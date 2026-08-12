@@ -340,8 +340,9 @@ public:
         bool graphOwnsAccumulatorBootstrapClear = false,
         bool graphOwnsNonTemporalAccumulatorClear = false,
         bool graphOwnsAccumulatorDecay = false,
+        bool graphOwnsResolve = false,
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr,
-        bool* accumulatorBootstrapProducerDispatched = nullptr
+        bool* causticProducerDispatched = nullptr
     );
     // The shared deferred graph supplies descriptor-visible shared-deferred entry states. Direct compatibility
     // callers retain the native setup by leaving this false.
@@ -351,6 +352,7 @@ public:
         bool graphEntryStatesOwned = false,
         bool graphOwnsAccumulatorBootstrapClear = false,
         bool graphOwnsAccumulatorDecay = false,
+        bool graphOwnsResolve = false,
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr
     );
     [[nodiscard]] bool hasCausticWork()const noexcept;
@@ -365,8 +367,9 @@ public:
         bool graphOwnsAccumulatorBootstrapClear = false,
         bool graphOwnsNonTemporalAccumulatorClear = false,
         bool graphOwnsAccumulatorDecay = false,
+        bool graphOwnsResolve = false,
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr,
-        bool* accumulatorBootstrapProducerDispatched = nullptr
+        bool* causticProducerDispatched = nullptr
     );
     // The shared deferred graph supplies descriptor-visible hardware-caustic producer inputs. Direct
     // compatibility callers retain native setup by leaving this false.
@@ -376,7 +379,24 @@ public:
         bool graphEntryStatesOwned = false,
         bool graphOwnsAccumulatorBootstrapClear = false,
         bool graphOwnsAccumulatorDecay = false,
+        bool graphOwnsResolve = false,
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr
+    );
+    // The normal deferred graph records wavelet resolve after the selected photon producer. Its exact resource uses
+    // own the accumulator UAV-to-SRV handoff; direct compatibility callers keep resolve attached to the producer.
+    [[nodiscard]] Core::GpuTaskId declareCausticResolveTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        const bool* causticProducerDispatched,
+        bool graphEntryStatesOwned = false
+    );
+    // Narrow entry for the graph-owned resolve callback. The shared direct implementation remains private.
+    void dispatchGraphCausticResolve(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned = false
     );
     [[nodiscard]] bool hasHwCausticWork()const noexcept;
     [[nodiscard]] bool hasSurfelWork()const noexcept;
@@ -603,8 +623,8 @@ private:
     void advanceCausticTemporalReuse();
     // Bootstrap or decay temporal splat accumulation before photon atomic adds.
     void prepareCausticAccumulatorForSplat(Core::CommandList& commandList, DeferredFrameTargets& targets, f32 decayFactor);
-    // Shared software/hardware caustic wavelet resolve. Normal graph callers already declare the geometry-downsample
-    // entry states; direct compatibility callers retain that native setup.
+    // Shared software/hardware caustic wavelet resolve. Normal graph callers declare the geometry-downsample inputs
+    // and accumulator handoff; direct compatibility callers retain that native setup.
     void dispatchCausticResolve(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,

@@ -119,7 +119,8 @@ struct SoftwareCausticsGraphTask{
         bool graphOwnsAccumulatorBootstrapClear = false;
         bool graphOwnsNonTemporalAccumulatorClear = false;
         bool graphOwnsAccumulatorDecay = false;
-        bool* accumulatorBootstrapProducerDispatched = nullptr;
+        bool graphOwnsResolve = false;
+        bool* causticProducerDispatched = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -128,8 +129,8 @@ struct SoftwareCausticsGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(payload.accumulatorBootstrapProducerDispatched)
-            *payload.accumulatorBootstrapProducerDispatched = false;
+        if(payload.causticProducerDispatched)
+            *payload.causticProducerDispatched = false;
         if(!payload.raytracingSystem || !payload.targets || !payload.timingTicket)
             return false;
 
@@ -146,14 +147,15 @@ struct SoftwareCausticsGraphTask{
                 payload.graphEntryStatesOwned,
                 payload.graphOwnsAccumulatorBootstrapClear,
                 payload.graphOwnsAccumulatorDecay,
+                payload.graphOwnsResolve,
                 payload.causticPhotonTiming
             );
             if(!causticsDispatched && payload.causticPhotonTiming && payload.causticPhotonTiming->has_value()){
                 payload.causticPhotonTiming->value().discardTiming();
                 payload.causticPhotonTiming->reset();
             }
-            if(payload.accumulatorBootstrapProducerDispatched)
-                *payload.accumulatorBootstrapProducerDispatched = causticsDispatched;
+            if(payload.causticProducerDispatched)
+                *payload.causticProducerDispatched = causticsDispatched;
             if(!causticsDispatched && payload.raytracingSystem->hasCausticWork())
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software caustic render pass failed"));
         }
@@ -167,15 +169,15 @@ struct SoftwareCausticsGraphTask{
         if(
             payload.raytracingSystem
             && payload.graphOwnsAccumulatorBootstrapClear
-            && payload.accumulatorBootstrapProducerDispatched
-            && *payload.accumulatorBootstrapProducerDispatched
+            && payload.causticProducerDispatched
+            && *payload.causticProducerDispatched
         )
             payload.raytracingSystem->confirmCausticAccumulatorBootstrapClear();
     }
 
     static void discarded(Payload& payload){
-        if(payload.accumulatorBootstrapProducerDispatched)
-            *payload.accumulatorBootstrapProducerDispatched = false;
+        if(payload.causticProducerDispatched)
+            *payload.causticProducerDispatched = false;
         if(payload.causticPhotonTiming && payload.causticPhotonTiming->has_value()){
             payload.causticPhotonTiming->value().discardTiming();
             payload.causticPhotonTiming->reset();
@@ -195,7 +197,8 @@ struct HardwareCausticsGraphTask{
         bool graphOwnsAccumulatorBootstrapClear = false;
         bool graphOwnsNonTemporalAccumulatorClear = false;
         bool graphOwnsAccumulatorDecay = false;
-        bool* accumulatorBootstrapProducerDispatched = nullptr;
+        bool graphOwnsResolve = false;
+        bool* causticProducerDispatched = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -204,8 +207,8 @@ struct HardwareCausticsGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(payload.accumulatorBootstrapProducerDispatched)
-            *payload.accumulatorBootstrapProducerDispatched = false;
+        if(payload.causticProducerDispatched)
+            *payload.causticProducerDispatched = false;
         if(!payload.raytracingSystem || !payload.targets || !payload.timingTicket)
             return false;
 
@@ -222,14 +225,15 @@ struct HardwareCausticsGraphTask{
                 payload.graphEntryStatesOwned,
                 payload.graphOwnsAccumulatorBootstrapClear,
                 payload.graphOwnsAccumulatorDecay,
+                payload.graphOwnsResolve,
                 payload.causticPhotonTiming
             );
             if(!causticsDispatched && payload.causticPhotonTiming && payload.causticPhotonTiming->has_value()){
                 payload.causticPhotonTiming->value().discardTiming();
                 payload.causticPhotonTiming->reset();
             }
-            if(payload.accumulatorBootstrapProducerDispatched)
-                *payload.accumulatorBootstrapProducerDispatched = causticsDispatched;
+            if(payload.causticProducerDispatched)
+                *payload.causticProducerDispatched = causticsDispatched;
             if(!causticsDispatched && payload.raytracingSystem->hasHwCausticWork())
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic render pass failed"));
         }
@@ -243,19 +247,53 @@ struct HardwareCausticsGraphTask{
         if(
             payload.raytracingSystem
             && payload.graphOwnsAccumulatorBootstrapClear
-            && payload.accumulatorBootstrapProducerDispatched
-            && *payload.accumulatorBootstrapProducerDispatched
+            && payload.causticProducerDispatched
+            && *payload.causticProducerDispatched
         )
             payload.raytracingSystem->confirmCausticAccumulatorBootstrapClear();
     }
 
     static void discarded(Payload& payload){
-        if(payload.accumulatorBootstrapProducerDispatched)
-            *payload.accumulatorBootstrapProducerDispatched = false;
+        if(payload.causticProducerDispatched)
+            *payload.causticProducerDispatched = false;
         if(payload.causticPhotonTiming && payload.causticPhotonTiming->has_value()){
             payload.causticPhotonTiming->value().discardTiming();
             payload.causticPhotonTiming->reset();
         }
+    }
+};
+
+// The resolver follows the selected photon producer inside the same graph packet. Its explicit accumulator read
+// makes the compiler lower the atomic-splat UAV-to-SRV transition before the shared wavelet sequence begins.
+struct CausticResolveGraphTask{
+    struct Payload{
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        const bool* causticProducerDispatched = nullptr;
+        bool graphEntryStatesOwned = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.raytracingSystem || !payload.targets || !payload.timingTicket)
+            return false;
+        // Preserve the existing no-producer contract: the graph-owned irradiance clear remains authoritative and
+        // no resolve dispatch is emitted when the selected photon producer did not record.
+        if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
+            return true;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        payload.raytracingSystem->dispatchGraphCausticResolve(
+            commandList,
+            *payload.targets,
+            payload.graphEntryStatesOwned
+        );
+        return true;
     }
 };
 
@@ -659,9 +697,17 @@ void RendererRayTracingSystem::dispatchCausticResolve(
     Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     NWB_ASSERT(heap.isInitialized());
 
-    // Heap-selected resolve resources need explicit transitions and UAV ordering.
+    // Heap-selected resolve resources need explicit transitions and UAV ordering. Normal graph resolve callers
+    // declare the accumulator read separately from the photon producer, so the compiler lowers that UAV-to-SRV
+    // handoff before this callback; direct compatibility callers retain the original native transition.
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
-    commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::ShaderResource);
+    if(!graphEntryStatesOwned){
+        commandList.setTextureState(
+            targets.causticAccumulator.get(),
+            ECSRenderDetail::s_CausticAccumulatorSubresources,
+            Core::ResourceStates::ShaderResource
+        );
+    }
     commandList.setEnableUavBarriersForTexture(targets.causticHistory.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.causticResolveHalf.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.causticResolveGeometry.get(), true);
@@ -966,8 +1012,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareSoftwareCausticsTask(
     const bool graphOwnsAccumulatorBootstrapClear,
     const bool graphOwnsNonTemporalAccumulatorClear,
     const bool graphOwnsAccumulatorDecay,
+    const bool graphOwnsResolve,
     Optional<Core::GpuTimingMeasure>* const causticPhotonTiming,
-    bool* const accumulatorBootstrapProducerDispatched
+    bool* const causticProducerDispatched
 ){
     return graph.addTask<__hidden_caustics::SoftwareCausticsGraphTask>(
         desc,
@@ -981,7 +1028,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareSoftwareCausticsTask(
             .graphOwnsAccumulatorBootstrapClear = graphOwnsAccumulatorBootstrapClear,
             .graphOwnsNonTemporalAccumulatorClear = graphOwnsNonTemporalAccumulatorClear,
             .graphOwnsAccumulatorDecay = graphOwnsAccumulatorDecay,
-            .accumulatorBootstrapProducerDispatched = accumulatorBootstrapProducerDispatched,
+            .graphOwnsResolve = graphOwnsResolve,
+            .causticProducerDispatched = causticProducerDispatched,
         }
     );
 }
@@ -996,8 +1044,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareHardwareCausticsTask(
     const bool graphOwnsAccumulatorBootstrapClear,
     const bool graphOwnsNonTemporalAccumulatorClear,
     const bool graphOwnsAccumulatorDecay,
+    const bool graphOwnsResolve,
     Optional<Core::GpuTimingMeasure>* const causticPhotonTiming,
-    bool* const accumulatorBootstrapProducerDispatched
+    bool* const causticProducerDispatched
 ){
     return graph.addTask<__hidden_caustics::HardwareCausticsGraphTask>(
         desc,
@@ -1011,9 +1060,38 @@ Core::GpuTaskId RendererRayTracingSystem::declareHardwareCausticsTask(
             .graphOwnsAccumulatorBootstrapClear = graphOwnsAccumulatorBootstrapClear,
             .graphOwnsNonTemporalAccumulatorClear = graphOwnsNonTemporalAccumulatorClear,
             .graphOwnsAccumulatorDecay = graphOwnsAccumulatorDecay,
-            .accumulatorBootstrapProducerDispatched = accumulatorBootstrapProducerDispatched,
+            .graphOwnsResolve = graphOwnsResolve,
+            .causticProducerDispatched = causticProducerDispatched,
         }
     );
+}
+
+Core::GpuTaskId RendererRayTracingSystem::declareCausticResolveTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    const bool* const causticProducerDispatched,
+    const bool graphEntryStatesOwned
+){
+    return graph.addTask<__hidden_caustics::CausticResolveGraphTask>(
+        desc,
+        __hidden_caustics::CausticResolveGraphTask::Payload{
+            .raytracingSystem = this,
+            .targets = &targets,
+            .timingTicket = &timingTicket,
+            .causticProducerDispatched = causticProducerDispatched,
+            .graphEntryStatesOwned = graphEntryStatesOwned,
+        }
+    );
+}
+
+void RendererRayTracingSystem::dispatchGraphCausticResolve(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool graphEntryStatesOwned
+){
+    dispatchCausticResolve(commandList, targets, graphEntryStatesOwned);
 }
 
 bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameTargets& targets, const f32 temporalDecay)const{
@@ -1041,6 +1119,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
     const bool graphEntryStatesOwned,
     const bool graphOwnsAccumulatorBootstrapClear,
     const bool graphOwnsAccumulatorDecay,
+    const bool graphOwnsResolve,
     Optional<Core::GpuTimingMeasure>* const causticPhotonTiming
 ){
     // Software photon producer runs before deferred lighting.
@@ -1131,7 +1210,8 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
         recordPhotons();
     }
 
-    dispatchCausticResolve(commandList, targets, graphEntryStatesOwned);
+    if(!graphOwnsResolve)
+        dispatchCausticResolve(commandList, targets, graphEntryStatesOwned);
 
     if(!rayTracingState().m_swCausticDispatchLogged){
         rayTracingState().m_swCausticDispatchLogged = true;
@@ -1552,6 +1632,7 @@ bool RendererRayTracingSystem::renderHwCaustics(
     const bool graphEntryStatesOwned,
     const bool graphOwnsAccumulatorBootstrapClear,
     const bool graphOwnsAccumulatorDecay,
+    const bool graphOwnsResolve,
     Optional<Core::GpuTimingMeasure>* const causticPhotonTiming
 ){
     // Hardware photons share the accumulator and resolve with the software reference.
@@ -1654,7 +1735,8 @@ bool RendererRayTracingSystem::renderHwCaustics(
         recordPhotons();
     }
 
-    dispatchCausticResolve(commandList, targets, graphEntryStatesOwned);
+    if(!graphOwnsResolve)
+        dispatchCausticResolve(commandList, targets, graphEntryStatesOwned);
 
     if(!rayTracingState().m_hwCausticDispatchLogged){
         rayTracingState().m_hwCausticDispatchLogged = true;

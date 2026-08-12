@@ -251,7 +251,8 @@ void RendererSystem::invalidateResources(){
     m_deferredCausticAccumulatorBootstrapClearTask = {};
     m_deferredCausticAccumulatorNonTemporalClearTask = {};
     m_deferredCausticAccumulatorDecayTask = {};
-    m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
+    m_deferredCausticPhotonTask = {};
+    m_deferredCausticProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
@@ -512,7 +513,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredCausticAccumulatorBootstrapClearTask = {};
     m_deferredCausticAccumulatorNonTemporalClearTask = {};
     m_deferredCausticAccumulatorDecayTask = {};
-    m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
+    m_deferredCausticPhotonTask = {};
+    m_deferredCausticProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
@@ -1221,6 +1223,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId hardwareCausticsPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredHardwareCausticsTask
     );
+    const Core::GpuSubmissionPacketId causticPhotonPacket = m_deferredCausticPhotonTask.valid()
+        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticPhotonTask)
+        : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuSubmissionPacketId causticIrradianceClearPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredCausticIrradianceClearTask
     );
@@ -1346,6 +1352,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId causticsPacket = hardwareShadowSupported
         ? hardwareCausticsPacket
         : softwareCausticsPacket
+    ;
+    // Photon and resolve are distinct callbacks so the compiler can lower their accumulator UAV-to-SRV handoff,
+    // but they remain one semantic caustics submission: clear acceptance, timing, and all dependent effects keep
+    // the established packet endpoint.
+    const bool causticPhotonMergedIntoCausticsPacket =
+        m_deferredCausticPhotonTask.valid()
+        && causticPhotonPacket.valid()
+        && causticsPacket.valid()
+        && causticPhotonPacket == causticsPacket
     ;
     const bool causticIrradianceClearMergedIntoCausticsPacket =
         m_deferredCausticIrradianceClearTask.valid()
@@ -1520,6 +1535,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !softwareCausticsQueue
         ))
         || !m_deferredCausticIrradianceClearTask.valid()
+        || !m_deferredCausticPhotonTask.valid()
+        || !causticPhotonMergedIntoCausticsPacket
         || !causticIrradianceClearMergedIntoCausticsPacket
         || !causticAccumulatorNonTemporalClearMergedIntoCausticsPacket
         || !causticAccumulatorBootstrapClearMergedIntoCausticsPacket

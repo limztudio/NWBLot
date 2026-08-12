@@ -1085,6 +1085,35 @@ struct NativePacketCausticAccumulatorDecayProbeTask{
 };
 
 
+// Resolve reads the photon-written accumulator as a sampled uint texture. The callback intentionally has no state
+// setup, so recording proves the graph lowered the in-packet UAV-to-SRV handoff before wavelet work begins.
+struct NativePacketCausticAccumulatorResolveProbeTask{
+    struct Payload{
+        Texture* accumulator = nullptr;
+        u32 layerCount = 0u;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        bool ready = payload.accumulator && payload.layerCount > 0u;
+        for(u32 layer = 0u; layer < payload.layerCount; ++layer){
+            ready = ready
+                && commandList.getTextureSubresourceState(payload.accumulator, layer, 0u)
+                    == ResourceStates::ShaderResource
+            ;
+        }
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
 // Surfel resource initialization records only clears. Its graph packet must therefore establish the four CopyDest
 // states before this getter-only callback runs, without relying on the native clear body to repeat them.
 struct NativePacketSurfelInitializationEntryProbeTask{
@@ -4540,6 +4569,183 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedWarmCausticAccumulatorDecayRecor
         scratchArena
     ));
     EXPECT_TRUE(transaction.packetToken(decayPacket).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Caustic photon splats and wavelet resolve remain in one native packet, but the resolver consumes the accumulator
+// as ShaderResource. Both callbacks are getter-only so the real Vulkan recorder must lower the precise UAV-to-SRV
+// barrier instead of a renderer-local transition.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonResolveHandoffRecordsWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    constexpr u32 layerCount = 3u;
+    const TextureHandle accumulator = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setArraySize(layerCount)
+            .setDimension(TextureDimension::Texture2DArray)
+            .setFormat(Format::R32_UINT)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::ShaderResource)
+            .setKeepInitialState(true)
+    );
+    ASSERT_NE(accumulator.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId accumulatorResource = graph.importTexture(
+        accumulator,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/caustic_photon_resolve_accumulator"))
+            .setMarkerLabel("Caustic Photon Resolve Accumulator")
+            .setType(GpuGraphResourceType::Texture)
+            .setInitialState(ResourceStates::ShaderResource)
+    );
+    ASSERT_TRUE(accumulatorResource.valid());
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const TextureSubresourceSet accumulatorSubresources(0u, 1u, 0u, layerCount);
+    const GpuTaskResourceUse photonUses[] = {
+        GpuTaskResourceUse{
+            .resource = accumulatorResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = accumulatorSubresources },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    GpuTaskSchedulingHint photonScheduling;
+    photonScheduling.cost = GpuTaskCostHint::Large;
+    photonScheduling.allowPacketMerge = true;
+    GpuTaskDesc photonDesc;
+    photonDesc
+        .setIdentity(Name("tests/descriptor_buffer/caustic_photon_stage"))
+        .setMarkerLabel("Caustic Photons")
+        .setQueue(graphicsQueue)
+        .setScheduling(photonScheduling)
+        .setResourceUses(photonUses, LengthOf(photonUses))
+    ;
+    bool photonRecorded = false;
+    const GpuTaskId photonTask = graph.addTask<NativePacketCausticAccumulatorDecayProbeTask>(
+        photonDesc,
+        NativePacketCausticAccumulatorDecayProbeTask::Payload{
+            .accumulator = accumulator.get(),
+            .layerCount = layerCount,
+            .recorded = &photonRecorded,
+        }
+    );
+    ASSERT_TRUE(photonTask.valid());
+
+    const GpuTaskResourceUse resolveUses[] = {
+        GpuTaskResourceUse{
+            .resource = accumulatorResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = accumulatorSubresources },
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskSchedulingHint resolveScheduling = photonScheduling;
+    resolveScheduling.mergeWithPrevious = true;
+    GpuTaskDesc resolveDesc;
+    resolveDesc
+        .setIdentity(Name("tests/descriptor_buffer/caustic_resolve_stage"))
+        .setMarkerLabel("Caustics Resolve")
+        .setQueue(graphicsQueue)
+        .setScheduling(resolveScheduling)
+        .setDependencies(&photonTask, 1u)
+        .setResourceUses(resolveUses, LengthOf(resolveUses))
+    ;
+    bool resolveRecorded = false;
+    const GpuTaskId resolveTask = graph.addTask<NativePacketCausticAccumulatorResolveProbeTask>(
+        resolveDesc,
+        NativePacketCausticAccumulatorResolveProbeTask::Payload{
+            .accumulator = accumulator.get(),
+            .layerCount = layerCount,
+            .recorded = &resolveRecorded,
+        }
+    );
+    ASSERT_TRUE(resolveTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/caustic_photon_resolve_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId photonPacket = compiledGraph.packetForTask(photonTask);
+    const GpuSubmissionPacketId resolvePacket = compiledGraph.packetForTask(resolveTask);
+    ASSERT_TRUE(photonPacket.valid());
+    EXPECT_EQ(resolvePacket, photonPacket);
+
+    const GpuCompiledTask* const compiledResolve = compiledGraph.findTask(resolveTask);
+    ASSERT_NE(compiledResolve, nullptr);
+    const GpuCompiledBarrier* const resolveBarriers = compiledGraph.taskPrologueBarriers(resolveTask);
+    ASSERT_NE(resolveBarriers, nullptr);
+    bool hasAccumulatorHandoff = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledResolve->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = resolveBarriers[barrierIndex];
+        hasAccumulatorHandoff = hasAccumulatorHandoff || (
+            barrier.type == GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == accumulatorResource
+            && barrier.range.textureSubresources == accumulatorSubresources
+            && barrier.before == ResourceStates::UnorderedAccess
+            && barrier.after == ResourceStates::ShaderResource
+        );
+    }
+    EXPECT_TRUE(hasAccumulatorHandoff);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(photonRecorded);
+    EXPECT_TRUE(resolveRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(photonPacket).valid());
     EXPECT_TRUE(device.waitForIdle());
 }
 

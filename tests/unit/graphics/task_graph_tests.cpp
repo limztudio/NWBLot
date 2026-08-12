@@ -5807,6 +5807,112 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
 }
 
 
+// Photon atomics and wavelet resolve now occupy distinct graph callbacks. Their packet remains unsplit, while the
+// resolve's accumulator read makes the compiler own the UAV-to-SRV transition that was formerly native-local.
+TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonResolveHandoff){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId accumulator = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/caustic_photon_resolve_accumulator"),
+        "Caustic Photon Resolve Accumulator",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    ASSERT_TRUE(accumulator.valid());
+
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        true,
+        true,
+    };
+    Graphics::GpuTaskSchedulingHint photonScheduling;
+    photonScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    photonScheduling.allowPacketMerge = true;
+    const Graphics::GpuTaskResourceUse photonUses[] = {
+        {
+            .resource = accumulator,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    Graphics::GpuTaskDesc photonDesc;
+    photonDesc
+        .setIdentity(Name("tests/task_graph/caustic_photon_stage"))
+        .setMarkerLabel("Caustic Photons")
+        .setQueue(computeRequest)
+        .setScheduling(photonScheduling)
+        .setResourceUses(photonUses, LengthOf(photonUses))
+    ;
+    const Graphics::GpuTaskId photonTask = graph.addTask(photonDesc);
+    ASSERT_TRUE(photonTask.valid());
+
+    Graphics::GpuTaskSchedulingHint resolveScheduling = photonScheduling;
+    resolveScheduling.mergeWithPrevious = true;
+    const Graphics::GpuTaskResourceUse resolveUses[] = {
+        {
+            .resource = accumulator,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskDesc resolveDesc;
+    resolveDesc
+        .setIdentity(Name("tests/task_graph/caustic_resolve_stage"))
+        .setMarkerLabel("Caustics Resolve")
+        .setQueue(computeRequest)
+        .setScheduling(resolveScheduling)
+        .setDependencies(&photonTask, 1u)
+        .setResourceUses(resolveUses, LengthOf(resolveUses))
+    ;
+    const Graphics::GpuTaskId resolveTask = graph.addTask(resolveDesc);
+    ASSERT_TRUE(resolveTask.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(HasInferredHazard(
+        analysis,
+        photonTask,
+        resolveTask,
+        accumulator,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+
+    const Graphics::GpuSubmissionPacketId photonPacket = compiledGraph.packetForTask(photonTask);
+    const Graphics::GpuSubmissionPacketId resolvePacket = compiledGraph.packetForTask(resolveTask);
+    ASSERT_TRUE(photonPacket.valid());
+    ASSERT_TRUE(resolvePacket.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(resolvePacket, photonPacket);
+
+    const Graphics::GpuCompiledTask* const compiledResolve = compiledGraph.findTask(resolveTask);
+    ASSERT_NE(compiledResolve, nullptr);
+    const Graphics::GpuCompiledBarrier* const resolveBarriers = compiledGraph.taskPrologueBarriers(resolveTask);
+    ASSERT_NE(resolveBarriers, nullptr);
+    bool hasAccumulatorHandoff = false;
+    for(usize barrierIndex = 0u; barrierIndex < compiledResolve->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = resolveBarriers[barrierIndex];
+        hasAccumulatorHandoff = hasAccumulatorHandoff || (
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == accumulator
+            && barrier.before == Graphics::ResourceStates::UnorderedAccess
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+        );
+    }
+    EXPECT_TRUE(hasAccumulatorHandoff);
+}
+
+
 // Surfel GI starts after the shared graphics prefix has produced G-buffer, descriptor, traversal, and persistent
 // resource data. The graph must establish that descriptor-visible batch on the Compute packet before the callback's
 // local clears and intra-task UAV/indirect transitions begin.

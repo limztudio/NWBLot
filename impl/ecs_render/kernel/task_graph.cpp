@@ -3745,7 +3745,8 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     m_deferredCausticAccumulatorBootstrapClearTask = {};
     m_deferredCausticAccumulatorNonTemporalClearTask = {};
     m_deferredCausticAccumulatorDecayTask = {};
-    m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
+    m_deferredCausticPhotonTask = {};
+    m_deferredCausticProducerDispatched = false;
 
     // This remains the direct successor of Shadow Visibility in the deferred graph. A distinct Compute family is
     // optional; on other devices the compiler routes the same packet through Graphics.
@@ -3810,18 +3811,66 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     }
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
-    resourceUses.reserve(25u + softwareTraceGeometryResourceCount);
-    resourceUses.push_back(ReadUse(worldPosition));
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> photonResourceUses{ scratchArena };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveResourceUses{ scratchArena };
+    photonResourceUses.reserve(20u + softwareTraceGeometryResourceCount);
+    resolveResourceUses.reserve(7u);
+    photonResourceUses.push_back(ReadTextureUse(
+        worldPosition,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::ShaderResource
+    ));
     // Software caustics samples the bindless depth image, so its declared layout must match the shader read.
-    resourceUses.push_back(ReadUse(depth, Core::ResourceStates::ShaderResource));
-    resourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
-    resourceUses.push_back(ReadWriteUse(causticAccumulator, Core::ResourceStates::UnorderedAccess));
-    resourceUses.push_back(ReadWriteUse(causticHistory, Core::ResourceStates::UnorderedAccess));
-    resourceUses.push_back(ReadWriteUse(causticResolveHalf, Core::ResourceStates::UnorderedAccess));
-    resourceUses.push_back(ReadWriteUse(causticResolveGeometry, Core::ResourceStates::UnorderedAccess));
-    resourceUses.push_back(WriteUse(causticIrradiance, Core::ResourceStates::UnorderedAccess));
-    resourceUses.push_back(ReadUse(sceneGeometryDomain));
+    photonResourceUses.push_back(ReadTextureUse(
+        depth,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::ShaderResource
+    ));
+    photonResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+    photonResourceUses.push_back(ReadWriteTextureUse(
+        causticAccumulator,
+        ECSRenderDetail::s_CausticAccumulatorSubresources,
+        Core::ResourceStates::UnorderedAccess
+    ));
+    photonResourceUses.push_back(ReadUse(sceneGeometryDomain));
+
+    // Resolve begins only after the photon atomics. This exact accumulator read turns the former native UAV-to-SRV
+    // state bridge into a compiler-lowered handoff while dynamic ping-pong transitions stay inside the callback.
+    resolveResourceUses.push_back(ReadTextureUse(
+        worldPosition,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::ShaderResource
+    ));
+    resolveResourceUses.push_back(ReadTextureUse(
+        depth,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::ShaderResource
+    ));
+    resolveResourceUses.push_back(ReadTextureUse(
+        causticAccumulator,
+        ECSRenderDetail::s_CausticAccumulatorSubresources,
+        Core::ResourceStates::ShaderResource
+    ));
+    resolveResourceUses.push_back(ReadWriteTextureUse(
+        causticHistory,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::UnorderedAccess
+    ));
+    resolveResourceUses.push_back(ReadWriteTextureUse(
+        causticResolveHalf,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::UnorderedAccess
+    ));
+    resolveResourceUses.push_back(ReadWriteTextureUse(
+        causticResolveGeometry,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::UnorderedAccess
+    ));
+    resolveResourceUses.push_back(WriteTextureUse(
+        causticIrradiance,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::UnorderedAccess
+    ));
 
     const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
         if(!buffer)
@@ -3829,7 +3878,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
         if(!resource.valid())
             return false;
-        resourceUses.push_back(ReadUse(resource, state));
+        photonResourceUses.push_back(ReadUse(resource, state));
         return true;
     };
     const bool optionalResourcesImported =
@@ -3880,15 +3929,15 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a deferred software-caustics dynamic resource"));
         return false;
     }
-    resourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
-    resourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource));
+    photonResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
+    photonResourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource));
     if(materialContextSlots.valid())
-        resourceUses.push_back(ReadUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
+        photonResourceUses.push_back(ReadUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
     for(usize resourceIndex = 0u; resourceIndex < softwareTraceGeometryResourceCount; ++resourceIndex){
         const Core::GpuGraphResourceId resource = softwareTraceGeometryResources[resourceIndex];
         if(!resource.valid())
             return false;
-        resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+        photonResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
 
     Core::GpuTaskSchedulingHint scheduling;
@@ -4038,18 +4087,18 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     causticsScheduling.forceSubmissionBoundary = false;
     causticsScheduling.allowPacketMerge = true;
     causticsScheduling.mergeWithPrevious = true;
-    Core::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("render.software_caustics"))
-        .setMarkerLabel("Software Caustics")
+    Core::GpuTaskDesc photonDesc;
+    photonDesc
+        .setIdentity(Name("render.software_caustics.photons"))
+        .setMarkerLabel("Software Caustic Photons")
         .setQueue(ComputeQueueRequest())
         .setScheduling(causticsScheduling)
         .setDependencies(&causticsDependency, 1u)
-        .setResourceUses(resourceUses.data(), resourceUses.size())
+        .setResourceUses(photonResourceUses.data(), photonResourceUses.size())
     ;
-    m_deferredSoftwareCausticsTask = m_raytracingSystem.declareSoftwareCausticsTask(
+    m_deferredCausticPhotonTask = m_raytracingSystem.declareSoftwareCausticsTask(
         m_deferredLightingTaskGraph,
-        desc,
+        photonDesc,
         deferredTargets,
         &m_preparedShadowVisibilityReady,
         timingTicket,
@@ -4057,13 +4106,36 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         graphOwnsAccumulatorBootstrapClear,
         graphOwnsNonTemporalAccumulatorClear,
         graphOwnsAccumulatorDecay,
+        true,
         &causticPhotonTiming,
-        graphOwnsAccumulatorBootstrapClear
-            ? &m_deferredCausticAccumulatorBootstrapProducerDispatched
-            : nullptr
+        &m_deferredCausticProducerDispatched
+    );
+    if(!m_deferredCausticPhotonTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics photon graph task"));
+        return false;
+    }
+
+    Core::GpuTaskSchedulingHint resolveScheduling = causticsScheduling;
+    resolveScheduling.mergeWithPrevious = true;
+    Core::GpuTaskDesc resolveDesc;
+    resolveDesc
+        .setIdentity(Name("render.software_caustics.resolve"))
+        .setMarkerLabel("Software Caustics Resolve")
+        .setQueue(ComputeQueueRequest())
+        .setScheduling(resolveScheduling)
+        .setDependencies(&m_deferredCausticPhotonTask, 1u)
+        .setResourceUses(resolveResourceUses.data(), resolveResourceUses.size())
+    ;
+    m_deferredSoftwareCausticsTask = m_raytracingSystem.declareCausticResolveTask(
+        m_deferredLightingTaskGraph,
+        resolveDesc,
+        deferredTargets,
+        timingTicket,
+        &m_deferredCausticProducerDispatched,
+        true
     );
     if(!m_deferredSoftwareCausticsTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics graph task"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve graph task"));
         return false;
     }
     return true;
@@ -4572,7 +4644,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredCausticAccumulatorBootstrapClearTask = {};
     m_deferredCausticAccumulatorNonTemporalClearTask = {};
     m_deferredCausticAccumulatorDecayTask = {};
-    m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
+    m_deferredCausticPhotonTask = {};
+    m_deferredCausticProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
@@ -5382,31 +5455,76 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         }
 
         Core::Alloc::ScratchArena hardwareCausticsScratchArena(RendererArenaScope::s_TaskGraphArena);
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResourceUses{ hardwareCausticsScratchArena };
-        hardwareResourceUses.reserve(20u + hardwareTraceAttributeResources.size());
-        hardwareResourceUses.push_back(ReadUse(
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwarePhotonResourceUses{ hardwareCausticsScratchArena };
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveResourceUses{ hardwareCausticsScratchArena };
+        hardwarePhotonResourceUses.reserve(15u + hardwareTraceAttributeResources.size());
+        hardwareResolveResourceUses.reserve(7u);
+        hardwarePhotonResourceUses.push_back(ReadTextureUse(
             worldPosition,
+            ECSRenderDetail::s_FramebufferSubresources,
             Core::ResourceStates::ShaderResource,
             true
         ));
-        hardwareResourceUses.push_back(ReadUse(depth, Core::ResourceStates::ShaderResource));
-        hardwareResourceUses.push_back(ReadUse(
+        hardwarePhotonResourceUses.push_back(ReadTextureUse(
+            depth,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        ));
+        hardwarePhotonResourceUses.push_back(ReadUse(
             currentBindlessSlots,
             Core::ResourceStates::ConstantBuffer,
             true
         ));
-        hardwareResourceUses.push_back(ReadUse(
+        hardwarePhotonResourceUses.push_back(ReadUse(
             sceneShading,
             Core::ResourceStates::ConstantBuffer,
             true
         ));
-        hardwareResourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource, true));
-        hardwareResourceUses.push_back(ReadUse(sceneGeometryDomain));
-        hardwareResourceUses.push_back(ReadWriteUse(causticAccumulator, Core::ResourceStates::UnorderedAccess));
-        hardwareResourceUses.push_back(ReadWriteUse(causticHistory, Core::ResourceStates::UnorderedAccess));
-        hardwareResourceUses.push_back(ReadWriteUse(causticResolveHalf, Core::ResourceStates::UnorderedAccess));
-        hardwareResourceUses.push_back(ReadWriteUse(causticResolveGeometry, Core::ResourceStates::UnorderedAccess));
-        hardwareResourceUses.push_back(WriteUse(currentCausticIrradiance, Core::ResourceStates::UnorderedAccess));
+        hardwarePhotonResourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource, true));
+        hardwarePhotonResourceUses.push_back(ReadUse(sceneGeometryDomain));
+        hardwarePhotonResourceUses.push_back(ReadWriteTextureUse(
+            causticAccumulator,
+            ECSRenderDetail::s_CausticAccumulatorSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
+
+        // This separate callback owns the immutable photon-to-resolve accumulator handoff. The ping-pong targets
+        // remain ReadWrite UAVs because the shared wavelet sequence retains their explicit local transitions.
+        hardwareResolveResourceUses.push_back(ReadTextureUse(
+            worldPosition,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        ));
+        hardwareResolveResourceUses.push_back(ReadTextureUse(
+            depth,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        ));
+        hardwareResolveResourceUses.push_back(ReadTextureUse(
+            causticAccumulator,
+            ECSRenderDetail::s_CausticAccumulatorSubresources,
+            Core::ResourceStates::ShaderResource
+        ));
+        hardwareResolveResourceUses.push_back(ReadWriteTextureUse(
+            causticHistory,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
+        hardwareResolveResourceUses.push_back(ReadWriteTextureUse(
+            causticResolveHalf,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
+        hardwareResolveResourceUses.push_back(ReadWriteTextureUse(
+            causticResolveGeometry,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
+        hardwareResolveResourceUses.push_back(WriteTextureUse(
+            currentCausticIrradiance,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
 
         const auto appendOptionalReadBuffer = [&](
             const Core::BufferHandle& buffer,
@@ -5419,7 +5537,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
             if(!resource.valid())
                 return false;
-            hardwareResourceUses.push_back(ReadUse(resource, state));
+            hardwarePhotonResourceUses.push_back(ReadUse(resource, state));
             return true;
         };
         bool optionalResourcesImported =
@@ -5455,7 +5573,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             )
         ;
         if(materialContextSlots.valid()){
-            hardwareResourceUses.push_back(ReadUse(
+            hardwarePhotonResourceUses.push_back(ReadUse(
                 materialContextSlots,
                 Core::ResourceStates::ConstantBuffer,
                 true
@@ -5469,7 +5587,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid prepared hardware-caustics attribute resource"));
                 return;
             }
-            hardwareResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+            hardwarePhotonResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         }
         if(m_rayTracingState.m_tlas){
             const Core::GpuGraphResourceId tlas = m_deferredLightingTaskGraph.importAccelStruct(
@@ -5483,8 +5601,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             );
             optionalResourcesImported = optionalResourcesImported && tlas.valid() && tlasBackingBuffer.valid();
             if(tlas.valid() && tlasBackingBuffer.valid()){
-                hardwareResourceUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
-                hardwareResourceUses.push_back(ReadUse(tlasBackingBuffer, Core::ResourceStates::AccelStructRead));
+                hardwarePhotonResourceUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
+                hardwarePhotonResourceUses.push_back(ReadUse(tlasBackingBuffer, Core::ResourceStates::AccelStructRead));
             }
         }
         if(!optionalResourcesImported){
@@ -5644,18 +5762,18 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwareCausticsScheduling.forceSubmissionBoundary = false;
         hardwareCausticsScheduling.allowPacketMerge = true;
         hardwareCausticsScheduling.mergeWithPrevious = true;
-        Core::GpuTaskDesc hardwareDesc;
-        hardwareDesc
-            .setIdentity(Name("render.hardware_caustics"))
-            .setMarkerLabel("Hardware Caustics")
+        Core::GpuTaskDesc hardwarePhotonDesc;
+        hardwarePhotonDesc
+            .setIdentity(Name("render.hardware_caustics.photons"))
+            .setMarkerLabel("Hardware Caustic Photons")
             .setQueue(GraphicsQueueRequest())
             .setScheduling(hardwareCausticsScheduling)
             .setDependencies(&causticsDependency, 1u)
-            .setResourceUses(hardwareResourceUses.data(), hardwareResourceUses.size())
+            .setResourceUses(hardwarePhotonResourceUses.data(), hardwarePhotonResourceUses.size())
         ;
-        m_deferredHardwareCausticsTask = m_raytracingSystem.declareHardwareCausticsTask(
+        m_deferredCausticPhotonTask = m_raytracingSystem.declareHardwareCausticsTask(
             m_deferredLightingTaskGraph,
-            hardwareDesc,
+            hardwarePhotonDesc,
             deferredTargets,
             &m_preparedShadowVisibilityReady,
             hardwareCausticsTimingTicket,
@@ -5663,13 +5781,36 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             graphOwnsAccumulatorBootstrapClear,
             graphOwnsNonTemporalAccumulatorClear,
             graphOwnsAccumulatorDecay,
+            true,
             &causticPhotonTiming,
-            graphOwnsAccumulatorBootstrapClear
-                ? &m_deferredCausticAccumulatorBootstrapProducerDispatched
-                : nullptr
+            &m_deferredCausticProducerDispatched
+        );
+        if(!m_deferredCausticPhotonTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics photon graph task"));
+            return;
+        }
+
+        Core::GpuTaskSchedulingHint hardwareResolveScheduling = hardwareCausticsScheduling;
+        hardwareResolveScheduling.mergeWithPrevious = true;
+        Core::GpuTaskDesc hardwareResolveDesc;
+        hardwareResolveDesc
+            .setIdentity(Name("render.hardware_caustics.resolve"))
+            .setMarkerLabel("Hardware Caustics Resolve")
+            .setQueue(GraphicsQueueRequest())
+            .setScheduling(hardwareResolveScheduling)
+            .setDependencies(&m_deferredCausticPhotonTask, 1u)
+            .setResourceUses(hardwareResolveResourceUses.data(), hardwareResolveResourceUses.size())
+        ;
+        m_deferredHardwareCausticsTask = m_raytracingSystem.declareCausticResolveTask(
+            m_deferredLightingTaskGraph,
+            hardwareResolveDesc,
+            deferredTargets,
+            hardwareCausticsTimingTicket,
+            &m_deferredCausticProducerDispatched,
+            true
         );
         if(!m_deferredHardwareCausticsTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics graph task"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve graph task"));
             return;
         }
     }

@@ -375,9 +375,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningDispatch(
     }
     if(plan.updatesMeshletBounds){
         // The graph establishes the static bounds inputs, including the CopyDest-to-ShaderResource rest-stream
-        // handoff when present.  Bounds output is generated inside this dispatch and remains task-local.
-        commandList.setBufferState(meshletBounds, Core::ResourceStates::UnorderedAccess);
-        commandList.commitBarriers();
+        // handoff when present, and publishes the generated bounds as the task's UnorderedAccess output.
 
         Core::ComputeState computeState;
         computeState.setPipeline(boundsPipeline);
@@ -394,8 +392,6 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningDispatch(
             commandList.dispatch(pushConstants.meshletCount, 1u, 1u);
         }
 
-        commandList.setBufferState(meshletBounds, Core::ResourceStates::ShaderResource);
-        commandList.commitBarriers();
     }
 
     if(plan.repacksNormals){
@@ -407,9 +403,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningDispatch(
             return false;
 
         // The normal and meshlet inputs are graph-owned ShaderResource entries (or were normalized after the
-        // preceding deformation dispatch).  The packed attribute output remains an intra-dispatch UAV phase.
-        commandList.setBufferState(attributeBuffer, Core::ResourceStates::UnorderedAccess);
-        commandList.commitBarriers();
+        // preceding deformation dispatch). The graph publishes the packed attribute output as UnorderedAccess.
 
         Core::ComputeState computeState;
         computeState.setPipeline(repackPipeline);
@@ -426,8 +420,6 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningDispatch(
             commandList.dispatch(pushConstants.meshletCount, 1u, 1u);
         }
 
-        commandList.setBufferState(attributeBuffer, Core::ResourceStates::ShaderResource);
-        commandList.commitBarriers();
     }
     return true;
 }

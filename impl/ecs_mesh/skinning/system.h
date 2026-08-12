@@ -288,6 +288,7 @@ private:
     };
 
     struct TaskGraphSkinningDispatchTask;
+    struct TaskGraphSkinningFinalizerTask;
 
 
 public:

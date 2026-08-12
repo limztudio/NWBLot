@@ -159,6 +159,43 @@ struct MeshSkinningSystem::TaskGraphSkinningDispatchTask{
 };
 
 
+// The native dispatch still owns deformation's mid-task UAV/SRV handoffs.  Bounds and normal-repack outputs end
+// the packet's work, so a getter-only graph task can publish their descriptor-visible final states without replaying
+// a native bridge in the dispatch callback.
+struct MeshSkinningSystem::TaskGraphSkinningFinalizerTask{
+    struct Payload{
+        explicit Payload(Core::Alloc::GlobalArena& arena)
+            : plans(arena)
+        {}
+
+        Vector<GraphOwnedSkinningDispatchPlan, Core::Alloc::GlobalArena> plans;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        if(payload.plans.empty())
+            return false;
+
+        for(const GraphOwnedSkinningDispatchPlan& plan : payload.plans){
+            if(plan.updatesMeshletBounds){
+                Core::Buffer* const meshletBounds = context.taskGraph.bufferForResource(plan.meshletBoundsResource);
+                if(!meshletBounds || commandList.getBufferState(meshletBounds) != Core::ResourceStates::ShaderResource)
+                    return false;
+            }
+            if(plan.repacksNormals){
+                Core::Buffer* const attributes = context.taskGraph.bufferForResource(plan.attributeResource);
+                if(!attributes || commandList.getBufferState(attributes) != Core::ResourceStates::ShaderResource)
+                    return false;
+            }
+        }
+        return true;
+    }
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -876,8 +913,8 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         const auto addRead = [&](const Core::GpuGraphResourceId resource){
             return addResourceUse(resource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read);
         };
-        const auto addWrite = [&](const Core::GpuGraphResourceId resource){
-            return addResourceUse(resource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Write);
+        const auto addUavWrite = [&](const Core::GpuGraphResourceId resource){
+            return addResourceUse(resource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write);
         };
         const auto addReadWrite = [&](const Core::GpuGraphResourceId resource){
             return addResourceUse(resource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::ReadWrite);
@@ -893,7 +930,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             || !addRead(plan.meshletPositionRefDeltaResource)
             || !addRead(plan.meshletLocalVertexRefResource)
             || !addRead(plan.meshletPrimitiveIndexResource)
-            || !addWrite(plan.meshletBoundsResource)
+            || !addUavWrite(plan.meshletBoundsResource)
             || (plan.hasActiveSkin && (
                 !addRead(plan.restPositionResource)
                 || !addRead(plan.restNormalResource)
@@ -913,7 +950,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             || (plan.repacksNormals && (
                 !addRead(plan.skinnedNormalResource)
                 || !addRead(plan.meshletAttributeRefDeltaResource)
-                || !addWrite(plan.attributeResource)
+                || !addUavWrite(plan.attributeResource)
             ))
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph resource uses for runtime skinning"));
@@ -921,10 +958,44 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         }
     }
 
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> finalizerResourceUses(scratchArena);
+    const auto addFinalizerUse = [&](const Core::GpuGraphResourceId resource){
+        if(!resource.valid())
+            return false;
+        for(const Core::GpuTaskResourceUse& existing : finalizerResourceUses){
+            if(existing.resource != resource)
+                continue;
+            return existing.requiredState == Core::ResourceStates::ShaderResource;
+        }
+        finalizerResourceUses.push_back(Core::GpuTaskResourceUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = Core::ResourceStates::ShaderResource,
+            .access = Core::GpuTaskResourceAccess::Read,
+        });
+        return true;
+    };
+    for(const GraphOwnedSkinningDispatchPlan& plan : dispatchPlans){
+        if(
+            (plan.updatesMeshletBounds && !addFinalizerUse(plan.meshletBoundsResource))
+            || (plan.repacksNormals && !addFinalizerUse(plan.attributeResource))
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning final states"));
+            return false;
+        }
+    }
+    if(finalizerResourceUses.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning dispatch has no final state"));
+        return false;
+    }
+
     Core::GpuTimingSubmissionTicket timingTicket(m_graphics.gpuTiming());
     TaskGraphSkinningDispatchTask::Payload dispatchPayload(m_arena);
     dispatchPayload.system = this;
     dispatchPayload.timingTicket = &timingTicket;
+    TaskGraphSkinningFinalizerTask::Payload finalizerPayload(m_arena);
+    for(const GraphOwnedSkinningDispatchPlan& plan : dispatchPlans)
+        finalizerPayload.plans.push_back(plan);
     dispatchPayload.plans = Move(dispatchPlans);
     Core::GpuTaskDesc dispatchDesc;
     dispatchDesc
@@ -944,7 +1015,24 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning compute continuation"));
         return false;
     }
-    terminalTask = dispatchTask;
+
+    const Core::GpuTaskDesc finalizerDesc = Core::GpuTaskDesc{}
+        .setIdentity(Name("mesh_skinning.frame_finalize_states"))
+        .setMarkerLabel("Runtime Skinning Finalize States")
+        .setQueue(__hidden_system::SkinningDispatchQueueRequest())
+        .setScheduling(__hidden_system::SkinningDispatchScheduling())
+        .setDependencies(&dispatchTask, 1u)
+        .setResourceUses(finalizerResourceUses.data(), finalizerResourceUses.size())
+    ;
+    const Core::GpuTaskId finalizerTask = graph.addTask<TaskGraphSkinningFinalizerTask>(
+        finalizerDesc,
+        Move(finalizerPayload)
+    );
+    if(!finalizerTask.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning final-state handoff"));
+        return false;
+    }
+    terminalTask = finalizerTask;
 
     Core::GpuTaskGraphAnalysis analysis(m_arena);
     Core::GpuTaskGraphQueueAssignments assignments(m_arena);

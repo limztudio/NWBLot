@@ -7374,6 +7374,186 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesWithGraphC
 }
 
 
+// Bounds and normal-repack outputs are the tail of the graph-owned skinning dispatch. Their callback emits no
+// state transition: the producer's UAV entry and the finalizer's ShaderResource handoff must both be packet-owned.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningOutputStatesFinalizeInGraph){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto generatedOutput = device.createBuffer(
+        BufferDesc()
+            .setDebugName(Name("tests/descriptor_buffer/skinning_generated_output"))
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::Exclusive)
+    );
+    ASSERT_NE(generatedOutput.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const BufferDesc& generatedOutputDesc = generatedOutput->getDescription();
+    const GpuGraphResourceId generatedOutputResource = graph.importBuffer(
+        generatedOutput,
+        GpuGraphResourceDesc{}
+            .setIdentity(generatedOutputDesc.debugName)
+            .setMarkerLabel("Skinning Generated Output")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(generatedOutputDesc.initialState)
+            .setQueueSharing(generatedOutputDesc.queueSharing)
+    );
+    ASSERT_TRUE(generatedOutputResource.valid());
+
+    const GpuQueueRequest graphicsComputeQueue{
+        GpuQueueCapability::Compute,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint producerScheduling;
+    producerScheduling.cost = GpuTaskCostHint::Small;
+    producerScheduling.overlapPreferred = false;
+    producerScheduling.avoidQueueCrossing = true;
+    producerScheduling.forceSubmissionBoundary = false;
+    producerScheduling.allowPacketMerge = true;
+    producerScheduling.mergeWithPrevious = false;
+    const GpuTaskResourceUse producerUses[] = {
+        GpuTaskResourceUse{
+            .resource = generatedOutputResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    bool producerObservedUnorderedAccess = false;
+    const GpuTaskId producerTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/skinning_generated_output_producer"))
+            .setMarkerLabel("Skinning Generated Output")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(producerScheduling)
+            .setResourceUses(producerUses, LengthOf(producerUses)),
+        NativePacketPrefixTask::Payload{
+            .buffer = generatedOutput.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .recorded = &producerObservedUnorderedAccess,
+        }
+    );
+    ASSERT_TRUE(producerTask.valid());
+
+    GpuTaskSchedulingHint finalizerScheduling = producerScheduling;
+    finalizerScheduling.mergeWithPrevious = true;
+    const GpuTaskResourceUse finalizerUses[] = {
+        GpuTaskResourceUse{
+            .resource = generatedOutputResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    bool finalizerObservedShaderResource = false;
+    QueueSubmissionToken finalizerAcceptedToken;
+    const GpuTaskId finalizerTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/skinning_generated_output_finalize"))
+            .setMarkerLabel("Skinning Finalize States")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(finalizerScheduling)
+            .setDependencies(&producerTask, 1u)
+            .setResourceUses(finalizerUses, LengthOf(finalizerUses)),
+        NativePacketPrefixTask::Payload{
+            .buffer = generatedOutput.get(),
+            .expectedState = ResourceStates::ShaderResource,
+            .recorded = &finalizerObservedShaderResource,
+            .acceptedToken = &finalizerAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(finalizerTask.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    ASSERT_TRUE(primaryGraphicsQueue.valid());
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/skinning_output_finalize_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuTaskQueueAssignment* const producerAssignment = assignments.find(producerTask);
+    const GpuTaskQueueAssignment* const finalizerAssignment = assignments.find(finalizerTask);
+    ASSERT_NE(producerAssignment, nullptr);
+    ASSERT_NE(finalizerAssignment, nullptr);
+    EXPECT_EQ(producerAssignment->queue, primaryGraphicsQueue);
+    EXPECT_EQ(finalizerAssignment->queue, primaryGraphicsQueue);
+    const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producerTask);
+    const GpuSubmissionPacketId finalizerPacket = compiledGraph.packetForTask(finalizerTask);
+    ASSERT_TRUE(producerPacket.valid());
+    ASSERT_TRUE(finalizerPacket.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(finalizerPacket, producerPacket);
+    const GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producerTask);
+    const GpuCompiledTask* const compiledFinalizer = compiledGraph.findTask(finalizerTask);
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledFinalizer, nullptr);
+    ASSERT_EQ(compiledProducer->prologueBarrierCount, 1u);
+    ASSERT_EQ(compiledFinalizer->prologueBarrierCount, 1u);
+    const GpuCompiledBarrier* const producerBarriers = compiledGraph.taskPrologueBarriers(producerTask);
+    const GpuCompiledBarrier* const finalizerBarriers = compiledGraph.taskPrologueBarriers(finalizerTask);
+    ASSERT_NE(producerBarriers, nullptr);
+    ASSERT_NE(finalizerBarriers, nullptr);
+    EXPECT_EQ(producerBarriers[0u].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(producerBarriers[0u].resource, generatedOutputResource);
+    EXPECT_EQ(producerBarriers[0u].before, ResourceStates::Common);
+    EXPECT_EQ(producerBarriers[0u].after, ResourceStates::UnorderedAccess);
+    EXPECT_EQ(finalizerBarriers[0u].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(finalizerBarriers[0u].resource, generatedOutputResource);
+    EXPECT_EQ(finalizerBarriers[0u].before, ResourceStates::UnorderedAccess);
+    EXPECT_EQ(finalizerBarriers[0u].after, ResourceStates::ShaderResource);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+    EXPECT_TRUE(producerObservedUnorderedAccess);
+    EXPECT_TRUE(finalizerObservedShaderResource);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(producerPacket);
+    ASSERT_NE(finalState, nullptr);
+    auto stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getBufferState(generatedOutput.get()), ResourceStates::ShaderResource);
+    stateProbe->close();
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken packetToken = transaction.packetToken(producerPacket);
+    ASSERT_TRUE(packetToken.valid());
+    ASSERT_TRUE(finalizerAcceptedToken.valid());
+    EXPECT_EQ(finalizerAcceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(finalizerAcceptedToken.value, packetToken.value);
+    ASSERT_TRUE(device.waitForIdle());
+}
+
+
 // The optional IR lowerer selects one packet from a full primitive capture only after graph-aware preflight. A
 // malformed later command in that packet must leave the earlier valid copy unrecorded; the success paths prove both
 // the ordinary Core::CommandList lowerer and the explicitly pre-stated direct-Vulkan CopyBuffer prototype.

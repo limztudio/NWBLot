@@ -259,7 +259,8 @@ private:
         Core::GpuGraphResourceId materialContextSlots,
         const Core::GpuGraphResourceId* softwareTraceGeometryResources,
         usize softwareTraceGeometryResourceCount,
-        Core::GpuTimingSubmissionTicket& timingTicket
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        Optional<Core::GpuTimingMeasure>& causticPhotonTiming
     );
     [[nodiscard]] bool declareDeferredSurfelGiTask(
         DeferredFrameTargets& deferredTargets,
@@ -303,6 +304,7 @@ private:
         Core::GpuTimingSubmissionTicket& softwareCausticsTimingTicket,
         Core::GpuTimingSubmissionTicket& surfelGiTimingTicket,
         Core::GpuTimingSubmissionTicket& hardwareCausticsTimingTicket,
+        Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
         Core::GpuTimingSubmissionTicket& lightingTimingTicket,
         Core::GpuTimingSubmissionTicket& compositeTimingTicket,
         Core::GpuTimingSubmissionTicket& presentTimingTicket,
@@ -386,6 +388,8 @@ private:
     // The temporal accumulator bootstrap is conditional, but when present it must remain in the same packet as the
     // selected caustic producer; that producer commits initialization only on acceptance.
     Core::GpuTaskId m_deferredCausticAccumulatorBootstrapClearTask;
+    // A warm temporal accumulator decays in a mergeable graph task before its selected photon producer.
+    Core::GpuTaskId m_deferredCausticAccumulatorDecayTask;
     bool m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
     // The typed output clear plus optional initialize/copy prefix form Surfel GI's graph-owned setup. The final GI
     // task remains the semantic effects endpoint, but must share the output-clear packet.

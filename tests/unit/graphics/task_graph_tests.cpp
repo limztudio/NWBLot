@@ -5230,8 +5230,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedPostGbufferTraceGeometryStates){
 
 // Software caustics succeeds the graph-owned shadow callback. Its photon shader samples the same depth layout and
 // descriptor-selected traversal inputs, so the task must inherit those states rather than reintroducing a native
-// entry bridge. A fresh temporal accumulator is zeroed by a typed graph clear; later decay/resolve work remains
-// task-local and is represented here only by its entry UAvs.
+// entry bridge. A fresh temporal accumulator is zeroed by a typed graph clear; warm decay now has its own preceding
+// graph task, while resolve work remains task-local and is represented here only by its entry UAvs.
 TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -6343,8 +6343,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelInitializationEntryStates){
 
 
 // Hardware caustics inherits the opaque prefix's descriptor-selected producer inputs on its Graphics packet. The
-// producer's fresh-accumulator clear is graph-owned, while temporal decay/resolve remain task-local. This pins the
-// static entry batch and CopyDest-to-UAV handoff the graph must establish before the ray-tracing callback records.
+// producer's fresh-accumulator clear and warm temporal decay are graph-owned. This pins the static entry batch and
+// CopyDest-to-UAV handoff the graph must establish before the ray-tracing callback records.
 TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -6682,6 +6682,147 @@ TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
     ));
     ASSERT_EQ(compiledGraph.packet(causticsPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(causticsPacket)[0u].producer, prefixPacket);
+}
+
+
+// Once temporal caustic history is initialized, its decay must be a real graph task before the selected photon
+// producer. The initial ShaderResource -> UAV transition belongs to decay; the producer then needs a same-UAV
+// ordering barrier. Exercise both software's Compute route and hardware's Graphics route without a native bridge.
+TEST(GpuTaskGraph, PlansWarmCausticAccumulatorDecayBeforePhotonProducer){
+    const auto verifyRoute = [](const bool hardwareCaustics){
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId accumulator = AddTextureMetadata(
+            graph,
+            Name("tests/task_graph/warm_caustics_accumulator"),
+            "Warm Caustic Accumulator",
+            Graphics::ResourceStates::ShaderResource,
+            Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+        );
+        ASSERT_TRUE(accumulator.valid());
+
+        const Graphics::GpuQueueRequest graphicsRequest{
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueuePreference::Graphics,
+            false,
+            false,
+        };
+        const Graphics::GpuQueueRequest computeRequest{
+            Graphics::GpuQueueCapability::Compute,
+            Graphics::GpuQueuePreference::Compute,
+            false,
+            false,
+        };
+        Graphics::GpuTaskSchedulingHint decayScheduling;
+        decayScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+        decayScheduling.allowPacketMerge = true;
+        const Graphics::GpuTaskResourceUse decayUses[] = {
+            Graphics::GpuTaskResourceUse{
+                .resource = accumulator,
+                .range = {},
+                .requiredState = Graphics::ResourceStates::UnorderedAccess,
+                .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+            },
+        };
+        Graphics::GpuTaskDesc decayDesc;
+        decayDesc
+            .setIdentity(Name("tests/task_graph/warm_caustics_accumulator_decay"))
+            .setMarkerLabel("Caustic Accumulator Decay")
+            .setQueue(hardwareCaustics ? graphicsRequest : computeRequest)
+            .setScheduling(decayScheduling)
+            .setResourceUses(decayUses, LengthOf(decayUses))
+        ;
+        const Graphics::GpuTaskId decay = graph.addTask(decayDesc);
+        ASSERT_TRUE(decay.valid());
+
+        Graphics::GpuTaskSchedulingHint producerScheduling = decayScheduling;
+        producerScheduling.mergeWithPrevious = true;
+        const Graphics::GpuTaskResourceUse producerUses[] = {
+            Graphics::GpuTaskResourceUse{
+                .resource = accumulator,
+                .range = {},
+                .requiredState = Graphics::ResourceStates::UnorderedAccess,
+                .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+            },
+        };
+        Graphics::GpuTaskDesc producerDesc;
+        producerDesc
+            .setIdentity(Name("tests/task_graph/warm_caustics_photon_producer"))
+            .setMarkerLabel(hardwareCaustics ? "Hardware Caustics" : "Software Caustics")
+            .setQueue(hardwareCaustics ? graphicsRequest : computeRequest)
+            .setScheduling(producerScheduling)
+            .setDependencies(&decay, 1u)
+            .setResourceUses(producerUses, LengthOf(producerUses))
+        ;
+        const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+        ASSERT_TRUE(producer.valid());
+
+        const Graphics::GpuPhysicalQueueInfo queues[] = {
+            GraphicsQueue(),
+            DedicatedComputeQueue(),
+        };
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = queues,
+            .queueCount = LengthOf(queues),
+        };
+        Graphics::GpuTaskGraphCompileOptions compileOptions;
+        compileOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, compileOptions));
+        EXPECT_TRUE(HasInferredHazard(
+            analysis,
+            decay,
+            producer,
+            accumulator,
+            Graphics::GpuTaskHazardType::WriteAfterWrite
+        ));
+
+        const Graphics::GpuTaskQueueAssignment* const decayAssignment = assignments.find(decay);
+        const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
+        ASSERT_NE(decayAssignment, nullptr);
+        ASSERT_NE(producerAssignment, nullptr);
+        const Graphics::CommandQueue::Enum expectedQueue = hardwareCaustics
+            ? Graphics::CommandQueue::Graphics
+            : Graphics::CommandQueue::Compute
+        ;
+        EXPECT_EQ(decayAssignment->queueClass, expectedQueue);
+        EXPECT_EQ(producerAssignment->queueClass, expectedQueue);
+
+        const Graphics::GpuSubmissionPacketId decayPacket = compiledGraph.packetForTask(decay);
+        const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
+        ASSERT_TRUE(decayPacket.valid());
+        EXPECT_EQ(producerPacket, decayPacket);
+        ASSERT_EQ(compiledGraph.packetCount(), 1u);
+        const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(decayPacket);
+        ASSERT_EQ(packet.taskCount, 2u);
+        ASSERT_NE(compiledGraph.packetTasks(decayPacket), nullptr);
+        EXPECT_EQ(compiledGraph.packetTasks(decayPacket)[0u], decay);
+        EXPECT_EQ(compiledGraph.packetTasks(decayPacket)[1u], producer);
+
+        const Graphics::GpuCompiledTask* const compiledDecay = compiledGraph.findTask(decay);
+        const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+        ASSERT_NE(compiledDecay, nullptr);
+        ASSERT_NE(compiledProducer, nullptr);
+        ASSERT_EQ(compiledDecay->prologueBarrierCount, 1u);
+        ASSERT_EQ(compiledProducer->prologueBarrierCount, 1u);
+        const Graphics::GpuCompiledBarrier* const decayBarrier = compiledGraph.taskPrologueBarriers(decay);
+        const Graphics::GpuCompiledBarrier* const producerBarrier = compiledGraph.taskPrologueBarriers(producer);
+        ASSERT_NE(decayBarrier, nullptr);
+        ASSERT_NE(producerBarrier, nullptr);
+        EXPECT_EQ(decayBarrier[0u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
+        EXPECT_EQ(decayBarrier[0u].resource, accumulator);
+        EXPECT_EQ(decayBarrier[0u].before, Graphics::ResourceStates::ShaderResource);
+        EXPECT_EQ(decayBarrier[0u].after, Graphics::ResourceStates::UnorderedAccess);
+        EXPECT_EQ(producerBarrier[0u].type, Graphics::GpuCompiledBarrierType::TextureUav);
+        EXPECT_EQ(producerBarrier[0u].resource, accumulator);
+        EXPECT_EQ(producerBarrier[0u].before, Graphics::ResourceStates::UnorderedAccess);
+        EXPECT_EQ(producerBarrier[0u].after, Graphics::ResourceStates::UnorderedAccess);
+    };
+
+    verifyRoute(false);
+    verifyRoute(true);
 }
 
 

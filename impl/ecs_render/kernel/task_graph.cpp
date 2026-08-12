@@ -967,6 +967,18 @@ namespace __hidden_renderer_task_graph{
     };
 }
 
+// A tiny setup dispatch can otherwise be rerouted to Graphics while its large Compute consumer selects the dedicated
+// Compute transport. Use this only for work that must merge into that consumer's packet, so both requests select the
+// same physical queue whenever a Compute transport is available.
+[[nodiscard]] static Core::GpuQueueRequest ComputePacketQueueRequest(){
+    return Core::GpuQueueRequest{
+        Core::GpuQueueCapability::Compute,
+        Core::GpuQueuePreference::Compute,
+        true,
+        false,
+    };
+}
+
 // Native image clears require Transfer capability, while Surfel GI keeps its output initialization and compute work
 // in one packet on the selected Compute transport. Lock the Compute preference so a tiny clear does not fall back to
 // Graphics merely because it is too small to amortize a queue crossing; Graphics remains the explicit fallback when
@@ -3723,13 +3735,15 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     const Core::GpuGraphResourceId materialContextSlots,
     const Core::GpuGraphResourceId* const softwareTraceGeometryResources,
     const usize softwareTraceGeometryResourceCount,
-    Core::GpuTimingSubmissionTicket& timingTicket
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    Optional<Core::GpuTimingMeasure>& causticPhotonTiming
 ){
     using namespace __hidden_renderer_task_graph;
 
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
     m_deferredCausticAccumulatorBootstrapClearTask = {};
+    m_deferredCausticAccumulatorDecayTask = {};
     m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
 
     // This remains the direct successor of Shadow Visibility in the deferred graph. A distinct Compute family is
@@ -3947,6 +3961,50 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         causticsDependency = accumulatorBootstrapClearTask;
     }
 
+    const bool graphOwnsAccumulatorDecay =
+        m_rayTracingState.m_causticAccumulatorInitialized
+        && m_rayTracingState.m_causticTemporalDecay > 0.f
+    ;
+    if(graphOwnsAccumulatorDecay){
+        Core::GpuTaskSchedulingHint accumulatorDecayScheduling;
+        accumulatorDecayScheduling.cost = Core::GpuTaskCostHint::Tiny;
+        accumulatorDecayScheduling.allowPacketMerge = true;
+        accumulatorDecayScheduling.mergeWithPrevious = true;
+        const Core::GpuTaskResourceUse accumulatorDecayUses[] = {
+            ReadWriteTextureUse(
+                causticAccumulator,
+                ECSRenderDetail::s_CausticAccumulatorSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ),
+        };
+        Core::GpuTaskDesc accumulatorDecayDesc;
+        accumulatorDecayDesc
+            .setIdentity(Name("render.software_caustics.accumulator_decay"))
+            .setMarkerLabel("Software Caustics Accumulator Decay")
+            .setQueue(ComputePacketQueueRequest())
+            .setScheduling(accumulatorDecayScheduling)
+            .setDependencies(&causticsDependency, 1u)
+            .setResourceUses(accumulatorDecayUses, LengthOf(accumulatorDecayUses))
+        ;
+        const Core::GpuTaskId accumulatorDecayTask = m_raytracingSystem.declareCausticAccumulatorDecayTask(
+            m_deferredLightingTaskGraph,
+            accumulatorDecayDesc,
+            deferredTargets,
+            &m_preparedShadowVisibilityReady,
+            m_rayTracingState.m_causticTemporalDecay,
+            false,
+            timingTicket,
+            &causticPhotonTiming,
+            true
+        );
+        if(!accumulatorDecayTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics accumulator decay"));
+            return false;
+        }
+        m_deferredCausticAccumulatorDecayTask = accumulatorDecayTask;
+        causticsDependency = accumulatorDecayTask;
+    }
+
     Core::GpuTaskSchedulingHint causticsScheduling = scheduling;
     causticsScheduling.forceSubmissionBoundary = false;
     causticsScheduling.allowPacketMerge = true;
@@ -3968,6 +4026,8 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         timingTicket,
         true,
         graphOwnsAccumulatorBootstrapClear,
+        graphOwnsAccumulatorDecay,
+        &causticPhotonTiming,
         graphOwnsAccumulatorBootstrapClear
             ? &m_deferredCausticAccumulatorBootstrapProducerDispatched
             : nullptr
@@ -4449,6 +4509,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::GpuTimingSubmissionTicket& softwareCausticsTimingTicket,
     Core::GpuTimingSubmissionTicket& surfelGiTimingTicket,
     Core::GpuTimingSubmissionTicket& hardwareCausticsTimingTicket,
+    Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
     Core::GpuTimingSubmissionTicket& lightingTimingTicket,
     Core::GpuTimingSubmissionTicket& compositeTimingTicket,
     Core::GpuTimingSubmissionTicket& presentTimingTicket,
@@ -4479,6 +4540,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
     m_deferredCausticAccumulatorBootstrapClearTask = {};
+    m_deferredCausticAccumulatorDecayTask = {};
     m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
@@ -5215,7 +5277,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         materialContextSlots,
         softwareTraceGeometryResources.data(),
         softwareTraceGeometryResources.size(),
-        softwareCausticsTimingTicket
+        softwareCausticsTimingTicket,
+        causticPhotonTiming
     ))
         return;
     const Core::GpuTaskId effectsTask = declaresHardwareCaustics
@@ -5474,6 +5537,50 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             causticsDependency = accumulatorBootstrapClearTask;
         }
 
+        const bool graphOwnsAccumulatorDecay =
+            m_rayTracingState.m_causticAccumulatorInitialized
+            && m_rayTracingState.m_causticTemporalDecay > 0.f
+        ;
+        if(graphOwnsAccumulatorDecay){
+            Core::GpuTaskSchedulingHint accumulatorDecayScheduling;
+            accumulatorDecayScheduling.cost = Core::GpuTaskCostHint::Tiny;
+            accumulatorDecayScheduling.allowPacketMerge = true;
+            accumulatorDecayScheduling.mergeWithPrevious = true;
+            const Core::GpuTaskResourceUse accumulatorDecayUses[] = {
+                ReadWriteTextureUse(
+                    causticAccumulator,
+                    ECSRenderDetail::s_CausticAccumulatorSubresources,
+                    Core::ResourceStates::UnorderedAccess
+                ),
+            };
+            Core::GpuTaskDesc accumulatorDecayDesc;
+            accumulatorDecayDesc
+                .setIdentity(Name("render.hardware_caustics.accumulator_decay"))
+                .setMarkerLabel("Hardware Caustics Accumulator Decay")
+                .setQueue(GraphicsQueueRequest())
+                .setScheduling(accumulatorDecayScheduling)
+                .setDependencies(&causticsDependency, 1u)
+                .setResourceUses(accumulatorDecayUses, LengthOf(accumulatorDecayUses))
+            ;
+            const Core::GpuTaskId accumulatorDecayTask = m_raytracingSystem.declareCausticAccumulatorDecayTask(
+                m_deferredLightingTaskGraph,
+                accumulatorDecayDesc,
+                deferredTargets,
+                &m_preparedShadowVisibilityReady,
+                m_rayTracingState.m_causticTemporalDecay,
+                true,
+                hardwareCausticsTimingTicket,
+                &causticPhotonTiming,
+                true
+            );
+            if(!accumulatorDecayTask.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics accumulator decay"));
+                return;
+            }
+            m_deferredCausticAccumulatorDecayTask = accumulatorDecayTask;
+            causticsDependency = accumulatorDecayTask;
+        }
+
         Core::GpuTaskSchedulingHint hardwareCausticsScheduling = hardwareScheduling;
         hardwareCausticsScheduling.forceSubmissionBoundary = false;
         hardwareCausticsScheduling.allowPacketMerge = true;
@@ -5495,6 +5602,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             hardwareCausticsTimingTicket,
             true,
             graphOwnsAccumulatorBootstrapClear,
+            graphOwnsAccumulatorDecay,
+            &causticPhotonTiming,
             graphOwnsAccumulatorBootstrapClear
                 ? &m_deferredCausticAccumulatorBootstrapProducerDispatched
                 : nullptr

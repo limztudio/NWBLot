@@ -299,6 +299,27 @@ public:
     // The temporal bootstrap clear is recorded by a graph task, but this mirror changes only when the containing
     // caustic producer packet accepts.
     void confirmCausticAccumulatorBootstrapClear();
+    // A warm temporal accumulator decays in its own graph task before the selected photon producer.  The task
+    // shares the producer packet, so the compiler owns the UAV handoff between the two dispatches.
+    [[nodiscard]] Core::GpuTaskId declareCausticAccumulatorDecayTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        const bool* shadowVisibilityPrepared,
+        f32 decayFactor,
+        bool hardwareCaustics,
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        Optional<Core::GpuTimingMeasure>* causticPhotonTiming,
+        bool graphEntryStatesOwned = false
+    );
+    // Record the decay dispatch itself.  Graph callers leave entry state lowering and the following producer's
+    // UAV dependency to the compiler; direct compatibility callers retain the existing native setup.
+    [[nodiscard]] bool dispatchCausticAccumulatorDecay(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        f32 decayFactor,
+        bool graphEntryStatesOwned = false
+    );
     // Hybrid mode folds software transparent transmittance onto hardware opaque visibility. The shared deferred
     // graph can supply the traversal entry states; direct compatibility callers retain their native setup.
     [[nodiscard]] bool renderGpuBvhShadowVisibility(
@@ -316,6 +337,8 @@ public:
         Core::GpuTimingSubmissionTicket& timingTicket,
         bool graphEntryStatesOwned = false,
         bool graphOwnsAccumulatorBootstrapClear = false,
+        bool graphOwnsAccumulatorDecay = false,
+        Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr,
         bool* accumulatorBootstrapProducerDispatched = nullptr
     );
     // The shared deferred graph supplies descriptor-visible shared-deferred entry states. Direct compatibility
@@ -324,7 +347,9 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool graphEntryStatesOwned = false,
-        bool graphOwnsAccumulatorBootstrapClear = false
+        bool graphOwnsAccumulatorBootstrapClear = false,
+        bool graphOwnsAccumulatorDecay = false,
+        Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr
     );
     [[nodiscard]] bool hasCausticWork()const noexcept;
     [[nodiscard]] bool prepareHwCausticResources(DeferredFrameTargets& targets);
@@ -336,6 +361,8 @@ public:
         Core::GpuTimingSubmissionTicket& timingTicket,
         bool graphEntryStatesOwned = false,
         bool graphOwnsAccumulatorBootstrapClear = false,
+        bool graphOwnsAccumulatorDecay = false,
+        Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr,
         bool* accumulatorBootstrapProducerDispatched = nullptr
     );
     // The shared deferred graph supplies descriptor-visible hardware-caustic producer inputs. Direct
@@ -344,7 +371,9 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool graphEntryStatesOwned = false,
-        bool graphOwnsAccumulatorBootstrapClear = false
+        bool graphOwnsAccumulatorBootstrapClear = false,
+        bool graphOwnsAccumulatorDecay = false,
+        Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr
     );
     [[nodiscard]] bool hasHwCausticWork()const noexcept;
     [[nodiscard]] bool hasSurfelWork()const noexcept;

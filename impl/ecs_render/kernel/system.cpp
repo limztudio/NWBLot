@@ -249,6 +249,7 @@ void RendererSystem::invalidateResources(){
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
     m_deferredCausticAccumulatorBootstrapClearTask = {};
+    m_deferredCausticAccumulatorDecayTask = {};
     m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
@@ -508,6 +509,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
     m_deferredCausticAccumulatorBootstrapClearTask = {};
+    m_deferredCausticAccumulatorDecayTask = {};
     m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
@@ -774,6 +776,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingSubmissionTicket softwareCausticsTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket surfelGiTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket hardwareCausticsTimingTicket(m_graphics.gpuTiming());
+    // A warm temporal decay starts this interval in its graph task and the selected photon producer closes it.
+    Optional<Core::GpuTimingMeasure> causticPhotonTiming;
     const bool clearAvboitTargets = hasTransparentRenderers || m_avboitState.m_targetsNeedClear;
     Core::GpuTimingSubmissionTicket avboitPreTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket avboitDepthWarpTimingTicket(m_graphics.gpuTiming());
@@ -816,6 +820,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         softwareCausticsTimingTicket,
         surfelGiTimingTicket,
         hardwareCausticsTimingTicket,
+        causticPhotonTiming,
         deferredLightingTimingTicket,
         deferredCompositeTimingTicket,
         deferredPresentTimingTicket,
@@ -849,6 +854,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             softwareCausticsTimingTicket,
             surfelGiTimingTicket,
             hardwareCausticsTimingTicket,
+            causticPhotonTiming,
             deferredLightingTimingTicket,
             deferredCompositeTimingTicket,
             deferredPresentTimingTicket,
@@ -1361,6 +1367,22 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && causticAccumulatorBootstrapClearPacket == causticsPacket
         )
     ;
+    // A warm temporal accumulator decays in the same selected caustics packet.  If it split, the photon timing
+    // scope could span an unsubmitted packet and the compiler-owned UAV dependency would no longer protect the
+    // following atomic producer.
+    const Core::GpuSubmissionPacketId causticAccumulatorDecayPacket =
+        m_deferredCausticAccumulatorDecayTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticAccumulatorDecayTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    const bool causticAccumulatorDecayMergedIntoCausticsPacket =
+        !m_deferredCausticAccumulatorDecayTask.valid()
+        || (
+            causticAccumulatorDecayPacket.valid()
+            && causticsPacket.valid()
+            && causticAccumulatorDecayPacket == causticsPacket
+        )
+    ;
     // Keep every recording and submission span derived from compiled packet handles. The renderer names semantic
     // endpoints only; raw compiler-order indices remain inside the task-graph runtime.
     const Core::GpuSubmissionPacketRange shadowPreparePacketRange =
@@ -1483,6 +1505,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredCausticIrradianceClearTask.valid()
         || !causticIrradianceClearMergedIntoCausticsPacket
         || !causticAccumulatorBootstrapClearMergedIntoCausticsPacket
+        || !causticAccumulatorDecayMergedIntoCausticsPacket
         || !m_deferredSurfelGiTask.valid()
         || !m_deferredSurfelGiIrradianceClearTask.valid()
         || !surfelGiOutputClearMergedIntoGiPacket
@@ -1700,6 +1723,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(asyncFinalTiming){
             asyncFinalTiming->discardTiming();
             asyncFinalTiming.reset();
+        }
+        if(causticPhotonTiming){
+            causticPhotonTiming->discardTiming();
+            causticPhotonTiming.reset();
         }
         frameTimingTransaction.discard();
         discardTimingTickets();

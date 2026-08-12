@@ -382,9 +382,9 @@ public:
         bool graphOwnsResolve = false,
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr
     );
-    // The normal deferred graph records geometry downsample after the selected photon producer, then wavelet
-    // resolve. Their exact resource uses own the accumulator and geometry-cache UAV-to-SRV handoffs; direct
-    // compatibility callers keep the full resolve attached to the producer.
+    // The normal deferred graph records geometry downsample, resolve prepare, the first wavelet pass, then the
+    // remaining wavelet body after the selected photon producer. Their exact resource uses own the immutable and
+    // first ping-pong UAV-to-SRV handoffs; direct compatibility callers keep the full resolve attached to it.
     [[nodiscard]] Core::GpuTaskId declareCausticGeometryDownsampleTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -403,14 +403,38 @@ public:
         Optional<Core::GpuTimingMeasure>* causticResolveTiming,
         bool graphEntryStatesOwned = false
     );
-    // Narrow entries for the graph-owned geometry/wavelet callbacks. The shared direct implementation remains
-    // private and retains its original single-call timing scope.
+    [[nodiscard]] Core::GpuTaskId declareCausticResolvePrepareTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        const bool* causticProducerDispatched,
+        bool graphEntryStatesOwned = false
+    );
+    [[nodiscard]] Core::GpuTaskId declareCausticResolveWaveletTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        const bool* causticProducerDispatched,
+        bool graphEntryStatesOwned = false
+    );
+    // Narrow entries for the graph-owned geometry/prepare/first-wavelet callbacks. The shared direct
+    // implementation remains private and retains its original single-call timing scope.
     void dispatchGraphCausticGeometryDownsample(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool graphEntryStatesOwned = false
     );
     void dispatchGraphCausticResolve(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned = false
+    );
+    void dispatchGraphCausticResolvePrepare(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned = false
+    );
+    void dispatchGraphCausticResolveWavelet(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool graphEntryStatesOwned = false
@@ -640,8 +664,8 @@ private:
     void advanceCausticTemporalReuse();
     // Bootstrap or decay temporal splat accumulation before photon atomic adds.
     void prepareCausticAccumulatorForSplat(Core::CommandList& commandList, DeferredFrameTargets& targets, f32 decayFactor);
-    // Shared software/hardware caustic resolve. Normal graph callers split geometry downsample from wavelet resolve
-    // so they declare the accumulator and geometry-cache handoffs; direct compatibility callers retain native setup.
+    // Shared software/hardware caustic resolve. Normal graph callers split geometry, prepare, and wavelet stages so
+    // they declare immutable inputs and the first ping-pong handoffs; direct compatibility callers retain setup.
     void dispatchCausticResolve(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -651,6 +675,18 @@ private:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool graphEntryStatesOwned = false
+    );
+    void dispatchCausticResolvePrepare(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned = false,
+        bool graphOwnsPassEntryStates = false
+    );
+    void dispatchCausticResolveFirstWavelet(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned = false,
+        bool graphOwnsPassEntryStates = false
     );
     void dispatchCausticWaveletResolve(
         Core::CommandList& commandList,

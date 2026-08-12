@@ -253,6 +253,8 @@ void RendererSystem::invalidateResources(){
     m_deferredCausticAccumulatorDecayTask = {};
     m_deferredCausticPhotonTask = {};
     m_deferredCausticGeometryTask = {};
+    m_deferredCausticResolvePrepareTask = {};
+    m_deferredCausticResolveWaveletTask = {};
     m_deferredCausticProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
@@ -516,6 +518,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredCausticAccumulatorDecayTask = {};
     m_deferredCausticPhotonTask = {};
     m_deferredCausticGeometryTask = {};
+    m_deferredCausticResolvePrepareTask = {};
+    m_deferredCausticResolveWaveletTask = {};
     m_deferredCausticProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
@@ -1237,6 +1241,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticGeometryTask)
         : Core::GpuSubmissionPacketId{}
     ;
+    const Core::GpuSubmissionPacketId causticResolvePreparePacket = m_deferredCausticResolvePrepareTask.valid()
+        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticResolvePrepareTask)
+        : Core::GpuSubmissionPacketId{}
+    ;
+    const Core::GpuSubmissionPacketId causticResolveWaveletPacket = m_deferredCausticResolveWaveletTask.valid()
+        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticResolveWaveletTask)
+        : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuSubmissionPacketId causticIrradianceClearPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredCausticIrradianceClearTask
     );
@@ -1363,9 +1375,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? hardwareCausticsPacket
         : softwareCausticsPacket
     ;
-    // Photon, geometry, and wavelet resolve are distinct callbacks so the compiler can lower both their UAV-to-SRV
-    // handoffs, but they remain one semantic caustics submission: clear acceptance, timing, and all dependent
-    // effects keep the established packet endpoint.
+    // Photon, geometry, resolve prepare, first wavelet, and the timed tail are distinct callbacks so the compiler
+    // can lower their immutable and first ping-pong UAV-to-SRV handoffs. They remain one semantic submission: clear
+    // acceptance, timing, and all dependent effects keep the established packet endpoint.
     const bool causticPhotonMergedIntoCausticsPacket =
         m_deferredCausticPhotonTask.valid()
         && causticPhotonPacket.valid()
@@ -1377,6 +1389,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && causticGeometryPacket.valid()
         && causticsPacket.valid()
         && causticGeometryPacket == causticsPacket
+    ;
+    const bool causticResolvePrepareMergedIntoCausticsPacket =
+        m_deferredCausticResolvePrepareTask.valid()
+        && causticResolvePreparePacket.valid()
+        && causticsPacket.valid()
+        && causticResolvePreparePacket == causticsPacket
+    ;
+    const bool causticResolveWaveletMergedIntoCausticsPacket =
+        m_deferredCausticResolveWaveletTask.valid()
+        && causticResolveWaveletPacket.valid()
+        && causticsPacket.valid()
+        && causticResolveWaveletPacket == causticsPacket
     ;
     const bool causticIrradianceClearMergedIntoCausticsPacket =
         m_deferredCausticIrradianceClearTask.valid()
@@ -1555,6 +1579,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !causticPhotonMergedIntoCausticsPacket
         || !m_deferredCausticGeometryTask.valid()
         || !causticGeometryMergedIntoCausticsPacket
+        || !m_deferredCausticResolvePrepareTask.valid()
+        || !causticResolvePrepareMergedIntoCausticsPacket
+        || !m_deferredCausticResolveWaveletTask.valid()
+        || !causticResolveWaveletMergedIntoCausticsPacket
         || !causticIrradianceClearMergedIntoCausticsPacket
         || !causticAccumulatorNonTemporalClearMergedIntoCausticsPacket
         || !causticAccumulatorBootstrapClearMergedIntoCausticsPacket

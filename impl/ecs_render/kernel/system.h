@@ -395,10 +395,13 @@ private:
     Core::GpuTaskId m_deferredCausticAccumulatorNonTemporalClearTask;
     // A warm temporal accumulator decays in a mergeable graph task before its selected photon producer.
     Core::GpuTaskId m_deferredCausticAccumulatorDecayTask;
-    // Photon, geometry downsample, and wavelet resolve are distinct graph tasks, but must remain in the selected
-    // caustics packet so the compiler owns both UAV-to-SRV handoffs without changing the effects endpoint.
+    // Photon, geometry downsample, resolve prepare, the first wavelet pass, and the timed wavelet tail are distinct
+    // graph tasks, but must remain in the selected caustics packet so the compiler owns immutable and first
+    // ping-pong handoffs without changing the effects endpoint.
     Core::GpuTaskId m_deferredCausticPhotonTask;
     Core::GpuTaskId m_deferredCausticGeometryTask;
+    Core::GpuTaskId m_deferredCausticResolvePrepareTask;
+    Core::GpuTaskId m_deferredCausticResolveWaveletTask;
     bool m_deferredCausticProducerDispatched = false;
     // The typed output clear plus optional initialize/copy prefix form Surfel GI's graph-owned setup. The final GI
     // task remains the semantic effects endpoint, but must share the output-clear packet.

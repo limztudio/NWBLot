@@ -78,6 +78,13 @@ RendererSystem::RendererSystem(
 RendererSystem::~RendererSystem(){}
 
 
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+void RendererSystem::forceHybridSceneTraversalFallbackForTesting()noexcept{
+    m_raytracingSystem.forceHybridSceneTraversalFallbackForTesting();
+}
+#endif
+
+
 void RendererSystem::reportLaggedLightingTransition(const LaggedLightingReport report, const u64 targetGeneration){
     if(m_laggedLightingReport == report && m_laggedLightingReportGeneration == targetGeneration)
         return;

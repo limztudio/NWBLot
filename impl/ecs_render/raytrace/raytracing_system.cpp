@@ -637,6 +637,12 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
     return true;
 }
 
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+void RendererRayTracingSystem::forceHybridSceneTraversalFallbackForTesting()noexcept{
+    m_forceHybridSceneTraversalFallbackForTesting = true;
+}
+#endif
+
 bool RendererRayTracingSystem::retainPreparedSceneBvhUploads(
     Core::GpuTaskGraph& graph,
     Core::GpuUploadBlobId& outNodeBlob,
@@ -1543,7 +1549,19 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
                 && sceneBvhBatchGraphOwned
                 && m_shadowVisibilityHybridPipelinePreflighted
             ;
-            bool sceneSwBvhReady = canRecordSceneSwBvh && (
+            bool forceHybridSceneTraversalFallback = false;
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+            forceHybridSceneTraversalFallback =
+                hybridSceneTraversalGraphOwned
+                && m_forceHybridSceneTraversalFallbackForTesting
+            ;
+            if(forceHybridSceneTraversalFallback){
+                m_forceHybridSceneTraversalFallbackForTesting = false;
+                m_expectHybridSceneTraversalRecoveryForTesting = true;
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test forced hybrid software traversal fallback"));
+            }
+#endif
+            bool sceneSwBvhReady = !forceHybridSceneTraversalFallback && canRecordSceneSwBvh && (
                 hybridSceneTraversalGraphOwned
                     ? recordPreparedSceneSwBvhTraversal()
                     : buildSceneSwBvh(
@@ -1554,7 +1572,11 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
                         meshSwBvhBuildsGraphOwned
                     )
             );
-            if(!sceneSwBvhReady && hybridSceneTraversalGraphOwned){
+            if(
+                !sceneSwBvhReady
+                && hybridSceneTraversalGraphOwned
+                && !forceHybridSceneTraversalFallback
+            ){
                 sceneSwBvhReady = buildSceneSwBvh(
                     commandList,
                     scratchArena,
@@ -1570,8 +1592,15 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
                 && rayTracingState().m_sceneBvhInstanceCount > 0u
                 && m_shadowVisibilityHybridPipelinePreflighted
             ;
-            if(swReady)
+            if(swReady){
                 rayTracingState().m_hybridTransparentShadowReady = true;
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+                if(m_expectHybridSceneTraversalRecoveryForTesting){
+                    m_expectHybridSceneTraversalRecoveryForTesting = false;
+                    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test hybrid software traversal recovered"));
+                }
+#endif
+            }
             else{
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow recording failed; transparent shadows absent this frame"));
                 if(hybridSoftwareMaterialContextGraphOwned){

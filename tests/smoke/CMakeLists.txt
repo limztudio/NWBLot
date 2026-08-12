@@ -115,6 +115,20 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         )
         nwb_configure_runtime_smoke_target(nwb_transparent_multi_sw_smoke "${_nwb_transparent_multi_runtime_root}")
 
+        # Test-only hardware route: force one healthy hybrid traversal tail to take the opaque-HW fallback, then
+        # continue into the ordinary transparent software path on the next frame.
+        nwb_declare_executable(nwb_transparent_multi_hybrid_fallback_smoke)
+        target_sources(nwb_transparent_multi_hybrid_fallback_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
+        )
+        target_compile_definitions(nwb_transparent_multi_hybrid_fallback_smoke PRIVATE
+            NWB_TRANSPARENT_MULTI_FORCE_HYBRID_TRAVERSAL_FALLBACK=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_transparent_multi_hybrid_fallback_smoke
+            "${_nwb_transparent_multi_runtime_root}"
+        )
+
         # Opt-in target-hardware smoke. It intentionally shares the transparent-multi scene and cooked assets, but
         # turns on frame-lagged lighting at startup and exposes an F1 transition back to normal current-frame lighting.
         nwb_declare_executable(nwb_frame_lagged_async_lighting_smoke)
@@ -159,6 +173,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         add_custom_target(nwb_transparent_multi_smoke_assets DEPENDS "${_nwb_transparent_multi_asset_stamp}")
         add_dependencies(nwb_transparent_multi_smoke nwb_transparent_multi_smoke_assets)
         add_dependencies(nwb_transparent_multi_sw_smoke nwb_transparent_multi_smoke_assets)
+        add_dependencies(nwb_transparent_multi_hybrid_fallback_smoke nwb_transparent_multi_smoke_assets)
         add_dependencies(nwb_frame_lagged_async_lighting_smoke nwb_transparent_multi_smoke_assets)
 
         nwb_declare_executable(nwb_transparent_csg_smoke)
@@ -192,6 +207,20 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "NWB Transparent Multi Smoke"
             "--expect-transparent-multi"
             "--expect-log-message" "RendererSystem: dispatched software shadow traversal"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+
+        nwb_add_window_capture_smoke(
+            nwb_transparent_multi_hybrid_fallback_capture_smoke
+            transparent_multi_hybrid_fallback_capture.bmp
+            "$<TARGET_FILE:nwb_transparent_multi_hybrid_fallback_smoke>"
+            "${_nwb_transparent_multi_runtime_root}"
+            "NWB Transparent Multi Smoke"
+            "--expect-transparent-multi"
+            "--expect-log-message" "RendererSystem: test forced hybrid software traversal fallback"
+            "--expect-log-message" "RendererSystem: hybrid transparent software shadow recording failed\; transparent shadows absent this frame"
+            "--expect-log-message" "RendererSystem: test hybrid software traversal recovered"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )

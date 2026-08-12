@@ -454,18 +454,25 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
     const MaterialPassDrawItemPartitions* const preparedOccupancyDrawItems,
     const CsgFrameGpuData* const preparedOccupancyCsgFrameData,
     const usize preparedOccupancyInstanceCount,
-    const usize preparedOccupancyMaterialTypedByteCount
+    const usize preparedOccupancyMaterialTypedByteCount,
+    const bool occupancyStatesGraphOwned
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
     NWB_ASSERT(avboitState().m_depthWarpPipeline);
     NWB_ASSERT(avboitState().m_integratePipeline);
 
-    // Occupancy discovers opaque depth and writes coverage solely through global heap descriptors, which normal
-    // command-state tracking cannot see. Keep both explicit transitions before the material pass.
-    commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(avboitTargets.coverageBuffer.get(), Core::ResourceStates::UnorderedAccess);
-    commandList.commitBarriers();
+    // Occupancy discovers opaque depth and writes coverage solely through global heap descriptors. The normal graph
+    // path declares those exact states at its packet boundary; direct compatibility callers retain this bridge.
+    if(!occupancyStatesGraphOwned){
+        commandList.setTextureState(
+            targets.depth.get(),
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        );
+        commandList.setBufferState(avboitTargets.coverageBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+    }
 
     if(preparedOccupancyDrawItems || preparedOccupancyCsgFrameData){
         NWB_ASSERT(preparedOccupancyDrawItems);

@@ -5204,6 +5204,108 @@ TEST(GpuTaskGraph, PlansPacketBoundaryTransitionsAndUavDependencies){
 }
 
 
+// AVBOIT's normal path clears coverage before occupancy, then the unsplit Graphics tail reads/writes it again.
+// Keep the first state change and the later same-state UAV ordering as distinct graph compiler responsibilities:
+// occupancy needs CopyDest -> UAV, while only the tail needs the UAV dependency.
+TEST(GpuTaskGraph, PlansAvboitCoverageClearAndTailUavDependencies){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId coverage = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/avboit_coverage"),
+        "AVBOIT Coverage"
+    );
+    ASSERT_TRUE(coverage.valid());
+
+    const Graphics::GpuTaskResourceUse clearUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = coverage,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskResourceUse occupancyUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = coverage,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    const Graphics::GpuTaskResourceUse tailUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = coverage,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    const Graphics::GpuTaskId clear = AddTask(
+        graph,
+        Name("tests/task_graph/avboit_coverage_clear"),
+        "AVBOIT Clear",
+        nullptr,
+        0u,
+        clearUses,
+        LengthOf(clearUses)
+    );
+    const Graphics::GpuTaskId occupancyDependencies[] = { clear };
+    const Graphics::GpuTaskId occupancy = AddTask(
+        graph,
+        Name("tests/task_graph/avboit_coverage_occupancy"),
+        "AVBOIT Occupancy",
+        occupancyDependencies,
+        LengthOf(occupancyDependencies),
+        occupancyUses,
+        LengthOf(occupancyUses)
+    );
+    const Graphics::GpuTaskId tailDependencies[] = { occupancy };
+    const Graphics::GpuTaskId tail = AddTask(
+        graph,
+        Name("tests/task_graph/avboit_coverage_tail"),
+        "AVBOIT Unsplit Tail",
+        tailDependencies,
+        LengthOf(tailDependencies),
+        tailUses,
+        LengthOf(tailUses)
+    );
+    ASSERT_TRUE(clear.valid());
+    ASSERT_TRUE(occupancy.valid());
+    ASSERT_TRUE(tail.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuCompiledTask* const compiledOccupancy = compiledGraph.findTask(occupancy);
+    const Graphics::GpuCompiledTask* const compiledTail = compiledGraph.findTask(tail);
+    ASSERT_NE(compiledOccupancy, nullptr);
+    ASSERT_NE(compiledTail, nullptr);
+    ASSERT_EQ(compiledOccupancy->prologueBarrierCount, 1u);
+    ASSERT_EQ(compiledTail->prologueBarrierCount, 1u);
+
+    const Graphics::GpuCompiledBarrier* const occupancyBarrier = compiledGraph.taskPrologueBarriers(occupancy);
+    const Graphics::GpuCompiledBarrier* const tailBarrier = compiledGraph.taskPrologueBarriers(tail);
+    ASSERT_NE(occupancyBarrier, nullptr);
+    ASSERT_NE(tailBarrier, nullptr);
+    EXPECT_EQ(occupancyBarrier[0].type, Graphics::GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(occupancyBarrier[0].resource, coverage);
+    EXPECT_EQ(occupancyBarrier[0].before, Graphics::ResourceStates::CopyDest);
+    EXPECT_EQ(occupancyBarrier[0].after, Graphics::ResourceStates::UnorderedAccess);
+    EXPECT_EQ(tailBarrier[0].type, Graphics::GpuCompiledBarrierType::BufferUav);
+    EXPECT_EQ(tailBarrier[0].resource, coverage);
+    EXPECT_EQ(tailBarrier[0].before, Graphics::ResourceStates::UnorderedAccess);
+    EXPECT_EQ(tailBarrier[0].after, Graphics::ResourceStates::UnorderedAccess);
+}
+
+
 TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

@@ -55,7 +55,10 @@ public:
         const MaterialPassDrawItemPartitions* preparedOccupancyDrawItems = nullptr,
         const CsgFrameGpuData* preparedOccupancyCsgFrameData = nullptr,
         usize preparedOccupancyInstanceCount = 0u,
-        usize preparedOccupancyMaterialTypedByteCount = 0u
+        usize preparedOccupancyMaterialTypedByteCount = 0u,
+        // The normal task-graph path declares depth as ShaderResource and coverage as UnorderedAccess before this
+        // material pass. Direct compatibility callers retain the explicit bridge.
+        bool occupancyStatesGraphOwned = false
     );
     void renderAvboitPostOccupancyPasses(
         Core::CommandList& commandList,

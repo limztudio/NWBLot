@@ -1062,7 +1062,9 @@ struct AvboitOccupancyGraphTask{
                 preparedOccupancyDrawItems,
                 preparedOccupancyCsgFrameData,
                 preparedOccupancyInstanceCount,
-                preparedOccupancyMaterialTypedByteCount
+                preparedOccupancyMaterialTypedByteCount,
+                // The task's declared depth/coverage uses have already lowered and committed their graph barrier.
+                true
             );
         }
         // The Graphics-only path records the remaining AVBOIT phases in the mergeable extinction tail so its

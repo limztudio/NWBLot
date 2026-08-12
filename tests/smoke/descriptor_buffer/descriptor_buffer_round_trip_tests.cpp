@@ -1471,6 +1471,217 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
 }
 
 
+// The AVBOIT occupancy material pass obtains depth and coverage through global descriptors. Its graph task must
+// therefore see the clear's CopyDest -> UAV transition before it records, without a renderer thunk reissuing it;
+// the following unsplit tail still owns the required UAV -> UAV ordering barrier.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCoverageStateRecordsWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto coverage = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(coverage.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId coverageResource = graph.importBuffer(
+        coverage,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_coverage"))
+            .setMarkerLabel("AVBOIT Coverage")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    ASSERT_TRUE(coverageResource.valid());
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint clearScheduling;
+    clearScheduling.cost = GpuTaskCostHint::Tiny;
+    clearScheduling.forceSubmissionBoundary = false;
+    clearScheduling.allowPacketMerge = true;
+    const GpuTaskResourceUse clearUses[] = {
+        GpuTaskResourceUse{
+            .resource = coverageResource,
+            .range = {},
+            .requiredState = ResourceStates::CopyDest,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    GpuTaskDesc clearDesc;
+    clearDesc
+        .setIdentity(Name("tests/descriptor_buffer/avboit_clear"))
+        .setMarkerLabel("AVBOIT Clear")
+        .setQueue(graphicsQueue)
+        .setScheduling(clearScheduling)
+        .setResourceUses(clearUses, LengthOf(clearUses))
+    ;
+    bool clearRecorded = false;
+    const GpuTaskId clearTask = graph.addTask<NativePacketPrefixTask>(
+        clearDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = coverage.get(),
+            .expectedState = ResourceStates::CopyDest,
+            .recorded = &clearRecorded,
+        }
+    );
+    ASSERT_TRUE(clearTask.valid());
+
+    GpuTaskSchedulingHint occupancyScheduling;
+    occupancyScheduling.cost = GpuTaskCostHint::Large;
+    occupancyScheduling.forceSubmissionBoundary = false;
+    occupancyScheduling.allowPacketMerge = true;
+    occupancyScheduling.mergeWithPrevious = true;
+    const GpuTaskResourceUse occupancyUses[] = {
+        GpuTaskResourceUse{
+            .resource = coverageResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    GpuTaskDesc occupancyDesc;
+    occupancyDesc
+        .setIdentity(Name("tests/descriptor_buffer/avboit_occupancy"))
+        .setMarkerLabel("AVBOIT Occupancy")
+        .setQueue(graphicsQueue)
+        .setScheduling(occupancyScheduling)
+        .setDependencies(&clearTask, 1u)
+        .setResourceUses(occupancyUses, LengthOf(occupancyUses))
+    ;
+    bool occupancyRecorded = false;
+    const GpuTaskId occupancyTask = graph.addTask<NativePacketPrefixTask>(
+        occupancyDesc,
+        NativePacketPrefixTask::Payload{
+            // This probe deliberately performs no native transition or barrier; the packet prologue is the contract.
+            .buffer = coverage.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .recorded = &occupancyRecorded,
+        }
+    );
+    ASSERT_TRUE(occupancyTask.valid());
+
+    GpuTaskSchedulingHint tailScheduling;
+    tailScheduling.cost = GpuTaskCostHint::Large;
+    tailScheduling.forceSubmissionBoundary = false;
+    tailScheduling.allowPacketMerge = true;
+    tailScheduling.mergeWithPrevious = true;
+    const GpuTaskResourceUse tailUses[] = {
+        GpuTaskResourceUse{
+            .resource = coverageResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    GpuTaskDesc tailDesc;
+    tailDesc
+        .setIdentity(Name("tests/descriptor_buffer/avboit_unsplit_tail"))
+        .setMarkerLabel("AVBOIT Unsplit Tail")
+        .setQueue(graphicsQueue)
+        .setScheduling(tailScheduling)
+        .setDependencies(&occupancyTask, 1u)
+        .setResourceUses(tailUses, LengthOf(tailUses))
+    ;
+    bool tailRecorded = false;
+    const GpuTaskId tailTask = graph.addTask<NativePacketPrefixTask>(
+        tailDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = coverage.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .recorded = &tailRecorded,
+        }
+    );
+    ASSERT_TRUE(tailTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/avboit_occupancy_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(clearTask);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(occupancyTask), packet);
+    EXPECT_EQ(compiledGraph.packetForTask(tailTask), packet);
+    const GpuCompiledTask* const compiledOccupancy = compiledGraph.findTask(occupancyTask);
+    const GpuCompiledTask* const compiledTail = compiledGraph.findTask(tailTask);
+    ASSERT_NE(compiledOccupancy, nullptr);
+    ASSERT_NE(compiledTail, nullptr);
+    ASSERT_EQ(compiledOccupancy->prologueBarrierCount, 1u);
+    ASSERT_EQ(compiledTail->prologueBarrierCount, 1u);
+    const GpuCompiledBarrier* const occupancyBarrier = compiledGraph.taskPrologueBarriers(occupancyTask);
+    const GpuCompiledBarrier* const tailBarrier = compiledGraph.taskPrologueBarriers(tailTask);
+    ASSERT_NE(occupancyBarrier, nullptr);
+    ASSERT_NE(tailBarrier, nullptr);
+    EXPECT_EQ(occupancyBarrier[0].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(occupancyBarrier[0].resource, coverageResource);
+    EXPECT_EQ(occupancyBarrier[0].before, ResourceStates::CopyDest);
+    EXPECT_EQ(occupancyBarrier[0].after, ResourceStates::UnorderedAccess);
+    EXPECT_EQ(tailBarrier[0].type, GpuCompiledBarrierType::BufferUav);
+    EXPECT_EQ(tailBarrier[0].resource, coverageResource);
+    EXPECT_EQ(tailBarrier[0].before, ResourceStates::UnorderedAccess);
+    EXPECT_EQ(tailBarrier[0].after, ResourceStates::UnorderedAccess);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(clearRecorded);
+    EXPECT_TRUE(occupancyRecorded);
+    EXPECT_TRUE(tailRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(packet).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Primitive copies belong to the graph as typed task payloads: it derives their resource-state declarations,
 // records direct native copies on the resolved physical queue, and publishes the accepted packet token only after
 // submission. On this host the same proof automatically exercises either a dedicated Transfer family or Graphics

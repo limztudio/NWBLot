@@ -70,7 +70,10 @@ public:
         const MaterialPassDrawItemPartitions& drawItems,
         const CsgFrameGpuData& csgFrameData,
         usize instanceCount,
-        usize materialTypedByteCount
+        usize materialTypedByteCount,
+        // The graph can declare the removed-interval StorageImage reads at a producer/consumer boundary. Direct
+        // and other prepared compatibility phases retain their native UAV handoff by leaving this false.
+        bool csgIntervalSampleImageStatesGraphOwned = false
     );
     [[nodiscard]] bool prepareMaterialPassResources(
         Core::Framebuffer* framebuffer,

@@ -62,7 +62,10 @@ public:
         usize preparedOccupancyMaterialTypedByteCount = 0u,
         // The normal task-graph path declares depth as ShaderResource and coverage as UnorderedAccess before this
         // material pass. Direct compatibility callers retain the explicit bridge.
-        bool occupancyStatesGraphOwned = false
+        bool occupancyStatesGraphOwned = false,
+        // The prepared transparent interval producer declares the removed-interval outputs before graph-owned
+        // occupancy CSG sampling. Other AVBOIT and compatibility consumers retain the native UAV handoff.
+        bool occupancyCsgIntervalSampleImageStatesGraphOwned = false
     );
     void renderAvboitPostOccupancyPasses(
         Core::CommandList& commandList,

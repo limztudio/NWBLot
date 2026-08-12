@@ -711,6 +711,51 @@ struct NativePacketPrefixTask{
 };
 
 
+// AVBOIT CSG occupancy reads four StorageImage aliases produced by the interval-combine task. This probe performs
+// no native state work: it only observes the packet runtime's graph-lowered state before the equivalent thunk runs.
+struct NativePacketCsgIntervalSampleProbeTask{
+    struct Payload{
+        Buffer* coverage = nullptr;
+        Texture* removedIntervalDepth = nullptr;
+        Texture* removedIntervalCapNormal = nullptr;
+        Texture* removedIntervalData = nullptr;
+        Texture* removedIntervalCount = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(
+            !payload.coverage
+            || !payload.removedIntervalDepth
+            || !payload.removedIntervalCapNormal
+            || !payload.removedIntervalData
+            || !payload.removedIntervalCount
+        )
+            return false;
+        const auto hasUavRange = [&commandList](Texture* texture, const u32 finalArraySlice){
+            return commandList.getTextureSubresourceState(texture, 0u, 0u) == ResourceStates::UnorderedAccess
+                && commandList.getTextureSubresourceState(texture, finalArraySlice, 0u) == ResourceStates::UnorderedAccess
+            ;
+        };
+        const bool ready =
+            commandList.getBufferState(payload.coverage) == ResourceStates::UnorderedAccess
+            && hasUavRange(payload.removedIntervalDepth, 15u)
+            && hasUavRange(payload.removedIntervalCapNormal, 15u)
+            && hasUavRange(payload.removedIntervalData, 15u)
+            && hasUavRange(payload.removedIntervalCount, 0u)
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
 // A mutable success gate lets the packet recorder prove that an optional capture rolls back an incomplete packet
 // before a retry. It intentionally records no native work beyond the task marker.
 struct NativePacketCaptureRetryTask{
@@ -1665,6 +1710,343 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCoverageStateReco
     EXPECT_TRUE(clearRecorded);
     EXPECT_TRUE(occupancyRecorded);
     EXPECT_TRUE(tailRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(packet).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Prepared transparent interval combine writes four CSG StorageImage aliases before phase-local occupancy uploads
+// and the AVBOIT clear. The occupancy callback must see the graph's same-UAV handoff without reissuing any native
+// state calls; check both ends of every 16-layer output range on a real Vulkan command list.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSampleStateRecordsWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto coverage = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(coverage.get(), nullptr);
+    const auto makeStorageArray = [&device](const u32 arraySize){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setArraySize(arraySize)
+                .setDimension(TextureDimension::Texture2DArray)
+                .setFormat(Format::RGBA32_UINT)
+                .setInUAV(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    auto removedIntervalDepth = makeStorageArray(16u);
+    auto removedIntervalCapNormal = makeStorageArray(16u);
+    auto removedIntervalData = makeStorageArray(16u);
+    auto removedIntervalCount = makeStorageArray(1u);
+    ASSERT_NE(removedIntervalDepth.get(), nullptr);
+    ASSERT_NE(removedIntervalCapNormal.get(), nullptr);
+    ASSERT_NE(removedIntervalData.get(), nullptr);
+    ASSERT_NE(removedIntervalCount.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId coverageResource = graph.importBuffer(
+        coverage,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_csg_coverage"))
+            .setMarkerLabel("AVBOIT CSG Coverage")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId removedIntervalDepthResource = graph.importTexture(
+        removedIntervalDepth,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_csg_removed_interval_depth"))
+            .setMarkerLabel("AVBOIT CSG Removed Interval Depth")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId removedIntervalCapNormalResource = graph.importTexture(
+        removedIntervalCapNormal,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_csg_removed_interval_cap_normal"))
+            .setMarkerLabel("AVBOIT CSG Removed Interval Cap Normal")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId removedIntervalDataResource = graph.importTexture(
+        removedIntervalData,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_csg_removed_interval_data"))
+            .setMarkerLabel("AVBOIT CSG Removed Interval Data")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId removedIntervalCountResource = graph.importTexture(
+        removedIntervalCount,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_csg_removed_interval_count"))
+            .setMarkerLabel("AVBOIT CSG Removed Interval Count")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(coverageResource.valid());
+    ASSERT_TRUE(removedIntervalDepthResource.valid());
+    ASSERT_TRUE(removedIntervalCapNormalResource.valid());
+    ASSERT_TRUE(removedIntervalDataResource.valid());
+    ASSERT_TRUE(removedIntervalCountResource.valid());
+
+    const TextureSubresourceSet removedIntervalRange(0u, 1u, 0u, 16u);
+    const TextureSubresourceSet removedIntervalCountRange(0u, 1u, 0u, 1u);
+    const GpuTaskResourceUse intervalUses[] = {
+        GpuTaskResourceUse{
+            .resource = removedIntervalDepthResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalCapNormalResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalDataResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalCountResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalCountRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    const GpuTaskResourceUse clearUses[] = {
+        GpuTaskResourceUse{
+            .resource = coverageResource,
+            .range = {},
+            .requiredState = ResourceStates::CopyDest,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    const GpuTaskResourceUse occupancyUses[] = {
+        GpuTaskResourceUse{
+            .resource = coverageResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalDepthResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalCapNormalResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalDataResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalCountResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalCountRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint intervalScheduling;
+    intervalScheduling.cost = GpuTaskCostHint::Large;
+    intervalScheduling.forceSubmissionBoundary = false;
+    intervalScheduling.allowPacketMerge = true;
+    GpuTaskDesc intervalDesc;
+    intervalDesc
+        .setIdentity(Name("tests/descriptor_buffer/avboit_csg_intervals"))
+        .setMarkerLabel("Transparent CSG Intervals")
+        .setQueue(graphicsQueue)
+        .setScheduling(intervalScheduling)
+        .setResourceUses(intervalUses, LengthOf(intervalUses))
+    ;
+    bool intervalsShouldRecord = true;
+    bool intervalsAttempted = false;
+    const GpuTaskId intervalsTask = graph.addTask<NativePacketCaptureRetryTask>(
+        intervalDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &intervalsShouldRecord,
+            .attempted = &intervalsAttempted,
+        }
+    );
+    ASSERT_TRUE(intervalsTask.valid());
+
+    GpuTaskSchedulingHint clearScheduling;
+    clearScheduling.cost = GpuTaskCostHint::Tiny;
+    clearScheduling.forceSubmissionBoundary = false;
+    clearScheduling.allowPacketMerge = true;
+    clearScheduling.mergeWithPrevious = true;
+    GpuTaskDesc clearDesc;
+    clearDesc
+        .setIdentity(Name("tests/descriptor_buffer/avboit_csg_clear"))
+        .setMarkerLabel("AVBOIT Clear")
+        .setQueue(graphicsQueue)
+        .setScheduling(clearScheduling)
+        .setDependencies(&intervalsTask, 1u)
+        .setResourceUses(clearUses, LengthOf(clearUses))
+    ;
+    bool clearRecorded = false;
+    const GpuTaskId clearTask = graph.addTask<NativePacketPrefixTask>(
+        clearDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = coverage.get(),
+            .expectedState = ResourceStates::CopyDest,
+            .recorded = &clearRecorded,
+        }
+    );
+    ASSERT_TRUE(clearTask.valid());
+
+    GpuTaskSchedulingHint occupancyScheduling;
+    occupancyScheduling.cost = GpuTaskCostHint::Large;
+    occupancyScheduling.forceSubmissionBoundary = false;
+    occupancyScheduling.allowPacketMerge = true;
+    occupancyScheduling.mergeWithPrevious = true;
+    GpuTaskDesc occupancyDesc;
+    occupancyDesc
+        .setIdentity(Name("tests/descriptor_buffer/avboit_csg_occupancy"))
+        .setMarkerLabel("AVBOIT CSG Occupancy")
+        .setQueue(graphicsQueue)
+        .setScheduling(occupancyScheduling)
+        .setDependencies(&clearTask, 1u)
+        .setResourceUses(occupancyUses, LengthOf(occupancyUses))
+    ;
+    bool occupancyRecorded = false;
+    const GpuTaskId occupancyTask = graph.addTask<NativePacketCsgIntervalSampleProbeTask>(
+        occupancyDesc,
+        NativePacketCsgIntervalSampleProbeTask::Payload{
+            .coverage = coverage.get(),
+            .removedIntervalDepth = removedIntervalDepth.get(),
+            .removedIntervalCapNormal = removedIntervalCapNormal.get(),
+            .removedIntervalData = removedIntervalData.get(),
+            .removedIntervalCount = removedIntervalCount.get(),
+            .recorded = &occupancyRecorded,
+        }
+    );
+    ASSERT_TRUE(occupancyTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/avboit_csg_occupancy_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(intervalsTask);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(clearTask), packet);
+    EXPECT_EQ(compiledGraph.packetForTask(occupancyTask), packet);
+    const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
+    ASSERT_EQ(packetPlan.taskCount, 3u);
+    ASSERT_NE(compiledGraph.packetTasks(packet), nullptr);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[0u], intervalsTask);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[1u], clearTask);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[2u], occupancyTask);
+
+    const GpuCompiledTask* const compiledIntervals = compiledGraph.findTask(intervalsTask);
+    const GpuCompiledTask* const compiledOccupancy = compiledGraph.findTask(occupancyTask);
+    ASSERT_NE(compiledIntervals, nullptr);
+    ASSERT_NE(compiledOccupancy, nullptr);
+    ASSERT_EQ(compiledIntervals->prologueBarrierCount, 4u);
+    ASSERT_EQ(compiledOccupancy->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledOccupancy->prologueBarrierCount, 5u);
+    const GpuCompiledBarrier* const occupancyBarriers = compiledGraph.taskPrologueBarriers(occupancyTask);
+    ASSERT_NE(occupancyBarriers, nullptr);
+    const auto hasOccupancyUav = [&](const GpuGraphResourceId resource, const TextureSubresourceSet& range){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledOccupancy->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = occupancyBarriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::TextureUav
+                && barrier.resource == resource
+                && barrier.range.textureSubresources == range
+                && barrier.before == ResourceStates::UnorderedAccess
+                && barrier.after == ResourceStates::UnorderedAccess
+            )
+                return true;
+        }
+        return false;
+    };
+    bool coverageTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledOccupancy->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = occupancyBarriers[barrierIndex];
+        if(
+            barrier.type == GpuCompiledBarrierType::BufferTransition
+            && barrier.resource == coverageResource
+            && barrier.before == ResourceStates::CopyDest
+            && barrier.after == ResourceStates::UnorderedAccess
+        )
+            coverageTransition = true;
+    }
+    EXPECT_TRUE(hasOccupancyUav(removedIntervalDepthResource, removedIntervalRange));
+    EXPECT_TRUE(hasOccupancyUav(removedIntervalCapNormalResource, removedIntervalRange));
+    EXPECT_TRUE(hasOccupancyUav(removedIntervalDataResource, removedIntervalRange));
+    EXPECT_TRUE(hasOccupancyUav(removedIntervalCountResource, removedIntervalCountRange));
+    EXPECT_TRUE(coverageTransition);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    const bool packetRecorded = recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    );
+    EXPECT_TRUE(intervalsAttempted);
+    EXPECT_TRUE(clearRecorded);
+    EXPECT_TRUE(occupancyRecorded);
+    ASSERT_TRUE(packetRecorded) << "failed packet " << failedPacket.index;
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);

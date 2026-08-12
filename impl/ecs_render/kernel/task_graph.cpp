@@ -1122,6 +1122,7 @@ struct AvboitOccupancyGraphTask{
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot occupancySnapshot;
         bool occupancyPhasePrepared = false;
         bool occupancyStreamsUploaded = false;
+        bool occupancyCsgIntervalSampleImageStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : occupancySnapshot(arena)
@@ -1164,7 +1165,8 @@ struct AvboitOccupancyGraphTask{
                 preparedOccupancyInstanceCount,
                 preparedOccupancyMaterialTypedByteCount,
                 // The task's declared depth/coverage uses have already lowered and committed their graph barrier.
-                true
+                true,
+                payload.occupancyCsgIntervalSampleImageStatesGraphOwned
             );
         }
         // The declared sampled G-buffer uses remain authoritative here. Occupancy's low-resolution framebuffer
@@ -5542,6 +5544,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .setDependencies(&transparentCsgUploadTask, 1u)
         .setResourceUses(avboitIntervalResourceUses.data(), avboitIntervalResourceUses.size())
     ;
+    const bool avboitIntervalOutputsGraphOwned =
+        avboitPrePayload.transparentCsgStreamsUploaded
+        && avboitPrePayload.transparentCsgSnapshot.captured
+        && avboitPrePayload.transparentCsgRemovedIntervalOutputImageStatesGraphOwned
+    ;
     m_deferredAvboitPreTask = m_deferredLightingTaskGraph.addTask<AvboitPreGraphTask>(
         avboitIntervalDesc,
         Move(avboitPrePayload)
@@ -5861,9 +5868,27 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         m_deferredAvboitClearTask = avboitClearTask;
     }
 
+    const bool occupancyCsgIntervalSampleImageStatesGraphOwned =
+        avboitIntervalOutputsGraphOwned && occupancyCsgStreamsUploaded
+    ;
+    NWB_ASSERT(
+        !occupancyCsgIntervalSampleImageStatesGraphOwned
+        || (
+            avboitOccupancyPayload.occupancyStreamsUploaded
+            && avboitOccupancyPayload.occupancySnapshot.captured
+        )
+    );
+    avboitOccupancyPayload.occupancyCsgIntervalSampleImageStatesGraphOwned =
+        occupancyCsgIntervalSampleImageStatesGraphOwned
+    ;
+
     Core::Alloc::ScratchArena avboitPreResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitPreResourceUses{ avboitPreResourceScratch };
-    avboitPreResourceUses.reserve(13u + (avboitOccupancyPayload.occupancyStreamsUploaded ? 7u : 0u));
+    avboitPreResourceUses.reserve(
+        13u
+        + (avboitOccupancyPayload.occupancyStreamsUploaded ? 7u : 0u)
+        + (occupancyCsgIntervalSampleImageStatesGraphOwned ? 4u : 0u)
+    );
     avboitPreResourceUses.push_back(ReadUse(albedo));
     avboitPreResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource, true));
     avboitPreResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
@@ -5881,6 +5906,30 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             // The preceding full-resolution interval producer owns this state. Occupancy only samples it.
             avboitPreResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
         }
+    }
+    if(occupancyCsgIntervalSampleImageStatesGraphOwned){
+        // The prepared interval producer wrote these aliases in the preceding AVBOIT task. The occupancy material
+        // shaders load them through StorageImage descriptors, so the graph lowers the required UAV handoff here.
+        avboitPreResourceUses.push_back(ReadTextureUse(
+            csgRemovedIntervalDepth,
+            csgRemovedIntervalSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
+        avboitPreResourceUses.push_back(ReadTextureUse(
+            csgRemovedIntervalCapNormal,
+            csgRemovedIntervalSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
+        avboitPreResourceUses.push_back(ReadTextureUse(
+            csgRemovedIntervalData,
+            csgRemovedIntervalSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
+        avboitPreResourceUses.push_back(ReadTextureUse(
+            csgRemovedIntervalCount,
+            csgRemovedIntervalCountSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
     }
     avboitPreResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer, true));
     avboitPreResourceUses.push_back(ReadUse(avboitMaterialDomain));

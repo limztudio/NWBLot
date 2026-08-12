@@ -490,7 +490,8 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
     const CsgFrameGpuData* const preparedOccupancyCsgFrameData,
     const usize preparedOccupancyInstanceCount,
     const usize preparedOccupancyMaterialTypedByteCount,
-    const bool occupancyStatesGraphOwned
+    const bool occupancyStatesGraphOwned,
+    const bool occupancyCsgIntervalSampleImageStatesGraphOwned
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -521,7 +522,8 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
                 *preparedOccupancyDrawItems,
                 *preparedOccupancyCsgFrameData,
                 preparedOccupancyInstanceCount,
-                preparedOccupancyMaterialTypedByteCount
+                preparedOccupancyMaterialTypedByteCount,
+                occupancyCsgIntervalSampleImageStatesGraphOwned
             );
         }
     }

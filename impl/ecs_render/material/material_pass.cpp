@@ -238,7 +238,8 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     const MaterialPassDrawItemPartitions& drawItems,
     const CsgFrameGpuData& csgFrameData,
     const usize instanceCount,
-    const usize materialTypedByteCount
+    const usize materialTypedByteCount,
+    const bool csgIntervalSampleImageStatesGraphOwned
 ){
     if(!framebuffer || drawItems.empty())
         return;
@@ -267,7 +268,15 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
 
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
-    const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, avboitTargets, viewportState };
+    const MaterialPassDrawContext drawContext{
+        commandList,
+        framebuffer,
+        pass,
+        avboitTargets,
+        viewportState,
+        false,
+        csgIntervalSampleImageStatesGraphOwned
+    };
     if(regularDrawResourcesReady)
         renderMaterialPassDrawItems(drawContext, drawItems.regular);
     if(csgDrawResourcesReady)

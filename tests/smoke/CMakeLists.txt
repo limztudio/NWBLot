@@ -220,6 +220,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "--expect-transparent-multi"
             "--expect-log-message" "RendererSystem: test forced hybrid software traversal fallback"
             "--expect-log-message" "RendererSystem: hybrid transparent software shadow recording failed\; transparent shadows absent this frame"
+            "--expect-log-message" "RendererSystem: restored frozen hybrid hardware material context"
             "--expect-log-message" "RendererSystem: test hybrid software traversal recovered"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"

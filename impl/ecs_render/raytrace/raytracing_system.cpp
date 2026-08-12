@@ -24,6 +24,7 @@ RendererRayTracingSystem::RendererRayTracingSystem(RendererSystem& renderer)
     , m_preparedShadowInstanceMaterialBytes(arena())
     , m_preparedShadowInstanceBytes(arena())
     , m_preparedShadowMaterialTypedBytes(arena())
+    , m_preparedHybridHardwareFallbackBytes(arena())
     , m_preparedSceneBvhNodeBytes(arena())
     , m_preparedSceneBvhInstanceBytes(arena())
     , m_preparedSceneSwBvhMeshes(arena())
@@ -102,6 +103,111 @@ void RendererRayTracingSystem::clearPreparedShadowMaterialContext()noexcept{
     m_preparedShadowMaterialContextStatic = false;
     m_preparedShadowMaterialContextReady = false;
     clearPreparedSceneSwBvhTraversal();
+}
+
+void RendererRayTracingSystem::clearPreparedHybridHardwareMaterialContextFallback()noexcept{
+    m_preparedHybridHardwareFallbackBytes.clear();
+    m_preparedHybridHardwareFallbackInstanceMaterialBuffer = nullptr;
+    m_preparedHybridHardwareFallbackInstanceBuffer = nullptr;
+    m_preparedHybridHardwareFallbackMaterialTypedBuffer = nullptr;
+    m_preparedHybridHardwareFallbackInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_preparedHybridHardwareFallbackInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_preparedHybridHardwareFallbackMaterialTypedHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_preparedHybridHardwareFallbackInstanceMaterialByteCount = 0u;
+    m_preparedHybridHardwareFallbackInstanceByteCount = 0u;
+    m_preparedHybridHardwareFallbackMaterialTypedByteCount = 0u;
+    m_preparedHybridHardwareFallbackInstanceMaterialCapacity = 0u;
+    m_preparedHybridHardwareFallbackInstanceCapacity = 0u;
+    m_preparedHybridHardwareFallbackMaterialTypedCapacity = 0u;
+    m_preparedHybridHardwareFallbackMaterialContextHash = 0u;
+    m_preparedHybridHardwareFallbackRendererMutationVersion = 0u;
+    m_preparedHybridHardwareFallbackTransformMutationVersion = 0u;
+    m_preparedHybridHardwareFallbackMaterialMutationVersion = 0u;
+    m_preparedHybridHardwareFallbackStatic = false;
+    m_preparedHybridHardwareFallbackReady = false;
+    m_preparedHybridHardwareFallbackRecorded = false;
+}
+
+bool RendererRayTracingSystem::capturePreparedHybridHardwareMaterialContextFallback(){
+    clearPreparedHybridHardwareMaterialContextFallback();
+    if(
+        !m_preparedShadowMaterialContextReady
+        || m_preparedShadowMaterialContextRoute != PreparedShadowMaterialContextRoute::Hardware
+        || m_preparedShadowInstanceMaterialBytes.empty()
+        || m_preparedShadowInstanceBytes.empty()
+        || m_preparedShadowMaterialTypedBytes.empty()
+    )
+        return false;
+
+    const usize instanceMaterialByteCount = m_preparedShadowInstanceMaterialBytes.size();
+    const usize instanceByteCount = m_preparedShadowInstanceBytes.size();
+    const usize materialTypedByteCount = m_preparedShadowMaterialTypedBytes.size();
+    if(
+        instanceMaterialByteCount > Limit<usize>::s_Max - instanceByteCount
+        || instanceMaterialByteCount + instanceByteCount > Limit<usize>::s_Max - materialTypedByteCount
+        || instanceMaterialByteCount % sizeof(NwbRtInstanceMaterialGpu) != 0u
+        || instanceByteCount % sizeof(InstanceGpuData) != 0u
+    )
+        return false;
+    const auto& state = rayTracingState();
+    const usize instanceMaterialCount = instanceMaterialByteCount / sizeof(NwbRtInstanceMaterialGpu);
+    const usize instanceCount = instanceByteCount / sizeof(InstanceGpuData);
+    if(
+        !state.m_shadowInstanceMaterialBuffer
+        || !state.m_shadowInstanceBuffer
+        || !state.m_shadowMaterialTypedBuffer
+        || state.m_shadowInstanceMaterialCapacity < instanceMaterialCount
+        || state.m_shadowInstanceCapacity < instanceCount
+        || state.m_shadowMaterialTypedCapacity < materialTypedByteCount
+        || !state.m_shadowInstanceMaterialHeapHandle.valid()
+        || state.m_shadowInstanceMaterialHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
+        || !state.m_shadowInstanceHeapHandle.valid()
+        || state.m_shadowInstanceHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
+        || !state.m_shadowMaterialTypedHeapHandle.valid()
+        || state.m_shadowMaterialTypedHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
+    )
+        return false;
+    m_preparedHybridHardwareFallbackBytes.resize(
+        instanceMaterialByteCount + instanceByteCount + materialTypedByteCount
+    );
+    u8* const destination = m_preparedHybridHardwareFallbackBytes.data();
+    NWB_MEMCPY(
+        destination,
+        m_preparedHybridHardwareFallbackBytes.size(),
+        m_preparedShadowInstanceMaterialBytes.data(),
+        instanceMaterialByteCount
+    );
+    NWB_MEMCPY(
+        destination + instanceMaterialByteCount,
+        m_preparedHybridHardwareFallbackBytes.size() - instanceMaterialByteCount,
+        m_preparedShadowInstanceBytes.data(),
+        instanceByteCount
+    );
+    NWB_MEMCPY(
+        destination + instanceMaterialByteCount + instanceByteCount,
+        m_preparedHybridHardwareFallbackBytes.size() - instanceMaterialByteCount - instanceByteCount,
+        m_preparedShadowMaterialTypedBytes.data(),
+        materialTypedByteCount
+    );
+    m_preparedHybridHardwareFallbackInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer;
+    m_preparedHybridHardwareFallbackInstanceBuffer = state.m_shadowInstanceBuffer;
+    m_preparedHybridHardwareFallbackMaterialTypedBuffer = state.m_shadowMaterialTypedBuffer;
+    m_preparedHybridHardwareFallbackInstanceMaterialHeapHandle = state.m_shadowInstanceMaterialHeapHandle;
+    m_preparedHybridHardwareFallbackInstanceHeapHandle = state.m_shadowInstanceHeapHandle;
+    m_preparedHybridHardwareFallbackMaterialTypedHeapHandle = state.m_shadowMaterialTypedHeapHandle;
+    m_preparedHybridHardwareFallbackInstanceMaterialByteCount = instanceMaterialByteCount;
+    m_preparedHybridHardwareFallbackInstanceByteCount = instanceByteCount;
+    m_preparedHybridHardwareFallbackMaterialTypedByteCount = materialTypedByteCount;
+    m_preparedHybridHardwareFallbackInstanceMaterialCapacity = state.m_shadowInstanceMaterialCapacity;
+    m_preparedHybridHardwareFallbackInstanceCapacity = state.m_shadowInstanceCapacity;
+    m_preparedHybridHardwareFallbackMaterialTypedCapacity = state.m_shadowMaterialTypedCapacity;
+    m_preparedHybridHardwareFallbackMaterialContextHash = m_preparedShadowMaterialContextHash;
+    m_preparedHybridHardwareFallbackRendererMutationVersion = world().componentMutationVersion<RendererComponent>();
+    m_preparedHybridHardwareFallbackTransformMutationVersion = world().componentMutationVersion<NWB::Impl::Scene::TransformComponent>();
+    m_preparedHybridHardwareFallbackMaterialMutationVersion = world().componentMutationVersion<MaterialInstanceComponent>();
+    m_preparedHybridHardwareFallbackStatic = m_preparedShadowMaterialContextStatic;
+    m_preparedHybridHardwareFallbackReady = true;
+    return true;
 }
 
 bool RendererRayTracingSystem::capturePreparedShadowMaterialContext(
@@ -302,20 +408,41 @@ bool RendererRayTracingSystem::retainPreparedShadowMaterialContextUploads(
 }
 
 void RendererRayTracingSystem::confirmPreparedShadowMaterialContextUploads()noexcept{
-    if(!m_preparedShadowMaterialContextReady)
-        return;
-
-    if(m_preparedShadowMaterialContextRoute == PreparedShadowMaterialContextRoute::Hardware){
-        rayTracingState().m_hwShadowMaterialContextHash = m_preparedShadowMaterialContextHash;
-        rayTracingState().m_hwShadowMaterialContextHashValid = m_preparedShadowMaterialContextStatic;
-        rayTracingState().m_swShadowMaterialContextHashValid = false;
-    }
-    else if(m_preparedShadowMaterialContextRoute == PreparedShadowMaterialContextRoute::Software){
-        rayTracingState().m_swShadowMaterialContextHash = m_preparedShadowMaterialContextHash;
-        rayTracingState().m_swShadowMaterialContextHashValid = m_preparedShadowMaterialContextStatic;
-        rayTracingState().m_hwShadowMaterialContextHashValid = false;
+    if(m_preparedShadowMaterialContextReady){
+        if(m_preparedShadowMaterialContextRoute == PreparedShadowMaterialContextRoute::Hardware){
+            rayTracingState().m_hwShadowMaterialContextHash = m_preparedShadowMaterialContextHash;
+            rayTracingState().m_hwShadowMaterialContextHashValid = m_preparedShadowMaterialContextStatic;
+            rayTracingState().m_swShadowMaterialContextHashValid = false;
+        }
+        else if(m_preparedShadowMaterialContextRoute == PreparedShadowMaterialContextRoute::Software){
+            rayTracingState().m_swShadowMaterialContextHash = m_preparedShadowMaterialContextHash;
+            rayTracingState().m_swShadowMaterialContextHashValid = m_preparedShadowMaterialContextStatic;
+            rayTracingState().m_hwShadowMaterialContextHashValid = false;
+        }
     }
     clearPreparedShadowMaterialContext();
+
+    if(m_preparedHybridHardwareFallbackRecorded){
+        auto& state = rayTracingState();
+        if(
+            state.m_shadowInstanceMaterialBuffer.get() == m_preparedHybridHardwareFallbackInstanceMaterialBuffer.get()
+            && state.m_shadowInstanceBuffer.get() == m_preparedHybridHardwareFallbackInstanceBuffer.get()
+            && state.m_shadowMaterialTypedBuffer.get() == m_preparedHybridHardwareFallbackMaterialTypedBuffer.get()
+            && state.m_shadowInstanceMaterialCapacity == m_preparedHybridHardwareFallbackInstanceMaterialCapacity
+            && state.m_shadowInstanceCapacity == m_preparedHybridHardwareFallbackInstanceCapacity
+            && state.m_shadowMaterialTypedCapacity == m_preparedHybridHardwareFallbackMaterialTypedCapacity
+            && state.m_shadowInstanceMaterialHeapHandle == m_preparedHybridHardwareFallbackInstanceMaterialHeapHandle
+            && state.m_shadowInstanceHeapHandle == m_preparedHybridHardwareFallbackInstanceHeapHandle
+            && state.m_shadowMaterialTypedHeapHandle == m_preparedHybridHardwareFallbackMaterialTypedHeapHandle
+        ){
+            state.m_hwShadowMaterialContextHash = m_preparedHybridHardwareFallbackMaterialContextHash;
+            state.m_hwShadowMaterialContextHashValid = m_preparedHybridHardwareFallbackStatic;
+            state.m_swShadowMaterialContextHashValid = false;
+        }
+        else
+            state.m_hwShadowMaterialContextHashValid = false;
+    }
+    clearPreparedHybridHardwareMaterialContextFallback();
 }
 
 void RendererRayTracingSystem::clearPreparedSceneBvh()noexcept{
@@ -1067,6 +1194,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     m_preparedShadowTraceGeometryBuffers.clear();
     m_preparedCausticEmissionTargetBytes.clear();
     clearPreparedShadowMaterialContext();
+    clearPreparedHybridHardwareMaterialContextFallback();
     clearPreparedSceneBvh();
     clearPreparedSceneTlasBuild();
     clearPreparedMeshBlasBuilds();
@@ -1120,6 +1248,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     m_shadowVisibilityBackendPipelinePreflighted = false;
     m_shadowVisibilityHybridPipelinePreflighted = false;
     clearPreparedShadowMaterialContext();
+    clearPreparedHybridHardwareMaterialContextFallback();
     clearPreparedSceneBvh();
     clearPreparedSceneTlasBuild();
     clearPreparedMeshBlasBuilds();
@@ -1607,9 +1736,14 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
                     // The immutable graph triple has already recorded in this packet. Replace it with the current
                     // hardware descriptor-slot context before accepting the opaque fallback; otherwise caustics or
                     // HW surfels could observe stale SW node-slot data. A failed restoration still preserves opaque
-                    // shadows, but disables every material-context consumer for this frame.
+                    // shadows, but disables every material-context consumer for this frame. Prefer the immutable
+                    // HW snapshot retained before the SW context replaced it; only a stale snapshot regathers via
+                    // the established direct compatibility retry.
                     discardHybridGraphMaterialContext();
-                    if(!buildSceneTlas(commandList, scratchArena, false)){
+                    if(
+                        !recordPreparedHybridHardwareMaterialContextFallback(commandList)
+                        && !buildSceneTlas(commandList, scratchArena, false)
+                    ){
                         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid hardware material-context fallback failed; caustics and surfel GI are disabled this frame"));
                         disableHybridMaterialConsumers();
                     }

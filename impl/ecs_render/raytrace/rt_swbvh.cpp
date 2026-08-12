@@ -1393,6 +1393,74 @@ bool RendererRayTracingSystem::buildSceneSwBvh(
     );
 }
 
+bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallback(Core::CommandList& commandList){
+    m_preparedHybridHardwareFallbackRecorded = false;
+    const auto isStorageHandle = [](const Core::GpuDescriptorHandle handle){
+        return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
+    };
+    const auto& state = rayTracingState();
+    const usize instanceMaterialByteCount = m_preparedHybridHardwareFallbackInstanceMaterialByteCount;
+    const usize instanceByteCount = m_preparedHybridHardwareFallbackInstanceByteCount;
+    const usize materialTypedByteCount = m_preparedHybridHardwareFallbackMaterialTypedByteCount;
+    if(
+        !m_preparedHybridHardwareFallbackReady
+        || instanceMaterialByteCount == 0u
+        || instanceByteCount == 0u
+        || materialTypedByteCount == 0u
+        || instanceMaterialByteCount % sizeof(NwbRtInstanceMaterialGpu) != 0u
+        || instanceByteCount % sizeof(InstanceGpuData) != 0u
+        || instanceMaterialByteCount > Limit<usize>::s_Max - instanceByteCount
+        || instanceMaterialByteCount + instanceByteCount > Limit<usize>::s_Max - materialTypedByteCount
+        || m_preparedHybridHardwareFallbackBytes.size() != instanceMaterialByteCount + instanceByteCount + materialTypedByteCount
+        || state.m_shadowInstanceMaterialBuffer.get() != m_preparedHybridHardwareFallbackInstanceMaterialBuffer.get()
+        || state.m_shadowInstanceBuffer.get() != m_preparedHybridHardwareFallbackInstanceBuffer.get()
+        || state.m_shadowMaterialTypedBuffer.get() != m_preparedHybridHardwareFallbackMaterialTypedBuffer.get()
+        || state.m_shadowInstanceMaterialCapacity != m_preparedHybridHardwareFallbackInstanceMaterialCapacity
+        || state.m_shadowInstanceCapacity != m_preparedHybridHardwareFallbackInstanceCapacity
+        || state.m_shadowMaterialTypedCapacity != m_preparedHybridHardwareFallbackMaterialTypedCapacity
+        || state.m_shadowInstanceMaterialHeapHandle != m_preparedHybridHardwareFallbackInstanceMaterialHeapHandle
+        || state.m_shadowInstanceHeapHandle != m_preparedHybridHardwareFallbackInstanceHeapHandle
+        || state.m_shadowMaterialTypedHeapHandle != m_preparedHybridHardwareFallbackMaterialTypedHeapHandle
+        || !isStorageHandle(state.m_shadowInstanceMaterialHeapHandle)
+        || !isStorageHandle(state.m_shadowInstanceHeapHandle)
+        || !isStorageHandle(state.m_shadowMaterialTypedHeapHandle)
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen hybrid hardware material context no longer matches preflight storage"));
+        return false;
+    }
+    if(
+        world().componentMutationVersion<RendererComponent>() != m_preparedHybridHardwareFallbackRendererMutationVersion
+        || world().componentMutationVersion<NWB::Impl::Scene::TransformComponent>() != m_preparedHybridHardwareFallbackTransformMutationVersion
+        || world().componentMutationVersion<MaterialInstanceComponent>() != m_preparedHybridHardwareFallbackMaterialMutationVersion
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid hardware fallback inputs changed after graph preflight"));
+        return false;
+    }
+
+    const u8* const bytes = m_preparedHybridHardwareFallbackBytes.data();
+    Core::Buffer* const instanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer.get();
+    Core::Buffer* const instanceBuffer = state.m_shadowInstanceBuffer.get();
+    Core::Buffer* const materialTypedBuffer = state.m_shadowMaterialTypedBuffer.get();
+    commandList.setBufferState(instanceMaterialBuffer, Core::ResourceStates::CopyDest);
+    commandList.setBufferState(instanceBuffer, Core::ResourceStates::CopyDest);
+    commandList.setBufferState(materialTypedBuffer, Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.writeBuffer(instanceMaterialBuffer, bytes, instanceMaterialByteCount);
+    commandList.writeBuffer(instanceBuffer, bytes + instanceMaterialByteCount, instanceByteCount);
+    commandList.writeBuffer(
+        materialTypedBuffer,
+        bytes + instanceMaterialByteCount + instanceByteCount,
+        materialTypedByteCount
+    );
+    commandList.setBufferState(instanceMaterialBuffer, Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(instanceBuffer, Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(materialTypedBuffer, Core::ResourceStates::ShaderResource);
+    commandList.commitBarriers();
+    m_preparedHybridHardwareFallbackRecorded = true;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: restored frozen hybrid hardware material context"));
+    return true;
+}
+
 bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     Core::CommandList* const commandList,
     Core::Alloc::ScratchArena& scratchArena,
@@ -1812,6 +1880,15 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                 )
             )
                 return false;
+            // This replaces the hardware snapshot gathered before the hybrid software path. Retain that exact
+            // immutable context first, so an optional SW-tail miss can restore opaque consumers without regathering
+            // renderer/material data while Shadow Preparation is recording.
+            if(
+                m_preparedShadowMaterialContextReady
+                && m_preparedShadowMaterialContextRoute == PreparedShadowMaterialContextRoute::Hardware
+                && !capturePreparedHybridHardwareMaterialContextFallback()
+            )
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain frozen hybrid hardware material fallback"));
             if(!capturePreparedShadowMaterialContext(
                 PreparedShadowMaterialContextRoute::Software,
                 staticScene,

@@ -396,6 +396,12 @@ private:
         usize materialTypedByteCount
     )const;
     void clearPreparedShadowMaterialContext()noexcept;
+    // A healthy hybrid preflight gathers the HW context before the final SW context replaces it. Retain that exact
+    // immutable HW payload so an optional SW-tail miss can restore opaque consumers without a recording-time
+    // renderer/material regather; stale sources still take the established direct retry.
+    [[nodiscard]] bool capturePreparedHybridHardwareMaterialContextFallback();
+    [[nodiscard]] bool recordPreparedHybridHardwareMaterialContextFallback(Core::CommandList& commandList);
+    void clearPreparedHybridHardwareMaterialContextFallback()noexcept;
     [[nodiscard]] bool capturePreparedSceneBvh(
         bool staticScene,
         u64 staticSceneHash,
@@ -563,6 +569,28 @@ private:
     PreparedShadowMaterialContextRoute m_preparedShadowMaterialContextRoute = PreparedShadowMaterialContextRoute::None;
     bool m_preparedShadowMaterialContextStatic = false;
     bool m_preparedShadowMaterialContextReady = false;
+    // The transient HW fallback is separate from the final SW graph upload. It retains only the material-context
+    // payload because the preceding Shadow Preparation work has already recorded the frozen HW TLAS/BLAS plan.
+    Vector<u8, Core::Alloc::GlobalArena> m_preparedHybridHardwareFallbackBytes;
+    Core::BufferHandle m_preparedHybridHardwareFallbackInstanceMaterialBuffer;
+    Core::BufferHandle m_preparedHybridHardwareFallbackInstanceBuffer;
+    Core::BufferHandle m_preparedHybridHardwareFallbackMaterialTypedBuffer;
+    Core::GpuDescriptorHandle m_preparedHybridHardwareFallbackInstanceMaterialHeapHandle;
+    Core::GpuDescriptorHandle m_preparedHybridHardwareFallbackInstanceHeapHandle;
+    Core::GpuDescriptorHandle m_preparedHybridHardwareFallbackMaterialTypedHeapHandle;
+    usize m_preparedHybridHardwareFallbackInstanceMaterialByteCount = 0u;
+    usize m_preparedHybridHardwareFallbackInstanceByteCount = 0u;
+    usize m_preparedHybridHardwareFallbackMaterialTypedByteCount = 0u;
+    usize m_preparedHybridHardwareFallbackInstanceMaterialCapacity = 0u;
+    usize m_preparedHybridHardwareFallbackInstanceCapacity = 0u;
+    usize m_preparedHybridHardwareFallbackMaterialTypedCapacity = 0u;
+    u64 m_preparedHybridHardwareFallbackMaterialContextHash = 0u;
+    u64 m_preparedHybridHardwareFallbackRendererMutationVersion = 0u;
+    u64 m_preparedHybridHardwareFallbackTransformMutationVersion = 0u;
+    u64 m_preparedHybridHardwareFallbackMaterialMutationVersion = 0u;
+    bool m_preparedHybridHardwareFallbackStatic = false;
+    bool m_preparedHybridHardwareFallbackReady = false;
+    bool m_preparedHybridHardwareFallbackRecorded = false;
     // The CPU-built software scene BVH must retain node and leaf-instance bytes together: each node's leaf range
     // indexes this exact instance stream. Hybrid frames graph-own this independent pair and their final
     // software-compatible material context, while the hardware TLAS plan retains its own retry boundary.

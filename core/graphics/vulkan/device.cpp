@@ -208,6 +208,9 @@ Device::Device(const DeviceDesc& desc)
     , m_pipelineCacheVolumeName(m_context.objectArena)
     , m_physicalQueues(m_context.objectArena)
     , m_physicalQueueInfos(m_context.objectArena)
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+    , m_submissionWaitTokensForTesting(m_context.objectArena)
+#endif
     , m_uploadManager(*this, s_DefaultUploadChunkSize, 0, false)
     , m_scratchManager(*this, s_DefaultScratchChunkSize, s_ScratchMemoryLimit, true)
 {
@@ -892,6 +895,37 @@ void Device::clearSubmissionRejectionsForTesting(){
         count.store(0u, MemoryOrder::relaxed);
 }
 
+void Device::clearSubmissionWaitTokensForTesting(){
+    m_submissionWaitCaptureArmedForTesting.store(false, MemoryOrder::release);
+    ScopedLock lock(m_submissionWaitTokensForTestingMutex);
+    m_submissionWaitQueueForTesting = {};
+    m_submissionWaitTokensForTesting.clear();
+}
+
+void Device::armSubmissionWaitCaptureForTesting(){
+    m_submissionWaitCaptureArmedForTesting.store(true, MemoryOrder::release);
+}
+
+usize Device::lastSubmissionWaitTokenCountForTesting(
+    const GpuPhysicalQueueId& executionQueue
+)const noexcept{
+    ScopedLock lock(m_submissionWaitTokensForTestingMutex);
+    return executionQueue == m_submissionWaitQueueForTesting
+        ? m_submissionWaitTokensForTesting.size()
+        : 0u
+    ;
+}
+
+QueueSubmissionToken Device::lastSubmissionWaitTokenForTesting(
+    const GpuPhysicalQueueId& executionQueue,
+    const usize index
+)const noexcept{
+    ScopedLock lock(m_submissionWaitTokensForTestingMutex);
+    if(executionQueue != m_submissionWaitQueueForTesting || index >= m_submissionWaitTokensForTesting.size())
+        return {};
+    return m_submissionWaitTokensForTesting[index];
+}
+
 bool Device::consumeSubmissionRejectionForTesting(const CommandQueue::Enum queue){
     const u32 index = static_cast<u32>(queue);
     if(index >= static_cast<u32>(CommandQueue::kCount))
@@ -904,6 +938,22 @@ bool Device::consumeSubmissionRejectionForTesting(const CommandQueue::Enum queue
             return true;
     }
     return false;
+}
+
+void Device::captureSubmissionWaitTokensForTesting(
+    const GpuPhysicalQueueId& executionQueue,
+    const QueueSubmissionToken* const waitTokens,
+    const usize waitTokenCount
+){
+    if(!m_submissionWaitCaptureArmedForTesting.exchange(false, MemoryOrder::acq_rel))
+        return;
+    ScopedLock lock(m_submissionWaitTokensForTestingMutex);
+    m_submissionWaitQueueForTesting = executionQueue;
+    if(!waitTokens || waitTokenCount == 0u){
+        m_submissionWaitTokensForTesting.clear();
+        return;
+    }
+    m_submissionWaitTokensForTesting.assign(waitTokens, waitTokens + waitTokenCount);
 }
 
 #endif
@@ -1148,6 +1198,13 @@ QueueSubmissionToken Device::executeCommandLists(
         localSignals = &hookSignal;
         localSignalCount = 1u;
     }
+
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+    // An explicitly armed test seam retains the uncollapsed graph/runtime token edge list at the final Device
+    // boundary. This is intentionally after every validation branch so tests can distinguish an accepted submit
+    // from an invalid descriptor without adding recurring debug-submit allocations.
+    captureSubmissionWaitTokensForTesting(executionQueue, submitDesc.waitTokens, submitDesc.waitTokenCount);
+#endif
 
     bool submissionAccepted = false;
     const u64 submittedID = queue->submit(

@@ -295,6 +295,34 @@ TEST_F(DescriptorBufferRoundTripTest, NativePhysicalQueueRegistryDrivesExactSubm
     ASSERT_TRUE(token.valid());
     EXPECT_TRUE(token.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
     EXPECT_EQ(token.queue, CommandQueue::Graphics);
+
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+    // The recovery proof reads the same Device-boundary capture below. Exercise it on the always-available
+    // Graphics transport too, so the test seam itself remains live on hosts without a dedicated Transfer family.
+    auto waitConsumer = nativeDevice.createCommandList(parameters);
+    ASSERT_NE(waitConsumer.get(), nullptr);
+    waitConsumer->open();
+    waitConsumer->close();
+    const QueueSubmissionToken waitTokens[] = { token };
+    CommandList* const waitConsumerLists[] = { waitConsumer.get() };
+    nativeDevice.clearSubmissionWaitTokensForTesting();
+    nativeDevice.armSubmissionWaitCaptureForTesting();
+    const QueueSubmissionToken waitConsumerToken = nativeDevice.executeCommandLists(
+        waitConsumerLists,
+        LengthOf(waitConsumerLists),
+        graphicsQueue,
+        QueueSubmissionDesc().setWaitTokens(waitTokens, LengthOf(waitTokens))
+    );
+    ASSERT_TRUE(waitConsumerToken.valid());
+    ASSERT_EQ(nativeDevice.lastSubmissionWaitTokenCountForTesting(graphicsQueue), 1u);
+    const QueueSubmissionToken capturedWait = nativeDevice.lastSubmissionWaitTokenForTesting(graphicsQueue, 0u);
+    EXPECT_EQ(capturedWait.queue, token.queue);
+    EXPECT_EQ(capturedWait.value, token.value);
+    EXPECT_EQ(capturedWait.physicalQueueIndex, token.physicalQueueIndex);
+    EXPECT_EQ(capturedWait.deviceGeneration, token.deviceGeneration);
+#endif
+
+    EXPECT_TRUE(nativeDevice.waitForIdle());
 }
 
 
@@ -5785,6 +5813,271 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
 
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();
+}
+
+
+// A renderer failure can leave an automatic setup upload accepted on a genuinely dedicated Transfer queue while a
+// later Graphics packet rejects.  The late Graphics recovery packet has no graph dependency on that rejected
+// suffix, so the transaction must turn the accepted Transfer completion into a submission-local frontier wait.
+// Keep this on a fresh Transfer-enabled device: a host without the optional physical queue reports an environment
+// skip, while a qualifying adapter exercises the actual VkQueue/physical-token path rather than a synthetic
+// topology alone.
+TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicatedTransferFrontier){
+    HeadlessGraphicsScope transferScope;
+    ASSERT_TRUE(transferScope.setTransferQueueEnabled(true));
+    if(!transferScope.initialize())
+        GTEST_SKIP() << "Transfer recovery: no usable dedicated-transfer headless Vulkan device on this host.";
+
+    auto& device = transferScope.graphics().getDevice();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueId transferQueue = device.getPrimaryPhysicalQueue(CommandQueue::Transfer);
+    if(
+        !device.getQueue(CommandQueue::Transfer)
+        || !transferQueue.valid()
+        || transferQueue == graphicsQueue
+        || device.getQueueFamilyIndex(transferQueue) == device.getQueueFamilyIndex(graphicsQueue)
+    ){
+        GTEST_SKIP() << "Transfer recovery: adapter has no dedicated transfer-only queue family.";
+    }
+    ASSERT_TRUE(graphicsQueue.valid());
+    ASSERT_TRUE(device.matchesPhysicalQueueIdentity(graphicsQueue));
+    ASSERT_TRUE(device.matchesPhysicalQueueIdentity(transferQueue));
+
+    static constexpr u32 s_TransferWords[] = {
+        0x1e35a7c9u,
+        0x73b4d2f0u,
+        0x0badbeefu,
+        0x9e3779b9u,
+    };
+    auto transferDestination = device.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(s_TransferWords))
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+    );
+    ASSERT_NE(transferDestination.get(), nullptr);
+
+    GpuTaskGraph graph(transferScope.arena());
+    const GpuGraphResourceId transferDestinationResource = graph.importBuffer(
+        transferDestination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/recovery_transfer_destination"))
+            .setMarkerLabel("Recovery Transfer Destination")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+    );
+    const GpuUploadBlobId transferBlob = graph.copyUploadData(
+        s_TransferWords,
+        sizeof(s_TransferWords),
+        alignof(u32)
+    );
+    ASSERT_TRUE(transferDestinationResource.valid());
+    ASSERT_TRUE(transferBlob.valid());
+
+    const GpuQueueRequest transferRequest{
+        GpuQueueCapability::Transfer,
+        GpuQueuePreference::Transfer,
+        false,
+        false,
+    };
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint packetScheduling;
+    packetScheduling.cost = GpuTaskCostHint::Large;
+    packetScheduling.forceSubmissionBoundary = true;
+    packetScheduling.allowPacketMerge = false;
+
+    QueueSubmissionToken acceptedTransferToken;
+    const GpuTaskId transferTask = graph.addUploadBufferTask(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/recovery_transfer_upload"))
+            .setMarkerLabel("Recovery Transfer Upload")
+            .setQueue(transferRequest)
+            .setScheduling(packetScheduling),
+        GpuUploadBufferTaskDesc{
+            .source = transferBlob,
+            .destination = transferDestinationResource,
+            .finalState = ResourceStates::CopyDest,
+            .acceptedToken = &acceptedTransferToken,
+        }
+    );
+    ASSERT_TRUE(transferTask.valid());
+
+    bool rejectedSuffixShouldRecord = true;
+    bool rejectedSuffixRecorded = false;
+    const GpuTaskId rejectedSuffixDependencies[] = { transferTask };
+    const GpuTaskId rejectedSuffixTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/recovery_rejected_graphics_suffix"))
+            .setMarkerLabel("Recovery Rejected Graphics Suffix")
+            .setQueue(graphicsRequest)
+            .setScheduling(packetScheduling)
+            .setDependencies(rejectedSuffixDependencies, LengthOf(rejectedSuffixDependencies)),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &rejectedSuffixShouldRecord,
+            .attempted = &rejectedSuffixRecorded,
+        }
+    );
+    ASSERT_TRUE(rejectedSuffixTask.valid());
+
+    bool recoveryShouldRecord = true;
+    bool recoveryRecorded = false;
+    GpuTaskSchedulingHint recoveryScheduling = packetScheduling;
+    recoveryScheduling.cost = GpuTaskCostHint::Tiny;
+    recoveryScheduling.joinsAcceptedQueueFrontier = true;
+    const GpuTaskId recoveryTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/recovery_dedicated_transfer_tail"))
+            .setMarkerLabel("Recovery Dedicated Transfer Tail")
+            .setQueue(graphicsRequest)
+            .setScheduling(recoveryScheduling),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &recoveryShouldRecord,
+            .attempted = &recoveryRecorded,
+        }
+    );
+    ASSERT_TRUE(recoveryTask.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    GpuTaskGraphAnalysis analysis(transferScope.arena());
+    GpuTaskGraphQueueAssignments assignments(transferScope.arena());
+    GpuCompiledGraph compiledGraph(transferScope.arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/recovery_dedicated_transfer_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+
+    const GpuTaskQueueAssignment* const transferAssignment = assignments.find(transferTask);
+    const GpuTaskQueueAssignment* const rejectedSuffixAssignment = assignments.find(rejectedSuffixTask);
+    const GpuTaskQueueAssignment* const recoveryAssignment = assignments.find(recoveryTask);
+    ASSERT_NE(transferAssignment, nullptr);
+    ASSERT_NE(rejectedSuffixAssignment, nullptr);
+    ASSERT_NE(recoveryAssignment, nullptr);
+    EXPECT_EQ(transferAssignment->queue, transferQueue);
+    EXPECT_EQ(transferAssignment->queueClass, CommandQueue::Transfer);
+    EXPECT_EQ(rejectedSuffixAssignment->queue, graphicsQueue);
+    EXPECT_EQ(recoveryAssignment->queue, graphicsQueue);
+
+    const GpuSubmissionPacketId transferPacket = compiledGraph.packetForTask(transferTask);
+    const GpuSubmissionPacketId rejectedSuffixPacket = compiledGraph.packetForTask(rejectedSuffixTask);
+    const GpuSubmissionPacketId recoveryPacket = compiledGraph.packetForTask(recoveryTask);
+    ASSERT_TRUE(transferPacket.valid());
+    ASSERT_TRUE(rejectedSuffixPacket.valid());
+    ASSERT_TRUE(recoveryPacket.valid());
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    EXPECT_EQ(compiledGraph.packetIdAt(0u), transferPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(1u), rejectedSuffixPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(2u), recoveryPacket);
+    ASSERT_EQ(compiledGraph.packet(rejectedSuffixPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(rejectedSuffixPacket)[0u].producer, transferPacket);
+    EXPECT_EQ(compiledGraph.packet(recoveryPacket).dependencyCount, 0u);
+    EXPECT_EQ(compiledGraph.packet(recoveryPacket).externalDependencyCount, 0u);
+    EXPECT_TRUE(compiledGraph.packet(recoveryPacket).joinsAcceptedQueueFrontier);
+
+    GpuRecordedGraph recordedGraph(transferScope.arena());
+    GpuGraphSubmissionTransaction transaction(transferScope.arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = transferPacket },
+        recordedGraph
+    ));
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = rejectedSuffixPacket },
+        recordedGraph
+    ));
+    EXPECT_TRUE(rejectedSuffixRecorded);
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        transferPacket,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken transferToken = transaction.packetToken(transferPacket);
+    ASSERT_TRUE(transferToken.valid());
+    ASSERT_TRUE(acceptedTransferToken.valid());
+    EXPECT_EQ(acceptedTransferToken.value, transferToken.value);
+    EXPECT_EQ(transferToken.queue, CommandQueue::Transfer);
+    EXPECT_TRUE(transferToken.matchesPhysicalQueue(transferQueue.index, transferQueue.deviceGeneration));
+
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    EXPECT_FALSE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        rejectedSuffixPacket,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    ASSERT_NE(transaction.packetRuntime(rejectedSuffixPacket), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(rejectedSuffixPacket)->state, GpuPacketRuntimeState::Rejected);
+    ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(recoveryPacket)->state, GpuPacketRuntimeState::Declared);
+
+    Vector<QueueSubmissionToken, Alloc::ScratchArena> recoveryWaitTokens(scratchArena);
+    ASSERT_TRUE(transaction.appendAcceptedQueueFrontierWaitTokens(graphicsQueue, recoveryWaitTokens));
+    ASSERT_EQ(recoveryWaitTokens.size(), 1u);
+    EXPECT_EQ(recoveryWaitTokens[0u].queue, CommandQueue::Transfer);
+    EXPECT_EQ(recoveryWaitTokens[0u].value, transferToken.value);
+    EXPECT_EQ(recoveryWaitTokens[0u].physicalQueueIndex, transferQueue.index);
+    EXPECT_EQ(recoveryWaitTokens[0u].deviceGeneration, transferQueue.deviceGeneration);
+
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = recoveryPacket },
+        recordedGraph
+    ));
+    EXPECT_TRUE(recoveryRecorded);
+    // The preceding rejected suffix also carried the Transfer dependency. Clear that capture so this assertion
+    // observes only the late recovery submitter call, after it has assembled its accepted-frontier waits.
+    device.clearSubmissionWaitTokensForTesting();
+    device.armSubmissionWaitCaptureForTesting();
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        recoveryPacket,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken recoveryToken = transaction.packetToken(recoveryPacket);
+    ASSERT_TRUE(recoveryToken.valid());
+    ASSERT_EQ(device.lastSubmissionWaitTokenCountForTesting(graphicsQueue), 1u);
+    const QueueSubmissionToken recoverySubmissionWait = device.lastSubmissionWaitTokenForTesting(graphicsQueue, 0u);
+    EXPECT_EQ(recoverySubmissionWait.queue, CommandQueue::Transfer);
+    EXPECT_EQ(recoverySubmissionWait.value, transferToken.value);
+    EXPECT_EQ(recoverySubmissionWait.physicalQueueIndex, transferQueue.index);
+    EXPECT_EQ(recoverySubmissionWait.deviceGeneration, transferQueue.deviceGeneration);
+    EXPECT_EQ(recoveryToken.queue, CommandQueue::Graphics);
+    EXPECT_TRUE(recoveryToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
+    ASSERT_TRUE(device.waitForIdle());
+
+    transaction.discardUnaccepted(graph, compiledGraph);
+    ASSERT_NE(transaction.packetRuntime(transferPacket), nullptr);
+    ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(transferPacket)->state, GpuPacketRuntimeState::Accepted);
+    EXPECT_EQ(transaction.packetRuntime(recoveryPacket)->state, GpuPacketRuntimeState::Accepted);
 }
 
 #endif

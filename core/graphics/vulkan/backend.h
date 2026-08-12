@@ -2492,9 +2492,17 @@ public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType);
     [[nodiscard]] Queue* getQueue(const GpuPhysicalQueueId& queue);
 #if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
-    // Test-only validated-submit rejection seam exercises production cleanup.
+    // Test-only validated-submit seams exercise production cleanup and retain the exact submission-local waits
+    // received by Device after graph/runtime assembly.
     void rejectNextSubmissionForTesting(CommandQueue::Enum queue);
     void clearSubmissionRejectionsForTesting();
+    void clearSubmissionWaitTokensForTesting();
+    void armSubmissionWaitCaptureForTesting();
+    [[nodiscard]] usize lastSubmissionWaitTokenCountForTesting(const GpuPhysicalQueueId& executionQueue)const noexcept;
+    [[nodiscard]] QueueSubmissionToken lastSubmissionWaitTokenForTesting(
+        const GpuPhysicalQueueId& executionQueue,
+        usize index
+    )const noexcept;
 #endif
     [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap(){ return m_gpuDescriptorHeap; }
     // Writes descriptor-buffer entries, including TLAS handles.
@@ -2506,6 +2514,11 @@ private:
     void configureLegacyQueueContext();
 #if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
     [[nodiscard]] bool consumeSubmissionRejectionForTesting(CommandQueue::Enum queue);
+    void captureSubmissionWaitTokensForTesting(
+        const GpuPhysicalQueueId& executionQueue,
+        const QueueSubmissionToken* waitTokens,
+        usize waitTokenCount
+    );
 #endif
     // Probed once at device initialization so compressed texture selection does not rely on
     // a later optimistic format-property query.
@@ -2641,6 +2654,10 @@ private:
 
 #if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
     Array<Atomic<u32>, static_cast<u32>(CommandQueue::kCount)> m_submissionRejectionsForTesting = {};
+    Atomic<bool> m_submissionWaitCaptureArmedForTesting = false;
+    mutable Futex m_submissionWaitTokensForTestingMutex;
+    GpuPhysicalQueueId m_submissionWaitQueueForTesting;
+    GraphicsVector<QueueSubmissionToken> m_submissionWaitTokensForTesting;
 #endif
 
     UploadManager m_uploadManager;

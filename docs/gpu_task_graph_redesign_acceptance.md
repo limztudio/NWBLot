@@ -6,7 +6,8 @@
 
 **Follow-up implementation:** physical queue identity, frontier-safe deferred scheduling, graph-bound presentation,
 graph-owned per-frame ImGui uploads, opt-in ready-frontier native recording, and opt-in same-class physical Graphics
-routing, actual-device stale packet-recording recreation coverage, and graph-owned public setup uploads,
+routing, actual-device stale packet-recording recreation coverage, qualified dedicated-Transfer recovery-frontier
+coverage, graph-owned public setup uploads,
 graph-owned deferred mesh-view, scene-light, and scene-shading frame updates, and graph-owned decoded texture-asset
 uploads, graph-owned runtime-skinning joint-palette uploads and no-active rest-to-skinned copies, graph-owned opaque material draw-stream uploads, and
 graph-owned opaque CSG receiver/cutter/context/interval streams, graph-owned transparent CSG interval-producer
@@ -163,6 +164,12 @@ can receive an unconditional final sign-off.
 - Recorded graph and submission-transaction state is generation-bound. Recompiling after graph reset invalidates
   stale recording state until it is reset for the new compiled graph, releasing the old packet-owned command-list
   handles before recording can resume.
+- A late recovery packet is an independent Graphics tail that derives one current-generation timeline wait from
+  every accepted non-destination physical queue. The transaction-level test covers Compute and Transfer sources;
+  the dedicated-Transfer headless smoke accepts a graph-owned Transfer upload, rejects its dependent Graphics
+  suffix, then late-records and submits the recovery tail. A test-only Device-boundary capture verifies that the
+  submitter supplied the exact Transfer token to that native submission. The dedicated-Transfer half is
+  topology-gated and skips only when the adapter lacks a dedicated Transfer-only family.
 
 ## Verification performed
 
@@ -209,6 +216,7 @@ can receive an unconditional final sign-off.
 | Graph-owned opaque hardware TLAS build follow-up: renderer build, FrontierSafe graph unit, and descriptor-buffer smoke | passed; `nwb_ecs_render` built, graph tests passed 50/50, and descriptor smoke passed 75 tests with 10 expected topology skips. The graph unit proves the backing-buffer `Common` to `AccelStructRead` handoff and that Shadow Preparation, rather than the frozen preflight data, owns later Compute consumers. |
 | Graph-owned opaque hardware BLAS build/refit follow-up: renderer build, FrontierSafe graph unit, and descriptor-buffer smoke | passed; `nwb_ecs_render` built, graph tests passed 50/50, and descriptor smoke passed 75 tests with 10 expected topology skips. The graph unit covers both a frozen BLAS build and a state-only compatibility BLAS backing, proving their `Common` to `AccelStructRead` handoff remains owned by Shadow Preparation before later Compute consumers. |
 | Graph-owned software-only per-mesh SW-BVH build/refit follow-up: renderer/runtime build, FrontierSafe graph unit, descriptor-buffer smoke, and forced-software transparent capture | passed; the graph unit proves `Common` to `UnorderedAccess` ownership for parent and shared scratch state, graph tests passed 50/50, descriptor smoke passed 75 tests with 10 expected topology skips, and the forced-software transparent capture completed. |
+| Dedicated-Transfer recovery-frontier follow-up: graph unit and descriptor-buffer smoke | passed; graph tests passed 50/50 and descriptor smoke passed 77 tests with 11 expected topology skips. The new native test accepts a graph-owned Transfer upload, injects a rejected dependent Graphics suffix, verifies the transaction emits its exact physical Transfer token, then confirms the Device receives that token on the independent recovery-tail submission. This adapter skips only the dedicated-Transfer execution because it has no Transfer-only family. |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -254,8 +262,11 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    stale imported completion tokens have graph and native-submission rejection coverage, and recording/transaction
    state is now invalidated and recreated across a compiled-graph generation change. A real headless Graphics
    device-lifetime test now verifies the renderer-style reset before teardown, rejects the retired token generation,
-   and records/submits a fresh packet after recreation. Recovery is still not proven to join every possible Transfer
-   queue route.
+   and records/submits a fresh packet after recreation. The transaction unit path covers accepted Compute and
+   Transfer producers, and a dedicated-Transfer headless test now accepts a graph-owned upload, rejects its later
+   Graphics suffix, verifies the exact physical Transfer frontier token, and confirms that the Device receives it
+   on an independent late Graphics recovery submission. The qualified-hardware execution remains topology-gated:
+   this adapter correctly skips it because it has no dedicated Transfer-only family.
 
 5. **Final parity and performance evidence.** There is no immutable current baseline, legacy-to-graph pixel parity
    corpus, complete bindless-domain audit, or target-scene critical-path comparison. Dedicated-Transfer ownership/
@@ -266,5 +277,5 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
 
 Do not relabel this result as final architectural completion without either implementing the five areas above or
 explicitly waiving them in a revised, version-controlled acceptance scope. The next implementation work should
-finish the remaining graph-owned asset/resource-update paths, specialized descriptor/resource updates, and recovery
-proof.
+finish the remaining graph-owned asset/resource-update paths and specialized descriptor/resource updates, then
+collect the target-hardware performance and dedicated-Transfer evidence still called out above.

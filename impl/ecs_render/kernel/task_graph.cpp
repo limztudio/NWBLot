@@ -1304,6 +1304,7 @@ struct AvboitAccumulationGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot accumulationSnapshot;
         bool accumulationPhasePrepared = false;
+        bool accumulationCsgIntervalSampleImageStatesGraphOwned = false;
         bool hasTransparentRenderers = false;
         bool splitStages = false;
 
@@ -1348,7 +1349,8 @@ struct AvboitAccumulationGraphTask{
                 preparedAccumulationInstanceCount,
                 preparedAccumulationMaterialTypedByteCount,
                 // The following mergeable Graphics finalizer owns every accumulation-framebuffer handoff.
-                true
+                true,
+                payload.accumulationCsgIntervalSampleImageStatesGraphOwned
             );
         }
         return true;
@@ -6668,9 +6670,27 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         }
     }
 
+    const bool accumulationCsgIntervalSampleImageStatesGraphOwned =
+        avboitIntervalOutputsGraphOwned && accumulationCsgStreamsUploaded
+    ;
+    NWB_ASSERT(
+        !accumulationCsgIntervalSampleImageStatesGraphOwned
+        || (
+            avboitAccumulationPayload.accumulationPhasePrepared
+            && avboitAccumulationPayload.accumulationSnapshot.captured
+        )
+    );
+    avboitAccumulationPayload.accumulationCsgIntervalSampleImageStatesGraphOwned =
+        accumulationCsgIntervalSampleImageStatesGraphOwned
+    ;
+
     Core::Alloc::ScratchArena accumulationResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationResourceUses{ accumulationResourceScratch };
-    accumulationResourceUses.reserve((splitAvboitStages ? 9u : 12u) + (accumulationStreamsUploaded ? 7u : 0u));
+    accumulationResourceUses.reserve(
+        (splitAvboitStages ? 9u : 12u)
+        + (accumulationStreamsUploaded ? 7u : 0u)
+        + (accumulationCsgIntervalSampleImageStatesGraphOwned ? 4u : 0u)
+    );
     if(!splitAvboitStages){
         // Graphics-only accumulation samples these full-resolution G-buffer inputs through material descriptors.
         accumulationResourceUses.push_back(ReadUse(albedo));
@@ -6694,6 +6714,30 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             accumulationResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
             // This remains the full-resolution interval producer's state; accumulation only samples it.
             accumulationResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
+            if(accumulationCsgIntervalSampleImageStatesGraphOwned){
+                // The prepared transparent interval producer wrote these aliases. Accumulation loads them through
+                // StorageImage descriptors, so the graph lowers its same-UAV handoff before this thunk records.
+                accumulationResourceUses.push_back(ReadTextureUse(
+                    csgRemovedIntervalDepth,
+                    csgRemovedIntervalSubresources,
+                    Core::ResourceStates::UnorderedAccess
+                ));
+                accumulationResourceUses.push_back(ReadTextureUse(
+                    csgRemovedIntervalCapNormal,
+                    csgRemovedIntervalSubresources,
+                    Core::ResourceStates::UnorderedAccess
+                ));
+                accumulationResourceUses.push_back(ReadTextureUse(
+                    csgRemovedIntervalData,
+                    csgRemovedIntervalSubresources,
+                    Core::ResourceStates::UnorderedAccess
+                ));
+                accumulationResourceUses.push_back(ReadTextureUse(
+                    csgRemovedIntervalCount,
+                    csgRemovedIntervalCountSubresources,
+                    Core::ResourceStates::UnorderedAccess
+                ));
+            }
         }
     }
     accumulationResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));

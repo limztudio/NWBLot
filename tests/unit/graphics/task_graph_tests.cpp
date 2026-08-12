@@ -8804,6 +8804,280 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToExtinctionSampleAcrossAsyncGa
 }
 
 
+// Accumulation runs after both Graphics extinction and Compute integration on the split route. It can still sample
+// the interval producer's StorageImage aliases without a renderer-local state call only if the compiler retains the
+// producer state seed and direct packet wait across the intervening AVBOIT work.
+TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToAccumulationSampleAcrossIntegrationGap){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId removedIntervalDepth = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_accumulation_removed_interval_depth"),
+        "AVBOIT Accumulation Removed Interval Depth"
+    );
+    const Graphics::GpuGraphResourceId removedIntervalCapNormal = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_accumulation_removed_interval_cap_normal"),
+        "AVBOIT Accumulation Removed Interval Cap Normal"
+    );
+    const Graphics::GpuGraphResourceId removedIntervalData = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_accumulation_removed_interval_data"),
+        "AVBOIT Accumulation Removed Interval Data"
+    );
+    const Graphics::GpuGraphResourceId removedIntervalCount = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_accumulation_removed_interval_count"),
+        "AVBOIT Accumulation Removed Interval Count"
+    );
+    ASSERT_TRUE(removedIntervalDepth.valid());
+    ASSERT_TRUE(removedIntervalCapNormal.valid());
+    ASSERT_TRUE(removedIntervalData.valid());
+    ASSERT_TRUE(removedIntervalCount.valid());
+
+    const Graphics::TextureSubresourceSet removedIntervalRange(0u, 1u, 0u, 16u);
+    const Graphics::TextureSubresourceSet removedIntervalCountRange(0u, 1u, 0u, 1u);
+    const Graphics::GpuTaskResourceUse intervalUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = removedIntervalDepth,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = removedIntervalCapNormal,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = removedIntervalData,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = removedIntervalCount,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalCountRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    const Graphics::GpuTaskResourceUse accumulationUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = removedIntervalDepth,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = removedIntervalCapNormal,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = removedIntervalData,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = removedIntervalCount,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalCountRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        true,
+        true,
+    };
+    Graphics::GpuTaskSchedulingHint boundaryScheduling;
+    boundaryScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    boundaryScheduling.forceSubmissionBoundary = true;
+    boundaryScheduling.allowPacketMerge = false;
+
+    Graphics::GpuTaskDesc intervalDesc;
+    intervalDesc
+        .setIdentity(Name("tests/task_graph/avboit_accumulation_intervals"))
+        .setMarkerLabel("Transparent CSG Intervals")
+        .setQueue(graphicsRequest)
+        .setScheduling(boundaryScheduling)
+        .setResourceUses(intervalUses, LengthOf(intervalUses))
+    ;
+    const Graphics::GpuTaskId intervals = graph.addTask(intervalDesc);
+    ASSERT_TRUE(intervals.valid());
+
+    Graphics::GpuTaskDesc depthWarpDesc;
+    depthWarpDesc
+        .setIdentity(Name("tests/task_graph/avboit_accumulation_depth_warp"))
+        .setMarkerLabel("AVBOIT Depth Warp")
+        .setQueue(computeRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&intervals, 1u)
+    ;
+    const Graphics::GpuTaskId depthWarp = graph.addTask(depthWarpDesc);
+    ASSERT_TRUE(depthWarp.valid());
+
+    Graphics::GpuTaskDesc extinctionDesc;
+    extinctionDesc
+        .setIdentity(Name("tests/task_graph/avboit_accumulation_extinction"))
+        .setMarkerLabel("AVBOIT Extinction")
+        .setQueue(graphicsRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&depthWarp, 1u)
+    ;
+    const Graphics::GpuTaskId extinction = graph.addTask(extinctionDesc);
+    ASSERT_TRUE(extinction.valid());
+
+    Graphics::GpuTaskDesc integrationDesc;
+    integrationDesc
+        .setIdentity(Name("tests/task_graph/avboit_accumulation_integration"))
+        .setMarkerLabel("AVBOIT Integration")
+        .setQueue(computeRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&extinction, 1u)
+    ;
+    const Graphics::GpuTaskId integration = graph.addTask(integrationDesc);
+    ASSERT_TRUE(integration.valid());
+
+    Graphics::GpuTaskDesc accumulationDesc;
+    accumulationDesc
+        .setIdentity(Name("tests/task_graph/avboit_accumulation_csg_sample"))
+        .setMarkerLabel("AVBOIT Accumulation")
+        .setQueue(graphicsRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&integration, 1u)
+        .setResourceUses(accumulationUses, LengthOf(accumulationUses))
+    ;
+    const Graphics::GpuTaskId accumulation = graph.addTask(accumulationDesc);
+    ASSERT_TRUE(accumulation.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        intervals,
+        accumulation,
+        removedIntervalDepth,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        intervals,
+        accumulation,
+        removedIntervalCapNormal,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        intervals,
+        accumulation,
+        removedIntervalData,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        intervals,
+        accumulation,
+        removedIntervalCount,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+
+    ASSERT_EQ(compiledGraph.packetCount(), 5u);
+    const Graphics::GpuSubmissionPacketId intervalsPacket = compiledGraph.packetForTask(intervals);
+    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledGraph.packetForTask(depthWarp);
+    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledGraph.packetForTask(extinction);
+    const Graphics::GpuSubmissionPacketId integrationPacket = compiledGraph.packetForTask(integration);
+    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledGraph.packetForTask(accumulation);
+    ASSERT_TRUE(intervalsPacket.valid());
+    ASSERT_TRUE(depthWarpPacket.valid());
+    ASSERT_TRUE(extinctionPacket.valid());
+    ASSERT_TRUE(integrationPacket.valid());
+    ASSERT_TRUE(accumulationPacket.valid());
+    EXPECT_NE(intervalsPacket, depthWarpPacket);
+    EXPECT_NE(depthWarpPacket, extinctionPacket);
+    EXPECT_NE(extinctionPacket, integrationPacket);
+    EXPECT_NE(integrationPacket, accumulationPacket);
+    const Graphics::GpuSubmissionPacket& accumulationPacketPlan = compiledGraph.packet(accumulationPacket);
+    ASSERT_EQ(accumulationPacketPlan.dependencyCount, 2u);
+    const Graphics::GpuPacketDependency* const accumulationDependencies = compiledGraph.packetDependencies(accumulationPacket);
+    ASSERT_NE(accumulationDependencies, nullptr);
+    bool waitsForIntervals = false;
+    bool waitsForIntegration = false;
+    for(u32 dependencyIndex = 0u; dependencyIndex < accumulationPacketPlan.dependencyCount; ++dependencyIndex){
+        waitsForIntervals = waitsForIntervals || accumulationDependencies[dependencyIndex].producer == intervalsPacket;
+        waitsForIntegration = waitsForIntegration || accumulationDependencies[dependencyIndex].producer == integrationPacket;
+    }
+    EXPECT_TRUE(waitsForIntervals);
+    EXPECT_TRUE(waitsForIntegration);
+
+    const Graphics::GpuCompiledTask* const compiledIntervals = compiledGraph.findTask(intervals);
+    const Graphics::GpuCompiledTask* const compiledAccumulation = compiledGraph.findTask(accumulation);
+    ASSERT_NE(compiledIntervals, nullptr);
+    ASSERT_NE(compiledAccumulation, nullptr);
+    ASSERT_EQ(compiledIntervals->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledIntervals->prologueBarrierCount, 4u);
+    ASSERT_EQ(compiledAccumulation->prologueStateSeedCount, 4u);
+    ASSERT_EQ(compiledAccumulation->prologueBarrierCount, 4u);
+    const Graphics::GpuPacketStateSeed* const accumulationSeeds = compiledGraph.taskPrologueStateSeeds(accumulation);
+    const Graphics::GpuCompiledBarrier* const accumulationBarriers = compiledGraph.taskPrologueBarriers(accumulation);
+    ASSERT_NE(accumulationSeeds, nullptr);
+    ASSERT_NE(accumulationBarriers, nullptr);
+    const auto hasAccumulationStateSeed = [&](const Graphics::GpuGraphResourceId resource){
+        for(u32 seedIndex = 0u; seedIndex < compiledAccumulation->prologueStateSeedCount; ++seedIndex){
+            const Graphics::GpuPacketStateSeed& seed = accumulationSeeds[seedIndex];
+            if(seed.resource == resource && seed.sourcePacket == intervalsPacket)
+                return true;
+        }
+        return false;
+    };
+    const auto hasAccumulationUav = [&](const Graphics::GpuGraphResourceId resource, const Graphics::TextureSubresourceSet& range){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledAccumulation->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = accumulationBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureUav
+                && barrier.resource == resource
+                && barrier.range.textureSubresources == range
+                && barrier.before == Graphics::ResourceStates::UnorderedAccess
+                && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasAccumulationStateSeed(removedIntervalDepth));
+    EXPECT_TRUE(hasAccumulationStateSeed(removedIntervalCapNormal));
+    EXPECT_TRUE(hasAccumulationStateSeed(removedIntervalData));
+    EXPECT_TRUE(hasAccumulationStateSeed(removedIntervalCount));
+    EXPECT_TRUE(hasAccumulationUav(removedIntervalDepth, removedIntervalRange));
+    EXPECT_TRUE(hasAccumulationUav(removedIntervalCapNormal, removedIntervalRange));
+    EXPECT_TRUE(hasAccumulationUav(removedIntervalData, removedIntervalRange));
+    EXPECT_TRUE(hasAccumulationUav(removedIntervalCount, removedIntervalCountRange));
+}
+
+
 TEST(GpuTaskGraph, CompilesTransferPreferenceToGraphicsFallbackWithoutARendererPath){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

@@ -122,7 +122,10 @@ public:
         // The normal task-graph path declares the two accumulation attachments and read-only deferred depth as
         // ShaderResource in a following Graphics finalizer. Direct compatibility callers retain their explicit
         // framebuffer-state bridge.
-        bool accumulationFinalStatesGraphOwned = false
+        bool accumulationFinalStatesGraphOwned = false,
+        // The prepared interval producer can hand its StorageImage outputs to graph-owned accumulation sampling.
+        // Direct and other compatibility callers retain the native UAV handoff by leaving this false.
+        bool accumulationCsgIntervalSampleImageStatesGraphOwned = false
     );
     void renderAvboitPasses(
         Core::CommandList& commandList,

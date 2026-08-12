@@ -174,8 +174,8 @@ can receive an unconditional final sign-off.
   consumer never regathers or rewrites those streams, and the renderer verifies that its task is in the interval
   task's accepted packet. When both prepared CSG interval production and prepared occupancy CSG sampling are
   present, occupancy also declares the four removed-interval aliases as exact-range `UnorderedAccess` reads, so
-  the compiler lowers their same-packet UAV handoff before its native thunk records. Direct occupancy and the
-  later accumulation phase retain their native sample-state bridge. The following extinction phase freezes a
+  the compiler lowers their same-packet UAV handoff before its native thunk records. Direct occupancy retains its
+  native sample-state bridge. The following extinction phase freezes a
   separate material instance/typed stream and,
   for CSG draws, receiver/cutter/clip-context data; it intentionally reads rather than rewrites the interval
   sample state. Its prepared CSG consumer also declares the same four exact-range `UnorderedAccess` reads: on
@@ -186,9 +186,13 @@ can receive an unconditional final sign-off.
   into the existing Graphics extinction packet after depth warp.
   The final accumulation phase freezes its own material instance/typed payload and, for CSG draws,
   receiver/cutter/clip-context payload after integration; it also retains the interval producer's full-resolution
-  sample state as a read-only input. Its serial Graphics upload chain and prepared consumer merge into the terminal
-  Graphics AVBOIT packet—after integration on the split route and after the Graphics-only post-extinction tail on
-  the normal route. A following mergeable Graphics finalizer declares the two accumulation attachments as
+  sample state as a read-only input. When both prepared interval production and prepared accumulation CSG sampling
+  are present, accumulation declares the same four exact-range `UnorderedAccess` reads. On the split route their
+  source state seeds survive the depth-warp, extinction, and integration packets and add the required producer
+  wait before accumulation records; direct and unprepared accumulation paths retain the native bridge. Its serial
+  Graphics upload chain and prepared consumer merge into the terminal Graphics AVBOIT packet—after integration on
+  the split route and after the Graphics-only post-extinction tail on the normal route. A following mergeable
+  Graphics finalizer declares the two accumulation attachments as
   `ShaderResource` before Deferred Composite consumes them, while the read-only depth attachment retains its
   explicit compatibility handoff. Runtime checks require every phase stream and finalizer to share its native
   consumer's accepted packet and keep the AVBOIT range at one or five packets. Direct helpers remain only for
@@ -257,8 +261,9 @@ can receive an unconditional final sign-off.
 | Graph-owned CSG receiver-span output state follow-up: 54 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; opaque G-buffer and prepared-transparent AVBOIT now declare every receiver-span-data layer and the receiver-span-count layer as `UnorderedAccess` before their native span dispatches. The graph removes only output setup; native event-image and span-to-combine UAV fences remain intact, as do direct compatibility paths. |
 | Graph-owned CSG removed-interval output state follow-up: 54 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; opaque G-buffer and prepared-transparent AVBOIT now declare every removed-interval depth/cap/data layer and the removed-interval-count layer as `UnorderedAccess` before their native combine dispatches. The graph removes only output setup; native combine-input and post-combine sampling UAV fences remain intact, as do direct compatibility paths. |
 | Graph-owned opaque CSG interval-sample state follow-up: 55 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque mesh/compute and early/mid/late transparent CSG captures | passed; opaque interval combine now ends at a mergeable graph boundary, and the following opaque material/cap task declares all removed-interval outputs as exact-range `UnorderedAccess` reads. The compiler lowers four same-packet UAV handoffs before the sample thunk records; AVBOIT and direct compatibility consumers retain their native post-combine bridge. |
-| Graph-owned AVBOIT occupancy CSG interval-sample state follow-up: 56 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus static/skinned early/mid/late transparent CSG captures | passed; when both prepared transparent interval production and prepared occupancy CSG sampling are present, the four removed-interval outputs cross the intervening AVBOIT clear through compiler-lowered same-packet UAV handoffs. Direct occupancy and later AVBOIT consumers retain their native sample-state bridge. |
-| Graph-owned AVBOIT extinction CSG interval-sample state follow-up: 57 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus static/skinned early/mid/late transparent CSG captures | passed; prepared extinction declares the four removed-interval aliases as exact-range `UnorderedAccess` reads. The compiler preserves four state seeds across the split depth-warp packet and waits for both it and the interval producer; direct/unprepared extinction and later accumulation retain their native bridge. |
+| Graph-owned AVBOIT occupancy CSG interval-sample state follow-up: 56 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus static/skinned early/mid/late transparent CSG captures | passed; when both prepared transparent interval production and prepared occupancy CSG sampling are present, the four removed-interval outputs cross the intervening AVBOIT clear through compiler-lowered same-packet UAV handoffs. Direct occupancy paths retain their native sample-state bridge. |
+| Graph-owned AVBOIT extinction CSG interval-sample state follow-up: 57 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus static/skinned early/mid/late transparent CSG captures | passed; prepared extinction declares the four removed-interval aliases as exact-range `UnorderedAccess` reads. The compiler preserves four state seeds across the split depth-warp packet and waits for both it and the interval producer; direct/unprepared extinction paths retain their native bridge. |
+| Graph-owned AVBOIT accumulation CSG interval-sample state follow-up: 58 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus static/skinned early/mid/late transparent CSG captures | passed; prepared accumulation declares the four removed-interval aliases as exact-range `UnorderedAccess` reads. The compiler preserves four source state seeds across split depth-warp, extinction, and integration packets; direct/unprepared accumulation paths retain their native bridge. |
 | Graph-owned lagged deferred bindless-selector follow-up: FrontierSafe graph unit and descriptor-buffer smoke | passed; the immutable history-selector upload is pinned to and merged into Deferred Lighting's existing Compute packet, retains the external history completion wait, and hands off `Common` to `ConstantBuffer` without extending the Lighting-to-Composite range |
 | Graph-owned ray-trace material-context selector follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and opaque CSG capture | passed; a post-preflight immutable selector blob merges into Shadow Preparation, publishes `Common`, and is logically handed off there to the later Compute trace consumers |
 | Graph-owned caustic emission-target follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and caustic-sphere capture | passed; the preflight-frozen refractive AABB payload merges into Shadow Preparation, publishes `Common`, and is logically handed off there to software and hardware caustic consumers |

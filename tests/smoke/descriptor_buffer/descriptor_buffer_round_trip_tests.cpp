@@ -1682,6 +1682,294 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCoverageStateReco
 }
 
 
+// Accumulation finishes Graphics raster work, but Deferred Composite may be a separate Compute packet. The normal
+// path uses a no-op Graphics finalizer whose declared ShaderResource reads lower the attachment transition before
+// that packet boundary; the finalizer itself deliberately performs no native state work.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStatesRecordWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto stateProbe = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(stateProbe.get(), nullptr);
+    const TextureDesc accumulationTextureDesc = TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Format::RGBA8_UNORM)
+        .setInRenderTarget(true)
+        .setInitialState(ResourceStates::Common)
+    ;
+    auto accumColor = device.createTexture(accumulationTextureDesc);
+    auto accumExtinction = device.createTexture(accumulationTextureDesc);
+    ASSERT_NE(accumColor.get(), nullptr);
+    ASSERT_NE(accumExtinction.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId stateProbeResource = graph.importBuffer(
+        stateProbe,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_accumulation_state_probe"))
+            .setMarkerLabel("AVBOIT Accumulation State Probe")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId accumColorResource = graph.importTexture(
+        accumColor,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_accumulation_color"))
+            .setMarkerLabel("AVBOIT Accumulation Color")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId accumExtinctionResource = graph.importTexture(
+        accumExtinction,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_accumulation_extinction"))
+            .setMarkerLabel("AVBOIT Accumulation Extinction")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(stateProbeResource.valid());
+    ASSERT_TRUE(accumColorResource.valid());
+    ASSERT_TRUE(accumExtinctionResource.valid());
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const GpuQueueRequest computeQueue{
+        GpuQueueCapability::Compute,
+        GpuQueuePreference::Compute,
+        true,
+        true,
+    };
+    GpuTaskSchedulingHint accumulationScheduling;
+    accumulationScheduling.cost = GpuTaskCostHint::Large;
+    accumulationScheduling.forceSubmissionBoundary = false;
+    accumulationScheduling.allowPacketMerge = true;
+    GpuTaskSchedulingHint finalizeScheduling;
+    finalizeScheduling.cost = GpuTaskCostHint::Tiny;
+    finalizeScheduling.forceSubmissionBoundary = false;
+    finalizeScheduling.allowPacketMerge = true;
+    finalizeScheduling.mergeWithPrevious = true;
+    GpuTaskSchedulingHint compositeScheduling;
+    compositeScheduling.cost = GpuTaskCostHint::Medium;
+    compositeScheduling.forceSubmissionBoundary = true;
+    compositeScheduling.allowPacketMerge = false;
+
+    const GpuTaskResourceUse accumulationUses[] = {
+        GpuTaskResourceUse{
+            .resource = stateProbeResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = accumColorResource,
+            .range = {},
+            .requiredState = ResourceStates::RenderTarget,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = accumExtinctionResource,
+            .range = {},
+            .requiredState = ResourceStates::RenderTarget,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    GpuTaskDesc accumulationDesc;
+    accumulationDesc
+        .setIdentity(Name("tests/descriptor_buffer/avboit_accumulation"))
+        .setMarkerLabel("AVBOIT Accumulation")
+        .setQueue(graphicsQueue)
+        .setScheduling(accumulationScheduling)
+        .setResourceUses(accumulationUses, LengthOf(accumulationUses))
+    ;
+    bool accumulationRecorded = false;
+    const GpuTaskId accumulationTask = graph.addTask<NativePacketPrefixTask>(
+        accumulationDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = stateProbe.get(),
+            .expectedState = ResourceStates::ConstantBuffer,
+            .texture = accumColor.get(),
+            .expectedTextureState = ResourceStates::RenderTarget,
+            .additionalTexture = accumExtinction.get(),
+            .expectedAdditionalTextureState = ResourceStates::RenderTarget,
+            .recorded = &accumulationRecorded,
+        }
+    );
+    ASSERT_TRUE(accumulationTask.valid());
+
+    const GpuTaskResourceUse finalizeUses[] = {
+        GpuTaskResourceUse{
+            .resource = stateProbeResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = accumColorResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = accumExtinctionResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskDesc finalizeDesc;
+    finalizeDesc
+        .setIdentity(Name("tests/descriptor_buffer/avboit_accumulation_finalize"))
+        .setMarkerLabel("AVBOIT Accumulation Finalize")
+        .setQueue(graphicsQueue)
+        .setScheduling(finalizeScheduling)
+        .setDependencies(&accumulationTask, 1u)
+        .setResourceUses(finalizeUses, LengthOf(finalizeUses))
+    ;
+    bool finalizerRecorded = false;
+    const GpuTaskId finalizerTask = graph.addTask<NativePacketPrefixTask>(
+        finalizeDesc,
+        NativePacketPrefixTask::Payload{
+            // This probe deliberately only observes graph-established attachment states.
+            .buffer = stateProbe.get(),
+            .expectedState = ResourceStates::ConstantBuffer,
+            .texture = accumColor.get(),
+            .expectedTextureState = ResourceStates::ShaderResource,
+            .additionalTexture = accumExtinction.get(),
+            .expectedAdditionalTextureState = ResourceStates::ShaderResource,
+            .recorded = &finalizerRecorded,
+        }
+    );
+    ASSERT_TRUE(finalizerTask.valid());
+
+    GpuTaskDesc compositeDesc;
+    compositeDesc
+        .setIdentity(Name("tests/descriptor_buffer/avboit_deferred_composite"))
+        .setMarkerLabel("Deferred Composite")
+        .setQueue(computeQueue)
+        .setScheduling(compositeScheduling)
+        .setDependencies(&finalizerTask, 1u)
+        .setResourceUses(finalizeUses, LengthOf(finalizeUses))
+    ;
+    bool compositeRecorded = false;
+    const GpuTaskId compositeTask = graph.addTask<NativePacketPrefixTask>(
+        compositeDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = stateProbe.get(),
+            .expectedState = ResourceStates::ConstantBuffer,
+            .texture = accumColor.get(),
+            .expectedTextureState = ResourceStates::ShaderResource,
+            .additionalTexture = accumExtinction.get(),
+            .expectedAdditionalTextureState = ResourceStates::ShaderResource,
+            .recorded = &compositeRecorded,
+        }
+    );
+    ASSERT_TRUE(compositeTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/avboit_accumulation_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+
+    const GpuSubmissionPacketId accumulationPacket = compiledGraph.packetForTask(accumulationTask);
+    const GpuSubmissionPacketId finalizerPacket = compiledGraph.packetForTask(finalizerTask);
+    const GpuSubmissionPacketId compositePacket = compiledGraph.packetForTask(compositeTask);
+    ASSERT_TRUE(accumulationPacket.valid());
+    ASSERT_TRUE(finalizerPacket.valid());
+    ASSERT_TRUE(compositePacket.valid());
+    EXPECT_EQ(finalizerPacket, accumulationPacket);
+    EXPECT_NE(compositePacket, finalizerPacket);
+
+    const GpuCompiledTask* const compiledFinalizer = compiledGraph.findTask(finalizerTask);
+    const GpuCompiledTask* const compiledComposite = compiledGraph.findTask(compositeTask);
+    ASSERT_NE(compiledFinalizer, nullptr);
+    ASSERT_NE(compiledComposite, nullptr);
+    ASSERT_EQ(compiledFinalizer->prologueBarrierCount, 2u);
+    const GpuCompiledBarrier* const finalizerBarriers = compiledGraph.taskPrologueBarriers(finalizerTask);
+    ASSERT_NE(finalizerBarriers, nullptr);
+    bool finalizesAccumColor = false;
+    bool finalizesAccumExtinction = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledFinalizer->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = finalizerBarriers[barrierIndex];
+        const bool isAttachmentFinalization = barrier.type == GpuCompiledBarrierType::TextureTransition
+            && barrier.before == ResourceStates::RenderTarget
+            && barrier.after == ResourceStates::ShaderResource
+        ;
+        finalizesAccumColor = finalizesAccumColor || (isAttachmentFinalization && barrier.resource == accumColorResource);
+        finalizesAccumExtinction = finalizesAccumExtinction
+            || (isAttachmentFinalization && barrier.resource == accumExtinctionResource);
+    }
+    EXPECT_TRUE(finalizesAccumColor);
+    EXPECT_TRUE(finalizesAccumExtinction);
+    const GpuCompiledBarrier* const compositeBarriers = compiledGraph.taskPrologueBarriers(compositeTask);
+    for(u32 barrierIndex = 0u; barrierIndex < compiledComposite->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = compositeBarriers[barrierIndex];
+        EXPECT_FALSE(
+            barrier.type == GpuCompiledBarrierType::TextureTransition
+            && barrier.before == ResourceStates::RenderTarget
+        );
+    }
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(accumulationRecorded);
+    EXPECT_TRUE(finalizerRecorded);
+    EXPECT_TRUE(compositeRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(finalizerPacket).valid());
+    EXPECT_TRUE(transaction.packetToken(compositePacket).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Primitive copies belong to the graph as typed task payloads: it derives their resource-state declarations,
 // records direct native copies on the resolved physical queue, and publishes the accepted packet token only after
 // submission. On this host the same proof automatically exercises either a dedicated Transfer family or Graphics

@@ -260,6 +260,7 @@ void RendererSystem::invalidateResources(){
     m_deferredAvboitIntegrationTask = {};
     m_deferredAvboitAccumulationStreamTask = {};
     m_deferredAvboitAccumulationTask = {};
+    m_deferredAvboitAccumulationFinalizeTask = {};
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredPresentationOverlayTask = {};
@@ -513,6 +514,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredAvboitIntegrationTask = {};
     m_deferredAvboitAccumulationStreamTask = {};
     m_deferredAvboitAccumulationTask = {};
+    m_deferredAvboitAccumulationFinalizeTask = {};
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredPresentationOverlayTask = {};
@@ -1130,6 +1132,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId avboitAccumulationPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitAccumulationTask
     );
+    const Core::GpuSubmissionPacketId avboitAccumulationFinalizePacket =
+        m_deferredAvboitAccumulationFinalizeTask.valid()
+        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitAccumulationFinalizeTask)
+        : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuSubmissionPacketId avboitAccumulationStreamPacket =
         m_deferredAvboitAccumulationStreamTask.valid()
         ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitAccumulationStreamTask)
@@ -1140,6 +1147,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitAccumulationPacket.valid()
             && avboitAccumulationStreamPacket.valid()
             && avboitAccumulationPacket == avboitAccumulationStreamPacket
+        )
+    ;
+    // The graph-only finalizer lowers the final attachment transition, so it is part of accumulation's accepted
+    // Graphics packet and its timing/submission endpoint. A split here would let Composite bypass that handoff.
+    const bool avboitAccumulationPacketContainsFinalizer = !hasTransparentRenderers
+        || (
+            avboitAccumulationPacket.valid()
+            && avboitAccumulationFinalizePacket.valid()
+            && avboitAccumulationPacket == avboitAccumulationFinalizePacket
         )
     ;
     const bool avboitUnsplitPrePacketContainsAccumulation = !hasTransparentRenderers
@@ -1309,12 +1325,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketRange hardwareCausticsPacketRange =
         m_deferredLightingCompiledGraph.packetRange(hardwareCausticsPacket, hardwareCausticsPacket);
     const Core::GpuSubmissionPacketId avboitUnsplitFinalPacket = hasTransparentRenderers
-        ? avboitAccumulationPacket
+        ? avboitAccumulationFinalizePacket
         : avboitPrePacket
     ;
     const Core::GpuSubmissionPacketRange avboitPacketRange = m_deferredLightingCompiledGraph.packetRange(
         avboitPrePacket,
-        avboitUsesAsyncCompute ? avboitAccumulationPacket : avboitUnsplitFinalPacket
+        avboitUsesAsyncCompute ? avboitAccumulationFinalizePacket : avboitUnsplitFinalPacket
     );
     const Core::GpuSubmissionPacketRange deferredLightingCompositePacketRange =
         m_deferredLightingCompiledGraph.packetRange(deferredLightingPacket, deferredCompositePacket);
@@ -1430,11 +1446,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !avboitPrePacketContainsOccupancy
         || !avboitExtinctionPacketContainsStreams
         || !avboitAccumulationPacketContainsStreams
+        || !avboitAccumulationPacketContainsFinalizer
         || (hasTransparentRenderers && (
             !m_deferredAvboitExtinctionTask.valid()
             || !m_deferredAvboitAccumulationTask.valid()
+            || !m_deferredAvboitAccumulationFinalizeTask.valid()
             || !avboitExtinctionPacket.valid()
             || !avboitAccumulationPacket.valid()
+            || !avboitAccumulationFinalizePacket.valid()
             || (!avboitUsesAsyncCompute && (
                 !avboitUnsplitPrePacketContainsExtinction
                 || !avboitUnsplitPrePacketContainsAccumulation
@@ -2033,11 +2052,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && avboitPrePacketContainsOccupancy
         && avboitExtinctionPacketContainsStreams
         && avboitAccumulationPacketContainsStreams
+        && avboitAccumulationPacketContainsFinalizer
         && (!hasTransparentRenderers || (
             m_deferredAvboitExtinctionTask.valid()
             && m_deferredAvboitAccumulationTask.valid()
+            && m_deferredAvboitAccumulationFinalizeTask.valid()
             && avboitExtinctionPacket.valid()
             && avboitAccumulationPacket.valid()
+            && avboitAccumulationFinalizePacket.valid()
             && (avboitUsesAsyncCompute || (
                 avboitUnsplitPrePacketContainsExtinction
                 && avboitUnsplitPrePacketContainsAccumulation
@@ -2313,11 +2335,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && avboitPrePacketContainsOccupancy
             && avboitExtinctionPacketContainsStreams
             && avboitAccumulationPacketContainsStreams
+            && avboitAccumulationPacketContainsFinalizer
             && (!hasTransparentRenderers || (
                 m_deferredAvboitExtinctionTask.valid()
                 && m_deferredAvboitAccumulationTask.valid()
+                && m_deferredAvboitAccumulationFinalizeTask.valid()
                 && avboitExtinctionPacket.valid()
                 && avboitAccumulationPacket.valid()
+                && avboitAccumulationFinalizePacket.valid()
                 && (avboitUsesAsyncCompute || (
                     avboitUnsplitPrePacketContainsExtinction
                     && avboitUnsplitPrePacketContainsAccumulation

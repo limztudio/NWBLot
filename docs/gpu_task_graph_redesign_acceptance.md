@@ -173,8 +173,11 @@ can receive an unconditional final sign-off.
   receiver/cutter/clip-context payload after integration; it also retains the interval producer's full-resolution
   sample state as a read-only input. Its serial Graphics upload chain and prepared consumer merge into the terminal
   Graphics AVBOIT packet—after integration on the split route and after the Graphics-only post-extinction tail on
-  the normal route. Runtime checks require every phase stream to share its native consumer's accepted packet and
-  keep the AVBOIT range at one or five packets. Direct helpers remain only for non-graph compatibility callers.
+  the normal route. A following mergeable Graphics finalizer declares the two accumulation attachments as
+  `ShaderResource` before Deferred Composite consumes them, while the read-only depth attachment retains its
+  explicit compatibility handoff. Runtime checks require every phase stream and finalizer to share its native
+  consumer's accepted packet and keep the AVBOIT range at one or five packets. Direct helpers remain only for
+  non-graph compatibility callers.
 - The compiler derives stable packet recording-frontier depths from packet dependencies. The native recorder may
   record an explicitly opted-in frontier concurrently with isolated per-packet state scratch and native command
   buffers; submission, timing, and failure reporting remain in stable compiler order. Command-IR capture and
@@ -232,6 +235,7 @@ can receive an unconditional final sign-off.
 | Graph-owned post-G-buffer ordinary-state normalization follow-up: 51 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; compiler-owned declared states now lower the normalizer's ordinary G-buffer, scene, and descriptor transitions; only route-dependent trace geometry retains explicit compatibility normalization |
 | Graph-owned AVBOIT target-clear follow-up: 51 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; AVBOIT's nine target clears now declare their `CopyDest` writes in a distinct mergeable Graphics task before occupancy, preserving the shared Pre packet/timing contract while the full native helper remains for compatibility callers |
 | Graph-owned AVBOIT occupancy-state follow-up: 52 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; occupancy now consumes graph-declared depth `ShaderResource` and coverage `UnorderedAccess` states without a normal-frame native bridge. Focused compiler and real-Vulkan packet tests prove the clear-to-occupancy `CopyDest` to `UnorderedAccess` transition and the separate unsplit-tail UAV dependency; direct compatibility callers retain their bridge |
+| Graph-owned AVBOIT accumulation-attachment state follow-up: 53 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; a mergeable Graphics finalizer now lowers both accumulation attachments from `RenderTarget` to `ShaderResource` before Deferred Composite. Focused compiler and real-Vulkan packet tests prove that the finalizer shares Accumulation's packet and records without a native bridge; direct callers and the read-only-depth compatibility handoff remain intact |
 | Graph-owned lagged deferred bindless-selector follow-up: FrontierSafe graph unit and descriptor-buffer smoke | passed; the immutable history-selector upload is pinned to and merged into Deferred Lighting's existing Compute packet, retains the external history completion wait, and hands off `Common` to `ConstantBuffer` without extending the Lighting-to-Composite range |
 | Graph-owned ray-trace material-context selector follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and opaque CSG capture | passed; a post-preflight immutable selector blob merges into Shadow Preparation, publishes `Common`, and is logically handed off there to the later Compute trace consumers |
 | Graph-owned caustic emission-target follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and caustic-sphere capture | passed; the preflight-frozen refractive AABB payload merges into Shadow Preparation, publishes `Common`, and is logically handed off there to software and hardware caustic consumers |

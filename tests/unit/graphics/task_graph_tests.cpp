@@ -5306,6 +5306,175 @@ TEST(GpuTaskGraph, PlansAvboitCoverageClearAndTailUavDependencies){
 }
 
 
+// AVBOIT accumulation ends a Graphics raster pass, while Deferred Composite may run on a dedicated Compute queue.
+// Keep the two attachment handoffs in a mergeable Graphics finalizer so Compute only consumes ShaderResource state.
+TEST(GpuTaskGraph, PlansAvboitAccumulationAttachmentFinalizationOnGraphics){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId accumColor = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_accumulation_color"),
+        "AVBOIT Accumulation Color"
+    );
+    const Graphics::GpuGraphResourceId accumExtinction = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_accumulation_extinction"),
+        "AVBOIT Accumulation Extinction"
+    );
+    ASSERT_TRUE(accumColor.valid());
+    ASSERT_TRUE(accumExtinction.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint accumulationScheduling;
+    accumulationScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    accumulationScheduling.forceSubmissionBoundary = false;
+    accumulationScheduling.allowPacketMerge = true;
+    Graphics::GpuTaskSchedulingHint finalizeScheduling;
+    finalizeScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    finalizeScheduling.forceSubmissionBoundary = false;
+    finalizeScheduling.allowPacketMerge = true;
+    finalizeScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskSchedulingHint compositeScheduling;
+    compositeScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    compositeScheduling.forceSubmissionBoundary = true;
+    compositeScheduling.allowPacketMerge = false;
+
+    const Graphics::GpuTaskResourceUse accumulationUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = accumColor,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::RenderTarget,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = accumExtinction,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::RenderTarget,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc accumulationDesc;
+    accumulationDesc
+        .setIdentity(Name("tests/task_graph/avboit_accumulation"))
+        .setMarkerLabel("AVBOIT Accumulation")
+        .setQueue(graphicsRequest)
+        .setScheduling(accumulationScheduling)
+        .setResourceUses(accumulationUses, LengthOf(accumulationUses))
+    ;
+    const Graphics::GpuTaskId accumulation = graph.addTask(accumulationDesc);
+    ASSERT_TRUE(accumulation.valid());
+
+    const Graphics::GpuTaskResourceUse finalizeUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = accumColor,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = accumExtinction,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskDesc finalizeDesc;
+    finalizeDesc
+        .setIdentity(Name("tests/task_graph/avboit_accumulation_finalize"))
+        .setMarkerLabel("AVBOIT Accumulation Finalize")
+        .setQueue(graphicsRequest)
+        .setScheduling(finalizeScheduling)
+        .setDependencies(&accumulation, 1u)
+        .setResourceUses(finalizeUses, LengthOf(finalizeUses))
+    ;
+    const Graphics::GpuTaskId finalizer = graph.addTask(finalizeDesc);
+    ASSERT_TRUE(finalizer.valid());
+
+    Graphics::GpuTaskDesc compositeDesc;
+    compositeDesc
+        .setIdentity(Name("tests/task_graph/avboit_deferred_composite"))
+        .setMarkerLabel("Deferred Composite")
+        .setQueue(computeRequest)
+        .setScheduling(compositeScheduling)
+        .setDependencies(&finalizer, 1u)
+        .setResourceUses(finalizeUses, LengthOf(finalizeUses))
+    ;
+    const Graphics::GpuTaskId composite = graph.addTask(compositeDesc);
+    ASSERT_TRUE(composite.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuTaskQueueAssignment* const finalizerAssignment = assignments.find(finalizer);
+    const Graphics::GpuTaskQueueAssignment* const compositeAssignment = assignments.find(composite);
+    ASSERT_NE(finalizerAssignment, nullptr);
+    ASSERT_NE(compositeAssignment, nullptr);
+    EXPECT_EQ(finalizerAssignment->queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(compositeAssignment->queueClass, Graphics::CommandQueue::Compute);
+
+    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledGraph.packetForTask(accumulation);
+    const Graphics::GpuSubmissionPacketId finalizerPacket = compiledGraph.packetForTask(finalizer);
+    const Graphics::GpuSubmissionPacketId compositePacket = compiledGraph.packetForTask(composite);
+    ASSERT_TRUE(accumulationPacket.valid());
+    ASSERT_TRUE(finalizerPacket.valid());
+    ASSERT_TRUE(compositePacket.valid());
+    EXPECT_EQ(finalizerPacket, accumulationPacket);
+    EXPECT_NE(compositePacket, finalizerPacket);
+
+    const Graphics::GpuCompiledTask* const compiledFinalizer = compiledGraph.findTask(finalizer);
+    const Graphics::GpuCompiledTask* const compiledComposite = compiledGraph.findTask(composite);
+    ASSERT_NE(compiledFinalizer, nullptr);
+    ASSERT_NE(compiledComposite, nullptr);
+    ASSERT_EQ(compiledFinalizer->prologueBarrierCount, 2u);
+    const Graphics::GpuCompiledBarrier* const finalizerBarriers = compiledGraph.taskPrologueBarriers(finalizer);
+    ASSERT_NE(finalizerBarriers, nullptr);
+    bool finalizesAccumColor = false;
+    bool finalizesAccumExtinction = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledFinalizer->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = finalizerBarriers[barrierIndex];
+        const bool isAttachmentFinalization = barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.before == Graphics::ResourceStates::RenderTarget
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+        ;
+        finalizesAccumColor = finalizesAccumColor || (isAttachmentFinalization && barrier.resource == accumColor);
+        finalizesAccumExtinction = finalizesAccumExtinction
+            || (isAttachmentFinalization && barrier.resource == accumExtinction);
+    }
+    EXPECT_TRUE(finalizesAccumColor);
+    EXPECT_TRUE(finalizesAccumExtinction);
+
+    const Graphics::GpuCompiledBarrier* const compositeBarriers = compiledGraph.taskPrologueBarriers(composite);
+    for(u32 barrierIndex = 0u; barrierIndex < compiledComposite->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = compositeBarriers[barrierIndex];
+        EXPECT_FALSE(
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.before == Graphics::ResourceStates::RenderTarget
+        );
+    }
+}
+
+
 TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

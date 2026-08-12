@@ -1244,11 +1244,32 @@ struct AvboitAccumulationGraphTask{
                 preparedAccumulationDrawItems,
                 preparedAccumulationCsgFrameData,
                 preparedAccumulationInstanceCount,
-                preparedAccumulationMaterialTypedByteCount
+                preparedAccumulationMaterialTypedByteCount,
+                // The following mergeable Graphics finalizer owns the two render-target attachment handoffs.
+                true
             );
         }
         if(!payload.splitStages)
             RestoreAvboitGbufferInputs(commandList, *payload.targets);
+        return true;
+    }
+};
+
+
+// Accumulation produces attachments that Deferred Composite samples on Compute. Keep their ShaderResource handoff
+// in a Graphics task immediately after rasterization, so no Compute packet has to name a framebuffer attachment
+// source state. The task intentionally records no native work; packet-prologue barriers are the entire contract.
+struct AvboitAccumulationFinalizeGraphTask{
+    struct Payload{};
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(payload);
+        static_cast<void>(commandList);
+        static_cast<void>(context);
         return true;
     }
 };
@@ -3881,6 +3902,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredAvboitIntegrationTask = {};
     m_deferredAvboitAccumulationStreamTask = {};
     m_deferredAvboitAccumulationTask = {};
+    m_deferredAvboitAccumulationFinalizeTask = {};
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredPresentationOverlayTask = {};
@@ -6199,9 +6221,36 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     if(accumulationStreamsUploaded)
         m_deferredAvboitAccumulationStreamTask = accumulationUploadTask;
 
+    const Core::GpuTaskResourceUse accumulationFinalizeResourceUses[] = {
+        ReadUse(avboitAccumColor, Core::ResourceStates::ShaderResource),
+        ReadUse(avboitAccumExtinction, Core::ResourceStates::ShaderResource),
+    };
+    Core::GpuTaskSchedulingHint accumulationFinalizeScheduling;
+    accumulationFinalizeScheduling.cost = Core::GpuTaskCostHint::Tiny;
+    accumulationFinalizeScheduling.forceSubmissionBoundary = false;
+    accumulationFinalizeScheduling.allowPacketMerge = true;
+    accumulationFinalizeScheduling.mergeWithPrevious = true;
+    Core::GpuTaskDesc accumulationFinalizeDesc;
+    accumulationFinalizeDesc
+        .setIdentity(Name("render.avboit.accumulation_finalize"))
+        .setMarkerLabel("AVBOIT Accumulation Finalize")
+        .setQueue(GraphicsQueueRequest())
+        .setScheduling(accumulationFinalizeScheduling)
+        .setDependencies(&m_deferredAvboitAccumulationTask, 1u)
+        .setResourceUses(accumulationFinalizeResourceUses, LengthOf(accumulationFinalizeResourceUses))
+    ;
+    m_deferredAvboitAccumulationFinalizeTask = m_deferredLightingTaskGraph.addTask<AvboitAccumulationFinalizeGraphTask>(
+        accumulationFinalizeDesc,
+        AvboitAccumulationFinalizeGraphTask::Payload{}
+    );
+    if(!m_deferredAvboitAccumulationFinalizeTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation finalizer graph task"));
+        return;
+    }
+
     }
     const Core::GpuTaskId avboitFinalTask = hasTransparentRenderers
-        ? m_deferredAvboitAccumulationTask
+        ? m_deferredAvboitAccumulationFinalizeTask
         : m_deferredAvboitOccupancyTask
     ;
 

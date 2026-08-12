@@ -574,7 +574,8 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     const MaterialPassDrawItemPartitions* const preparedAccumulationDrawItems,
     const CsgFrameGpuData* const preparedAccumulationCsgFrameData,
     const usize preparedAccumulationInstanceCount,
-    const usize preparedAccumulationMaterialTypedByteCount
+    const usize preparedAccumulationMaterialTypedByteCount,
+    const bool accumulationAttachmentStatesGraphOwned
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -610,18 +611,22 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     }
     commandList.endRenderPass();
 
-    // Deferred composite is a Compute pass. Return the two accumulation attachments and the read-only depth input
-    // to their common sampled state on Graphics so its Compute barrier never names unsupported attachment accesses.
-    commandList.setTextureState(
-        avboitTargets.accumColor.get(),
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::ResourceStates::ShaderResource
-    );
-    commandList.setTextureState(
-        avboitTargets.accumExtinction.get(),
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::ResourceStates::ShaderResource
-    );
+    // Deferred composite is a Compute pass. The normal graph lowers the two accumulation attachment transitions
+    // in its following Graphics finalizer, so Compute never names unsupported attachment accesses. Direct callers
+    // retain the established bridge. Read-only depth remains explicit because framebuffer setup changed it to
+    // DepthRead and its broader G-buffer compatibility handoff is intentionally outside this slice.
+    if(!accumulationAttachmentStatesGraphOwned){
+        commandList.setTextureState(
+            avboitTargets.accumColor.get(),
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        );
+        commandList.setTextureState(
+            avboitTargets.accumExtinction.get(),
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        );
+    }
     commandList.setTextureState(
         targets.depth.get(),
         ECSRenderDetail::s_FramebufferSubresources,

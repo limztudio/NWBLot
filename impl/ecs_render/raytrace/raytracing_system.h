@@ -340,9 +340,16 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        bool graphEntryStatesOwned = false
     );
-    [[nodiscard]] bool renderSurfelGi(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    // The shared deferred graph supplies the descriptor-visible surfel entry states. Direct compatibility callers
+    // retain native setup by leaving this false.
+    [[nodiscard]] bool renderSurfelGi(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned = false
+    );
     // Persistent surfel storage survives resize.
     [[nodiscard]] bool ensureSurfelResources();
     [[nodiscard]] bool ensureSurfelSpawnPipeline();

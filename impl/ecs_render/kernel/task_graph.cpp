@@ -4075,7 +4075,8 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         m_deferredLightingTaskGraph,
         desc,
         deferredTargets,
-        timingTicket
+        timingTicket,
+        true
     );
     if(!m_deferredSurfelGiTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI graph task"));

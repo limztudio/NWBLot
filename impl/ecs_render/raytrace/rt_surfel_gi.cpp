@@ -70,6 +70,7 @@ struct SurfelGiGraphTask{
         Core::Graphics* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        bool graphEntryStatesOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -99,7 +100,11 @@ struct SurfelGiGraphTask{
         // invariant under late queue assignment instead of relying on a Graphics-prefix clear chosen in advance.
         payload.raytracingSystem->clearSurfelIrradiance(commandList, *payload.targets);
 
-        if(!payload.raytracingSystem->renderSurfelGi(commandList, *payload.targets))
+        if(!payload.raytracingSystem->renderSurfelGi(
+            commandList,
+            *payload.targets,
+            payload.graphEntryStatesOwned
+        ))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel GI render pass failed"));
 
         if(asyncTiming){
@@ -961,7 +966,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
-    Core::GpuTimingSubmissionTicket& timingTicket
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    const bool graphEntryStatesOwned
 ){
     return graph.addTask<__hidden_surfel_gi_task::SurfelGiGraphTask>(
         desc,
@@ -970,6 +976,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
             .graphics = &graphics(),
             .targets = &targets,
             .timingTicket = &timingTicket,
+            .graphEntryStatesOwned = graphEntryStatesOwned,
         }
     );
 }
@@ -988,7 +995,11 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelResourceInitializationTas
 }
 
 
-bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, DeferredFrameTargets& targets){
+bool RendererRayTracingSystem::renderSurfelGi(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool graphEntryStatesOwned
+){
     if(!hasSurfelWork())
         return true;
 
@@ -1061,10 +1072,12 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     // Age-free recycles unseen surfels before hash rebuild and spawn.
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelAgeFree, graphics().getDevice(), commandList);
-        commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(rayTracingState().m_surfelCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(rayTracingState().m_surfelFreeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        if(!graphEntryStatesOwned){
+            commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(rayTracingState().m_surfelCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(rayTracingState().m_surfelFreeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        }
         commandList.commitBarriers();
         Core::ComputeState state;
         state.setPipeline(rayTracingState().m_surfelAgeFreePipeline.get());
@@ -1084,8 +1097,10 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
 
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelHashBuild, graphics().getDevice(), commandList);
-        commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        if(!graphEntryStatesOwned){
+            commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        }
         commandList.setBufferState(rayTracingState().m_surfelCellHeadBuffer.get(), Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
         Core::ComputeState state;
@@ -1099,13 +1114,17 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     // Spawn claims only empty hash cells.
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelSpawn, graphics().getDevice(), commandList);
-        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        if(!graphEntryStatesOwned){
+            commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        }
         commandList.setBufferState(rayTracingState().m_surfelCellHeadBuffer.get(), Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(rayTracingState().m_surfelCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(rayTracingState().m_surfelFreeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        if(!graphEntryStatesOwned){
+            commandList.setBufferState(rayTracingState().m_surfelCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(rayTracingState().m_surfelFreeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        }
         commandList.commitBarriers();
 
         surfelPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
@@ -1123,9 +1142,11 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
 
     // Build an indirect dispatch sized for live surfels.
     {
-        commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(rayTracingState().m_surfelCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(rayTracingState().m_surfelTraceIndirectArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        if(!graphEntryStatesOwned){
+            commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(rayTracingState().m_surfelCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(rayTracingState().m_surfelTraceIndirectArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        }
         commandList.commitBarriers();
         Core::ComputeState state;
         state.setPipeline(rayTracingState().m_surfelTraceBuildArgsPipeline.get());
@@ -1139,10 +1160,11 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         );
     }
 
-    // Trace geometry is heap-selected and must be transitioned explicitly.
+    // Direct callers stage heap-selected trace inputs locally; graph callers retain only the indirect-argument
+    // transition produced within this task after the graph-owned build-arguments phase.
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelTrace, graphics().getDevice(), commandList);
-        if(useHwTrace){
+        if(!graphEntryStatesOwned && useHwTrace){
             for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot){
                 commandList.setBufferState(rayTracingState().m_shadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
                 commandList.setBufferState(rayTracingState().m_shadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
@@ -1153,19 +1175,21 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
             commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
             commandList.setBufferState(rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
         }
-        else{
+        else if(!graphEntryStatesOwned){
             transitionSwShadowTraversalResources(commandList);
             commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
         }
-        if(useHwTrace)
+        if(!graphEntryStatesOwned && useHwTrace)
             commandList.setAccelStructState(rayTracingState().m_tlas.get(), Core::ResourceStates::AccelStructRead);
-        commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(rayTracingState().m_surfelPoolSnapshotBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_surfelCellHeadSnapshotBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+        if(!graphEntryStatesOwned){
+            commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(rayTracingState().m_surfelPoolSnapshotBuffer.get(), Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(rayTracingState().m_surfelCellHeadSnapshotBuffer.get(), Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+        }
         commandList.setBufferState(rayTracingState().m_surfelTraceIndirectArgsBuffer.get(), Core::ResourceStates::IndirectArgument);
         commandList.commitBarriers();
         Core::ComputeState state;
@@ -1190,12 +1214,15 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     const u32 halfHeight = DivideUp(targets.height, static_cast<u32>(NWB_SURFEL_RESOLVE_HALF_FACTOR));
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelResolve, graphics().getDevice(), commandList);
-        commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
+        if(!graphEntryStatesOwned)
+            commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
         commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_surfelCellHeadBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.surfelIrradianceHalf.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
+        if(!graphEntryStatesOwned){
+            commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(targets.surfelIrradianceHalf.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
+        }
         commandList.commitBarriers();
 
         surfelPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
@@ -1215,8 +1242,10 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     commandList.setTextureState(targets.surfelIrradianceHalf.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelUpsample, graphics().getDevice(), commandList);
-        commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        if(!graphEntryStatesOwned){
+            commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        }
         commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 

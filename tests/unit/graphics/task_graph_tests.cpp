@@ -5400,6 +5400,318 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
 }
 
 
+// Surfel GI starts after the shared graphics prefix has produced G-buffer, descriptor, traversal, and persistent
+// resource data. The graph must establish that descriptor-visible batch on the Compute packet before the callback's
+// local clears and intra-task UAV/indirect transitions begin.
+TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiEntryStates){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    constexpr Graphics::ResourceQueueSharing::Mask queueSharing =
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    ;
+    const Graphics::GpuGraphResourceId worldPosition = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/surfel_gi_world_position"),
+        "Surfel GI World Position",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId normal = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/surfel_gi_normal"),
+        "Surfel GI Normal",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId irradianceHalf = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/surfel_gi_irradiance_half"),
+        "Surfel GI Irradiance Half",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId currentBindlessSlots = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_gi_bindless_slots"),
+        "Surfel GI Bindless Slots",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId materialContextSlots = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_gi_material_context_slots"),
+        "Surfel GI Material Context Slots",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId surfelConstants = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_gi_constants"),
+        "Surfel GI Constants",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId sceneShading = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_gi_scene_shading"),
+        "Surfel GI Scene Shading",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId traceGeometry = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_gi_trace_geometry"),
+        "Surfel GI Trace Geometry",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId poolSnapshot = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_gi_pool_snapshot"),
+        "Surfel GI Pool Snapshot",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId cellHeadSnapshot = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_gi_cell_head_snapshot"),
+        "Surfel GI Cell Head Snapshot",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId lights = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_gi_lights"),
+        "Surfel GI Lights",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId pool = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_gi_pool"),
+        "Surfel GI Pool",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId cellHeads = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_gi_cell_heads"),
+        "Surfel GI Cell Heads",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId counter = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_gi_counter"),
+        "Surfel GI Counter",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId traceArgs = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_gi_trace_args"),
+        "Surfel GI Trace Arguments",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId freeList = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_gi_free_list"),
+        "Surfel GI Free List",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    ASSERT_TRUE(worldPosition.valid());
+    ASSERT_TRUE(normal.valid());
+    ASSERT_TRUE(irradianceHalf.valid());
+    ASSERT_TRUE(currentBindlessSlots.valid());
+    ASSERT_TRUE(materialContextSlots.valid());
+    ASSERT_TRUE(surfelConstants.valid());
+    ASSERT_TRUE(sceneShading.valid());
+    ASSERT_TRUE(traceGeometry.valid());
+    ASSERT_TRUE(poolSnapshot.valid());
+    ASSERT_TRUE(cellHeadSnapshot.valid());
+    ASSERT_TRUE(lights.valid());
+    ASSERT_TRUE(pool.valid());
+    ASSERT_TRUE(cellHeads.valid());
+    ASSERT_TRUE(counter.valid());
+    ASSERT_TRUE(traceArgs.valid());
+    ASSERT_TRUE(freeList.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        true,
+        true,
+    };
+    Graphics::GpuTaskSchedulingHint boundaryScheduling;
+    boundaryScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    boundaryScheduling.forceSubmissionBoundary = true;
+    boundaryScheduling.allowPacketMerge = false;
+
+    const Graphics::GpuTaskResourceUse prefixUses[] = {
+        { .resource = worldPosition, .range = {}, .requiredState = Graphics::ResourceStates::RenderTarget, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = normal, .range = {}, .requiredState = Graphics::ResourceStates::RenderTarget, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = irradianceHalf, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = currentBindlessSlots, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = materialContextSlots, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = surfelConstants, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = sceneShading, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = traceGeometry, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = poolSnapshot, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = cellHeadSnapshot, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = lights, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = pool, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = cellHeads, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = counter, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = traceArgs, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = freeList, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+    };
+    Graphics::GpuTaskDesc prefixDesc;
+    prefixDesc
+        .setIdentity(Name("tests/task_graph/surfel_gi_prefix"))
+        .setMarkerLabel("Surfel GI Prefix")
+        .setQueue(graphicsRequest)
+        .setScheduling(boundaryScheduling)
+        .setResourceUses(prefixUses, LengthOf(prefixUses))
+    ;
+    const Graphics::GpuTaskId prefix = graph.addTask(prefixDesc);
+    ASSERT_TRUE(prefix.valid());
+
+    const Graphics::GpuTaskResourceUse surfelUses[] = {
+        { .resource = worldPosition, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = normal, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = currentBindlessSlots, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = materialContextSlots, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = surfelConstants, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = sceneShading, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = traceGeometry, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = poolSnapshot, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = cellHeadSnapshot, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = lights, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = pool, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = cellHeads, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = counter, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = traceArgs, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = freeList, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = irradianceHalf, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
+    };
+    Graphics::GpuTaskDesc surfelDesc;
+    surfelDesc
+        .setIdentity(Name("tests/task_graph/graph_owned_surfel_gi"))
+        .setMarkerLabel("Surfel GI")
+        .setQueue(computeRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&prefix, 1u)
+        .setResourceUses(surfelUses, LengthOf(surfelUses))
+    ;
+    const Graphics::GpuTaskId surfelGi = graph.addTask(surfelDesc);
+    ASSERT_TRUE(surfelGi.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(HasInferredHazard(
+        analysis,
+        prefix,
+        surfelGi,
+        pool,
+        Graphics::GpuTaskHazardType::WriteAfterWrite
+    ));
+
+    const Graphics::GpuTaskQueueAssignment* const surfelAssignment = assignments.find(surfelGi);
+    ASSERT_NE(surfelAssignment, nullptr);
+    EXPECT_EQ(surfelAssignment->queueClass, Graphics::CommandQueue::Compute);
+    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId surfelPacket = compiledGraph.packetForTask(surfelGi);
+    ASSERT_TRUE(prefixPacket.valid());
+    ASSERT_TRUE(surfelPacket.valid());
+    EXPECT_NE(prefixPacket, surfelPacket);
+    const Graphics::GpuCompiledTask* const compiledSurfel = compiledGraph.findTask(surfelGi);
+    ASSERT_NE(compiledSurfel, nullptr);
+    const Graphics::GpuPacketStateSeed* const surfelSeeds = compiledGraph.taskPrologueStateSeeds(surfelGi);
+    ASSERT_NE(surfelSeeds, nullptr);
+    const auto hasSurfelSeed = [&](const Graphics::GpuGraphResourceId resource){
+        for(usize seedIndex = 0u; seedIndex < compiledSurfel->prologueStateSeedCount; ++seedIndex){
+            if(
+                surfelSeeds[seedIndex].resource == resource
+                && surfelSeeds[seedIndex].sourcePacket == prefixPacket
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasSurfelSeed(worldPosition));
+    EXPECT_TRUE(hasSurfelSeed(currentBindlessSlots));
+    EXPECT_TRUE(hasSurfelSeed(traceGeometry));
+    EXPECT_TRUE(hasSurfelSeed(pool));
+    EXPECT_TRUE(hasSurfelSeed(irradianceHalf));
+
+    const Graphics::GpuCompiledBarrier* const surfelBarriers = compiledGraph.taskPrologueBarriers(surfelGi);
+    ASSERT_NE(surfelBarriers, nullptr);
+    const auto hasSurfelBarrier = [&](const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
+        for(usize barrierIndex = 0u; barrierIndex < compiledSurfel->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = surfelBarriers[barrierIndex];
+            if(
+                barrier.type == type
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasSurfelBarrier(
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        worldPosition,
+        Graphics::ResourceStates::RenderTarget,
+        Graphics::ResourceStates::ShaderResource
+    ));
+    EXPECT_TRUE(hasSurfelBarrier(
+        Graphics::GpuCompiledBarrierType::BufferTransition,
+        surfelConstants,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::ConstantBuffer
+    ));
+    EXPECT_TRUE(hasSurfelBarrier(
+        Graphics::GpuCompiledBarrierType::BufferTransition,
+        traceGeometry,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::ShaderResource
+    ));
+    EXPECT_TRUE(hasSurfelBarrier(
+        Graphics::GpuCompiledBarrierType::BufferTransition,
+        pool,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasSurfelBarrier(
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        irradianceHalf,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    ASSERT_EQ(compiledGraph.packet(surfelPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(surfelPacket)[0u].producer, prefixPacket);
+}
+
+
 TEST(GpuTaskGraph, MergesRayTraceMaterialContextUploadIntoShadowPreparePacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

@@ -897,33 +897,6 @@ struct PostGbufferNormalizeGraphTask{
 };
 
 
-// AVBOIT remains explicitly staged because its raster/compute alternation is a real dependency chain. The normal
-// graph path owns its clear-state transitions in a separate task; direct compatibility callers retain the wider
-// native helper for now.
-static void RestoreAvboitGbufferInputs(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    commandList.setTextureState(
-        targets.albedo.get(),
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::ResourceStates::ShaderResource
-    );
-    commandList.setTextureState(
-        targets.normal.get(),
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::ResourceStates::ShaderResource
-    );
-    commandList.setTextureState(
-        targets.worldPosition.get(),
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::ResourceStates::ShaderResource
-    );
-    commandList.setTextureState(
-        targets.depth.get(),
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::ResourceStates::ShaderResource
-    );
-}
-
-
 // The AVBOIT targets have no semantic lifetime before the first transparent phase. Keep their clear as one
 // graph-declared CopyDest operation so its exact nine writes and following producer transitions stay visible to the
 // compiler, while the clear thunk itself remains a value-only native operation with its established timing scope.
@@ -1067,11 +1040,8 @@ struct AvboitOccupancyGraphTask{
                 true
             );
         }
-        // The Graphics-only path records the remaining AVBOIT phases in the mergeable extinction tail so its
-        // phase-local immutable uploads land after occupancy. The split path retains the historical early restore
-        // before the Compute depth warp packet.
-        if(payload.splitStages || !payload.hasTransparentRenderers)
-            RestoreAvboitGbufferInputs(commandList, *payload.targets);
+        // The declared sampled G-buffer uses remain authoritative here. Occupancy's low-resolution framebuffer
+        // does not attach any deferred target, so the graph-established states remain valid for either continuation.
         return true;
     }
 };
@@ -1245,20 +1215,19 @@ struct AvboitAccumulationGraphTask{
                 preparedAccumulationCsgFrameData,
                 preparedAccumulationInstanceCount,
                 preparedAccumulationMaterialTypedByteCount,
-                // The following mergeable Graphics finalizer owns the two render-target attachment handoffs.
+                // The following mergeable Graphics finalizer owns every accumulation-framebuffer handoff.
                 true
             );
         }
-        if(!payload.splitStages)
-            RestoreAvboitGbufferInputs(commandList, *payload.targets);
         return true;
     }
 };
 
 
-// Accumulation produces attachments that Deferred Composite samples on Compute. Keep their ShaderResource handoff
-// in a Graphics task immediately after rasterization, so no Compute packet has to name a framebuffer attachment
-// source state. The task intentionally records no native work; packet-prologue barriers are the entire contract.
+// Accumulation produces attachments that Deferred Composite samples on Compute and leaves the read-only deferred
+// depth attachment in DepthRead. Keep all ShaderResource handoffs in a Graphics task immediately after
+// rasterization, so no following packet has to name a framebuffer attachment source state. The task intentionally
+// records no native work; packet-prologue barriers are the entire contract.
 struct AvboitAccumulationFinalizeGraphTask{
     struct Payload{};
 
@@ -6169,12 +6138,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationResourceUses{ accumulationResourceScratch };
     accumulationResourceUses.reserve((splitAvboitStages ? 9u : 12u) + (accumulationStreamsUploaded ? 7u : 0u));
     if(!splitAvboitStages){
-        // Normal Graphics recording restores these native G-buffer inputs after the final accumulation raster pass.
+        // Graphics-only accumulation samples these full-resolution G-buffer inputs through material descriptors.
         accumulationResourceUses.push_back(ReadUse(albedo));
         accumulationResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource, true));
         accumulationResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
     }
-    accumulationResourceUses.push_back(ReadUse(depth));
+    // accumulationFramebuffer binds deferred depth read-only, which Vulkan tracks as DepthRead rather than SRV.
+    accumulationResourceUses.push_back(ReadUse(depth, Core::ResourceStates::DepthRead));
     accumulationResourceUses.push_back(ReadUse(avboitTransmittance));
     accumulationResourceUses.push_back(ReadUse(avboitDepthWarp));
     accumulationResourceUses.push_back(ReadUse(avboitControl));
@@ -6224,6 +6194,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     const Core::GpuTaskResourceUse accumulationFinalizeResourceUses[] = {
         ReadUse(avboitAccumColor, Core::ResourceStates::ShaderResource),
         ReadUse(avboitAccumExtinction, Core::ResourceStates::ShaderResource),
+        ReadUse(depth, Core::ResourceStates::ShaderResource),
     };
     Core::GpuTaskSchedulingHint accumulationFinalizeScheduling;
     accumulationFinalizeScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -6279,7 +6250,15 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         m_deferredSurfelGiTask,
         avboitFinalTask,
     };
-    const Core::GpuTaskId laggedLightingDependencies[] = { m_graphicsPrefixTask };
+    // Lagged Lighting normally reads its shared G-buffer inputs from the accepted prefix while history supplies the
+    // temporal effects. Transparent AVBOIT accumulation temporarily binds current deferred depth as DepthRead, so
+    // its finalizer must complete before that independent Compute reader can observe ShaderResource layout again.
+    const Core::GpuTaskId laggedLightingDependencies[] = {
+        m_graphicsPrefixTask,
+        avboitFinalTask,
+    };
+    const usize laggedLightingDependencyCount = hasTransparentRenderers ? 2u : 1u;
+    const Core::GpuTaskId laggedLightingSelectorUploadDependencies[] = { m_graphicsPrefixTask };
     const bool laggedBindlessSlotsGraphOwned = useLaggedLightingHistory && !history->slotsUploaded;
     if(laggedBindlessSlotsGraphOwned){
         const Core::GpuUploadBlobId laggedBindlessSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
@@ -6302,7 +6281,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .setMarkerLabel("Lagged Lighting Bindless Slots Upload")
             .setQueue(ComputeUploadQueueRequest())
             .setScheduling(uploadScheduling)
-            .setDependencies(laggedLightingDependencies, LengthOf(laggedLightingDependencies))
+            .setDependencies(
+                laggedLightingSelectorUploadDependencies,
+                LengthOf(laggedLightingSelectorUploadDependencies)
+            )
         ;
         m_deferredLaggedLightingHistorySlotsUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
             uploadDesc,
@@ -6322,6 +6304,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     const Core::GpuTaskId laggedLightingWithSelectorDependencies[] = {
         m_graphicsPrefixTask,
         m_deferredLaggedLightingHistorySlotsUploadTask,
+        avboitFinalTask,
     };
     const Core::GpuTaskId* const lightingDependencies = declaresHardwareCaustics
         ? (useLaggedLightingHistory ? laggedLightingDependencies : hardwareLightingDependencies)
@@ -6332,13 +6315,14 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         : lightingDependencies
     ;
     const usize lightingDependencyCount = laggedBindlessSlotsGraphOwned
-        ? LengthOf(laggedLightingWithSelectorDependencies)
+        ? (hasTransparentRenderers ? 3u : 2u)
         : (useLaggedLightingHistory
-            ? LengthOf(laggedLightingDependencies)
+            ? laggedLightingDependencyCount
             : LengthOf(hardwareLightingDependencies))
     ;
-    // Active lagged Lighting receives these shared read-only states directly from the accepted prefix source. This
-    // lets it avoid importing the recorded snapshots from Hardware Caustics and AVBOIT Pre while it reads history.
+    // Active lagged Lighting receives its shared albedo/normal/world inputs directly from the accepted prefix
+    // source while it reads history. Transparent depth is the explicit exception: the finalizer dependency above
+    // orders its temporary AVBOIT DepthRead layout before Lighting samples ShaderResource state.
     const bool laggedReadsHaveIndependentStateSources = useLaggedLightingHistory;
     const bool laggedBindlessSlotsHaveIndependentStateSource =
         laggedReadsHaveIndependentStateSources && !laggedBindlessSlotsGraphOwned

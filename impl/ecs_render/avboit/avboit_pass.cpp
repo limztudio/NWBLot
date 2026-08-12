@@ -575,7 +575,7 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     const CsgFrameGpuData* const preparedAccumulationCsgFrameData,
     const usize preparedAccumulationInstanceCount,
     const usize preparedAccumulationMaterialTypedByteCount,
-    const bool accumulationAttachmentStatesGraphOwned
+    const bool accumulationFinalStatesGraphOwned
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -611,11 +611,10 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     }
     commandList.endRenderPass();
 
-    // Deferred composite is a Compute pass. The normal graph lowers the two accumulation attachment transitions
-    // in its following Graphics finalizer, so Compute never names unsupported attachment accesses. Direct callers
-    // retain the established bridge. Read-only depth remains explicit because framebuffer setup changed it to
-    // DepthRead and its broader G-buffer compatibility handoff is intentionally outside this slice.
-    if(!accumulationAttachmentStatesGraphOwned){
+    // Deferred composite is a Compute pass. The normal graph lowers the two accumulation attachment and read-only
+    // depth transitions in its following Graphics finalizer, so later packets never name framebuffer attachment
+    // source states. Direct callers retain the established bridge.
+    if(!accumulationFinalStatesGraphOwned){
         commandList.setTextureState(
             avboitTargets.accumColor.get(),
             ECSRenderDetail::s_FramebufferSubresources,
@@ -626,12 +625,12 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
             ECSRenderDetail::s_FramebufferSubresources,
             Core::ResourceStates::ShaderResource
         );
+        commandList.setTextureState(
+            targets.depth.get(),
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        );
     }
-    commandList.setTextureState(
-        targets.depth.get(),
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::ResourceStates::ShaderResource
-    );
 }
 
 void RendererAvboitSystem::renderAvboitPostOccupancyPreAccumulationPasses(

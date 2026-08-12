@@ -678,6 +678,8 @@ struct NativePacketPrefixTask{
         ResourceStates::Mask expectedTextureState = ResourceStates::Unknown;
         Texture* additionalTexture = nullptr;
         ResourceStates::Mask expectedAdditionalTextureState = ResourceStates::Unknown;
+        Texture* thirdTexture = nullptr;
+        ResourceStates::Mask expectedThirdTextureState = ResourceStates::Unknown;
         bool* recorded = nullptr;
         QueueSubmissionToken* acceptedToken = nullptr;
     };
@@ -695,6 +697,8 @@ struct NativePacketPrefixTask{
             ready = ready && commandList.getTextureSubresourceState(payload.texture, 0u, 0u) == payload.expectedTextureState;
         if(payload.additionalTexture)
             ready = ready && commandList.getTextureSubresourceState(payload.additionalTexture, 0u, 0u) == payload.expectedAdditionalTextureState;
+        if(payload.thirdTexture)
+            ready = ready && commandList.getTextureSubresourceState(payload.thirdTexture, 0u, 0u) == payload.expectedThirdTextureState;
         if(payload.recorded)
             *payload.recorded = ready;
         return ready;
@@ -1683,8 +1687,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCoverageStateReco
 
 
 // Accumulation finishes Graphics raster work, but Deferred Composite may be a separate Compute packet. The normal
-// path uses a no-op Graphics finalizer whose declared ShaderResource reads lower the attachment transition before
-// that packet boundary; the finalizer itself deliberately performs no native state work.
+// path uses a no-op Graphics finalizer whose declared ShaderResource reads lower its color-attachment and read-only
+// depth transitions before that packet boundary; the finalizer itself deliberately performs no native state work.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStatesRecordWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto stateProbe = device.createBuffer(
@@ -1703,8 +1707,17 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
     ;
     auto accumColor = device.createTexture(accumulationTextureDesc);
     auto accumExtinction = device.createTexture(accumulationTextureDesc);
+    const TextureDesc depthTextureDesc = TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Format::D24S8)
+        .setInRenderTarget(true)
+        .setInitialState(ResourceStates::Common)
+    ;
+    auto deferredDepth = device.createTexture(depthTextureDesc);
     ASSERT_NE(accumColor.get(), nullptr);
     ASSERT_NE(accumExtinction.get(), nullptr);
+    ASSERT_NE(deferredDepth.get(), nullptr);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId stateProbeResource = graph.importBuffer(
@@ -1728,9 +1741,17 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
             .setMarkerLabel("AVBOIT Accumulation Extinction")
             .setType(GpuGraphResourceType::Texture)
     );
+    const GpuGraphResourceId deferredDepthResource = graph.importTexture(
+        deferredDepth,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_deferred_depth"))
+            .setMarkerLabel("Deferred Depth")
+            .setType(GpuGraphResourceType::Texture)
+    );
     ASSERT_TRUE(stateProbeResource.valid());
     ASSERT_TRUE(accumColorResource.valid());
     ASSERT_TRUE(accumExtinctionResource.valid());
+    ASSERT_TRUE(deferredDepthResource.valid());
 
     const GpuQueueRequest graphicsQueue{
         GpuQueueCapability::Graphics,
@@ -1777,6 +1798,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
             .requiredState = ResourceStates::RenderTarget,
             .access = GpuTaskResourceAccess::Write,
         },
+        GpuTaskResourceUse{
+            .resource = deferredDepthResource,
+            .range = {},
+            .requiredState = ResourceStates::DepthRead,
+            .access = GpuTaskResourceAccess::Read,
+        },
     };
     GpuTaskDesc accumulationDesc;
     accumulationDesc
@@ -1796,6 +1823,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
             .expectedTextureState = ResourceStates::RenderTarget,
             .additionalTexture = accumExtinction.get(),
             .expectedAdditionalTextureState = ResourceStates::RenderTarget,
+            .thirdTexture = deferredDepth.get(),
+            .expectedThirdTextureState = ResourceStates::DepthRead,
             .recorded = &accumulationRecorded,
         }
     );
@@ -1816,6 +1845,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
         },
         GpuTaskResourceUse{
             .resource = accumExtinctionResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = deferredDepthResource,
             .range = {},
             .requiredState = ResourceStates::ShaderResource,
             .access = GpuTaskResourceAccess::Read,
@@ -1841,10 +1876,33 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
             .expectedTextureState = ResourceStates::ShaderResource,
             .additionalTexture = accumExtinction.get(),
             .expectedAdditionalTextureState = ResourceStates::ShaderResource,
+            .thirdTexture = deferredDepth.get(),
+            .expectedThirdTextureState = ResourceStates::ShaderResource,
             .recorded = &finalizerRecorded,
         }
     );
     ASSERT_TRUE(finalizerTask.valid());
+
+    const GpuTaskResourceUse compositeUses[] = {
+        GpuTaskResourceUse{
+            .resource = stateProbeResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = accumColorResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = accumExtinctionResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
 
     GpuTaskDesc compositeDesc;
     compositeDesc
@@ -1853,7 +1911,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
         .setQueue(computeQueue)
         .setScheduling(compositeScheduling)
         .setDependencies(&finalizerTask, 1u)
-        .setResourceUses(finalizeUses, LengthOf(finalizeUses))
+        .setResourceUses(compositeUses, LengthOf(compositeUses))
     ;
     bool compositeRecorded = false;
     const GpuTaskId compositeTask = graph.addTask<NativePacketPrefixTask>(
@@ -1907,11 +1965,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
     const GpuCompiledTask* const compiledComposite = compiledGraph.findTask(compositeTask);
     ASSERT_NE(compiledFinalizer, nullptr);
     ASSERT_NE(compiledComposite, nullptr);
-    ASSERT_EQ(compiledFinalizer->prologueBarrierCount, 2u);
+    ASSERT_EQ(compiledFinalizer->prologueBarrierCount, 3u);
     const GpuCompiledBarrier* const finalizerBarriers = compiledGraph.taskPrologueBarriers(finalizerTask);
     ASSERT_NE(finalizerBarriers, nullptr);
     bool finalizesAccumColor = false;
     bool finalizesAccumExtinction = false;
+    bool finalizesDeferredDepth = false;
     for(u32 barrierIndex = 0u; barrierIndex < compiledFinalizer->prologueBarrierCount; ++barrierIndex){
         const GpuCompiledBarrier& barrier = finalizerBarriers[barrierIndex];
         const bool isAttachmentFinalization = barrier.type == GpuCompiledBarrierType::TextureTransition
@@ -1921,15 +1980,25 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
         finalizesAccumColor = finalizesAccumColor || (isAttachmentFinalization && barrier.resource == accumColorResource);
         finalizesAccumExtinction = finalizesAccumExtinction
             || (isAttachmentFinalization && barrier.resource == accumExtinctionResource);
+        finalizesDeferredDepth = finalizesDeferredDepth || (
+            barrier.type == GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == deferredDepthResource
+            && barrier.before == ResourceStates::DepthRead
+            && barrier.after == ResourceStates::ShaderResource
+        );
     }
     EXPECT_TRUE(finalizesAccumColor);
     EXPECT_TRUE(finalizesAccumExtinction);
+    EXPECT_TRUE(finalizesDeferredDepth);
     const GpuCompiledBarrier* const compositeBarriers = compiledGraph.taskPrologueBarriers(compositeTask);
     for(u32 barrierIndex = 0u; barrierIndex < compiledComposite->prologueBarrierCount; ++barrierIndex){
         const GpuCompiledBarrier& barrier = compositeBarriers[barrierIndex];
         EXPECT_FALSE(
             barrier.type == GpuCompiledBarrierType::TextureTransition
-            && barrier.before == ResourceStates::RenderTarget
+            && (
+                barrier.before == ResourceStates::RenderTarget
+                || barrier.before == ResourceStates::DepthRead
+            )
         );
     }
 

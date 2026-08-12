@@ -388,7 +388,7 @@ private:
     // accumulation packet so a rejected/retried recording cannot publish only its upload prefix.
     Core::GpuTaskId m_deferredAvboitAccumulationStreamTask;
     Core::GpuTaskId m_deferredAvboitAccumulationTask;
-    // A no-op Graphics task that declares accumulation render-target outputs as Deferred Composite inputs.
+    // A no-op Graphics task that returns accumulation color outputs and read-only deferred depth to sampled state.
     Core::GpuTaskId m_deferredAvboitAccumulationFinalizeTask;
     Core::GpuTaskId m_deferredLightingTask;
     Core::GpuTaskId m_deferredCompositeTask;

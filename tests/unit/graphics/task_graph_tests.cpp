@@ -5307,8 +5307,9 @@ TEST(GpuTaskGraph, PlansAvboitCoverageClearAndTailUavDependencies){
 
 
 // AVBOIT accumulation ends a Graphics raster pass, while Deferred Composite may run on a dedicated Compute queue.
-// Keep the two attachment handoffs in a mergeable Graphics finalizer so Compute only consumes ShaderResource state.
-TEST(GpuTaskGraph, PlansAvboitAccumulationAttachmentFinalizationOnGraphics){
+// Keep its color attachments and read-only depth handoff in a mergeable Graphics finalizer so following packets
+// only consume ShaderResource state.
+TEST(GpuTaskGraph, PlansAvboitAccumulationFinalizationOnGraphics){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId accumColor = AddTextureMetadata(
@@ -5321,8 +5322,14 @@ TEST(GpuTaskGraph, PlansAvboitAccumulationAttachmentFinalizationOnGraphics){
         Name("tests/task_graph/avboit_accumulation_extinction"),
         "AVBOIT Accumulation Extinction"
     );
+    const Graphics::GpuGraphResourceId deferredDepth = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_deferred_depth"),
+        "Deferred Depth"
+    );
     ASSERT_TRUE(accumColor.valid());
     ASSERT_TRUE(accumExtinction.valid());
+    ASSERT_TRUE(deferredDepth.valid());
 
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
@@ -5363,6 +5370,12 @@ TEST(GpuTaskGraph, PlansAvboitAccumulationAttachmentFinalizationOnGraphics){
             .requiredState = Graphics::ResourceStates::RenderTarget,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
+        Graphics::GpuTaskResourceUse{
+            .resource = deferredDepth,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::DepthRead,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
     };
     Graphics::GpuTaskDesc accumulationDesc;
     accumulationDesc
@@ -5388,6 +5401,12 @@ TEST(GpuTaskGraph, PlansAvboitAccumulationAttachmentFinalizationOnGraphics){
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Read,
         },
+        Graphics::GpuTaskResourceUse{
+            .resource = deferredDepth,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
     };
     Graphics::GpuTaskDesc finalizeDesc;
     finalizeDesc
@@ -5401,6 +5420,21 @@ TEST(GpuTaskGraph, PlansAvboitAccumulationAttachmentFinalizationOnGraphics){
     const Graphics::GpuTaskId finalizer = graph.addTask(finalizeDesc);
     ASSERT_TRUE(finalizer.valid());
 
+    const Graphics::GpuTaskResourceUse compositeUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = accumColor,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = accumExtinction,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+
     Graphics::GpuTaskDesc compositeDesc;
     compositeDesc
         .setIdentity(Name("tests/task_graph/avboit_deferred_composite"))
@@ -5408,7 +5442,7 @@ TEST(GpuTaskGraph, PlansAvboitAccumulationAttachmentFinalizationOnGraphics){
         .setQueue(computeRequest)
         .setScheduling(compositeScheduling)
         .setDependencies(&finalizer, 1u)
-        .setResourceUses(finalizeUses, LengthOf(finalizeUses))
+        .setResourceUses(compositeUses, LengthOf(compositeUses))
     ;
     const Graphics::GpuTaskId composite = graph.addTask(compositeDesc);
     ASSERT_TRUE(composite.valid());
@@ -5446,11 +5480,12 @@ TEST(GpuTaskGraph, PlansAvboitAccumulationAttachmentFinalizationOnGraphics){
     const Graphics::GpuCompiledTask* const compiledComposite = compiledGraph.findTask(composite);
     ASSERT_NE(compiledFinalizer, nullptr);
     ASSERT_NE(compiledComposite, nullptr);
-    ASSERT_EQ(compiledFinalizer->prologueBarrierCount, 2u);
+    ASSERT_EQ(compiledFinalizer->prologueBarrierCount, 3u);
     const Graphics::GpuCompiledBarrier* const finalizerBarriers = compiledGraph.taskPrologueBarriers(finalizer);
     ASSERT_NE(finalizerBarriers, nullptr);
     bool finalizesAccumColor = false;
     bool finalizesAccumExtinction = false;
+    bool finalizesDeferredDepth = false;
     for(u32 barrierIndex = 0u; barrierIndex < compiledFinalizer->prologueBarrierCount; ++barrierIndex){
         const Graphics::GpuCompiledBarrier& barrier = finalizerBarriers[barrierIndex];
         const bool isAttachmentFinalization = barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
@@ -5460,18 +5495,238 @@ TEST(GpuTaskGraph, PlansAvboitAccumulationAttachmentFinalizationOnGraphics){
         finalizesAccumColor = finalizesAccumColor || (isAttachmentFinalization && barrier.resource == accumColor);
         finalizesAccumExtinction = finalizesAccumExtinction
             || (isAttachmentFinalization && barrier.resource == accumExtinction);
+        finalizesDeferredDepth = finalizesDeferredDepth || (
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == deferredDepth
+            && barrier.before == Graphics::ResourceStates::DepthRead
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+        );
     }
     EXPECT_TRUE(finalizesAccumColor);
     EXPECT_TRUE(finalizesAccumExtinction);
+    EXPECT_TRUE(finalizesDeferredDepth);
 
     const Graphics::GpuCompiledBarrier* const compositeBarriers = compiledGraph.taskPrologueBarriers(composite);
     for(u32 barrierIndex = 0u; barrierIndex < compiledComposite->prologueBarrierCount; ++barrierIndex){
         const Graphics::GpuCompiledBarrier& barrier = compositeBarriers[barrierIndex];
         EXPECT_FALSE(
             barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
-            && barrier.before == Graphics::ResourceStates::RenderTarget
+            && (
+                barrier.before == Graphics::ResourceStates::RenderTarget
+                || barrier.before == Graphics::ResourceStates::DepthRead
+            )
         );
     }
+}
+
+
+// Frame-lagged Lighting reads current G-buffer depth independently of the temporal effect history. Transparent
+// AVBOIT temporarily binds that depth read-only as DepthRead, so its Graphics finalizer must precede the otherwise
+// independent dedicated-Compute Lighting packet before the latter can sample ShaderResource layout again.
+TEST(GpuTaskGraph, OrdersLaggedLightingAfterAvboitDepthFinalizer){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId deferredDepth = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/lagged_avboit_deferred_depth"),
+        "Deferred Depth",
+        Graphics::ResourceStates::ShaderResource,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId accumulationColor = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/lagged_avboit_accumulation_color"),
+        "AVBOIT Accumulation Color",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    ASSERT_TRUE(deferredDepth.valid());
+    ASSERT_TRUE(accumulationColor.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        true,
+        true,
+    };
+    Graphics::GpuTaskSchedulingHint prefixScheduling;
+    prefixScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    prefixScheduling.forceSubmissionBoundary = true;
+    prefixScheduling.allowPacketMerge = false;
+    Graphics::GpuTaskSchedulingHint accumulationScheduling;
+    accumulationScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    accumulationScheduling.forceSubmissionBoundary = false;
+    accumulationScheduling.allowPacketMerge = true;
+    accumulationScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskSchedulingHint finalizerScheduling;
+    finalizerScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    finalizerScheduling.forceSubmissionBoundary = false;
+    finalizerScheduling.allowPacketMerge = true;
+    finalizerScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskSchedulingHint lightingScheduling;
+    lightingScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    lightingScheduling.forceSubmissionBoundary = true;
+    lightingScheduling.allowPacketMerge = false;
+
+    const Graphics::GpuTaskResourceUse prefixUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = deferredDepth,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskDesc prefixDesc;
+    prefixDesc
+        .setIdentity(Name("tests/task_graph/lagged_avboit_prefix"))
+        .setMarkerLabel("Graphics Prefix")
+        .setQueue(graphicsRequest)
+        .setScheduling(prefixScheduling)
+        .setResourceUses(prefixUses, LengthOf(prefixUses))
+    ;
+    const Graphics::GpuTaskId prefix = graph.addTask(prefixDesc);
+    ASSERT_TRUE(prefix.valid());
+
+    const Graphics::GpuTaskResourceUse accumulationUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = deferredDepth,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::DepthRead,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = accumulationColor,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::RenderTarget,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc accumulationDesc;
+    accumulationDesc
+        .setIdentity(Name("tests/task_graph/lagged_avboit_accumulation"))
+        .setMarkerLabel("AVBOIT Accumulation")
+        .setQueue(graphicsRequest)
+        .setScheduling(accumulationScheduling)
+        .setDependencies(&prefix, 1u)
+        .setResourceUses(accumulationUses, LengthOf(accumulationUses))
+    ;
+    const Graphics::GpuTaskId accumulation = graph.addTask(accumulationDesc);
+    ASSERT_TRUE(accumulation.valid());
+
+    const Graphics::GpuTaskResourceUse finalizerUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = deferredDepth,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = accumulationColor,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskDesc finalizerDesc;
+    finalizerDesc
+        .setIdentity(Name("tests/task_graph/lagged_avboit_finalize"))
+        .setMarkerLabel("AVBOIT Accumulation Finalize")
+        .setQueue(graphicsRequest)
+        .setScheduling(finalizerScheduling)
+        .setDependencies(&accumulation, 1u)
+        .setResourceUses(finalizerUses, LengthOf(finalizerUses))
+    ;
+    const Graphics::GpuTaskId finalizer = graph.addTask(finalizerDesc);
+    ASSERT_TRUE(finalizer.valid());
+
+    const Graphics::GpuTaskResourceUse lightingUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = deferredDepth,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+            // Match lagged Lighting's prefix-backed independent read source; the explicit finalizer dependency,
+            // rather than read/read hazard analysis, orders the temporary depth layout transition.
+            .hasIndependentStateSource = true,
+        },
+    };
+    const Graphics::GpuTaskId lightingDependencies[] = { prefix, finalizer };
+    Graphics::GpuTaskDesc lightingDesc;
+    lightingDesc
+        .setIdentity(Name("tests/task_graph/lagged_deferred_lighting"))
+        .setMarkerLabel("Deferred Lighting")
+        .setQueue(computeRequest)
+        .setScheduling(lightingScheduling)
+        .setDependencies(lightingDependencies, LengthOf(lightingDependencies))
+        .setResourceUses(lightingUses, LengthOf(lightingUses))
+    ;
+    const Graphics::GpuTaskId lighting = graph.addTask(lightingDesc);
+    ASSERT_TRUE(lighting.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+
+    const Graphics::GpuTaskQueueAssignment* const finalizerAssignment = assignments.find(finalizer);
+    const Graphics::GpuTaskQueueAssignment* const lightingAssignment = assignments.find(lighting);
+    ASSERT_NE(finalizerAssignment, nullptr);
+    ASSERT_NE(lightingAssignment, nullptr);
+    EXPECT_EQ(finalizerAssignment->queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(lightingAssignment->queueClass, Graphics::CommandQueue::Compute);
+    EXPECT_EQ(lightingAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute);
+    EXPECT_NE(FindEdge(analysis, finalizer, lighting), nullptr);
+
+    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledGraph.packetForTask(accumulation);
+    const Graphics::GpuSubmissionPacketId finalizerPacket = compiledGraph.packetForTask(finalizer);
+    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
+    ASSERT_TRUE(accumulationPacket.valid());
+    ASSERT_TRUE(finalizerPacket.valid());
+    ASSERT_TRUE(lightingPacket.valid());
+    EXPECT_EQ(finalizerPacket, accumulationPacket);
+    EXPECT_NE(lightingPacket, finalizerPacket);
+
+    const Graphics::GpuCompiledTask* const compiledFinalizer = compiledGraph.findTask(finalizer);
+    ASSERT_NE(compiledFinalizer, nullptr);
+    const Graphics::GpuCompiledBarrier* const finalizerBarriers = compiledGraph.taskPrologueBarriers(finalizer);
+    ASSERT_NE(finalizerBarriers, nullptr);
+    bool finalizesDeferredDepth = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledFinalizer->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = finalizerBarriers[barrierIndex];
+        finalizesDeferredDepth = finalizesDeferredDepth || (
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == deferredDepth
+            && barrier.before == Graphics::ResourceStates::DepthRead
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+        );
+    }
+    EXPECT_TRUE(finalizesDeferredDepth);
+
+    const Graphics::GpuSubmissionPacket& lightingPacketInfo = compiledGraph.packet(lightingPacket);
+    ASSERT_GT(lightingPacketInfo.dependencyCount, 0u);
+    const Graphics::GpuPacketDependency* const lightingPacketDependencies = compiledGraph.packetDependencies(lightingPacket);
+    ASSERT_NE(lightingPacketDependencies, nullptr);
+    bool lightingWaitsForFinalizer = false;
+    for(u32 dependencyIndex = 0u; dependencyIndex < lightingPacketInfo.dependencyCount; ++dependencyIndex)
+        lightingWaitsForFinalizer = lightingWaitsForFinalizer
+            || lightingPacketDependencies[dependencyIndex].producer == finalizerPacket;
+    EXPECT_TRUE(lightingWaitsForFinalizer);
 }
 
 

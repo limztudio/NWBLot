@@ -108,9 +108,10 @@ public:
         const CsgFrameGpuData* preparedAccumulationCsgFrameData = nullptr,
         usize preparedAccumulationInstanceCount = 0u,
         usize preparedAccumulationMaterialTypedByteCount = 0u,
-        // The normal task-graph path declares the two accumulation attachments as ShaderResource in a following
-        // Graphics finalizer. Direct compatibility callers retain their explicit attachment-state bridge.
-        bool accumulationAttachmentStatesGraphOwned = false
+        // The normal task-graph path declares the two accumulation attachments and read-only deferred depth as
+        // ShaderResource in a following Graphics finalizer. Direct compatibility callers retain their explicit
+        // framebuffer-state bridge.
+        bool accumulationFinalStatesGraphOwned = false
     );
     void renderAvboitPasses(
         Core::CommandList& commandList,

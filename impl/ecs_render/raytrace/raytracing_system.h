@@ -273,8 +273,6 @@ public:
     void releaseRayTraceMaterialContextHeapHandles();
     void releaseSwBvhScratchHeapHandles();
     void releaseSurfelGiHeapHandles();
-    // Normalize inputs shared by independently recorded effect packets.
-    void normalizePostGbufferPacketResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] Core::GpuTaskId declareShadowVisibilityTask(
         Core::GpuTaskGraph& graph,

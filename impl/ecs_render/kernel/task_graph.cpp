@@ -847,11 +847,11 @@ namespace __hidden_renderer_task_graph{
     };
 }
 
-// The terminal graphics-prefix task normalizes the state exported to the following graph packets.
+// The terminal graphics-prefix task finishes route-dependent trace-geometry normalization before the following graph
+// packets. Its regular deferred resources are declared below, so their state transitions remain graph-owned.
 struct PostGbufferNormalizeGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncPrefixTiming = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const Core::GpuTaskId* shadowVisibilityTask = nullptr;
@@ -868,7 +868,6 @@ struct PostGbufferNormalizeGraphTask{
         );
         if(
             !payload.raytracingSystem
-            || !payload.targets
             || !payload.timingTicket
             || !*payload.timingTicket
             || !shadowVisibilityQueue
@@ -876,7 +875,9 @@ struct PostGbufferNormalizeGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
-        payload.raytracingSystem->normalizePostGbufferPacketResources(commandList, *payload.targets);
+        // The graph's explicit reads below lower the ordinary G-buffer, scene, and descriptor states before this
+        // task records. Only dynamically selected trace geometry still needs route-specific normalization here.
+        payload.raytracingSystem->normalizePreparedShadowTraceGeometryBuffers(commandList);
         if(
             shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute
             && payload.asyncPrefixTiming
@@ -2889,7 +2890,6 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         normalizeDesc,
         PostGbufferNormalizeGraphTask::Payload{
             .raytracingSystem = &m_raytracingSystem,
-            .targets = &deferredTargets,
             .asyncPrefixTiming = &asyncPrefixTiming,
             .timingTicket = timingTicketSlot(PrefixTimingSlot::Normalize),
             .shadowVisibilityTask = &m_deferredShadowVisibilityTask,

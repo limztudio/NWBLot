@@ -1399,7 +1399,25 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
     ASSERT_NE(compiledGraph.findTask(sceneSetupTask), nullptr);
     ASSERT_NE(compiledGraph.findTask(clearTask), nullptr);
     ASSERT_NE(compiledGraph.findTask(gbufferTask), nullptr);
-    ASSERT_NE(compiledGraph.findTask(normalizeTask), nullptr);
+    const GpuCompiledTask* const compiledNormalize = compiledGraph.findTask(normalizeTask);
+    ASSERT_NE(compiledNormalize, nullptr);
+    const GpuCompiledBarrier* const normalizeBarriers = compiledGraph.taskPrologueBarriers(normalizeTask);
+    ASSERT_NE(normalizeBarriers, nullptr);
+    // The normalizer probe emits no native state change. The graph must lower the G-buffer attachment transition
+    // before it records, just as the renderer's Post-G-Buffer Normalize task does for its declared resources.
+    bool graphOwnsNormalizeTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledNormalize->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = normalizeBarriers[barrierIndex];
+        graphOwnsNormalizeTransition = graphOwnsNormalizeTransition
+            || (
+                barrier.type == GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == textureResource
+                && barrier.before == ResourceStates::RenderTarget
+                && barrier.after == ResourceStates::ShaderResource
+            )
+        ;
+    }
+    EXPECT_TRUE(graphOwnsNormalizeTransition);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());

@@ -355,17 +355,6 @@ void RendererRayTracingSystem::transitionSwShadowTraversalResources(Core::Comman
     commandList.setBufferState(rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
 }
 
-void RendererRayTracingSystem::normalizePostGbufferPacketResources(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    // The native graph task declares these shared buffers, so compiler state seeds carry the preparation packet's
-    // exact final states into this separate Graphics command list.
-    commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.setBufferState(rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    normalizePreparedShadowTraceGeometryBuffers(commandList);
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

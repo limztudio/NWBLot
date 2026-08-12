@@ -314,11 +314,8 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningDispatch(
     if(!heap.isInitialized())
         return false;
 
-    // The selector is consumed indirectly by every skinning pipeline through its bindless slot. The graph
-    // declaration makes that dependency visible to scheduling; retain the concrete ConstantBuffer transition in
-    // this packet so native descriptor-buffer binding never inherits Common from its preceding upload.
-    commandList.setBufferState(bindlessResourceSlots, Core::ResourceStates::ConstantBuffer);
-    commandList.commitBarriers();
+    // The graph packet prologue owns the selector's descriptor-visible ConstantBuffer state.  This callback only
+    // consumes its frozen heap slot; generated output streams still retain their local UAV phases below.
 
     if(plan.hasActiveSkin){
         Core::Buffer* const restPosition = resolveBuffer(plan.restPositionResource);
@@ -345,18 +342,11 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningDispatch(
         )
             return false;
 
-        commandList.setBufferState(restPosition, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(restNormal, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(restTangent, Core::ResourceStates::ShaderResource);
         commandList.setBufferState(skinnedPosition, Core::ResourceStates::UnorderedAccess);
         commandList.setBufferState(skinnedNormal, Core::ResourceStates::UnorderedAccess);
         commandList.setBufferState(skinnedTangent, Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(meshletDesc, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(meshletPositionRefDeltas, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(meshletAttributeRefDeltas, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(attributeSkins, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(skinInfluences, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(jointPalette, Core::ResourceStates::ShaderResource);
+        // Rest/meshlet/skin inputs enter this graph task as ShaderResource uses.  The generated skinned streams are
+        // the only resources that need an intra-dispatch transition before the deformation dispatch.
         commandList.commitBarriers();
 
         Core::ComputeState computeState;
@@ -383,26 +373,9 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningDispatch(
         commandList.setBufferState(skinnedTangent, Core::ResourceStates::ShaderResource);
         commandList.commitBarriers();
     }
-    else if(plan.copiedRestStreams){
-        Core::Buffer* const skinnedNormal = resolveBuffer(plan.skinnedNormalResource);
-        Core::Buffer* const skinnedTangent = resolveBuffer(plan.skinnedTangentResource);
-        if(!skinnedNormal || !skinnedTangent)
-            return false;
-
-        // The preceding graph-owned copy leaves every output in CopyDest. Promote the complete stream set in this
-        // same packet before bounds and later renderer consumers observe it.
-        commandList.setBufferState(skinnedPosition, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(skinnedNormal, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(skinnedTangent, Core::ResourceStates::ShaderResource);
-        commandList.commitBarriers();
-    }
-
     if(plan.updatesMeshletBounds){
-        commandList.setBufferState(skinnedPosition, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(meshletDesc, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(meshletPositionRefDeltas, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(meshletLocalVertexRefs, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(meshletPrimitiveIndices, Core::ResourceStates::ShaderResource);
+        // The graph establishes the static bounds inputs, including the CopyDest-to-ShaderResource rest-stream
+        // handoff when present.  Bounds output is generated inside this dispatch and remains task-local.
         commandList.setBufferState(meshletBounds, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
@@ -433,11 +406,8 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningDispatch(
         if(!skinnedNormal || !meshletAttributeRefDeltas || !attributeBuffer || !repackPipeline)
             return false;
 
-        commandList.setBufferState(skinnedNormal, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(meshletDesc, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(meshletPrimitiveIndices, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(meshletAttributeRefDeltas, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(meshletLocalVertexRefs, Core::ResourceStates::ShaderResource);
+        // The normal and meshlet inputs are graph-owned ShaderResource entries (or were normalized after the
+        // preceding deformation dispatch).  The packed attribute output remains an intra-dispatch UAV phase.
         commandList.setBufferState(attributeBuffer, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 

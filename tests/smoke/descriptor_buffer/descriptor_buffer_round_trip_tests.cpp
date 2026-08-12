@@ -235,7 +235,9 @@ Optional<Common::LoggerRegistrationGuard> DescriptorBufferRoundTripTest::s_logge
 struct SkinningGraphSelectorConsumerTask{
     struct Payload{
         GpuGraphResourceId selector;
+        GpuGraphResourceId staticInput;
         bool* observedConstantBuffer = nullptr;
+        bool* observedStaticInputShaderResource = nullptr;
         QueueSubmissionToken* acceptedToken = nullptr;
     };
 
@@ -245,15 +247,17 @@ struct SkinningGraphSelectorConsumerTask{
         const GpuTaskRecordContext& context
     ){
         Buffer* const selector = context.taskGraph.bufferForResource(payload.selector);
-        if(!selector)
+        Buffer* const staticInput = context.taskGraph.bufferForResource(payload.staticInput);
+        if(!selector || !staticInput)
             return false;
 
-        commandList.setBufferState(selector, ResourceStates::ConstantBuffer);
-        commandList.commitBarriers();
         const bool observedConstantBuffer = commandList.getBufferState(selector) == ResourceStates::ConstantBuffer;
+        const bool observedStaticInputShaderResource = commandList.getBufferState(staticInput) == ResourceStates::ShaderResource;
         if(payload.observedConstantBuffer)
             *payload.observedConstantBuffer = observedConstantBuffer;
-        return observedConstantBuffer;
+        if(payload.observedStaticInputShaderResource)
+            *payload.observedStaticInputShaderResource = observedStaticInputShaderResource;
+        return observedConstantBuffer && observedStaticInputShaderResource;
     }
 
     static void accepted(Payload& payload, const QueueSubmissionToken& token){
@@ -282,10 +286,6 @@ struct SkinningGraphRestStreamConsumerTask{
         if(!position || !normal || !tangent)
             return false;
 
-        commandList.setBufferState(position, ResourceStates::ShaderResource);
-        commandList.setBufferState(normal, ResourceStates::ShaderResource);
-        commandList.setBufferState(tangent, ResourceStates::ShaderResource);
-        commandList.commitBarriers();
         return
             commandList.getBufferState(position) == ResourceStates::ShaderResource
             && commandList.getBufferState(normal) == ResourceStates::ShaderResource
@@ -6798,8 +6798,9 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
 }
 
 
-// Skinning publishes its immutable bindless selector and consumes it from a graph-owned compute endpoint in one
-// primary-Graphics packet. No second native command list may bridge Common -> ConstantBuffer.
+// Skinning publishes its immutable bindless selector and consumes it with a static ShaderResource input from a
+// graph-owned compute endpoint in one primary-Graphics packet. The callback is getter-only: packet barriers must
+// establish both Common -> ConstantBuffer and Common -> ShaderResource before native skinning-style recording.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphCompute){
     auto& device = DescriptorBufferRoundTripTest::device();
     static constexpr u32 s_SelectorWords[] = {
@@ -6830,6 +6831,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
             .setCpuAccess(CpuAccessMode::Read)
     );
     ASSERT_NE(selectorBuffer.get(), nullptr);
+    auto staticInputBuffer = device.createBuffer(
+        BufferDesc()
+            .setDebugName(Name("tests/descriptor_buffer/skinning_static_input"))
+            .setByteSize(sizeof(s_SelectorWords))
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::Exclusive)
+    );
+    ASSERT_NE(staticInputBuffer.get(), nullptr);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const BufferDesc& selectorDesc = selectorBuffer->getDescription();
@@ -6842,12 +6851,23 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
             .setInitialState(selectorDesc.initialState)
             .setQueueSharing(selectorDesc.queueSharing)
     );
+    const BufferDesc& staticInputDesc = staticInputBuffer->getDescription();
+    const GpuGraphResourceId staticInputResource = graph.importBuffer(
+        staticInputBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(staticInputDesc.debugName)
+            .setMarkerLabel("Skinning Static Input")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(staticInputDesc.initialState)
+            .setQueueSharing(staticInputDesc.queueSharing)
+    );
     const GpuUploadBlobId selectorBlob = graph.copyUploadData(
         s_SelectorWords,
         sizeof(s_SelectorWords),
         alignof(u32)
     );
     ASSERT_TRUE(selectorResource.valid());
+    ASSERT_TRUE(staticInputResource.valid());
     ASSERT_TRUE(selectorBlob.valid());
 
     const GpuQueueRequest graphicsUploadQueue{
@@ -6888,10 +6908,17 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
             .requiredState = ResourceStates::ConstantBuffer,
             .access = GpuTaskResourceAccess::Read,
         },
+        GpuTaskResourceUse{
+            .resource = staticInputResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
     };
     GpuTaskSchedulingHint selectorConsumerScheduling = selectorScheduling;
     selectorConsumerScheduling.mergeWithPrevious = true;
     bool selectorConsumerObservedConstantBuffer = false;
+    bool selectorConsumerObservedStaticInputShaderResource = false;
     QueueSubmissionToken selectorConsumerAcceptedToken;
     const GpuTaskId selectorConsumerTask = graph.addTask<SkinningGraphSelectorConsumerTask>(
         GpuTaskDesc{}
@@ -6908,7 +6935,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
             .setResourceUses(selectorConsumerUses, LengthOf(selectorConsumerUses)),
         SkinningGraphSelectorConsumerTask::Payload{
             .selector = selectorResource,
+            .staticInput = staticInputResource,
             .observedConstantBuffer = &selectorConsumerObservedConstantBuffer,
+            .observedStaticInputShaderResource = &selectorConsumerObservedStaticInputShaderResource,
             .acceptedToken = &selectorConsumerAcceptedToken,
         }
     );
@@ -6950,12 +6979,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
         recordedGraph
     ));
     EXPECT_TRUE(selectorConsumerObservedConstantBuffer);
+    EXPECT_TRUE(selectorConsumerObservedStaticInputShaderResource);
     const CommandListResourceStateHandoff* const graphFinalState = recordedGraph.packetFinalStateSeed(selectorPacket);
     ASSERT_NE(graphFinalState, nullptr);
     auto graphStateProbe = device.createCommandList();
     ASSERT_NE(graphStateProbe.get(), nullptr);
     graphStateProbe->open(graphFinalState);
     EXPECT_EQ(graphStateProbe->getBufferState(selectorBuffer.get()), ResourceStates::Common);
+    EXPECT_EQ(graphStateProbe->getBufferState(staticInputBuffer.get()), ResourceStates::ShaderResource);
     graphStateProbe->close();
 
     const GpuTaskGraphSubmitter submitter(device);

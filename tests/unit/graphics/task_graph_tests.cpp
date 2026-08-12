@@ -4293,6 +4293,13 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
         Graphics::ResourceStates::Common,
         queueSharing
     );
+    const Graphics::GpuGraphResourceId shadowSoftGeometry = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/shadow_visibility_soft_geometry"),
+        "Shadow Soft Geometry",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
     const Graphics::GpuGraphResourceId currentBindlessSlots = AddBufferMetadata(
         graph,
         Name("tests/task_graph/shadow_visibility_bindless_slots"),
@@ -4383,6 +4390,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
     ASSERT_TRUE(shadowVisibility.valid());
     ASSERT_TRUE(shadowSoftHalfA.valid());
     ASSERT_TRUE(shadowCoarseTransmittance.valid());
+    ASSERT_TRUE(shadowSoftGeometry.valid());
     ASSERT_TRUE(currentBindlessSlots.valid());
     ASSERT_TRUE(sceneShading.valid());
     ASSERT_TRUE(lights.valid());
@@ -4535,6 +4543,12 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
         },
         Graphics::GpuTaskResourceUse{
             .resource = shadowCoarseTransmittance,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = shadowSoftGeometry,
             .range = {},
             .requiredState = Graphics::ResourceStates::UnorderedAccess,
             .access = Graphics::GpuTaskResourceAccess::ReadWrite,
@@ -4816,6 +4830,12 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
     EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::TextureTransition,
         shadowCoarseTransmittance,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasShadowBarrier(
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        shadowSoftGeometry,
         Graphics::ResourceStates::Common,
         Graphics::ResourceStates::UnorderedAccess
     ));

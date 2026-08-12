@@ -576,7 +576,14 @@ bool RendererRayTracingSystem::renderShadowVisibility(
         commandList.commitBarriers();
 
         // The resolve optionally folds transparent software transmittance.
-        dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, frameIndex, softGroupsX, softGroupsY);
+        dispatchSoftShadowDenoiseAndTransparentFold(
+            commandList,
+            targets,
+            frameIndex,
+            softGroupsX,
+            softGroupsY,
+            graphEntryStatesOwned
+        );
         return true;
     }
 
@@ -814,7 +821,14 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             commandList.commitBarriers();
 
             // Shared resolve also guards against a second transparent fold.
-            dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, frameIndex, softGroupsX, softGroupsY);
+            dispatchSoftShadowDenoiseAndTransparentFold(
+                commandList,
+                targets,
+                frameIndex,
+                softGroupsX,
+                softGroupsY,
+                graphEntryStatesOwned
+            );
             softTransparentRan = rayTracingState().m_softTransparentReady;
         }
     }

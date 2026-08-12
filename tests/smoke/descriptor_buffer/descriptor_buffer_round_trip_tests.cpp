@@ -771,6 +771,7 @@ struct NativePacketShadowVisibilityEntryProbeTask{
         Texture* shadowVisibility = nullptr;
         Texture* shadowSoftHalfA = nullptr;
         Texture* shadowCoarseTransmittance = nullptr;
+        Texture* shadowSoftGeometry = nullptr;
         bool* recorded = nullptr;
     };
 
@@ -792,6 +793,7 @@ struct NativePacketShadowVisibilityEntryProbeTask{
             || !payload.shadowVisibility
             || !payload.shadowSoftHalfA
             || !payload.shadowCoarseTransmittance
+            || !payload.shadowSoftGeometry
         )
             return false;
         const bool ready =
@@ -806,6 +808,8 @@ struct NativePacketShadowVisibilityEntryProbeTask{
             && commandList.getTextureSubresourceState(payload.shadowVisibility, 0u, 0u) == ResourceStates::UnorderedAccess
             && commandList.getTextureSubresourceState(payload.shadowSoftHalfA, 0u, 0u) == ResourceStates::UnorderedAccess
             && commandList.getTextureSubresourceState(payload.shadowCoarseTransmittance, 0u, 0u)
+                == ResourceStates::UnorderedAccess
+            && commandList.getTextureSubresourceState(payload.shadowSoftGeometry, 0u, 0u)
                 == ResourceStates::UnorderedAccess
         ;
         if(payload.recorded)
@@ -2093,6 +2097,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
     auto shadowVisibility = makeShadowTarget();
     auto shadowSoftHalfA = makeShadowTarget();
     auto shadowCoarseTransmittance = makeShadowTarget();
+    auto shadowSoftGeometry = makeShadowTarget();
     ASSERT_NE(currentBindlessSlots.get(), nullptr);
     ASSERT_NE(materialContextSlots.get(), nullptr);
     ASSERT_NE(sceneShading.get(), nullptr);
@@ -2104,6 +2109,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
     ASSERT_NE(shadowVisibility.get(), nullptr);
     ASSERT_NE(shadowSoftHalfA.get(), nullptr);
     ASSERT_NE(shadowCoarseTransmittance.get(), nullptr);
+    ASSERT_NE(shadowSoftGeometry.get(), nullptr);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importBuffer = [&graph](
@@ -2187,6 +2193,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
         Name("tests/descriptor_buffer/shadow_visibility_coarse_transmittance"),
         "Shadow Coarse Transmittance"
     );
+    const GpuGraphResourceId shadowSoftGeometryResource = importTexture(
+        shadowSoftGeometry,
+        Name("tests/descriptor_buffer/shadow_visibility_soft_geometry"),
+        "Shadow Soft Geometry"
+    );
     ASSERT_TRUE(currentBindlessSlotsResource.valid());
     ASSERT_TRUE(materialContextSlotsResource.valid());
     ASSERT_TRUE(sceneShadingResource.valid());
@@ -2198,6 +2209,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
     ASSERT_TRUE(shadowVisibilityResource.valid());
     ASSERT_TRUE(shadowSoftHalfAResource.valid());
     ASSERT_TRUE(shadowCoarseTransmittanceResource.valid());
+    ASSERT_TRUE(shadowSoftGeometryResource.valid());
 
     const GpuQueueRequest graphicsQueue{
         GpuQueueCapability::Graphics,
@@ -2374,6 +2386,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
             .requiredState = ResourceStates::UnorderedAccess,
             .access = GpuTaskResourceAccess::ReadWrite,
         },
+        GpuTaskResourceUse{
+            .resource = shadowSoftGeometryResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
     };
     GpuTaskSchedulingHint shadowScheduling;
     shadowScheduling.cost = GpuTaskCostHint::Large;
@@ -2403,6 +2421,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
             .shadowVisibility = shadowVisibility.get(),
             .shadowSoftHalfA = shadowSoftHalfA.get(),
             .shadowCoarseTransmittance = shadowCoarseTransmittance.get(),
+            .shadowSoftGeometry = shadowSoftGeometry.get(),
             .recorded = &shadowRecorded,
         }
     );

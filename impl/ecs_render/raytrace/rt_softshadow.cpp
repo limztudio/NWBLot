@@ -55,7 +55,14 @@ bool RendererRayTracingSystem::softShadowTemporalHistoryUsable()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 frameIndex, u32 softGroupsX, u32 softGroupsY){
+void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const u32 frameIndex,
+    const u32 softGroupsX,
+    const u32 softGroupsY,
+    const bool graphEntryStatesOwned
+){
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
     NWB_ASSERT(deferredState().m_lightBuffer);
@@ -85,14 +92,19 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
         heap.bindCompute(commandList, *pipeline.get());
     };
 
-    // Geometry downsample: the only write is the heap-selected half-resolution geometry cache.
-    commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
+    // Geometry downsample: the shared graph already declares its descriptor-visible inputs and the first geometry
+    // cache UAV state. Direct compatibility callers retain the native prologue; all later soft-shadow lifecycle
+    // transitions remain local to this task.
+    if(!graphEntryStatesOwned){
+        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
+    }
     commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
-    commandList.commitBarriers();
+    if(!graphEntryStatesOwned)
+        commandList.commitBarriers();
 
     {
         Core::GpuTimingMeasure geometryTiming(

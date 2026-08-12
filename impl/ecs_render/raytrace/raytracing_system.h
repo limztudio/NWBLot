@@ -532,8 +532,16 @@ private:
     };
     // Resolve a contiguous shadow-slot range in one heap-selected dispatch.
     void dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slotStart, u32 slotCount, const SoftShadowResolveDispatch& dispatch);
-    // Denoise either backend's soft trace and optionally fold transparent transmittance.
-    void dispatchSoftShadowDenoiseAndTransparentFold(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 frameIndex, u32 softGroupsX, u32 softGroupsY);
+    // Denoise either backend's soft trace and optionally fold transparent transmittance. The shared deferred graph
+    // supplies the first geometry-downsample entry states; later trace/resolve transitions remain task-local.
+    void dispatchSoftShadowDenoiseAndTransparentFold(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        u32 frameIndex,
+        u32 softGroupsX,
+        u32 softGroupsY,
+        bool graphEntryStatesOwned = false
+    );
     // Temporal merge precedes soft resolve and swaps history at frame end.
     [[nodiscard]] bool ensureShadowReprojectMergePipeline();
     [[nodiscard]] bool softShadowTemporalHistoryUsable()const noexcept;

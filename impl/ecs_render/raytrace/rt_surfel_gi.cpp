@@ -96,10 +96,6 @@ struct SurfelGiGraphTask{
             );
         }
 
-        // The task owns its no-op output initialization on every physical route. This keeps the graph declaration
-        // invariant under late queue assignment instead of relying on a Graphics-prefix clear chosen in advance.
-        payload.raytracingSystem->clearSurfelIrradiance(commandList, *payload.targets);
-
         if(!payload.raytracingSystem->renderSurfelGi(
             commandList,
             *payload.targets,
@@ -957,18 +953,6 @@ void RendererRayTracingSystem::finalizeSurfelResourceInitialization(){
 void RendererRayTracingSystem::discardSurfelResourceInitialization(){
     // Keep the clear pending until a producer succeeds.
     rayTracingState().m_surfelResourcesClearPending = false;
-}
-
-void RendererRayTracingSystem::clearSurfelIrradiance(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    if(!targets.surfelIrradiance)
-        return;
-
-    // Zero coverage is the deferred-lighting no-op.
-    commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.clearTextureFloat(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-    commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.commitBarriers();
 }
 
 Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(

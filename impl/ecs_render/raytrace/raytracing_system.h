@@ -293,7 +293,6 @@ public:
     );
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearCausticTargets(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    void clearSurfelIrradiance(Core::CommandList& commandList, DeferredFrameTargets& targets);
     // Hybrid mode folds software transparent transmittance onto hardware opaque visibility. The shared deferred
     // graph can supply the traversal entry states; direct compatibility callers retain their native setup.
     [[nodiscard]] bool renderGpuBvhShadowVisibility(

@@ -4136,9 +4136,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
 }
 
 
-// Surfel GI's direct callback now receives all descriptor-visible static inputs and its first persistent UAV phase
-// from the graph. The test intentionally has no renderer-native state setup: the getter-only callback must observe
-// the compiler-lowered states after a prefix left every resource in an incompatible layout.
+// Surfel GI's typed output clear and direct callback now receive their states from the graph. The test intentionally
+// has no renderer-native state setup: after the clear records CopyDest, the getter-only GI callback must observe its
+// compiler-lowered UAV handoff alongside every descriptor-visible input.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiEntryStatesRecordWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
     constexpr u32 shaderBufferCount = NativePacketSurfelGiEntryProbeTask::s_ShaderBufferCount;
@@ -4206,6 +4206,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiEntryStatesRecordWithout
         uavTextures[textureIndex] = makeUavTexture();
         ASSERT_NE(uavTextures[textureIndex].get(), nullptr);
     }
+    const TextureHandle irradianceHalf = makeUavTexture();
+    ASSERT_NE(irradianceHalf.get(), nullptr);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importBuffer = [&graph](const BufferHandle& buffer, const Name identity, const AStringView label){
@@ -4291,13 +4293,19 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiEntryStatesRecordWithout
         Name("tests/descriptor_buffer/surfel_gi_normal"),
         "Normal"
     );
-    const GpuGraphResourceId irradianceHalfResource = importTexture(
+    const GpuGraphResourceId irradianceResource = importTexture(
         uavTextures[0u],
+        Name("tests/descriptor_buffer/surfel_gi_irradiance"),
+        "Surfel Irradiance"
+    );
+    const GpuGraphResourceId irradianceHalfResource = importTexture(
+        irradianceHalf,
         Name("tests/descriptor_buffer/surfel_gi_irradiance_half"),
         "Surfel Irradiance Half"
     );
     ASSERT_TRUE(worldPositionResource.valid());
     ASSERT_TRUE(normalResource.valid());
+    ASSERT_TRUE(irradianceResource.valid());
     ASSERT_TRUE(irradianceHalfResource.valid());
 
     const GpuQueueRequest graphicsQueue{
@@ -4311,6 +4319,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiEntryStatesRecordWithout
         GpuQueuePreference::Compute,
         true,
         true,
+    };
+    const GpuQueueRequest computeTransferQueue{
+        GpuQueueCapability::Transfer,
+        GpuQueuePreference::Compute,
+        true,
+        false,
     };
     GpuTaskSchedulingHint boundaryScheduling;
     boundaryScheduling.cost = GpuTaskCostHint::Large;
@@ -4348,8 +4362,30 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiEntryStatesRecordWithout
     );
     ASSERT_TRUE(prefixTask.valid());
 
+    GpuTaskSchedulingHint clearScheduling;
+    clearScheduling.cost = GpuTaskCostHint::Tiny;
+    clearScheduling.allowPacketMerge = true;
+    GpuTaskDesc clearDesc;
+    clearDesc
+        .setIdentity(Name("tests/descriptor_buffer/graph_owned_surfel_gi_output_clear"))
+        .setMarkerLabel("Surfel GI Output Clear")
+        .setQueue(computeTransferQueue)
+        .setScheduling(clearScheduling)
+        .setDependencies(&prefixTask, 1u)
+    ;
+    const GpuTaskId outputClearTask = graph.addClearTextureTask(
+        clearDesc,
+        GpuClearTextureTaskDesc{
+            .destination = irradianceResource,
+            .subresources = TextureSubresourceSet(0u, 1u, 0u, 1u),
+            .valueType = GpuClearTextureTaskValueType::Float,
+            .floatValue = Color(0.f, 0.f, 0.f, 0.f),
+        }
+    );
+    ASSERT_TRUE(outputClearTask.valid());
+
     Vector<GpuTaskResourceUse, Alloc::ScratchArena> surfelUses(resourceUseArena);
-    surfelUses.reserve(shaderBufferCount + constantBufferCount + uavBufferCount + shaderTextureCount + uavTextureCount);
+    surfelUses.reserve(shaderBufferCount + constantBufferCount + uavBufferCount + shaderTextureCount + uavTextureCount + 1u);
     for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)
         surfelUses.push_back({ .resource = shaderBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read });
     for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex)
@@ -4361,13 +4397,18 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiEntryStatesRecordWithout
     for(u32 bufferIndex = 0u; bufferIndex < uavBufferCount; ++bufferIndex)
         surfelUses.push_back({ .resource = uavBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write });
     surfelUses.push_back({ .resource = irradianceHalfResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write });
+    surfelUses.push_back({ .resource = irradianceResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write });
+    GpuTaskSchedulingHint surfelScheduling = boundaryScheduling;
+    surfelScheduling.forceSubmissionBoundary = false;
+    surfelScheduling.allowPacketMerge = true;
+    surfelScheduling.mergeWithPrevious = true;
     GpuTaskDesc surfelDesc;
     surfelDesc
         .setIdentity(Name("tests/descriptor_buffer/graph_owned_surfel_gi"))
         .setMarkerLabel("Surfel GI")
         .setQueue(computeQueue)
-        .setScheduling(boundaryScheduling)
-        .setDependencies(&prefixTask, 1u)
+        .setScheduling(surfelScheduling)
+        .setDependencies(&outputClearTask, 1u)
         .setResourceUses(surfelUses.data(), surfelUses.size())
     ;
     NativePacketSurfelGiEntryProbeTask::Payload surfelPayload{};
@@ -4413,9 +4454,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiEntryStatesRecordWithout
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
     ASSERT_EQ(compiledGraph.packetCount(), 2u);
     const GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefixTask);
+    const GpuSubmissionPacketId clearPacket = compiledGraph.packetForTask(outputClearTask);
     const GpuSubmissionPacketId surfelPacket = compiledGraph.packetForTask(surfelTask);
     ASSERT_TRUE(prefixPacket.valid());
+    ASSERT_TRUE(clearPacket.valid());
     ASSERT_TRUE(surfelPacket.valid());
+    EXPECT_EQ(clearPacket, surfelPacket);
     const GpuCompiledTask* const compiledSurfel = compiledGraph.findTask(surfelTask);
     ASSERT_NE(compiledSurfel, nullptr);
     const GpuCompiledBarrier* const surfelBarriers = compiledGraph.taskPrologueBarriers(surfelTask);
@@ -4437,6 +4481,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiEntryStatesRecordWithout
     EXPECT_TRUE(hasSurfelTransition(shaderBufferResources[5u], ResourceStates::CopyDest, ResourceStates::ShaderResource));
     EXPECT_TRUE(hasSurfelTransition(uavBufferResources[0u], ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasSurfelTransition(irradianceHalfResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasSurfelTransition(irradianceResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
     ASSERT_EQ(compiledGraph.packet(surfelPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(surfelPacket)[0u].producer, prefixPacket);
 

@@ -967,6 +967,19 @@ namespace __hidden_renderer_task_graph{
     };
 }
 
+// Native image clears require Transfer capability, while Surfel GI keeps its output initialization and compute work
+// in one packet on the selected Compute transport. Lock the Compute preference so a tiny clear does not fall back to
+// Graphics merely because it is too small to amortize a queue crossing; Graphics remains the explicit fallback when
+// no Compute transport exists.
+[[nodiscard]] static Core::GpuQueueRequest ComputeTransferQueueRequest(){
+    return Core::GpuQueueRequest{
+        Core::GpuQueueCapability::Transfer,
+        Core::GpuQueuePreference::Compute,
+        true,
+        false,
+    };
+}
+
 // The lagged-history selector must share Deferred Lighting's dedicated Compute packet. Its built-in upload needs
 // Transfer capability, which the Vulkan Compute transport also advertises, but may not be rerouted for its tiny cost.
 [[nodiscard]] static Core::GpuQueueRequest ComputeUploadQueueRequest(){
@@ -3909,6 +3922,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
 
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
+    m_deferredSurfelGiIrradianceClearTask = {};
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     if(
@@ -4211,12 +4225,46 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         surfelGiDependency = m_deferredSurfelGiSnapshotCopyTask;
     }
 
+    // Zero coverage is the deferred-lighting no-op. Keep the typed CopyDest clear at the front of the same Compute
+    // packet as GI: it does not merge with the preceding effects packet, while GI explicitly merges with it below.
+    // This preserves the established semantic GI boundary on every Compute/Graphics fallback route.
+    Core::GpuTaskSchedulingHint surfelIrradianceClearScheduling;
+    surfelIrradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
+    surfelIrradianceClearScheduling.allowPacketMerge = true;
+    Core::GpuTaskDesc surfelIrradianceClearDesc;
+    surfelIrradianceClearDesc
+        .setIdentity(Name("render.surfel_gi.irradiance_clear"))
+        .setMarkerLabel("Surfel Irradiance Clear")
+        .setQueue(ComputeTransferQueueRequest())
+        .setScheduling(surfelIrradianceClearScheduling)
+        .setDependencies(&surfelGiDependency, 1u)
+    ;
+    const Core::GpuTaskId surfelIrradianceClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
+        surfelIrradianceClearDesc,
+        Core::GpuClearTextureTaskDesc{
+            .destination = surfelIrradiance,
+            .subresources = ECSRenderDetail::s_FramebufferSubresources,
+            .valueType = Core::GpuClearTextureTaskValueType::Float,
+            .floatValue = Core::Color(0.f, 0.f, 0.f, 0.f),
+        }
+    );
+    if(!surfelIrradianceClearTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred surfel-irradiance clear"));
+        return false;
+    }
+    m_deferredSurfelGiIrradianceClearTask = surfelIrradianceClearTask;
+    surfelGiDependency = surfelIrradianceClearTask;
+
+    Core::GpuTaskSchedulingHint surfelGiScheduling = scheduling;
+    surfelGiScheduling.forceSubmissionBoundary = false;
+    surfelGiScheduling.allowPacketMerge = true;
+    surfelGiScheduling.mergeWithPrevious = true;
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.surfel_gi"))
         .setMarkerLabel("Surfel GI")
         .setQueue(ComputeQueueRequest())
-        .setScheduling(scheduling)
+        .setScheduling(surfelGiScheduling)
         .setDependencies(&surfelGiDependency, 1u)
         .setExternalDependencies(surfelGiExternalDependencies, surfelGiExternalDependencyCount)
         .setResourceUses(resourceUses.data(), resourceUses.size())
@@ -4354,6 +4402,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredSoftwareCausticsTask = {};
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
+    m_deferredSurfelGiIrradianceClearTask = {};
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};

@@ -249,6 +249,7 @@ void RendererSystem::invalidateResources(){
     m_deferredSoftwareCausticsTask = {};
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
+    m_deferredSurfelGiIrradianceClearTask = {};
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
@@ -504,6 +505,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredSoftwareCausticsTask = {};
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
+    m_deferredSurfelGiIrradianceClearTask = {};
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
@@ -1211,6 +1213,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId surfelGiSnapshotCopyPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredSurfelGiSnapshotCopyTask
     );
+    const Core::GpuSubmissionPacketId surfelGiIrradianceClearPacket = m_deferredLightingCompiledGraph.packetForTask(
+        m_deferredSurfelGiIrradianceClearTask
+    );
     const Core::GpuSubmissionPacketId surfelGiPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredSurfelGiTask
     );
@@ -1311,6 +1316,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         : nullptr
     ;
     const bool surfelGiRunsOnCompute = surfelGiQueue && surfelGiQueue->queueClass == Core::CommandQueue::Compute;
+    // The clear must remain in GI's semantic packet. If it split, the standard effects range would either gain a
+    // hidden submission or record an output write outside the acceptance/timing endpoint it protects.
+    const bool surfelGiOutputClearMergedIntoGiPacket =
+        m_deferredSurfelGiIrradianceClearTask.valid()
+        && surfelGiIrradianceClearPacket.valid()
+        && surfelGiPacket.valid()
+        && surfelGiIrradianceClearPacket == surfelGiPacket
+    ;
     // Keep every recording and submission span derived from compiled packet handles. The renderer names semantic
     // endpoints only; raw compiler-order indices remain inside the task-graph runtime.
     const Core::GpuSubmissionPacketRange shadowPreparePacketRange =
@@ -1431,6 +1444,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !softwareCausticsQueue
         ))
         || !m_deferredSurfelGiTask.valid()
+        || !m_deferredSurfelGiIrradianceClearTask.valid()
+        || !surfelGiOutputClearMergedIntoGiPacket
         || !surfelGiPacket.valid()
         || !surfelGiQueue
         || (m_deferredSurfelGiSnapshotCopyTask.valid() && (

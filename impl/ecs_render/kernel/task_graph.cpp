@@ -612,6 +612,7 @@ struct GbufferGraphTask{
         bool csgRemovedIntervalOutputImageStatesGraphOwned = false;
         bool csgClipBufferStatesGraphOwned = false;
         bool materialFrameStatesGraphOwned = false;
+        bool materialGeometryStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : opaqueDrawSnapshot(arena)
@@ -703,7 +704,8 @@ struct GbufferGraphTask{
                 false,
                 false,
                 false,
-                payload.materialFrameStatesGraphOwned
+                payload.materialFrameStatesGraphOwned,
+                payload.materialGeometryStatesGraphOwned
             };
             if(regularDrawResourcesReady && !opaqueDrawItems.regular.empty()){
                 Core::GpuTimingMeasure timing(
@@ -729,7 +731,8 @@ struct GbufferGraphTask{
                 payload.csgReceiverSurfaceImageStatesGraphOwned,
                 false,
                 payload.csgClipBufferStatesGraphOwned,
-                payload.materialFrameStatesGraphOwned
+                payload.materialFrameStatesGraphOwned,
+                payload.materialGeometryStatesGraphOwned
             };
             if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
                 Core::GpuTimingMeasure timing(
@@ -780,6 +783,7 @@ struct CsgIntervalSampleGraphTask{
         bool intervalSampleImageStatesGraphOwned = false;
         bool csgClipBufferStatesGraphOwned = false;
         bool materialFrameStatesGraphOwned = false;
+        bool materialGeometryStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : opaqueDrawSnapshot(arena)
@@ -858,7 +862,8 @@ struct CsgIntervalSampleGraphTask{
                 false,
                 payload.intervalSampleImageStatesGraphOwned,
                 payload.csgClipBufferStatesGraphOwned,
-                payload.materialFrameStatesGraphOwned
+                payload.materialFrameStatesGraphOwned,
+                payload.materialGeometryStatesGraphOwned
             };
             if(!opaqueDrawItems.csg.empty()){
                 Core::GpuTimingMeasure timing(
@@ -1072,6 +1077,7 @@ struct AvboitPreGraphTask{
         bool transparentCsgRemovedIntervalOutputImageStatesGraphOwned = false;
         bool transparentCsgClipBufferStatesGraphOwned = false;
         bool transparentCsgMaterialFrameStatesGraphOwned = false;
+        bool transparentCsgMaterialGeometryStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : transparentCsgSnapshot(arena)
@@ -1120,7 +1126,8 @@ struct AvboitPreGraphTask{
                 payload.transparentCsgReceiverSpanOutputImageStatesGraphOwned,
                 payload.transparentCsgRemovedIntervalOutputImageStatesGraphOwned,
                 payload.transparentCsgClipBufferStatesGraphOwned,
-                payload.transparentCsgMaterialFrameStatesGraphOwned
+                payload.transparentCsgMaterialFrameStatesGraphOwned,
+                payload.transparentCsgMaterialGeometryStatesGraphOwned
             );
         }
         return true;
@@ -1144,6 +1151,7 @@ struct AvboitOccupancyGraphTask{
         bool occupancyCsgIntervalSampleImageStatesGraphOwned = false;
         bool occupancyCsgClipBufferStatesGraphOwned = false;
         bool occupancyMaterialFrameStatesGraphOwned = false;
+        bool occupancyMaterialGeometryStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : occupancySnapshot(arena)
@@ -1189,7 +1197,8 @@ struct AvboitOccupancyGraphTask{
                 true,
                 payload.occupancyCsgIntervalSampleImageStatesGraphOwned,
                 payload.occupancyCsgClipBufferStatesGraphOwned,
-                payload.occupancyMaterialFrameStatesGraphOwned
+                payload.occupancyMaterialFrameStatesGraphOwned,
+                payload.occupancyMaterialGeometryStatesGraphOwned
             );
         }
         // The declared sampled G-buffer uses remain authoritative here. Occupancy's low-resolution framebuffer
@@ -1233,6 +1242,7 @@ struct AvboitExtinctionGraphTask{
         bool extinctionCsgIntervalSampleImageStatesGraphOwned = false;
         bool extinctionCsgClipBufferStatesGraphOwned = false;
         bool extinctionMaterialFrameStatesGraphOwned = false;
+        bool extinctionMaterialGeometryStatesGraphOwned = false;
         bool hasTransparentRenderers = false;
         bool splitStages = false;
 
@@ -1279,7 +1289,8 @@ struct AvboitExtinctionGraphTask{
                     preparedExtinctionMaterialTypedByteCount,
                     payload.extinctionCsgIntervalSampleImageStatesGraphOwned,
                     payload.extinctionCsgClipBufferStatesGraphOwned,
-                    payload.extinctionMaterialFrameStatesGraphOwned
+                    payload.extinctionMaterialFrameStatesGraphOwned,
+                    payload.extinctionMaterialGeometryStatesGraphOwned
                 );
             }
             else{
@@ -1293,7 +1304,8 @@ struct AvboitExtinctionGraphTask{
                     preparedExtinctionMaterialTypedByteCount,
                     payload.extinctionCsgIntervalSampleImageStatesGraphOwned,
                     payload.extinctionCsgClipBufferStatesGraphOwned,
-                    payload.extinctionMaterialFrameStatesGraphOwned
+                    payload.extinctionMaterialFrameStatesGraphOwned,
+                    payload.extinctionMaterialGeometryStatesGraphOwned
                 );
             }
         }
@@ -1336,6 +1348,7 @@ struct AvboitAccumulationGraphTask{
         bool accumulationCsgIntervalSampleImageStatesGraphOwned = false;
         bool accumulationCsgClipBufferStatesGraphOwned = false;
         bool accumulationMaterialFrameStatesGraphOwned = false;
+        bool accumulationMaterialGeometryStatesGraphOwned = false;
         bool hasTransparentRenderers = false;
         bool splitStages = false;
 
@@ -1383,7 +1396,8 @@ struct AvboitAccumulationGraphTask{
                 true,
                 payload.accumulationCsgIntervalSampleImageStatesGraphOwned,
                 payload.accumulationCsgClipBufferStatesGraphOwned,
-                payload.accumulationMaterialFrameStatesGraphOwned
+                payload.accumulationMaterialFrameStatesGraphOwned,
+                payload.accumulationMaterialGeometryStatesGraphOwned
             );
         }
         return true;
@@ -1518,6 +1532,78 @@ struct DeferredPresentGraphTask{
         .access = Core::GpuTaskResourceAccess::Read,
         .hasIndependentStateSource = hasIndependentStateSource,
     };
+}
+
+// Material pipelines select mesh source buffers through global heap slots, so the graph cannot infer their physical
+// inputs from a pipeline object. Freeze and deduplicate the exact buffers selected by the gathered draw items while
+// declaring each packet. A source that Shadow Preparation already imported reuses that graph identity instead of
+// attempting an incompatible second import with a material-specific name.
+[[nodiscard]] static bool GatherPreparedMaterialGeometryUses(
+    RendererMeshSystem& meshSystem,
+    Core::GpuTaskGraph& graph,
+    const MaterialPassDrawItems* const* const drawItemSets,
+    const usize drawItemSetCount,
+    Core::Alloc::ScratchArena& scratchArena,
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outResourceUses
+){
+    outResourceUses.clear();
+    if(drawItemSetCount != 0u && !drawItemSets)
+        return false;
+
+    Vector<Core::BufferHandle, Core::Alloc::ScratchArena> sourceBuffers{ scratchArena };
+    const auto appendDrawItem = [&](const MaterialPassDrawItem& drawItem){
+        MeshResources* mesh = nullptr;
+        if(!meshSystem.findMeshResources(drawItem.meshKey, mesh) || !mesh)
+            return false;
+
+        bool buffersReady = true;
+        RendererMeshSystem::forEachMeshSourceBuffer(*mesh, [&](const u32, const Core::BufferHandle& buffer, const bool){
+            if(!buffersReady)
+                return;
+            if(!buffer){
+                buffersReady = false;
+                return;
+            }
+            for(const Core::BufferHandle& existing : sourceBuffers){
+                if(existing.get() == buffer.get())
+                    return;
+            }
+            sourceBuffers.push_back(buffer);
+        });
+        return buffersReady;
+    };
+    for(usize drawItemSetIndex = 0u; drawItemSetIndex < drawItemSetCount; ++drawItemSetIndex){
+        const MaterialPassDrawItems* const drawItems = drawItemSets[drawItemSetIndex];
+        if(!drawItems)
+            return false;
+        for(const MaterialPassDrawItem& drawItem : drawItems->meshDrawItems){
+            if(!appendDrawItem(drawItem))
+                return false;
+        }
+        for(const MaterialPassDrawItem& drawItem : drawItems->computeDrawItems){
+            if(!appendDrawItem(drawItem))
+                return false;
+        }
+    }
+
+    outResourceUses.reserve(sourceBuffers.size());
+    for(const Core::BufferHandle& buffer : sourceBuffers){
+        Core::GpuGraphResourceId resource = graph.findImportedBuffer(buffer);
+        if(!resource.valid()){
+            const Name identity = buffer->getDescription().debugName;
+            if(!identity){
+                outResourceUses.clear();
+                return false;
+            }
+            resource = graph.importBuffer(buffer, BufferResourceDesc(identity, "Prepared Material Geometry"));
+        }
+        if(!resource.valid()){
+            outResourceUses.clear();
+            return false;
+        }
+        outResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+    }
+    return true;
 }
 
 [[nodiscard]] static Core::GpuTaskResourceUse ReadTextureUse(
@@ -2738,8 +2824,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     gbufferPayload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
 
     const bool hasOpaqueDrawItems = !opaqueDrawItems.empty();
-    // G-buffer and the optional opaque CSG follow-up both declare this exact shared material entry batch whenever
-    // their immutable draw stream exists. Individual mesh geometry remains selected and normalized per draw.
+    // G-buffer and the optional opaque CSG follow-up both declare the shared material entry batch whenever their
+    // immutable draw stream exists. The selected source-geometry batch is retained and declared separately below.
     gbufferPayload.materialFrameStatesGraphOwned = hasOpaqueDrawItems;
     Core::GpuTaskId materialDrawUploadTask = m_graphicsPrefixDeferredClearTask;
     if(hasOpaqueDrawItems){
@@ -3059,6 +3145,27 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
     Core::Alloc::ScratchArena gbufferResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferResourceUses{ gbufferResourceScratch };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferMaterialGeometryUses{ gbufferResourceScratch };
+    const MaterialPassDrawItems* const gbufferMaterialGeometryDrawSets[] = {
+        &opaqueDrawItems.regular,
+        &opaqueDrawItems.csgReceiverSurface,
+    };
+    const bool gbufferUsesMaterialGeometry =
+        !opaqueDrawItems.regular.empty()
+        || !opaqueDrawItems.csgReceiverSurface.empty()
+    ;
+    gbufferPayload.materialGeometryStatesGraphOwned = gbufferUsesMaterialGeometry
+        && GatherPreparedMaterialGeometryUses(
+            m_meshSystem,
+            m_deferredLightingTaskGraph,
+            gbufferMaterialGeometryDrawSets,
+            LengthOf(gbufferMaterialGeometryDrawSets),
+            gbufferResourceScratch,
+            gbufferMaterialGeometryUses
+        )
+    ;
+    if(gbufferUsesMaterialGeometry && !gbufferPayload.materialGeometryStatesGraphOwned)
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque material geometry states"));
     gbufferResourceUses.reserve((hasOpaqueDrawItems ? 7u : 5u) + (hasCsgFrameGpuWork ? 5u : 0u) + (hasOpaqueCsgFrameWork ? 11u : 0u));
     gbufferResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
     if(hasOpaqueDrawItems){
@@ -3128,6 +3235,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     gbufferResourceUses.push_back(WriteUse(normal, Core::ResourceStates::RenderTarget));
     gbufferResourceUses.push_back(WriteUse(worldPosition, Core::ResourceStates::RenderTarget));
     gbufferResourceUses.push_back(WriteUse(depth, Core::ResourceStates::DepthWrite));
+    for(const Core::GpuTaskResourceUse& use : gbufferMaterialGeometryUses)
+        gbufferResourceUses.push_back(use);
     Core::GpuTaskSchedulingHint gbufferScheduling;
     gbufferScheduling.cost = Core::GpuTaskCostHint::Medium;
     gbufferScheduling.forceSubmissionBoundary = false;
@@ -3157,6 +3266,23 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgIntervalSampleResourceUses{
             csgIntervalSampleResourceScratch
         };
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgIntervalSampleMaterialGeometryUses{
+            csgIntervalSampleResourceScratch
+        };
+        const MaterialPassDrawItems* const csgIntervalSampleMaterialGeometryDrawSets[] = { &opaqueDrawItems.csg };
+        const bool csgIntervalSampleUsesMaterialGeometry = !opaqueDrawItems.csg.empty();
+        csgIntervalSamplePayload.materialGeometryStatesGraphOwned = csgIntervalSampleUsesMaterialGeometry
+            && GatherPreparedMaterialGeometryUses(
+                m_meshSystem,
+                m_deferredLightingTaskGraph,
+                csgIntervalSampleMaterialGeometryDrawSets,
+                LengthOf(csgIntervalSampleMaterialGeometryDrawSets),
+                csgIntervalSampleResourceScratch,
+                csgIntervalSampleMaterialGeometryUses
+            )
+        ;
+        if(csgIntervalSampleUsesMaterialGeometry && !csgIntervalSamplePayload.materialGeometryStatesGraphOwned)
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque CSG material geometry states"));
         csgIntervalSampleResourceUses.reserve(
             1u
             + (hasOpaqueDrawItems ? 2u : 0u)
@@ -3200,6 +3326,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         csgIntervalSampleResourceUses.push_back(WriteUse(normal, Core::ResourceStates::RenderTarget));
         csgIntervalSampleResourceUses.push_back(WriteUse(worldPosition, Core::ResourceStates::RenderTarget));
         csgIntervalSampleResourceUses.push_back(WriteUse(depth, Core::ResourceStates::DepthWrite));
+        for(const Core::GpuTaskResourceUse& use : csgIntervalSampleMaterialGeometryUses)
+            csgIntervalSampleResourceUses.push_back(use);
 
         Core::GpuTaskSchedulingHint csgIntervalSampleScheduling;
         csgIntervalSampleScheduling.cost = Core::GpuTaskCostHint::Medium;
@@ -5186,6 +5314,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     // and CSG buffers are intentionally overwritten by the later occupancy/extinction/accumulation compatibility
     // paths, so this snapshot applies only to the receiver-surface interval work immediately before occupancy.
     Core::GpuTaskId transparentCsgUploadTask = m_graphicsPrefixTask;
+    Core::Alloc::ScratchArena transparentCsgMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentCsgMaterialGeometryUses{
+        transparentCsgMaterialGeometryScratch
+    };
     const bool hasTransparentCsgFrameWork = hasTransparentRenderers
         && (csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork)
     ;
@@ -5242,6 +5374,20 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared transparent CSG interval resources were unavailable during graph declaration"));
                 return;
             }
+
+            const MaterialPassDrawItems* const transparentCsgMaterialGeometryDrawSets[] = {
+                &transparentCsgDrawItems.csgReceiverSurface,
+            };
+            avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryUses(
+                m_meshSystem,
+                m_deferredLightingTaskGraph,
+                transparentCsgMaterialGeometryDrawSets,
+                LengthOf(transparentCsgMaterialGeometryDrawSets),
+                transparentCsgMaterialGeometryScratch,
+                transparentCsgMaterialGeometryUses
+            );
+            if(!avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned)
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared transparent CSG material geometry states"));
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(transparentCsgInstanceData);
 #if defined(NWB_DEBUG)
@@ -5586,6 +5732,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Core::ResourceStates::UnorderedAccess
         ));
     }
+    for(const Core::GpuTaskResourceUse& use : transparentCsgMaterialGeometryUses)
+        avboitIntervalResourceUses.push_back(use);
     avboitIntervalResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer, true));
     avboitIntervalResourceUses.push_back(ReadUse(avboitMaterialDomain));
     avboitIntervalResourceUses.push_back(ReadWriteUse(avboitCsgDomain, Core::ResourceStates::ShaderResource));
@@ -5628,6 +5776,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
 
     Core::GpuTaskId occupancyUploadTask = m_deferredAvboitPreTask;
     bool occupancyCsgStreamsUploaded = false;
+    Core::Alloc::ScratchArena occupancyMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> occupancyMaterialGeometryUses{
+        occupancyMaterialGeometryScratch
+    };
     if(hasTransparentRenderers){
         Core::Alloc::ScratchArena occupancyUploadScratch(RendererArenaScope::s_TaskGraphArena);
         MaterialPassDrawItemPartitions occupancyDrawItems{ occupancyUploadScratch };
@@ -5675,6 +5827,21 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT occupancy resources were unavailable during graph declaration"));
                 return;
             }
+
+            const MaterialPassDrawItems* const occupancyMaterialGeometryDrawSets[] = {
+                &occupancyDrawItems.regular,
+                &occupancyDrawItems.csg,
+            };
+            avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryUses(
+                m_meshSystem,
+                m_deferredLightingTaskGraph,
+                occupancyMaterialGeometryDrawSets,
+                LengthOf(occupancyMaterialGeometryDrawSets),
+                occupancyMaterialGeometryScratch,
+                occupancyMaterialGeometryUses
+            );
+            if(!avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned)
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT occupancy material geometry states"));
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(occupancyInstanceData);
 #if defined(NWB_DEBUG)
@@ -5953,6 +6120,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         occupancyCsgClipBufferStatesGraphOwned
     ;
     avboitOccupancyPayload.occupancyMaterialFrameStatesGraphOwned = avboitOccupancyPayload.occupancyStreamsUploaded;
+    avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned =
+        avboitOccupancyPayload.occupancyStreamsUploaded
+        && avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
+    ;
 
     Core::Alloc::ScratchArena avboitPreResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitPreResourceUses{ avboitPreResourceScratch };
@@ -6003,6 +6174,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Core::ResourceStates::UnorderedAccess
         ));
     }
+    for(const Core::GpuTaskResourceUse& use : occupancyMaterialGeometryUses)
+        avboitPreResourceUses.push_back(use);
     avboitPreResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer, true));
     avboitPreResourceUses.push_back(ReadUse(avboitMaterialDomain));
     avboitPreResourceUses.push_back(ReadUse(avboitCsgDomain, Core::ResourceStates::ShaderResource));
@@ -6085,6 +6258,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     ;
     bool extinctionStreamsUploaded = false;
     bool extinctionCsgStreamsUploaded = false;
+    Core::Alloc::ScratchArena extinctionMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionMaterialGeometryUses{
+        extinctionMaterialGeometryScratch
+    };
         Core::Alloc::ScratchArena extinctionUploadScratch(RendererArenaScope::s_TaskGraphArena);
         MaterialPassDrawItemPartitions extinctionDrawItems{ extinctionUploadScratch };
         InstanceGpuDataVector extinctionInstanceData{ extinctionUploadScratch };
@@ -6131,6 +6308,21 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT extinction resources were unavailable during graph declaration"));
                 return;
             }
+
+            const MaterialPassDrawItems* const extinctionMaterialGeometryDrawSets[] = {
+                &extinctionDrawItems.regular,
+                &extinctionDrawItems.csg,
+            };
+            avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryUses(
+                m_meshSystem,
+                m_deferredLightingTaskGraph,
+                extinctionMaterialGeometryDrawSets,
+                LengthOf(extinctionMaterialGeometryDrawSets),
+                extinctionMaterialGeometryScratch,
+                extinctionMaterialGeometryUses
+            );
+            if(!avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned)
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT extinction material geometry states"));
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(extinctionInstanceData);
 #if defined(NWB_DEBUG)
@@ -6355,6 +6547,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         extinctionCsgClipBufferStatesGraphOwned
     ;
     avboitExtinctionPayload.extinctionMaterialFrameStatesGraphOwned = extinctionStreamsUploaded;
+    avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned =
+        extinctionStreamsUploaded
+        && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
+    ;
     Core::Alloc::ScratchArena extinctionResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionResourceUses{ extinctionResourceScratch };
     extinctionResourceUses.reserve(
@@ -6421,6 +6617,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             }
         }
     }
+    for(const Core::GpuTaskResourceUse& use : extinctionMaterialGeometryUses)
+        extinctionResourceUses.push_back(use);
     extinctionResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     extinctionResourceUses.push_back(ReadUse(avboitMaterialDomain));
     extinctionResourceUses.push_back(ReadUse(avboitCsgDomain));
@@ -6502,6 +6700,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     ;
     bool accumulationStreamsUploaded = false;
     bool accumulationCsgStreamsUploaded = false;
+    Core::Alloc::ScratchArena accumulationMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationMaterialGeometryUses{
+        accumulationMaterialGeometryScratch
+    };
     {
         Core::Alloc::ScratchArena accumulationUploadScratch(RendererArenaScope::s_TaskGraphArena);
         MaterialPassDrawItemPartitions accumulationDrawItems{ accumulationUploadScratch };
@@ -6549,6 +6751,21 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT accumulation resources were unavailable during graph declaration"));
                 return;
             }
+
+            const MaterialPassDrawItems* const accumulationMaterialGeometryDrawSets[] = {
+                &accumulationDrawItems.regular,
+                &accumulationDrawItems.csg,
+            };
+            avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryUses(
+                m_meshSystem,
+                m_deferredLightingTaskGraph,
+                accumulationMaterialGeometryDrawSets,
+                LengthOf(accumulationMaterialGeometryDrawSets),
+                accumulationMaterialGeometryScratch,
+                accumulationMaterialGeometryUses
+            );
+            if(!avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned)
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT accumulation material geometry states"));
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(accumulationInstanceData);
 #if defined(NWB_DEBUG)
@@ -6774,6 +6991,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         accumulationCsgClipBufferStatesGraphOwned
     ;
     avboitAccumulationPayload.accumulationMaterialFrameStatesGraphOwned = accumulationStreamsUploaded;
+    avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned =
+        accumulationStreamsUploaded
+        && avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
+    ;
 
     Core::Alloc::ScratchArena accumulationResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationResourceUses{ accumulationResourceScratch };
@@ -6831,6 +7052,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             }
         }
     }
+    for(const Core::GpuTaskResourceUse& use : accumulationMaterialGeometryUses)
+        accumulationResourceUses.push_back(use);
     accumulationResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     accumulationResourceUses.push_back(ReadUse(avboitMaterialDomain));
     accumulationResourceUses.push_back(ReadUse(avboitCsgDomain));

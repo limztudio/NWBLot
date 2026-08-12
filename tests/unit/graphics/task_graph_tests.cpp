@@ -10500,6 +10500,73 @@ TEST(GpuTaskGraph, PlansGraphOwnedMaterialFrameEntryStates){
 }
 
 
+// Prepared draw streams retain the exact mesh source buffers selected during gathering. Unlike the shared material
+// batch, these geometry SRVs are dynamic per stream, so verify the graph still lowers their Common predecessor
+// before the getter-only draw thunk would run.
+TEST(GpuTaskGraph, PlansGraphOwnedMaterialGeometryEntryStates){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    constexpr Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Graphics;
+    const Graphics::GpuGraphResourceId geometry = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/material_geometry_source"),
+        "Prepared Material Geometry",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    ASSERT_TRUE(geometry.valid());
+
+    const Graphics::GpuTaskResourceUse materialUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = geometry,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Graphics::GpuTaskDesc materialDesc;
+    materialDesc
+        .setIdentity(Name("tests/task_graph/material_geometry_entry"))
+        .setMarkerLabel("Material Geometry Entry")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+        .setResourceUses(materialUses, LengthOf(materialUses))
+    ;
+    const Graphics::GpuTaskId materialTask = graph.addTask(materialDesc);
+    ASSERT_TRUE(materialTask.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledTask* const compiledMaterial = compiledGraph.findTask(materialTask);
+    ASSERT_NE(compiledMaterial, nullptr);
+    ASSERT_EQ(compiledMaterial->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledMaterial->prologueBarrierCount, 1u);
+    const Graphics::GpuCompiledBarrier* const materialBarrier = compiledGraph.taskPrologueBarriers(materialTask);
+    ASSERT_NE(materialBarrier, nullptr);
+    EXPECT_EQ(materialBarrier[0].type, Graphics::GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(materialBarrier[0].resource, geometry);
+    EXPECT_EQ(materialBarrier[0].before, Graphics::ResourceStates::Common);
+    EXPECT_EQ(materialBarrier[0].after, Graphics::ResourceStates::ShaderResource);
+}
+
+
 // The opaque CSG graph ends interval combine before its material/cap StorageImage loads. Keep the two tasks in one
 // Graphics packet when FrontierSafe permits it, but require the compiler to lower the four same-UAV RAW fences at
 // that intra-packet boundary instead of relying on a renderer-owned state call inside either draw thunk.

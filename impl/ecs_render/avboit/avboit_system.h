@@ -54,9 +54,10 @@ public:
         // Prepared graph interval work declares the CSG receiver/cutter SRVs and clip/sample CBVs. Direct and
         // unprepared paths retain their native heap-buffer setup.
         bool preparedTransparentCsgClipBufferStatesGraphOwned = false,
-        // The graph also declares the shared mesh-view/material states for this frozen stream. Dynamic geometry
-        // remains locally owned by the material draw thunk.
-        bool preparedTransparentCsgMaterialFrameStatesGraphOwned = false
+        // The graph can also retain the source-buffer SRVs selected by this frozen stream. Direct and unprepared
+        // work retains the material draw thunk's native geometry setup.
+        bool preparedTransparentCsgMaterialFrameStatesGraphOwned = false,
+        bool preparedTransparentCsgMaterialGeometryStatesGraphOwned = false
     );
     void renderAvboitOccupancyPass(
         Core::CommandList& commandList,
@@ -74,7 +75,8 @@ public:
         bool occupancyCsgIntervalSampleImageStatesGraphOwned = false,
         // A prepared occupancy CSG stream also has graph-declared clip buffers at the material callback entry.
         bool occupancyCsgClipBufferStatesGraphOwned = false,
-        bool occupancyMaterialFrameStatesGraphOwned = false
+        bool occupancyMaterialFrameStatesGraphOwned = false,
+        bool occupancyMaterialGeometryStatesGraphOwned = false
     );
     void renderAvboitPostOccupancyPasses(
         Core::CommandList& commandList,
@@ -99,7 +101,8 @@ public:
         // Direct and other compatibility callers retain the native bridge by leaving this false.
         bool extinctionCsgIntervalSampleImageStatesGraphOwned = false,
         bool extinctionCsgClipBufferStatesGraphOwned = false,
-        bool extinctionMaterialFrameStatesGraphOwned = false
+        bool extinctionMaterialFrameStatesGraphOwned = false,
+        bool extinctionMaterialGeometryStatesGraphOwned = false
     );
     // AVBOIT alternates raster and compute work. The Graphics-routed plan calls the three slices consecutively,
     // while the dedicated AsyncCompute schedule brackets the two compute dispatches with Graphics submissions.
@@ -122,7 +125,8 @@ public:
         usize preparedExtinctionMaterialTypedByteCount = 0u,
         bool extinctionCsgIntervalSampleImageStatesGraphOwned = false,
         bool extinctionCsgClipBufferStatesGraphOwned = false,
-        bool extinctionMaterialFrameStatesGraphOwned = false
+        bool extinctionMaterialFrameStatesGraphOwned = false,
+        bool extinctionMaterialGeometryStatesGraphOwned = false
     );
     void renderAvboitAccumulatePass(
         Core::CommandList& commandList,
@@ -140,7 +144,8 @@ public:
         // Direct and other compatibility callers retain the native UAV handoff by leaving this false.
         bool accumulationCsgIntervalSampleImageStatesGraphOwned = false,
         bool accumulationCsgClipBufferStatesGraphOwned = false,
-        bool accumulationMaterialFrameStatesGraphOwned = false
+        bool accumulationMaterialFrameStatesGraphOwned = false,
+        bool accumulationMaterialGeometryStatesGraphOwned = false
     );
     void renderAvboitPasses(
         Core::CommandList& commandList,
@@ -168,7 +173,8 @@ private:
         bool receiverSpanOutputImageStatesGraphOwned,
         bool removedIntervalOutputImageStatesGraphOwned,
         bool csgClipBufferStatesGraphOwned,
-        bool materialFrameStatesGraphOwned
+        bool materialFrameStatesGraphOwned,
+        bool materialGeometryStatesGraphOwned
     );
 };
 

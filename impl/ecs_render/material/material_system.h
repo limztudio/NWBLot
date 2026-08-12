@@ -79,7 +79,9 @@ public:
         bool csgClipBufferStatesGraphOwned = false,
         // The shared graph declares mesh-view/material entry states for immutable prepared streams. Direct and
         // compatibility consumers retain their historical native setup by leaving this false.
-        bool materialFrameStatesGraphOwned = false
+        bool materialFrameStatesGraphOwned = false,
+        // The graph can also retain the per-mesh source buffer batch selected by the prepared draw stream.
+        bool materialGeometryStatesGraphOwned = false
     );
     [[nodiscard]] bool prepareMaterialPassResources(
         Core::Framebuffer* framebuffer,
@@ -160,7 +162,8 @@ public:
     void setMaterialPassCommonBufferStates(
         Core::CommandList& commandList,
         const MeshResources& mesh,
-        bool materialFrameStatesGraphOwned
+        bool materialFrameStatesGraphOwned,
+        bool materialGeometryStatesGraphOwned
     );
     void setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MeshResources& mesh);
     void renderMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItems& drawItems);

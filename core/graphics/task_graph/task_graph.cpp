@@ -1132,6 +1132,18 @@ GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const 
     return resource;
 }
 
+GpuGraphResourceId GpuTaskGraph::findImportedBuffer(const BufferHandle& buffer)const noexcept{
+    if(!buffer)
+        return {};
+
+    for(usize resourceIndex = 0u; resourceIndex < m_resources.size(); ++resourceIndex){
+        const GpuGraphResourceNode& existing = m_resources[resourceIndex];
+        if(existing.type == GpuGraphResourceType::Buffer && existing.buffer.get() == buffer.get())
+            return GpuGraphResourceId{ static_cast<u32>(resourceIndex), m_generation };
+    }
+    return {};
+}
+
 GpuGraphResourceId GpuTaskGraph::importAccelStruct(
     const RayTracingAccelStructHandle& accelStruct,
     const GpuGraphResourceDesc& desc

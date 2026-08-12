@@ -512,10 +512,15 @@ bool RendererMeshSystem::findMeshResources(const Core::Assets::AssetRef<Mesh>& m
     outMesh = nullptr;
 
     const Name meshPath = meshAsset.name();
-    if(!meshPath)
+    return findMeshResources(meshPath, outMesh);
+}
+
+bool RendererMeshSystem::findMeshResources(const Name& meshKey, MeshResources*& outMesh){
+    outMesh = nullptr;
+    if(!meshKey)
         return false;
 
-    const auto foundMesh = meshState().m_meshes.find(meshPath);
+    const auto foundMesh = meshState().m_meshes.find(meshKey);
     if(foundMesh == meshState().m_meshes.end())
         return false;
 

@@ -1160,6 +1160,29 @@ struct NativePacketMaterialFrameEntryProbeTask{
 };
 
 
+// A material stream's selected source buffer may have been retained first by preflight (for example Shadow
+// Preparation) under a different graph identity. The probe verifies that the material consumer reuses that typed
+// import and sees its ShaderResource transition without an in-thunk native normalizer.
+struct NativePacketMaterialGeometryEntryProbeTask{
+    struct Payload{
+        Buffer* geometry = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        const bool ready = payload.geometry && commandList.getBufferState(payload.geometry) == ResourceStates::ShaderResource;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
 // A mutable success gate lets the packet recorder prove that an optional capture rolls back an incomplete packet
 // before a retry. It intentionally records no native work beyond the task marker.
 struct NativePacketCaptureRetryTask{
@@ -4773,6 +4796,138 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialFrameEntryStatesRecordWi
     EXPECT_TRUE(hasTransition(meshViewResource, ResourceStates::ConstantBuffer));
     EXPECT_TRUE(hasTransition(materialInstancesResource, ResourceStates::ShaderResource));
     EXPECT_TRUE(hasTransition(materialTypedResource, ResourceStates::ShaderResource));
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(materialRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(materialPacket).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// A prepared material stream must reuse a source buffer imported earlier by preflight even when that producer chose
+// a different graph identity. The real packet only reads the tracker, proving both the reuse and Common-to-SRV
+// transition occur before material-native code could invoke its compatibility normalizer.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialGeometryEntryStatesReusePreflightImport){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto geometry = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(geometry.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId preflightGeometryResource = graph.importBuffer(
+        geometry,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/material_geometry_preflight"))
+            .setMarkerLabel("Preflight Material Geometry")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    ASSERT_TRUE(preflightGeometryResource.valid());
+    const GpuGraphResourceId materialGeometryResource = graph.findImportedBuffer(geometry);
+    ASSERT_TRUE(materialGeometryResource.valid());
+    EXPECT_EQ(materialGeometryResource, preflightGeometryResource);
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint materialScheduling;
+    materialScheduling.cost = GpuTaskCostHint::Medium;
+    materialScheduling.forceSubmissionBoundary = true;
+    materialScheduling.allowPacketMerge = false;
+    const GpuTaskResourceUse materialUses[] = {
+        GpuTaskResourceUse{
+            .resource = materialGeometryResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskDesc materialDesc;
+    materialDesc
+        .setIdentity(Name("tests/descriptor_buffer/material_geometry_entry"))
+        .setMarkerLabel("Material Geometry Entry")
+        .setQueue(graphicsQueue)
+        .setScheduling(materialScheduling)
+        .setResourceUses(materialUses, LengthOf(materialUses))
+    ;
+    bool materialRecorded = false;
+    const GpuTaskId materialTask = graph.addTask<NativePacketMaterialGeometryEntryProbeTask>(
+        materialDesc,
+        NativePacketMaterialGeometryEntryProbeTask::Payload{
+            .geometry = geometry.get(),
+            .recorded = &materialRecorded,
+        }
+    );
+    ASSERT_TRUE(materialTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/material_geometry_entry_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuSubmissionPacketId materialPacket = compiledGraph.packetForTask(materialTask);
+    ASSERT_TRUE(materialPacket.valid());
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuCompiledTask* const compiledMaterial = compiledGraph.findTask(materialTask);
+    ASSERT_NE(compiledMaterial, nullptr);
+    ASSERT_EQ(compiledMaterial->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledMaterial->prologueBarrierCount, 1u);
+    const GpuCompiledBarrier* const materialBarrier = compiledGraph.taskPrologueBarriers(materialTask);
+    ASSERT_NE(materialBarrier, nullptr);
+    EXPECT_EQ(materialBarrier[0].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(materialBarrier[0].resource, materialGeometryResource);
+    EXPECT_EQ(materialBarrier[0].before, ResourceStates::Common);
+    EXPECT_EQ(materialBarrier[0].after, ResourceStates::ShaderResource);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);

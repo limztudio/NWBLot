@@ -224,6 +224,9 @@ public:
     [[nodiscard]] GpuGraphResourceId importResource(const GpuGraphResourceDesc& desc);
     [[nodiscard]] GpuGraphResourceId importTexture(const TextureHandle& texture, const GpuGraphResourceDesc& desc);
     [[nodiscard]] GpuGraphResourceId importBuffer(const BufferHandle& buffer, const GpuGraphResourceDesc& desc);
+    // Reuses a typed buffer import whose identity may have been chosen by an earlier producer. This lets later
+    // consumers add resource uses for the same physical buffer without inventing incompatible graph metadata.
+    [[nodiscard]] GpuGraphResourceId findImportedBuffer(const BufferHandle& buffer)const noexcept;
     [[nodiscard]] GpuGraphResourceId importAccelStruct(
         const RayTracingAccelStructHandle& accelStruct,
         const GpuGraphResourceDesc& desc

@@ -33,6 +33,8 @@ public:
 public:
     [[nodiscard]] bool createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
     [[nodiscard]] bool findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
+    // Graph declaration resolves already-prepared draw-item keys without touching assets or mutating mesh state.
+    [[nodiscard]] bool findMeshResources(const Name& meshKey, MeshResources*& outMesh);
     [[nodiscard]] bool createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
     [[nodiscard]] bool findRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
     void pruneRuntimeMeshResources();

@@ -241,7 +241,8 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     const usize materialTypedByteCount,
     const bool csgIntervalSampleImageStatesGraphOwned,
     const bool csgClipBufferStatesGraphOwned,
-    const bool materialFrameStatesGraphOwned
+    const bool materialFrameStatesGraphOwned,
+    const bool materialGeometryStatesGraphOwned
 ){
     if(!framebuffer || drawItems.empty())
         return;
@@ -279,7 +280,8 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         false,
         csgIntervalSampleImageStatesGraphOwned,
         csgClipBufferStatesGraphOwned,
-        materialFrameStatesGraphOwned
+        materialFrameStatesGraphOwned,
+        materialGeometryStatesGraphOwned
     };
     if(regularDrawResourcesReady)
         renderMaterialPassDrawItems(drawContext, drawItems.regular);

@@ -361,7 +361,8 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     const bool receiverSpanOutputImageStatesGraphOwned,
     const bool removedIntervalOutputImageStatesGraphOwned,
     const bool csgClipBufferStatesGraphOwned,
-    const bool materialFrameStatesGraphOwned
+    const bool materialFrameStatesGraphOwned,
+    const bool materialGeometryStatesGraphOwned
 ){
     if(
         !targets.framebuffer
@@ -431,7 +432,8 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         receiverSurfaceImageStatesGraphOwned,
         false,
         csgClipBufferStatesGraphOwned,
-        materialFrameStatesGraphOwned
+        materialFrameStatesGraphOwned,
+        materialGeometryStatesGraphOwned
     };
     m_renderer.materialSystem().renderMaterialPassDrawItems(
         csgReceiverSurfaceDrawContext,
@@ -466,7 +468,8 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     const bool preparedTransparentCsgReceiverSpanOutputImageStatesGraphOwned,
     const bool preparedTransparentCsgRemovedIntervalOutputImageStatesGraphOwned,
     const bool preparedTransparentCsgClipBufferStatesGraphOwned,
-    const bool preparedTransparentCsgMaterialFrameStatesGraphOwned
+    const bool preparedTransparentCsgMaterialFrameStatesGraphOwned,
+    const bool preparedTransparentCsgMaterialGeometryStatesGraphOwned
 ){
     if(preparedTransparentCsgReceiverSurfaceDrawItems || preparedTransparentCsgFrameData){
         NWB_ASSERT(preparedTransparentCsgReceiverSurfaceDrawItems);
@@ -485,7 +488,8 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
                 preparedTransparentCsgReceiverSpanOutputImageStatesGraphOwned,
                 preparedTransparentCsgRemovedIntervalOutputImageStatesGraphOwned,
                 preparedTransparentCsgClipBufferStatesGraphOwned,
-                preparedTransparentCsgMaterialFrameStatesGraphOwned
+                preparedTransparentCsgMaterialFrameStatesGraphOwned,
+                preparedTransparentCsgMaterialGeometryStatesGraphOwned
             );
         }
     }
@@ -504,7 +508,8 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
     const bool occupancyStatesGraphOwned,
     const bool occupancyCsgIntervalSampleImageStatesGraphOwned,
     const bool occupancyCsgClipBufferStatesGraphOwned,
-    const bool occupancyMaterialFrameStatesGraphOwned
+    const bool occupancyMaterialFrameStatesGraphOwned,
+    const bool occupancyMaterialGeometryStatesGraphOwned
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -538,7 +543,8 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
                 preparedOccupancyMaterialTypedByteCount,
                 occupancyCsgIntervalSampleImageStatesGraphOwned,
                 occupancyCsgClipBufferStatesGraphOwned,
-                occupancyMaterialFrameStatesGraphOwned
+                occupancyMaterialFrameStatesGraphOwned,
+                occupancyMaterialGeometryStatesGraphOwned
             );
         }
     }
@@ -586,7 +592,8 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
     const usize preparedExtinctionMaterialTypedByteCount,
     const bool extinctionCsgIntervalSampleImageStatesGraphOwned,
     const bool extinctionCsgClipBufferStatesGraphOwned,
-    const bool extinctionMaterialFrameStatesGraphOwned
+    const bool extinctionMaterialFrameStatesGraphOwned,
+    const bool extinctionMaterialGeometryStatesGraphOwned
 ){
     NWB_ASSERT(avboitTargets.valid());
 
@@ -608,7 +615,8 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
                 preparedExtinctionMaterialTypedByteCount,
                 extinctionCsgIntervalSampleImageStatesGraphOwned,
                 extinctionCsgClipBufferStatesGraphOwned,
-                extinctionMaterialFrameStatesGraphOwned
+                extinctionMaterialFrameStatesGraphOwned,
+                extinctionMaterialGeometryStatesGraphOwned
             );
         }
     }
@@ -636,7 +644,8 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     const bool accumulationFinalStatesGraphOwned,
     const bool accumulationCsgIntervalSampleImageStatesGraphOwned,
     const bool accumulationCsgClipBufferStatesGraphOwned,
-    const bool accumulationMaterialFrameStatesGraphOwned
+    const bool accumulationMaterialFrameStatesGraphOwned,
+    const bool accumulationMaterialGeometryStatesGraphOwned
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -659,7 +668,8 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
                 preparedAccumulationMaterialTypedByteCount,
                 accumulationCsgIntervalSampleImageStatesGraphOwned,
                 accumulationCsgClipBufferStatesGraphOwned,
-                accumulationMaterialFrameStatesGraphOwned
+                accumulationMaterialFrameStatesGraphOwned,
+                accumulationMaterialGeometryStatesGraphOwned
             );
         }
     }
@@ -707,7 +717,8 @@ void RendererAvboitSystem::renderAvboitPostOccupancyPreAccumulationPasses(
     const usize preparedExtinctionMaterialTypedByteCount,
     const bool extinctionCsgIntervalSampleImageStatesGraphOwned,
     const bool extinctionCsgClipBufferStatesGraphOwned,
-    const bool extinctionMaterialFrameStatesGraphOwned
+    const bool extinctionMaterialFrameStatesGraphOwned,
+    const bool extinctionMaterialGeometryStatesGraphOwned
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -725,7 +736,8 @@ void RendererAvboitSystem::renderAvboitPostOccupancyPreAccumulationPasses(
         preparedExtinctionMaterialTypedByteCount,
         extinctionCsgIntervalSampleImageStatesGraphOwned,
         extinctionCsgClipBufferStatesGraphOwned,
-        extinctionMaterialFrameStatesGraphOwned
+        extinctionMaterialFrameStatesGraphOwned,
+        extinctionMaterialGeometryStatesGraphOwned
     );
     dispatchAvboitIntegration(commandList, avboitTargets);
 }

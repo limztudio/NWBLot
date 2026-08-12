@@ -815,6 +815,43 @@ struct NativePacketShadowVisibilityEntryProbeTask{
 };
 
 
+// CSG clip/cap/interval callbacks receive their receiver/cutter SRVs and clip/sample CBVs from graph declarations.
+// This probe intentionally only reads the command-list tracker before any renderer-native state setup can run.
+struct NativePacketCsgClipBufferEntryProbeTask{
+    struct Payload{
+        Buffer* receiverRanges = nullptr;
+        Buffer* cutters = nullptr;
+        Buffer* clipContextSlots = nullptr;
+        Buffer* intervalSampleState = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(
+            !payload.receiverRanges
+            || !payload.cutters
+            || !payload.clipContextSlots
+            || !payload.intervalSampleState
+        )
+            return false;
+        const bool ready =
+            commandList.getBufferState(payload.receiverRanges) == ResourceStates::ShaderResource
+            && commandList.getBufferState(payload.cutters) == ResourceStates::ShaderResource
+            && commandList.getBufferState(payload.clipContextSlots) == ResourceStates::ConstantBuffer
+            && commandList.getBufferState(payload.intervalSampleState) == ResourceStates::ConstantBuffer
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
 // A mutable success gate lets the packet recorder prove that an optional capture rolls back an incomplete packet
 // before a retry. It intentionally records no native work beyond the task marker.
 struct NativePacketCaptureRetryTask{
@@ -2286,6 +2323,220 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
         scratchArena
     ));
     EXPECT_TRUE(transaction.packetToken(lightingPacket).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// CSG peel, receiver-surface, cap, and material callbacks no longer restate the four heap-selected clip-buffer
+// entry states on graph-owned paths. All four imported buffers begin Common; this getter-only callback proves the
+// packet runtime lowers their declared entry transitions before native renderer work can run.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCsgClipBufferEntryStatesRecordWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const auto makeStorageBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setStructStride(16u)
+                .setCanHaveRawViews(true)
+                .setCanHaveUAVs(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const auto makeConstantBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    auto receiverRanges = makeStorageBuffer();
+    auto cutters = makeStorageBuffer();
+    auto clipContextSlots = makeConstantBuffer();
+    auto intervalSampleState = makeConstantBuffer();
+    ASSERT_NE(receiverRanges.get(), nullptr);
+    ASSERT_NE(cutters.get(), nullptr);
+    ASSERT_NE(clipContextSlots.get(), nullptr);
+    ASSERT_NE(intervalSampleState.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importBuffer = [&graph](
+        const BufferHandle& buffer,
+        const Name identity,
+        const AStringView label
+    ){
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Buffer)
+        );
+    };
+    const GpuGraphResourceId receiverRangesResource = importBuffer(
+        receiverRanges,
+        Name("tests/descriptor_buffer/csg_clip_receiver_ranges"),
+        "CSG Receiver Ranges"
+    );
+    const GpuGraphResourceId cuttersResource = importBuffer(
+        cutters,
+        Name("tests/descriptor_buffer/csg_clip_cutters"),
+        "CSG Cutters"
+    );
+    const GpuGraphResourceId clipContextSlotsResource = importBuffer(
+        clipContextSlots,
+        Name("tests/descriptor_buffer/csg_clip_context_slots"),
+        "CSG Clip Context Slots"
+    );
+    const GpuGraphResourceId intervalSampleStateResource = importBuffer(
+        intervalSampleState,
+        Name("tests/descriptor_buffer/csg_clip_interval_sample_state"),
+        "CSG Interval Sample State"
+    );
+    ASSERT_TRUE(receiverRangesResource.valid());
+    ASSERT_TRUE(cuttersResource.valid());
+    ASSERT_TRUE(clipContextSlotsResource.valid());
+    ASSERT_TRUE(intervalSampleStateResource.valid());
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint csgClipScheduling;
+    csgClipScheduling.cost = GpuTaskCostHint::Medium;
+    csgClipScheduling.forceSubmissionBoundary = true;
+    csgClipScheduling.allowPacketMerge = false;
+
+    const GpuTaskResourceUse csgClipUses[] = {
+        GpuTaskResourceUse{
+            .resource = receiverRangesResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = cuttersResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = clipContextSlotsResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = intervalSampleStateResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskDesc csgClipDesc;
+    csgClipDesc
+        .setIdentity(Name("tests/descriptor_buffer/csg_clip_entry"))
+        .setMarkerLabel("CSG Clip Entry")
+        .setQueue(graphicsQueue)
+        .setScheduling(csgClipScheduling)
+        .setResourceUses(csgClipUses, LengthOf(csgClipUses))
+    ;
+    bool csgClipRecorded = false;
+    const GpuTaskId csgClipTask = graph.addTask<NativePacketCsgClipBufferEntryProbeTask>(
+        csgClipDesc,
+        NativePacketCsgClipBufferEntryProbeTask::Payload{
+            .receiverRanges = receiverRanges.get(),
+            .cutters = cutters.get(),
+            .clipContextSlots = clipContextSlots.get(),
+            .intervalSampleState = intervalSampleState.get(),
+            .recorded = &csgClipRecorded,
+        }
+    );
+    ASSERT_TRUE(csgClipTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/csg_clip_entry_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuSubmissionPacketId csgClipPacket = compiledGraph.packetForTask(csgClipTask);
+    ASSERT_TRUE(csgClipPacket.valid());
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuCompiledTask* const compiledCsgClip = compiledGraph.findTask(csgClipTask);
+    ASSERT_NE(compiledCsgClip, nullptr);
+    ASSERT_EQ(compiledCsgClip->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledCsgClip->prologueBarrierCount, 4u);
+    const GpuCompiledBarrier* const csgClipBarriers = compiledGraph.taskPrologueBarriers(csgClipTask);
+    ASSERT_NE(csgClipBarriers, nullptr);
+    const auto hasTransition = [&](const GpuGraphResourceId resource, const ResourceStates::Mask expectedState){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledCsgClip->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = csgClipBarriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == ResourceStates::Common
+                && barrier.after == expectedState
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTransition(receiverRangesResource, ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasTransition(cuttersResource, ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasTransition(clipContextSlotsResource, ResourceStates::ConstantBuffer));
+    EXPECT_TRUE(hasTransition(intervalSampleStateResource, ResourceStates::ConstantBuffer));
+    EXPECT_EQ(compiledGraph.packet(csgClipPacket).dependencyCount, 0u);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(csgClipRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(csgClipPacket).valid());
     EXPECT_TRUE(device.waitForIdle());
 }
 

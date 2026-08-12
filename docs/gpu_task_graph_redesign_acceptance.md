@@ -13,7 +13,7 @@ uploads, graph-owned runtime-skinning dispatch packets, graph-owned opaque mater
 graph-owned opaque CSG receiver/cutter/context/interval streams, graph-owned transparent CSG interval-producer
 streams, graph-owned transparent AVBOIT occupancy, extinction, and accumulation material/CSG streams, and
 graph-owned AVBOIT final G-buffer state handoffs, graph-owned normal Shadow Visibility hardware/software traversal
-entry-state handoffs, and graph-owned current and lagged deferred bindless-selector, ray-trace material-context
+entry-state handoffs, graph-owned CSG clip-buffer entry-state handoffs, and graph-owned current and lagged deferred bindless-selector, ray-trace material-context
 selector, caustic
 emission-target, surfel-frame constant, shadow material-context batch and retained hybrid hardware fallback context,
 software-only and hybrid scene-BVH pair uploads and healthy-hybrid frozen software traversal tables, software-only
@@ -202,7 +202,11 @@ can receive an unconditional final sign-off.
   `ShaderResource` before Deferred Composite consumes them, while the read-only depth attachment retains its
   explicit compatibility handoff. Runtime checks require every phase stream and finalizer to share its native
   consumer's accepted packet and keep the AVBOIT range at one or five packets. Direct helpers remain only for
-  non-graph compatibility callers.
+  non-graph compatibility callers. Across opaque G-buffer/interval sampling and prepared transparent interval,
+  occupancy, extinction, and accumulation callbacks, those exact graph declarations now also own the CSG
+  receiver/cutter `ShaderResource` and clip-context/interval-sample `ConstantBuffer` entry states. The native
+  helper remains for direct, unprepared, or empty gathered-work paths; the receiver-surface-to-span and
+  span-to-combine task-local UAV fences remain native.
 - The compiler derives stable packet recording-frontier depths from packet dependencies. The native recorder may
   record an explicitly opted-in frontier concurrently with isolated per-packet state scratch and native command
   buffers; submission, timing, and failure reporting remain in stable compiler order. Command-IR capture and
@@ -293,6 +297,7 @@ can receive an unconditional final sign-off.
 | Dedicated-Transfer recovery-frontier follow-up: graph unit and descriptor-buffer smoke | passed; graph tests passed 50/50 and descriptor smoke passed 77 tests with 11 expected topology skips. The new native test accepts a graph-owned Transfer upload, injects a rejected dependent Graphics suffix, verifies the transaction emits its exact physical Transfer token, then confirms the Device receives that token on the independent recovery-tail submission. This adapter skips only the dedicated-Transfer execution because it has no Transfer-only family. |
 | Graph-owned frame GPU-timing reset: graph unit, ECS graphics, and descriptor-buffer smoke | passed; the reset now compiles as one strict primary-Graphics graph packet, and only its accepted task callback publishes timer-query availability while failed work remains revoked. Graph tests passed 50/50, ECS graphics passed 18/18, and descriptor smoke passed 78 tests with 11 expected topology skips. The targeted rejection/retry smoke proves a rejected reset leaves no stale dynamic-rendering query availability and the following accepted graph preamble recovers it. |
 | Graph-owned CSG interval rect-clear follow-up: renderer build, graph/ECS/descriptor tests, and Vulkan/X11 CSG captures | passed; opaque G-buffer and prepared-transparent AVBOIT now run an exact two-target frozen-rect clear task before their native CSG producers, with graph-declared `CopyDest` to `UnorderedAccess` handoff over all peel ID layers and the single receiver-event-count layer. Graph tests passed 51/51, ECS graphics passed 18/18, descriptor smoke passed 78 tests with 11 expected topology skips, and opaque plus transparent CSG early/mid/late captures passed. The direct CSG clear remains the compatibility fallback for unprepared transparent work. |
+| Graph-owned CSG clip-buffer entry-state follow-up: renderer build, graph/ECS/descriptor tests, and Vulkan/X11 CSG captures | passed; opaque and prepared-transparent CSG callbacks now consume graph-declared receiver/cutter `ShaderResource` and clip-context/interval-sample `ConstantBuffer` states without restating the native heap-buffer bridge. Graph tests passed 60/60, ECS graphics passed 18/18, descriptor smoke passed 83 tests with 11 expected topology skips, and opaque plus early/mid/late transparent CSG captures passed. Direct, unprepared, and empty gathered-work paths retain the native helper; intra-task CSG UAV fences remain native. |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a

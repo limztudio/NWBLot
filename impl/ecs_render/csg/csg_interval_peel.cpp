@@ -215,7 +215,8 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
-    const bool intervalPeelTargetStatesGraphOwned
+    const bool intervalPeelTargetStatesGraphOwned,
+    const bool csgClipBufferStatesGraphOwned
 ){
     if(!csgFrameData.hasWork())
         return;
@@ -233,7 +234,8 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
     // The view is heap-selected; transition its UniformBuffer
     // explicitly before the standalone peel dispatch.
     commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    setCsgClipBufferStates(commandList);
+    if(!csgClipBufferStatesGraphOwned)
+        setCsgClipBufferStates(commandList);
     commandList.commitBarriers();
 
     __hidden_csg_interval_peel::DispatchCsgIntervalCompute(
@@ -313,7 +315,8 @@ void RendererCsgSystem::renderCsgIntervalCaps(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
-    const bool intervalSampleImageStatesGraphOwned
+    const bool intervalSampleImageStatesGraphOwned,
+    const bool csgClipBufferStatesGraphOwned
 ){
     NWB_ASSERT(csgState().m_intervalCapFillPipeline);
     NWB_ASSERT(csgState().m_clipContextSlotsHeapHandle.valid());
@@ -331,7 +334,8 @@ void RendererCsgSystem::renderCsgIntervalCaps(
     commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(drawState().m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    setCsgClipBufferStates(commandList);
+    if(!csgClipBufferStatesGraphOwned)
+        setCsgClipBufferStates(commandList);
     commandList.commitBarriers();
 
     Core::ViewportState viewportState;

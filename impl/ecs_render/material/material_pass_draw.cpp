@@ -28,12 +28,14 @@ static void SetCsgHeapResourceStates(
     const DeferredFrameTargets& targets,
     const MaterialPipelineCsgBindingUse& csgBindingUse,
     const bool receiverSurfaceImageStatesGraphOwned,
-    const bool intervalSampleImageStatesGraphOwned
+    const bool intervalSampleImageStatesGraphOwned,
+    const bool csgClipBufferStatesGraphOwned
 ){
     if(!csgBindingUse.clip)
         return;
 
-    csgSystem.setCsgClipBufferStates(commandList);
+    if(!csgClipBufferStatesGraphOwned)
+        csgSystem.setCsgClipBufferStates(commandList);
     if(csgBindingUse.receiverSurface && !receiverSurfaceImageStatesGraphOwned){
         // Compatibility callers still stage the heap-selected receiver-event images themselves. The normal graph
         // declares this exact StorageImage pair before its receiver-surface task records.
@@ -235,7 +237,8 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
             deferredState().m_targets,
             csgBindingUse,
             context.csgReceiverSurfaceImageStatesGraphOwned,
-            context.csgIntervalSampleImageStatesGraphOwned
+            context.csgIntervalSampleImageStatesGraphOwned,
+            context.csgClipBufferStatesGraphOwned
         );
 
         Core::MeshletState meshletState;
@@ -280,7 +283,8 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
             deferredState().m_targets,
             csgBindingUse,
             context.csgReceiverSurfaceImageStatesGraphOwned,
-            context.csgIntervalSampleImageStatesGraphOwned
+            context.csgIntervalSampleImageStatesGraphOwned,
+            context.csgClipBufferStatesGraphOwned
         );
         context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
 

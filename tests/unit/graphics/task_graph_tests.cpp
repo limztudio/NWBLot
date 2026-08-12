@@ -8707,6 +8707,135 @@ TEST(GpuTaskGraph, PlansCsgIntervalWorkingSetStorageStates){
 }
 
 
+// Every graph-owned CSG record thunk starts from the same four heap-selected clip buffers. Their immutable uploads
+// publish Common, so the compiler must establish the two SRV and two CBV states before a peel/material/cap callback
+// records; direct and unprepared paths retain the native helper instead.
+TEST(GpuTaskGraph, PlansCsgClipBufferEntryStates){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId receiverRanges = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/csg_clip_receiver_ranges"),
+        "CSG Receiver Ranges",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId cutters = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/csg_clip_cutters"),
+        "CSG Cutters",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId clipContextSlots = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/csg_clip_context_slots"),
+        "CSG Clip Context Slots",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId intervalSampleState = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/csg_clip_interval_sample_state"),
+        "CSG Interval Sample State",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    ASSERT_TRUE(receiverRanges.valid());
+    ASSERT_TRUE(cutters.valid());
+    ASSERT_TRUE(clipContextSlots.valid());
+    ASSERT_TRUE(intervalSampleState.valid());
+
+    const Graphics::GpuTaskResourceUse csgClipUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverRanges,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = cutters,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = clipContextSlots,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = intervalSampleState,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint csgClipScheduling;
+    csgClipScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    csgClipScheduling.forceSubmissionBoundary = true;
+    csgClipScheduling.allowPacketMerge = false;
+    Graphics::GpuTaskDesc csgClipDesc;
+    csgClipDesc
+        .setIdentity(Name("tests/task_graph/csg_clip_entry"))
+        .setMarkerLabel("CSG Clip Entry")
+        .setQueue(graphicsRequest)
+        .setScheduling(csgClipScheduling)
+        .setResourceUses(csgClipUses, LengthOf(csgClipUses))
+    ;
+    const Graphics::GpuTaskId csgClipTask = graph.addTask(csgClipDesc);
+    ASSERT_TRUE(csgClipTask.valid());
+    EXPECT_EQ(graph.taskAt(csgClipTask.index).resourceUseCount, 4u);
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const Graphics::GpuSubmissionPacketId csgClipPacket = compiledGraph.packetForTask(csgClipTask);
+    ASSERT_TRUE(csgClipPacket.valid());
+    EXPECT_EQ(compiledGraph.packet(csgClipPacket).dependencyCount, 0u);
+    const Graphics::GpuCompiledTask* const compiledCsgClip = compiledGraph.findTask(csgClipTask);
+    ASSERT_NE(compiledCsgClip, nullptr);
+    EXPECT_EQ(compiledCsgClip->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledCsgClip->prologueBarrierCount, 4u);
+    const Graphics::GpuCompiledBarrier* const csgClipBarriers = compiledGraph.taskPrologueBarriers(csgClipTask);
+    ASSERT_NE(csgClipBarriers, nullptr);
+    const auto hasTransition = [&](
+        const Graphics::GpuGraphResourceId resource,
+        const Graphics::ResourceStates::Mask expectedState
+    ){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledCsgClip->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = csgClipBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == Graphics::ResourceStates::Common
+                && barrier.after == expectedState
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTransition(receiverRanges, Graphics::ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasTransition(cutters, Graphics::ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasTransition(clipContextSlots, Graphics::ResourceStates::ConstantBuffer));
+    EXPECT_TRUE(hasTransition(intervalSampleState, Graphics::ResourceStates::ConstantBuffer));
+}
+
+
 // The opaque CSG graph ends interval combine before its material/cap StorageImage loads. Keep the two tasks in one
 // Graphics packet when FrontierSafe permits it, but require the compiler to lower the four same-UAV RAW fences at
 // that intra-packet boundary instead of relying on a renderer-owned state call inside either draw thunk.

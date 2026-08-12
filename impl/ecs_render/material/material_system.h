@@ -73,7 +73,10 @@ public:
         usize materialTypedByteCount,
         // The graph can declare the removed-interval StorageImage reads at a producer/consumer boundary. Direct
         // and other prepared compatibility phases retain their native UAV handoff by leaving this false.
-        bool csgIntervalSampleImageStatesGraphOwned = false
+        bool csgIntervalSampleImageStatesGraphOwned = false,
+        // Prepared graph tasks also declare their heap-selected CSG clip buffers. Direct and unprepared callers
+        // retain the native SRV/CBV state setup by leaving this false.
+        bool csgClipBufferStatesGraphOwned = false
     );
     [[nodiscard]] bool prepareMaterialPassResources(
         Core::Framebuffer* framebuffer,

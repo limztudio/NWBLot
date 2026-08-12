@@ -102,6 +102,9 @@ struct MaterialPassDrawContext{
     // The opaque graph splits interval combine from its following material/cap sample task. That task lowers the
     // required UAV handoff before this thunk records; direct and AVBOIT compatibility callers retain their bridge.
     bool csgIntervalSampleImageStatesGraphOwned = false;
+    // The shared graph declares receiver/cutter SRVs and clip/interval-sample CBVs before prepared CSG thunks
+    // record. Direct and unprepared callers retain the native heap-buffer setup by leaving this false.
+    bool csgClipBufferStatesGraphOwned = false;
 };
 
 

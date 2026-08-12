@@ -5712,6 +5712,170 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiEntryStates){
 }
 
 
+// Surfel initialization is a graph task in its own right. The callback only clears four persistent buffers, so the
+// graph must lower their inherited UAV state to CopyDest before recording begins and leave that state for snapshot.
+TEST(GpuTaskGraph, PlansGraphOwnedSurfelInitializationEntryStates){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    constexpr Graphics::ResourceQueueSharing::Mask queueSharing =
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    ;
+    const Graphics::GpuGraphResourceId pool = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_initialize_pool"),
+        "Surfel Pool",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId cellHeads = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_initialize_cell_heads"),
+        "Surfel Cell Heads",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId counter = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_initialize_counter"),
+        "Surfel Counter",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId freeList = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_initialize_free_list"),
+        "Surfel Free List",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    ASSERT_TRUE(pool.valid());
+    ASSERT_TRUE(cellHeads.valid());
+    ASSERT_TRUE(counter.valid());
+    ASSERT_TRUE(freeList.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        true,
+        true,
+    };
+    Graphics::GpuTaskSchedulingHint boundaryScheduling;
+    boundaryScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    boundaryScheduling.forceSubmissionBoundary = true;
+    boundaryScheduling.allowPacketMerge = false;
+
+    const Graphics::GpuTaskResourceUse prefixUses[] = {
+        { .resource = pool, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = cellHeads, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = counter, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = freeList, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
+    };
+    Graphics::GpuTaskDesc prefixDesc;
+    prefixDesc
+        .setIdentity(Name("tests/task_graph/surfel_initialize_prefix"))
+        .setMarkerLabel("Surfel Initialize Prefix")
+        .setQueue(graphicsRequest)
+        .setScheduling(boundaryScheduling)
+        .setResourceUses(prefixUses, LengthOf(prefixUses))
+    ;
+    const Graphics::GpuTaskId prefix = graph.addTask(prefixDesc);
+    ASSERT_TRUE(prefix.valid());
+
+    const Graphics::GpuTaskResourceUse initializeUses[] = {
+        { .resource = pool, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = cellHeads, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = counter, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = freeList, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+    };
+    Graphics::GpuTaskDesc initializeDesc;
+    initializeDesc
+        .setIdentity(Name("tests/task_graph/graph_owned_surfel_initialize"))
+        .setMarkerLabel("Surfel GI Initialize")
+        .setQueue(computeRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&prefix, 1u)
+        .setResourceUses(initializeUses, LengthOf(initializeUses))
+    ;
+    const Graphics::GpuTaskId initialize = graph.addTask(initializeDesc);
+    ASSERT_TRUE(initialize.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(HasInferredHazard(
+        analysis,
+        prefix,
+        initialize,
+        pool,
+        Graphics::GpuTaskHazardType::WriteAfterWrite
+    ));
+
+    const Graphics::GpuTaskQueueAssignment* const initializeAssignment = assignments.find(initialize);
+    ASSERT_NE(initializeAssignment, nullptr);
+    EXPECT_EQ(initializeAssignment->queueClass, Graphics::CommandQueue::Compute);
+    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId initializePacket = compiledGraph.packetForTask(initialize);
+    ASSERT_TRUE(prefixPacket.valid());
+    ASSERT_TRUE(initializePacket.valid());
+    EXPECT_NE(prefixPacket, initializePacket);
+    const Graphics::GpuCompiledTask* const compiledInitialize = compiledGraph.findTask(initialize);
+    ASSERT_NE(compiledInitialize, nullptr);
+    const Graphics::GpuPacketStateSeed* const initializeSeeds = compiledGraph.taskPrologueStateSeeds(initialize);
+    ASSERT_NE(initializeSeeds, nullptr);
+    const auto hasInitializeSeed = [&](const Graphics::GpuGraphResourceId resource){
+        for(usize seedIndex = 0u; seedIndex < compiledInitialize->prologueStateSeedCount; ++seedIndex){
+            if(
+                initializeSeeds[seedIndex].resource == resource
+                && initializeSeeds[seedIndex].sourcePacket == prefixPacket
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasInitializeSeed(pool));
+    EXPECT_TRUE(hasInitializeSeed(cellHeads));
+    EXPECT_TRUE(hasInitializeSeed(counter));
+    EXPECT_TRUE(hasInitializeSeed(freeList));
+
+    const Graphics::GpuCompiledBarrier* const initializeBarriers = compiledGraph.taskPrologueBarriers(initialize);
+    ASSERT_NE(initializeBarriers, nullptr);
+    const auto hasInitializeBarrier = [&](const Graphics::GpuGraphResourceId resource){
+        for(usize barrierIndex = 0u; barrierIndex < compiledInitialize->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = initializeBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == Graphics::ResourceStates::UnorderedAccess
+                && barrier.after == Graphics::ResourceStates::CopyDest
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasInitializeBarrier(pool));
+    EXPECT_TRUE(hasInitializeBarrier(cellHeads));
+    EXPECT_TRUE(hasInitializeBarrier(counter));
+    EXPECT_TRUE(hasInitializeBarrier(freeList));
+    ASSERT_EQ(compiledGraph.packet(initializePacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(initializePacket)[0u].producer, prefixPacket);
+}
+
+
 // Hardware caustics inherits the opaque prefix's descriptor-selected producer inputs on its Graphics packet. The
 // producer's accumulator clear/temporal/resolve lifetime is task-local, so this pins only the static entry batch
 // that the graph must establish before the ray-tracing callback records.

@@ -4016,7 +4016,8 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             ;
             m_deferredSurfelGiPreparationTask = m_raytracingSystem.declareSurfelResourceInitializationTask(
                 m_deferredLightingTaskGraph,
-                initializationDesc
+                initializationDesc,
+                true
             );
             if(!m_deferredSurfelGiPreparationTask.valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI initialization task"));

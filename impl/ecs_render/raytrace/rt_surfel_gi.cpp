@@ -123,6 +123,7 @@ struct SurfelGiGraphTask{
 struct RendererRayTracingSystem::SurfelGiInitializationGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
+        bool graphEntryStatesOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -132,7 +133,10 @@ struct RendererRayTracingSystem::SurfelGiInitializationGraphTask{
     ){
         static_cast<void>(context);
         return payload.raytracingSystem
-            && payload.raytracingSystem->initializeSurfelResources(commandList);
+            && payload.raytracingSystem->initializeSurfelResources(
+                commandList,
+                payload.graphEntryStatesOwned
+            );
     }
 
     static void discarded(Payload& payload){
@@ -842,7 +846,10 @@ bool RendererRayTracingSystem::needsSurfelResourceInitialization()const noexcept
     return hasSurfelWork() && rayTracingState().m_surfelResourcesNeedClear;
 }
 
-bool RendererRayTracingSystem::initializeSurfelResources(Core::CommandList& commandList){
+bool RendererRayTracingSystem::initializeSurfelResources(
+    Core::CommandList& commandList,
+    const bool graphEntryStatesOwned
+){
     if(!rayTracingState().m_surfelResourcesNeedClear)
         return true;
 
@@ -853,12 +860,14 @@ bool RendererRayTracingSystem::initializeSurfelResources(Core::CommandList& comm
     if(!pool || !cellHead || !counter || !freeList)
         return false;
 
-    // The graph lowers the CopyDest transitions. Keep the clear body confined to this setup task so the following
-    // Transfer snapshot consumes a compiler-owned final CopyDest state.
-    commandList.setBufferState(pool, Core::ResourceStates::CopyDest);
-    commandList.setBufferState(cellHead, Core::ResourceStates::CopyDest);
-    commandList.setBufferState(counter, Core::ResourceStates::CopyDest);
-    commandList.setBufferState(freeList, Core::ResourceStates::CopyDest);
+    // The normal graph establishes CopyDest in its packet prologue. Direct compatibility callers retain their
+    // local setup; both routes leave the clear body and following snapshot's final CopyDest state unchanged.
+    if(!graphEntryStatesOwned){
+        commandList.setBufferState(pool, Core::ResourceStates::CopyDest);
+        commandList.setBufferState(cellHead, Core::ResourceStates::CopyDest);
+        commandList.setBufferState(counter, Core::ResourceStates::CopyDest);
+        commandList.setBufferState(freeList, Core::ResourceStates::CopyDest);
+    }
     commandList.commitBarriers();
     commandList.clearBufferUInt(pool, 0u);
     commandList.clearBufferUInt(cellHead, NWB_SURFEL_CELL_INVALID);
@@ -984,12 +993,14 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
 
 Core::GpuTaskId RendererRayTracingSystem::declareSurfelResourceInitializationTask(
     Core::GpuTaskGraph& graph,
-    const Core::GpuTaskDesc& desc
+    const Core::GpuTaskDesc& desc,
+    const bool graphEntryStatesOwned
 ){
     return graph.addTask<SurfelGiInitializationGraphTask>(
         desc,
         SurfelGiInitializationGraphTask::Payload{
             .raytracingSystem = this,
+            .graphEntryStatesOwned = graphEntryStatesOwned,
         }
     );
 }

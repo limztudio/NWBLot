@@ -338,7 +338,8 @@ public:
     [[nodiscard]] bool needsSurfelResourceInitialization()const noexcept;
     [[nodiscard]] Core::GpuTaskId declareSurfelResourceInitializationTask(
         Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc
+        const Core::GpuTaskDesc& desc,
+        bool graphEntryStatesOwned = false
     );
     // Clear ownership commits only after the producer packet accepts.
     void finalizeSurfelResourceInitialization();
@@ -484,7 +485,10 @@ private:
     void clearPreparedMeshSwBvhBuilds()noexcept;
     [[nodiscard]] bool prepareSurfelResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool recordPreparedSurfelFrameConstants(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    [[nodiscard]] bool initializeSurfelResources(Core::CommandList& commandList);
+    [[nodiscard]] bool initializeSurfelResources(
+        Core::CommandList& commandList,
+        bool graphEntryStatesOwned = false
+    );
     [[nodiscard]] bool prepareMeshBlasResources(MeshResources& meshResources);
     [[nodiscard]] bool buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources);
     // Runtime meshes prepare every frame; static meshes remain dirty until first build.

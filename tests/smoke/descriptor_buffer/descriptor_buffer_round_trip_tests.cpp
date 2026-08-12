@@ -921,6 +921,40 @@ struct NativePacketHardwareCausticsEntryProbeTask{
 };
 
 
+// Surfel resource initialization records only clears. Its graph packet must therefore establish the four CopyDest
+// states before this getter-only callback runs, without relying on the native clear body to repeat them.
+struct NativePacketSurfelInitializationEntryProbeTask{
+    struct Payload{
+        Buffer* pool = nullptr;
+        Buffer* cellHeads = nullptr;
+        Buffer* counter = nullptr;
+        Buffer* freeList = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        const bool ready =
+            payload.pool
+            && payload.cellHeads
+            && payload.counter
+            && payload.freeList
+            && commandList.getBufferState(payload.pool) == ResourceStates::CopyDest
+            && commandList.getBufferState(payload.cellHeads) == ResourceStates::CopyDest
+            && commandList.getBufferState(payload.counter) == ResourceStates::CopyDest
+            && commandList.getBufferState(payload.freeList) == ResourceStates::CopyDest
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
 // Surfel GI's persistent resources start with the graph-established descriptor-visible state batch. The actual
 // renderer then owns only its intra-task clears, UAV ordering, and indirect-argument transition. This getter-only
 // probe keeps the entry handoff observable before any native setup could mask a missing graph declaration.
@@ -3252,6 +3286,218 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
         scratchArena
     ));
     EXPECT_TRUE(transaction.packetToken(causticsPacket).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// The Surfel initialization packet must enter with all four persistent buffers in CopyDest. This callback is
+// getter-only, so the test proves the graph prologue handles the complete batch before native clear commands run.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesRecordWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const auto makeStorageBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setCanHaveUAVs(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const BufferHandle pool = makeStorageBuffer();
+    const BufferHandle cellHeads = makeStorageBuffer();
+    const BufferHandle counter = makeStorageBuffer();
+    const BufferHandle freeList = makeStorageBuffer();
+    ASSERT_NE(pool.get(), nullptr);
+    ASSERT_NE(cellHeads.get(), nullptr);
+    ASSERT_NE(counter.get(), nullptr);
+    ASSERT_NE(freeList.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importBuffer = [&graph](const BufferHandle& buffer, const Name identity, const AStringView label){
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Buffer)
+        );
+    };
+    const GpuGraphResourceId poolResource = importBuffer(
+        pool,
+        Name("tests/descriptor_buffer/surfel_initialize_pool"),
+        "Surfel Pool"
+    );
+    const GpuGraphResourceId cellHeadsResource = importBuffer(
+        cellHeads,
+        Name("tests/descriptor_buffer/surfel_initialize_cell_heads"),
+        "Surfel Cell Heads"
+    );
+    const GpuGraphResourceId counterResource = importBuffer(
+        counter,
+        Name("tests/descriptor_buffer/surfel_initialize_counter"),
+        "Surfel Counter"
+    );
+    const GpuGraphResourceId freeListResource = importBuffer(
+        freeList,
+        Name("tests/descriptor_buffer/surfel_initialize_free_list"),
+        "Surfel Free List"
+    );
+    ASSERT_TRUE(poolResource.valid());
+    ASSERT_TRUE(cellHeadsResource.valid());
+    ASSERT_TRUE(counterResource.valid());
+    ASSERT_TRUE(freeListResource.valid());
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const GpuQueueRequest computeQueue{
+        GpuQueueCapability::Compute,
+        GpuQueuePreference::Compute,
+        true,
+        true,
+    };
+    GpuTaskSchedulingHint boundaryScheduling;
+    boundaryScheduling.cost = GpuTaskCostHint::Medium;
+    boundaryScheduling.forceSubmissionBoundary = true;
+    boundaryScheduling.allowPacketMerge = false;
+
+    const GpuTaskResourceUse prefixUses[] = {
+        { .resource = poolResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write },
+        { .resource = cellHeadsResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write },
+        { .resource = counterResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write },
+        { .resource = freeListResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write },
+    };
+    GpuTaskDesc prefixDesc;
+    prefixDesc
+        .setIdentity(Name("tests/descriptor_buffer/surfel_initialize_prefix"))
+        .setMarkerLabel("Surfel Initialize Prefix")
+        .setQueue(graphicsQueue)
+        .setScheduling(boundaryScheduling)
+        .setResourceUses(prefixUses, LengthOf(prefixUses))
+    ;
+    bool shouldRecord = true;
+    bool prefixAttempted = false;
+    const GpuTaskId prefixTask = graph.addTask<NativePacketCaptureRetryTask>(
+        prefixDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &prefixAttempted,
+        }
+    );
+    ASSERT_TRUE(prefixTask.valid());
+
+    const GpuTaskResourceUse initializeUses[] = {
+        { .resource = poolResource, .range = {}, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write },
+        { .resource = cellHeadsResource, .range = {}, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write },
+        { .resource = counterResource, .range = {}, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write },
+        { .resource = freeListResource, .range = {}, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write },
+    };
+    GpuTaskDesc initializeDesc;
+    initializeDesc
+        .setIdentity(Name("tests/descriptor_buffer/graph_owned_surfel_initialize"))
+        .setMarkerLabel("Surfel GI Initialize")
+        .setQueue(computeQueue)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&prefixTask, 1u)
+        .setResourceUses(initializeUses, LengthOf(initializeUses))
+    ;
+    bool initializeRecorded = false;
+    const GpuTaskId initializeTask = graph.addTask<NativePacketSurfelInitializationEntryProbeTask>(
+        initializeDesc,
+        NativePacketSurfelInitializationEntryProbeTask::Payload{
+            .pool = pool.get(),
+            .cellHeads = cellHeads.get(),
+            .counter = counter.get(),
+            .freeList = freeList.get(),
+            .recorded = &initializeRecorded,
+        }
+    );
+    ASSERT_TRUE(initializeTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/surfel_initialize_entry_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefixTask);
+    const GpuSubmissionPacketId initializePacket = compiledGraph.packetForTask(initializeTask);
+    ASSERT_TRUE(prefixPacket.valid());
+    ASSERT_TRUE(initializePacket.valid());
+    const GpuCompiledTask* const compiledInitialize = compiledGraph.findTask(initializeTask);
+    ASSERT_NE(compiledInitialize, nullptr);
+    const GpuCompiledBarrier* const initializeBarriers = compiledGraph.taskPrologueBarriers(initializeTask);
+    ASSERT_NE(initializeBarriers, nullptr);
+    const auto hasInitializeTransition = [&](const GpuGraphResourceId resource){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledInitialize->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = initializeBarriers[barrierIndex];
+            if(
+                barrier.resource == resource
+                && barrier.before == ResourceStates::UnorderedAccess
+                && barrier.after == ResourceStates::CopyDest
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasInitializeTransition(poolResource));
+    EXPECT_TRUE(hasInitializeTransition(cellHeadsResource));
+    EXPECT_TRUE(hasInitializeTransition(counterResource));
+    EXPECT_TRUE(hasInitializeTransition(freeListResource));
+    ASSERT_EQ(compiledGraph.packet(initializePacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(initializePacket)[0u].producer, prefixPacket);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(prefixAttempted);
+    EXPECT_TRUE(initializeRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(initializePacket).valid());
     EXPECT_TRUE(device.waitForIdle());
 }
 

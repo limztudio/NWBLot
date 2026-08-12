@@ -306,9 +306,16 @@ public:
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
         const bool* shadowVisibilityPrepared,
-        Core::GpuTimingSubmissionTicket& timingTicket
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        bool graphEntryStatesOwned = false
     );
-    [[nodiscard]] bool renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    // The shared deferred graph supplies descriptor-visible shared-deferred entry states. Direct compatibility
+    // callers retain the native setup by leaving this false.
+    [[nodiscard]] bool renderGpuBvhCaustics(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned = false
+    );
     [[nodiscard]] bool hasCausticWork()const noexcept;
     [[nodiscard]] bool prepareHwCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] Core::GpuTaskId declareHardwareCausticsTask(

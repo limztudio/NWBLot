@@ -3633,7 +3633,8 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     resourceUses.reserve(25u + softwareTraceGeometryResourceCount);
     resourceUses.push_back(ReadUse(worldPosition));
-    resourceUses.push_back(ReadUse(depth, Core::ResourceStates::DepthRead));
+    // Software caustics samples the bindless depth image, so its declared layout must match the shader read.
+    resourceUses.push_back(ReadUse(depth, Core::ResourceStates::ShaderResource));
     resourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     resourceUses.push_back(ReadWriteUse(causticAccumulator, Core::ResourceStates::UnorderedAccess));
     resourceUses.push_back(ReadWriteUse(causticHistory, Core::ResourceStates::UnorderedAccess));
@@ -3729,7 +3730,8 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         desc,
         deferredTargets,
         &m_preparedShadowVisibilityReady,
-        timingTicket
+        timingTicket,
+        true
     );
     if(!m_deferredSoftwareCausticsTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics graph task"));

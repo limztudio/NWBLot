@@ -13,7 +13,7 @@ uploads, graph-owned runtime-skinning dispatch packets, graph-owned opaque mater
 graph-owned opaque CSG receiver/cutter/context/interval streams, graph-owned transparent CSG interval-producer
 streams, graph-owned transparent AVBOIT occupancy, extinction, and accumulation material/CSG streams, and
 graph-owned AVBOIT final G-buffer state handoffs, graph-owned normal Shadow Visibility hardware/software traversal
-entry-state handoffs, graph-owned CSG clip-buffer entry-state handoffs, and graph-owned current and lagged deferred bindless-selector, ray-trace material-context
+entry-state handoffs, graph-owned normal Software Caustics entry-state handoffs, graph-owned CSG clip-buffer entry-state handoffs, and graph-owned current and lagged deferred bindless-selector, ray-trace material-context
 selector, caustic
 emission-target, surfel-frame constant, shadow material-context batch and retained hybrid hardware fallback context,
 software-only and hybrid scene-BVH pair uploads and healthy-hybrid frozen software traversal tables, software-only
@@ -92,6 +92,12 @@ can receive an unconditional final sign-off.
   traversal/material streams, TLAS/backing storage, and its output/scratch UAVs. Its graph callback no longer
   reissues those entry transitions. Direct or minimal callers retain native setup by default; the preflight-failure
   `CopyDest` clear and all intra-task soft/hybrid UAV fences remain native ownership.
+- The normal deferred Software Caustics task now consumes graph-declared descriptor-visible shared inputs: sampled
+  world/depth textures, bindless/scene/material/mesh constant buffers, emission and frozen software-BVH traversal
+  streams, plus scene/material/light buffers. Its depth use is `ShaderResource`, matching the bindless sampled-image
+  shader read; the callback no longer restates that entry batch. Direct callers retain native setup by default, while
+  caustic target clears, temporal accumulator reset/decay, and the multi-pass resolve/UAV sequence remain native
+  task-local ownership.
 - Caustic preflight now freezes the exact refractive-instance AABB stream after it has selected buffer capacity and
   descriptor residency. A nonempty immutable blob uploads after the material-context selector and merges into the
   same Shadow Preparation packet, publishing automatic-state `Common`. Shadow Preparation keeps the logical
@@ -326,7 +332,7 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    now use the graph-owned primitive path. The transparent AVBOIT interval producer, occupancy, extinction, and
    accumulation phases now freeze and publish their own per-write-point material/CSG streams, preserving the shared
    interval sample state across the low-resolution raster passes. Current and lagged deferred bindless selectors,
-   the ray-trace material-context selector, normal Shadow Visibility descriptor-visible entry states, caustic
+   the ray-trace material-context selector, normal Shadow Visibility and Software Caustics descriptor-visible entry states, caustic
    emission-target stream, surfel-frame constants, hardware-only,
    forced-software, and healthy hybrid shadow material-context batches plus their retained immutable hardware
    fallback context, software-only and hybrid scene-BVH pairs

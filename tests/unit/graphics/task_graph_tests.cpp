@@ -4896,6 +4896,510 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
 }
 
 
+// Software caustics succeeds the graph-owned shadow callback. Its photon shader samples the same depth layout and
+// descriptor-selected traversal inputs, so the task must inherit those states rather than reintroducing a native
+// entry bridge. Its accumulator/resolve sequence remains task-local and is represented here only by its entry UAvs.
+TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    constexpr Graphics::ResourceQueueSharing::Mask queueSharing =
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    ;
+    const Graphics::GpuGraphResourceId worldPosition = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_world_position"),
+        "Software Caustics World Position",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId depth = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_depth"),
+        "Software Caustics Depth",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId shadowVisibility = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_shadow_visibility"),
+        "Software Caustics Shadow Visibility",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId causticAccumulator = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_accumulator"),
+        "Software Caustics Accumulator",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId causticHistory = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_history"),
+        "Software Caustics History",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId causticResolveHalf = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_resolve_half"),
+        "Software Caustics Resolve Half",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId causticResolveGeometry = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_resolve_geometry"),
+        "Software Caustics Resolve Geometry",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId causticIrradiance = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_irradiance"),
+        "Software Caustics Irradiance",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId currentBindlessSlots = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_bindless_slots"),
+        "Software Caustics Bindless Slots",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId materialContextSlots = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_material_context_slots"),
+        "Software Caustics Material Context Slots",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId causticEmissionTargets = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_emission_targets"),
+        "Software Caustics Emission Targets",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId meshView = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_mesh_view"),
+        "Software Caustics Mesh View",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId sceneBvhNodes = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_scene_bvh_nodes"),
+        "Software Caustics Scene BVH Nodes",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId sceneInstances = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_scene_instances"),
+        "Software Caustics Scene Instances",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId shadowInstanceMaterials = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_instance_materials"),
+        "Software Caustics Shadow Instance Materials",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId shadowMaterialTyped = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_material_typed"),
+        "Software Caustics Shadow Typed Materials",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId shadowInstances = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_instances"),
+        "Software Caustics Shadow Instances",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId softwareMeshNodes = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_mesh_nodes"),
+        "Software Caustics Mesh Nodes",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId softwareMeshPositions = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_mesh_positions"),
+        "Software Caustics Mesh Positions",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId softwareMeshIndices = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_mesh_indices"),
+        "Software Caustics Mesh Indices",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId softwareMeshAttributes = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_mesh_attributes"),
+        "Software Caustics Mesh Attributes",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId sceneShading = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_scene_shading"),
+        "Software Caustics Scene Shading",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId lights = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/software_caustics_lights"),
+        "Software Caustics Lights",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    ASSERT_TRUE(worldPosition.valid());
+    ASSERT_TRUE(depth.valid());
+    ASSERT_TRUE(shadowVisibility.valid());
+    ASSERT_TRUE(causticAccumulator.valid());
+    ASSERT_TRUE(causticHistory.valid());
+    ASSERT_TRUE(causticResolveHalf.valid());
+    ASSERT_TRUE(causticResolveGeometry.valid());
+    ASSERT_TRUE(causticIrradiance.valid());
+    ASSERT_TRUE(currentBindlessSlots.valid());
+    ASSERT_TRUE(materialContextSlots.valid());
+    ASSERT_TRUE(causticEmissionTargets.valid());
+    ASSERT_TRUE(meshView.valid());
+    ASSERT_TRUE(sceneBvhNodes.valid());
+    ASSERT_TRUE(sceneInstances.valid());
+    ASSERT_TRUE(shadowInstanceMaterials.valid());
+    ASSERT_TRUE(shadowMaterialTyped.valid());
+    ASSERT_TRUE(shadowInstances.valid());
+    ASSERT_TRUE(softwareMeshNodes.valid());
+    ASSERT_TRUE(softwareMeshPositions.valid());
+    ASSERT_TRUE(softwareMeshIndices.valid());
+    ASSERT_TRUE(softwareMeshAttributes.valid());
+    ASSERT_TRUE(sceneShading.valid());
+    ASSERT_TRUE(lights.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint boundaryScheduling;
+    boundaryScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    boundaryScheduling.forceSubmissionBoundary = true;
+    boundaryScheduling.allowPacketMerge = false;
+
+    const Graphics::GpuTaskResourceUse shadowPrepareUses[] = {
+        { .resource = currentBindlessSlots, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
+        { .resource = materialContextSlots, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = causticEmissionTargets, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = sceneBvhNodes, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = sceneInstances, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = shadowInstanceMaterials, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = shadowMaterialTyped, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = shadowInstances, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = softwareMeshNodes, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
+        { .resource = softwareMeshPositions, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
+        { .resource = softwareMeshIndices, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
+        { .resource = softwareMeshAttributes, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
+    };
+    Graphics::GpuTaskDesc shadowPrepareDesc;
+    shadowPrepareDesc
+        .setIdentity(Name("tests/task_graph/software_caustics_shadow_prepare"))
+        .setMarkerLabel("Shadow Preparation")
+        .setQueue(graphicsRequest)
+        .setScheduling(boundaryScheduling)
+        .setResourceUses(shadowPrepareUses, LengthOf(shadowPrepareUses))
+    ;
+    const Graphics::GpuTaskId shadowPrepare = graph.addTask(shadowPrepareDesc);
+    ASSERT_TRUE(shadowPrepare.valid());
+
+    const Graphics::GpuTaskResourceUse prefixUses[] = {
+        { .resource = worldPosition, .range = {}, .requiredState = Graphics::ResourceStates::RenderTarget, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = depth, .range = {}, .requiredState = Graphics::ResourceStates::DepthWrite, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = meshView, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = sceneShading, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = lights, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+    };
+    Graphics::GpuTaskDesc prefixDesc;
+    prefixDesc
+        .setIdentity(Name("tests/task_graph/software_caustics_prefix"))
+        .setMarkerLabel("G-Buffer Prefix")
+        .setQueue(graphicsRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&shadowPrepare, 1u)
+        .setResourceUses(prefixUses, LengthOf(prefixUses))
+    ;
+    const Graphics::GpuTaskId prefix = graph.addTask(prefixDesc);
+    ASSERT_TRUE(prefix.valid());
+
+    const Graphics::GpuTaskResourceUse shadowVisibilityUses[] = {
+        { .resource = worldPosition, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = depth, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = currentBindlessSlots, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = materialContextSlots, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = sceneBvhNodes, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = sceneInstances, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = shadowInstanceMaterials, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = shadowMaterialTyped, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = shadowInstances, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = softwareMeshNodes, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = softwareMeshPositions, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = softwareMeshIndices, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = softwareMeshAttributes, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = sceneShading, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = lights, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = shadowVisibility, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
+    };
+    Graphics::GpuTaskDesc shadowVisibilityDesc;
+    shadowVisibilityDesc
+        .setIdentity(Name("tests/task_graph/software_caustics_shadow_visibility"))
+        .setMarkerLabel("Shadow Visibility")
+        .setQueue(computeRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&prefix, 1u)
+        .setResourceUses(shadowVisibilityUses, LengthOf(shadowVisibilityUses))
+    ;
+    const Graphics::GpuTaskId shadowVisibilityTask = graph.addTask(shadowVisibilityDesc);
+    ASSERT_TRUE(shadowVisibilityTask.valid());
+
+    const Graphics::GpuTaskResourceUse softwareCausticsUses[] = {
+        { .resource = worldPosition, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = depth, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = currentBindlessSlots, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = materialContextSlots, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = causticEmissionTargets, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = meshView, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = sceneBvhNodes, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = sceneInstances, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = shadowInstanceMaterials, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = shadowMaterialTyped, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = shadowInstances, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = softwareMeshNodes, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = softwareMeshPositions, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = softwareMeshIndices, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = softwareMeshAttributes, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = sceneShading, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = lights, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = causticAccumulator, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
+        { .resource = causticHistory, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
+        { .resource = causticResolveHalf, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
+        { .resource = causticResolveGeometry, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
+        { .resource = causticIrradiance, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
+    };
+    Graphics::GpuTaskDesc softwareCausticsDesc;
+    softwareCausticsDesc
+        .setIdentity(Name("tests/task_graph/graph_owned_software_caustics"))
+        .setMarkerLabel("Software Caustics")
+        .setQueue(computeRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&shadowVisibilityTask, 1u)
+        .setResourceUses(softwareCausticsUses, LengthOf(softwareCausticsUses))
+    ;
+    const Graphics::GpuTaskId softwareCausticsTask = graph.addTask(softwareCausticsDesc);
+    ASSERT_TRUE(softwareCausticsTask.valid());
+
+    const Graphics::GpuTaskResourceUse lightingUses[] = {
+        { .resource = causticIrradiance, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+    };
+    Graphics::GpuTaskDesc lightingDesc;
+    lightingDesc
+        .setIdentity(Name("tests/task_graph/graph_owned_software_caustics_lighting"))
+        .setMarkerLabel("Deferred Lighting")
+        .setQueue(computeRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&softwareCausticsTask, 1u)
+        .setResourceUses(lightingUses, LengthOf(lightingUses))
+    ;
+    const Graphics::GpuTaskId lighting = graph.addTask(lightingDesc);
+    ASSERT_TRUE(lighting.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    ASSERT_TRUE(HasInferredHazard(
+        analysis,
+        softwareCausticsTask,
+        lighting,
+        causticIrradiance,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+
+    const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
+    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId shadowPacket = compiledGraph.packetForTask(shadowVisibilityTask);
+    const Graphics::GpuSubmissionPacketId causticsPacket = compiledGraph.packetForTask(softwareCausticsTask);
+    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
+    ASSERT_TRUE(shadowPreparePacket.valid());
+    ASSERT_TRUE(prefixPacket.valid());
+    ASSERT_TRUE(shadowPacket.valid());
+    ASSERT_TRUE(causticsPacket.valid());
+    ASSERT_TRUE(lightingPacket.valid());
+    EXPECT_NE(shadowPreparePacket, prefixPacket);
+    EXPECT_NE(prefixPacket, shadowPacket);
+    EXPECT_NE(shadowPacket, causticsPacket);
+    EXPECT_NE(causticsPacket, lightingPacket);
+
+    const Graphics::GpuCompiledTask* const compiledShadow = compiledGraph.findTask(shadowVisibilityTask);
+    const Graphics::GpuCompiledTask* const compiledCaustics = compiledGraph.findTask(softwareCausticsTask);
+    const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting);
+    ASSERT_NE(compiledShadow, nullptr);
+    ASSERT_NE(compiledCaustics, nullptr);
+    ASSERT_NE(compiledLighting, nullptr);
+    const Graphics::GpuCompiledBarrier* const shadowBarriers = compiledGraph.taskPrologueBarriers(shadowVisibilityTask);
+    ASSERT_NE(shadowBarriers, nullptr);
+    bool shadowTransitionsDepthToShaderResource = false;
+    for(usize barrierIndex = 0u; barrierIndex < compiledShadow->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = shadowBarriers[barrierIndex];
+        shadowTransitionsDepthToShaderResource = shadowTransitionsDepthToShaderResource || (
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == depth
+            && barrier.before == Graphics::ResourceStates::DepthWrite
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+        );
+    }
+    EXPECT_TRUE(shadowTransitionsDepthToShaderResource);
+
+    const Graphics::GpuPacketStateSeed* const causticsSeeds = compiledGraph.taskPrologueStateSeeds(softwareCausticsTask);
+    ASSERT_NE(causticsSeeds, nullptr);
+    const auto hasCausticsSeed = [&](const Graphics::GpuGraphResourceId resource, const Graphics::GpuSubmissionPacketId sourcePacket){
+        for(usize seedIndex = 0u; seedIndex < compiledCaustics->prologueStateSeedCount; ++seedIndex){
+            if(causticsSeeds[seedIndex].resource == resource && causticsSeeds[seedIndex].sourcePacket == sourcePacket)
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasCausticsSeed(causticEmissionTargets, shadowPreparePacket));
+    EXPECT_TRUE(hasCausticsSeed(meshView, prefixPacket));
+    EXPECT_TRUE(hasCausticsSeed(worldPosition, shadowPacket));
+    EXPECT_TRUE(hasCausticsSeed(depth, shadowPacket));
+    EXPECT_TRUE(hasCausticsSeed(currentBindlessSlots, shadowPacket));
+    EXPECT_TRUE(hasCausticsSeed(materialContextSlots, shadowPacket));
+    EXPECT_TRUE(hasCausticsSeed(sceneBvhNodes, shadowPacket));
+    EXPECT_TRUE(hasCausticsSeed(sceneInstances, shadowPacket));
+    EXPECT_TRUE(hasCausticsSeed(shadowInstanceMaterials, shadowPacket));
+    EXPECT_TRUE(hasCausticsSeed(shadowMaterialTyped, shadowPacket));
+    EXPECT_TRUE(hasCausticsSeed(shadowInstances, shadowPacket));
+    EXPECT_TRUE(hasCausticsSeed(softwareMeshNodes, shadowPacket));
+    EXPECT_TRUE(hasCausticsSeed(softwareMeshPositions, shadowPacket));
+    EXPECT_TRUE(hasCausticsSeed(softwareMeshIndices, shadowPacket));
+    EXPECT_TRUE(hasCausticsSeed(softwareMeshAttributes, shadowPacket));
+    EXPECT_TRUE(hasCausticsSeed(sceneShading, shadowPacket));
+    EXPECT_TRUE(hasCausticsSeed(lights, shadowPacket));
+
+    const auto causticsPacketWaitsFor = [&](const Graphics::GpuSubmissionPacketId producer){
+        const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(causticsPacket);
+        const Graphics::GpuPacketDependency* const dependencies = compiledGraph.packetDependencies(causticsPacket);
+        if(packet.dependencyCount != 0u && !dependencies)
+            return false;
+        for(usize dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){
+            if(dependencies[dependencyIndex].producer == producer)
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(causticsPacketWaitsFor(shadowPreparePacket));
+    EXPECT_TRUE(causticsPacketWaitsFor(prefixPacket));
+    EXPECT_TRUE(causticsPacketWaitsFor(shadowPacket));
+
+    const Graphics::GpuCompiledBarrier* const causticsBarriers = compiledGraph.taskPrologueBarriers(softwareCausticsTask);
+    ASSERT_NE(causticsBarriers, nullptr);
+    const auto hasCausticsBarrier = [&](const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
+        for(usize barrierIndex = 0u; barrierIndex < compiledCaustics->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = causticsBarriers[barrierIndex];
+            if(
+                barrier.type == type
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_FALSE(hasCausticsBarrier(
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        depth,
+        Graphics::ResourceStates::ShaderResource,
+        Graphics::ResourceStates::DepthRead
+    ));
+    EXPECT_TRUE(hasCausticsBarrier(
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        causticAccumulator,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasCausticsBarrier(
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        causticHistory,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasCausticsBarrier(
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        causticResolveHalf,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasCausticsBarrier(
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        causticResolveGeometry,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasCausticsBarrier(
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        causticIrradiance,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+
+    ASSERT_EQ(compiledLighting->prologueStateSeedCount, 1u);
+    const Graphics::GpuPacketStateSeed* const lightingSeed = compiledGraph.taskPrologueStateSeeds(lighting);
+    ASSERT_NE(lightingSeed, nullptr);
+    EXPECT_EQ(lightingSeed[0u].resource, causticIrradiance);
+    EXPECT_EQ(lightingSeed[0u].sourcePacket, causticsPacket);
+    ASSERT_EQ(compiledLighting->prologueBarrierCount, 1u);
+    const Graphics::GpuCompiledBarrier* const lightingBarrier = compiledGraph.taskPrologueBarriers(lighting);
+    ASSERT_NE(lightingBarrier, nullptr);
+    EXPECT_EQ(lightingBarrier[0u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
+    EXPECT_EQ(lightingBarrier[0u].resource, causticIrradiance);
+    EXPECT_EQ(lightingBarrier[0u].before, Graphics::ResourceStates::UnorderedAccess);
+    EXPECT_EQ(lightingBarrier[0u].after, Graphics::ResourceStates::ShaderResource);
+    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(lightingPacket)[0u].producer, causticsPacket);
+}
+
+
 TEST(GpuTaskGraph, MergesRayTraceMaterialContextUploadIntoShadowPreparePacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

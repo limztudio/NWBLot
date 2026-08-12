@@ -36,6 +36,7 @@ struct SoftwareCausticsGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* shadowVisibilityPrepared = nullptr;
+        bool graphEntryStatesOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -53,7 +54,8 @@ struct SoftwareCausticsGraphTask{
         if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
             const bool causticsDispatched = payload.raytracingSystem->renderGpuBvhCaustics(
                 commandList,
-                *payload.targets
+                *payload.targets,
+                payload.graphEntryStatesOwned
             );
             if(!causticsDispatched && payload.raytracingSystem->hasCausticWork())
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software caustic render pass failed"));
@@ -695,7 +697,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareSoftwareCausticsTask(
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
     const bool* const shadowVisibilityPrepared,
-    Core::GpuTimingSubmissionTicket& timingTicket
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    const bool graphEntryStatesOwned
 ){
     return graph.addTask<__hidden_caustics::SoftwareCausticsGraphTask>(
         desc,
@@ -704,6 +707,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSoftwareCausticsTask(
             .targets = &targets,
             .timingTicket = &timingTicket,
             .shadowVisibilityPrepared = shadowVisibilityPrepared,
+            .graphEntryStatesOwned = graphEntryStatesOwned,
         }
     );
 }
@@ -745,7 +749,11 @@ bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameT
     ;
 }
 
-bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets){
+bool RendererRayTracingSystem::renderGpuBvhCaustics(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool graphEntryStatesOwned
+){
     // Software photon producer runs before deferred lighting.
 
     if(!hasCausticWork())
@@ -769,18 +777,23 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         if(temporalDecay > 0.f)
             prepareCausticAccumulatorForSplat(commandList, targets, temporalDecay);
 
-        // Heap-selected traversal inputs need explicit state transitions.
-        transitionSwShadowTraversalResources(commandList);
-        commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_causticEmissionTargetBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        if(!graphEntryStatesOwned){
+            // Direct compatibility callers restore heap-selected traversal inputs locally. The normal deferred
+            // graph declares and commits these descriptor-visible states before this callback begins.
+            transitionSwShadowTraversalResources(commandList);
+            commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(rayTracingState().m_causticEmissionTargetBuffer.get(), Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        }
         commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
-        commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+        if(!graphEntryStatesOwned){
+            commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+        }
         commandList.commitBarriers();
 
         CausticPhotonPushConstants pushConstants;

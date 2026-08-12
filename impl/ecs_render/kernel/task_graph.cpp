@@ -3753,6 +3753,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     m_deferredCausticResolveSecondWaveletTask = {};
     m_deferredCausticResolveThirdWaveletTask = {};
     m_deferredCausticResolveFourthWaveletTask = {};
+    m_deferredCausticResolveFifthWaveletTask = {};
     m_deferredCausticProducerDispatched = false;
 
     // This remains the direct successor of Shadow Visibility in the deferred graph. A distinct Compute family is
@@ -3825,6 +3826,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveSecondWaveletResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveThirdWaveletResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveFourthWaveletResourceUses{ scratchArena };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveFifthWaveletResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveResourceUses{ scratchArena };
     photonResourceUses.reserve(20u + softwareTraceGeometryResourceCount);
     geometryResourceUses.reserve(3u);
@@ -3833,7 +3835,8 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     resolveSecondWaveletResourceUses.reserve(3u);
     resolveThirdWaveletResourceUses.reserve(3u);
     resolveFourthWaveletResourceUses.reserve(3u);
-    resolveResourceUses.reserve(6u);
+    resolveFifthWaveletResourceUses.reserve(3u);
+    resolveResourceUses.reserve(5u);
     photonResourceUses.push_back(ReadTextureUse(
         worldPosition,
         ECSRenderDetail::s_FramebufferSubresources,
@@ -3872,8 +3875,8 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     ));
 
     // Prepare consumes both immutable graph-produced inputs, then writes the parity-selected first ping-pong target.
-    // The first four wavelet passes read/write the alternating pair, so the compiler owns their exact UAV-to-SRV
-    // handoffs before the native alternating tail begins.
+    // The five fixed wavelet passes read/write the alternating pair, so the compiler owns their exact UAV-to-SRV
+    // handoffs before the native upsample tail begins.
     constexpr bool s_CausticResolvePrepareWritesHalf = (NWB_CAUSTIC_RESOLVE_PASS_COUNT % 2u) == 0u;
     resolvePrepareResourceUses.push_back(ReadTextureUse(
         causticAccumulator,
@@ -3901,6 +3904,11 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         Core::ResourceStates::ShaderResource
     ));
     resolveFourthWaveletResourceUses.push_back(ReadTextureUse(
+        causticResolveGeometry,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::ShaderResource
+    ));
+    resolveFifthWaveletResourceUses.push_back(ReadTextureUse(
         causticResolveGeometry,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::ResourceStates::ShaderResource
@@ -3956,6 +3964,16 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
             ECSRenderDetail::s_FramebufferSubresources,
             Core::ResourceStates::UnorderedAccess
         ));
+        resolveFifthWaveletResourceUses.push_back(ReadTextureUse(
+            causticResolveHalf,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        ));
+        resolveFifthWaveletResourceUses.push_back(WriteTextureUse(
+            causticHistory,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
     }
     else{
         resolvePrepareResourceUses.push_back(ReadTextureUse(
@@ -4008,10 +4026,20 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
             ECSRenderDetail::s_FramebufferSubresources,
             Core::ResourceStates::UnorderedAccess
         ));
+        resolveFifthWaveletResourceUses.push_back(ReadTextureUse(
+            causticHistory,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        ));
+        resolveFifthWaveletResourceUses.push_back(WriteTextureUse(
+            causticResolveHalf,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
     }
 
-    // The timed tail retains the remaining dynamic ping-pong sequence and final upsample. Its broad UAV uses
-    // establish only the tail entry/final state; the first four callbacks above own the precise handoffs.
+    // The timed tail now owns only the fixed half-B upsample. Its declared input receives the exact fifth-wavelet
+    // UAV-to-SRV handoff, so normal graph recording does not repeat that native state bridge.
     resolveResourceUses.push_back(ReadTextureUse(
         worldPosition,
         ECSRenderDetail::s_FramebufferSubresources,
@@ -4022,15 +4050,10 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         ECSRenderDetail::s_FramebufferSubresources,
         Core::ResourceStates::ShaderResource
     ));
-    resolveResourceUses.push_back(ReadWriteTextureUse(
-        causticHistory,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::ResourceStates::UnorderedAccess
-    ));
-    resolveResourceUses.push_back(ReadWriteTextureUse(
+    resolveResourceUses.push_back(ReadTextureUse(
         causticResolveHalf,
         ECSRenderDetail::s_FramebufferSubresources,
-        Core::ResourceStates::UnorderedAccess
+        Core::ResourceStates::ShaderResource
     ));
     resolveResourceUses.push_back(ReadTextureUse(
         causticResolveGeometry,
@@ -4426,7 +4449,30 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         return false;
     }
 
-    Core::GpuTaskSchedulingHint resolveScheduling = resolveFourthWaveletScheduling;
+    Core::GpuTaskSchedulingHint resolveFifthWaveletScheduling = resolveFourthWaveletScheduling;
+    resolveFifthWaveletScheduling.mergeWithPrevious = true;
+    Core::GpuTaskDesc resolveFifthWaveletDesc;
+    resolveFifthWaveletDesc
+        .setIdentity(Name("render.software_caustics.resolve_fifth_wavelet"))
+        .setMarkerLabel("Software Caustics Resolve Fifth Wavelet")
+        .setQueue(ComputeQueueRequest())
+        .setScheduling(resolveFifthWaveletScheduling)
+        .setDependencies(&m_deferredCausticResolveFourthWaveletTask, 1u)
+        .setResourceUses(resolveFifthWaveletResourceUses.data(), resolveFifthWaveletResourceUses.size())
+    ;
+    m_deferredCausticResolveFifthWaveletTask = m_raytracingSystem.declareCausticResolveFifthWaveletTask(
+        m_deferredLightingTaskGraph,
+        resolveFifthWaveletDesc,
+        deferredTargets,
+        &m_deferredCausticProducerDispatched,
+        true
+    );
+    if(!m_deferredCausticResolveFifthWaveletTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics fifth-wavelet graph task"));
+        return false;
+    }
+
+    Core::GpuTaskSchedulingHint resolveScheduling = resolveFifthWaveletScheduling;
     resolveScheduling.mergeWithPrevious = true;
     Core::GpuTaskDesc resolveDesc;
     resolveDesc
@@ -4434,7 +4480,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         .setMarkerLabel("Software Caustics Resolve Tail")
         .setQueue(ComputeQueueRequest())
         .setScheduling(resolveScheduling)
-        .setDependencies(&m_deferredCausticResolveFourthWaveletTask, 1u)
+        .setDependencies(&m_deferredCausticResolveFifthWaveletTask, 1u)
         .setResourceUses(resolveResourceUses.data(), resolveResourceUses.size())
     ;
     m_deferredSoftwareCausticsTask = m_raytracingSystem.declareCausticResolveTask(
@@ -4964,6 +5010,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredCausticResolveSecondWaveletTask = {};
     m_deferredCausticResolveThirdWaveletTask = {};
     m_deferredCausticResolveFourthWaveletTask = {};
+    m_deferredCausticResolveFifthWaveletTask = {};
     m_deferredCausticProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
@@ -5782,6 +5829,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveSecondWaveletResourceUses{ hardwareCausticsScratchArena };
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveThirdWaveletResourceUses{ hardwareCausticsScratchArena };
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveFourthWaveletResourceUses{ hardwareCausticsScratchArena };
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveFifthWaveletResourceUses{ hardwareCausticsScratchArena };
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveResourceUses{ hardwareCausticsScratchArena };
         hardwarePhotonResourceUses.reserve(15u + hardwareTraceAttributeResources.size());
         hardwareGeometryResourceUses.reserve(3u);
@@ -5790,7 +5838,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwareResolveSecondWaveletResourceUses.reserve(3u);
         hardwareResolveThirdWaveletResourceUses.reserve(3u);
         hardwareResolveFourthWaveletResourceUses.reserve(3u);
-        hardwareResolveResourceUses.reserve(6u);
+        hardwareResolveFifthWaveletResourceUses.reserve(3u);
+        hardwareResolveResourceUses.reserve(5u);
         hardwarePhotonResourceUses.push_back(ReadTextureUse(
             worldPosition,
             ECSRenderDetail::s_FramebufferSubresources,
@@ -5839,7 +5888,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ));
 
         // Prepare consumes both immutable graph-produced inputs, then writes the parity-selected first ping-pong
-        // target. The first four wavelet passes read/write the alternating pair through graph barriers.
+        // target. The five fixed wavelet passes read/write the alternating pair through graph barriers.
         constexpr bool s_HardwareCausticResolvePrepareWritesHalf = (NWB_CAUSTIC_RESOLVE_PASS_COUNT % 2u) == 0u;
         hardwareResolvePrepareResourceUses.push_back(ReadTextureUse(
             causticAccumulator,
@@ -5867,6 +5916,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Core::ResourceStates::ShaderResource
         ));
         hardwareResolveFourthWaveletResourceUses.push_back(ReadTextureUse(
+            causticResolveGeometry,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        ));
+        hardwareResolveFifthWaveletResourceUses.push_back(ReadTextureUse(
             causticResolveGeometry,
             ECSRenderDetail::s_FramebufferSubresources,
             Core::ResourceStates::ShaderResource
@@ -5922,6 +5976,16 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 ECSRenderDetail::s_FramebufferSubresources,
                 Core::ResourceStates::UnorderedAccess
             ));
+            hardwareResolveFifthWaveletResourceUses.push_back(ReadTextureUse(
+                causticResolveHalf,
+                ECSRenderDetail::s_FramebufferSubresources,
+                Core::ResourceStates::ShaderResource
+            ));
+            hardwareResolveFifthWaveletResourceUses.push_back(WriteTextureUse(
+                causticHistory,
+                ECSRenderDetail::s_FramebufferSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ));
         }
         else{
             hardwareResolvePrepareResourceUses.push_back(ReadTextureUse(
@@ -5974,9 +6038,19 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 ECSRenderDetail::s_FramebufferSubresources,
                 Core::ResourceStates::UnorderedAccess
             ));
+            hardwareResolveFifthWaveletResourceUses.push_back(ReadTextureUse(
+                causticHistory,
+                ECSRenderDetail::s_FramebufferSubresources,
+                Core::ResourceStates::ShaderResource
+            ));
+            hardwareResolveFifthWaveletResourceUses.push_back(WriteTextureUse(
+                causticResolveHalf,
+                ECSRenderDetail::s_FramebufferSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ));
         }
 
-        // The timed tail retains the remaining dynamic ping-pong sequence and final upsample.
+        // The timed tail now owns only the fixed half-B upsample and receives its exact final graph handoff.
         hardwareResolveResourceUses.push_back(ReadTextureUse(
             worldPosition,
             ECSRenderDetail::s_FramebufferSubresources,
@@ -5987,15 +6061,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             ECSRenderDetail::s_FramebufferSubresources,
             Core::ResourceStates::ShaderResource
         ));
-        hardwareResolveResourceUses.push_back(ReadWriteTextureUse(
-            causticHistory,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::UnorderedAccess
-        ));
-        hardwareResolveResourceUses.push_back(ReadWriteTextureUse(
+        hardwareResolveResourceUses.push_back(ReadTextureUse(
             causticResolveHalf,
             ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::UnorderedAccess
+            Core::ResourceStates::ShaderResource
         ));
         hardwareResolveResourceUses.push_back(ReadTextureUse(
             causticResolveGeometry,
@@ -6421,7 +6490,33 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             return;
         }
 
-        Core::GpuTaskSchedulingHint hardwareResolveScheduling = hardwareResolveFourthWaveletScheduling;
+        Core::GpuTaskSchedulingHint hardwareResolveFifthWaveletScheduling = hardwareResolveFourthWaveletScheduling;
+        hardwareResolveFifthWaveletScheduling.mergeWithPrevious = true;
+        Core::GpuTaskDesc hardwareResolveFifthWaveletDesc;
+        hardwareResolveFifthWaveletDesc
+            .setIdentity(Name("render.hardware_caustics.resolve_fifth_wavelet"))
+            .setMarkerLabel("Hardware Caustics Resolve Fifth Wavelet")
+            .setQueue(GraphicsQueueRequest())
+            .setScheduling(hardwareResolveFifthWaveletScheduling)
+            .setDependencies(&m_deferredCausticResolveFourthWaveletTask, 1u)
+            .setResourceUses(
+                hardwareResolveFifthWaveletResourceUses.data(),
+                hardwareResolveFifthWaveletResourceUses.size()
+            )
+        ;
+        m_deferredCausticResolveFifthWaveletTask = m_raytracingSystem.declareCausticResolveFifthWaveletTask(
+            m_deferredLightingTaskGraph,
+            hardwareResolveFifthWaveletDesc,
+            deferredTargets,
+            &m_deferredCausticProducerDispatched,
+            true
+        );
+        if(!m_deferredCausticResolveFifthWaveletTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics fifth-wavelet graph task"));
+            return;
+        }
+
+        Core::GpuTaskSchedulingHint hardwareResolveScheduling = hardwareResolveFifthWaveletScheduling;
         hardwareResolveScheduling.mergeWithPrevious = true;
         Core::GpuTaskDesc hardwareResolveDesc;
         hardwareResolveDesc
@@ -6429,7 +6524,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .setMarkerLabel("Hardware Caustics Resolve Tail")
             .setQueue(GraphicsQueueRequest())
             .setScheduling(hardwareResolveScheduling)
-            .setDependencies(&m_deferredCausticResolveFourthWaveletTask, 1u)
+            .setDependencies(&m_deferredCausticResolveFifthWaveletTask, 1u)
             .setResourceUses(hardwareResolveResourceUses.data(), hardwareResolveResourceUses.size())
         ;
         m_deferredHardwareCausticsTask = m_raytracingSystem.declareCausticResolveTask(

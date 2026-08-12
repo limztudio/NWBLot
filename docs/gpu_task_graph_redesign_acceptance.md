@@ -105,19 +105,20 @@ can receive an unconditional final sign-off.
   closes that interval. Its first geometry-downsample dispatch also consumes the declared world/depth
   `ShaderResource` and resolve-geometry `UnorderedAccess` states without reasserting them natively. The selected
   photon producer, geometry downsample, resolve-prepare, first-wavelet, second-wavelet, third-wavelet,
-  fourth-wavelet, and timed tail are distinct merged callbacks in that same caustics packet: geometry starts the
-  retained full-resolve timing interval; prepare declares the exact accumulator, geometry cache, and parity-selected
-  ping-pong input as `ShaderResource` plus its target as `UnorderedAccess`; first-wavelet reads that target as
-  `ShaderResource` while writing the counterpart as `UnorderedAccess`; second-wavelet reads that first output as
-  `ShaderResource` while writing back to the parity-selected surface as `UnorderedAccess`; third-wavelet reads that
-  second output as `ShaderResource` while writing its counterpart as `UnorderedAccess`; and fourth-wavelet reads that
-  third output as `ShaderResource` while writing back to the parity-selected surface as `UnorderedAccess`. The
-  compiler therefore lowers the photon/geometry and first four ping-pong in-packet `UnorderedAccess`-to-
-  `ShaderResource` handoffs before the consuming callbacks record; the tail closes the retained interval. When no
-  photon producer records, geometry, prepare, all four wavelets, and tail emit no dispatch and the graph-owned black
-  irradiance clear remains final. Packet-identity validation retains the established timing and acceptance endpoint.
-  Direct callers retain native setup by default, while only the final alternating history/half pass, upsample, and its
-  local UAV ordering remain native task-local ownership.
+  fourth-wavelet, fifth-wavelet, and timed upsample tail are distinct merged callbacks in that same caustics packet:
+  geometry starts the retained full-resolve timing interval; prepare declares the exact accumulator, geometry cache,
+  and parity-selected ping-pong input as `ShaderResource` plus its target as `UnorderedAccess`; first-wavelet reads
+  that target as `ShaderResource` while writing the counterpart as `UnorderedAccess`; second-wavelet reads that first
+  output as `ShaderResource` while writing back to the parity-selected surface as `UnorderedAccess`; third-wavelet
+  reads that second output as `ShaderResource` while writing its counterpart as `UnorderedAccess`; fourth-wavelet
+  reads that third output as `ShaderResource` while writing back to the parity-selected surface as
+  `UnorderedAccess`; and fifth-wavelet reads that fourth output as `ShaderResource` while writing the fixed upsample
+  input as `UnorderedAccess`. The compiler therefore lowers the photon/geometry, all five ping-pong, and the final
+  fifth-wavelet-to-upsample in-packet `UnorderedAccess`-to-`ShaderResource` handoffs before consuming callbacks
+  record; the tail closes the retained interval. When no photon producer records, geometry, prepare, all five
+  wavelets, and tail emit no dispatch and the graph-owned black irradiance clear remains final. Packet-identity
+  validation retains the established timing and acceptance endpoint. Direct callers retain native setup by default,
+  while only the final upsample dispatch and timing close remain native task-local ownership.
   The normal graph also no longer repeats unchanged world/depth sampled-state setup across each wavelet pass.
 - The normal deferred Surfel GI task now consumes graph-declared descriptor-visible entry states for its sampled
   world/normal textures, bindless/material/surfel/scene constants, frozen trace inputs and snapshots, lights, its
@@ -140,20 +141,22 @@ can receive an unconditional final sign-off.
   receives the compiler-owned same-UAV fence and closes that interval. Its first geometry-downsample dispatch also
   consumes the declared world/depth `ShaderResource` and resolve-geometry `UnorderedAccess` states without
   reasserting them natively. The selected photon producer, geometry downsample, resolve-prepare, first-wavelet,
-  second-wavelet, third-wavelet, fourth-wavelet, and timed tail are distinct merged callbacks in that same caustics
-  packet: geometry starts the retained full-resolve timing interval; prepare declares the exact accumulator, geometry
-  cache, and parity-selected ping-pong input as `ShaderResource` plus its target as `UnorderedAccess`; first-wavelet
-  reads that target as `ShaderResource` while writing the counterpart as `UnorderedAccess`; second-wavelet reads that
-  first output as `ShaderResource` while writing back to the parity-selected surface as `UnorderedAccess`;
-  third-wavelet reads that second output as `ShaderResource` while writing its counterpart as `UnorderedAccess`; and
-  fourth-wavelet reads that third output as `ShaderResource` while writing back to the parity-selected surface as
-  `UnorderedAccess`. The compiler therefore lowers the photon/geometry and first four ping-pong in-packet
-  `UnorderedAccess`-to-`ShaderResource` handoffs before the consuming callbacks record; the tail closes the retained
-  interval. When no photon producer records, geometry, prepare, all four wavelets, and tail emit no dispatch and the
-  graph-owned black irradiance clear remains final. Packet-identity validation retains the established timing and
-  acceptance endpoint. Direct callers retain native setup by default; only the final alternating history/half pass,
-  upsample, and its local UAV ordering remain native task-local ownership. The normal graph also no longer repeats
-  unchanged world/depth sampled-state setup across each wavelet pass.
+  second-wavelet, third-wavelet, fourth-wavelet, fifth-wavelet, and timed upsample tail are distinct merged callbacks
+  in that same caustics packet: geometry starts the retained full-resolve timing interval; prepare declares the exact
+  accumulator, geometry cache, and parity-selected ping-pong input as `ShaderResource` plus its target as
+  `UnorderedAccess`; first-wavelet reads that target as `ShaderResource` while writing the counterpart as
+  `UnorderedAccess`; second-wavelet reads that first output as `ShaderResource` while writing back to the
+  parity-selected surface as `UnorderedAccess`; third-wavelet reads that second output as `ShaderResource` while
+  writing its counterpart as `UnorderedAccess`; fourth-wavelet reads that third output as `ShaderResource` while
+  writing back to the parity-selected surface as `UnorderedAccess`; and fifth-wavelet reads that fourth output as
+  `ShaderResource` while writing the fixed upsample input as `UnorderedAccess`. The compiler therefore lowers the
+  photon/geometry, all five ping-pong, and final fifth-wavelet-to-upsample in-packet `UnorderedAccess`-to-
+  `ShaderResource` handoffs before consuming callbacks record; the tail closes the retained interval. When no photon
+  producer records, geometry, prepare, all five wavelets, and tail emit no dispatch and the graph-owned black
+  irradiance clear remains final. Packet-identity validation retains the established timing and acceptance endpoint.
+  Direct callers retain native setup by default; only the final upsample dispatch and timing close remain native
+  task-local ownership. The normal graph also no longer repeats unchanged world/depth sampled-state setup across each
+  wavelet pass.
 - Caustic preflight now freezes the exact refractive-instance AABB stream after it has selected buffer capacity and
   descriptor residency. A nonempty immutable blob uploads after the material-context selector and merges into the
   same Shadow Preparation packet, publishing automatic-state `Common`. Shadow Preparation keeps the logical
@@ -353,6 +356,7 @@ can receive an unconditional final sign-off.
 | Graph-owned caustic second-wavelet handoff follow-up: renderer build, task-graph unit, descriptor-buffer smoke, ECS graphics, CTest, and GPU-validation hardware/forced-software caustic A/B | passed; normal Software and Hardware Caustics now retain a second graph-owned wavelet callback in the same selected caustics packet. It reads the first wavelet's ping-pong output as `ShaderResource` and writes the opposite parity-selected target as `UnorderedAccess`, so the compiler lowers the exact second in-packet `UnorderedAccess`-to-`ShaderResource` barrier before bridge-free recording. The timed tail begins after both graph-owned wavelets, retains the remaining three alternating native passes plus upsample, and closes the existing resolve interval. Renderer packet validation rejects a split, while no-producer prepare/wavelet/tail callbacks issue no dispatch and preserve the black irradiance clear. Graph tests passed 71/71, ECS graphics passed 18/18, descriptor smoke passed 96 with 11 expected topology skips, and CTest passed 3/3. The debug GPU-validation paired capture reported no failures (`.cozter/out/ab-results/bindless-parity/caustics/20260813_073108/`; max delta 20, mean 0.111340, 9.8191% changed pixels). |
 | Graph-owned caustic third-wavelet handoff follow-up: renderer build, task-graph unit, descriptor-buffer smoke, ECS graphics, CTest, and GPU-validation hardware/forced-software caustic A/B | passed; normal Software and Hardware Caustics now retain a third graph-owned wavelet callback in the same selected caustics packet. It reads the second wavelet's ping-pong output as `ShaderResource` and writes the counterpart as `UnorderedAccess`, so the compiler lowers the exact third in-packet `UnorderedAccess`-to-`ShaderResource` barrier before bridge-free recording. The timed tail begins after all three graph-owned wavelets, retains the final two alternating native passes plus upsample, and closes the existing resolve interval. Renderer packet validation rejects a split, while no-producer prepare/wavelet/tail callbacks issue no dispatch and preserve the black irradiance clear. Graph tests passed 71/71, ECS graphics passed 18/18, descriptor smoke passed 96 with 11 expected topology skips, and CTest passed 3/3. The debug GPU-validation paired capture reported no failures (`.cozter/out/ab-results/bindless-parity/caustics/20260813_074829/`; max delta 22, mean 0.139727, 12.8664% changed pixels). |
 | Graph-owned caustic fourth-wavelet handoff follow-up: renderer build, task-graph unit, descriptor-buffer smoke, ECS graphics, CTest, and GPU-validation hardware/forced-software caustic A/B | passed; normal Software and Hardware Caustics now retain a fourth graph-owned wavelet callback in the same selected caustics packet. It reads the third wavelet's ping-pong output as `ShaderResource` and writes the parity-selected surface as `UnorderedAccess`, so the compiler lowers the exact fourth in-packet `UnorderedAccess`-to-`ShaderResource` barrier before bridge-free recording. The timed tail begins after all four graph-owned wavelets, retains only the final native wavelet plus upsample, and closes the existing resolve interval. Renderer packet validation rejects a split, while no-producer prepare/wavelet/tail callbacks issue no dispatch and preserve the black irradiance clear. Graph tests passed 71/71, ECS graphics passed 18/18, descriptor smoke passed 96 with 11 expected topology skips, and CTest passed 3/3. The debug GPU-validation paired capture reported no failures (`.cozter/out/ab-results/bindless-parity/caustics/20260813_080319/`; max delta 46, mean 0.309171, 11.3173% changed pixels). |
+| Graph-owned caustic fifth-wavelet and upsample handoff follow-up: renderer build, task-graph unit, descriptor-buffer smoke, ECS graphics, CTest, and GPU-validation hardware/forced-software caustic A/B | passed; normal Software and Hardware Caustics now retain the fixed fifth wavelet callback in the same selected caustics packet. It reads the fourth ping-pong output as `ShaderResource` and writes the fixed half-resolution upsample input as `UnorderedAccess`; the following timed tail declares that half-resolution input as `ShaderResource`, so the compiler lowers both the fifth wavelet and final wavelet-to-upsample in-packet `UnorderedAccess`-to-`ShaderResource` barriers before bridge-free recording. The tail now contains only the upsample dispatch and timing close. Renderer packet validation rejects a split, while no-producer wavelet/tail callbacks issue no dispatch and preserve the black irradiance clear. Graph tests passed 71/71, ECS graphics passed 18/18, descriptor smoke passed 96 with 11 expected topology skips, and CTest passed 3/3. The debug GPU-validation paired capture reported no failures (`.cozter/out/ab-results/bindless-parity/caustics/20260813_083102/`; max delta 47, mean 0.327890, 13.8906% changed pixels). |
 | Graph-owned Surfel GI entry-state follow-up: renderer build, task-graph unit, descriptor-buffer smoke, and CTest | passed; `nwb_ecs_render` rebuilt, graph tests passed 62/62, descriptor smoke passed 85 with 11 expected topology skips, and CTest passed 2/2. Normal deferred Surfel GI now receives descriptor-visible G-buffer, selector/context/scene/surfel constants, frozen software traversal/snapshot/light streams, persistent UAV buffers, and half-resolution output from graph declarations before its callback records. Focused compiler and real-Vulkan getter-only packet tests prove that an incompatible prefix state is lowered before the native bridge-free entry. Direct callers retain their native setup while output/cell clears and in-task UAV/indirect transitions stay local. |
 | Graph-owned CSG receiver-surface image-state follow-up: 54 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; opaque G-buffer and prepared-transparent AVBOIT declare all receiver-event-data layers and the receiver-event-count layer as `UnorderedAccess` before their native material thunks record. The normal graph no longer manually transitions that StorageImage pair; unprepared and direct compatibility paths retain their bridge while the remaining CSG image lifecycle stays explicitly out of scope. |
 | Graph-owned CSG interval-peel state follow-up: 54 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; opaque G-buffer and prepared-transparent AVBOIT now declare every cap-back-normal, interval-depth, and interval-ID peel layer as `UnorderedAccess` before their native interval dispatches. The direct first-peel state bridge is removed only for those graph callers; compatibility paths and the native combine-stage UAV barrier remain intact. |

@@ -105,6 +105,9 @@ struct MaterialPassDrawContext{
     // The shared graph declares receiver/cutter SRVs and clip/interval-sample CBVs before prepared CSG thunks
     // record. Direct and unprepared callers retain the native heap-buffer setup by leaving this false.
     bool csgClipBufferStatesGraphOwned = false;
+    // Prepared graph tasks also declare the shared mesh-view CBV and material instance/typed SRVs. Individual mesh
+    // geometry remains dynamically selected by each draw and therefore retains its local state setup.
+    bool materialFrameStatesGraphOwned = false;
 };
 
 

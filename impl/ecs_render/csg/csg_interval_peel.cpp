@@ -216,7 +216,8 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
     DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
     const bool intervalPeelTargetStatesGraphOwned,
-    const bool csgClipBufferStatesGraphOwned
+    const bool csgClipBufferStatesGraphOwned,
+    const bool materialFrameStatesGraphOwned
 ){
     if(!csgFrameData.hasWork())
         return;
@@ -231,9 +232,10 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
     // states before this thunk records. Direct compatibility callers retain the historical native setup.
     if(!intervalPeelTargetStatesGraphOwned)
         __hidden_csg_interval_peel::SetCsgIntervalPeelStorageStates(commandList, targets);
-    // The view is heap-selected; transition its UniformBuffer
-    // explicitly before the standalone peel dispatch.
-    commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    // The graph declares the heap-selected view CBV for prepared material streams. Direct and compatibility callers
+    // retain the established native setup.
+    if(!materialFrameStatesGraphOwned)
+        commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
     if(!csgClipBufferStatesGraphOwned)
         setCsgClipBufferStates(commandList);
     commandList.commitBarriers();
@@ -316,7 +318,8 @@ void RendererCsgSystem::renderCsgIntervalCaps(
     DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
     const bool intervalSampleImageStatesGraphOwned,
-    const bool csgClipBufferStatesGraphOwned
+    const bool csgClipBufferStatesGraphOwned,
+    const bool materialFrameStatesGraphOwned
 ){
     NWB_ASSERT(csgState().m_intervalCapFillPipeline);
     NWB_ASSERT(csgState().m_clipContextSlotsHeapHandle.valid());
@@ -329,11 +332,13 @@ void RendererCsgSystem::renderCsgIntervalCaps(
 
     if(!intervalSampleImageStatesGraphOwned)
         __hidden_csg_interval_peel::SetCsgIntervalSampleStorageStates(commandList, targets);
-    // The cap-fill surface evaluator reaches typed words and mesh instances through heap slots, so its pipeline-local
-    // material descriptor cannot contribute these transitions automatically.
-    commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(drawState().m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    // The cap-fill surface evaluator reaches typed words, mesh instances, and the view through heap slots. Prepared
+    // graph tasks declare those shared states before this thunk records; compatibility callers retain this bridge.
+    if(!materialFrameStatesGraphOwned){
+        commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(drawState().m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    }
     if(!csgClipBufferStatesGraphOwned)
         setCsgClipBufferStates(commandList);
     commandList.commitBarriers();

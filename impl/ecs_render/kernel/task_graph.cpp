@@ -611,6 +611,7 @@ struct GbufferGraphTask{
         bool csgReceiverSpanOutputImageStatesGraphOwned = false;
         bool csgRemovedIntervalOutputImageStatesGraphOwned = false;
         bool csgClipBufferStatesGraphOwned = false;
+        bool materialFrameStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : opaqueDrawSnapshot(arena)
@@ -690,14 +691,19 @@ struct GbufferGraphTask{
                     deferredTargets,
                     csgFrameData,
                     payload.csgIntervalPeelTargetStatesGraphOwned,
-                    payload.csgClipBufferStatesGraphOwned
+                    payload.csgClipBufferStatesGraphOwned,
+                    payload.materialFrameStatesGraphOwned
                 );
             const MaterialPassDrawContext opaqueDrawContext{
                 commandList,
                 deferredTargets.framebuffer.get(),
                 MaterialPipelinePass::Opaque,
                 nullptr,
-                deferredViewportState
+                deferredViewportState,
+                false,
+                false,
+                false,
+                payload.materialFrameStatesGraphOwned
             };
             if(regularDrawResourcesReady && !opaqueDrawItems.regular.empty()){
                 Core::GpuTimingMeasure timing(
@@ -722,7 +728,8 @@ struct GbufferGraphTask{
                 csgIntervalViewportState,
                 payload.csgReceiverSurfaceImageStatesGraphOwned,
                 false,
-                payload.csgClipBufferStatesGraphOwned
+                payload.csgClipBufferStatesGraphOwned,
+                payload.materialFrameStatesGraphOwned
             };
             if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
                 Core::GpuTimingMeasure timing(
@@ -772,6 +779,7 @@ struct CsgIntervalSampleGraphTask{
         bool csgFrameBuffersUploaded = false;
         bool intervalSampleImageStatesGraphOwned = false;
         bool csgClipBufferStatesGraphOwned = false;
+        bool materialFrameStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : opaqueDrawSnapshot(arena)
@@ -849,7 +857,8 @@ struct CsgIntervalSampleGraphTask{
                 deferredViewportState,
                 false,
                 payload.intervalSampleImageStatesGraphOwned,
-                payload.csgClipBufferStatesGraphOwned
+                payload.csgClipBufferStatesGraphOwned,
+                payload.materialFrameStatesGraphOwned
             };
             if(!opaqueDrawItems.csg.empty()){
                 Core::GpuTimingMeasure timing(
@@ -866,7 +875,8 @@ struct CsgIntervalSampleGraphTask{
                     deferredTargets,
                     csgFrameData,
                     payload.intervalSampleImageStatesGraphOwned,
-                    payload.csgClipBufferStatesGraphOwned
+                    payload.csgClipBufferStatesGraphOwned,
+                    payload.materialFrameStatesGraphOwned
                 );
             }
         }
@@ -1061,6 +1071,7 @@ struct AvboitPreGraphTask{
         bool transparentCsgReceiverSpanOutputImageStatesGraphOwned = false;
         bool transparentCsgRemovedIntervalOutputImageStatesGraphOwned = false;
         bool transparentCsgClipBufferStatesGraphOwned = false;
+        bool transparentCsgMaterialFrameStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : transparentCsgSnapshot(arena)
@@ -1108,7 +1119,8 @@ struct AvboitPreGraphTask{
                 payload.transparentCsgIntervalPeelTargetStatesGraphOwned,
                 payload.transparentCsgReceiverSpanOutputImageStatesGraphOwned,
                 payload.transparentCsgRemovedIntervalOutputImageStatesGraphOwned,
-                payload.transparentCsgClipBufferStatesGraphOwned
+                payload.transparentCsgClipBufferStatesGraphOwned,
+                payload.transparentCsgMaterialFrameStatesGraphOwned
             );
         }
         return true;
@@ -1131,6 +1143,7 @@ struct AvboitOccupancyGraphTask{
         bool occupancyStreamsUploaded = false;
         bool occupancyCsgIntervalSampleImageStatesGraphOwned = false;
         bool occupancyCsgClipBufferStatesGraphOwned = false;
+        bool occupancyMaterialFrameStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : occupancySnapshot(arena)
@@ -1175,7 +1188,8 @@ struct AvboitOccupancyGraphTask{
                 // The task's declared depth/coverage uses have already lowered and committed their graph barrier.
                 true,
                 payload.occupancyCsgIntervalSampleImageStatesGraphOwned,
-                payload.occupancyCsgClipBufferStatesGraphOwned
+                payload.occupancyCsgClipBufferStatesGraphOwned,
+                payload.occupancyMaterialFrameStatesGraphOwned
             );
         }
         // The declared sampled G-buffer uses remain authoritative here. Occupancy's low-resolution framebuffer
@@ -1218,6 +1232,7 @@ struct AvboitExtinctionGraphTask{
         bool extinctionPhasePrepared = false;
         bool extinctionCsgIntervalSampleImageStatesGraphOwned = false;
         bool extinctionCsgClipBufferStatesGraphOwned = false;
+        bool extinctionMaterialFrameStatesGraphOwned = false;
         bool hasTransparentRenderers = false;
         bool splitStages = false;
 
@@ -1263,7 +1278,8 @@ struct AvboitExtinctionGraphTask{
                     preparedExtinctionInstanceCount,
                     preparedExtinctionMaterialTypedByteCount,
                     payload.extinctionCsgIntervalSampleImageStatesGraphOwned,
-                    payload.extinctionCsgClipBufferStatesGraphOwned
+                    payload.extinctionCsgClipBufferStatesGraphOwned,
+                    payload.extinctionMaterialFrameStatesGraphOwned
                 );
             }
             else{
@@ -1276,7 +1292,8 @@ struct AvboitExtinctionGraphTask{
                     preparedExtinctionInstanceCount,
                     preparedExtinctionMaterialTypedByteCount,
                     payload.extinctionCsgIntervalSampleImageStatesGraphOwned,
-                    payload.extinctionCsgClipBufferStatesGraphOwned
+                    payload.extinctionCsgClipBufferStatesGraphOwned,
+                    payload.extinctionMaterialFrameStatesGraphOwned
                 );
             }
         }
@@ -1318,6 +1335,7 @@ struct AvboitAccumulationGraphTask{
         bool accumulationPhasePrepared = false;
         bool accumulationCsgIntervalSampleImageStatesGraphOwned = false;
         bool accumulationCsgClipBufferStatesGraphOwned = false;
+        bool accumulationMaterialFrameStatesGraphOwned = false;
         bool hasTransparentRenderers = false;
         bool splitStages = false;
 
@@ -1364,7 +1382,8 @@ struct AvboitAccumulationGraphTask{
                 // The following mergeable Graphics finalizer owns every accumulation-framebuffer handoff.
                 true,
                 payload.accumulationCsgIntervalSampleImageStatesGraphOwned,
-                payload.accumulationCsgClipBufferStatesGraphOwned
+                payload.accumulationCsgClipBufferStatesGraphOwned,
+                payload.accumulationMaterialFrameStatesGraphOwned
             );
         }
         return true;
@@ -2719,6 +2738,9 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     gbufferPayload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
 
     const bool hasOpaqueDrawItems = !opaqueDrawItems.empty();
+    // G-buffer and the optional opaque CSG follow-up both declare this exact shared material entry batch whenever
+    // their immutable draw stream exists. Individual mesh geometry remains selected and normalized per draw.
+    gbufferPayload.materialFrameStatesGraphOwned = hasOpaqueDrawItems;
     Core::GpuTaskId materialDrawUploadTask = m_graphicsPrefixDeferredClearTask;
     if(hasOpaqueDrawItems){
         if(
@@ -2972,6 +2994,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         csgIntervalSamplePayload.materialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
         csgIntervalSamplePayload.csgFrameBuffersUploaded = gbufferPayload.csgFrameBuffersUploaded;
         csgIntervalSamplePayload.intervalSampleImageStatesGraphOwned = true;
+        csgIntervalSamplePayload.materialFrameStatesGraphOwned = hasOpaqueDrawItems;
         // The interval-sample task is scheduled for semantic CSG work, but only the gathered GPU work
         // declares these heap-selected clip buffers. Retain the native bridge for an empty gathered frame.
         csgIntervalSamplePayload.csgClipBufferStatesGraphOwned = hasCsgFrameGpuWork;
@@ -5492,6 +5515,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         avboitPrePayload.transparentCsgReceiverSpanOutputImageStatesGraphOwned = true;
         avboitPrePayload.transparentCsgRemovedIntervalOutputImageStatesGraphOwned = true;
         avboitPrePayload.transparentCsgClipBufferStatesGraphOwned = true;
+        avboitPrePayload.transparentCsgMaterialFrameStatesGraphOwned = true;
         NWB_ASSERT(
             avboitPrePayload.transparentCsgStreamsUploaded
             && avboitPrePayload.transparentCsgSnapshot.captured
@@ -5928,6 +5952,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitOccupancyPayload.occupancyCsgClipBufferStatesGraphOwned =
         occupancyCsgClipBufferStatesGraphOwned
     ;
+    avboitOccupancyPayload.occupancyMaterialFrameStatesGraphOwned = avboitOccupancyPayload.occupancyStreamsUploaded;
 
     Core::Alloc::ScratchArena avboitPreResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitPreResourceUses{ avboitPreResourceScratch };
@@ -6329,6 +6354,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitExtinctionPayload.extinctionCsgClipBufferStatesGraphOwned =
         extinctionCsgClipBufferStatesGraphOwned
     ;
+    avboitExtinctionPayload.extinctionMaterialFrameStatesGraphOwned = extinctionStreamsUploaded;
     Core::Alloc::ScratchArena extinctionResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionResourceUses{ extinctionResourceScratch };
     extinctionResourceUses.reserve(
@@ -6747,6 +6773,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitAccumulationPayload.accumulationCsgClipBufferStatesGraphOwned =
         accumulationCsgClipBufferStatesGraphOwned
     ;
+    avboitAccumulationPayload.accumulationMaterialFrameStatesGraphOwned = accumulationStreamsUploaded;
 
     Core::Alloc::ScratchArena accumulationResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationResourceUses{ accumulationResourceScratch };

@@ -1128,6 +1128,38 @@ struct NativePacketCsgClipBufferEntryProbeTask{
 };
 
 
+// Prepared opaque and AVBOIT draw streams share this mesh-view/material entry batch. The probe deliberately uses
+// only state getters, ensuring the graph has established all three descriptor-visible states before native draw
+// code could reintroduce its compatibility bridge.
+struct NativePacketMaterialFrameEntryProbeTask{
+    struct Payload{
+        Buffer* meshView = nullptr;
+        Buffer* materialInstances = nullptr;
+        Buffer* materialTyped = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        const bool ready =
+            payload.meshView
+            && payload.materialInstances
+            && payload.materialTyped
+            && commandList.getBufferState(payload.meshView) == ResourceStates::ConstantBuffer
+            && commandList.getBufferState(payload.materialInstances) == ResourceStates::ShaderResource
+            && commandList.getBufferState(payload.materialTyped) == ResourceStates::ShaderResource
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
 // A mutable success gate lets the packet recorder prove that an optional capture rolls back an incomplete packet
 // before a retry. It intentionally records no native work beyond the task marker.
 struct NativePacketCaptureRetryTask{
@@ -4585,6 +4617,193 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCsgClipBufferEntryStatesRecordWi
         scratchArena
     ));
     EXPECT_TRUE(transaction.packetToken(csgClipPacket).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// The prepared material draw routes now receive their common mesh-view/material states from graph declarations.
+// This real-Vulkan packet contains a getter-only callback, so any native state setup would be unable to mask a
+// missing ConstantBuffer/ShaderResource transition.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialFrameEntryStatesRecordWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto meshView = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setIsConstantBuffer(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    const auto makeMaterialBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    auto materialInstances = makeMaterialBuffer();
+    auto materialTyped = makeMaterialBuffer();
+    ASSERT_NE(meshView.get(), nullptr);
+    ASSERT_NE(materialInstances.get(), nullptr);
+    ASSERT_NE(materialTyped.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importBuffer = [&graph](const BufferHandle& buffer, const Name identity, const AStringView label){
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Buffer)
+        );
+    };
+    const GpuGraphResourceId meshViewResource = importBuffer(
+        meshView,
+        Name("tests/descriptor_buffer/material_frame_mesh_view"),
+        "Material Frame Mesh View"
+    );
+    const GpuGraphResourceId materialInstancesResource = importBuffer(
+        materialInstances,
+        Name("tests/descriptor_buffer/material_frame_instances"),
+        "Material Frame Instances"
+    );
+    const GpuGraphResourceId materialTypedResource = importBuffer(
+        materialTyped,
+        Name("tests/descriptor_buffer/material_frame_typed"),
+        "Material Frame Typed"
+    );
+    ASSERT_TRUE(meshViewResource.valid());
+    ASSERT_TRUE(materialInstancesResource.valid());
+    ASSERT_TRUE(materialTypedResource.valid());
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint materialScheduling;
+    materialScheduling.cost = GpuTaskCostHint::Medium;
+    materialScheduling.forceSubmissionBoundary = true;
+    materialScheduling.allowPacketMerge = false;
+    const GpuTaskResourceUse materialUses[] = {
+        GpuTaskResourceUse{
+            .resource = meshViewResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = materialInstancesResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = materialTypedResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskDesc materialDesc;
+    materialDesc
+        .setIdentity(Name("tests/descriptor_buffer/material_frame_entry"))
+        .setMarkerLabel("Material Frame Entry")
+        .setQueue(graphicsQueue)
+        .setScheduling(materialScheduling)
+        .setResourceUses(materialUses, LengthOf(materialUses))
+    ;
+    bool materialRecorded = false;
+    const GpuTaskId materialTask = graph.addTask<NativePacketMaterialFrameEntryProbeTask>(
+        materialDesc,
+        NativePacketMaterialFrameEntryProbeTask::Payload{
+            .meshView = meshView.get(),
+            .materialInstances = materialInstances.get(),
+            .materialTyped = materialTyped.get(),
+            .recorded = &materialRecorded,
+        }
+    );
+    ASSERT_TRUE(materialTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/material_frame_entry_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuSubmissionPacketId materialPacket = compiledGraph.packetForTask(materialTask);
+    ASSERT_TRUE(materialPacket.valid());
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuCompiledTask* const compiledMaterial = compiledGraph.findTask(materialTask);
+    ASSERT_NE(compiledMaterial, nullptr);
+    ASSERT_EQ(compiledMaterial->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledMaterial->prologueBarrierCount, 3u);
+    const GpuCompiledBarrier* const materialBarriers = compiledGraph.taskPrologueBarriers(materialTask);
+    ASSERT_NE(materialBarriers, nullptr);
+    const auto hasTransition = [&](const GpuGraphResourceId resource, const ResourceStates::Mask expectedState){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledMaterial->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = materialBarriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == ResourceStates::Common
+                && barrier.after == expectedState
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTransition(meshViewResource, ResourceStates::ConstantBuffer));
+    EXPECT_TRUE(hasTransition(materialInstancesResource, ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasTransition(materialTypedResource, ResourceStates::ShaderResource));
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(materialRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(materialPacket).valid());
     EXPECT_TRUE(device.waitForIdle());
 }
 

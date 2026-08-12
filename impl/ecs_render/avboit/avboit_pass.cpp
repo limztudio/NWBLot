@@ -360,7 +360,8 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     const bool intervalPeelTargetStatesGraphOwned,
     const bool receiverSpanOutputImageStatesGraphOwned,
     const bool removedIntervalOutputImageStatesGraphOwned,
-    const bool csgClipBufferStatesGraphOwned
+    const bool csgClipBufferStatesGraphOwned,
+    const bool materialFrameStatesGraphOwned
 ){
     if(
         !targets.framebuffer
@@ -417,7 +418,8 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         targets,
         csgFrameData,
         intervalTargetsGraphOwned && intervalPeelTargetStatesGraphOwned,
-        csgClipBufferStatesGraphOwned
+        csgClipBufferStatesGraphOwned,
+        materialFrameStatesGraphOwned
     );
 
     const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
@@ -428,7 +430,8 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         viewportState,
         receiverSurfaceImageStatesGraphOwned,
         false,
-        csgClipBufferStatesGraphOwned
+        csgClipBufferStatesGraphOwned,
+        materialFrameStatesGraphOwned
     };
     m_renderer.materialSystem().renderMaterialPassDrawItems(
         csgReceiverSurfaceDrawContext,
@@ -462,7 +465,8 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     const bool preparedTransparentCsgIntervalPeelTargetStatesGraphOwned,
     const bool preparedTransparentCsgReceiverSpanOutputImageStatesGraphOwned,
     const bool preparedTransparentCsgRemovedIntervalOutputImageStatesGraphOwned,
-    const bool preparedTransparentCsgClipBufferStatesGraphOwned
+    const bool preparedTransparentCsgClipBufferStatesGraphOwned,
+    const bool preparedTransparentCsgMaterialFrameStatesGraphOwned
 ){
     if(preparedTransparentCsgReceiverSurfaceDrawItems || preparedTransparentCsgFrameData){
         NWB_ASSERT(preparedTransparentCsgReceiverSurfaceDrawItems);
@@ -480,7 +484,8 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
                 preparedTransparentCsgIntervalPeelTargetStatesGraphOwned,
                 preparedTransparentCsgReceiverSpanOutputImageStatesGraphOwned,
                 preparedTransparentCsgRemovedIntervalOutputImageStatesGraphOwned,
-                preparedTransparentCsgClipBufferStatesGraphOwned
+                preparedTransparentCsgClipBufferStatesGraphOwned,
+                preparedTransparentCsgMaterialFrameStatesGraphOwned
             );
         }
     }
@@ -498,7 +503,8 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
     const usize preparedOccupancyMaterialTypedByteCount,
     const bool occupancyStatesGraphOwned,
     const bool occupancyCsgIntervalSampleImageStatesGraphOwned,
-    const bool occupancyCsgClipBufferStatesGraphOwned
+    const bool occupancyCsgClipBufferStatesGraphOwned,
+    const bool occupancyMaterialFrameStatesGraphOwned
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -531,7 +537,8 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
                 preparedOccupancyInstanceCount,
                 preparedOccupancyMaterialTypedByteCount,
                 occupancyCsgIntervalSampleImageStatesGraphOwned,
-                occupancyCsgClipBufferStatesGraphOwned
+                occupancyCsgClipBufferStatesGraphOwned,
+                occupancyMaterialFrameStatesGraphOwned
             );
         }
     }
@@ -578,7 +585,8 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
     const usize preparedExtinctionInstanceCount,
     const usize preparedExtinctionMaterialTypedByteCount,
     const bool extinctionCsgIntervalSampleImageStatesGraphOwned,
-    const bool extinctionCsgClipBufferStatesGraphOwned
+    const bool extinctionCsgClipBufferStatesGraphOwned,
+    const bool extinctionMaterialFrameStatesGraphOwned
 ){
     NWB_ASSERT(avboitTargets.valid());
 
@@ -599,7 +607,8 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
                 preparedExtinctionInstanceCount,
                 preparedExtinctionMaterialTypedByteCount,
                 extinctionCsgIntervalSampleImageStatesGraphOwned,
-                extinctionCsgClipBufferStatesGraphOwned
+                extinctionCsgClipBufferStatesGraphOwned,
+                extinctionMaterialFrameStatesGraphOwned
             );
         }
     }
@@ -626,7 +635,8 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     const usize preparedAccumulationMaterialTypedByteCount,
     const bool accumulationFinalStatesGraphOwned,
     const bool accumulationCsgIntervalSampleImageStatesGraphOwned,
-    const bool accumulationCsgClipBufferStatesGraphOwned
+    const bool accumulationCsgClipBufferStatesGraphOwned,
+    const bool accumulationMaterialFrameStatesGraphOwned
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -648,7 +658,8 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
                 preparedAccumulationInstanceCount,
                 preparedAccumulationMaterialTypedByteCount,
                 accumulationCsgIntervalSampleImageStatesGraphOwned,
-                accumulationCsgClipBufferStatesGraphOwned
+                accumulationCsgClipBufferStatesGraphOwned,
+                accumulationMaterialFrameStatesGraphOwned
             );
         }
     }
@@ -695,7 +706,8 @@ void RendererAvboitSystem::renderAvboitPostOccupancyPreAccumulationPasses(
     const usize preparedExtinctionInstanceCount,
     const usize preparedExtinctionMaterialTypedByteCount,
     const bool extinctionCsgIntervalSampleImageStatesGraphOwned,
-    const bool extinctionCsgClipBufferStatesGraphOwned
+    const bool extinctionCsgClipBufferStatesGraphOwned,
+    const bool extinctionMaterialFrameStatesGraphOwned
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -712,7 +724,8 @@ void RendererAvboitSystem::renderAvboitPostOccupancyPreAccumulationPasses(
         preparedExtinctionInstanceCount,
         preparedExtinctionMaterialTypedByteCount,
         extinctionCsgIntervalSampleImageStatesGraphOwned,
-        extinctionCsgClipBufferStatesGraphOwned
+        extinctionCsgClipBufferStatesGraphOwned,
+        extinctionMaterialFrameStatesGraphOwned
     );
     dispatchAvboitIntegration(commandList, avboitTargets);
 }

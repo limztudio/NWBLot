@@ -76,7 +76,10 @@ public:
         bool csgIntervalSampleImageStatesGraphOwned = false,
         // Prepared graph tasks also declare their heap-selected CSG clip buffers. Direct and unprepared callers
         // retain the native SRV/CBV state setup by leaving this false.
-        bool csgClipBufferStatesGraphOwned = false
+        bool csgClipBufferStatesGraphOwned = false,
+        // The shared graph declares mesh-view/material entry states for immutable prepared streams. Direct and
+        // compatibility consumers retain their historical native setup by leaving this false.
+        bool materialFrameStatesGraphOwned = false
     );
     [[nodiscard]] bool prepareMaterialPassResources(
         Core::Framebuffer* framebuffer,
@@ -154,7 +157,11 @@ public:
     [[nodiscard]] bool prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] u32 meshDispatchFlags(const MeshResources& mesh, MaterialPipelinePass::Enum pass, bool twoSided, bool meshletConeCullScaleSafe)const;
     [[nodiscard]] u32 materialPassDrawDispatchFlags(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MeshResources& mesh)const;
-    void setMaterialPassCommonBufferStates(Core::CommandList& commandList, const MeshResources& mesh);
+    void setMaterialPassCommonBufferStates(
+        Core::CommandList& commandList,
+        const MeshResources& mesh,
+        bool materialFrameStatesGraphOwned
+    );
     void setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MeshResources& mesh);
     void renderMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItems& drawItems);
     void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);

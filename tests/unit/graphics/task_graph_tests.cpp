@@ -10393,6 +10393,113 @@ TEST(GpuTaskGraph, PlansCsgClipBufferEntryStates){
 }
 
 
+// Prepared opaque and AVBOIT material consumers share the mesh-view CBV with material instance/typed SRVs. Their
+// uploads publish Common, so the graph must establish this three-buffer entry batch before native draw or CSG code
+// records; only dynamically selected mesh geometry remains local to each draw.
+TEST(GpuTaskGraph, PlansGraphOwnedMaterialFrameEntryStates){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    constexpr Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Graphics;
+    const Graphics::GpuGraphResourceId meshView = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/material_frame_mesh_view"),
+        "Material Frame Mesh View",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId materialInstances = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/material_frame_instances"),
+        "Material Frame Instances",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId materialTyped = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/material_frame_typed"),
+        "Material Frame Typed",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    ASSERT_TRUE(meshView.valid());
+    ASSERT_TRUE(materialInstances.valid());
+    ASSERT_TRUE(materialTyped.valid());
+
+    const Graphics::GpuTaskResourceUse materialUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = meshView,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = materialInstances,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = materialTyped,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Graphics::GpuTaskDesc materialDesc;
+    materialDesc
+        .setIdentity(Name("tests/task_graph/material_frame_entry"))
+        .setMarkerLabel("Material Frame Entry")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+        .setResourceUses(materialUses, LengthOf(materialUses))
+    ;
+    const Graphics::GpuTaskId materialTask = graph.addTask(materialDesc);
+    ASSERT_TRUE(materialTask.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledTask* const compiledMaterial = compiledGraph.findTask(materialTask);
+    ASSERT_NE(compiledMaterial, nullptr);
+    ASSERT_EQ(compiledMaterial->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledMaterial->prologueBarrierCount, 3u);
+    const Graphics::GpuCompiledBarrier* const materialBarriers = compiledGraph.taskPrologueBarriers(materialTask);
+    ASSERT_NE(materialBarriers, nullptr);
+    const auto hasTransition = [&](const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask after){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledMaterial->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = materialBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == Graphics::ResourceStates::Common
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTransition(meshView, Graphics::ResourceStates::ConstantBuffer));
+    EXPECT_TRUE(hasTransition(materialInstances, Graphics::ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasTransition(materialTyped, Graphics::ResourceStates::ShaderResource));
+}
+
+
 // The opaque CSG graph ends interval combine before its material/cap StorageImage loads. Keep the two tasks in one
 // Graphics packet when FrontierSafe permits it, but require the compiler to lower the four same-UAV RAW fences at
 // that intra-packet boundary instead of relying on a renderer-owned state call inside either draw thunk.

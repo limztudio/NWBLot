@@ -46,7 +46,8 @@ public:
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
         bool intervalPeelTargetStatesGraphOwned = false,
-        bool csgClipBufferStatesGraphOwned = false
+        bool csgClipBufferStatesGraphOwned = false,
+        bool materialFrameStatesGraphOwned = false
     );
     void dispatchCsgReceiverSpanBuild(
         Core::CommandList& commandList,
@@ -65,7 +66,8 @@ public:
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
         bool intervalSampleImageStatesGraphOwned = false,
-        bool csgClipBufferStatesGraphOwned = false
+        bool csgClipBufferStatesGraphOwned = false,
+        bool materialFrameStatesGraphOwned = false
     );
     [[nodiscard]] bool createCsgIntervalSampleStateBuffer();
     [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);

@@ -65,14 +65,17 @@ static void SetCsgHeapResourceStates(
 
 void RendererMaterialSystem::setMaterialPassCommonBufferStates(
     Core::CommandList& commandList,
-    const MeshResources& mesh
+    const MeshResources& mesh,
+    const bool materialFrameStatesGraphOwned
 ){
     RendererMeshSystem::forEachMeshSourceBuffer(mesh, [&](const u32, const Core::BufferHandle& buffer, const bool){
         commandList.setBufferState(buffer.get(), Core::ResourceStates::ShaderResource);
     });
-    commandList.setBufferState(drawState().m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+    if(!materialFrameStatesGraphOwned){
+        commandList.setBufferState(drawState().m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+    }
 }
 
 bool RendererMaterialSystem::materialPassDrawResourcesReady(const MeshResources& mesh)const{
@@ -230,7 +233,7 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
         const MaterialPipelineCsgBindingUse csgBindingUse =
             MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, context.pass);
 
-        setMaterialPassCommonBufferStates(context.commandList, mesh);
+        setMaterialPassCommonBufferStates(context.commandList, mesh, context.materialFrameStatesGraphOwned);
         __hidden_material_pass_draw::SetCsgHeapResourceStates(
             m_renderer.csgSystem(),
             context.commandList,
@@ -276,7 +279,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         NWB_ASSERT(mesh.emulationVertexHeapHandle.valid());
         NWB_ASSERT(mesh.emulationVertexBuffer);
 
-        setMaterialPassCommonBufferStates(context.commandList, mesh);
+        setMaterialPassCommonBufferStates(context.commandList, mesh, context.materialFrameStatesGraphOwned);
         __hidden_material_pass_draw::SetCsgHeapResourceStates(
             m_renderer.csgSystem(),
             context.commandList,

@@ -353,7 +353,9 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         .setIsConstantBuffer(true)
         .setDebugName("ECSRender_DeferredBindlessResourceSlots")
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        // This selector spans several graph packets. Retain its descriptor-visible state at every native close so
+        // the compiler's ConstantBuffer handoffs agree with Vulkan state tracking without a record-time bridge.
+        .enableAutomaticStateTracking(Core::ResourceStates::ConstantBuffer)
     ;
     bindless.slotsBuffer = graphics().createBuffer(slotsBufferDesc);
     if(!bindless.slotsBuffer){

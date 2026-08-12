@@ -1542,6 +1542,54 @@ bool GpuTaskGraph::applyCompiledBarrier(
     }
 }
 
+bool GpuTaskGraph::seedTaskRetainedBufferStates(
+    const GpuTaskId& taskID,
+    CommandList& commandList
+)const{
+    if(!validTask(taskID))
+        return false;
+
+    const GpuTaskNode& task = m_tasks[taskID.index];
+    const GpuTaskResourceUse* const resourceUses = task.resourceUseCount != 0u
+        ? m_resourceUses.data() + task.resourceUseOffset
+        : nullptr
+    ;
+    if(task.resourceUseCount != 0u && !resourceUses)
+        return false;
+    for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
+        const GpuTaskResourceUse& use = resourceUses[useIndex];
+        if(!validResource(use.resource) || use.requiredState == ResourceStates::Unknown)
+            return false;
+
+        const GpuGraphResourceNode& resource = m_resources[use.resource.index];
+        if(resource.type != GpuGraphResourceType::Buffer)
+            continue;
+
+        bool alreadySeededByTask = false;
+        for(usize previousUseIndex = 0u; previousUseIndex < useIndex; ++previousUseIndex){
+            const GpuTaskResourceUse& previousUse = resourceUses[previousUseIndex];
+            if(previousUse.resource == use.resource){
+                alreadySeededByTask = true;
+                break;
+            }
+        }
+        if(alreadySeededByTask)
+            continue;
+
+        if(!resource.buffer)
+            return false;
+        const BufferDesc& description = resource.buffer->getDescription();
+        // Only seed a state that the Vulkan backend will retain exactly at packet close. Other graph resources must
+        // already have an explicit compiler transition or native record-time state before they can become a source.
+        if(!description.keepInitialState || description.initialState != use.requiredState)
+            continue;
+        if(commandList.getBufferState(resource.buffer.get()) != use.requiredState)
+            return false;
+        commandList.beginTrackingBufferState(resource.buffer.get(), use.requiredState);
+    }
+    return true;
+}
+
 void GpuTaskGraph::acceptTask(const GpuTaskId& taskID, const QueueSubmissionToken& token)noexcept{
     if(!validTask(taskID) || !token.valid())
         return;

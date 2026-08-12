@@ -118,20 +118,9 @@ struct ShadowPrepareGraphTask{
         RendererSystem& renderer = *payload.renderer;
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
         renderer.m_preparedShadowVisibilityReady = false;
-        const bool deferredBindlessResourcesReady = payload.currentBindlessSlotsGraphOwned
-            ? payload.targets->bindless.valid()
-            : renderer.m_deferredSystem.uploadDeferredBindlessFrameResources(commandList, *payload.targets)
-        ;
-        // Compatibility callers retain their direct selector update. The graph-owned path publishes Common from
-        // its built-in upload and this task's declared ConstantBuffer read owns the transition.
-        if(deferredBindlessResourcesReady && !payload.currentBindlessSlotsGraphOwned){
-            commandList.setBufferState(
-                payload.targets->bindless.slotsBuffer.get(),
-                Core::ResourceStates::ConstantBuffer
-            );
-            commandList.commitBarriers();
-        }
-        const bool shadowResourcesPrepared = deferredBindlessResourcesReady
+        // The compiled ConstantBuffer use established this packet's selector state before this thunk records. The
+        // retained descriptor-visible state is also ConstantBuffer, so normal graph frames need no native bridge.
+        const bool shadowResourcesPrepared = payload.targets->bindless.valid()
             && renderer.m_raytracingSystem.recordPreflightShadowVisibilityResources(
                 commandList,
                 *payload.targets,
@@ -1483,9 +1472,9 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             Core::GpuUploadBufferTaskDesc{
                 .source = bindlessSlotsBlob,
                 .destination = currentBindlessSlots,
-                // The selector buffer restores Common when its command list closes. Shadow Preparation owns the
-                // following Common -> ConstantBuffer transition through its declared read use.
-                .finalState = Core::ResourceStates::Common,
+                // This selector persists its descriptor-visible state across packet closes. The built-in upload
+                // performs its intrinsic CopyDest transition, then publishes ConstantBuffer to Shadow Preparation.
+                .finalState = Core::ResourceStates::ConstantBuffer,
             }
         );
         if(!m_deferredBindlessSlotsUploadTask.valid()){
@@ -1933,8 +1922,8 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     // preceding immutable uploads as graph producers, so later Compute readers wait on this first Graphics packet
     // rather than forcing FrontierSafe packetization to split an upload away from its accepting consumer.
     resourceUses.push_back(ReadWriteUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
-    // Retain Shadow Preparation as the graph producer for this selector. Its direct compatibility path writes the
-    // same bytes natively; on the graph path this WAW handoff retires the immutable upload before later Compute reads.
+    // Retain Shadow Preparation as the graph producer for this selector. This WAW handoff retires the immutable
+    // upload before later Compute reads without a record-time native state transition.
     resourceUses.push_back(WriteUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
     if(causticEmissionTargets.valid())
         resourceUses.push_back(WriteUse(causticEmissionTargets, Core::ResourceStates::ShaderResource));
@@ -3970,13 +3959,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
     const auto importCurrentBindlessSlots = [&](const Name& identity, const AStringView label){
-        Core::GpuGraphResourceDesc desc = BufferResourceDesc(identity, label);
-        desc.setInitialState(
-            deferredTargets.bindless.slotsUploaded
-                ? Core::ResourceStates::ConstantBuffer
-                : deferredTargets.bindless.slotsBuffer->getDescription().initialState
+        return m_deferredLightingTaskGraph.importBuffer(
+            deferredTargets.bindless.slotsBuffer,
+            BufferResourceDesc(identity, label)
         );
-        return m_deferredLightingTaskGraph.importBuffer(deferredTargets.bindless.slotsBuffer, desc);
     };
     for(const PreparedShadowTraceGeometryBuffer& preparedBuffer : preparedTraceGeometry){
         Core::GpuGraphResourceDesc desc = BufferResourceDesc(preparedBuffer.identity, "Prepared Shadow Trace Geometry");

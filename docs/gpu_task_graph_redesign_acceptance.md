@@ -68,8 +68,9 @@ can receive an unconditional final sign-off.
   later asynchronous handoff.
 - A target generation's current deferred bindless selector now follows the same acceptance-safe graph path. Its
   immutable slot payload is retained before declaration and, when not yet resident, a tiny Graphics-routed built-in
-  upload precedes and merges into the first Shadow Preparation packet. The automatic-state selector publishes
-  `Common`; Shadow Preparation owns the following `ConstantBuffer` state handoff. That packet alone commits
+  upload precedes and merges into the first Shadow Preparation packet. Its automatic retained state is
+  `ConstantBuffer`, matching the descriptor-visible state at every native packet close; the graph's declared
+  selector use and packet handoffs therefore need no normal-frame native state bridge. That packet alone commits
   `slotsUploaded` on acceptance, and graph-recorded Deferred Lighting, Composite, and Present use the declared
   selector instead of re-reading or rewriting mutable CPU slot data. The direct helper remains for non-graph
   compatibility callers. Active lagged Lighting now retains its history selector as a separate immutable graph
@@ -227,7 +228,7 @@ can receive an unconditional final sign-off.
 | Graph-owned transparent AVBOIT occupancy-stream follow-up: ECS graphics, task-graph, descriptor smoke, transparent multi, plus static/skinned transparent CSG captures | 10/10 passed; interval generation, phase-local occupancy uploads, and prepared occupancy remain in one accepted AVBOIT-pre Graphics packet while the visible transparent and CSG cases stay correct |
 | Graph-owned transparent AVBOIT extinction-stream follow-up: FrontierSafe task-graph topology, ECS graphics, descriptor smoke, transparent multi, plus static/skinned transparent CSG captures | 10/10 passed; phase-local extinction uploads merge with native extinction without adding a sixth async packet, while Graphics-only and CSG captures remain correct |
 | Graph-owned transparent AVBOIT accumulation-stream follow-up: FrontierSafe task-graph topology, ECS graphics, descriptor smoke, transparent multi, plus static/skinned transparent CSG captures | 10/10 passed; phase-local accumulation uploads merge with the final native consumer without adding a sixth async packet, while Graphics-only and transparent CSG captures remain correct |
-| Graph-owned current deferred bindless-selector follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and opaque CSG capture | passed; the immutable selector upload merges into Shadow Preparation's first Graphics packet, hands off `Common` to `ConstantBuffer` there, and remains correct through later Compute and full deferred rendering |
+| Graph-owned current deferred bindless-selector retained-state follow-up: 51 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; retained `ConstantBuffer` selector state is seeded into the graph packet handoff, removing Shadow Preparation's normal-frame native state bridge while preserving graph-owned upload acceptance |
 | Graph-owned lagged deferred bindless-selector follow-up: FrontierSafe graph unit and descriptor-buffer smoke | passed; the immutable history-selector upload is pinned to and merged into Deferred Lighting's existing Compute packet, retains the external history completion wait, and hands off `Common` to `ConstantBuffer` without extending the Lighting-to-Composite range |
 | Graph-owned ray-trace material-context selector follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and opaque CSG capture | passed; a post-preflight immutable selector blob merges into Shadow Preparation, publishes `Common`, and is logically handed off there to the later Compute trace consumers |
 | Graph-owned caustic emission-target follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and caustic-sphere capture | passed; the preflight-frozen refractive AABB payload merges into Shadow Preparation, publishes `Common`, and is logically handed off there to software and hardware caustic consumers |

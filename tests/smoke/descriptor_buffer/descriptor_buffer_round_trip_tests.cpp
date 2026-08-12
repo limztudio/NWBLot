@@ -1059,7 +1059,7 @@ struct NativeFrameRecoveryPacketTask{
 };
 
 
-struct NativeShadowPrepareTask{
+struct GraphOwnedShadowPrepareTask{
     struct Payload{
         Buffer* bindlessSlots = nullptr;
         bool* recorded = nullptr;
@@ -1073,10 +1073,8 @@ struct NativeShadowPrepareTask{
         static_cast<void>(context);
         if(!payload.bindlessSlots)
             return false;
-        // The synthetic chain models an already-uploaded selector. Record its known final state so a later packet
-        // can import the native snapshot even though the compiler correctly plans no initial Common transition.
-        commandList.setBufferState(payload.bindlessSlots, ResourceStates::ConstantBuffer);
-        commandList.commitBarriers();
+        // The packet prologue owns selector state. This task deliberately emits no native transition: its retained
+        // descriptor-visible state must already be available through the compiled graph handoff.
         const bool ready = commandList.getBufferState(payload.bindlessSlots) == ResourceStates::ConstantBuffer;
         if(payload.recorded)
             *payload.recorded = ready;
@@ -1407,14 +1405,17 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+    GpuSubmissionPacketId failedPacket;
+    const bool recorded = recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         packetRange,
         nullptr,
         0u,
-        recordedGraph
-    ));
+        recordedGraph,
+        &failedPacket
+    );
+    ASSERT_TRUE(recorded) << "failed packet " << failedPacket.index;
     ASSERT_TRUE(nativeMeshViewSetupRecorded);
     ASSERT_TRUE(nativeSceneSetupRecorded);
     ASSERT_TRUE(nativeClearRecorded);
@@ -8398,9 +8399,9 @@ TEST_F(DescriptorBufferRoundTripTest, NormalizedStatePreludeFansInIndependentBra
 }
 
 
-// One compiled graph owns Shadow Prepare, the Graphics Prefix, every effect, and Present. Slots begin in the
-// already-uploaded ConstantBuffer state; graph-owned packet seeds carry that state through the prefix and effects
-// without any renderer-owned serial state snapshot.
+// One compiled graph owns Shadow Prepare, the Graphics Prefix, every effect, and Present. The selector retains its
+// descriptor-visible ConstantBuffer state at native packet close, so graph-owned packet seeds carry that state
+// through the prefix and effects without any renderer-owned serial state snapshot or record-time state bridge.
 TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroughComputePresent){
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto makeGbufferTarget = [&device](){
@@ -8431,9 +8432,19 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
                 .setInitialState(ResourceStates::Common)
         );
     };
+    const auto makeBindlessSlotsBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setIsConstantBuffer(true)
+                .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+                .enableAutomaticStateTracking(ResourceStates::ConstantBuffer)
+        );
+    };
 
     auto prefixBuffer = makeSetupBuffer();
-    auto slotsBuffer = makeSetupBuffer();
+    auto slotsBuffer = makeBindlessSlotsBuffer();
     auto gbuffer = makeGbufferTarget();
     auto shadowVisibility = makeStorageTarget();
     auto causticIrradiance = makeStorageTarget();
@@ -8479,7 +8490,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
             .setIdentity(Name("tests/descriptor_buffer/shadow_chain_bindless_slots"))
             .setMarkerLabel("Bindless Slots")
             .setType(GpuGraphResourceType::Buffer)
-            // This is the current uploaded layout, not the allocation-time Common state.
+            // This is both the allocation-time and retained packet-boundary state of the current selector.
             .setInitialState(ResourceStates::ConstantBuffer)
     );
     const GpuGraphResourceId gbufferResource = importTexture(
@@ -8593,9 +8604,9 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
         .setResourceUses(shadowPrepareUses, LengthOf(shadowPrepareUses))
     ;
     bool shadowPrepareRecorded = false;
-    const GpuTaskId shadowPrepareTask = graph.addTask<NativeShadowPrepareTask>(
+    const GpuTaskId shadowPrepareTask = graph.addTask<GraphOwnedShadowPrepareTask>(
         shadowPrepareDesc,
-        NativeShadowPrepareTask::Payload{
+        GraphOwnedShadowPrepareTask::Payload{
             .bindlessSlots = slotsBuffer.get(),
             .recorded = &shadowPrepareRecorded,
         }
@@ -8923,8 +8934,10 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
     const GpuCompiledTask* const compiledPrefix = compiledGraph.findTask(graphicsPrefixTask);
     ASSERT_NE(compiledShadowPrepare, nullptr);
     ASSERT_NE(compiledPrefix, nullptr);
-    // slotsUploaded makes ConstantBuffer the authoritative imported state. Preparation must not add a stale
-    // Common -> ConstantBuffer graph barrier, but its actual native final snapshot still seeds Prefix.
+    // The retained selector state matches the graph import. Preparation requires no stale Common -> ConstantBuffer
+    // barrier, and it records successfully without a native selector transition before seeding Prefix.
+    EXPECT_TRUE(slotsBuffer->getDescription().keepInitialState);
+    EXPECT_EQ(slotsBuffer->getDescription().initialState, ResourceStates::ConstantBuffer);
     EXPECT_EQ(graph.resourceAt(slotsResource.index).initialState, ResourceStates::ConstantBuffer);
     EXPECT_EQ(compiledShadowPrepare->prologueBarrierCount, 0u);
     ASSERT_GT(compiledPrefix->prologueStateSeedCount, 0u);
@@ -9030,6 +9043,27 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
         0u,
         recordedGraph
     ));
+    const CommandListResourceStateHandoff* const shadowPrepareFinalState = recordedGraph.packetFinalStateSeed(
+        shadowPreparePacket
+    );
+    ASSERT_NE(shadowPrepareFinalState, nullptr);
+    // Opening an empty handoff would also report the selector's retained ConstantBuffer state from its descriptor.
+    // Select the buffer explicitly to prove Shadow Prepare exported a tracked state for Prefix to import.
+    Buffer* const shadowPrepareSelectorBuffers[] = { slotsBuffer.get() };
+    CommandListResourceStateHandoff shadowPrepareSelectorState(DescriptorBufferRoundTripTest::arena());
+    ASSERT_TRUE(shadowPrepareSelectorState.buildResourceSubset(
+        *shadowPrepareFinalState,
+        nullptr,
+        0u,
+        shadowPrepareSelectorBuffers,
+        LengthOf(shadowPrepareSelectorBuffers)
+    ));
+    ASSERT_FALSE(shadowPrepareSelectorState.empty());
+    auto shadowPrepareStateProbe = device.createCommandList();
+    ASSERT_NE(shadowPrepareStateProbe.get(), nullptr);
+    shadowPrepareStateProbe->open(&shadowPrepareSelectorState);
+    EXPECT_EQ(shadowPrepareStateProbe->getBufferState(slotsBuffer.get()), ResourceStates::ConstantBuffer);
+    shadowPrepareStateProbe->close();
     EXPECT_TRUE(shadowPrepareRecorded);
     EXPECT_TRUE(graphicsPrefixRecorded);
     EXPECT_TRUE(shadowVisibilityRecorded);

@@ -4916,6 +4916,174 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
 }
 
 
+// The transparent software trace follows opaque soft-shadow work but retains the normal graph's static traversal
+// and descriptor input states. Its image/UAV boundary remains local to the renderer, so this compiler proof covers
+// only the late buffer batch that graph-owned recording must inherit before that native boundary.
+TEST(GpuTaskGraph, PlansGraphOwnedSoftTransparentTraceEntryStates){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    constexpr Graphics::ResourceQueueSharing::Mask queueSharing =
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    ;
+    const auto addBuffer = [&](const Name identity, const AStringView label){
+        return AddBufferMetadata(
+            graph,
+            identity,
+            label,
+            Graphics::ResourceStates::Common,
+            queueSharing
+        );
+    };
+    const Graphics::GpuGraphResourceId shaderResources[] = {
+        addBuffer(Name("tests/task_graph/soft_transparent_mesh_nodes"), "Software Mesh Nodes"),
+        addBuffer(Name("tests/task_graph/soft_transparent_mesh_positions"), "Software Mesh Positions"),
+        addBuffer(Name("tests/task_graph/soft_transparent_mesh_indices"), "Software Mesh Indices"),
+        addBuffer(Name("tests/task_graph/soft_transparent_mesh_attributes"), "Software Mesh Attributes"),
+        addBuffer(Name("tests/task_graph/soft_transparent_scene_bvh_nodes"), "Scene BVH Nodes"),
+        addBuffer(Name("tests/task_graph/soft_transparent_scene_instances"), "Scene Instances"),
+        addBuffer(Name("tests/task_graph/soft_transparent_instance_materials"), "Shadow Instance Materials"),
+        addBuffer(Name("tests/task_graph/soft_transparent_material_typed"), "Shadow Typed Materials"),
+        addBuffer(Name("tests/task_graph/soft_transparent_instances"), "Shadow Instances"),
+        addBuffer(Name("tests/task_graph/soft_transparent_lights"), "Deferred Lights"),
+    };
+    const Graphics::GpuGraphResourceId constantResources[] = {
+        addBuffer(Name("tests/task_graph/soft_transparent_material_context_slots"), "Ray-Trace Material Context Slots"),
+        addBuffer(Name("tests/task_graph/soft_transparent_bindless_slots"), "Deferred Bindless Slots"),
+        addBuffer(Name("tests/task_graph/soft_transparent_scene_shading"), "Scene Shading"),
+    };
+    for(const Graphics::GpuGraphResourceId resource : shaderResources)
+        ASSERT_TRUE(resource.valid());
+    for(const Graphics::GpuGraphResourceId resource : constantResources)
+        ASSERT_TRUE(resource.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint boundaryScheduling;
+    boundaryScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    boundaryScheduling.forceSubmissionBoundary = true;
+    boundaryScheduling.allowPacketMerge = false;
+
+    Graphics::GpuTaskResourceUse prefixUses[LengthOf(shaderResources) + LengthOf(constantResources)] = {};
+    usize prefixUseCount = 0u;
+    for(const Graphics::GpuGraphResourceId resource : shaderResources){
+        prefixUses[prefixUseCount++] = {
+            .resource = resource,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+    }
+    for(const Graphics::GpuGraphResourceId resource : constantResources){
+        prefixUses[prefixUseCount++] = {
+            .resource = resource,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+    }
+    ASSERT_EQ(prefixUseCount, LengthOf(prefixUses));
+    Graphics::GpuTaskDesc prefixDesc;
+    prefixDesc
+        .setIdentity(Name("tests/task_graph/soft_transparent_prefix"))
+        .setMarkerLabel("Transparent Shadow Prefix")
+        .setQueue(graphicsRequest)
+        .setScheduling(boundaryScheduling)
+        .setResourceUses(prefixUses, LengthOf(prefixUses))
+    ;
+    const Graphics::GpuTaskId prefix = graph.addTask(prefixDesc);
+    ASSERT_TRUE(prefix.valid());
+
+    Graphics::GpuTaskResourceUse traceUses[LengthOf(shaderResources) + LengthOf(constantResources)] = {};
+    usize traceUseCount = 0u;
+    for(const Graphics::GpuGraphResourceId resource : shaderResources){
+        traceUses[traceUseCount++] = {
+            .resource = resource,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        };
+    }
+    for(const Graphics::GpuGraphResourceId resource : constantResources){
+        traceUses[traceUseCount++] = {
+            .resource = resource,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        };
+    }
+    ASSERT_EQ(traceUseCount, LengthOf(traceUses));
+    Graphics::GpuTaskDesc traceDesc;
+    traceDesc
+        .setIdentity(Name("tests/task_graph/graph_owned_soft_transparent_trace"))
+        .setMarkerLabel("Transparent Shadow Trace")
+        .setQueue(graphicsRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&prefix, 1u)
+        .setResourceUses(traceUses, LengthOf(traceUses))
+    ;
+    const Graphics::GpuTaskId trace = graph.addTask(traceDesc);
+    ASSERT_TRUE(trace.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId tracePacket = compiledGraph.packetForTask(trace);
+    ASSERT_TRUE(prefixPacket.valid());
+    ASSERT_TRUE(tracePacket.valid());
+    EXPECT_NE(prefixPacket, tracePacket);
+
+    const Graphics::GpuCompiledTask* const compiledTrace = compiledGraph.findTask(trace);
+    ASSERT_NE(compiledTrace, nullptr);
+    EXPECT_EQ(compiledTrace->prologueStateSeedCount, LengthOf(traceUses));
+    const Graphics::GpuPacketStateSeed* const traceSeeds = compiledGraph.taskPrologueStateSeeds(trace);
+    ASSERT_NE(traceSeeds, nullptr);
+    const auto hasTraceSeed = [&](const Graphics::GpuGraphResourceId resource){
+        for(usize seedIndex = 0u; seedIndex < compiledTrace->prologueStateSeedCount; ++seedIndex){
+            if(traceSeeds[seedIndex].resource == resource && traceSeeds[seedIndex].sourcePacket == prefixPacket)
+                return true;
+        }
+        return false;
+    };
+    for(const Graphics::GpuGraphResourceId resource : shaderResources)
+        EXPECT_TRUE(hasTraceSeed(resource));
+    for(const Graphics::GpuGraphResourceId resource : constantResources)
+        EXPECT_TRUE(hasTraceSeed(resource));
+
+    const Graphics::GpuCompiledBarrier* const traceBarriers = compiledGraph.taskPrologueBarriers(trace);
+    ASSERT_NE(traceBarriers, nullptr);
+    const auto hasTraceBarrier = [&](const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask after){
+        for(usize barrierIndex = 0u; barrierIndex < compiledTrace->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = traceBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == Graphics::ResourceStates::CopyDest
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    for(const Graphics::GpuGraphResourceId resource : shaderResources)
+        EXPECT_TRUE(hasTraceBarrier(resource, Graphics::ResourceStates::ShaderResource));
+    for(const Graphics::GpuGraphResourceId resource : constantResources)
+        EXPECT_TRUE(hasTraceBarrier(resource, Graphics::ResourceStates::ConstantBuffer));
+    ASSERT_EQ(compiledGraph.packet(tracePacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(tracePacket)[0u].producer, prefixPacket);
+}
+
+
 // Software caustics succeeds the graph-owned shadow callback. Its photon shader samples the same depth layout and
 // descriptor-selected traversal inputs, so the task must inherit those states rather than reintroducing a native
 // entry bridge. Its accumulator/resolve sequence remains task-local and is represented here only by its entry UAvs.

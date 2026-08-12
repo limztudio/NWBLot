@@ -258,12 +258,16 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 graphics().getDevice(),
                 commandList
             );
-            // The transparent SW trace is shared by the HW and SW opaque paths, so stage its common traversal inputs.
-            transitionSwShadowTraversalResources(commandList);
-            commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-            commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-            commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+            // The normal deferred graph already supplies the transparent trace's heap-selected traversal and
+            // descriptor buffers. Direct compatibility callers retain the native static bridge. Keep the image
+            // transitions below: they form the required opaque-resolve-to-transparent-trace UAV boundary.
+            if(!graphEntryStatesOwned){
+                transitionSwShadowTraversalResources(commandList);
+                commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+                commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+                commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+                commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+            }
             commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.setEnableUavBarriersForTexture(targets.transparentSoftHalf.get(), true);

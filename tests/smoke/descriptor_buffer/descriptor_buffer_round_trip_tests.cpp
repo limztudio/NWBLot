@@ -819,6 +819,45 @@ struct NativePacketShadowVisibilityEntryProbeTask{
 };
 
 
+// The transparent software trace begins after opaque soft-shadow work, but its traversal/material/selector inputs
+// remain unchanged descriptor-visible reads. This probe intentionally excludes the image/UAV boundary, which the
+// renderer keeps local to order the opaque resolve before the transparent fold.
+struct NativePacketSoftTransparentTraceEntryProbeTask{
+    static constexpr u32 s_ShaderBufferCount = 10u;
+    static constexpr u32 s_ConstantBufferCount = 3u;
+
+    struct Payload{
+        Buffer* shaderBuffers[s_ShaderBufferCount] = {};
+        Buffer* constantBuffers[s_ConstantBufferCount] = {};
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        bool ready = true;
+        for(u32 bufferIndex = 0u; bufferIndex < s_ShaderBufferCount; ++bufferIndex){
+            ready = ready
+                && payload.shaderBuffers[bufferIndex]
+                && commandList.getBufferState(payload.shaderBuffers[bufferIndex]) == ResourceStates::ShaderResource
+            ;
+        }
+        for(u32 bufferIndex = 0u; bufferIndex < s_ConstantBufferCount; ++bufferIndex){
+            ready = ready
+                && payload.constantBuffers[bufferIndex]
+                && commandList.getBufferState(payload.constantBuffers[bufferIndex]) == ResourceStates::ConstantBuffer
+            ;
+        }
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
 // Software caustics follows Shadow Visibility and uses the same descriptor-selected geometry plus its own
 // emission/mesh-view inputs. Keep this callback getter-only so a missing graph state seed cannot be hidden by
 // renderer-native setup. Accumulator and irradiance are intentionally excluded: the real task clears them locally
@@ -2547,6 +2586,257 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
         scratchArena
     ));
     EXPECT_TRUE(transaction.packetToken(lightingPacket).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// The transparent software trace runs after the opaque soft resolve, but its descriptor-selected traversal/material
+// buffers retain the static graph-declared states. This packet proof is getter-only at that late trace seam; the
+// opaque-to-transparent image/UAV boundary is deliberately excluded because the renderer continues to own it.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceEntryStatesRecordWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    constexpr u32 shaderBufferCount = NativePacketSoftTransparentTraceEntryProbeTask::s_ShaderBufferCount;
+    constexpr u32 constantBufferCount = NativePacketSoftTransparentTraceEntryProbeTask::s_ConstantBufferCount;
+    const auto makeStorageBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setCanHaveUAVs(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const auto makeConstantBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    BufferHandle shaderBuffers[shaderBufferCount];
+    BufferHandle constantBuffers[constantBufferCount];
+    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex){
+        shaderBuffers[bufferIndex] = makeStorageBuffer();
+        ASSERT_NE(shaderBuffers[bufferIndex].get(), nullptr);
+    }
+    for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex){
+        constantBuffers[bufferIndex] = makeConstantBuffer();
+        ASSERT_NE(constantBuffers[bufferIndex].get(), nullptr);
+    }
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importBuffer = [&graph](const BufferHandle& buffer, const Name identity, const AStringView label){
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Buffer)
+        );
+    };
+    struct BufferImportDesc{
+        Name identity;
+        AStringView label;
+    };
+    const BufferImportDesc shaderBufferImports[shaderBufferCount] = {
+        { Name("tests/descriptor_buffer/soft_transparent_mesh_nodes"), "Software Mesh Nodes" },
+        { Name("tests/descriptor_buffer/soft_transparent_mesh_positions"), "Software Mesh Positions" },
+        { Name("tests/descriptor_buffer/soft_transparent_mesh_indices"), "Software Mesh Indices" },
+        { Name("tests/descriptor_buffer/soft_transparent_mesh_attributes"), "Software Mesh Attributes" },
+        { Name("tests/descriptor_buffer/soft_transparent_scene_bvh_nodes"), "Scene BVH Nodes" },
+        { Name("tests/descriptor_buffer/soft_transparent_scene_instances"), "Scene Instances" },
+        { Name("tests/descriptor_buffer/soft_transparent_instance_materials"), "Shadow Instance Materials" },
+        { Name("tests/descriptor_buffer/soft_transparent_material_typed"), "Shadow Typed Materials" },
+        { Name("tests/descriptor_buffer/soft_transparent_instances"), "Shadow Instances" },
+        { Name("tests/descriptor_buffer/soft_transparent_lights"), "Deferred Lights" },
+    };
+    const BufferImportDesc constantBufferImports[constantBufferCount] = {
+        { Name("tests/descriptor_buffer/soft_transparent_material_context_slots"), "Ray-Trace Material Context Slots" },
+        { Name("tests/descriptor_buffer/soft_transparent_bindless_slots"), "Deferred Bindless Slots" },
+        { Name("tests/descriptor_buffer/soft_transparent_scene_shading"), "Scene Shading" },
+    };
+    GpuGraphResourceId shaderBufferResources[shaderBufferCount] = {};
+    GpuGraphResourceId constantBufferResources[constantBufferCount] = {};
+    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex){
+        shaderBufferResources[bufferIndex] = importBuffer(
+            shaderBuffers[bufferIndex],
+            shaderBufferImports[bufferIndex].identity,
+            shaderBufferImports[bufferIndex].label
+        );
+        ASSERT_TRUE(shaderBufferResources[bufferIndex].valid());
+    }
+    for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex){
+        constantBufferResources[bufferIndex] = importBuffer(
+            constantBuffers[bufferIndex],
+            constantBufferImports[bufferIndex].identity,
+            constantBufferImports[bufferIndex].label
+        );
+        ASSERT_TRUE(constantBufferResources[bufferIndex].valid());
+    }
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint boundaryScheduling;
+    boundaryScheduling.cost = GpuTaskCostHint::Medium;
+    boundaryScheduling.forceSubmissionBoundary = true;
+    boundaryScheduling.allowPacketMerge = false;
+    Alloc::ScratchArena resourceUseArena(Name("tests/descriptor_buffer/soft_transparent_entry_state_resource_uses"));
+    Vector<GpuTaskResourceUse, Alloc::ScratchArena> prefixUses(resourceUseArena);
+    prefixUses.reserve(shaderBufferCount + constantBufferCount);
+    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)
+        prefixUses.push_back({ .resource = shaderBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write });
+    for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex)
+        prefixUses.push_back({ .resource = constantBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write });
+    GpuTaskDesc prefixDesc;
+    prefixDesc
+        .setIdentity(Name("tests/descriptor_buffer/soft_transparent_prefix"))
+        .setMarkerLabel("Transparent Shadow Prefix")
+        .setQueue(graphicsQueue)
+        .setScheduling(boundaryScheduling)
+        .setResourceUses(prefixUses.data(), prefixUses.size())
+    ;
+    bool shouldRecord = true;
+    bool prefixAttempted = false;
+    const GpuTaskId prefixTask = graph.addTask<NativePacketCaptureRetryTask>(
+        prefixDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &prefixAttempted,
+        }
+    );
+    ASSERT_TRUE(prefixTask.valid());
+
+    Vector<GpuTaskResourceUse, Alloc::ScratchArena> traceUses(resourceUseArena);
+    traceUses.reserve(shaderBufferCount + constantBufferCount);
+    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)
+        traceUses.push_back({ .resource = shaderBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read });
+    for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex)
+        traceUses.push_back({ .resource = constantBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read });
+    GpuTaskDesc traceDesc;
+    traceDesc
+        .setIdentity(Name("tests/descriptor_buffer/graph_owned_soft_transparent_trace"))
+        .setMarkerLabel("Transparent Shadow Trace")
+        .setQueue(graphicsQueue)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&prefixTask, 1u)
+        .setResourceUses(traceUses.data(), traceUses.size())
+    ;
+    NativePacketSoftTransparentTraceEntryProbeTask::Payload tracePayload{};
+    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)
+        tracePayload.shaderBuffers[bufferIndex] = shaderBuffers[bufferIndex].get();
+    for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex)
+        tracePayload.constantBuffers[bufferIndex] = constantBuffers[bufferIndex].get();
+    bool traceRecorded = false;
+    tracePayload.recorded = &traceRecorded;
+    const GpuTaskId traceTask = graph.addTask<NativePacketSoftTransparentTraceEntryProbeTask>(
+        traceDesc,
+        Move(tracePayload)
+    );
+    ASSERT_TRUE(traceTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/soft_transparent_entry_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefixTask);
+    const GpuSubmissionPacketId tracePacket = compiledGraph.packetForTask(traceTask);
+    ASSERT_TRUE(prefixPacket.valid());
+    ASSERT_TRUE(tracePacket.valid());
+    EXPECT_NE(prefixPacket, tracePacket);
+    const GpuCompiledTask* const compiledTrace = compiledGraph.findTask(traceTask);
+    ASSERT_NE(compiledTrace, nullptr);
+    EXPECT_EQ(compiledTrace->prologueStateSeedCount, shaderBufferCount + constantBufferCount);
+    const GpuPacketStateSeed* const traceSeeds = compiledGraph.taskPrologueStateSeeds(traceTask);
+    ASSERT_NE(traceSeeds, nullptr);
+    const auto hasTraceSeed = [&](const GpuGraphResourceId resource){
+        for(u32 seedIndex = 0u; seedIndex < compiledTrace->prologueStateSeedCount; ++seedIndex){
+            if(traceSeeds[seedIndex].resource == resource && traceSeeds[seedIndex].sourcePacket == prefixPacket)
+                return true;
+        }
+        return false;
+    };
+    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)
+        EXPECT_TRUE(hasTraceSeed(shaderBufferResources[bufferIndex]));
+    for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex)
+        EXPECT_TRUE(hasTraceSeed(constantBufferResources[bufferIndex]));
+    const GpuCompiledBarrier* const traceBarriers = compiledGraph.taskPrologueBarriers(traceTask);
+    ASSERT_NE(traceBarriers, nullptr);
+    const auto hasTraceTransition = [&](const GpuGraphResourceId resource, const ResourceStates::Mask after){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledTrace->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = traceBarriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == ResourceStates::CopyDest
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)
+        EXPECT_TRUE(hasTraceTransition(shaderBufferResources[bufferIndex], ResourceStates::ShaderResource));
+    for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex)
+        EXPECT_TRUE(hasTraceTransition(constantBufferResources[bufferIndex], ResourceStates::ConstantBuffer));
+    ASSERT_EQ(compiledGraph.packet(tracePacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(tracePacket)[0u].producer, prefixPacket);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(prefixAttempted);
+    EXPECT_TRUE(traceRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(tracePacket).valid());
     EXPECT_TRUE(device.waitForIdle());
 }
 

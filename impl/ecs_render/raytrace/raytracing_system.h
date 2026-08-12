@@ -248,6 +248,9 @@ public:
     // One-shot test seam for the healthy hybrid tail. It models a traversal-table miss whose direct revalidation also
     // cannot record, so Shadow Preparation must retain the opaque-HW fallback without accepting stale SW state.
     void forceHybridSceneTraversalFallbackForTesting()noexcept;
+    // Target-hardware benchmark seam. It retains the normal opaque-HW fallback on every hybrid frame without
+    // flooding the diagnostic log, so a fixed scene can compare that boundary against the healthy hybrid tail.
+    void forceHybridSceneTraversalFallbackEveryFrameForTesting()noexcept;
     // Makes the retained HW fallback snapshot fail validation once, proving the direct hardware retry boundary.
     void forceHybridHardwareFallbackSnapshotStaleForTesting()noexcept;
 #endif
@@ -619,7 +622,11 @@ private:
     bool m_preparedSceneSwBvhReady = false;
 #if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
     bool m_forceHybridSceneTraversalFallbackForTesting = false;
+    bool m_forceHybridSceneTraversalFallbackEveryFrameForTesting = false;
     bool m_expectHybridSceneTraversalRecoveryForTesting = false;
+    bool m_reportedHybridSceneTraversalFallbackLoopForTesting = false;
+    bool m_reportedHybridSceneTraversalFallbackLoopFailureForTesting = false;
+    bool m_reportedHybridHardwareFallbackRestoreLoopForTesting = false;
     bool m_forceHybridHardwareFallbackSnapshotStaleForTesting = false;
     bool m_expectHybridHardwareFallbackDirectRetryForTesting = false;
 #endif

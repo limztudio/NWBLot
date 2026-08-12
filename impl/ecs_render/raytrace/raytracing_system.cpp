@@ -769,6 +769,14 @@ void RendererRayTracingSystem::forceHybridSceneTraversalFallbackForTesting()noex
     m_forceHybridSceneTraversalFallbackForTesting = true;
 }
 
+void RendererRayTracingSystem::forceHybridSceneTraversalFallbackEveryFrameForTesting()noexcept{
+    m_forceHybridSceneTraversalFallbackEveryFrameForTesting = true;
+    m_expectHybridSceneTraversalRecoveryForTesting = false;
+    m_reportedHybridSceneTraversalFallbackLoopForTesting = false;
+    m_reportedHybridSceneTraversalFallbackLoopFailureForTesting = false;
+    m_reportedHybridHardwareFallbackRestoreLoopForTesting = false;
+}
+
 void RendererRayTracingSystem::forceHybridHardwareFallbackSnapshotStaleForTesting()noexcept{
     m_forceHybridHardwareFallbackSnapshotStaleForTesting = true;
 }
@@ -1686,12 +1694,20 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
 #if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
             forceHybridSceneTraversalFallback =
                 hybridSceneTraversalGraphOwned
-                && m_forceHybridSceneTraversalFallbackForTesting
+                && (
+                    m_forceHybridSceneTraversalFallbackForTesting
+                    || m_forceHybridSceneTraversalFallbackEveryFrameForTesting
+                )
             ;
             if(forceHybridSceneTraversalFallback){
+                const bool oneShotFallback = m_forceHybridSceneTraversalFallbackForTesting;
                 m_forceHybridSceneTraversalFallbackForTesting = false;
-                m_expectHybridSceneTraversalRecoveryForTesting = true;
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test forced hybrid software traversal fallback"));
+                if(oneShotFallback)
+                    m_expectHybridSceneTraversalRecoveryForTesting = true;
+                if(oneShotFallback || !m_reportedHybridSceneTraversalFallbackLoopForTesting){
+                    m_reportedHybridSceneTraversalFallbackLoopForTesting = true;
+                    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test forced hybrid software traversal fallback"));
+                }
             }
 #endif
             bool sceneSwBvhReady = !forceHybridSceneTraversalFallback && canRecordSceneSwBvh && (
@@ -1735,7 +1751,15 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
 #endif
             }
             else{
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow recording failed; transparent shadows absent this frame"));
+                bool reportHybridTraversalFailure = true;
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+                if(m_forceHybridSceneTraversalFallbackEveryFrameForTesting){
+                    reportHybridTraversalFailure = !m_reportedHybridSceneTraversalFallbackLoopFailureForTesting;
+                    m_reportedHybridSceneTraversalFallbackLoopFailureForTesting = true;
+                }
+#endif
+                if(reportHybridTraversalFailure)
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow recording failed; transparent shadows absent this frame"));
                 if(hybridSoftwareMaterialContextGraphOwned){
                     // The immutable graph triple has already recorded in this packet. Replace it with the current
                     // hardware descriptor-slot context before accepting the opaque fallback; otherwise caustics or

@@ -1465,7 +1465,15 @@ bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallba
     commandList.setBufferState(materialTypedBuffer, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
     m_preparedHybridHardwareFallbackRecorded = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: restored frozen hybrid hardware material context"));
+    bool reportHybridHardwareFallbackRestore = true;
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+    if(m_forceHybridSceneTraversalFallbackEveryFrameForTesting){
+        reportHybridHardwareFallbackRestore = !m_reportedHybridHardwareFallbackRestoreLoopForTesting;
+        m_reportedHybridHardwareFallbackRestoreLoopForTesting = true;
+    }
+#endif
+    if(reportHybridHardwareFallbackRestore)
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: restored frozen hybrid hardware material context"));
     return true;
 }
 

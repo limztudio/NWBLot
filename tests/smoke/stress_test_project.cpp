@@ -343,6 +343,19 @@ public:
             NWB_TEXT("StressTestSmokeProject failed to create all scene entities")
         );
 
+#if defined(NWB_HYBRID_SHADOW_BOUNDARY_FALLBACK_BENCHMARK) && (!defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES))
+        auto* const rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>();
+        NWB_FATAL_ASSERT_MSG(rendererSystem, NWB_TEXT("StressTestSmokeProject renderer system disappeared"));
+        rendererSystem->forceHybridSceneTraversalFallbackEveryFrameForTesting();
+        NWB_LOGGER_ESSENTIAL_INFO(
+            NWB_TEXT("StressTestSmokeProject: enabled persistent hybrid transparent-shadow fallback benchmark")
+        );
+#elif defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)
+        NWB_LOGGER_ESSENTIAL_INFO(
+            NWB_TEXT("StressTestSmokeProject: enabled healthy hybrid transparent-shadow benchmark")
+        );
+#endif
+
         NWB_LOGGER_ESSENTIAL_INFO(
             NWB_TEXT("StressTestSmokeProject: spawned {} spinning characters ({} transparent + {} opaque) over ground, directional + point light")
             , s_CharacterCount
@@ -423,7 +436,9 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 
 const tchar* NWB::QueryProjectWindowTitle(){
-#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
+#if defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)
+    return NWB_TEXT("NWB Hybrid Shadow Boundary Benchmark");
+#elif defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
     return NWB_TEXT("NWB Async Shadow M4 Benchmark");
 #else
     return NWB_TEXT("NWB Stress Test Smoke");

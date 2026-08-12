@@ -83,6 +83,10 @@ void RendererSystem::forceHybridSceneTraversalFallbackForTesting()noexcept{
     m_raytracingSystem.forceHybridSceneTraversalFallbackForTesting();
 }
 
+void RendererSystem::forceHybridSceneTraversalFallbackEveryFrameForTesting()noexcept{
+    m_raytracingSystem.forceHybridSceneTraversalFallbackEveryFrameForTesting();
+}
+
 void RendererSystem::forceHybridHardwareFallbackSnapshotStaleForTesting()noexcept{
     m_raytracingSystem.forceHybridHardwareFallbackSnapshotStaleForTesting();
 }

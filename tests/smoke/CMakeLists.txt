@@ -859,6 +859,56 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         )
         add_dependencies(nwb_stress_test_sw_smoke nwb_skinning_culling_benchmark_assets)
 
+        # Target-hardware A/B pair for the hybrid HW -> SW transparent-shadow safety boundary. The fallback arm
+        # intentionally takes the retained immutable hardware-context restore on every frame; it is not a visual
+        # parity mode, but a fixed-scene measurement of the safe opaque-HW degradation path.
+        nwb_declare_executable(nwb_hybrid_shadow_boundary_healthy_benchmark)
+        target_sources(nwb_hybrid_shadow_boundary_healthy_benchmark PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+        )
+        target_compile_definitions(nwb_hybrid_shadow_boundary_healthy_benchmark PRIVATE
+            NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_hybrid_shadow_boundary_healthy_benchmark
+            "${_nwb_skinning_culling_runtime_root}"
+            nwb_ecs_model
+            nwb_ecs_mesh_skinning
+        )
+        add_dependencies(nwb_hybrid_shadow_boundary_healthy_benchmark nwb_skinning_culling_benchmark_assets)
+
+        nwb_declare_executable(nwb_hybrid_shadow_boundary_fallback_benchmark)
+        target_sources(nwb_hybrid_shadow_boundary_fallback_benchmark PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+        )
+        target_compile_definitions(nwb_hybrid_shadow_boundary_fallback_benchmark PRIVATE
+            NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK=1
+            NWB_HYBRID_SHADOW_BOUNDARY_FALLBACK_BENCHMARK=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_hybrid_shadow_boundary_fallback_benchmark
+            "${_nwb_skinning_culling_runtime_root}"
+            nwb_ecs_model
+            nwb_ecs_mesh_skinning
+        )
+        add_dependencies(nwb_hybrid_shadow_boundary_fallback_benchmark nwb_skinning_culling_benchmark_assets)
+
+        nwb_add_window_capture_smoke(
+            nwb_hybrid_shadow_boundary_fallback_capture_smoke
+            hybrid_shadow_boundary_fallback_capture.bmp
+            "$<TARGET_FILE:nwb_hybrid_shadow_boundary_fallback_benchmark>"
+            "${_nwb_skinning_culling_runtime_root}"
+            "NWB Hybrid Shadow Boundary Benchmark"
+            "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}"
+            "--expect-log-message" "StressTestSmokeProject: enabled persistent hybrid transparent-shadow fallback benchmark"
+            "--expect-log-message" "RendererSystem: test forced hybrid software traversal fallback"
+            "--expect-log-message" "RendererSystem: hybrid transparent software shadow recording failed\\; transparent shadows absent this frame"
+            "--expect-log-message" "RendererSystem: restored frozen hybrid hardware material context"
+            "--reject-log-message" "RendererSystem: test hybrid software traversal recovered"
+            "--reject-log-message" "[ERROR]"
+            "--reject-log-message" "failed to resolve shader"
+        )
+
         # M4 target-hardware A/B pair. Both binaries use the same fixed-friendly stress scene and cooked runtime
         # assets; the synchronous baseline explicitly disables the default async-lane request. The runner under
         # tests/ab/async_shadow_m4/ validates that the normal request resolves to a distinct queue rather than

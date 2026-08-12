@@ -145,9 +145,8 @@ struct ShadowPrepareGraphTask{
         )
             return false;
 
-        // BLAS/SW-BVH record paths leave their inputs in route-dependent states. Export one exact graph-visible
-        // boundary state for every retained selected buffer before the following Prefix packet is seeded.
-        renderer.m_raytracingSystem.normalizePreparedShadowTraceGeometryBuffers(commandList);
+        // The declared ShaderResource uses export every selected BLAS/SW-BVH input's exact graph-visible boundary
+        // state before the following Prefix packet is seeded. Route-local build work remains inside this callback.
         return true;
     }
 
@@ -973,8 +972,8 @@ namespace __hidden_renderer_task_graph{
     };
 }
 
-// The terminal graphics-prefix task finishes route-dependent trace-geometry normalization before the following graph
-// packets. Its regular deferred resources are declared below, so their state transitions remain graph-owned.
+// The terminal graphics-prefix task publishes its ordinary and route-selected trace-geometry states before the
+// following graph packets. All of those states are declared below, so this callback retains only timing ownership.
 struct PostGbufferNormalizeGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -1001,9 +1000,8 @@ struct PostGbufferNormalizeGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
-        // The graph's explicit reads below lower the ordinary G-buffer, scene, and descriptor states before this
-        // task records. Only dynamically selected trace geometry still needs route-specific normalization here.
-        payload.raytracingSystem->normalizePreparedShadowTraceGeometryBuffers(commandList);
+        // The graph's explicit uses below lower the ordinary G-buffer, scene, descriptor, and dynamically selected
+        // trace-geometry states before this task records.
         if(
             shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute
             && payload.asyncPrefixTiming

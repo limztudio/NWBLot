@@ -1176,13 +1176,6 @@ const PreparedShadowTraceGeometryBufferVector& RendererRayTracingSystem::prepare
     return m_preparedShadowTraceGeometryBuffers;
 }
 
-void RendererRayTracingSystem::normalizePreparedShadowTraceGeometryBuffers(Core::CommandList& commandList)const{
-    for(const PreparedShadowTraceGeometryBuffer& resource : m_preparedShadowTraceGeometryBuffers){
-        if(resource.buffer)
-            commandList.setBufferState(resource.buffer.get(), Core::ResourceStates::ShaderResource);
-    }
-}
-
 void RendererRayTracingSystem::confirmPreparedShadowTraceGeometryNormalization()noexcept{
     for(const PreparedShadowTraceGeometryBuffer& resource : m_preparedShadowTraceGeometryBuffers){
         bool known = false;

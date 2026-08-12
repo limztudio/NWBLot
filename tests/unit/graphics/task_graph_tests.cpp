@@ -5084,6 +5084,150 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftTransparentTraceEntryStates){
 }
 
 
+// Shadow Preparation, G-buffer, and the post-G-buffer normalizer share their frozen trace geometry through one
+// graph. The normalizer must restore both raster VertexBuffer and SW-BVH UAV producers to ShaderResource before the
+// shadow callback records; it no longer relies on a native route-specific state bridge.
+TEST(GpuTaskGraph, PlansGraphOwnedPostGbufferTraceGeometryStates){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    constexpr Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Graphics;
+    const Graphics::GpuGraphResourceId rasterGeometry = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/post_gbuffer_raster_geometry"),
+        "Post-G-Buffer Raster Geometry",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId softwareBvh = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/post_gbuffer_software_bvh"),
+        "Post-G-Buffer Software BVH",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    ASSERT_TRUE(rasterGeometry.valid());
+    ASSERT_TRUE(softwareBvh.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    scheduling.allowPacketMerge = true;
+
+    const Graphics::GpuTaskResourceUse prepareUses[] = {
+        {
+            .resource = rasterGeometry,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        {
+            .resource = softwareBvh,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    Graphics::GpuTaskDesc prepareDesc;
+    prepareDesc
+        .setIdentity(Name("tests/task_graph/post_gbuffer_shadow_prepare"))
+        .setMarkerLabel("Shadow Preparation")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+        .setResourceUses(prepareUses, LengthOf(prepareUses))
+    ;
+    const Graphics::GpuTaskId prepare = graph.addTask(prepareDesc);
+    ASSERT_TRUE(prepare.valid());
+
+    Graphics::GpuTaskSchedulingHint gbufferScheduling = scheduling;
+    gbufferScheduling.mergeWithPrevious = true;
+    const Graphics::GpuTaskResourceUse gbufferUses[] = {
+        {
+            .resource = rasterGeometry,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::VertexBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = softwareBvh,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    Graphics::GpuTaskDesc gbufferDesc;
+    gbufferDesc
+        .setIdentity(Name("tests/task_graph/post_gbuffer_gbuffer"))
+        .setMarkerLabel("G-Buffer")
+        .setQueue(graphicsRequest)
+        .setScheduling(gbufferScheduling)
+        .setDependencies(&prepare, 1u)
+        .setResourceUses(gbufferUses, LengthOf(gbufferUses))
+    ;
+    const Graphics::GpuTaskId gbuffer = graph.addTask(gbufferDesc);
+    ASSERT_TRUE(gbuffer.valid());
+
+    const Graphics::GpuTaskResourceUse normalizeUses[] = {
+        {
+            .resource = rasterGeometry,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        {
+            .resource = softwareBvh,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    Graphics::GpuTaskDesc normalizeDesc;
+    normalizeDesc
+        .setIdentity(Name("tests/task_graph/post_gbuffer_normalize_trace_geometry"))
+        .setMarkerLabel("Post-G-Buffer Normalize")
+        .setQueue(graphicsRequest)
+        .setScheduling(gbufferScheduling)
+        .setDependencies(&gbuffer, 1u)
+        .setResourceUses(normalizeUses, LengthOf(normalizeUses))
+    ;
+    const Graphics::GpuTaskId normalize = graph.addTask(normalizeDesc);
+    ASSERT_TRUE(normalize.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledTask* const compiledNormalize = compiledGraph.findTask(normalize);
+    ASSERT_NE(compiledNormalize, nullptr);
+    const Graphics::GpuCompiledBarrier* const normalizeBarriers = compiledGraph.taskPrologueBarriers(normalize);
+    ASSERT_NE(normalizeBarriers, nullptr);
+    const auto hasNormalizeBarrier = [&](const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before){
+        for(usize barrierIndex = 0u; barrierIndex < compiledNormalize->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = normalizeBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == Graphics::ResourceStates::ShaderResource
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasNormalizeBarrier(rasterGeometry, Graphics::ResourceStates::VertexBuffer));
+    EXPECT_TRUE(hasNormalizeBarrier(softwareBvh, Graphics::ResourceStates::UnorderedAccess));
+}
+
+
 // Software caustics succeeds the graph-owned shadow callback. Its photon shader samples the same depth layout and
 // descriptor-selected traversal inputs, so the task must inherit those states rather than reintroducing a native
 // entry bridge. Its accumulator/resolve sequence remains task-local and is represented here only by its entry UAvs.

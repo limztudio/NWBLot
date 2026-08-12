@@ -858,6 +858,34 @@ struct NativePacketSoftTransparentTraceEntryProbeTask{
 };
 
 
+// The post-G-buffer normalizer must see both raster and software-build trace geometry in graph-declared
+// ShaderResource state. It deliberately performs no native transition itself.
+struct NativePacketPostGbufferTraceGeometryProbeTask{
+    struct Payload{
+        Buffer* rasterGeometry = nullptr;
+        Buffer* softwareBvh = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        const bool ready =
+            payload.rasterGeometry
+            && payload.softwareBvh
+            && commandList.getBufferState(payload.rasterGeometry) == ResourceStates::ShaderResource
+            && commandList.getBufferState(payload.softwareBvh) == ResourceStates::ShaderResource
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
 // Software caustics follows Shadow Visibility and uses the same descriptor-selected geometry plus its own
 // emission/mesh-view inputs. Keep this callback getter-only so a missing graph state seed cannot be hidden by
 // renderer-native setup. Accumulator and irradiance are intentionally excluded: the real task clears them locally
@@ -2586,6 +2614,203 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
         scratchArena
     ));
     EXPECT_TRUE(transaction.packetToken(lightingPacket).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// The normal deferred graph declares the selected trace geometry at the post-G-buffer boundary. Verify that its
+// native callback can remain getter-only while the compiler lowers both raster and software-BVH predecessor states.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPostGbufferTraceGeometryStatesRecordWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const auto makeBuffer = [&device](const bool canHaveUavs){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setCanHaveUAVs(canHaveUavs)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    BufferHandle rasterGeometry = makeBuffer(false);
+    BufferHandle softwareBvh = makeBuffer(true);
+    ASSERT_NE(rasterGeometry.get(), nullptr);
+    ASSERT_NE(softwareBvh.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importBuffer = [&graph](const BufferHandle& buffer, const Name identity, const AStringView label){
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Buffer)
+        );
+    };
+    const GpuGraphResourceId rasterGeometryResource = importBuffer(
+        rasterGeometry,
+        Name("tests/descriptor_buffer/post_gbuffer_raster_geometry"),
+        "Post-G-Buffer Raster Geometry"
+    );
+    const GpuGraphResourceId softwareBvhResource = importBuffer(
+        softwareBvh,
+        Name("tests/descriptor_buffer/post_gbuffer_software_bvh"),
+        "Post-G-Buffer Software BVH"
+    );
+    ASSERT_TRUE(rasterGeometryResource.valid());
+    ASSERT_TRUE(softwareBvhResource.valid());
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint gbufferScheduling;
+    gbufferScheduling.cost = GpuTaskCostHint::Medium;
+    gbufferScheduling.allowPacketMerge = true;
+    const GpuTaskResourceUse gbufferUses[] = {
+        {
+            .resource = rasterGeometryResource,
+            .range = {},
+            .requiredState = ResourceStates::VertexBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = softwareBvhResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    GpuTaskDesc gbufferDesc;
+    gbufferDesc
+        .setIdentity(Name("tests/descriptor_buffer/post_gbuffer_gbuffer"))
+        .setMarkerLabel("G-Buffer")
+        .setQueue(graphicsQueue)
+        .setScheduling(gbufferScheduling)
+        .setResourceUses(gbufferUses, LengthOf(gbufferUses))
+    ;
+    bool shouldRecord = true;
+    bool gbufferAttempted = false;
+    const GpuTaskId gbufferTask = graph.addTask<NativePacketCaptureRetryTask>(
+        gbufferDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &gbufferAttempted,
+        }
+    );
+    ASSERT_TRUE(gbufferTask.valid());
+
+    GpuTaskSchedulingHint normalizeScheduling = gbufferScheduling;
+    normalizeScheduling.mergeWithPrevious = true;
+    const GpuTaskResourceUse normalizeUses[] = {
+        {
+            .resource = rasterGeometryResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+        {
+            .resource = softwareBvhResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    GpuTaskDesc normalizeDesc;
+    normalizeDesc
+        .setIdentity(Name("tests/descriptor_buffer/post_gbuffer_normalize_trace_geometry"))
+        .setMarkerLabel("Post-G-Buffer Normalize")
+        .setQueue(graphicsQueue)
+        .setScheduling(normalizeScheduling)
+        .setDependencies(&gbufferTask, 1u)
+        .setResourceUses(normalizeUses, LengthOf(normalizeUses))
+    ;
+    bool normalizeRecorded = false;
+    const GpuTaskId normalizeTask = graph.addTask<NativePacketPostGbufferTraceGeometryProbeTask>(
+        normalizeDesc,
+        NativePacketPostGbufferTraceGeometryProbeTask::Payload{
+            .rasterGeometry = rasterGeometry.get(),
+            .softwareBvh = softwareBvh.get(),
+            .recorded = &normalizeRecorded,
+        }
+    );
+    ASSERT_TRUE(normalizeTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/post_gbuffer_trace_geometry_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuCompiledTask* const compiledNormalize = compiledGraph.findTask(normalizeTask);
+    ASSERT_NE(compiledNormalize, nullptr);
+    const GpuCompiledBarrier* const normalizeBarriers = compiledGraph.taskPrologueBarriers(normalizeTask);
+    ASSERT_NE(normalizeBarriers, nullptr);
+    const auto hasNormalizeTransition = [&](const GpuGraphResourceId resource, const ResourceStates::Mask before){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledNormalize->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = normalizeBarriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == ResourceStates::ShaderResource
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasNormalizeTransition(rasterGeometryResource, ResourceStates::VertexBuffer));
+    EXPECT_TRUE(hasNormalizeTransition(softwareBvhResource, ResourceStates::UnorderedAccess));
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(gbufferAttempted);
+    EXPECT_TRUE(normalizeRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(compiledGraph.packetForTask(normalizeTask)).valid());
     EXPECT_TRUE(device.waitForIdle());
 }
 

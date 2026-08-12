@@ -188,7 +188,6 @@ public:
     // uses the shared IDs for every packet that manually stages it.
     [[nodiscard]] bool freezePreparedShadowTraceGeometryBuffers();
     [[nodiscard]] const PreparedShadowTraceGeometryBufferVector& preparedShadowTraceGeometryBuffers()const noexcept;
-    void normalizePreparedShadowTraceGeometryBuffers(Core::CommandList& commandList)const;
     void confirmPreparedShadowTraceGeometryNormalization()noexcept;
     void invalidatePreparedShadowTraceGeometryBuffers()noexcept;
 

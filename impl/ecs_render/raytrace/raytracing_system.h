@@ -273,20 +273,33 @@ public:
     void releaseRayTraceMaterialContextHeapHandles();
     void releaseSwBvhScratchHeapHandles();
     void releaseSurfelGiHeapHandles();
-    [[nodiscard]] bool renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    // The shared deferred graph declares the hardware trace entry resources. Direct compatibility callers retain
+    // their native state setup by leaving graphEntryStatesOwned false.
+    [[nodiscard]] bool renderShadowVisibility(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned = false
+    );
     [[nodiscard]] Core::GpuTaskId declareShadowVisibilityTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
         const bool* prepared,
         bool hardwareShadowSupported,
-        Core::GpuTimingSubmissionTicket& timingTicket
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        bool graphEntryStatesOwned = false
     );
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearCausticTargets(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearSurfelIrradiance(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    // Hybrid mode folds software transparent transmittance onto hardware opaque visibility.
-    [[nodiscard]] bool renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets, bool multiplyOntoOpaque = false);
+    // Hybrid mode folds software transparent transmittance onto hardware opaque visibility. The shared deferred
+    // graph can supply the traversal entry states; direct compatibility callers retain their native setup.
+    [[nodiscard]] bool renderGpuBvhShadowVisibility(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool multiplyOntoOpaque = false,
+        bool graphEntryStatesOwned = false
+    );
     [[nodiscard]] bool prepareGpuBvhCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] Core::GpuTaskId declareSoftwareCausticsTask(
         Core::GpuTaskGraph& graph,

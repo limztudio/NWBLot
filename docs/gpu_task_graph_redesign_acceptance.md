@@ -12,8 +12,9 @@ graph-owned deferred mesh-view, scene-light, and scene-shading frame updates, an
 uploads, graph-owned runtime-skinning dispatch packets, graph-owned opaque material draw-stream uploads, and
 graph-owned opaque CSG receiver/cutter/context/interval streams, graph-owned transparent CSG interval-producer
 streams, graph-owned transparent AVBOIT occupancy, extinction, and accumulation material/CSG streams, and
-graph-owned AVBOIT final G-buffer state handoffs,
-and graph-owned current and lagged deferred bindless-selector, ray-trace material-context selector, caustic
+graph-owned AVBOIT final G-buffer state handoffs, graph-owned normal Shadow Visibility hardware/software traversal
+entry-state handoffs, and graph-owned current and lagged deferred bindless-selector, ray-trace material-context
+selector, caustic
 emission-target, surfel-frame constant, shadow material-context batch and retained hybrid hardware fallback context,
 software-only and hybrid scene-BVH pair uploads and healthy-hybrid frozen software traversal tables, software-only
 and hybrid per-mesh SW-BVH build/refit,
@@ -86,6 +87,11 @@ can receive an unconditional final sign-off.
   than an upload frontier. This per-frame selector has no residency bit: packet rejection discards the preflight
   plan and the next graph build resolves and retains a fresh payload. The native direct writer remains only for
   non-graph compatibility callers.
+- The normal deferred Shadow Visibility task now declares its descriptor-visible hardware and software traversal
+  entry states: sampled G-buffer inputs (including depth as `ShaderResource`), selector and scene constant buffers,
+  traversal/material streams, TLAS/backing storage, and its output/scratch UAVs. Its graph callback no longer
+  reissues those entry transitions. Direct or minimal callers retain native setup by default; the preflight-failure
+  `CopyDest` clear and all intra-task soft/hybrid UAV fences remain native ownership.
 - Caustic preflight now freezes the exact refractive-instance AABB stream after it has selected buffer capacity and
   descriptor residency. A nonempty immutable blob uploads after the material-context selector and merges into the
   same Shadow Preparation packet, publishing automatic-state `Common`. Shadow Preparation keeps the logical
@@ -256,6 +262,7 @@ can receive an unconditional final sign-off.
 | Graph-owned AVBOIT occupancy-state follow-up: 52 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; occupancy now consumes graph-declared depth `ShaderResource` and coverage `UnorderedAccess` states without a normal-frame native bridge. Focused compiler and real-Vulkan packet tests prove the clear-to-occupancy `CopyDest` to `UnorderedAccess` transition and the separate unsplit-tail UAV dependency; direct compatibility callers retain their bridge |
 | Graph-owned AVBOIT accumulation-attachment state follow-up: 53 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; a mergeable Graphics finalizer now lowers both accumulation attachments from `RenderTarget` to `ShaderResource` before Deferred Composite. Focused compiler and real-Vulkan packet tests prove that the finalizer shares Accumulation's packet and records without a native bridge; direct callers and the read-only-depth compatibility handoff remain intact |
 | Graph-owned AVBOIT final G-buffer-state follow-up: 54 task-graph, 18 ECS graphics, descriptor-buffer smoke, lagged-lighting harness, plus opaque and early/mid/late transparent CSG captures | passed; normal graph recording no longer restores AVBOIT G-buffer inputs natively. Accumulation declares its read-only deferred depth as `DepthRead`, and the mergeable Graphics finalizer returns it and both accumulation outputs to `ShaderResource`. The active transparent frame-lagged dedicated-Compute route explicitly waits for that finalizer while its immutable selector upload remains independent; direct compatibility callers retain their native framebuffer-state bridge. |
+| Graph-owned Shadow Visibility entry-state follow-up: renderer build, 59 task-graph tests, 18 ECS graphics tests, descriptor-buffer smoke, and GPU-validation hybrid A/B | passed; normal deferred Shadow Visibility now receives descriptor-visible sampled G-buffer inputs (depth specifically transitions `DepthWrite` to `ShaderResource`), constants, traversal resources, TLAS/backing storage, and output/scratch UAVs from graph declarations before its callback records. Focused compiler and real-Vulkan getter-only packet tests prove both producer handoffs and native-bridge-free entry. The short GPU-validation A/B passed healthy and forced-fallback arms (six timing intervals each) with no forbidden validation/runtime log. Direct callers, preflight clear fallback, and required intra-task UAV fences remain native. |
 | Graph-owned CSG receiver-surface image-state follow-up: 54 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; opaque G-buffer and prepared-transparent AVBOIT declare all receiver-event-data layers and the receiver-event-count layer as `UnorderedAccess` before their native material thunks record. The normal graph no longer manually transitions that StorageImage pair; unprepared and direct compatibility paths retain their bridge while the remaining CSG image lifecycle stays explicitly out of scope. |
 | Graph-owned CSG interval-peel state follow-up: 54 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; opaque G-buffer and prepared-transparent AVBOIT now declare every cap-back-normal, interval-depth, and interval-ID peel layer as `UnorderedAccess` before their native interval dispatches. The direct first-peel state bridge is removed only for those graph callers; compatibility paths and the native combine-stage UAV barrier remain intact. |
 | Graph-owned CSG receiver-span output state follow-up: 54 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; opaque G-buffer and prepared-transparent AVBOIT now declare every receiver-span-data layer and the receiver-span-count layer as `UnorderedAccess` before their native span dispatches. The graph removes only output setup; native event-image and span-to-combine UAV fences remain intact, as do direct compatibility paths. |
@@ -314,7 +321,8 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    now use the graph-owned primitive path. The transparent AVBOIT interval producer, occupancy, extinction, and
    accumulation phases now freeze and publish their own per-write-point material/CSG streams, preserving the shared
    interval sample state across the low-resolution raster passes. Current and lagged deferred bindless selectors,
-   the ray-trace material-context selector, caustic emission-target stream, surfel-frame constants, hardware-only,
+   the ray-trace material-context selector, normal Shadow Visibility descriptor-visible entry states, caustic
+   emission-target stream, surfel-frame constants, hardware-only,
    forced-software, and healthy hybrid shadow material-context batches plus their retained immutable hardware
    fallback context, software-only and hybrid scene-BVH pairs
    and healthy hybrid software traversal tables, software-only and hybrid per-mesh SW-BVH build/refit,

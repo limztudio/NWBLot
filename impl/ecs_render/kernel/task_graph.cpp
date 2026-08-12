@@ -3289,7 +3289,8 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     resourceUses.reserve(40u);
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));
-    resourceUses.push_back(ReadUse(depth, Core::ResourceStates::DepthRead));
+    // Shadow visibility samples the bindless depth image, so its declared layout must match the native shader read.
+    resourceUses.push_back(ReadUse(depth, Core::ResourceStates::ShaderResource));
     resourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     // Hybrid transparent shadows multiply onto the opaque result, so this remains a read/write declaration even
     // when the hardware-only path overwrites it.
@@ -3516,7 +3517,8 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         deferredTargets,
         &m_preparedShadowVisibilityReady,
         hardwareShadowSupported,
-        timingTicket
+        timingTicket,
+        true
     );
     if(!m_deferredShadowVisibilityTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred shadow-visibility graph task"));

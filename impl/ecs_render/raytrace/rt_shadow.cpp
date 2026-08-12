@@ -31,6 +31,7 @@ struct ShadowVisibilityGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* prepared = nullptr;
         bool hardwareShadowSupported = false;
+        bool graphEntryStatesOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -63,21 +64,32 @@ struct ShadowVisibilityGraphTask{
 
         bool shadowVisibilityWritten = false;
         if(payload.prepared && *payload.prepared && payload.hardwareShadowSupported){
-            shadowVisibilityWritten = payload.raytracingSystem->renderShadowVisibility(commandList, *payload.targets);
+            shadowVisibilityWritten = payload.raytracingSystem->renderShadowVisibility(
+                commandList,
+                *payload.targets,
+                payload.graphEntryStatesOwned
+            );
             if(!shadowVisibilityWritten)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
             else if(
                 !payload.raytracingSystem->softTransparentShadowReady()
                 && payload.raytracingSystem->hybridTransparentShadowReady()
             ){
-                if(!payload.raytracingSystem->renderGpuBvhShadowVisibility(commandList, *payload.targets, true))
+                if(!payload.raytracingSystem->renderGpuBvhShadowVisibility(
+                    commandList,
+                    *payload.targets,
+                    true,
+                    payload.graphEntryStatesOwned
+                ))
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow pass failed"));
             }
         }
         else if(payload.prepared && *payload.prepared){
             shadowVisibilityWritten = payload.raytracingSystem->renderGpuBvhShadowVisibility(
                 commandList,
-                *payload.targets
+                *payload.targets,
+                false,
+                payload.graphEntryStatesOwned
             );
         }
         // Retain all-lit visibility when no shadow producer records.
@@ -464,7 +476,11 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     return true;
 }
 
-bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
+bool RendererRayTracingSystem::renderShadowVisibility(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool graphEntryStatesOwned
+){
     if(!targets.shadowVisibility)
         return false;
     if(!rayTracingState().m_tlas || !rayTracingState().m_shadowPipeline)
@@ -485,14 +501,16 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
-    // Heap-selected resources still need explicit state transitions.
-    commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.setAccelStructState(rayTracingState().m_tlas.get(), Core::ResourceStates::AccelStructRead);
+    if(!graphEntryStatesOwned){
+        // Heap-selected resources still need explicit state transitions for direct compatibility callers.
+        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setAccelStructState(rayTracingState().m_tlas.get(), Core::ResourceStates::AccelStructRead);
+    }
 
     // Hardware tracing shares the half-resolution soft-shadow resolve when available.
     if(rayTracingState().m_softShadowReady && rayTracingState().m_shadowSoftPipeline && rayTracingState().m_softShadowSlotMask != 0u){
@@ -501,8 +519,14 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE));
         const u32 softGroupsY = DivideUp(softHalfHeight, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE));
 
-        commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.commitBarriers();
+        if(!graphEntryStatesOwned){
+            commandList.setTextureState(
+                targets.shadowSoftHalfA.get(),
+                ECSRenderDetail::s_ShadowVisibilitySubresources,
+                Core::ResourceStates::UnorderedAccess
+            );
+            commandList.commitBarriers();
+        }
 
         // Resolve reuses the trace outputs as UAV/SRV scratch.
         commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
@@ -557,8 +581,14 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     }
 
     // Full-resolution inline-RayQuery fallback.
-    commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.commitBarriers();
+    if(!graphEntryStatesOwned){
+        commandList.setTextureState(
+            targets.shadowVisibility.get(),
+            ECSRenderDetail::s_ShadowVisibilitySubresources,
+            Core::ResourceStates::UnorderedAccess
+        );
+        commandList.commitBarriers();
+    }
 
     {
         Core::GpuTimingMeasure opaqueTraceTiming(
@@ -594,7 +624,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
     DeferredFrameTargets& targets,
     const bool* const prepared,
     const bool hardwareShadowSupported,
-    Core::GpuTimingSubmissionTicket& timingTicket
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    const bool graphEntryStatesOwned
 ){
     return graph.addTask<__hidden_shadow_visibility_task::ShadowVisibilityGraphTask>(
         desc,
@@ -605,6 +636,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
             .timingTicket = &timingTicket,
             .prepared = prepared,
             .hardwareShadowSupported = hardwareShadowSupported,
+            .graphEntryStatesOwned = graphEntryStatesOwned,
         }
     );
 }
@@ -619,7 +651,12 @@ void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandL
     commandList.clearTextureFloat(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
 }
 
-bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets, bool multiplyOntoOpaque){
+bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool multiplyOntoOpaque,
+    const bool graphEntryStatesOwned
+){
     // Hybrid mode folds transparent software transmittance onto the hardware opaque mask.
     if(!targets.shadowVisibility)
         return false;
@@ -652,20 +689,23 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
-    // BVH build leaves traversal inputs in UAV state.
-    transitionSwShadowTraversalResources(commandList);
-    if(rayTracingState().m_shadowInstanceBuffer)
-        commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    if(!graphEntryStatesOwned){
+        // BVH build leaves traversal inputs in UAV state. Direct compatibility callers restore them locally.
+        transitionSwShadowTraversalResources(commandList);
+        if(rayTracingState().m_shadowInstanceBuffer)
+            commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    }
     // Subsequent passes read/write these UAVs in place.
     commandList.setEnableUavBarriersForTexture(targets.shadowVisibility.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.shadowCoarseTransmittance.get(), true);
-    commandList.commitBarriers();
+    if(!graphEntryStatesOwned)
+        commandList.commitBarriers();
 
     const auto passState = [&](const Core::ComputePipelineHandle& pipeline){
         Core::ComputeState state;

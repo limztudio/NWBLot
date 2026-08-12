@@ -357,7 +357,8 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     const usize materialTypedByteCount,
     const bool intervalTargetsGraphOwned,
     const bool receiverSurfaceImageStatesGraphOwned,
-    const bool intervalPeelTargetStatesGraphOwned
+    const bool intervalPeelTargetStatesGraphOwned,
+    const bool receiverSpanOutputImageStatesGraphOwned
 ){
     if(
         !targets.framebuffer
@@ -370,6 +371,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     // setup. Keep an externally mismatched compatibility call on the safe native bridge instead of claiming that
     // a ClearDestination peel image is already a StorageImage.
     NWB_ASSERT(!intervalPeelTargetStatesGraphOwned || intervalTargetsGraphOwned);
+    NWB_ASSERT(!receiverSpanOutputImageStatesGraphOwned || intervalTargetsGraphOwned);
 
     Core::GpuTimingMeasure timing(
         graphics().gpuTiming(),
@@ -427,7 +429,12 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         receiverSurfaceDrawItems
     );
 
-    m_renderer.csgSystem().dispatchCsgReceiverSpanBuild(commandList, targets, csgFrameData);
+    m_renderer.csgSystem().dispatchCsgReceiverSpanBuild(
+        commandList,
+        targets,
+        csgFrameData,
+        intervalTargetsGraphOwned && receiverSpanOutputImageStatesGraphOwned
+    );
     m_renderer.csgSystem().dispatchCsgIntervalCombine(commandList, targets, csgFrameData);
 }
 
@@ -441,7 +448,8 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     const usize preparedTransparentCsgMaterialTypedByteCount,
     const bool preparedTransparentCsgIntervalTargetsGraphOwned,
     const bool preparedTransparentCsgReceiverSurfaceImageStatesGraphOwned,
-    const bool preparedTransparentCsgIntervalPeelTargetStatesGraphOwned
+    const bool preparedTransparentCsgIntervalPeelTargetStatesGraphOwned,
+    const bool preparedTransparentCsgReceiverSpanOutputImageStatesGraphOwned
 ){
     if(preparedTransparentCsgReceiverSurfaceDrawItems || preparedTransparentCsgFrameData){
         NWB_ASSERT(preparedTransparentCsgReceiverSurfaceDrawItems);
@@ -456,7 +464,8 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
                 preparedTransparentCsgMaterialTypedByteCount,
                 preparedTransparentCsgIntervalTargetsGraphOwned,
                 preparedTransparentCsgReceiverSurfaceImageStatesGraphOwned,
-                preparedTransparentCsgIntervalPeelTargetStatesGraphOwned
+                preparedTransparentCsgIntervalPeelTargetStatesGraphOwned,
+                preparedTransparentCsgReceiverSpanOutputImageStatesGraphOwned
             );
         }
     }

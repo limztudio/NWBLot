@@ -7577,11 +7577,11 @@ TEST(GpuTaskGraph, PlansTextureStatesPerDeclaredSubresourceRange){
 }
 
 
-// Opaque and prepared-transparent CSG each begin with the same peel StorageImage arrays. The graph owns the
-// initial three-target state setup, while the rect clear remains limited to the two values that accumulate across
-// a frame. Keep the later same-state UAV handoff visible: it is what orders opaque peel writes before a transparent
-// producer consumes the cap/depth/data aliases.
-TEST(GpuTaskGraph, PlansCsgIntervalPeelAndReceiverSurfaceStorageStates){
+// Opaque and prepared-transparent CSG each begin with the same StorageImage working set. The graph owns its
+// initial peel/span-output state setup, while the rect clear remains limited to the two values that accumulate
+// across a frame. Keep the later same-state UAV handoff visible: it orders opaque writes before a transparent
+// producer consumes the cap/depth/event/span aliases.
+TEST(GpuTaskGraph, PlansCsgIntervalPeelReceiverSurfaceAndSpanStorageStates){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId capBackNormal = AddTextureMetadata(
@@ -7609,15 +7609,29 @@ TEST(GpuTaskGraph, PlansCsgIntervalPeelAndReceiverSurfaceStorageStates){
         Name("tests/task_graph/csg_receiver_event_count"),
         "CSG Receiver Event Count"
     );
+    const Graphics::GpuGraphResourceId receiverSpanData = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/csg_receiver_span_data"),
+        "CSG Receiver Span Data"
+    );
+    const Graphics::GpuGraphResourceId receiverSpanCount = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/csg_receiver_span_count"),
+        "CSG Receiver Span Count"
+    );
     ASSERT_TRUE(capBackNormal.valid());
     ASSERT_TRUE(intervalDepth.valid());
     ASSERT_TRUE(intervalId.valid());
     ASSERT_TRUE(receiverEventData.valid());
     ASSERT_TRUE(receiverEventCount.valid());
+    ASSERT_TRUE(receiverSpanData.valid());
+    ASSERT_TRUE(receiverSpanCount.valid());
 
     const Graphics::TextureSubresourceSet peelRange(0u, 1u, 0u, 4u);
     const Graphics::TextureSubresourceSet receiverEventDataRange(0u, 1u, 0u, 8u);
     const Graphics::TextureSubresourceSet receiverEventCountRange(0u, 1u, 0u, 1u);
+    const Graphics::TextureSubresourceSet receiverSpanDataRange(0u, 1u, 0u, 16u);
+    const Graphics::TextureSubresourceSet receiverSpanCountRange(0u, 1u, 0u, 1u);
     const Graphics::GpuTaskResourceUse clearUses[] = {
         Graphics::GpuTaskResourceUse{
             .resource = intervalId,
@@ -7663,6 +7677,18 @@ TEST(GpuTaskGraph, PlansCsgIntervalPeelAndReceiverSurfaceStorageStates){
             .requiredState = Graphics::ResourceStates::UnorderedAccess,
             .access = Graphics::GpuTaskResourceAccess::ReadWrite,
         },
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverSpanData,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverSpanDataRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverSpanCount,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverSpanCountRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
     };
     const Graphics::GpuTaskId opaqueClear = AddTask(
         graph,
@@ -7705,9 +7731,9 @@ TEST(GpuTaskGraph, PlansCsgIntervalPeelAndReceiverSurfaceStorageStates){
     ASSERT_TRUE(transparentClear.valid());
     ASSERT_TRUE(transparentProducer.valid());
     EXPECT_EQ(graph.taskAt(opaqueClear.index).resourceUseCount, 2u);
-    EXPECT_EQ(graph.taskAt(opaqueProducer.index).resourceUseCount, 5u);
+    EXPECT_EQ(graph.taskAt(opaqueProducer.index).resourceUseCount, 7u);
     EXPECT_EQ(graph.taskAt(transparentClear.index).resourceUseCount, 2u);
-    EXPECT_EQ(graph.taskAt(transparentProducer.index).resourceUseCount, 5u);
+    EXPECT_EQ(graph.taskAt(transparentProducer.index).resourceUseCount, 7u);
 
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
     const Graphics::GpuTaskGraphQueueTopology topology{
@@ -7745,13 +7771,15 @@ TEST(GpuTaskGraph, PlansCsgIntervalPeelAndReceiverSurfaceStorageStates){
     ASSERT_NE(compiledTransparentProducer, nullptr);
     ASSERT_NE(opaqueProducerBarriers, nullptr);
     ASSERT_NE(transparentProducerBarriers, nullptr);
-    ASSERT_EQ(compiledOpaqueProducer->prologueBarrierCount, 5u);
-    ASSERT_EQ(compiledTransparentProducer->prologueBarrierCount, 5u);
+    ASSERT_EQ(compiledOpaqueProducer->prologueBarrierCount, 7u);
+    ASSERT_EQ(compiledTransparentProducer->prologueBarrierCount, 7u);
     bool capBackNormalTransition = false;
     bool intervalDepthTransition = false;
     bool intervalIdTransition = false;
     bool receiverEventDataTransition = false;
     bool receiverEventCountTransition = false;
+    bool receiverSpanDataTransition = false;
+    bool receiverSpanCountTransition = false;
     for(u32 barrierIndex = 0u; barrierIndex < compiledOpaqueProducer->prologueBarrierCount; ++barrierIndex){
         const Graphics::GpuCompiledBarrier& barrier = opaqueProducerBarriers[barrierIndex];
         if(
@@ -7794,16 +7822,36 @@ TEST(GpuTaskGraph, PlansCsgIntervalPeelAndReceiverSurfaceStorageStates){
             && barrier.range.textureSubresources == receiverEventCountRange
         )
             receiverEventCountTransition = true;
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.before == Graphics::ResourceStates::Common
+            && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            && barrier.resource == receiverSpanData
+            && barrier.range.textureSubresources == receiverSpanDataRange
+        )
+            receiverSpanDataTransition = true;
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.before == Graphics::ResourceStates::Common
+            && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            && barrier.resource == receiverSpanCount
+            && barrier.range.textureSubresources == receiverSpanCountRange
+        )
+            receiverSpanCountTransition = true;
     }
     EXPECT_TRUE(capBackNormalTransition);
     EXPECT_TRUE(intervalDepthTransition);
     EXPECT_TRUE(intervalIdTransition);
     EXPECT_TRUE(receiverEventDataTransition);
     EXPECT_TRUE(receiverEventCountTransition);
+    EXPECT_TRUE(receiverSpanDataTransition);
+    EXPECT_TRUE(receiverSpanCountTransition);
 
     bool capBackNormalUav = false;
     bool intervalDepthUav = false;
     bool receiverEventDataUav = false;
+    bool receiverSpanDataUav = false;
+    bool receiverSpanCountUav = false;
     bool transparentIntervalIdTransition = false;
     bool transparentReceiverEventCountTransition = false;
     for(u32 barrierIndex = 0u; barrierIndex < compiledTransparentProducer->prologueBarrierCount; ++barrierIndex){
@@ -7833,6 +7881,22 @@ TEST(GpuTaskGraph, PlansCsgIntervalPeelAndReceiverSurfaceStorageStates){
         )
             receiverEventDataUav = true;
         if(
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureUav
+            && barrier.before == Graphics::ResourceStates::UnorderedAccess
+            && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            && barrier.resource == receiverSpanData
+            && barrier.range.textureSubresources == receiverSpanDataRange
+        )
+            receiverSpanDataUav = true;
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureUav
+            && barrier.before == Graphics::ResourceStates::UnorderedAccess
+            && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            && barrier.resource == receiverSpanCount
+            && barrier.range.textureSubresources == receiverSpanCountRange
+        )
+            receiverSpanCountUav = true;
+        if(
             barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
             && barrier.before == Graphics::ResourceStates::CopyDest
             && barrier.after == Graphics::ResourceStates::UnorderedAccess
@@ -7852,6 +7916,8 @@ TEST(GpuTaskGraph, PlansCsgIntervalPeelAndReceiverSurfaceStorageStates){
     EXPECT_TRUE(capBackNormalUav);
     EXPECT_TRUE(intervalDepthUav);
     EXPECT_TRUE(receiverEventDataUav);
+    EXPECT_TRUE(receiverSpanDataUav);
+    EXPECT_TRUE(receiverSpanCountUav);
     EXPECT_TRUE(transparentIntervalIdTransition);
     EXPECT_TRUE(transparentReceiverEventCountTransition);
 }

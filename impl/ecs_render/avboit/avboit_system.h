@@ -48,7 +48,8 @@ public:
         usize preparedTransparentCsgMaterialTypedByteCount = 0u,
         bool preparedTransparentCsgIntervalTargetsGraphOwned = false,
         bool preparedTransparentCsgReceiverSurfaceImageStatesGraphOwned = false,
-        bool preparedTransparentCsgIntervalPeelTargetStatesGraphOwned = false
+        bool preparedTransparentCsgIntervalPeelTargetStatesGraphOwned = false,
+        bool preparedTransparentCsgReceiverSpanOutputImageStatesGraphOwned = false
     );
     void renderAvboitOccupancyPass(
         Core::CommandList& commandList,
@@ -137,7 +138,8 @@ private:
         usize materialTypedByteCount,
         bool intervalTargetsGraphOwned,
         bool receiverSurfaceImageStatesGraphOwned,
-        bool intervalPeelTargetStatesGraphOwned
+        bool intervalPeelTargetStatesGraphOwned,
+        bool receiverSpanOutputImageStatesGraphOwned
     );
 };
 

@@ -47,7 +47,12 @@ public:
         const CsgFrameGpuData& csgFrameData,
         bool intervalPeelTargetStatesGraphOwned = false
     );
-    void dispatchCsgReceiverSpanBuild(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
+    void dispatchCsgReceiverSpanBuild(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        const CsgFrameGpuData& csgFrameData,
+        bool receiverSpanOutputImageStatesGraphOwned = false
+    );
     void dispatchCsgIntervalCombine(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
     void renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
     [[nodiscard]] bool createCsgIntervalSampleStateBuffer();

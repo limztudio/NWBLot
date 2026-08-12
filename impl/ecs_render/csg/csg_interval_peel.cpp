@@ -31,12 +31,20 @@ static void SetCsgIntervalPeelStorageStates(Core::CommandList& commandList, cons
     commandList.setTextureState(targets.csgIntervalId.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
 }
 
-static void SetCsgReceiverSpanStorageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
-    // These load-only inputs still use StorageImage heap descriptors, whose Vulkan image layout is GENERAL.
+static void SetCsgReceiverSpanStorageStates(
+    Core::CommandList& commandList,
+    const DeferredFrameTargets& targets,
+    const bool receiverSpanOutputImageStatesGraphOwned
+){
+    // These load-only inputs still use StorageImage heap descriptors, whose Vulkan image layout is GENERAL. Keep
+    // their same-state UAV transition even for graph-owned outputs: it is the receiver-surface-write -> span-read
+    // fence within this aggregate native task.
     commandList.setTextureState(targets.csgReceiverEventData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
     commandList.setTextureState(targets.csgReceiverEventCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgReceiverSpanData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgReceiverSpanCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    if(!receiverSpanOutputImageStatesGraphOwned){
+        commandList.setTextureState(targets.csgReceiverSpanData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.csgReceiverSpanCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    }
 }
 
 static void SetCsgIntervalCombineStorageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
@@ -235,7 +243,8 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
 void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const CsgFrameGpuData& csgFrameData
+    const CsgFrameGpuData& csgFrameData,
+    const bool receiverSpanOutputImageStatesGraphOwned
 ){
     if(!csgFrameData.hasWork())
         return;
@@ -245,7 +254,11 @@ void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgReceiverSpanBuild, graphics().getDevice(), commandList);
 
     commandList.endRenderPass();
-    __hidden_csg_interval_peel::SetCsgReceiverSpanStorageStates(commandList, targets);
+    __hidden_csg_interval_peel::SetCsgReceiverSpanStorageStates(
+        commandList,
+        targets,
+        receiverSpanOutputImageStatesGraphOwned
+    );
     commandList.commitBarriers();
 
     __hidden_csg_interval_peel::DispatchCsgIntervalCompute(

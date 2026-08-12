@@ -211,6 +211,8 @@ private:
         Core::GpuGraphResourceId csgIntervalId,
         Core::GpuGraphResourceId csgReceiverEventData,
         Core::GpuGraphResourceId csgReceiverEventCount,
+        Core::GpuGraphResourceId csgReceiverSpanData,
+        Core::GpuGraphResourceId csgReceiverSpanCount,
         Core::GpuGraphResourceId currentBindlessSlots,
         Core::GpuGraphResourceId materialContextSlots,
         const Core::GpuGraphResourceId* shadowTraceGeometryResources,

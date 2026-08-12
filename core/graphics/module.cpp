@@ -248,14 +248,14 @@ constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
 }
 
 template<typename DeclareTask>
-[[nodiscard]] static bool SubmitGraphOwnedSetupUpload(
+[[nodiscard]] static bool SubmitGraphOwnedStandaloneTask(
     GraphicsBackend::Device& device,
     GraphicsArena& graphArena,
-    const ResourceQueueSharing::Mask queueSharing,
     DeclareTask&& declareTask,
-    QueueSubmissionToken& outUploadToken
+    QueueSubmissionToken& outSubmissionToken,
+    const GpuPhysicalQueueId requiredTerminalQueue = {}
 ){
-    outUploadToken = {};
+    outSubmissionToken = {};
 
     const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
     if(!topology.queues || topology.queueCount == 0u)
@@ -278,6 +278,8 @@ template<typename DeclareTask>
 
     const GpuSubmissionPacketId terminalPacket = compiledGraph.packetForTask(terminalTask);
     if(!terminalPacket.valid())
+        return false;
+    if(requiredTerminalQueue.valid() && compiledGraph.packet(terminalPacket).queue != requiredTerminalQueue)
         return false;
 
     transaction.reset(compiledGraph);
@@ -308,13 +310,118 @@ template<typename DeclareTask>
         scratchArena
     )){
         transaction.discardUnaccepted(graph, compiledGraph);
-        outUploadToken = {};
+        outSubmissionToken = {};
         return false;
     }
 
-    outUploadToken = transaction.packetToken(terminalPacket);
-    return outUploadToken.valid()
-        && BridgeSetupUploadToConsumerQueues(device, outUploadToken, queueSharing)
+    outSubmissionToken = transaction.packetToken(terminalPacket);
+    return outSubmissionToken.valid();
+}
+
+template<typename DeclareTask>
+[[nodiscard]] static bool SubmitGraphOwnedSetupUpload(
+    GraphicsBackend::Device& device,
+    GraphicsArena& graphArena,
+    const ResourceQueueSharing::Mask queueSharing,
+    DeclareTask&& declareTask,
+    QueueSubmissionToken& outUploadToken
+){
+    if(!SubmitGraphOwnedStandaloneTask(
+        device,
+        graphArena,
+        Forward<DeclareTask>(declareTask),
+        outUploadToken
+    ))
+        return false;
+
+    return BridgeSetupUploadToConsumerQueues(device, outUploadToken, queueSharing);
+}
+
+
+struct FrameTimingResetGraphTask{
+    struct Payload{
+        GpuTimingRecorder* timing = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.timing)
+            return false;
+
+        payload.timing->recordFrameReset(commandList);
+        return true;
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(payload.timing && token.valid())
+            payload.timing->confirmFrameReset();
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.timing)
+            payload.timing->discardFrameReset();
+    }
+};
+
+[[nodiscard]] static GpuQueueRequest FrameTimingResetQueueRequest()noexcept{
+    return GpuQueueRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+}
+
+[[nodiscard]] static GpuTaskSchedulingHint FrameTimingResetScheduling()noexcept{
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Tiny;
+    // The reset is a complete, CPU-visible preamble boundary. Later renderer submissions may only reserve their
+    // timestamp scopes after this packet accepts, so it must not merge with unrelated graph work.
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    scheduling.overlapPreferred = false;
+    return scheduling;
+}
+
+[[nodiscard]] static bool SubmitGraphOwnedFrameTimingReset(
+    GraphicsBackend::Device& device,
+    GraphicsArena& graphArena,
+    GpuTimingRecorder& timing
+){
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    if(!graphicsQueue.valid())
+        return false;
+
+    QueueSubmissionToken acceptedToken;
+    if(!SubmitGraphOwnedStandaloneTask(
+        device,
+        graphArena,
+        [&timing](GpuTaskGraph& graph){
+            GpuTaskDesc resetDesc;
+            resetDesc
+                .setIdentity(Name("graphics.frame_timing.reset"))
+                .setMarkerLabel("Frame GPU-Timing Reset")
+                .setQueue(FrameTimingResetQueueRequest())
+                .setScheduling(FrameTimingResetScheduling())
+            ;
+            return graph.addTask<FrameTimingResetGraphTask>(
+                resetDesc,
+                FrameTimingResetGraphTask::Payload{
+                    .timing = &timing,
+                }
+            );
+        },
+        acceptedToken,
+        graphicsQueue
+    ))
+        return false;
+
+    return acceptedToken.queue == CommandQueue::Graphics
+        && acceptedToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration)
     ;
 }
 
@@ -733,9 +840,6 @@ bool Graphics::init(const Common::FrameData& data){
     if(!m_backend->createDevice())
         return false;
 
-    if(!createFrameTimingCommandList())
-        return false;
-
     m_deviceRecreationRequested = false;
 
     if(!m_backend->createSwapChain())
@@ -764,9 +868,6 @@ bool Graphics::createHeadlessDevice(){
     }
 
     if(!m_backend->createDevice())
-        return false;
-
-    if(!createFrameTimingCommandList())
         return false;
 
     m_deviceRecreationRequested = false;
@@ -905,7 +1006,6 @@ void Graphics::destroy(){
     m_renderPasses.clear();
     m_gpuTiming.resetQueries();
 
-    m_frameTimingCommandList.reset();
     m_swapChainFramebuffers.clear();
     m_backend->destroy();
     m_instanceCreated = false;
@@ -1083,19 +1183,6 @@ bool Graphics::validateRenderPassResources(){
     return valid;
 }
 
-bool Graphics::createFrameTimingCommandList(){
-    if(m_frameTimingCommandList)
-        return true;
-
-    m_frameTimingCommandList = getDevice().createCommandList();
-    if(!m_frameTimingCommandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create the frame GPU-timing reset command list"));
-        return false;
-    }
-
-    return true;
-}
-
 void Graphics::displayScaleChanged(){
     notifyPointerScaleChanged();
 
@@ -1127,35 +1214,16 @@ bool Graphics::prepareFramePreamble(){
         if(!m_gpuTiming.materializeRequestedQueries(device))
             NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to materialize one or more requested GPU-timing query pools"));
 
-        // Do not allow render-pass scopes to reuse a prior frame's reset if recording or submitting this preamble
-        // fails. confirmFrameReset() below reenables only the pools covered by the successful submission.
+        // Do not allow render-pass scopes to reuse a prior frame's reset if graph recording or submission fails.
+        // The task's accepted callback reenables only the pools covered by the successfully submitted packet.
         m_gpuTiming.discardFrameReset();
-        if(!m_frameTimingCommandList)
-            NWB_LOGGER_WARNING(NWB_TEXT("Graphics: frame GPU-timing reset command list is unavailable"));
-        else{
-            m_frameTimingCommandList->open();
-            if(!m_frameTimingCommandList->hasCommandBuffer())
-                NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to open the frame GPU-timing reset command list"));
-            else{
-                m_gpuTiming.recordFrameReset(*m_frameTimingCommandList);
-                m_frameTimingCommandList->close();
-
-                if(!m_frameTimingCommandList->hasCommandBuffer()){
-                    m_gpuTiming.discardFrameReset();
-                    NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to close the frame GPU-timing reset command list"));
-                }
-                else{
-                    CommandList* commandLists[] = { m_frameTimingCommandList.get() };
-                    bool frameTimingResetSubmitted = false;
-                    device.executeCommandLists(commandLists, 1u, CommandQueue::Graphics, &frameTimingResetSubmitted);
-                    if(!frameTimingResetSubmitted){
-                        m_gpuTiming.discardFrameReset();
-                        NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to submit the frame GPU-timing reset command list"));
-                    }
-                    else
-                        m_gpuTiming.confirmFrameReset();
-                }
-            }
+        if(!__hidden_graphics::SubmitGraphOwnedFrameTimingReset(
+            device,
+            m_allocator.getObjectArena(),
+            m_gpuTiming
+        )){
+            m_gpuTiming.discardFrameReset();
+            NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to submit the graph-owned frame GPU-timing reset packet"));
         }
     }
 

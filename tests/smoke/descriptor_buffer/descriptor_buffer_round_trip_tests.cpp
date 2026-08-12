@@ -5032,6 +5032,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
 
 inline constexpr GpuTimingScopeDefinition s_FrameTimingPreambleScope("tests/frame_timing_preamble");
 inline constexpr GpuTimingScopeDefinition s_FrameTimingLateActivationScope("tests/frame_timing_late_activation");
+inline constexpr GpuTimingScopeDefinition s_FrameTimingRejectedGraphResetScope("tests/frame_timing_rejected_graph_reset");
 inline constexpr GpuTimingScopeDefinition s_UnpreparedTimingScope("tests/timing_unprepared_scope");
 inline constexpr GpuTimingScopeDefinition s_SubmissionTicketScope("tests/timing_submission_ticket");
 inline constexpr GpuTimingScopeDefinition s_ConcurrentSubmissionTicketScope("tests/timing_submission_ticket_concurrent");
@@ -5195,6 +5196,55 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQuer
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();
 }
+
+
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+
+// The graph-owned reset task must publish query-pool availability only from packet acceptance. A rejected reset is
+// followed by a dynamic-rendering timing scope, which cannot reset the pool itself; the next accepted preamble must
+// still establish a fresh usable reset rather than leaving either stale availability or a permanently stuck pool.
+TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleRollsBackRejectedGraphTimingReset){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingRejectedGraphResetScope.identity, device, 1u));
+
+    FrameTimingPreambleProbePass rejectedProbe(graphics, s_FrameTimingRejectedGraphResetScope);
+    ASSERT_TRUE(rejectedProbe.initialize());
+    graphics.addRenderPassToBack(rejectedProbe);
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    ASSERT_TRUE(graphics.prepareFramePreamble());
+    graphics.render();
+    graphics.removeRenderPass(rejectedProbe);
+    ASSERT_TRUE(rejectedProbe.recorded());
+    ASSERT_TRUE(device.waitForIdle());
+
+    // collect() observes no sample from the rejected reset frame, then the second preamble's accepted graph packet
+    // makes the pool available for the next dynamic-rendering scope.
+    ASSERT_TRUE(graphics.prepareFramePreamble());
+    EXPECT_FALSE(timingSink.stats(s_FrameTimingRejectedGraphResetScope.identity).valid());
+
+    FrameTimingPreambleProbePass acceptedProbe(graphics, s_FrameTimingRejectedGraphResetScope);
+    ASSERT_TRUE(acceptedProbe.initialize());
+    graphics.addRenderPassToBack(acceptedProbe);
+    graphics.render();
+    graphics.removeRenderPass(acceptedProbe);
+    ASSERT_TRUE(acceptedProbe.recorded());
+    ASSERT_TRUE(device.waitForIdle());
+
+    ASSERT_TRUE(graphics.prepareFramePreamble());
+    graphics.render();
+    ASSERT_TRUE(device.waitForIdle());
+    EXPECT_TRUE(timingSink.stats(s_FrameTimingRejectedGraphResetScope.identity).valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+#endif
 
 
 // Recording must not grow persistent timer-query pools. A scope that was not declared during preparation simply

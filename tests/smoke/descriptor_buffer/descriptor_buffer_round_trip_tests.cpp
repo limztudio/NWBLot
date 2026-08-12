@@ -1085,12 +1085,13 @@ struct NativePacketCausticAccumulatorDecayProbeTask{
 };
 
 
-// Resolve reads the photon-written accumulator as a sampled uint texture. The callback intentionally has no state
-// setup, so recording proves the graph lowered the in-packet UAV-to-SRV handoff before wavelet work begins.
-struct NativePacketCausticAccumulatorResolveProbeTask{
+// Wavelet resolve reads the photon-written accumulator and geometry cache as sampled uint textures. The callback
+// intentionally has no state setup, so recording proves the graph lowered both in-packet UAV-to-SRV handoffs.
+struct NativePacketCausticResolveProbeTask{
     struct Payload{
         Texture* accumulator = nullptr;
         u32 layerCount = 0u;
+        Texture* geometry = nullptr;
         bool* recorded = nullptr;
     };
 
@@ -1107,6 +1108,11 @@ struct NativePacketCausticAccumulatorResolveProbeTask{
                     == ResourceStates::ShaderResource
             ;
         }
+        ready = ready
+            && payload.geometry
+            && commandList.getTextureSubresourceState(payload.geometry, 0u, 0u)
+                == ResourceStates::ShaderResource
+        ;
         if(payload.recorded)
             *payload.recorded = ready;
         return ready;
@@ -4573,10 +4579,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedWarmCausticAccumulatorDecayRecor
 }
 
 
-// Caustic photon splats and wavelet resolve remain in one native packet, but the resolver consumes the accumulator
-// as ShaderResource. Both callbacks are getter-only so the real Vulkan recorder must lower the precise UAV-to-SRV
-// barrier instead of a renderer-local transition.
-TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonResolveHandoffRecordsWithoutNativeBridge){
+// Caustic photon splats, geometry downsample, and wavelet resolve remain in one native packet. The wavelet task
+// consumes both preceding outputs as ShaderResource, so getter-only callbacks prove Vulkan lowered both barriers.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryResolveHandoffsRecordWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
     constexpr u32 layerCount = 3u;
     const TextureHandle accumulator = device.createTexture(
@@ -4591,6 +4596,17 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonResolveHandoffRecor
             .setKeepInitialState(true)
     );
     ASSERT_NE(accumulator.get(), nullptr);
+    const TextureHandle geometry = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setDimension(TextureDimension::Texture2D)
+            .setFormat(Format::R32_UINT)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::ShaderResource)
+            .setKeepInitialState(true)
+    );
+    ASSERT_NE(geometry.get(), nullptr);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId accumulatorResource = graph.importTexture(
@@ -4602,6 +4618,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonResolveHandoffRecor
             .setInitialState(ResourceStates::ShaderResource)
     );
     ASSERT_TRUE(accumulatorResource.valid());
+    const GpuGraphResourceId geometryResource = graph.importTexture(
+        geometry,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/caustic_photon_resolve_geometry"))
+            .setMarkerLabel("Caustic Photon Resolve Geometry")
+            .setType(GpuGraphResourceType::Texture)
+            .setInitialState(ResourceStates::ShaderResource)
+    );
+    ASSERT_TRUE(geometryResource.valid());
 
     const GpuQueueRequest graphicsQueue{
         GpuQueueCapability::Graphics,
@@ -4610,6 +4635,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonResolveHandoffRecor
         false,
     };
     const TextureSubresourceSet accumulatorSubresources(0u, 1u, 0u, layerCount);
+    const TextureSubresourceSet geometrySubresources(0u, 1u, 0u, 1u);
     const GpuTaskResourceUse photonUses[] = {
         GpuTaskResourceUse{
             .resource = accumulatorResource,
@@ -4640,10 +4666,46 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonResolveHandoffRecor
     );
     ASSERT_TRUE(photonTask.valid());
 
+    const GpuTaskResourceUse geometryUses[] = {
+        GpuTaskResourceUse{
+            .resource = geometryResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = geometrySubresources },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    GpuTaskSchedulingHint geometryScheduling = photonScheduling;
+    geometryScheduling.mergeWithPrevious = true;
+    GpuTaskDesc geometryDesc;
+    geometryDesc
+        .setIdentity(Name("tests/descriptor_buffer/caustic_geometry_stage"))
+        .setMarkerLabel("Caustic Geometry")
+        .setQueue(graphicsQueue)
+        .setScheduling(geometryScheduling)
+        .setDependencies(&photonTask, 1u)
+        .setResourceUses(geometryUses, LengthOf(geometryUses))
+    ;
+    bool geometryRecorded = false;
+    const GpuTaskId geometryTask = graph.addTask<NativePacketCausticAccumulatorDecayProbeTask>(
+        geometryDesc,
+        NativePacketCausticAccumulatorDecayProbeTask::Payload{
+            .accumulator = geometry.get(),
+            .layerCount = 1u,
+            .recorded = &geometryRecorded,
+        }
+    );
+    ASSERT_TRUE(geometryTask.valid());
+
     const GpuTaskResourceUse resolveUses[] = {
         GpuTaskResourceUse{
             .resource = accumulatorResource,
             .range = GpuTaskResourceRange{ .textureSubresources = accumulatorSubresources },
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = geometryResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = geometrySubresources },
             .requiredState = ResourceStates::ShaderResource,
             .access = GpuTaskResourceAccess::Read,
         },
@@ -4656,15 +4718,16 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonResolveHandoffRecor
         .setMarkerLabel("Caustics Resolve")
         .setQueue(graphicsQueue)
         .setScheduling(resolveScheduling)
-        .setDependencies(&photonTask, 1u)
+        .setDependencies(&geometryTask, 1u)
         .setResourceUses(resolveUses, LengthOf(resolveUses))
     ;
     bool resolveRecorded = false;
-    const GpuTaskId resolveTask = graph.addTask<NativePacketCausticAccumulatorResolveProbeTask>(
+    const GpuTaskId resolveTask = graph.addTask<NativePacketCausticResolveProbeTask>(
         resolveDesc,
-        NativePacketCausticAccumulatorResolveProbeTask::Payload{
+        NativePacketCausticResolveProbeTask::Payload{
             .accumulator = accumulator.get(),
             .layerCount = layerCount,
+            .geometry = geometry.get(),
             .recorded = &resolveRecorded,
         }
     );
@@ -4694,8 +4757,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonResolveHandoffRecor
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
     ASSERT_EQ(compiledGraph.packetCount(), 1u);
     const GpuSubmissionPacketId photonPacket = compiledGraph.packetForTask(photonTask);
+    const GpuSubmissionPacketId geometryPacket = compiledGraph.packetForTask(geometryTask);
     const GpuSubmissionPacketId resolvePacket = compiledGraph.packetForTask(resolveTask);
     ASSERT_TRUE(photonPacket.valid());
+    ASSERT_TRUE(geometryPacket.valid());
+    EXPECT_EQ(geometryPacket, photonPacket);
     EXPECT_EQ(resolvePacket, photonPacket);
 
     const GpuCompiledTask* const compiledResolve = compiledGraph.findTask(resolveTask);
@@ -4703,6 +4769,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonResolveHandoffRecor
     const GpuCompiledBarrier* const resolveBarriers = compiledGraph.taskPrologueBarriers(resolveTask);
     ASSERT_NE(resolveBarriers, nullptr);
     bool hasAccumulatorHandoff = false;
+    bool hasGeometryHandoff = false;
     for(u32 barrierIndex = 0u; barrierIndex < compiledResolve->prologueBarrierCount; ++barrierIndex){
         const GpuCompiledBarrier& barrier = resolveBarriers[barrierIndex];
         hasAccumulatorHandoff = hasAccumulatorHandoff || (
@@ -4712,8 +4779,16 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonResolveHandoffRecor
             && barrier.before == ResourceStates::UnorderedAccess
             && barrier.after == ResourceStates::ShaderResource
         );
+        hasGeometryHandoff = hasGeometryHandoff || (
+            barrier.type == GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == geometryResource
+            && barrier.range.textureSubresources == geometrySubresources
+            && barrier.before == ResourceStates::UnorderedAccess
+            && barrier.after == ResourceStates::ShaderResource
+        );
     }
     EXPECT_TRUE(hasAccumulatorHandoff);
+    EXPECT_TRUE(hasGeometryHandoff);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
@@ -4728,6 +4803,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonResolveHandoffRecor
         &failedPacket
     )) << "failed packet " << failedPacket.index;
     EXPECT_TRUE(photonRecorded);
+    EXPECT_TRUE(geometryRecorded);
     EXPECT_TRUE(resolveRecorded);
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -4746,6 +4822,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonResolveHandoffRecor
         scratchArena
     ));
     EXPECT_TRUE(transaction.packetToken(photonPacket).valid());
+    EXPECT_TRUE(transaction.packetToken(geometryPacket).valid());
     EXPECT_TRUE(device.waitForIdle());
 }
 

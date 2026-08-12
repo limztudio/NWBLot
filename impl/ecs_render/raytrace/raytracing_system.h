@@ -382,17 +382,34 @@ public:
         bool graphOwnsResolve = false,
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr
     );
-    // The normal deferred graph records wavelet resolve after the selected photon producer. Its exact resource uses
-    // own the accumulator UAV-to-SRV handoff; direct compatibility callers keep resolve attached to the producer.
+    // The normal deferred graph records geometry downsample after the selected photon producer, then wavelet
+    // resolve. Their exact resource uses own the accumulator and geometry-cache UAV-to-SRV handoffs; direct
+    // compatibility callers keep the full resolve attached to the producer.
+    [[nodiscard]] Core::GpuTaskId declareCausticGeometryDownsampleTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        const bool* causticProducerDispatched,
+        Optional<Core::GpuTimingMeasure>* causticResolveTiming,
+        bool graphEntryStatesOwned = false
+    );
     [[nodiscard]] Core::GpuTaskId declareCausticResolveTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
         Core::GpuTimingSubmissionTicket& timingTicket,
         const bool* causticProducerDispatched,
+        Optional<Core::GpuTimingMeasure>* causticResolveTiming,
         bool graphEntryStatesOwned = false
     );
-    // Narrow entry for the graph-owned resolve callback. The shared direct implementation remains private.
+    // Narrow entries for the graph-owned geometry/wavelet callbacks. The shared direct implementation remains
+    // private and retains its original single-call timing scope.
+    void dispatchGraphCausticGeometryDownsample(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned = false
+    );
     void dispatchGraphCausticResolve(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -623,9 +640,19 @@ private:
     void advanceCausticTemporalReuse();
     // Bootstrap or decay temporal splat accumulation before photon atomic adds.
     void prepareCausticAccumulatorForSplat(Core::CommandList& commandList, DeferredFrameTargets& targets, f32 decayFactor);
-    // Shared software/hardware caustic wavelet resolve. Normal graph callers declare the geometry-downsample inputs
-    // and accumulator handoff; direct compatibility callers retain that native setup.
+    // Shared software/hardware caustic resolve. Normal graph callers split geometry downsample from wavelet resolve
+    // so they declare the accumulator and geometry-cache handoffs; direct compatibility callers retain native setup.
     void dispatchCausticResolve(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned = false
+    );
+    void dispatchCausticGeometryDownsample(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned = false
+    );
+    void dispatchCausticWaveletResolve(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool graphEntryStatesOwned = false

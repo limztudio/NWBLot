@@ -260,7 +260,8 @@ private:
         const Core::GpuGraphResourceId* softwareTraceGeometryResources,
         usize softwareTraceGeometryResourceCount,
         Core::GpuTimingSubmissionTicket& timingTicket,
-        Optional<Core::GpuTimingMeasure>& causticPhotonTiming
+        Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
+        Optional<Core::GpuTimingMeasure>& causticResolveTiming
     );
     [[nodiscard]] bool declareDeferredSurfelGiTask(
         DeferredFrameTargets& deferredTargets,
@@ -305,6 +306,7 @@ private:
         Core::GpuTimingSubmissionTicket& surfelGiTimingTicket,
         Core::GpuTimingSubmissionTicket& hardwareCausticsTimingTicket,
         Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
+        Optional<Core::GpuTimingMeasure>& causticResolveTiming,
         Core::GpuTimingSubmissionTicket& lightingTimingTicket,
         Core::GpuTimingSubmissionTicket& compositeTimingTicket,
         Core::GpuTimingSubmissionTicket& presentTimingTicket,
@@ -393,9 +395,10 @@ private:
     Core::GpuTaskId m_deferredCausticAccumulatorNonTemporalClearTask;
     // A warm temporal accumulator decays in a mergeable graph task before its selected photon producer.
     Core::GpuTaskId m_deferredCausticAccumulatorDecayTask;
-    // Photon and resolve are distinct graph tasks, but must remain in the selected caustics packet so the compiler
-    // owns their accumulator UAV-to-SRV handoff without changing the effects acceptance endpoint.
+    // Photon, geometry downsample, and wavelet resolve are distinct graph tasks, but must remain in the selected
+    // caustics packet so the compiler owns both UAV-to-SRV handoffs without changing the effects endpoint.
     Core::GpuTaskId m_deferredCausticPhotonTask;
+    Core::GpuTaskId m_deferredCausticGeometryTask;
     bool m_deferredCausticProducerDispatched = false;
     // The typed output clear plus optional initialize/copy prefix form Surfel GI's graph-owned setup. The final GI
     // task remains the semantic effects endpoint, but must share the output-clear packet.

@@ -5809,7 +5809,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
 
 // Photon atomics and wavelet resolve now occupy distinct graph callbacks. Their packet remains unsplit, while the
 // resolve's accumulator read makes the compiler own the UAV-to-SRV transition that was formerly native-local.
-TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonResolveHandoff){
+TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryResolveHandoffs){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId accumulator = AddTextureMetadata(
@@ -5820,6 +5820,14 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonResolveHandoff){
         Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
     );
     ASSERT_TRUE(accumulator.valid());
+    const Graphics::GpuGraphResourceId geometry = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/caustic_photon_resolve_geometry"),
+        "Caustic Photon Resolve Geometry",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    ASSERT_TRUE(geometry.valid());
 
     const Graphics::GpuQueueRequest computeRequest{
         Graphics::GpuQueueCapability::Compute,
@@ -5849,11 +5857,39 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonResolveHandoff){
     const Graphics::GpuTaskId photonTask = graph.addTask(photonDesc);
     ASSERT_TRUE(photonTask.valid());
 
+    const Graphics::GpuTaskResourceUse geometryUses[] = {
+        {
+            .resource = geometry,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    Graphics::GpuTaskSchedulingHint geometryScheduling = photonScheduling;
+    geometryScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskDesc geometryDesc;
+    geometryDesc
+        .setIdentity(Name("tests/task_graph/caustic_geometry_stage"))
+        .setMarkerLabel("Caustic Geometry")
+        .setQueue(computeRequest)
+        .setScheduling(geometryScheduling)
+        .setDependencies(&photonTask, 1u)
+        .setResourceUses(geometryUses, LengthOf(geometryUses))
+    ;
+    const Graphics::GpuTaskId geometryTask = graph.addTask(geometryDesc);
+    ASSERT_TRUE(geometryTask.valid());
+
     Graphics::GpuTaskSchedulingHint resolveScheduling = photonScheduling;
     resolveScheduling.mergeWithPrevious = true;
     const Graphics::GpuTaskResourceUse resolveUses[] = {
         {
             .resource = accumulator,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = geometry,
             .range = {},
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Read,
@@ -5865,7 +5901,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonResolveHandoff){
         .setMarkerLabel("Caustics Resolve")
         .setQueue(computeRequest)
         .setScheduling(resolveScheduling)
-        .setDependencies(&photonTask, 1u)
+        .setDependencies(&geometryTask, 1u)
         .setResourceUses(resolveUses, LengthOf(resolveUses))
     ;
     const Graphics::GpuTaskId resolveTask = graph.addTask(resolveDesc);
@@ -5887,12 +5923,22 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonResolveHandoff){
         accumulator,
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
+    ASSERT_TRUE(HasInferredHazard(
+        analysis,
+        geometryTask,
+        resolveTask,
+        geometry,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
 
     const Graphics::GpuSubmissionPacketId photonPacket = compiledGraph.packetForTask(photonTask);
+    const Graphics::GpuSubmissionPacketId geometryPacket = compiledGraph.packetForTask(geometryTask);
     const Graphics::GpuSubmissionPacketId resolvePacket = compiledGraph.packetForTask(resolveTask);
     ASSERT_TRUE(photonPacket.valid());
+    ASSERT_TRUE(geometryPacket.valid());
     ASSERT_TRUE(resolvePacket.valid());
     EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(geometryPacket, photonPacket);
     EXPECT_EQ(resolvePacket, photonPacket);
 
     const Graphics::GpuCompiledTask* const compiledResolve = compiledGraph.findTask(resolveTask);
@@ -5900,6 +5946,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonResolveHandoff){
     const Graphics::GpuCompiledBarrier* const resolveBarriers = compiledGraph.taskPrologueBarriers(resolveTask);
     ASSERT_NE(resolveBarriers, nullptr);
     bool hasAccumulatorHandoff = false;
+    bool hasGeometryHandoff = false;
     for(usize barrierIndex = 0u; barrierIndex < compiledResolve->prologueBarrierCount; ++barrierIndex){
         const Graphics::GpuCompiledBarrier& barrier = resolveBarriers[barrierIndex];
         hasAccumulatorHandoff = hasAccumulatorHandoff || (
@@ -5908,8 +5955,15 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonResolveHandoff){
             && barrier.before == Graphics::ResourceStates::UnorderedAccess
             && barrier.after == Graphics::ResourceStates::ShaderResource
         );
+        hasGeometryHandoff = hasGeometryHandoff || (
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == geometry
+            && barrier.before == Graphics::ResourceStates::UnorderedAccess
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+        );
     }
     EXPECT_TRUE(hasAccumulatorHandoff);
+    EXPECT_TRUE(hasGeometryHandoff);
 }
 
 

@@ -263,14 +263,16 @@ struct HardwareCausticsGraphTask{
     }
 };
 
-// The resolver follows the selected photon producer inside the same graph packet. Its explicit accumulator read
-// makes the compiler lower the atomic-splat UAV-to-SRV transition before the shared wavelet sequence begins.
-struct CausticResolveGraphTask{
+// Geometry downsample follows the selected photon producer in the same graph packet. Its timing begin is retained
+// until wavelet resolve records the endpoint, preserving the established full-resolve interval across callbacks.
+struct CausticGeometryDownsampleGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
+        Core::Graphics* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* causticProducerDispatched = nullptr;
+        Optional<Core::GpuTimingMeasure>* causticResolveTiming = nullptr;
         bool graphEntryStatesOwned = false;
     };
 
@@ -280,12 +282,73 @@ struct CausticResolveGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.raytracingSystem || !payload.targets || !payload.timingTicket)
+        if(!payload.raytracingSystem || !payload.graphics || !payload.targets || !payload.timingTicket || !payload.causticResolveTiming)
+            return false;
+        if(payload.causticResolveTiming->has_value()){
+            payload.causticResolveTiming->value().discardTiming();
+            payload.causticResolveTiming->reset();
+        }
+        if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
+            return true;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        payload.causticResolveTiming->emplace(
+            payload.graphics->gpuTiming(),
+            RendererGpuTimingScope::s_CausticResolve,
+            payload.graphics->getDevice(),
+            commandList
+        );
+        payload.raytracingSystem->dispatchGraphCausticGeometryDownsample(
+            commandList,
+            *payload.targets,
+            payload.graphEntryStatesOwned
+        );
+        // The next callback writes the timestamp endpoint on this same primary command list. Close this callback's
+        // nested marker now, before the packet recorder advances to the wavelet task marker.
+        payload.causticResolveTiming->value().finishMarker();
+        return true;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.causticResolveTiming && payload.causticResolveTiming->has_value()){
+            payload.causticResolveTiming->value().discardTiming();
+            payload.causticResolveTiming->reset();
+        }
+    }
+};
+
+
+// Wavelet resolve consumes the geometry cache written above. Its explicit sampled use makes the compiler lower the
+// cache UAV-to-SRV transition before this callback records, and it finishes the retained full-resolve interval.
+struct CausticResolveGraphTask{
+    struct Payload{
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        const bool* causticProducerDispatched = nullptr;
+        Optional<Core::GpuTimingMeasure>* causticResolveTiming = nullptr;
+        bool graphEntryStatesOwned = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.raytracingSystem || !payload.targets || !payload.timingTicket || !payload.causticResolveTiming)
             return false;
         // Preserve the existing no-producer contract: the graph-owned irradiance clear remains authoritative and
         // no resolve dispatch is emitted when the selected photon producer did not record.
-        if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
+        if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched){
+            if(payload.causticResolveTiming->has_value()){
+                payload.causticResolveTiming->value().discardTiming();
+                payload.causticResolveTiming->reset();
+            }
             return true;
+        }
+        if(!payload.causticResolveTiming->has_value())
+            return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
         payload.raytracingSystem->dispatchGraphCausticResolve(
@@ -293,7 +356,16 @@ struct CausticResolveGraphTask{
             *payload.targets,
             payload.graphEntryStatesOwned
         );
+        payload.causticResolveTiming->value().finishTiming(commandList);
+        payload.causticResolveTiming->reset();
         return true;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.causticResolveTiming && payload.causticResolveTiming->has_value()){
+            payload.causticResolveTiming->value().discardTiming();
+            payload.causticResolveTiming->reset();
+        }
     }
 };
 
@@ -693,13 +765,65 @@ void RendererRayTracingSystem::dispatchCausticResolve(
     const bool graphEntryStatesOwned
 ){
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticResolve, graphics().getDevice(), commandList);
+    dispatchCausticGeometryDownsample(commandList, targets, graphEntryStatesOwned);
+    dispatchCausticWaveletResolve(commandList, targets, graphEntryStatesOwned);
+}
+
+
+void RendererRayTracingSystem::dispatchCausticGeometryDownsample(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool graphEntryStatesOwned
+){
     NWB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     NWB_ASSERT(heap.isInitialized());
 
-    // Heap-selected resolve resources need explicit transitions and UAV ordering. Normal graph resolve callers
-    // declare the accumulator read separately from the photon producer, so the compiler lowers that UAV-to-SRV
-    // handoff before this callback; direct compatibility callers retain the original native transition.
+    // The normal graph declares this writable cache separately from wavelet resolve, so the latter receives a
+    // compiler-lowered UAV-to-SRV handoff. Direct callers retain the original native entry setup.
+    commandList.setEnableUavBarriersForTexture(targets.causticResolveGeometry.get(), true);
+
+    const u32 halfWidth = (targets.width + 1u) / 2u;
+    const u32 halfHeight = (targets.height + 1u) / 2u;
+    const u32 halfGroupsX = DivideUp(halfWidth, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+    const u32 halfGroupsY = DivideUp(halfHeight, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+
+    if(!graphEntryStatesOwned){
+        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.causticResolveGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+    }
+
+    CausticGeometryDownsamplePushConstants geometryPush;
+    geometryPush.width = targets.width;
+    geometryPush.height = targets.height;
+    geometryPush.halfWidth = halfWidth;
+    geometryPush.halfHeight = halfHeight;
+    geometryPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
+    geometryPush.depthSlot = targets.bindless.gbufferDepth.slot();
+    geometryPush.outputStorageSlot = targets.bindless.causticResolveGeometryStorage.slot();
+
+    Core::ComputeState geometryState;
+    geometryState.setPipeline(rayTracingState().m_causticGeometryDownsamplePipeline.get());
+    commandList.setComputeState(geometryState);
+    heap.bindCompute(commandList, *rayTracingState().m_causticGeometryDownsamplePipeline.get());
+    commandList.setPushConstants(&geometryPush, sizeof(geometryPush));
+    commandList.dispatch(halfGroupsX, halfGroupsY, 1u);
+}
+
+
+void RendererRayTracingSystem::dispatchCausticWaveletResolve(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool graphEntryStatesOwned
+){
+    NWB_ASSERT(targets.bindless.valid());
+    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
+    NWB_ASSERT(heap.isInitialized());
+
+    // The normal graph has already lowered both immutable sampled inputs. Direct callers retain the accumulator
+    // transition, while dynamic ping-pong targets remain locally ordered below.
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
     if(!graphEntryStatesOwned){
         commandList.setTextureState(
@@ -719,34 +843,6 @@ void RendererRayTracingSystem::dispatchCausticResolve(
     const u32 halfGroupsY = DivideUp(halfHeight, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const u32 fullGroupsX = DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const u32 fullGroupsY = DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
-
-    // Downsample geometry once for all edge-aware wavelet taps. The normal deferred graph already lowers these
-    // descriptor-visible sources and the writable cache through the selected caustics task's declared uses; direct
-    // compatibility callers retain the original native setup.
-    {
-        if(!graphEntryStatesOwned){
-            commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-            commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-            commandList.setTextureState(targets.causticResolveGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
-            commandList.commitBarriers();
-        }
-
-        CausticGeometryDownsamplePushConstants geometryPush;
-        geometryPush.width = targets.width;
-        geometryPush.height = targets.height;
-        geometryPush.halfWidth = halfWidth;
-        geometryPush.halfHeight = halfHeight;
-        geometryPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
-        geometryPush.depthSlot = targets.bindless.gbufferDepth.slot();
-        geometryPush.outputStorageSlot = targets.bindless.causticResolveGeometryStorage.slot();
-
-        Core::ComputeState geometryState;
-        geometryState.setPipeline(rayTracingState().m_causticGeometryDownsamplePipeline.get());
-        commandList.setComputeState(geometryState);
-        heap.bindCompute(commandList, *rayTracingState().m_causticGeometryDownsamplePipeline.get());
-        commandList.setPushConstants(&geometryPush, sizeof(geometryPush));
-        commandList.dispatch(halfGroupsX, halfGroupsY, 1u);
-    }
 
     // Normalize temporal accumulation to retain non-temporal brightness.
     const f32 temporalDecay = causticTemporalDecay();
@@ -1066,12 +1162,37 @@ Core::GpuTaskId RendererRayTracingSystem::declareHardwareCausticsTask(
     );
 }
 
+Core::GpuTaskId RendererRayTracingSystem::declareCausticGeometryDownsampleTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    const bool* const causticProducerDispatched,
+    Optional<Core::GpuTimingMeasure>* const causticResolveTiming,
+    const bool graphEntryStatesOwned
+){
+    return graph.addTask<__hidden_caustics::CausticGeometryDownsampleGraphTask>(
+        desc,
+        __hidden_caustics::CausticGeometryDownsampleGraphTask::Payload{
+            .raytracingSystem = this,
+            .graphics = &graphics(),
+            .targets = &targets,
+            .timingTicket = &timingTicket,
+            .causticProducerDispatched = causticProducerDispatched,
+            .causticResolveTiming = causticResolveTiming,
+            .graphEntryStatesOwned = graphEntryStatesOwned,
+        }
+    );
+}
+
+
 Core::GpuTaskId RendererRayTracingSystem::declareCausticResolveTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     const bool* const causticProducerDispatched,
+    Optional<Core::GpuTimingMeasure>* const causticResolveTiming,
     const bool graphEntryStatesOwned
 ){
     return graph.addTask<__hidden_caustics::CausticResolveGraphTask>(
@@ -1081,9 +1202,18 @@ Core::GpuTaskId RendererRayTracingSystem::declareCausticResolveTask(
             .targets = &targets,
             .timingTicket = &timingTicket,
             .causticProducerDispatched = causticProducerDispatched,
+            .causticResolveTiming = causticResolveTiming,
             .graphEntryStatesOwned = graphEntryStatesOwned,
         }
     );
+}
+
+void RendererRayTracingSystem::dispatchGraphCausticGeometryDownsample(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool graphEntryStatesOwned
+){
+    dispatchCausticGeometryDownsample(commandList, targets, graphEntryStatesOwned);
 }
 
 void RendererRayTracingSystem::dispatchGraphCausticResolve(
@@ -1091,7 +1221,7 @@ void RendererRayTracingSystem::dispatchGraphCausticResolve(
     DeferredFrameTargets& targets,
     const bool graphEntryStatesOwned
 ){
-    dispatchCausticResolve(commandList, targets, graphEntryStatesOwned);
+    dispatchCausticWaveletResolve(commandList, targets, graphEntryStatesOwned);
 }
 
 bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameTargets& targets, const f32 temporalDecay)const{

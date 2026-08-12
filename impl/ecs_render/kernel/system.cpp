@@ -252,6 +252,7 @@ void RendererSystem::invalidateResources(){
     m_deferredCausticAccumulatorNonTemporalClearTask = {};
     m_deferredCausticAccumulatorDecayTask = {};
     m_deferredCausticPhotonTask = {};
+    m_deferredCausticGeometryTask = {};
     m_deferredCausticProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
@@ -514,6 +515,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredCausticAccumulatorNonTemporalClearTask = {};
     m_deferredCausticAccumulatorDecayTask = {};
     m_deferredCausticPhotonTask = {};
+    m_deferredCausticGeometryTask = {};
     m_deferredCausticProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
@@ -782,6 +784,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingSubmissionTicket hardwareCausticsTimingTicket(m_graphics.gpuTiming());
     // A warm temporal decay starts this interval in its graph task and the selected photon producer closes it.
     Optional<Core::GpuTimingMeasure> causticPhotonTiming;
+    // Geometry downsample begins the resolve interval and wavelet resolve closes it in the same selected packet.
+    Optional<Core::GpuTimingMeasure> causticResolveTiming;
     const bool clearAvboitTargets = hasTransparentRenderers || m_avboitState.m_targetsNeedClear;
     Core::GpuTimingSubmissionTicket avboitPreTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket avboitDepthWarpTimingTicket(m_graphics.gpuTiming());
@@ -825,6 +829,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         surfelGiTimingTicket,
         hardwareCausticsTimingTicket,
         causticPhotonTiming,
+        causticResolveTiming,
         deferredLightingTimingTicket,
         deferredCompositeTimingTicket,
         deferredPresentTimingTicket,
@@ -859,6 +864,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             surfelGiTimingTicket,
             hardwareCausticsTimingTicket,
             causticPhotonTiming,
+            causticResolveTiming,
             deferredLightingTimingTicket,
             deferredCompositeTimingTicket,
             deferredPresentTimingTicket,
@@ -1227,6 +1233,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticPhotonTask)
         : Core::GpuSubmissionPacketId{}
     ;
+    const Core::GpuSubmissionPacketId causticGeometryPacket = m_deferredCausticGeometryTask.valid()
+        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticGeometryTask)
+        : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuSubmissionPacketId causticIrradianceClearPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredCausticIrradianceClearTask
     );
@@ -1353,14 +1363,20 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? hardwareCausticsPacket
         : softwareCausticsPacket
     ;
-    // Photon and resolve are distinct callbacks so the compiler can lower their accumulator UAV-to-SRV handoff,
-    // but they remain one semantic caustics submission: clear acceptance, timing, and all dependent effects keep
-    // the established packet endpoint.
+    // Photon, geometry, and wavelet resolve are distinct callbacks so the compiler can lower both their UAV-to-SRV
+    // handoffs, but they remain one semantic caustics submission: clear acceptance, timing, and all dependent
+    // effects keep the established packet endpoint.
     const bool causticPhotonMergedIntoCausticsPacket =
         m_deferredCausticPhotonTask.valid()
         && causticPhotonPacket.valid()
         && causticsPacket.valid()
         && causticPhotonPacket == causticsPacket
+    ;
+    const bool causticGeometryMergedIntoCausticsPacket =
+        m_deferredCausticGeometryTask.valid()
+        && causticGeometryPacket.valid()
+        && causticsPacket.valid()
+        && causticGeometryPacket == causticsPacket
     ;
     const bool causticIrradianceClearMergedIntoCausticsPacket =
         m_deferredCausticIrradianceClearTask.valid()
@@ -1537,6 +1553,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredCausticIrradianceClearTask.valid()
         || !m_deferredCausticPhotonTask.valid()
         || !causticPhotonMergedIntoCausticsPacket
+        || !m_deferredCausticGeometryTask.valid()
+        || !causticGeometryMergedIntoCausticsPacket
         || !causticIrradianceClearMergedIntoCausticsPacket
         || !causticAccumulatorNonTemporalClearMergedIntoCausticsPacket
         || !causticAccumulatorBootstrapClearMergedIntoCausticsPacket
@@ -1762,6 +1780,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(causticPhotonTiming){
             causticPhotonTiming->discardTiming();
             causticPhotonTiming.reset();
+        }
+        if(causticResolveTiming){
+            causticResolveTiming->discardTiming();
+            causticResolveTiming.reset();
         }
         frameTimingTransaction.discard();
         discardTimingTickets();

@@ -3736,7 +3736,8 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     const Core::GpuGraphResourceId* const softwareTraceGeometryResources,
     const usize softwareTraceGeometryResourceCount,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>& causticPhotonTiming
+    Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
+    Optional<Core::GpuTimingMeasure>& causticResolveTiming
 ){
     using namespace __hidden_renderer_task_graph;
 
@@ -3746,6 +3747,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     m_deferredCausticAccumulatorNonTemporalClearTask = {};
     m_deferredCausticAccumulatorDecayTask = {};
     m_deferredCausticPhotonTask = {};
+    m_deferredCausticGeometryTask = {};
     m_deferredCausticProducerDispatched = false;
 
     // This remains the direct successor of Shadow Visibility in the deferred graph. A distinct Compute family is
@@ -3812,8 +3814,10 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> photonResourceUses{ scratchArena };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> geometryResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveResourceUses{ scratchArena };
     photonResourceUses.reserve(20u + softwareTraceGeometryResourceCount);
+    geometryResourceUses.reserve(3u);
     resolveResourceUses.reserve(7u);
     photonResourceUses.push_back(ReadTextureUse(
         worldPosition,
@@ -3834,8 +3838,26 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     ));
     photonResourceUses.push_back(ReadUse(sceneGeometryDomain));
 
-    // Resolve begins only after the photon atomics. This exact accumulator read turns the former native UAV-to-SRV
-    // state bridge into a compiler-lowered handoff while dynamic ping-pong transitions stay inside the callback.
+    // Geometry downsample begins only after the selected photon producer. Its cache write becomes an explicit graph
+    // handoff to wavelet resolve, while dynamic ping-pong transitions remain inside the latter callback.
+    geometryResourceUses.push_back(ReadTextureUse(
+        worldPosition,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::ShaderResource
+    ));
+    geometryResourceUses.push_back(ReadTextureUse(
+        depth,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::ShaderResource
+    ));
+    geometryResourceUses.push_back(ReadWriteTextureUse(
+        causticResolveGeometry,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::UnorderedAccess
+    ));
+
+    // Wavelet resolve consumes the photon-written accumulator and geometry cache as sampled resources. The graph
+    // therefore lowers both producer-to-consumer UAV handoffs before this callback records.
     resolveResourceUses.push_back(ReadTextureUse(
         worldPosition,
         ECSRenderDetail::s_FramebufferSubresources,
@@ -3861,10 +3883,10 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         ECSRenderDetail::s_FramebufferSubresources,
         Core::ResourceStates::UnorderedAccess
     ));
-    resolveResourceUses.push_back(ReadWriteTextureUse(
+    resolveResourceUses.push_back(ReadTextureUse(
         causticResolveGeometry,
         ECSRenderDetail::s_FramebufferSubresources,
-        Core::ResourceStates::UnorderedAccess
+        Core::ResourceStates::ShaderResource
     ));
     resolveResourceUses.push_back(WriteTextureUse(
         causticIrradiance,
@@ -4115,7 +4137,32 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         return false;
     }
 
-    Core::GpuTaskSchedulingHint resolveScheduling = causticsScheduling;
+    Core::GpuTaskSchedulingHint geometryScheduling = causticsScheduling;
+    geometryScheduling.mergeWithPrevious = true;
+    Core::GpuTaskDesc geometryDesc;
+    geometryDesc
+        .setIdentity(Name("render.software_caustics.geometry_downsample"))
+        .setMarkerLabel("Software Caustics Geometry Downsample")
+        .setQueue(ComputeQueueRequest())
+        .setScheduling(geometryScheduling)
+        .setDependencies(&m_deferredCausticPhotonTask, 1u)
+        .setResourceUses(geometryResourceUses.data(), geometryResourceUses.size())
+    ;
+    m_deferredCausticGeometryTask = m_raytracingSystem.declareCausticGeometryDownsampleTask(
+        m_deferredLightingTaskGraph,
+        geometryDesc,
+        deferredTargets,
+        timingTicket,
+        &m_deferredCausticProducerDispatched,
+        &causticResolveTiming,
+        true
+    );
+    if(!m_deferredCausticGeometryTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics geometry graph task"));
+        return false;
+    }
+
+    Core::GpuTaskSchedulingHint resolveScheduling = geometryScheduling;
     resolveScheduling.mergeWithPrevious = true;
     Core::GpuTaskDesc resolveDesc;
     resolveDesc
@@ -4123,7 +4170,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         .setMarkerLabel("Software Caustics Resolve")
         .setQueue(ComputeQueueRequest())
         .setScheduling(resolveScheduling)
-        .setDependencies(&m_deferredCausticPhotonTask, 1u)
+        .setDependencies(&m_deferredCausticGeometryTask, 1u)
         .setResourceUses(resolveResourceUses.data(), resolveResourceUses.size())
     ;
     m_deferredSoftwareCausticsTask = m_raytracingSystem.declareCausticResolveTask(
@@ -4132,6 +4179,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         deferredTargets,
         timingTicket,
         &m_deferredCausticProducerDispatched,
+        &causticResolveTiming,
         true
     );
     if(!m_deferredSoftwareCausticsTask.valid()){
@@ -4612,6 +4660,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::GpuTimingSubmissionTicket& surfelGiTimingTicket,
     Core::GpuTimingSubmissionTicket& hardwareCausticsTimingTicket,
     Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
+    Optional<Core::GpuTimingMeasure>& causticResolveTiming,
     Core::GpuTimingSubmissionTicket& lightingTimingTicket,
     Core::GpuTimingSubmissionTicket& compositeTimingTicket,
     Core::GpuTimingSubmissionTicket& presentTimingTicket,
@@ -4645,6 +4694,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredCausticAccumulatorNonTemporalClearTask = {};
     m_deferredCausticAccumulatorDecayTask = {};
     m_deferredCausticPhotonTask = {};
+    m_deferredCausticGeometryTask = {};
     m_deferredCausticProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
@@ -5382,7 +5432,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         softwareTraceGeometryResources.data(),
         softwareTraceGeometryResources.size(),
         softwareCausticsTimingTicket,
-        causticPhotonTiming
+        causticPhotonTiming,
+        causticResolveTiming
     ))
         return;
     const Core::GpuTaskId effectsTask = declaresHardwareCaustics
@@ -5456,8 +5507,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
 
         Core::Alloc::ScratchArena hardwareCausticsScratchArena(RendererArenaScope::s_TaskGraphArena);
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwarePhotonResourceUses{ hardwareCausticsScratchArena };
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareGeometryResourceUses{ hardwareCausticsScratchArena };
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveResourceUses{ hardwareCausticsScratchArena };
         hardwarePhotonResourceUses.reserve(15u + hardwareTraceAttributeResources.size());
+        hardwareGeometryResourceUses.reserve(3u);
         hardwareResolveResourceUses.reserve(7u);
         hardwarePhotonResourceUses.push_back(ReadTextureUse(
             worldPosition,
@@ -5488,8 +5541,25 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Core::ResourceStates::UnorderedAccess
         ));
 
-        // This separate callback owns the immutable photon-to-resolve accumulator handoff. The ping-pong targets
-        // remain ReadWrite UAVs because the shared wavelet sequence retains their explicit local transitions.
+        // Geometry downsample writes its cache after photons. The following wavelet callback reads that cache, so
+        // the compiler owns their exact UAV-to-SRV handoff while ping-pong transitions remain local.
+        hardwareGeometryResourceUses.push_back(ReadTextureUse(
+            worldPosition,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        ));
+        hardwareGeometryResourceUses.push_back(ReadTextureUse(
+            depth,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        ));
+        hardwareGeometryResourceUses.push_back(ReadWriteTextureUse(
+            causticResolveGeometry,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
+
+        // Wavelet resolve consumes immutable sampled inputs from both preceding callbacks.
         hardwareResolveResourceUses.push_back(ReadTextureUse(
             worldPosition,
             ECSRenderDetail::s_FramebufferSubresources,
@@ -5515,10 +5585,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             ECSRenderDetail::s_FramebufferSubresources,
             Core::ResourceStates::UnorderedAccess
         ));
-        hardwareResolveResourceUses.push_back(ReadWriteTextureUse(
+        hardwareResolveResourceUses.push_back(ReadTextureUse(
             causticResolveGeometry,
             ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::UnorderedAccess
+            Core::ResourceStates::ShaderResource
         ));
         hardwareResolveResourceUses.push_back(WriteTextureUse(
             currentCausticIrradiance,
@@ -5790,7 +5860,32 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             return;
         }
 
-        Core::GpuTaskSchedulingHint hardwareResolveScheduling = hardwareCausticsScheduling;
+        Core::GpuTaskSchedulingHint hardwareGeometryScheduling = hardwareCausticsScheduling;
+        hardwareGeometryScheduling.mergeWithPrevious = true;
+        Core::GpuTaskDesc hardwareGeometryDesc;
+        hardwareGeometryDesc
+            .setIdentity(Name("render.hardware_caustics.geometry_downsample"))
+            .setMarkerLabel("Hardware Caustics Geometry Downsample")
+            .setQueue(GraphicsQueueRequest())
+            .setScheduling(hardwareGeometryScheduling)
+            .setDependencies(&m_deferredCausticPhotonTask, 1u)
+            .setResourceUses(hardwareGeometryResourceUses.data(), hardwareGeometryResourceUses.size())
+        ;
+        m_deferredCausticGeometryTask = m_raytracingSystem.declareCausticGeometryDownsampleTask(
+            m_deferredLightingTaskGraph,
+            hardwareGeometryDesc,
+            deferredTargets,
+            hardwareCausticsTimingTicket,
+            &m_deferredCausticProducerDispatched,
+            &causticResolveTiming,
+            true
+        );
+        if(!m_deferredCausticGeometryTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics geometry graph task"));
+            return;
+        }
+
+        Core::GpuTaskSchedulingHint hardwareResolveScheduling = hardwareGeometryScheduling;
         hardwareResolveScheduling.mergeWithPrevious = true;
         Core::GpuTaskDesc hardwareResolveDesc;
         hardwareResolveDesc
@@ -5798,7 +5893,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .setMarkerLabel("Hardware Caustics Resolve")
             .setQueue(GraphicsQueueRequest())
             .setScheduling(hardwareResolveScheduling)
-            .setDependencies(&m_deferredCausticPhotonTask, 1u)
+            .setDependencies(&m_deferredCausticGeometryTask, 1u)
             .setResourceUses(hardwareResolveResourceUses.data(), hardwareResolveResourceUses.size())
         ;
         m_deferredHardwareCausticsTask = m_raytracingSystem.declareCausticResolveTask(
@@ -5807,6 +5902,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             deferredTargets,
             hardwareCausticsTimingTicket,
             &m_deferredCausticProducerDispatched,
+            &causticResolveTiming,
             true
         );
         if(!m_deferredHardwareCausticsTask.valid()){

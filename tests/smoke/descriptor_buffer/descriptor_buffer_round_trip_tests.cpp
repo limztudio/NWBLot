@@ -873,6 +873,54 @@ struct NativePacketSoftwareCausticsEntryProbeTask{
 };
 
 
+// Hardware caustics shares the descriptor-visible static producer batch with its Graphics-prefix dependency. Its
+// accumulator and resolve lifecycle remains callback-local, so this probe observes only the graph-owned inputs that
+// the ray-tracing producer would otherwise transition itself.
+struct NativePacketHardwareCausticsEntryProbeTask{
+    static constexpr u32 s_ShaderBufferCount = 6u;
+    static constexpr u32 s_ConstantBufferCount = 4u;
+    static constexpr u32 s_ShaderTextureCount = 2u;
+
+    struct Payload{
+        Buffer* shaderBuffers[s_ShaderBufferCount] = {};
+        Buffer* constantBuffers[s_ConstantBufferCount] = {};
+        Texture* shaderTextures[s_ShaderTextureCount] = {};
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        bool ready = true;
+        for(u32 bufferIndex = 0u; bufferIndex < s_ShaderBufferCount; ++bufferIndex){
+            ready = ready
+                && payload.shaderBuffers[bufferIndex]
+                && commandList.getBufferState(payload.shaderBuffers[bufferIndex]) == ResourceStates::ShaderResource
+            ;
+        }
+        for(u32 bufferIndex = 0u; bufferIndex < s_ConstantBufferCount; ++bufferIndex){
+            ready = ready
+                && payload.constantBuffers[bufferIndex]
+                && commandList.getBufferState(payload.constantBuffers[bufferIndex]) == ResourceStates::ConstantBuffer
+            ;
+        }
+        for(u32 textureIndex = 0u; textureIndex < s_ShaderTextureCount; ++textureIndex){
+            ready = ready
+                && payload.shaderTextures[textureIndex]
+                && commandList.getTextureSubresourceState(payload.shaderTextures[textureIndex], 0u, 0u)
+                    == ResourceStates::ShaderResource
+            ;
+        }
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
 // Surfel GI's persistent resources start with the graph-established descriptor-visible state batch. The actual
 // renderer then owns only its intra-task clears, UAV ordering, and indirect-argument transition. This getter-only
 // probe keeps the entry handoff observable before any native setup could mask a missing graph declaration.
@@ -2923,6 +2971,287 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftwareCausticsEntryStatesRecor
         scratchArena
     ));
     EXPECT_TRUE(transaction.packetToken(lightingPacket).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Hardware caustics' ray-tracing producer receives its static heap inputs from the Graphics-prefix packet. The
+// callback seam is getter-only, so this verifies that the normal graph route cannot depend on native transitions to
+// repair the descriptor-visible states after an incompatible producer layout.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecordWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    constexpr u32 shaderBufferCount = NativePacketHardwareCausticsEntryProbeTask::s_ShaderBufferCount;
+    constexpr u32 constantBufferCount = NativePacketHardwareCausticsEntryProbeTask::s_ConstantBufferCount;
+    constexpr u32 shaderTextureCount = NativePacketHardwareCausticsEntryProbeTask::s_ShaderTextureCount;
+    const auto makeStorageBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setCanHaveUAVs(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const auto makeConstantBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    BufferHandle shaderBuffers[shaderBufferCount];
+    BufferHandle constantBuffers[constantBufferCount];
+    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex){
+        shaderBuffers[bufferIndex] = makeStorageBuffer();
+        ASSERT_NE(shaderBuffers[bufferIndex].get(), nullptr);
+    }
+    for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex){
+        constantBuffers[bufferIndex] = makeConstantBuffer();
+        ASSERT_NE(constantBuffers[bufferIndex].get(), nullptr);
+    }
+    TextureHandle shaderTextures[shaderTextureCount];
+    shaderTextures[0u] = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInRenderTarget(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    shaderTextures[1u] = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::D24S8)
+            .setInRenderTarget(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    for(u32 textureIndex = 0u; textureIndex < shaderTextureCount; ++textureIndex)
+        ASSERT_NE(shaderTextures[textureIndex].get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importBuffer = [&graph](const BufferHandle& buffer, const Name identity, const AStringView label){
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Buffer)
+        );
+    };
+    const auto importTexture = [&graph](const TextureHandle& texture, const Name identity, const AStringView label){
+        return graph.importTexture(
+            texture,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Texture)
+        );
+    };
+    struct BufferImportDesc{
+        Name identity;
+        AStringView label;
+    };
+    const BufferImportDesc shaderBufferImports[shaderBufferCount] = {
+        { Name("tests/descriptor_buffer/hardware_caustics_mesh_attributes"), "Hardware Mesh Attributes" },
+        { Name("tests/descriptor_buffer/hardware_caustics_instance_materials"), "Shadow Instance Materials" },
+        { Name("tests/descriptor_buffer/hardware_caustics_typed_materials"), "Shadow Typed Materials" },
+        { Name("tests/descriptor_buffer/hardware_caustics_instances"), "Shadow Instances" },
+        { Name("tests/descriptor_buffer/hardware_caustics_emission_targets"), "Caustic Emission Targets" },
+        { Name("tests/descriptor_buffer/hardware_caustics_lights"), "Deferred Lights" },
+    };
+    const BufferImportDesc constantBufferImports[constantBufferCount] = {
+        { Name("tests/descriptor_buffer/hardware_caustics_mesh_view"), "Mesh View" },
+        { Name("tests/descriptor_buffer/hardware_caustics_bindless_slots"), "Deferred Bindless Slots" },
+        { Name("tests/descriptor_buffer/hardware_caustics_material_context_slots"), "Ray-Trace Material Context Slots" },
+        { Name("tests/descriptor_buffer/hardware_caustics_scene_shading"), "Scene Shading" },
+    };
+    GpuGraphResourceId shaderBufferResources[shaderBufferCount] = {};
+    GpuGraphResourceId constantBufferResources[constantBufferCount] = {};
+    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex){
+        shaderBufferResources[bufferIndex] = importBuffer(
+            shaderBuffers[bufferIndex],
+            shaderBufferImports[bufferIndex].identity,
+            shaderBufferImports[bufferIndex].label
+        );
+        ASSERT_TRUE(shaderBufferResources[bufferIndex].valid());
+    }
+    for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex){
+        constantBufferResources[bufferIndex] = importBuffer(
+            constantBuffers[bufferIndex],
+            constantBufferImports[bufferIndex].identity,
+            constantBufferImports[bufferIndex].label
+        );
+        ASSERT_TRUE(constantBufferResources[bufferIndex].valid());
+    }
+    const GpuGraphResourceId worldPositionResource = importTexture(
+        shaderTextures[0u],
+        Name("tests/descriptor_buffer/hardware_caustics_world_position"),
+        "World Position"
+    );
+    const GpuGraphResourceId depthResource = importTexture(
+        shaderTextures[1u],
+        Name("tests/descriptor_buffer/hardware_caustics_depth"),
+        "Depth"
+    );
+    ASSERT_TRUE(worldPositionResource.valid());
+    ASSERT_TRUE(depthResource.valid());
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint boundaryScheduling;
+    boundaryScheduling.cost = GpuTaskCostHint::Large;
+    boundaryScheduling.forceSubmissionBoundary = true;
+    boundaryScheduling.allowPacketMerge = false;
+
+    Alloc::ScratchArena resourceUseArena(Name("tests/descriptor_buffer/hardware_caustics_entry_state_resource_uses"));
+    Vector<GpuTaskResourceUse, Alloc::ScratchArena> prefixUses(resourceUseArena);
+    prefixUses.reserve(shaderBufferCount + constantBufferCount + shaderTextureCount);
+    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)
+        prefixUses.push_back({ .resource = shaderBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write });
+    for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex)
+        prefixUses.push_back({ .resource = constantBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write });
+    prefixUses.push_back({ .resource = worldPositionResource, .range = {}, .requiredState = ResourceStates::RenderTarget, .access = GpuTaskResourceAccess::Write });
+    prefixUses.push_back({ .resource = depthResource, .range = {}, .requiredState = ResourceStates::DepthWrite, .access = GpuTaskResourceAccess::Write });
+    GpuTaskDesc prefixDesc;
+    prefixDesc
+        .setIdentity(Name("tests/descriptor_buffer/hardware_caustics_prefix"))
+        .setMarkerLabel("Hardware Caustics Prefix")
+        .setQueue(graphicsQueue)
+        .setScheduling(boundaryScheduling)
+        .setResourceUses(prefixUses.data(), prefixUses.size())
+    ;
+    bool shouldRecord = true;
+    bool prefixAttempted = false;
+    const GpuTaskId prefixTask = graph.addTask<NativePacketCaptureRetryTask>(
+        prefixDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &prefixAttempted,
+        }
+    );
+    ASSERT_TRUE(prefixTask.valid());
+
+    Vector<GpuTaskResourceUse, Alloc::ScratchArena> causticsUses(resourceUseArena);
+    causticsUses.reserve(shaderBufferCount + constantBufferCount + shaderTextureCount);
+    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)
+        causticsUses.push_back({ .resource = shaderBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read });
+    for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex)
+        causticsUses.push_back({ .resource = constantBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read });
+    causticsUses.push_back({ .resource = worldPositionResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read });
+    causticsUses.push_back({ .resource = depthResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read });
+    GpuTaskDesc causticsDesc;
+    causticsDesc
+        .setIdentity(Name("tests/descriptor_buffer/graph_owned_hardware_caustics"))
+        .setMarkerLabel("Hardware Caustics")
+        .setQueue(graphicsQueue)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&prefixTask, 1u)
+        .setResourceUses(causticsUses.data(), causticsUses.size())
+    ;
+    NativePacketHardwareCausticsEntryProbeTask::Payload causticsPayload{};
+    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)
+        causticsPayload.shaderBuffers[bufferIndex] = shaderBuffers[bufferIndex].get();
+    for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex)
+        causticsPayload.constantBuffers[bufferIndex] = constantBuffers[bufferIndex].get();
+    for(u32 textureIndex = 0u; textureIndex < shaderTextureCount; ++textureIndex)
+        causticsPayload.shaderTextures[textureIndex] = shaderTextures[textureIndex].get();
+    bool causticsRecorded = false;
+    causticsPayload.recorded = &causticsRecorded;
+    const GpuTaskId causticsTask = graph.addTask<NativePacketHardwareCausticsEntryProbeTask>(
+        causticsDesc,
+        Move(causticsPayload)
+    );
+    ASSERT_TRUE(causticsTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/hardware_caustics_entry_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefixTask);
+    const GpuSubmissionPacketId causticsPacket = compiledGraph.packetForTask(causticsTask);
+    ASSERT_TRUE(prefixPacket.valid());
+    ASSERT_TRUE(causticsPacket.valid());
+    const GpuCompiledTask* const compiledCaustics = compiledGraph.findTask(causticsTask);
+    ASSERT_NE(compiledCaustics, nullptr);
+    const GpuCompiledBarrier* const causticsBarriers = compiledGraph.taskPrologueBarriers(causticsTask);
+    ASSERT_NE(causticsBarriers, nullptr);
+    const auto hasCausticsTransition = [&](const GpuGraphResourceId resource, const ResourceStates::Mask before, const ResourceStates::Mask after){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledCaustics->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = causticsBarriers[barrierIndex];
+            if(
+                barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasCausticsTransition(depthResource, ResourceStates::DepthWrite, ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasCausticsTransition(worldPositionResource, ResourceStates::RenderTarget, ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasCausticsTransition(shaderBufferResources[0u], ResourceStates::CopyDest, ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasCausticsTransition(constantBufferResources[0u], ResourceStates::CopyDest, ResourceStates::ConstantBuffer));
+    EXPECT_TRUE(hasCausticsTransition(constantBufferResources[3u], ResourceStates::CopyDest, ResourceStates::ConstantBuffer));
+    ASSERT_EQ(compiledGraph.packet(causticsPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(causticsPacket)[0u].producer, prefixPacket);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(prefixAttempted);
+    EXPECT_TRUE(causticsRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(causticsPacket).valid());
     EXPECT_TRUE(device.waitForIdle());
 }
 

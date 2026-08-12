@@ -5712,6 +5712,251 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiEntryStates){
 }
 
 
+// Hardware caustics inherits the opaque prefix's descriptor-selected producer inputs on its Graphics packet. The
+// producer's accumulator clear/temporal/resolve lifetime is task-local, so this pins only the static entry batch
+// that the graph must establish before the ray-tracing callback records.
+TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    constexpr Graphics::ResourceQueueSharing::Mask queueSharing =
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    ;
+    const Graphics::GpuGraphResourceId worldPosition = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/hardware_caustics_world_position"),
+        "Hardware Caustics World Position",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId depth = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/hardware_caustics_depth"),
+        "Hardware Caustics Depth",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId meshAttributes = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/hardware_caustics_mesh_attributes"),
+        "Hardware Caustics Mesh Attributes",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId instanceMaterials = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/hardware_caustics_instance_materials"),
+        "Hardware Caustics Instance Materials",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId typedMaterials = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/hardware_caustics_typed_materials"),
+        "Hardware Caustics Typed Materials",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId instances = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/hardware_caustics_instances"),
+        "Hardware Caustics Instances",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId emissionTargets = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/hardware_caustics_emission_targets"),
+        "Hardware Caustics Emission Targets",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId lights = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/hardware_caustics_lights"),
+        "Hardware Caustics Lights",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId meshView = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/hardware_caustics_mesh_view"),
+        "Hardware Caustics Mesh View",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId bindlessSlots = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/hardware_caustics_bindless_slots"),
+        "Hardware Caustics Bindless Slots",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId materialContextSlots = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/hardware_caustics_material_context_slots"),
+        "Hardware Caustics Material Context Slots",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId sceneShading = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/hardware_caustics_scene_shading"),
+        "Hardware Caustics Scene Shading",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    ASSERT_TRUE(worldPosition.valid());
+    ASSERT_TRUE(depth.valid());
+    ASSERT_TRUE(meshAttributes.valid());
+    ASSERT_TRUE(instanceMaterials.valid());
+    ASSERT_TRUE(typedMaterials.valid());
+    ASSERT_TRUE(instances.valid());
+    ASSERT_TRUE(emissionTargets.valid());
+    ASSERT_TRUE(lights.valid());
+    ASSERT_TRUE(meshView.valid());
+    ASSERT_TRUE(bindlessSlots.valid());
+    ASSERT_TRUE(materialContextSlots.valid());
+    ASSERT_TRUE(sceneShading.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint boundaryScheduling;
+    boundaryScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    boundaryScheduling.forceSubmissionBoundary = true;
+    boundaryScheduling.allowPacketMerge = false;
+
+    const Graphics::GpuTaskResourceUse prefixUses[] = {
+        { .resource = worldPosition, .range = {}, .requiredState = Graphics::ResourceStates::RenderTarget, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = depth, .range = {}, .requiredState = Graphics::ResourceStates::DepthWrite, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = meshAttributes, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = instanceMaterials, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = typedMaterials, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = instances, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = emissionTargets, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = lights, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = meshView, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = bindlessSlots, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = materialContextSlots, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = sceneShading, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+    };
+    Graphics::GpuTaskDesc prefixDesc;
+    prefixDesc
+        .setIdentity(Name("tests/task_graph/hardware_caustics_prefix"))
+        .setMarkerLabel("Hardware Caustics Prefix")
+        .setQueue(graphicsRequest)
+        .setScheduling(boundaryScheduling)
+        .setResourceUses(prefixUses, LengthOf(prefixUses))
+    ;
+    const Graphics::GpuTaskId prefix = graph.addTask(prefixDesc);
+    ASSERT_TRUE(prefix.valid());
+
+    const Graphics::GpuTaskResourceUse causticsUses[] = {
+        { .resource = worldPosition, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = depth, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = meshAttributes, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = instanceMaterials, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = typedMaterials, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = instances, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = emissionTargets, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = lights, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = meshView, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = bindlessSlots, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = materialContextSlots, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = sceneShading, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+    };
+    Graphics::GpuTaskDesc causticsDesc;
+    causticsDesc
+        .setIdentity(Name("tests/task_graph/graph_owned_hardware_caustics"))
+        .setMarkerLabel("Hardware Caustics")
+        .setQueue(graphicsRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&prefix, 1u)
+        .setResourceUses(causticsUses, LengthOf(causticsUses))
+    ;
+    const Graphics::GpuTaskId caustics = graph.addTask(causticsDesc);
+    ASSERT_TRUE(caustics.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(HasInferredHazard(
+        analysis,
+        prefix,
+        caustics,
+        meshAttributes,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+
+    const Graphics::GpuTaskQueueAssignment* const causticsAssignment = assignments.find(caustics);
+    ASSERT_NE(causticsAssignment, nullptr);
+    EXPECT_EQ(causticsAssignment->queueClass, Graphics::CommandQueue::Graphics);
+    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId causticsPacket = compiledGraph.packetForTask(caustics);
+    ASSERT_TRUE(prefixPacket.valid());
+    ASSERT_TRUE(causticsPacket.valid());
+    EXPECT_NE(prefixPacket, causticsPacket);
+    const Graphics::GpuCompiledTask* const compiledCaustics = compiledGraph.findTask(caustics);
+    ASSERT_NE(compiledCaustics, nullptr);
+    const Graphics::GpuCompiledBarrier* const causticsBarriers = compiledGraph.taskPrologueBarriers(caustics);
+    ASSERT_NE(causticsBarriers, nullptr);
+    const auto hasCausticsBarrier = [&](const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
+        for(usize barrierIndex = 0u; barrierIndex < compiledCaustics->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = causticsBarriers[barrierIndex];
+            if(
+                barrier.type == type
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasCausticsBarrier(
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        depth,
+        Graphics::ResourceStates::DepthWrite,
+        Graphics::ResourceStates::ShaderResource
+    ));
+    EXPECT_TRUE(hasCausticsBarrier(
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        worldPosition,
+        Graphics::ResourceStates::RenderTarget,
+        Graphics::ResourceStates::ShaderResource
+    ));
+    EXPECT_TRUE(hasCausticsBarrier(
+        Graphics::GpuCompiledBarrierType::BufferTransition,
+        meshAttributes,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::ShaderResource
+    ));
+    EXPECT_TRUE(hasCausticsBarrier(
+        Graphics::GpuCompiledBarrierType::BufferTransition,
+        meshView,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::ConstantBuffer
+    ));
+    EXPECT_TRUE(hasCausticsBarrier(
+        Graphics::GpuCompiledBarrierType::BufferTransition,
+        sceneShading,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::ConstantBuffer
+    ));
+    ASSERT_EQ(compiledGraph.packet(causticsPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(causticsPacket)[0u].producer, prefixPacket);
+}
+
+
 TEST(GpuTaskGraph, MergesRayTraceMaterialContextUploadIntoShadowPreparePacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

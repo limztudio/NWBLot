@@ -323,9 +323,16 @@ public:
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
         const bool* shadowVisibilityPrepared,
-        Core::GpuTimingSubmissionTicket& timingTicket
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        bool graphEntryStatesOwned = false
     );
-    [[nodiscard]] bool renderHwCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    // The shared deferred graph supplies descriptor-visible hardware-caustic producer inputs. Direct
+    // compatibility callers retain native setup by leaving this false.
+    [[nodiscard]] bool renderHwCaustics(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned = false
+    );
     [[nodiscard]] bool hasHwCausticWork()const noexcept;
     [[nodiscard]] bool hasSurfelWork()const noexcept;
     [[nodiscard]] bool needsSurfelResourceInitialization()const noexcept;

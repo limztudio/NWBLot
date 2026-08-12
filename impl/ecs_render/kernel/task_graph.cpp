@@ -5144,7 +5144,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             hardwareDesc,
             deferredTargets,
             &m_preparedShadowVisibilityReady,
-            hardwareCausticsTimingTicket
+            hardwareCausticsTimingTicket,
+            true
         );
         if(!m_deferredHardwareCausticsTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics graph task"));

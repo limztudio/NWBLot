@@ -15,7 +15,7 @@ streams, and graph-owned transparent AVBOIT occupancy, extinction, and accumulat
 and graph-owned current and lagged deferred bindless-selector, ray-trace material-context selector, caustic
 emission-target, surfel-frame constant, shadow material-context batch, software-only and hybrid scene-BVH pair
 uploads, software-only and hybrid per-mesh SW-BVH build/refit,
-and opaque hardware TLAS and BLAS build transactions,
+opaque hardware TLAS, and opaque and hybrid hardware BLAS build transactions,
 2026-08-12.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
@@ -125,11 +125,12 @@ can receive an unconditional final sign-off.
   packet, explicitly transitions acceleration structures from build-write to read, and commits its static cache and
   cross-frame backing-state seed only after that packet accepts. Hybrid transparent hardware-to-software frames
   retain their native fallback until both paths can share one frozen scene plan.
-- Opaque hardware BLAS builds and refits now freeze the selected static or runtime mesh operation with its exact
+- Hardware BLAS builds and refits now freeze the selected static or runtime mesh operation with its exact
   position/index buffers, BLAS, backing generation, and rebuild/refit decision. The plan records before the frozen
   TLAS in the same Shadow Preparation packet, and every live BLAS backing participates in the accepted cross-frame
-  state seed, including hybrid compatibility frames that still use the native build path. Pending-build and refit
-  counters commit only after that retained state handoff accepts; transparent hybrid scene construction remains
+  state seed. Hybrid frames now use this independent frozen per-mesh work too: a mismatched or failed frozen record
+  discards the plan and retries the established direct loop, preserving the valid opaque-HW fallback. Pending-build
+  and refit counters commit only after an accepted frozen handoff; transparent hybrid scene construction remains
   native until it can use the same immutable scene plan.
 - The opaque G-buffer now freezes its material draw ordering and CSG CPU frame payload during graph declaration.
   Its instance and typed-material bytes are retained as immutable graph blobs and uploaded through Graphics-routed
@@ -222,6 +223,7 @@ can receive an unconditional final sign-off.
 | Graph-owned software-only per-mesh SW-BVH build/refit follow-up: renderer/runtime build, FrontierSafe graph unit, descriptor-buffer smoke, and forced-software transparent capture | passed; the graph unit proves `Common` to `UnorderedAccess` ownership for parent and shared scratch state, graph tests passed 50/50, descriptor smoke passed 75 tests with 10 expected topology skips, and the forced-software transparent capture completed. |
 | Graph-owned hybrid per-mesh SW-BVH follow-up: renderer build, FrontierSafe graph unit, descriptor-buffer smoke, and hardware transparent-multi capture | passed; the frozen mesh build is accepted only after its commands record, while a failed optional software tail discards that plan and still submits the valid hardware opaque result. Graph tests passed 50/50, descriptor smoke passed 77 tests with 11 expected topology skips, and the Vulkan/X11 transparent-multi capture passed. |
 | Graph-owned hybrid scene-BVH pair follow-up: renderer build, FrontierSafe graph unit, descriptor-buffer smoke, and hardware transparent-multi capture | passed; the immutable node/leaf pair is accepted only after the matching native software gather. A mismatch discards the optional pair and preserves the valid hardware opaque result. Graph tests passed 50/50, descriptor smoke passed 77 tests with 11 expected topology skips, and the Vulkan/X11 transparent-multi capture passed. |
+| Graph-owned hybrid hardware-BLAS follow-up: renderer build, FrontierSafe graph unit, descriptor-buffer smoke, transparent-multi, and skinned-caustic captures | passed; independent frozen hardware mesh builds now record in Shadow Preparation for hybrid frames, while a mismatch discards the plan and retries the direct compatibility loop instead of rejecting the opaque-shadow fallback. Graph tests passed 50/50, descriptor smoke passed 77 tests with 11 expected topology skips, and both Vulkan/X11 captures passed. |
 | Dedicated-Transfer recovery-frontier follow-up: graph unit and descriptor-buffer smoke | passed; graph tests passed 50/50 and descriptor smoke passed 77 tests with 11 expected topology skips. The new native test accepts a graph-owned Transfer upload, injects a rejected dependent Graphics suffix, verifies the transaction emits its exact physical Transfer token, then confirms the Device receives that token on the independent recovery-tail submission. This adapter skips only the dedicated-Transfer execution because it has no Transfer-only family. |
 
 The latest local command-IR evidence is under
@@ -252,8 +254,8 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    accumulation phases now freeze and publish their own per-write-point material/CSG streams, preserving the shared
    interval sample state across the low-resolution raster passes. Current and lagged deferred bindless selectors,
    the ray-trace material-context selector, caustic emission-target stream, surfel-frame constants, shadow
-   material-context batch, software-only and hybrid scene-BVH pairs, software-only and hybrid per-mesh SW-BVH build/refit, and
-   opaque hardware TLAS and BLAS build/refit transactions are acceptance-safe
+   material-context batch, software-only and hybrid scene-BVH pairs, software-only and hybrid per-mesh SW-BVH build/refit,
+   opaque hardware TLAS, and opaque and hybrid hardware BLAS build/refit transactions are acceptance-safe
    graph-owned preparation work; skinning compute dispatch and other specialized descriptor/resource updates still
    retain direct native recording or submission. The graph
    therefore does not yet authoritatively own all frame work and state retirement.

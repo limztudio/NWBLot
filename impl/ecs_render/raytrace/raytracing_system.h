@@ -221,8 +221,9 @@ public:
     // becomes valid only after that packet accepts; transparent/hybrid frames retain the compatibility path.
     [[nodiscard]] bool preparedSceneTlasBuildReady()const noexcept;
     void confirmPreparedSceneTlasBuild()noexcept;
-    // Opaque hardware frames retain exact BLAS build/refit choices. The selected handles outlive recording; only
-    // Shadow Preparation acceptance publishes mesh cache progress.
+    // Opaque and independent hybrid hardware BLAS build/refit choices retain their selected handles through
+    // recording. Hybrid mismatch falls back to the established direct loop; only Shadow Preparation acceptance
+    // publishes a frozen plan's mesh-cache progress.
     [[nodiscard]] bool preparedMeshBlasBuildsReady()const noexcept;
     [[nodiscard]] const PreparedMeshBlasBuildVector& preparedMeshBlasBuilds()const noexcept;
     void confirmPreparedMeshBlasBuilds()noexcept;

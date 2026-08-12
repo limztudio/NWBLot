@@ -953,14 +953,13 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
             m_shadowVisibilityResourcesPreflighted = true;
             return true;
         }
-        // Freeze the same opaque-HW BLAS operations that the old record-time loop would execute. A capture miss
-        // deliberately falls back as one unit with the frozen TLAS rather than mixing snapshot and live traversal.
-        if(
-            !rayTracingState().m_sceneHasTransparentOccluder
-            && !capturePreparedMeshBlasBuilds()
-        ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze opaque hardware BLAS build plan"));
-            clearPreparedSceneTlasBuild();
+        // Per-mesh hardware BLAS work is independent from the later software material/scene gather.  Freeze it
+        // for both opaque and hybrid frames. An opaque capture miss must drop the paired frozen TLAS; a hybrid miss
+        // retains the established direct hardware path, whose result remains valid when the optional SW tail fails.
+        if(!capturePreparedMeshBlasBuilds()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze hardware BLAS build plan"));
+            if(!rayTracingState().m_sceneHasTransparentOccluder)
+                clearPreparedSceneTlasBuild();
         }
         m_shadowVisibilityTraceResourcesPreflighted = true;
 
@@ -1207,12 +1206,23 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
         return true;
 
     if(m_shadowVisibilityHardwareSupported){
-        const bool meshBlasReady = meshBlasBuildsGraphOwned
+        // A transparent scene keeps a valid opaque-HW fallback even when its later software tail cannot record.
+        // If its independent frozen BLAS plan no longer matches, discard that plan and retry the established live
+        // loop rather than rejecting the whole packet. Opaque-only frozen plans remain all-or-nothing.
+        const bool hybridHardwareFallback = rayTracingState().m_sceneHasTransparentOccluder;
+        bool meshBlasReady = meshBlasBuildsGraphOwned
             ? recordPreparedMeshBlasBuilds(commandList)
             : buildPendingMeshBlas(commandList)
         ;
+        if(!meshBlasReady && meshBlasBuildsGraphOwned && hybridHardwareFallback){
+            clearPreparedMeshBlasBuilds();
+            meshBlasReady = buildPendingMeshBlas(commandList);
+        }
         if(!meshBlasReady){
-            if(sceneTlasBuildGraphOwned || meshBlasBuildsGraphOwned)
+            if(
+                sceneTlasBuildGraphOwned
+                || (meshBlasBuildsGraphOwned && !hybridHardwareFallback)
+            )
                 return false;
             // A hybrid SW-BVH plan has not recorded when the HW precursor misses. Do not let packet acceptance
             // publish optimistic mesh topology state for work that never reached this command list.

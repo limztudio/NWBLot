@@ -1145,7 +1145,7 @@ struct NativePacketCausticResolvePrepareProbeTask{
 };
 
 
-// A graph-owned wavelet pass must see its input as sampled input and its target in UAV state. Two instances prove
+// A graph-owned wavelet pass must see its input as sampled input and its target in UAV state. Three instances prove
 // the compiler owns the early ping-pong UAV-to-SRV handoffs before the remaining native wavelet tail begins.
 struct NativePacketCausticResolveWaveletProbeTask{
     struct Payload{
@@ -1179,7 +1179,7 @@ struct NativePacketCausticResolveWaveletProbeTask{
 };
 
 
-// The remaining alternating wavelet passes own their local transitions. They start after the first two graph-owned
+// The remaining alternating wavelet passes own their local transitions. They start after the first three graph-owned
 // passes with both ping-pong surfaces in UAV state, which this getter-only probe verifies at the graph/native boundary.
 struct NativePacketCausticResolveTailProbeTask{
     struct Payload{
@@ -4668,9 +4668,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedWarmCausticAccumulatorDecayRecor
 }
 
 
-// Caustic photon splats, geometry downsample, resolve prepare, and the first two wavelet passes remain in one native
+// Caustic photon splats, geometry downsample, resolve prepare, and the first three wavelet passes remain in one native
 // packet. Getter-only callbacks prove Vulkan lowers both producer handoffs and the early ping-pong transitions.
-TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareTwoWaveletHandoffsRecordWithoutNativeBridge){
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareThreeWaveletHandoffsRecordWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
     constexpr u32 layerCount = 3u;
     const TextureHandle accumulator = device.createTexture(
@@ -4829,8 +4829,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareTwoW
     ASSERT_TRUE(geometryTask.valid());
 
     // Five wavelet passes make prepare read resolveHalf and write history. The graph then makes the first wavelet
-    // read history and write resolveHalf, and the second read resolveHalf and write history; the dynamic tail starts
-    // after those exact ping-pong handoffs.
+    // read history and write resolveHalf, the second reads resolveHalf and writes history, and the third reads
+    // history and writes resolveHalf; the dynamic tail starts after those exact ping-pong handoffs.
     const GpuTaskResourceUse prepareUses[] = {
         GpuTaskResourceUse{
             .resource = accumulatorResource,
@@ -4976,6 +4976,49 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareTwoW
     );
     ASSERT_TRUE(secondWaveletTask.valid());
 
+    const GpuTaskResourceUse thirdWaveletUses[] = {
+        GpuTaskResourceUse{
+            .resource = geometryResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = geometrySubresources },
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = historyResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = pingPongSubresources },
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = resolveHalfResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = pingPongSubresources },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    GpuTaskSchedulingHint thirdWaveletScheduling = secondWaveletScheduling;
+    thirdWaveletScheduling.mergeWithPrevious = true;
+    GpuTaskDesc thirdWaveletDesc;
+    thirdWaveletDesc
+        .setIdentity(Name("tests/descriptor_buffer/caustic_resolve_third_wavelet_stage"))
+        .setMarkerLabel("Caustics Resolve Third Wavelet")
+        .setQueue(graphicsQueue)
+        .setScheduling(thirdWaveletScheduling)
+        .setDependencies(&secondWaveletTask, 1u)
+        .setResourceUses(thirdWaveletUses, LengthOf(thirdWaveletUses))
+    ;
+    bool thirdWaveletRecorded = false;
+    const GpuTaskId thirdWaveletTask = graph.addTask<NativePacketCausticResolveWaveletProbeTask>(
+        thirdWaveletDesc,
+        NativePacketCausticResolveWaveletProbeTask::Payload{
+            .geometry = geometry.get(),
+            .input = history.get(),
+            .output = resolveHalf.get(),
+            .recorded = &thirdWaveletRecorded,
+        }
+    );
+    ASSERT_TRUE(thirdWaveletTask.valid());
+
     const GpuTaskResourceUse tailUses[] = {
         GpuTaskResourceUse{
             .resource = historyResource,
@@ -4990,7 +5033,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareTwoW
             .access = GpuTaskResourceAccess::ReadWrite,
         },
     };
-    GpuTaskSchedulingHint tailScheduling = secondWaveletScheduling;
+    GpuTaskSchedulingHint tailScheduling = thirdWaveletScheduling;
     tailScheduling.mergeWithPrevious = true;
     GpuTaskDesc tailDesc;
     tailDesc
@@ -4998,7 +5041,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareTwoW
         .setMarkerLabel("Caustics Resolve Tail")
         .setQueue(graphicsQueue)
         .setScheduling(tailScheduling)
-        .setDependencies(&secondWaveletTask, 1u)
+        .setDependencies(&thirdWaveletTask, 1u)
         .setResourceUses(tailUses, LengthOf(tailUses))
     ;
     bool tailRecorded = false;
@@ -5040,31 +5083,38 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareTwoW
     const GpuSubmissionPacketId preparePacket = compiledGraph.packetForTask(prepareTask);
     const GpuSubmissionPacketId waveletPacket = compiledGraph.packetForTask(waveletTask);
     const GpuSubmissionPacketId secondWaveletPacket = compiledGraph.packetForTask(secondWaveletTask);
+    const GpuSubmissionPacketId thirdWaveletPacket = compiledGraph.packetForTask(thirdWaveletTask);
     const GpuSubmissionPacketId tailPacket = compiledGraph.packetForTask(tailTask);
     ASSERT_TRUE(photonPacket.valid());
     ASSERT_TRUE(geometryPacket.valid());
     ASSERT_TRUE(preparePacket.valid());
     ASSERT_TRUE(waveletPacket.valid());
     ASSERT_TRUE(secondWaveletPacket.valid());
+    ASSERT_TRUE(thirdWaveletPacket.valid());
     ASSERT_TRUE(tailPacket.valid());
     EXPECT_EQ(geometryPacket, photonPacket);
     EXPECT_EQ(preparePacket, photonPacket);
     EXPECT_EQ(waveletPacket, photonPacket);
     EXPECT_EQ(secondWaveletPacket, photonPacket);
+    EXPECT_EQ(thirdWaveletPacket, photonPacket);
     EXPECT_EQ(tailPacket, photonPacket);
 
     const GpuCompiledTask* const compiledPrepare = compiledGraph.findTask(prepareTask);
     const GpuCompiledTask* const compiledWavelet = compiledGraph.findTask(waveletTask);
     const GpuCompiledTask* const compiledSecondWavelet = compiledGraph.findTask(secondWaveletTask);
+    const GpuCompiledTask* const compiledThirdWavelet = compiledGraph.findTask(thirdWaveletTask);
     ASSERT_NE(compiledPrepare, nullptr);
     ASSERT_NE(compiledWavelet, nullptr);
     ASSERT_NE(compiledSecondWavelet, nullptr);
+    ASSERT_NE(compiledThirdWavelet, nullptr);
     const GpuCompiledBarrier* const prepareBarriers = compiledGraph.taskPrologueBarriers(prepareTask);
     const GpuCompiledBarrier* const waveletBarriers = compiledGraph.taskPrologueBarriers(waveletTask);
     const GpuCompiledBarrier* const secondWaveletBarriers = compiledGraph.taskPrologueBarriers(secondWaveletTask);
+    const GpuCompiledBarrier* const thirdWaveletBarriers = compiledGraph.taskPrologueBarriers(thirdWaveletTask);
     ASSERT_NE(prepareBarriers, nullptr);
     ASSERT_NE(waveletBarriers, nullptr);
     ASSERT_NE(secondWaveletBarriers, nullptr);
+    ASSERT_NE(thirdWaveletBarriers, nullptr);
     bool hasAccumulatorHandoff = false;
     bool hasGeometryHandoff = false;
     for(u32 barrierIndex = 0u; barrierIndex < compiledPrepare->prologueBarrierCount; ++barrierIndex){
@@ -5112,6 +5162,19 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareTwoW
         );
     }
     EXPECT_TRUE(hasWaveletSecondHandoff);
+
+    bool hasSecondThirdHandoff = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledThirdWavelet->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = thirdWaveletBarriers[barrierIndex];
+        hasSecondThirdHandoff = hasSecondThirdHandoff || (
+            barrier.type == GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == historyResource
+            && barrier.range.textureSubresources == pingPongSubresources
+            && barrier.before == ResourceStates::UnorderedAccess
+            && barrier.after == ResourceStates::ShaderResource
+        );
+    }
+    EXPECT_TRUE(hasSecondThirdHandoff);
 
     // Persistent caustic scratch comes from the previous accepted frame in the renderer. Seed the native packet
     // exactly as that state-handoff contract does, rather than pretending a newly-created ShaderResource image was
@@ -5175,6 +5238,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareTwoW
     EXPECT_TRUE(prepareRecorded);
     EXPECT_TRUE(waveletRecorded);
     EXPECT_TRUE(secondWaveletRecorded);
+    EXPECT_TRUE(thirdWaveletRecorded);
     EXPECT_TRUE(tailRecorded);
     if(!packetRecorded)
         return;
@@ -5199,6 +5263,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareTwoW
     EXPECT_TRUE(transaction.packetToken(preparePacket).valid());
     EXPECT_TRUE(transaction.packetToken(waveletPacket).valid());
     EXPECT_TRUE(transaction.packetToken(secondWaveletPacket).valid());
+    EXPECT_TRUE(transaction.packetToken(thirdWaveletPacket).valid());
     EXPECT_TRUE(transaction.packetToken(tailPacket).valid());
     EXPECT_TRUE(device.waitForIdle());
 }

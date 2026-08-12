@@ -3751,6 +3751,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     m_deferredCausticResolvePrepareTask = {};
     m_deferredCausticResolveWaveletTask = {};
     m_deferredCausticResolveSecondWaveletTask = {};
+    m_deferredCausticResolveThirdWaveletTask = {};
     m_deferredCausticProducerDispatched = false;
 
     // This remains the direct successor of Shadow Visibility in the deferred graph. A distinct Compute family is
@@ -3821,12 +3822,14 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolvePrepareResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveWaveletResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveSecondWaveletResourceUses{ scratchArena };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveThirdWaveletResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveResourceUses{ scratchArena };
     photonResourceUses.reserve(20u + softwareTraceGeometryResourceCount);
     geometryResourceUses.reserve(3u);
     resolvePrepareResourceUses.reserve(4u);
     resolveWaveletResourceUses.reserve(3u);
     resolveSecondWaveletResourceUses.reserve(3u);
+    resolveThirdWaveletResourceUses.reserve(3u);
     resolveResourceUses.reserve(6u);
     photonResourceUses.push_back(ReadTextureUse(
         worldPosition,
@@ -3866,7 +3869,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     ));
 
     // Prepare consumes both immutable graph-produced inputs, then writes the parity-selected first ping-pong target.
-    // The first two wavelet passes read/write the alternating pair, so the compiler owns their exact UAV-to-SRV
+    // The first three wavelet passes read/write the alternating pair, so the compiler owns their exact UAV-to-SRV
     // handoffs before the native alternating tail begins.
     constexpr bool s_CausticResolvePrepareWritesHalf = (NWB_CAUSTIC_RESOLVE_PASS_COUNT % 2u) == 0u;
     resolvePrepareResourceUses.push_back(ReadTextureUse(
@@ -3885,6 +3888,11 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         Core::ResourceStates::ShaderResource
     ));
     resolveSecondWaveletResourceUses.push_back(ReadTextureUse(
+        causticResolveGeometry,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::ShaderResource
+    ));
+    resolveThirdWaveletResourceUses.push_back(ReadTextureUse(
         causticResolveGeometry,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::ResourceStates::ShaderResource
@@ -3920,6 +3928,16 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
             ECSRenderDetail::s_FramebufferSubresources,
             Core::ResourceStates::UnorderedAccess
         ));
+        resolveThirdWaveletResourceUses.push_back(ReadTextureUse(
+            causticResolveHalf,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        ));
+        resolveThirdWaveletResourceUses.push_back(WriteTextureUse(
+            causticHistory,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
     }
     else{
         resolvePrepareResourceUses.push_back(ReadTextureUse(
@@ -3952,10 +3970,20 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
             ECSRenderDetail::s_FramebufferSubresources,
             Core::ResourceStates::UnorderedAccess
         ));
+        resolveThirdWaveletResourceUses.push_back(ReadTextureUse(
+            causticHistory,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        ));
+        resolveThirdWaveletResourceUses.push_back(WriteTextureUse(
+            causticResolveHalf,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
     }
 
     // The timed tail retains the remaining dynamic ping-pong sequence and final upsample. Its broad UAV uses
-    // establish only the tail entry/final state; the first two callbacks above own the precise handoff.
+    // establish only the tail entry/final state; the first three callbacks above own the precise handoffs.
     resolveResourceUses.push_back(ReadTextureUse(
         worldPosition,
         ECSRenderDetail::s_FramebufferSubresources,
@@ -4324,7 +4352,30 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         return false;
     }
 
-    Core::GpuTaskSchedulingHint resolveScheduling = resolveSecondWaveletScheduling;
+    Core::GpuTaskSchedulingHint resolveThirdWaveletScheduling = resolveSecondWaveletScheduling;
+    resolveThirdWaveletScheduling.mergeWithPrevious = true;
+    Core::GpuTaskDesc resolveThirdWaveletDesc;
+    resolveThirdWaveletDesc
+        .setIdentity(Name("render.software_caustics.resolve_third_wavelet"))
+        .setMarkerLabel("Software Caustics Resolve Third Wavelet")
+        .setQueue(ComputeQueueRequest())
+        .setScheduling(resolveThirdWaveletScheduling)
+        .setDependencies(&m_deferredCausticResolveSecondWaveletTask, 1u)
+        .setResourceUses(resolveThirdWaveletResourceUses.data(), resolveThirdWaveletResourceUses.size())
+    ;
+    m_deferredCausticResolveThirdWaveletTask = m_raytracingSystem.declareCausticResolveThirdWaveletTask(
+        m_deferredLightingTaskGraph,
+        resolveThirdWaveletDesc,
+        deferredTargets,
+        &m_deferredCausticProducerDispatched,
+        true
+    );
+    if(!m_deferredCausticResolveThirdWaveletTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics third-wavelet graph task"));
+        return false;
+    }
+
+    Core::GpuTaskSchedulingHint resolveScheduling = resolveThirdWaveletScheduling;
     resolveScheduling.mergeWithPrevious = true;
     Core::GpuTaskDesc resolveDesc;
     resolveDesc
@@ -4332,7 +4383,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         .setMarkerLabel("Software Caustics Resolve Tail")
         .setQueue(ComputeQueueRequest())
         .setScheduling(resolveScheduling)
-        .setDependencies(&m_deferredCausticResolveSecondWaveletTask, 1u)
+        .setDependencies(&m_deferredCausticResolveThirdWaveletTask, 1u)
         .setResourceUses(resolveResourceUses.data(), resolveResourceUses.size())
     ;
     m_deferredSoftwareCausticsTask = m_raytracingSystem.declareCausticResolveTask(
@@ -4860,6 +4911,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredCausticResolvePrepareTask = {};
     m_deferredCausticResolveWaveletTask = {};
     m_deferredCausticResolveSecondWaveletTask = {};
+    m_deferredCausticResolveThirdWaveletTask = {};
     m_deferredCausticProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
@@ -5676,12 +5728,14 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolvePrepareResourceUses{ hardwareCausticsScratchArena };
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveWaveletResourceUses{ hardwareCausticsScratchArena };
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveSecondWaveletResourceUses{ hardwareCausticsScratchArena };
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveThirdWaveletResourceUses{ hardwareCausticsScratchArena };
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveResourceUses{ hardwareCausticsScratchArena };
         hardwarePhotonResourceUses.reserve(15u + hardwareTraceAttributeResources.size());
         hardwareGeometryResourceUses.reserve(3u);
         hardwareResolvePrepareResourceUses.reserve(4u);
         hardwareResolveWaveletResourceUses.reserve(3u);
         hardwareResolveSecondWaveletResourceUses.reserve(3u);
+        hardwareResolveThirdWaveletResourceUses.reserve(3u);
         hardwareResolveResourceUses.reserve(6u);
         hardwarePhotonResourceUses.push_back(ReadTextureUse(
             worldPosition,
@@ -5731,7 +5785,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ));
 
         // Prepare consumes both immutable graph-produced inputs, then writes the parity-selected first ping-pong
-        // target. The first two wavelet passes read/write the alternating pair through graph barriers.
+        // target. The first three wavelet passes read/write the alternating pair through graph barriers.
         constexpr bool s_HardwareCausticResolvePrepareWritesHalf = (NWB_CAUSTIC_RESOLVE_PASS_COUNT % 2u) == 0u;
         hardwareResolvePrepareResourceUses.push_back(ReadTextureUse(
             causticAccumulator,
@@ -5749,6 +5803,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Core::ResourceStates::ShaderResource
         ));
         hardwareResolveSecondWaveletResourceUses.push_back(ReadTextureUse(
+            causticResolveGeometry,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        ));
+        hardwareResolveThirdWaveletResourceUses.push_back(ReadTextureUse(
             causticResolveGeometry,
             ECSRenderDetail::s_FramebufferSubresources,
             Core::ResourceStates::ShaderResource
@@ -5784,6 +5843,16 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 ECSRenderDetail::s_FramebufferSubresources,
                 Core::ResourceStates::UnorderedAccess
             ));
+            hardwareResolveThirdWaveletResourceUses.push_back(ReadTextureUse(
+                causticResolveHalf,
+                ECSRenderDetail::s_FramebufferSubresources,
+                Core::ResourceStates::ShaderResource
+            ));
+            hardwareResolveThirdWaveletResourceUses.push_back(WriteTextureUse(
+                causticHistory,
+                ECSRenderDetail::s_FramebufferSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ));
         }
         else{
             hardwareResolvePrepareResourceUses.push_back(ReadTextureUse(
@@ -5813,6 +5882,16 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             ));
             hardwareResolveSecondWaveletResourceUses.push_back(WriteTextureUse(
                 causticHistory,
+                ECSRenderDetail::s_FramebufferSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ));
+            hardwareResolveThirdWaveletResourceUses.push_back(ReadTextureUse(
+                causticHistory,
+                ECSRenderDetail::s_FramebufferSubresources,
+                Core::ResourceStates::ShaderResource
+            ));
+            hardwareResolveThirdWaveletResourceUses.push_back(WriteTextureUse(
+                causticResolveHalf,
                 ECSRenderDetail::s_FramebufferSubresources,
                 Core::ResourceStates::UnorderedAccess
             ));
@@ -6211,7 +6290,33 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             return;
         }
 
-        Core::GpuTaskSchedulingHint hardwareResolveScheduling = hardwareResolveSecondWaveletScheduling;
+        Core::GpuTaskSchedulingHint hardwareResolveThirdWaveletScheduling = hardwareResolveSecondWaveletScheduling;
+        hardwareResolveThirdWaveletScheduling.mergeWithPrevious = true;
+        Core::GpuTaskDesc hardwareResolveThirdWaveletDesc;
+        hardwareResolveThirdWaveletDesc
+            .setIdentity(Name("render.hardware_caustics.resolve_third_wavelet"))
+            .setMarkerLabel("Hardware Caustics Resolve Third Wavelet")
+            .setQueue(GraphicsQueueRequest())
+            .setScheduling(hardwareResolveThirdWaveletScheduling)
+            .setDependencies(&m_deferredCausticResolveSecondWaveletTask, 1u)
+            .setResourceUses(
+                hardwareResolveThirdWaveletResourceUses.data(),
+                hardwareResolveThirdWaveletResourceUses.size()
+            )
+        ;
+        m_deferredCausticResolveThirdWaveletTask = m_raytracingSystem.declareCausticResolveThirdWaveletTask(
+            m_deferredLightingTaskGraph,
+            hardwareResolveThirdWaveletDesc,
+            deferredTargets,
+            &m_deferredCausticProducerDispatched,
+            true
+        );
+        if(!m_deferredCausticResolveThirdWaveletTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics third-wavelet graph task"));
+            return;
+        }
+
+        Core::GpuTaskSchedulingHint hardwareResolveScheduling = hardwareResolveThirdWaveletScheduling;
         hardwareResolveScheduling.mergeWithPrevious = true;
         Core::GpuTaskDesc hardwareResolveDesc;
         hardwareResolveDesc
@@ -6219,7 +6324,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .setMarkerLabel("Hardware Caustics Resolve Tail")
             .setQueue(GraphicsQueueRequest())
             .setScheduling(hardwareResolveScheduling)
-            .setDependencies(&m_deferredCausticResolveSecondWaveletTask, 1u)
+            .setDependencies(&m_deferredCausticResolveThirdWaveletTask, 1u)
             .setResourceUses(hardwareResolveResourceUses.data(), hardwareResolveResourceUses.size())
         ;
         m_deferredHardwareCausticsTask = m_raytracingSystem.declareCausticResolveTask(

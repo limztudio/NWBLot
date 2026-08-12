@@ -256,6 +256,7 @@ void RendererSystem::invalidateResources(){
     m_deferredCausticResolvePrepareTask = {};
     m_deferredCausticResolveWaveletTask = {};
     m_deferredCausticResolveSecondWaveletTask = {};
+    m_deferredCausticResolveThirdWaveletTask = {};
     m_deferredCausticProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
@@ -522,6 +523,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredCausticResolvePrepareTask = {};
     m_deferredCausticResolveWaveletTask = {};
     m_deferredCausticResolveSecondWaveletTask = {};
+    m_deferredCausticResolveThirdWaveletTask = {};
     m_deferredCausticProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
@@ -1255,6 +1257,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticResolveSecondWaveletTask)
         : Core::GpuSubmissionPacketId{}
     ;
+    const Core::GpuSubmissionPacketId causticResolveThirdWaveletPacket = m_deferredCausticResolveThirdWaveletTask.valid()
+        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticResolveThirdWaveletTask)
+        : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuSubmissionPacketId causticIrradianceClearPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredCausticIrradianceClearTask
     );
@@ -1381,7 +1387,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? hardwareCausticsPacket
         : softwareCausticsPacket
     ;
-    // Photon, geometry, resolve prepare, the first two wavelets, and the timed tail are distinct callbacks so the
+    // Photon, geometry, resolve prepare, the first three wavelets, and the timed tail are distinct callbacks so the
     // compiler can lower their immutable and early ping-pong UAV-to-SRV handoffs. They remain one semantic
     // submission: clear acceptance, timing, and all dependent effects keep the established packet endpoint.
     const bool causticPhotonMergedIntoCausticsPacket =
@@ -1413,6 +1419,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && causticResolveSecondWaveletPacket.valid()
         && causticsPacket.valid()
         && causticResolveSecondWaveletPacket == causticsPacket
+    ;
+    const bool causticResolveThirdWaveletMergedIntoCausticsPacket =
+        m_deferredCausticResolveThirdWaveletTask.valid()
+        && causticResolveThirdWaveletPacket.valid()
+        && causticsPacket.valid()
+        && causticResolveThirdWaveletPacket == causticsPacket
     ;
     const bool causticIrradianceClearMergedIntoCausticsPacket =
         m_deferredCausticIrradianceClearTask.valid()
@@ -1597,6 +1609,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !causticResolveWaveletMergedIntoCausticsPacket
         || !m_deferredCausticResolveSecondWaveletTask.valid()
         || !causticResolveSecondWaveletMergedIntoCausticsPacket
+        || !m_deferredCausticResolveThirdWaveletTask.valid()
+        || !causticResolveThirdWaveletMergedIntoCausticsPacket
         || !causticIrradianceClearMergedIntoCausticsPacket
         || !causticAccumulatorNonTemporalClearMergedIntoCausticsPacket
         || !causticAccumulatorBootstrapClearMergedIntoCausticsPacket

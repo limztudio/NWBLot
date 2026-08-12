@@ -470,7 +470,7 @@ struct CausticResolveFourthWaveletGraphTask{
 
 
 // The fifth wavelet pass consumes the fourth graph-owned output and produces the fixed half-B upsample input. This
-// final ping-pong handoff receives graph-owned entry states before the timed native upsample tail.
+// final ping-pong handoff receives graph-owned entry states before the graph-owned upsample callback.
 struct CausticResolveFifthWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -499,14 +499,13 @@ struct CausticResolveFifthWaveletGraphTask{
 };
 
 
-// The timed upsample body follows the graph-owned five wavelets and finishes the retained full-resolve interval.
-struct CausticResolveGraphTask{
+// Upsample consumes the fifth-wavelet output after the compiler has lowered the final ping-pong UAV-to-SRV handoff.
+// The following empty callback only closes the retained full-resolve timing interval.
+struct CausticResolveUpsampleGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* causticProducerDispatched = nullptr;
-        Optional<Core::GpuTimingMeasure>* causticResolveTiming = nullptr;
         bool graphEntryStatesOwned = false;
     };
 
@@ -516,7 +515,35 @@ struct CausticResolveGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.raytracingSystem || !payload.targets || !payload.timingTicket || !payload.causticResolveTiming)
+        if(!payload.raytracingSystem || !payload.targets)
+            return false;
+        if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
+            return true;
+        payload.raytracingSystem->dispatchGraphCausticResolveUpsample(
+            commandList,
+            *payload.targets,
+            payload.graphEntryStatesOwned
+        );
+        return true;
+    }
+};
+
+
+// The empty timing-close callback follows graph-owned upsample and finishes the retained full-resolve interval.
+struct CausticResolveGraphTask{
+    struct Payload{
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        const bool* causticProducerDispatched = nullptr;
+        Optional<Core::GpuTimingMeasure>* causticResolveTiming = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.timingTicket || !payload.causticResolveTiming)
             return false;
         // Preserve the existing no-producer contract: the graph-owned irradiance clear remains authoritative and
         // no resolve dispatch is emitted when the selected photon producer did not record.
@@ -531,11 +558,6 @@ struct CausticResolveGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        payload.raytracingSystem->dispatchGraphCausticResolve(
-            commandList,
-            *payload.targets,
-            payload.graphEntryStatesOwned
-        );
         payload.causticResolveTiming->value().finishTiming(commandList);
         payload.causticResolveTiming->reset();
         return true;
@@ -1682,21 +1704,16 @@ Core::GpuTaskId RendererRayTracingSystem::declareCausticGeometryDownsampleTask(
 Core::GpuTaskId RendererRayTracingSystem::declareCausticResolveTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
-    DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     const bool* const causticProducerDispatched,
-    Optional<Core::GpuTimingMeasure>* const causticResolveTiming,
-    const bool graphEntryStatesOwned
+    Optional<Core::GpuTimingMeasure>* const causticResolveTiming
 ){
     return graph.addTask<__hidden_caustics::CausticResolveGraphTask>(
         desc,
         __hidden_caustics::CausticResolveGraphTask::Payload{
-            .raytracingSystem = this,
-            .targets = &targets,
             .timingTicket = &timingTicket,
             .causticProducerDispatched = causticProducerDispatched,
             .causticResolveTiming = causticResolveTiming,
-            .graphEntryStatesOwned = graphEntryStatesOwned,
         }
     );
 }
@@ -1815,6 +1832,25 @@ Core::GpuTaskId RendererRayTracingSystem::declareCausticResolveFifthWaveletTask(
     );
 }
 
+
+Core::GpuTaskId RendererRayTracingSystem::declareCausticResolveUpsampleTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    const bool* const causticProducerDispatched,
+    const bool graphEntryStatesOwned
+){
+    return graph.addTask<__hidden_caustics::CausticResolveUpsampleGraphTask>(
+        desc,
+        __hidden_caustics::CausticResolveUpsampleGraphTask::Payload{
+            .raytracingSystem = this,
+            .targets = &targets,
+            .causticProducerDispatched = causticProducerDispatched,
+            .graphEntryStatesOwned = graphEntryStatesOwned,
+        }
+    );
+}
+
 void RendererRayTracingSystem::dispatchGraphCausticGeometryDownsample(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
@@ -1823,7 +1859,7 @@ void RendererRayTracingSystem::dispatchGraphCausticGeometryDownsample(
     dispatchCausticGeometryDownsample(commandList, targets, graphEntryStatesOwned);
 }
 
-void RendererRayTracingSystem::dispatchGraphCausticResolve(
+void RendererRayTracingSystem::dispatchGraphCausticResolveUpsample(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const bool graphEntryStatesOwned

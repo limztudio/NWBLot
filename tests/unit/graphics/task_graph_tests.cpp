@@ -5807,9 +5807,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
 }
 
 
-// Photon, geometry, prepare, and all five wavelet passes occupy distinct graph callbacks. Their packet remains
+// Photon, geometry, prepare, five wavelets, and upsample occupy distinct graph callbacks. Their packet remains
 // unsplit, while compiler barriers own the immutable inputs and every ping-pong UAV-to-SRV handoff.
-TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletHandoffs){
+TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsampleHandoffs){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId accumulator = AddTextureMetadata(
@@ -6117,8 +6117,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletHandoff
     };
     Graphics::GpuTaskDesc tailDesc;
     tailDesc
-        .setIdentity(Name("tests/task_graph/caustic_resolve_tail_stage"))
-        .setMarkerLabel("Caustics Resolve Tail")
+        .setIdentity(Name("tests/task_graph/caustic_resolve_upsample_stage"))
+        .setMarkerLabel("Caustics Resolve Upsample")
         .setQueue(computeRequest)
         .setScheduling(tailScheduling)
         .setDependencies(&fifthWaveletTask, 1u)
@@ -6126,6 +6126,19 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletHandoff
     ;
     const Graphics::GpuTaskId tailTask = graph.addTask(tailDesc);
     ASSERT_TRUE(tailTask.valid());
+
+    Graphics::GpuTaskSchedulingHint timingCloseScheduling = tailScheduling;
+    timingCloseScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskDesc timingCloseDesc;
+    timingCloseDesc
+        .setIdentity(Name("tests/task_graph/caustic_resolve_timing_close"))
+        .setMarkerLabel("Caustics Resolve Timing Close")
+        .setQueue(computeRequest)
+        .setScheduling(timingCloseScheduling)
+        .setDependencies(&tailTask, 1u)
+    ;
+    const Graphics::GpuTaskId timingCloseTask = graph.addTask(timingCloseDesc);
+    ASSERT_TRUE(timingCloseTask.valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
     const Graphics::GpuTaskGraphQueueTopology topology{
@@ -6202,6 +6215,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletHandoff
     const Graphics::GpuSubmissionPacketId fourthWaveletPacket = compiledGraph.packetForTask(fourthWaveletTask);
     const Graphics::GpuSubmissionPacketId fifthWaveletPacket = compiledGraph.packetForTask(fifthWaveletTask);
     const Graphics::GpuSubmissionPacketId tailPacket = compiledGraph.packetForTask(tailTask);
+    const Graphics::GpuSubmissionPacketId timingClosePacket = compiledGraph.packetForTask(timingCloseTask);
     ASSERT_TRUE(photonPacket.valid());
     ASSERT_TRUE(geometryPacket.valid());
     ASSERT_TRUE(preparePacket.valid());
@@ -6211,6 +6225,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletHandoff
     ASSERT_TRUE(fourthWaveletPacket.valid());
     ASSERT_TRUE(fifthWaveletPacket.valid());
     ASSERT_TRUE(tailPacket.valid());
+    ASSERT_TRUE(timingClosePacket.valid());
     EXPECT_EQ(compiledGraph.packetCount(), 1u);
     EXPECT_EQ(geometryPacket, photonPacket);
     EXPECT_EQ(preparePacket, photonPacket);
@@ -6220,6 +6235,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletHandoff
     EXPECT_EQ(fourthWaveletPacket, photonPacket);
     EXPECT_EQ(fifthWaveletPacket, photonPacket);
     EXPECT_EQ(tailPacket, photonPacket);
+    EXPECT_EQ(timingClosePacket, photonPacket);
 
     const Graphics::GpuCompiledTask* const compiledPrepare = compiledGraph.findTask(prepareTask);
     const Graphics::GpuCompiledTask* const compiledWavelet = compiledGraph.findTask(waveletTask);

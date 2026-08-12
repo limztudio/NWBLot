@@ -382,9 +382,10 @@ public:
         bool graphOwnsResolve = false,
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr
     );
-    // The normal deferred graph records geometry downsample, resolve prepare, all five wavelet passes, then the
-    // upsample tail after the selected photon producer. Their exact resource uses own the immutable and ping-pong
-    // UAV-to-SRV handoffs; direct compatibility callers keep the full resolve attached to it.
+    // The normal deferred graph records geometry downsample, resolve prepare, all five wavelet passes, and upsample
+    // after the selected photon producer. Their exact resource uses own the immutable and ping-pong UAV-to-SRV
+    // handoffs; a final empty callback preserves the established resolve timing endpoint. Direct compatibility
+    // callers keep the full resolve attached to it.
     [[nodiscard]] Core::GpuTaskId declareCausticGeometryDownsampleTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -397,11 +398,9 @@ public:
     [[nodiscard]] Core::GpuTaskId declareCausticResolveTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
-        DeferredFrameTargets& targets,
         Core::GpuTimingSubmissionTicket& timingTicket,
         const bool* causticProducerDispatched,
-        Optional<Core::GpuTimingMeasure>* causticResolveTiming,
-        bool graphEntryStatesOwned = false
+        Optional<Core::GpuTimingMeasure>* causticResolveTiming
     );
     [[nodiscard]] Core::GpuTaskId declareCausticResolvePrepareTask(
         Core::GpuTaskGraph& graph,
@@ -445,14 +444,21 @@ public:
         const bool* causticProducerDispatched,
         bool graphEntryStatesOwned = false
     );
-    // Narrow entries for the graph-owned geometry/prepare/five-wavelet callbacks. The shared direct
+    [[nodiscard]] Core::GpuTaskId declareCausticResolveUpsampleTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        const bool* causticProducerDispatched,
+        bool graphEntryStatesOwned = false
+    );
+    // Narrow entries for the graph-owned geometry/prepare/five-wavelet/upsample callbacks. The shared direct
     // implementation remains private and retains its original single-call timing scope.
     void dispatchGraphCausticGeometryDownsample(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool graphEntryStatesOwned = false
     );
-    void dispatchGraphCausticResolve(
+    void dispatchGraphCausticResolveUpsample(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool graphEntryStatesOwned = false

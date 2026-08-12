@@ -1205,6 +1205,27 @@ struct NativePacketCausticResolveTailProbeTask{
 };
 
 
+// Timing close owns no image state. It must still record in the same packet after graph-owned upsample so the
+// renderer can retain its established resolve timing endpoint without reintroducing a native resource bridge.
+struct NativePacketCausticResolveTimingCloseProbeTask{
+    struct Payload{
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(commandList);
+        static_cast<void>(context);
+        if(payload.recorded)
+            *payload.recorded = true;
+        return true;
+    }
+};
+
+
 // Surfel resource initialization records only clears. Its graph packet must therefore establish the four CopyDest
 // states before this getter-only callback runs, without relying on the native clear body to repeat them.
 struct NativePacketSurfelInitializationEntryProbeTask{
@@ -4664,9 +4685,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedWarmCausticAccumulatorDecayRecor
 }
 
 
-// Caustic photon splats, geometry downsample, resolve prepare, and all five wavelet passes remain in one native
+// Caustic photon splats, geometry downsample, resolve prepare, five wavelets, and upsample remain in one native
 // packet. Getter-only callbacks prove Vulkan lowers both producer handoffs and every fixed ping-pong transition.
-TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFiveWaveletHandoffsRecordWithoutNativeBridge){
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsampleHandoffsRecordWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
     constexpr u32 layerCount = 3u;
     const TextureHandle accumulator = device.createTexture(
@@ -5114,8 +5135,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFive
     tailScheduling.mergeWithPrevious = true;
     GpuTaskDesc tailDesc;
     tailDesc
-        .setIdentity(Name("tests/descriptor_buffer/caustic_resolve_tail_stage"))
-        .setMarkerLabel("Caustics Resolve Tail")
+        .setIdentity(Name("tests/descriptor_buffer/caustic_resolve_upsample_stage"))
+        .setMarkerLabel("Caustics Resolve Upsample")
         .setQueue(graphicsQueue)
         .setScheduling(tailScheduling)
         .setDependencies(&fifthWaveletTask, 1u)
@@ -5130,6 +5151,23 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFive
         }
     );
     ASSERT_TRUE(tailTask.valid());
+
+    GpuTaskSchedulingHint timingCloseScheduling = tailScheduling;
+    timingCloseScheduling.mergeWithPrevious = true;
+    GpuTaskDesc timingCloseDesc;
+    timingCloseDesc
+        .setIdentity(Name("tests/descriptor_buffer/caustic_resolve_timing_close"))
+        .setMarkerLabel("Caustics Resolve Timing Close")
+        .setQueue(graphicsQueue)
+        .setScheduling(timingCloseScheduling)
+        .setDependencies(&tailTask, 1u)
+    ;
+    bool timingCloseRecorded = false;
+    const GpuTaskId timingCloseTask = graph.addTask<NativePacketCausticResolveTimingCloseProbeTask>(
+        timingCloseDesc,
+        NativePacketCausticResolveTimingCloseProbeTask::Payload{ .recorded = &timingCloseRecorded }
+    );
+    ASSERT_TRUE(timingCloseTask.valid());
 
     const GpuPhysicalQueueInfo queue{
         .id = BackendQueueId(device, CommandQueue::Graphics),
@@ -5163,6 +5201,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFive
     const GpuSubmissionPacketId fourthWaveletPacket = compiledGraph.packetForTask(fourthWaveletTask);
     const GpuSubmissionPacketId fifthWaveletPacket = compiledGraph.packetForTask(fifthWaveletTask);
     const GpuSubmissionPacketId tailPacket = compiledGraph.packetForTask(tailTask);
+    const GpuSubmissionPacketId timingClosePacket = compiledGraph.packetForTask(timingCloseTask);
     ASSERT_TRUE(photonPacket.valid());
     ASSERT_TRUE(geometryPacket.valid());
     ASSERT_TRUE(preparePacket.valid());
@@ -5172,6 +5211,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFive
     ASSERT_TRUE(fourthWaveletPacket.valid());
     ASSERT_TRUE(fifthWaveletPacket.valid());
     ASSERT_TRUE(tailPacket.valid());
+    ASSERT_TRUE(timingClosePacket.valid());
     EXPECT_EQ(geometryPacket, photonPacket);
     EXPECT_EQ(preparePacket, photonPacket);
     EXPECT_EQ(waveletPacket, photonPacket);
@@ -5180,6 +5220,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFive
     EXPECT_EQ(fourthWaveletPacket, photonPacket);
     EXPECT_EQ(fifthWaveletPacket, photonPacket);
     EXPECT_EQ(tailPacket, photonPacket);
+    EXPECT_EQ(timingClosePacket, photonPacket);
 
     const GpuCompiledTask* const compiledPrepare = compiledGraph.findTask(prepareTask);
     const GpuCompiledTask* const compiledWavelet = compiledGraph.findTask(waveletTask);
@@ -5375,6 +5416,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFive
     EXPECT_TRUE(fourthWaveletRecorded);
     EXPECT_TRUE(fifthWaveletRecorded);
     EXPECT_TRUE(tailRecorded);
+    EXPECT_TRUE(timingCloseRecorded);
     if(!packetRecorded)
         return;
 
@@ -5402,6 +5444,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFive
     EXPECT_TRUE(transaction.packetToken(fourthWaveletPacket).valid());
     EXPECT_TRUE(transaction.packetToken(fifthWaveletPacket).valid());
     EXPECT_TRUE(transaction.packetToken(tailPacket).valid());
+    EXPECT_TRUE(transaction.packetToken(timingClosePacket).valid());
     EXPECT_TRUE(device.waitForIdle());
 }
 

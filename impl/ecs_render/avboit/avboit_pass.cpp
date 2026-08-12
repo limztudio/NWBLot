@@ -356,7 +356,8 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     const usize instanceCount,
     const usize materialTypedByteCount,
     const bool intervalTargetsGraphOwned,
-    const bool receiverSurfaceImageStatesGraphOwned
+    const bool receiverSurfaceImageStatesGraphOwned,
+    const bool intervalPeelTargetStatesGraphOwned
 ){
     if(
         !targets.framebuffer
@@ -364,6 +365,11 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         || !csgFrameData.hasWork()
     )
         return;
+
+    // Graph-owned peel states are valid only when the paired graph-owned clear omitted the legacy broad CopyDest
+    // setup. Keep an externally mismatched compatibility call on the safe native bridge instead of claiming that
+    // a ClearDestination peel image is already a StorageImage.
+    NWB_ASSERT(!intervalPeelTargetStatesGraphOwned || intervalTargetsGraphOwned);
 
     Core::GpuTimingMeasure timing(
         graphics().gpuTiming(),
@@ -401,7 +407,12 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         .addScissorRect(csgFrameData.workRegion.resolveRect(targets.width, targets.height))
     ;
 
-    m_renderer.csgSystem().dispatchCsgIntervalPeels(commandList, targets, csgFrameData);
+    m_renderer.csgSystem().dispatchCsgIntervalPeels(
+        commandList,
+        targets,
+        csgFrameData,
+        intervalTargetsGraphOwned && intervalPeelTargetStatesGraphOwned
+    );
 
     const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
         commandList,
@@ -429,7 +440,8 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     const usize preparedTransparentCsgInstanceCount,
     const usize preparedTransparentCsgMaterialTypedByteCount,
     const bool preparedTransparentCsgIntervalTargetsGraphOwned,
-    const bool preparedTransparentCsgReceiverSurfaceImageStatesGraphOwned
+    const bool preparedTransparentCsgReceiverSurfaceImageStatesGraphOwned,
+    const bool preparedTransparentCsgIntervalPeelTargetStatesGraphOwned
 ){
     if(preparedTransparentCsgReceiverSurfaceDrawItems || preparedTransparentCsgFrameData){
         NWB_ASSERT(preparedTransparentCsgReceiverSurfaceDrawItems);
@@ -443,7 +455,8 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
                 preparedTransparentCsgInstanceCount,
                 preparedTransparentCsgMaterialTypedByteCount,
                 preparedTransparentCsgIntervalTargetsGraphOwned,
-                preparedTransparentCsgReceiverSurfaceImageStatesGraphOwned
+                preparedTransparentCsgReceiverSurfaceImageStatesGraphOwned,
+                preparedTransparentCsgIntervalPeelTargetStatesGraphOwned
             );
         }
     }

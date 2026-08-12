@@ -206,6 +206,8 @@ private:
         Core::GpuGraphResourceId csgCutters,
         Core::GpuGraphResourceId csgClipContextSlots,
         Core::GpuGraphResourceId csgIntervalSampleState,
+        Core::GpuGraphResourceId csgCapBackNormal,
+        Core::GpuGraphResourceId csgIntervalDepth,
         Core::GpuGraphResourceId csgIntervalId,
         Core::GpuGraphResourceId csgReceiverEventData,
         Core::GpuGraphResourceId csgReceiverEventCount,

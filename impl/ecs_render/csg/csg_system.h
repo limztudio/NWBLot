@@ -41,7 +41,12 @@ public:
     [[nodiscard]] bool createCsgIntervalPeelResources(DeferredFrameTargets& targets, bool capFillRequired);
     [[nodiscard]] bool createCsgIntervalSampleResources(DeferredFrameTargets& targets);
     void invalidateCsgIntervalPeelPipelines();
-    void dispatchCsgIntervalPeels(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
+    void dispatchCsgIntervalPeels(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        const CsgFrameGpuData& csgFrameData,
+        bool intervalPeelTargetStatesGraphOwned = false
+    );
     void dispatchCsgReceiverSpanBuild(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
     void dispatchCsgIntervalCombine(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
     void renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);

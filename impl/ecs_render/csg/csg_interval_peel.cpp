@@ -199,7 +199,8 @@ void RendererCsgSystem::invalidateCsgIntervalPeelPipelines(){
 void RendererCsgSystem::dispatchCsgIntervalPeels(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const CsgFrameGpuData& csgFrameData
+    const CsgFrameGpuData& csgFrameData,
+    const bool intervalPeelTargetStatesGraphOwned
 ){
     if(!csgFrameData.hasWork())
         return;
@@ -210,7 +211,10 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalPeel, graphics().getDevice(), commandList);
 
-    __hidden_csg_interval_peel::SetCsgIntervalPeelStorageStates(commandList, targets);
+    // Opaque G-buffer and prepared-transparent AVBOIT graph tasks declare these exact peel-array StorageImage
+    // states before this thunk records. Direct compatibility callers retain the historical native setup.
+    if(!intervalPeelTargetStatesGraphOwned)
+        __hidden_csg_interval_peel::SetCsgIntervalPeelStorageStates(commandList, targets);
     // The view is heap-selected; transition its UniformBuffer
     // explicitly before the standalone peel dispatch.
     commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);

@@ -243,8 +243,8 @@ private:
         usize tangentBytes = 0u;
     };
 
-    // The graph task retains only immutable per-mesh dispatch inputs. It resolves its imported buffers and pipelines
-    // from graph-owned IDs while recording, then publishes the dirty-state and selector-residency commit only after
+    // The graph tasks retain only immutable per-mesh dispatch inputs. They resolve imported buffers and pipelines
+    // from graph-owned IDs while recording, then publish the dirty-state and selector-residency commit only after
     // the containing primary-Graphics packet is accepted.
     struct GraphOwnedSkinningDispatchPlan{
         RuntimeMeshHandle handle;
@@ -287,7 +287,8 @@ private:
         Core::GpuGraphPipelineId repackPipeline;
     };
 
-    struct TaskGraphSkinningDispatchTask;
+    struct TaskGraphSkinningDeformationTask;
+    struct TaskGraphSkinningPostDispatchTask;
     struct TaskGraphSkinningFinalizerTask;
 
 
@@ -331,7 +332,8 @@ private:
         MeshSkinningSubmissionCommit& outCommit
     );
     // Declares all frame-local skinning work as one graph-owned primary-Graphics packet: immutable palette/selector
-    // uploads and rest-stream copies feed the compute continuation, whose accepted task commits dirty-state changes.
+    // uploads and rest-stream copies feed deformation, bounds/repack, and final-state stages whose accepted task
+    // commits dirty-state changes.
     [[nodiscard]] bool submitFrameSkinningGraph();
     [[nodiscard]] bool prepareRuntimeMeshResources(
         MeshSkinningRuntimeInstance& instance,
@@ -340,7 +342,12 @@ private:
     );
     [[nodiscard]] bool copyRestToSkinned(Core::CommandList& commandList, MeshSkinningRuntimeInstance& instance);
     [[nodiscard]] bool hasGraphOwnedRestCopyPlan(const MeshSkinningRuntimeInstance& instance)const;
-    [[nodiscard]] bool recordGraphOwnedSkinningDispatch(
+    [[nodiscard]] bool recordGraphOwnedSkinningDeformation(
+        const GraphOwnedSkinningDispatchPlan& plan,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    );
+    [[nodiscard]] bool recordGraphOwnedSkinningPostDispatch(
         const GraphOwnedSkinningDispatchPlan& plan,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context

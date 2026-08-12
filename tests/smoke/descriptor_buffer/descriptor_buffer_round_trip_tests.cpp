@@ -300,6 +300,51 @@ struct SkinningGraphRestStreamConsumerTask{
 };
 
 
+// The active-pose skinning path has three graph stages: deformation writes all skinned streams as UAVs, bounds and
+// repack consume the required streams as SRVs while producing their own UAV outputs, and a finalizer publishes every
+// generated stream. This probe is getter-only so packet-lowered barriers are the entire state contract.
+struct SkinningGraphStateProbeTask{
+    struct Expectation{
+        GpuGraphResourceId resource;
+        ResourceStates::Mask state = ResourceStates::Unknown;
+    };
+
+    struct Payload{
+        Expectation expectations[5u] = {};
+        usize expectationCount = 0u;
+        bool* recorded = nullptr;
+        QueueSubmissionToken* acceptedToken = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        if(payload.expectationCount == 0u || payload.expectationCount > LengthOf(payload.expectations))
+            return false;
+
+        bool ready = true;
+        for(usize expectationIndex = 0u; expectationIndex < payload.expectationCount; ++expectationIndex){
+            const Expectation& expectation = payload.expectations[expectationIndex];
+            Buffer* const buffer = context.taskGraph.bufferForResource(expectation.resource);
+            if(!buffer || commandList.getBufferState(buffer) != expectation.state){
+                ready = false;
+                break;
+            }
+        }
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(payload.acceptedToken)
+            *payload.acceptedToken = token;
+    }
+};
+
+
 // RendererSystem requests this terminal policy only when accepted cross-queue ownership cannot be recovered. The
 // Graphics owner must stop the current generation before it records another frame, leaving orderly teardown and
 // recreation to the caller that owns the device lifetime.
@@ -7546,6 +7591,361 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningOutputStatesFinalizeInGr
         scratchArena
     ));
     const QueueSubmissionToken packetToken = transaction.packetToken(producerPacket);
+    ASSERT_TRUE(packetToken.valid());
+    ASSERT_TRUE(finalizerAcceptedToken.valid());
+    EXPECT_EQ(finalizerAcceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(finalizerAcceptedToken.value, packetToken.value);
+    ASSERT_TRUE(device.waitForIdle());
+}
+
+
+// Active-pose skinning must not rely on a native UAV/SRV bridge between deformation and bounds/repack. This native
+// packet smoke models the exact three graph tasks: deformation writes skinned position/normal/tangent, post-dispatch
+// reads position/normal while writing bounds/attributes, and the finalizer publishes every generated buffer as SRV.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningDeformationHandoffStaysInGraph){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const auto createGeneratedBuffer = [&device](const Name& debugName){
+        return device.createBuffer(
+            BufferDesc()
+                .setDebugName(debugName)
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setCanHaveUAVs(true)
+                .setInitialState(ResourceStates::Common)
+                .setQueueSharing(ResourceQueueSharing::Exclusive)
+        );
+    };
+    auto skinnedPosition = createGeneratedBuffer(Name("tests/descriptor_buffer/skinning_stage_position"));
+    auto skinnedNormal = createGeneratedBuffer(Name("tests/descriptor_buffer/skinning_stage_normal"));
+    auto skinnedTangent = createGeneratedBuffer(Name("tests/descriptor_buffer/skinning_stage_tangent"));
+    auto meshletBounds = createGeneratedBuffer(Name("tests/descriptor_buffer/skinning_stage_bounds"));
+    auto attributes = createGeneratedBuffer(Name("tests/descriptor_buffer/skinning_stage_attributes"));
+    ASSERT_NE(skinnedPosition.get(), nullptr);
+    ASSERT_NE(skinnedNormal.get(), nullptr);
+    ASSERT_NE(skinnedTangent.get(), nullptr);
+    ASSERT_NE(meshletBounds.get(), nullptr);
+    ASSERT_NE(attributes.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importBuffer = [&graph](const BufferHandle& buffer, const AStringView markerLabel){
+        const BufferDesc& description = buffer->getDescription();
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(description.debugName)
+                .setMarkerLabel(markerLabel)
+                .setType(GpuGraphResourceType::Buffer)
+                .setInitialState(description.initialState)
+                .setQueueSharing(description.queueSharing)
+        );
+    };
+    const GpuGraphResourceId skinnedPositionResource = importBuffer(skinnedPosition, "Skinning Stage Position");
+    const GpuGraphResourceId skinnedNormalResource = importBuffer(skinnedNormal, "Skinning Stage Normal");
+    const GpuGraphResourceId skinnedTangentResource = importBuffer(skinnedTangent, "Skinning Stage Tangent");
+    const GpuGraphResourceId meshletBoundsResource = importBuffer(meshletBounds, "Skinning Stage Bounds");
+    const GpuGraphResourceId attributesResource = importBuffer(attributes, "Skinning Stage Attributes");
+    ASSERT_TRUE(skinnedPositionResource.valid());
+    ASSERT_TRUE(skinnedNormalResource.valid());
+    ASSERT_TRUE(skinnedTangentResource.valid());
+    ASSERT_TRUE(meshletBoundsResource.valid());
+    ASSERT_TRUE(attributesResource.valid());
+
+    const GpuQueueRequest graphicsComputeQueue{
+        GpuQueueCapability::Compute,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint deformationScheduling;
+    deformationScheduling.cost = GpuTaskCostHint::Small;
+    deformationScheduling.overlapPreferred = false;
+    deformationScheduling.avoidQueueCrossing = true;
+    deformationScheduling.forceSubmissionBoundary = false;
+    deformationScheduling.allowPacketMerge = true;
+    deformationScheduling.mergeWithPrevious = false;
+    const GpuTaskResourceUse deformationUses[] = {
+        GpuTaskResourceUse{
+            .resource = skinnedPositionResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = skinnedNormalResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = skinnedTangentResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    bool deformationObservedUavs = false;
+    SkinningGraphStateProbeTask::Payload deformationPayload;
+    deformationPayload.expectations[0u] = SkinningGraphStateProbeTask::Expectation{
+        .resource = skinnedPositionResource,
+        .state = ResourceStates::UnorderedAccess,
+    };
+    deformationPayload.expectations[1u] = SkinningGraphStateProbeTask::Expectation{
+        .resource = skinnedNormalResource,
+        .state = ResourceStates::UnorderedAccess,
+    };
+    deformationPayload.expectations[2u] = SkinningGraphStateProbeTask::Expectation{
+        .resource = skinnedTangentResource,
+        .state = ResourceStates::UnorderedAccess,
+    };
+    deformationPayload.expectationCount = 3u;
+    deformationPayload.recorded = &deformationObservedUavs;
+    const GpuTaskId deformationTask = graph.addTask<SkinningGraphStateProbeTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/skinning_stage_deformation"))
+            .setMarkerLabel("Skinning Deformation")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(deformationScheduling)
+            .setResourceUses(deformationUses, LengthOf(deformationUses)),
+        Move(deformationPayload)
+    );
+    ASSERT_TRUE(deformationTask.valid());
+
+    GpuTaskSchedulingHint postDispatchScheduling = deformationScheduling;
+    postDispatchScheduling.mergeWithPrevious = true;
+    const GpuTaskResourceUse postDispatchUses[] = {
+        GpuTaskResourceUse{
+            .resource = skinnedPositionResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = skinnedNormalResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = meshletBoundsResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = attributesResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    bool postDispatchObservedStates = false;
+    SkinningGraphStateProbeTask::Payload postDispatchPayload;
+    postDispatchPayload.expectations[0u] = SkinningGraphStateProbeTask::Expectation{
+        .resource = skinnedPositionResource,
+        .state = ResourceStates::ShaderResource,
+    };
+    postDispatchPayload.expectations[1u] = SkinningGraphStateProbeTask::Expectation{
+        .resource = skinnedNormalResource,
+        .state = ResourceStates::ShaderResource,
+    };
+    postDispatchPayload.expectations[2u] = SkinningGraphStateProbeTask::Expectation{
+        .resource = meshletBoundsResource,
+        .state = ResourceStates::UnorderedAccess,
+    };
+    postDispatchPayload.expectations[3u] = SkinningGraphStateProbeTask::Expectation{
+        .resource = attributesResource,
+        .state = ResourceStates::UnorderedAccess,
+    };
+    postDispatchPayload.expectationCount = 4u;
+    postDispatchPayload.recorded = &postDispatchObservedStates;
+    const GpuTaskId postDispatchTask = graph.addTask<SkinningGraphStateProbeTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/skinning_stage_bounds_repack"))
+            .setMarkerLabel("Skinning Bounds and Repack")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(postDispatchScheduling)
+            .setDependencies(&deformationTask, 1u)
+            .setResourceUses(postDispatchUses, LengthOf(postDispatchUses)),
+        Move(postDispatchPayload)
+    );
+    ASSERT_TRUE(postDispatchTask.valid());
+
+    const GpuTaskResourceUse finalizerUses[] = {
+        GpuTaskResourceUse{
+            .resource = skinnedPositionResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = skinnedNormalResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = skinnedTangentResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = meshletBoundsResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = attributesResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    bool finalizerObservedShaderResources = false;
+    QueueSubmissionToken finalizerAcceptedToken;
+    SkinningGraphStateProbeTask::Payload finalizerPayload;
+    finalizerPayload.expectations[0u] = SkinningGraphStateProbeTask::Expectation{
+        .resource = skinnedPositionResource,
+        .state = ResourceStates::ShaderResource,
+    };
+    finalizerPayload.expectations[1u] = SkinningGraphStateProbeTask::Expectation{
+        .resource = skinnedNormalResource,
+        .state = ResourceStates::ShaderResource,
+    };
+    finalizerPayload.expectations[2u] = SkinningGraphStateProbeTask::Expectation{
+        .resource = skinnedTangentResource,
+        .state = ResourceStates::ShaderResource,
+    };
+    finalizerPayload.expectations[3u] = SkinningGraphStateProbeTask::Expectation{
+        .resource = meshletBoundsResource,
+        .state = ResourceStates::ShaderResource,
+    };
+    finalizerPayload.expectations[4u] = SkinningGraphStateProbeTask::Expectation{
+        .resource = attributesResource,
+        .state = ResourceStates::ShaderResource,
+    };
+    finalizerPayload.expectationCount = 5u;
+    finalizerPayload.recorded = &finalizerObservedShaderResources;
+    finalizerPayload.acceptedToken = &finalizerAcceptedToken;
+    const GpuTaskId finalizerTask = graph.addTask<SkinningGraphStateProbeTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/skinning_stage_finalize"))
+            .setMarkerLabel("Skinning Finalize States")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(postDispatchScheduling)
+            .setDependencies(&postDispatchTask, 1u)
+            .setResourceUses(finalizerUses, LengthOf(finalizerUses)),
+        Move(finalizerPayload)
+    );
+    ASSERT_TRUE(finalizerTask.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    ASSERT_TRUE(primaryGraphicsQueue.valid());
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/skinning_stage_handoff_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuTaskQueueAssignment* const deformationAssignment = assignments.find(deformationTask);
+    const GpuTaskQueueAssignment* const postDispatchAssignment = assignments.find(postDispatchTask);
+    const GpuTaskQueueAssignment* const finalizerAssignment = assignments.find(finalizerTask);
+    ASSERT_NE(deformationAssignment, nullptr);
+    ASSERT_NE(postDispatchAssignment, nullptr);
+    ASSERT_NE(finalizerAssignment, nullptr);
+    EXPECT_EQ(deformationAssignment->queue, primaryGraphicsQueue);
+    EXPECT_EQ(postDispatchAssignment->queue, primaryGraphicsQueue);
+    EXPECT_EQ(finalizerAssignment->queue, primaryGraphicsQueue);
+    const GpuSubmissionPacketId deformationPacket = compiledGraph.packetForTask(deformationTask);
+    const GpuSubmissionPacketId postDispatchPacket = compiledGraph.packetForTask(postDispatchTask);
+    const GpuSubmissionPacketId finalizerPacket = compiledGraph.packetForTask(finalizerTask);
+    ASSERT_TRUE(deformationPacket.valid());
+    ASSERT_TRUE(postDispatchPacket.valid());
+    ASSERT_TRUE(finalizerPacket.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(postDispatchPacket, deformationPacket);
+    EXPECT_EQ(finalizerPacket, deformationPacket);
+    EXPECT_EQ(compiledGraph.packet(deformationPacket).taskCount, 3u);
+
+    const GpuCompiledTask* const compiledDeformation = compiledGraph.findTask(deformationTask);
+    const GpuCompiledTask* const compiledPostDispatch = compiledGraph.findTask(postDispatchTask);
+    const GpuCompiledTask* const compiledFinalizer = compiledGraph.findTask(finalizerTask);
+    ASSERT_NE(compiledDeformation, nullptr);
+    ASSERT_NE(compiledPostDispatch, nullptr);
+    ASSERT_NE(compiledFinalizer, nullptr);
+    EXPECT_EQ(compiledDeformation->prologueBarrierCount, 3u);
+    EXPECT_EQ(compiledPostDispatch->prologueBarrierCount, 4u);
+    EXPECT_EQ(compiledFinalizer->prologueBarrierCount, 3u);
+    const GpuCompiledBarrier* const postDispatchBarriers = compiledGraph.taskPrologueBarriers(postDispatchTask);
+    const GpuCompiledBarrier* const finalizerBarriers = compiledGraph.taskPrologueBarriers(finalizerTask);
+    ASSERT_NE(postDispatchBarriers, nullptr);
+    ASSERT_NE(finalizerBarriers, nullptr);
+    EXPECT_EQ(postDispatchBarriers[0u].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(postDispatchBarriers[0u].resource, skinnedPositionResource);
+    EXPECT_EQ(postDispatchBarriers[0u].before, ResourceStates::UnorderedAccess);
+    EXPECT_EQ(postDispatchBarriers[0u].after, ResourceStates::ShaderResource);
+    EXPECT_EQ(postDispatchBarriers[1u].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(postDispatchBarriers[1u].resource, skinnedNormalResource);
+    EXPECT_EQ(postDispatchBarriers[1u].before, ResourceStates::UnorderedAccess);
+    EXPECT_EQ(postDispatchBarriers[1u].after, ResourceStates::ShaderResource);
+    EXPECT_EQ(finalizerBarriers[0u].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(finalizerBarriers[0u].resource, skinnedTangentResource);
+    EXPECT_EQ(finalizerBarriers[0u].before, ResourceStates::UnorderedAccess);
+    EXPECT_EQ(finalizerBarriers[0u].after, ResourceStates::ShaderResource);
+    EXPECT_EQ(finalizerBarriers[1u].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(finalizerBarriers[1u].resource, meshletBoundsResource);
+    EXPECT_EQ(finalizerBarriers[1u].before, ResourceStates::UnorderedAccess);
+    EXPECT_EQ(finalizerBarriers[1u].after, ResourceStates::ShaderResource);
+    EXPECT_EQ(finalizerBarriers[2u].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(finalizerBarriers[2u].resource, attributesResource);
+    EXPECT_EQ(finalizerBarriers[2u].before, ResourceStates::UnorderedAccess);
+    EXPECT_EQ(finalizerBarriers[2u].after, ResourceStates::ShaderResource);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+    EXPECT_TRUE(deformationObservedUavs);
+    EXPECT_TRUE(postDispatchObservedStates);
+    EXPECT_TRUE(finalizerObservedShaderResources);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(deformationPacket);
+    ASSERT_NE(finalState, nullptr);
+    auto stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getBufferState(skinnedPosition.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(stateProbe->getBufferState(skinnedNormal.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(stateProbe->getBufferState(skinnedTangent.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(stateProbe->getBufferState(meshletBounds.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(stateProbe->getBufferState(attributes.get()), ResourceStates::ShaderResource);
+    stateProbe->close();
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken packetToken = transaction.packetToken(deformationPacket);
     ASSERT_TRUE(packetToken.valid());
     ASSERT_TRUE(finalizerAcceptedToken.valid());
     EXPECT_EQ(finalizerAcceptedToken.queue, packetToken.queue);

@@ -7051,6 +7051,129 @@ TEST(GpuTaskGraph, PlansTextureStatesPerDeclaredSubresourceRange){
 }
 
 
+TEST(GpuTaskGraph, PlansPairedCsgIntervalClearsBeforeUavConsumers){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId intervalId = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/csg_interval_id"),
+        "CSG Interval ID"
+    );
+    const Graphics::GpuGraphResourceId receiverEventCount = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/csg_receiver_event_count"),
+        "CSG Receiver Event Count"
+    );
+    ASSERT_TRUE(intervalId.valid());
+    ASSERT_TRUE(receiverEventCount.valid());
+
+    const Graphics::TextureSubresourceSet intervalIdRange(0u, 1u, 0u, 4u);
+    const Graphics::TextureSubresourceSet receiverEventCountRange(0u, 1u, 0u, 1u);
+    const Graphics::GpuTaskResourceUse clearUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = intervalId,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = intervalIdRange },
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverEventCount,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverEventCountRange },
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskResourceUse consumerUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = intervalId,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = intervalIdRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverEventCount,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverEventCountRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    const Graphics::GpuTaskId clear = AddTask(
+        graph,
+        Name("tests/task_graph/csg_interval_clear"),
+        "CSG Interval Clear",
+        nullptr,
+        0u,
+        clearUses,
+        LengthOf(clearUses)
+    );
+    const Graphics::GpuTaskId consumer = AddTask(
+        graph,
+        Name("tests/task_graph/csg_interval_consumer"),
+        "CSG Interval Consumer",
+        nullptr,
+        0u,
+        consumerUses,
+        LengthOf(consumerUses)
+    );
+    ASSERT_TRUE(clear.valid());
+    ASSERT_TRUE(consumer.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    EXPECT_NE(FindEdge(analysis, clear, consumer), nullptr);
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        clear,
+        consumer,
+        intervalId,
+        Graphics::GpuTaskHazardType::WriteAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        clear,
+        consumer,
+        receiverEventCount,
+        Graphics::GpuTaskHazardType::WriteAfterWrite
+    ));
+
+    const Graphics::GpuCompiledBarrier* const consumerBarriers = compiledGraph.taskPrologueBarriers(consumer);
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+    ASSERT_NE(compiledConsumer, nullptr);
+    ASSERT_NE(consumerBarriers, nullptr);
+    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
+    bool intervalIdTransition = false;
+    bool receiverEventCountTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledConsumer->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = consumerBarriers[barrierIndex];
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.before == Graphics::ResourceStates::CopyDest
+            && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            && barrier.resource == intervalId
+            && barrier.range.textureSubresources == intervalIdRange
+        )
+            intervalIdTransition = true;
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.before == Graphics::ResourceStates::CopyDest
+            && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            && barrier.resource == receiverEventCount
+            && barrier.range.textureSubresources == receiverEventCountRange
+        )
+            receiverEventCountTransition = true;
+    }
+    EXPECT_TRUE(intervalIdTransition);
+    EXPECT_TRUE(receiverEventCountTransition);
+}
+
+
 TEST(GpuTaskGraph, CompilesTransferPreferenceToGraphicsFallbackWithoutARendererPath){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

@@ -149,12 +149,18 @@ can receive an unconditional final sign-off.
   G-buffer declares the transient `ShaderResource` reads. CSG receiver-range, cutter, clip-context, and interval
   sample bytes from that same frozen payload are immutable graph blobs, uploaded in order before the G-buffer. The
   graph declares the receiver/cutter `ShaderResource` reads and the context/sample plus target-generation deferred
-  bindless-slot `ConstantBuffer` reads. The transparent CSG interval producer now does the same within AVBOIT-pre:
+  bindless-slot `ConstantBuffer` reads. Its two persistent CSG interval values (`csgIntervalId` over all peel
+  layers and slice-zero `csgReceiverEventCount`) now clear through a frozen-rect graph task immediately before the
+  opaque native producer, then explicitly hand off from `CopyDest` to `UnorderedAccess`; the wider CSG target
+  lifecycle and direct compatibility clear remain deliberately outside this bounded task. The transparent CSG
+  interval producer now does the same within AVBOIT-pre:
   it freezes its fresh mesh-view work region, receiver-surface draw ordering, material instance/typed data, and CSG
   receiver/cutter/context/sample payloads during graph declaration. Its serial Graphics upload chain merges into
   the established AVBOIT-pre packet, which consumes the graph-owned bytes before later AVBOIT phases overwrite
-  their shared buffers. The subsequent transparent occupancy phase now freezes its own material instance/typed
-  stream and, when it contains CSG draws, its receiver/cutter/clip-context stream. Its serial Graphics uploads run
+  their shared buffers. Its prepared path also uses the same graph-owned paired rect clear before native interval
+  production, while an unprepared compatibility path retains the direct helper. The subsequent transparent
+  occupancy phase now freezes its own material instance/typed stream and, when it contains CSG draws, its
+  receiver/cutter/clip-context stream. Its serial Graphics uploads run
   after interval generation and merge into that same AVBOIT-pre packet; it deliberately retains the interval
   producer's full-resolution sample-state payload for low-resolution sampling. The prepared native occupancy
   consumer never regathers or rewrites those streams, and the renderer verifies that its task is in the interval
@@ -243,6 +249,7 @@ can receive an unconditional final sign-off.
 | Graph-owned hybrid hardware-BLAS follow-up: renderer build, FrontierSafe graph unit, descriptor-buffer smoke, transparent-multi, and skinned-caustic captures | passed; independent frozen hardware mesh builds now record in Shadow Preparation for hybrid frames, while a mismatch discards the plan and retries the direct compatibility loop instead of rejecting the opaque-shadow fallback. Graph tests passed 50/50, descriptor smoke passed 77 tests with 11 expected topology skips, and both Vulkan/X11 captures passed. |
 | Dedicated-Transfer recovery-frontier follow-up: graph unit and descriptor-buffer smoke | passed; graph tests passed 50/50 and descriptor smoke passed 77 tests with 11 expected topology skips. The new native test accepts a graph-owned Transfer upload, injects a rejected dependent Graphics suffix, verifies the transaction emits its exact physical Transfer token, then confirms the Device receives that token on the independent recovery-tail submission. This adapter skips only the dedicated-Transfer execution because it has no Transfer-only family. |
 | Graph-owned frame GPU-timing reset: graph unit, ECS graphics, and descriptor-buffer smoke | passed; the reset now compiles as one strict primary-Graphics graph packet, and only its accepted task callback publishes timer-query availability while failed work remains revoked. Graph tests passed 50/50, ECS graphics passed 18/18, and descriptor smoke passed 78 tests with 11 expected topology skips. The targeted rejection/retry smoke proves a rejected reset leaves no stale dynamic-rendering query availability and the following accepted graph preamble recovers it. |
+| Graph-owned CSG interval rect-clear follow-up: renderer build, graph/ECS/descriptor tests, and Vulkan/X11 CSG captures | passed; opaque G-buffer and prepared-transparent AVBOIT now run an exact two-target frozen-rect clear task before their native CSG producers, with graph-declared `CopyDest` to `UnorderedAccess` handoff over all peel ID layers and the single receiver-event-count layer. Graph tests passed 51/51, ECS graphics passed 18/18, descriptor smoke passed 78 tests with 11 expected topology skips, and opaque plus transparent CSG early/mid/late captures passed. The direct CSG clear remains the compatibility fallback for unprepared transparent work. |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a

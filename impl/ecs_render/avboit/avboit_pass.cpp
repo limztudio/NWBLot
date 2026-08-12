@@ -339,7 +339,8 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     const MaterialPassDrawItems& receiverSurfaceDrawItems,
     const CsgFrameGpuData& csgFrameData,
     const usize instanceCount,
-    const usize materialTypedByteCount
+    const usize materialTypedByteCount,
+    const bool intervalTargetsGraphOwned
 ){
     if(
         !targets.framebuffer
@@ -354,13 +355,15 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         graphics().getDevice(),
         commandList
     );
-    // Match the legacy interval producer: later transparent material passes sample these images through global
-    // descriptors, so clear the selected work rect even if a defensive readiness check below declines the draw.
-    m_renderer.m_deferredSystem.clearCsgIntervalTargets(
-        commandList,
-        targets,
-        csgFrameData.workRegion.resolveRect(targets.width, targets.height)
-    );
+    // The normal prepared path records this exact rect clear as a preceding graph task. Retain the direct helper
+    // for compatibility callers, including its historical all-target state preparation before readiness checks.
+    if(!intervalTargetsGraphOwned){
+        m_renderer.m_deferredSystem.clearCsgIntervalTargets(
+            commandList,
+            targets,
+            csgFrameData.workRegion.resolveRect(targets.width, targets.height)
+        );
+    }
 
     // The graph copied the material and CSG bytes after preflight froze every selected handle.  Do not rebuild or
     // rewrite them here: a rejected packet will re-declare the retained blobs, while this native step only consumes
@@ -407,7 +410,8 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     const MaterialPassDrawItems* const preparedTransparentCsgReceiverSurfaceDrawItems,
     const CsgFrameGpuData* const preparedTransparentCsgFrameData,
     const usize preparedTransparentCsgInstanceCount,
-    const usize preparedTransparentCsgMaterialTypedByteCount
+    const usize preparedTransparentCsgMaterialTypedByteCount,
+    const bool preparedTransparentCsgIntervalTargetsGraphOwned
 ){
     if(preparedTransparentCsgReceiverSurfaceDrawItems || preparedTransparentCsgFrameData){
         NWB_ASSERT(preparedTransparentCsgReceiverSurfaceDrawItems);
@@ -419,7 +423,8 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
                 *preparedTransparentCsgReceiverSurfaceDrawItems,
                 *preparedTransparentCsgFrameData,
                 preparedTransparentCsgInstanceCount,
-                preparedTransparentCsgMaterialTypedByteCount
+                preparedTransparentCsgMaterialTypedByteCount,
+                preparedTransparentCsgIntervalTargetsGraphOwned
             );
         }
     }

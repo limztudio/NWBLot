@@ -78,6 +78,10 @@ public:
     [[nodiscard]] bool createDeferredPresentPipeline(Core::Framebuffer* presentationFramebuffer);
     void resetAvboitFrameTargets(AvboitFrameTargets& targets);
     void resetDeferredFrameTargets();
+    // The graph declares the exact CopyDest writes before calling this narrow recorder. It clears only the two
+    // CSG values that persist across a work region; the direct compatibility helper below retains its historical
+    // all-target state preparation.
+    void clearGraphOwnedCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::Rect& csgClearRect);
     void clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::Rect& csgClearRect);
     [[nodiscard]] Core::GpuTaskId declareDeferredCompositeTask(
         Core::GpuTaskGraph& graph,

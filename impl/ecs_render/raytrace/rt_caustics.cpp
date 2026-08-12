@@ -348,9 +348,9 @@ struct CausticResolvePrepareGraphTask{
 };
 
 
-// The first wavelet pass consumes the prepare output and writes its counterpart. The next two alternating passes stay
-// in separate graph callbacks, while the remaining body stays native; this first read/write pair receives graph-owned
-// entry states.
+// The first wavelet pass consumes the prepare output and writes its counterpart. The next three alternating passes
+// stay in separate graph callbacks, while the remaining body stays native; this first read/write pair receives
+// graph-owned entry states.
 struct CausticResolveWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -379,8 +379,8 @@ struct CausticResolveWaveletGraphTask{
 };
 
 
-// The second wavelet pass consumes the first graph-owned output and returns to the parity-selected surface. The third
-// alternating pass stays in a separate graph callback, but this exact handoff receives graph-owned entry states.
+// The second wavelet pass consumes the first graph-owned output and returns to the parity-selected surface. The next
+// two alternating passes stay in separate graph callbacks, but this exact handoff receives graph-owned entry states.
 struct CausticResolveSecondWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -409,8 +409,8 @@ struct CausticResolveSecondWaveletGraphTask{
 };
 
 
-// The third wavelet pass consumes the second graph-owned output and writes its counterpart. Later alternating passes
-// remain in the timed native body, but this exact handoff receives graph-owned entry states.
+// The third wavelet pass consumes the second graph-owned output and writes its counterpart. The next alternating pass
+// stays in a separate graph callback, but this exact handoff receives graph-owned entry states.
 struct CausticResolveThirdWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -439,7 +439,37 @@ struct CausticResolveThirdWaveletGraphTask{
 };
 
 
-// The timed wavelet body follows the graph-owned first three passes and finishes the retained full-resolve interval.
+// The fourth wavelet pass consumes the third graph-owned output and returns to the parity-selected surface. Only the
+// final alternating pass remains in the timed native body, but this exact handoff receives graph-owned entry states.
+struct CausticResolveFourthWaveletGraphTask{
+    struct Payload{
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        const bool* causticProducerDispatched = nullptr;
+        bool graphEntryStatesOwned = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.raytracingSystem || !payload.targets)
+            return false;
+        if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
+            return true;
+        payload.raytracingSystem->dispatchGraphCausticResolveFourthWavelet(
+            commandList,
+            *payload.targets,
+            payload.graphEntryStatesOwned
+        );
+        return true;
+    }
+};
+
+
+// The timed wavelet body follows the graph-owned first four passes and finishes the retained full-resolve interval.
 struct CausticResolveGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -948,6 +978,7 @@ void RendererRayTracingSystem::dispatchCausticResolve(
     dispatchCausticResolveFirstWavelet(commandList, targets, graphEntryStatesOwned);
     dispatchCausticResolveSecondWavelet(commandList, targets, graphEntryStatesOwned);
     dispatchCausticResolveThirdWavelet(commandList, targets, graphEntryStatesOwned);
+    dispatchCausticResolveFourthWavelet(commandList, targets, graphEntryStatesOwned);
     dispatchCausticWaveletResolve(commandList, targets, graphEntryStatesOwned);
 }
 
@@ -1201,6 +1232,55 @@ void RendererRayTracingSystem::dispatchCausticResolveThirdWavelet(
 }
 
 
+void RendererRayTracingSystem::dispatchCausticResolveFourthWavelet(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsPassEntryStates
+){
+    NWB_ASSERT(targets.bindless.valid());
+    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
+    NWB_ASSERT(heap.isInitialized());
+
+    commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
+    commandList.setEnableUavBarriersForTexture(targets.causticHistory.get(), true);
+    commandList.setEnableUavBarriersForTexture(targets.causticResolveHalf.get(), true);
+    commandList.setEnableUavBarriersForTexture(targets.causticResolveGeometry.get(), true);
+    const u32 halfWidth = (targets.width + 1u) / 2u;
+    const u32 halfHeight = (targets.height + 1u) / 2u;
+    const u32 halfGroupsX = DivideUp(halfWidth, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+    const u32 halfGroupsY = DivideUp(halfHeight, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+    const f32 temporalDecay = causticTemporalDecay();
+    const f32 effectiveIntensity = (temporalDecay > 0.f) ? (s_CausticIntensity * (1.f - temporalDecay)) : s_CausticIntensity;
+    const bool prepareToHalfB = (static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) % 2u) == 0u;
+    const __hidden_caustics::CausticResolvePassResources halfA{
+        targets.causticHistory.get(),
+        targets.bindless.causticHistory.slot(),
+        targets.bindless.causticHistoryStorage.slot()
+    };
+    const __hidden_caustics::CausticResolvePassResources halfB{
+        targets.causticResolveHalf.get(),
+        targets.bindless.causticResolveHalf.slot(),
+        targets.bindless.causticResolveHalfStorage.slot()
+    };
+    __hidden_caustics::DispatchCausticResolvePass(
+        commandList,
+        heap,
+        *rayTracingState().m_causticResolvePipeline.get(),
+        targets,
+        graphEntryStatesOwned,
+        graphOwnsPassEntryStates,
+        prepareToHalfB ? halfA : halfB,
+        prepareToHalfB ? halfB : halfA,
+        effectiveIntensity,
+        8u,
+        CausticResolveStage::Wavelet,
+        halfGroupsX,
+        halfGroupsY
+    );
+}
+
+
 void RendererRayTracingSystem::dispatchCausticWaveletResolve(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
@@ -1210,7 +1290,7 @@ void RendererRayTracingSystem::dispatchCausticWaveletResolve(
     Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     NWB_ASSERT(heap.isInitialized());
 
-    // The graph-owned first three wavelet passes have completed. Keep the remaining alternating targets locally ordered.
+    // The graph-owned first four wavelet passes have completed. Keep the remaining alternating targets locally ordered.
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.causticHistory.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.causticResolveHalf.get(), true);
@@ -1245,12 +1325,13 @@ void RendererRayTracingSystem::dispatchCausticWaveletResolve(
         targets.bindless.causticIrradiance.slot(),
         targets.bindless.causticIrradianceStorage.slot()
     };
-    // The first three passes are graph-owned above. The remaining alternating sequence retains local transitions.
+    // The first four passes are graph-owned above. The remaining alternating sequence retains local transitions.
     bool srcIsHalfB = prepareToHalfB;
     srcIsHalfB = !srcIsHalfB;
     srcIsHalfB = !srcIsHalfB;
     srcIsHalfB = !srcIsHalfB;
-    for(u32 pass = 3u; pass < static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT); ++pass){
+    srcIsHalfB = !srcIsHalfB;
+    for(u32 pass = 4u; pass < static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT); ++pass){
         __hidden_caustics::DispatchCausticResolvePass(
             commandList,
             heap,
@@ -1651,6 +1732,25 @@ Core::GpuTaskId RendererRayTracingSystem::declareCausticResolveThirdWaveletTask(
     );
 }
 
+
+Core::GpuTaskId RendererRayTracingSystem::declareCausticResolveFourthWaveletTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    const bool* const causticProducerDispatched,
+    const bool graphEntryStatesOwned
+){
+    return graph.addTask<__hidden_caustics::CausticResolveFourthWaveletGraphTask>(
+        desc,
+        __hidden_caustics::CausticResolveFourthWaveletGraphTask::Payload{
+            .raytracingSystem = this,
+            .targets = &targets,
+            .causticProducerDispatched = causticProducerDispatched,
+            .graphEntryStatesOwned = graphEntryStatesOwned,
+        }
+    );
+}
+
 void RendererRayTracingSystem::dispatchGraphCausticGeometryDownsample(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
@@ -1697,6 +1797,14 @@ void RendererRayTracingSystem::dispatchGraphCausticResolveThirdWavelet(
     const bool graphEntryStatesOwned
 ){
     dispatchCausticResolveThirdWavelet(commandList, targets, graphEntryStatesOwned, true);
+}
+
+void RendererRayTracingSystem::dispatchGraphCausticResolveFourthWavelet(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool graphEntryStatesOwned
+){
+    dispatchCausticResolveFourthWavelet(commandList, targets, graphEntryStatesOwned, true);
 }
 
 bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameTargets& targets, const f32 temporalDecay)const{

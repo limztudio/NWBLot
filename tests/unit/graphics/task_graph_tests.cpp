@@ -5807,9 +5807,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
 }
 
 
-// Photon, geometry, prepare, and the first three wavelet passes occupy distinct graph callbacks. Their packet remains
+// Photon, geometry, prepare, and the first four wavelet passes occupy distinct graph callbacks. Their packet remains
 // unsplit, while compiler barriers own the immutable inputs and early ping-pong UAV-to-SRV handoffs.
-TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareThreeWaveletHandoffs){
+TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFourWaveletHandoffs){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId accumulator = AddTextureMetadata(
@@ -6037,7 +6037,41 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareThreeWaveletHandof
     const Graphics::GpuTaskId thirdWaveletTask = graph.addTask(thirdWaveletDesc);
     ASSERT_TRUE(thirdWaveletTask.valid());
 
-    Graphics::GpuTaskSchedulingHint tailScheduling = thirdWaveletScheduling;
+    Graphics::GpuTaskSchedulingHint fourthWaveletScheduling = thirdWaveletScheduling;
+    fourthWaveletScheduling.mergeWithPrevious = true;
+    const Graphics::GpuTaskResourceUse fourthWaveletUses[] = {
+        {
+            .resource = geometry,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = resolveHalf,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = history,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc fourthWaveletDesc;
+    fourthWaveletDesc
+        .setIdentity(Name("tests/task_graph/caustic_resolve_fourth_wavelet_stage"))
+        .setMarkerLabel("Caustics Resolve Fourth Wavelet")
+        .setQueue(computeRequest)
+        .setScheduling(fourthWaveletScheduling)
+        .setDependencies(&thirdWaveletTask, 1u)
+        .setResourceUses(fourthWaveletUses, LengthOf(fourthWaveletUses))
+    ;
+    const Graphics::GpuTaskId fourthWaveletTask = graph.addTask(fourthWaveletDesc);
+    ASSERT_TRUE(fourthWaveletTask.valid());
+
+    Graphics::GpuTaskSchedulingHint tailScheduling = fourthWaveletScheduling;
     tailScheduling.mergeWithPrevious = true;
     const Graphics::GpuTaskResourceUse tailUses[] = {
         {
@@ -6059,7 +6093,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareThreeWaveletHandof
         .setMarkerLabel("Caustics Resolve Tail")
         .setQueue(computeRequest)
         .setScheduling(tailScheduling)
-        .setDependencies(&thirdWaveletTask, 1u)
+        .setDependencies(&fourthWaveletTask, 1u)
         .setResourceUses(tailUses, LengthOf(tailUses))
     ;
     const Graphics::GpuTaskId tailTask = graph.addTask(tailDesc);
@@ -6109,6 +6143,13 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareThreeWaveletHandof
         history,
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
+    ASSERT_TRUE(HasInferredHazard(
+        analysis,
+        thirdWaveletTask,
+        fourthWaveletTask,
+        resolveHalf,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
 
     const Graphics::GpuSubmissionPacketId photonPacket = compiledGraph.packetForTask(photonTask);
     const Graphics::GpuSubmissionPacketId geometryPacket = compiledGraph.packetForTask(geometryTask);
@@ -6116,6 +6157,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareThreeWaveletHandof
     const Graphics::GpuSubmissionPacketId waveletPacket = compiledGraph.packetForTask(waveletTask);
     const Graphics::GpuSubmissionPacketId secondWaveletPacket = compiledGraph.packetForTask(secondWaveletTask);
     const Graphics::GpuSubmissionPacketId thirdWaveletPacket = compiledGraph.packetForTask(thirdWaveletTask);
+    const Graphics::GpuSubmissionPacketId fourthWaveletPacket = compiledGraph.packetForTask(fourthWaveletTask);
     const Graphics::GpuSubmissionPacketId tailPacket = compiledGraph.packetForTask(tailTask);
     ASSERT_TRUE(photonPacket.valid());
     ASSERT_TRUE(geometryPacket.valid());
@@ -6123,6 +6165,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareThreeWaveletHandof
     ASSERT_TRUE(waveletPacket.valid());
     ASSERT_TRUE(secondWaveletPacket.valid());
     ASSERT_TRUE(thirdWaveletPacket.valid());
+    ASSERT_TRUE(fourthWaveletPacket.valid());
     ASSERT_TRUE(tailPacket.valid());
     EXPECT_EQ(compiledGraph.packetCount(), 1u);
     EXPECT_EQ(geometryPacket, photonPacket);
@@ -6130,24 +6173,29 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareThreeWaveletHandof
     EXPECT_EQ(waveletPacket, photonPacket);
     EXPECT_EQ(secondWaveletPacket, photonPacket);
     EXPECT_EQ(thirdWaveletPacket, photonPacket);
+    EXPECT_EQ(fourthWaveletPacket, photonPacket);
     EXPECT_EQ(tailPacket, photonPacket);
 
     const Graphics::GpuCompiledTask* const compiledPrepare = compiledGraph.findTask(prepareTask);
     const Graphics::GpuCompiledTask* const compiledWavelet = compiledGraph.findTask(waveletTask);
     const Graphics::GpuCompiledTask* const compiledSecondWavelet = compiledGraph.findTask(secondWaveletTask);
     const Graphics::GpuCompiledTask* const compiledThirdWavelet = compiledGraph.findTask(thirdWaveletTask);
+    const Graphics::GpuCompiledTask* const compiledFourthWavelet = compiledGraph.findTask(fourthWaveletTask);
     ASSERT_NE(compiledPrepare, nullptr);
     ASSERT_NE(compiledWavelet, nullptr);
     ASSERT_NE(compiledSecondWavelet, nullptr);
     ASSERT_NE(compiledThirdWavelet, nullptr);
+    ASSERT_NE(compiledFourthWavelet, nullptr);
     const Graphics::GpuCompiledBarrier* const prepareBarriers = compiledGraph.taskPrologueBarriers(prepareTask);
     const Graphics::GpuCompiledBarrier* const waveletBarriers = compiledGraph.taskPrologueBarriers(waveletTask);
     const Graphics::GpuCompiledBarrier* const secondWaveletBarriers = compiledGraph.taskPrologueBarriers(secondWaveletTask);
     const Graphics::GpuCompiledBarrier* const thirdWaveletBarriers = compiledGraph.taskPrologueBarriers(thirdWaveletTask);
+    const Graphics::GpuCompiledBarrier* const fourthWaveletBarriers = compiledGraph.taskPrologueBarriers(fourthWaveletTask);
     ASSERT_NE(prepareBarriers, nullptr);
     ASSERT_NE(waveletBarriers, nullptr);
     ASSERT_NE(secondWaveletBarriers, nullptr);
     ASSERT_NE(thirdWaveletBarriers, nullptr);
+    ASSERT_NE(fourthWaveletBarriers, nullptr);
     bool hasAccumulatorHandoff = false;
     bool hasGeometryHandoff = false;
     for(usize barrierIndex = 0u; barrierIndex < compiledPrepare->prologueBarrierCount; ++barrierIndex){
@@ -6203,6 +6251,18 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareThreeWaveletHandof
         );
     }
     EXPECT_TRUE(hasSecondThirdHandoff);
+
+    bool hasThirdFourthHandoff = false;
+    for(usize barrierIndex = 0u; barrierIndex < compiledFourthWavelet->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = fourthWaveletBarriers[barrierIndex];
+        hasThirdFourthHandoff = hasThirdFourthHandoff || (
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == resolveHalf
+            && barrier.before == Graphics::ResourceStates::UnorderedAccess
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+        );
+    }
+    EXPECT_TRUE(hasThirdFourthHandoff);
 }
 
 

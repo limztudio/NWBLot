@@ -1009,9 +1009,13 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         // prepared, retain the established native fallback rather than publishing a context no later task can validate.
         if(m_shadowVisibilityHybridResourcesPreflighted && !m_shadowVisibilityHybridPipelinePreflighted)
             clearPreparedShadowMaterialContext();
-        // Hybrid tracing retains the established native HW/SW fallback. A later software failure is intentionally
-        // non-fatal, so do not let an opaque-only frozen TLAS build publish a partial hybrid frame.
-        if(rayTracingState().m_sceneHasTransparentOccluder)
+        // Retain the independent frozen TLAS plan only for a fully healthy hybrid preflight. Its recorder retries
+        // the direct hardware path on a generation/BLAS mismatch, while the later software tail remains optional.
+        // If the software side cannot run at all, keep the established direct compatibility path instead.
+        if(
+            rayTracingState().m_sceneHasTransparentOccluder
+            && !m_shadowVisibilityHybridPipelinePreflighted
+        )
             clearPreparedSceneTlasBuild();
         // The scene-BVH pair is independent from the native material-context writer. Retain it for a hybrid frame
         // when preflight completed the software gather: recording revalidates the exact pair, and a miss discards
@@ -1260,13 +1264,28 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
             }
             return true;
         }
-        const bool sceneTlasReady = sceneTlasBuildGraphOwned
+        // A healthy hybrid frozen TLAS plan is independent from the immutable software material/context uploads.
+        // If its native record no longer matches, discard only the plan and retry the current direct TLAS build;
+        // buildSceneTlas preserves a graph-owned SW material triple for the following optional-tail validation.
+        const bool hybridSceneTlasFallback =
+            sceneTlasBuildGraphOwned
+            && m_shadowVisibilityHybridPipelinePreflighted
+        ;
+        bool sceneTlasReady = sceneTlasBuildGraphOwned
             ? recordPreparedSceneTlasBuild(commandList)
             : buildSceneTlas(commandList, scratchArena, shadowMaterialContextBatchGraphOwned)
         ;
+        if(!sceneTlasReady && hybridSceneTlasFallback){
+            clearPreparedSceneTlasBuild();
+            sceneTlasReady = buildSceneTlas(
+                commandList,
+                scratchArena,
+                shadowMaterialContextBatchGraphOwned
+            );
+        }
         if(!sceneTlasReady){
             if(
-                sceneTlasBuildGraphOwned
+                (sceneTlasBuildGraphOwned && !hybridSceneTlasFallback)
                 || (shadowMaterialContextBatchGraphOwned && !hybridSoftwareMaterialContextGraphOwned)
             )
                 return false;

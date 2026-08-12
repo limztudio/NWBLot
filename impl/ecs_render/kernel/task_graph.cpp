@@ -1855,8 +1855,9 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         shadowPrepareDependency = m_sceneBvhInstancesUploadTask;
     }
 
-    // Opaque hardware TLAS builds retain their preflight instance stream inside Shadow Preparation itself. They do
-    // not add an upload packet: the existing first Graphics packet owns the native build and its acceptance cache.
+    // Opaque and healthy hybrid hardware TLAS builds retain their preflight instance stream inside Shadow
+    // Preparation itself. They do not add an upload packet: the existing first Graphics packet owns the native
+    // build and its acceptance cache.
     const bool sceneTlasBuildGraphOwned = m_raytracingSystem.preparedSceneTlasBuildReady();
     if(sceneTlasBuildGraphOwned && !m_rayTracingState.m_tlas){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build has no imported acceleration structure"));

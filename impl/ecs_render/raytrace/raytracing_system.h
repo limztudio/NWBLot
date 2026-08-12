@@ -217,8 +217,8 @@ public:
         Core::GpuUploadBlobId& outInstanceBlob
     )const;
     void confirmPreparedSceneBvhUploads()noexcept;
-    // The opaque hardware TLAS records from this frozen preflight plan in Shadow Preparation. Its static cache
-    // becomes valid only after that packet accepts; transparent/hybrid frames retain the compatibility path.
+    // Opaque and healthy hybrid hardware TLAS work records from this frozen preflight plan in Shadow Preparation.
+    // Its static cache becomes valid only after that packet accepts; a hybrid record miss retries direct TLAS work.
     [[nodiscard]] bool preparedSceneTlasBuildReady()const noexcept;
     void confirmPreparedSceneTlasBuild()noexcept;
     // Opaque and independent hybrid hardware BLAS build/refit choices retain their selected handles through
@@ -228,8 +228,8 @@ public:
     [[nodiscard]] const PreparedMeshBlasBuildVector& preparedMeshBlasBuilds()const noexcept;
     void confirmPreparedMeshBlasBuilds()noexcept;
     // Software-only frames and the independent per-mesh portion of hybrid frames freeze selected build/refit work
-    // against its shared scratch generation. Hybrid scene/material construction remains native because its SW half
-    // is non-fatal after hardware preparation has already succeeded.
+    // against its shared scratch generation. Hybrid scene/material snapshots remain independently graph-owned while
+    // their optional software tail preserves its narrow direct compatibility fallback.
     [[nodiscard]] bool preparedMeshSwBvhBuildsReady()const noexcept;
     [[nodiscard]] const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds()const noexcept;
     void confirmPreparedMeshSwBvhBuilds()noexcept;
@@ -525,8 +525,8 @@ private:
     bool m_preparedShadowMaterialContextStatic = false;
     bool m_preparedShadowMaterialContextReady = false;
     // The CPU-built software scene BVH must retain node and leaf-instance bytes together: each node's leaf range
-    // indexes this exact instance stream. Hybrid frames may graph-own this independent pair while their material
-    // context remains compatibility-direct until both paths use one frozen scene plan.
+    // indexes this exact instance stream. Hybrid frames graph-own this independent pair and their final
+    // software-compatible material context, while the hardware TLAS plan retains its own retry boundary.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedSceneBvhNodeBytes;
     Vector<u8, Core::Alloc::GlobalArena> m_preparedSceneBvhInstanceBytes;
     Core::BufferHandle m_preparedSceneBvhNodeBuffer;

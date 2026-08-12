@@ -1345,17 +1345,23 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         }
     }
 
-    // Freeze only the opaque hardware route. Hybrid recording deliberately keeps its native HW/SW fallback: its
-    // later software gather is non-fatal and must not accept a presumed final hardware-only snapshot.
-    if(!commandList && !canReuseTlas && !rayTracingState().m_sceneHasTransparentOccluder){
+    // Freeze the selected hardware instance stream for opaque and hybrid frames. Hybrid recording keeps a direct
+    // retry boundary: if the frozen plan loses its generation or BLAS identity, it rebuilds the current TLAS and
+    // retains the valid opaque result before the optional software tail decides whether transparent tracing runs.
+    if(!commandList && !canReuseTlas){
         if(!capturePreparedSceneTlasBuild(
             staticScene,
             tlasStaticSceneHash,
             instances,
             instanceBlases
         )){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: could not freeze opaque scene TLAS build after preflight"));
-            return false;
+            if(!rayTracingState().m_sceneHasTransparentOccluder){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: could not freeze opaque scene TLAS build after preflight"));
+                return false;
+            }
+            // A hybrid capture miss remains a direct compatibility fallback. The software material/scene snapshots
+            // may still be graph-owned independently, so do not discard the whole preflight transaction here.
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze hybrid scene TLAS build; retaining direct retry fallback"));
         }
     }
 

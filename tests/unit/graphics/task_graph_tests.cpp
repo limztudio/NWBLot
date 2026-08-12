@@ -5807,9 +5807,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
 }
 
 
-// Photon, geometry, prepare, and the first wavelet pass occupy distinct graph callbacks. Their packet remains
-// unsplit, while compiler barriers own the immutable inputs and first ping-pong UAV-to-SRV handoff.
-TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareWaveletHandoffs){
+// Photon, geometry, prepare, and the first two wavelet passes occupy distinct graph callbacks. Their packet remains
+// unsplit, while compiler barriers own the immutable inputs and early ping-pong UAV-to-SRV handoffs.
+TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareTwoWaveletHandoffs){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId accumulator = AddTextureMetadata(
@@ -5969,7 +5969,41 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareWaveletHandoffs){
     const Graphics::GpuTaskId waveletTask = graph.addTask(waveletDesc);
     ASSERT_TRUE(waveletTask.valid());
 
-    Graphics::GpuTaskSchedulingHint tailScheduling = waveletScheduling;
+    Graphics::GpuTaskSchedulingHint secondWaveletScheduling = waveletScheduling;
+    secondWaveletScheduling.mergeWithPrevious = true;
+    const Graphics::GpuTaskResourceUse secondWaveletUses[] = {
+        {
+            .resource = geometry,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = resolveHalf,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = history,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc secondWaveletDesc;
+    secondWaveletDesc
+        .setIdentity(Name("tests/task_graph/caustic_resolve_second_wavelet_stage"))
+        .setMarkerLabel("Caustics Resolve Second Wavelet")
+        .setQueue(computeRequest)
+        .setScheduling(secondWaveletScheduling)
+        .setDependencies(&waveletTask, 1u)
+        .setResourceUses(secondWaveletUses, LengthOf(secondWaveletUses))
+    ;
+    const Graphics::GpuTaskId secondWaveletTask = graph.addTask(secondWaveletDesc);
+    ASSERT_TRUE(secondWaveletTask.valid());
+
+    Graphics::GpuTaskSchedulingHint tailScheduling = secondWaveletScheduling;
     tailScheduling.mergeWithPrevious = true;
     const Graphics::GpuTaskResourceUse tailUses[] = {
         {
@@ -5991,7 +6025,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareWaveletHandoffs){
         .setMarkerLabel("Caustics Resolve Tail")
         .setQueue(computeRequest)
         .setScheduling(tailScheduling)
-        .setDependencies(&waveletTask, 1u)
+        .setDependencies(&secondWaveletTask, 1u)
         .setResourceUses(tailUses, LengthOf(tailUses))
     ;
     const Graphics::GpuTaskId tailTask = graph.addTask(tailDesc);
@@ -6027,31 +6061,45 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareWaveletHandoffs){
         history,
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
+    ASSERT_TRUE(HasInferredHazard(
+        analysis,
+        waveletTask,
+        secondWaveletTask,
+        resolveHalf,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
 
     const Graphics::GpuSubmissionPacketId photonPacket = compiledGraph.packetForTask(photonTask);
     const Graphics::GpuSubmissionPacketId geometryPacket = compiledGraph.packetForTask(geometryTask);
     const Graphics::GpuSubmissionPacketId preparePacket = compiledGraph.packetForTask(prepareTask);
     const Graphics::GpuSubmissionPacketId waveletPacket = compiledGraph.packetForTask(waveletTask);
+    const Graphics::GpuSubmissionPacketId secondWaveletPacket = compiledGraph.packetForTask(secondWaveletTask);
     const Graphics::GpuSubmissionPacketId tailPacket = compiledGraph.packetForTask(tailTask);
     ASSERT_TRUE(photonPacket.valid());
     ASSERT_TRUE(geometryPacket.valid());
     ASSERT_TRUE(preparePacket.valid());
     ASSERT_TRUE(waveletPacket.valid());
+    ASSERT_TRUE(secondWaveletPacket.valid());
     ASSERT_TRUE(tailPacket.valid());
     EXPECT_EQ(compiledGraph.packetCount(), 1u);
     EXPECT_EQ(geometryPacket, photonPacket);
     EXPECT_EQ(preparePacket, photonPacket);
     EXPECT_EQ(waveletPacket, photonPacket);
+    EXPECT_EQ(secondWaveletPacket, photonPacket);
     EXPECT_EQ(tailPacket, photonPacket);
 
     const Graphics::GpuCompiledTask* const compiledPrepare = compiledGraph.findTask(prepareTask);
     const Graphics::GpuCompiledTask* const compiledWavelet = compiledGraph.findTask(waveletTask);
+    const Graphics::GpuCompiledTask* const compiledSecondWavelet = compiledGraph.findTask(secondWaveletTask);
     ASSERT_NE(compiledPrepare, nullptr);
     ASSERT_NE(compiledWavelet, nullptr);
+    ASSERT_NE(compiledSecondWavelet, nullptr);
     const Graphics::GpuCompiledBarrier* const prepareBarriers = compiledGraph.taskPrologueBarriers(prepareTask);
     const Graphics::GpuCompiledBarrier* const waveletBarriers = compiledGraph.taskPrologueBarriers(waveletTask);
+    const Graphics::GpuCompiledBarrier* const secondWaveletBarriers = compiledGraph.taskPrologueBarriers(secondWaveletTask);
     ASSERT_NE(prepareBarriers, nullptr);
     ASSERT_NE(waveletBarriers, nullptr);
+    ASSERT_NE(secondWaveletBarriers, nullptr);
     bool hasAccumulatorHandoff = false;
     bool hasGeometryHandoff = false;
     for(usize barrierIndex = 0u; barrierIndex < compiledPrepare->prologueBarrierCount; ++barrierIndex){
@@ -6083,6 +6131,18 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareWaveletHandoffs){
         );
     }
     EXPECT_TRUE(hasPrepareWaveletHandoff);
+
+    bool hasWaveletSecondHandoff = false;
+    for(usize barrierIndex = 0u; barrierIndex < compiledSecondWavelet->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = secondWaveletBarriers[barrierIndex];
+        hasWaveletSecondHandoff = hasWaveletSecondHandoff || (
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == resolveHalf
+            && barrier.before == Graphics::ResourceStates::UnorderedAccess
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+        );
+    }
+    EXPECT_TRUE(hasWaveletSecondHandoff);
 }
 
 

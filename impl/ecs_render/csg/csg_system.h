@@ -53,7 +53,12 @@ public:
         const CsgFrameGpuData& csgFrameData,
         bool receiverSpanOutputImageStatesGraphOwned = false
     );
-    void dispatchCsgIntervalCombine(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
+    void dispatchCsgIntervalCombine(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        const CsgFrameGpuData& csgFrameData,
+        bool removedIntervalOutputImageStatesGraphOwned = false
+    );
     void renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
     [[nodiscard]] bool createCsgIntervalSampleStateBuffer();
     [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);

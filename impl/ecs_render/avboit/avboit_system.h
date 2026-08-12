@@ -49,7 +49,8 @@ public:
         bool preparedTransparentCsgIntervalTargetsGraphOwned = false,
         bool preparedTransparentCsgReceiverSurfaceImageStatesGraphOwned = false,
         bool preparedTransparentCsgIntervalPeelTargetStatesGraphOwned = false,
-        bool preparedTransparentCsgReceiverSpanOutputImageStatesGraphOwned = false
+        bool preparedTransparentCsgReceiverSpanOutputImageStatesGraphOwned = false,
+        bool preparedTransparentCsgRemovedIntervalOutputImageStatesGraphOwned = false
     );
     void renderAvboitOccupancyPass(
         Core::CommandList& commandList,
@@ -139,7 +140,8 @@ private:
         bool intervalTargetsGraphOwned,
         bool receiverSurfaceImageStatesGraphOwned,
         bool intervalPeelTargetStatesGraphOwned,
-        bool receiverSpanOutputImageStatesGraphOwned
+        bool receiverSpanOutputImageStatesGraphOwned,
+        bool removedIntervalOutputImageStatesGraphOwned
     );
 };
 

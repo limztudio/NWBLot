@@ -154,11 +154,11 @@ can receive an unconditional final sign-off.
   bindless-slot `ConstantBuffer` reads. Its two persistent CSG interval values (`csgIntervalId` over all peel
   layers and slice-zero `csgReceiverEventCount`) now clear through a frozen-rect graph task immediately before the
   opaque native producer, then explicitly hand off from `CopyDest` to `UnorderedAccess`. All three peel arrays
-  (`csgCapBackNormal`, `csgIntervalDepth`, and `csgIntervalId`) plus receiver-surface event and receiver-span images
-  now declare their exact `UnorderedAccess` ranges before normal opaque and prepared-transparent thunks record, so
-  those producers no longer stage their initial StorageImage states natively. The native receiver-span event-image
-  and later interval-combine UAV fences, wider CSG target lifecycle, and direct compatibility clear remain
-  deliberately outside this bounded task. The transparent CSG
+  (`csgCapBackNormal`, `csgIntervalDepth`, and `csgIntervalId`), receiver-surface event and receiver-span images,
+  and removed-interval outputs now declare their exact `UnorderedAccess` ranges before normal opaque and
+  prepared-transparent thunks record, so those producers no longer stage their initial StorageImage states natively.
+  The native receiver-span event-image, interval-combine input, and post-combine sampling UAV fences, wider CSG
+  target lifecycle, and direct compatibility clear remain deliberately outside this bounded task. The transparent CSG
   interval producer now does the same within AVBOIT-pre:
   it freezes its fresh mesh-view work region, receiver-surface draw ordering, material instance/typed data, and CSG
   receiver/cutter/context/sample payloads during graph declaration. Its serial Graphics upload chain merges into
@@ -245,6 +245,7 @@ can receive an unconditional final sign-off.
 | Graph-owned CSG receiver-surface image-state follow-up: 54 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; opaque G-buffer and prepared-transparent AVBOIT declare all receiver-event-data layers and the receiver-event-count layer as `UnorderedAccess` before their native material thunks record. The normal graph no longer manually transitions that StorageImage pair; unprepared and direct compatibility paths retain their bridge while the remaining CSG image lifecycle stays explicitly out of scope. |
 | Graph-owned CSG interval-peel state follow-up: 54 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; opaque G-buffer and prepared-transparent AVBOIT now declare every cap-back-normal, interval-depth, and interval-ID peel layer as `UnorderedAccess` before their native interval dispatches. The direct first-peel state bridge is removed only for those graph callers; compatibility paths and the native combine-stage UAV barrier remain intact. |
 | Graph-owned CSG receiver-span output state follow-up: 54 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; opaque G-buffer and prepared-transparent AVBOIT now declare every receiver-span-data layer and the receiver-span-count layer as `UnorderedAccess` before their native span dispatches. The graph removes only output setup; native event-image and span-to-combine UAV fences remain intact, as do direct compatibility paths. |
+| Graph-owned CSG removed-interval output state follow-up: 54 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; opaque G-buffer and prepared-transparent AVBOIT now declare every removed-interval depth/cap/data layer and the removed-interval-count layer as `UnorderedAccess` before their native combine dispatches. The graph removes only output setup; native combine-input and post-combine sampling UAV fences remain intact, as do direct compatibility paths. |
 | Graph-owned lagged deferred bindless-selector follow-up: FrontierSafe graph unit and descriptor-buffer smoke | passed; the immutable history-selector upload is pinned to and merged into Deferred Lighting's existing Compute packet, retains the external history completion wait, and hands off `Common` to `ConstantBuffer` without extending the Lighting-to-Composite range |
 | Graph-owned ray-trace material-context selector follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and opaque CSG capture | passed; a post-preflight immutable selector blob merges into Shadow Preparation, publishes `Common`, and is logically handed off there to the later Compute trace consumers |
 | Graph-owned caustic emission-target follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and caustic-sphere capture | passed; the preflight-frozen refractive AABB payload merges into Shadow Preparation, publishes `Common`, and is logically handed off there to software and hardware caustic consumers |

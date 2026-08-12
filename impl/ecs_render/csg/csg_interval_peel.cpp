@@ -47,17 +47,24 @@ static void SetCsgReceiverSpanStorageStates(
     }
 }
 
-static void SetCsgIntervalCombineStorageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
-    // The combine pass loads through StorageImage aliases, so all inputs retain the descriptor's GENERAL layout.
+static void SetCsgIntervalCombineStorageStates(
+    Core::CommandList& commandList,
+    const DeferredFrameTargets& targets,
+    const bool removedIntervalOutputImageStatesGraphOwned
+){
+    // The combine pass loads these prior-stage values through StorageImage aliases, so retain their GENERAL-layout
+    // same-state UAV transitions as the peel/span-write -> combine-read fence within this aggregate native task.
     commandList.setTextureState(targets.csgCapBackNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
     commandList.setTextureState(targets.csgIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
     commandList.setTextureState(targets.csgIntervalId.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
     commandList.setTextureState(targets.csgReceiverSpanData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
     commandList.setTextureState(targets.csgReceiverSpanCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgRemovedIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgRemovedIntervalCapNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgRemovedIntervalData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgRemovedIntervalCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    if(!removedIntervalOutputImageStatesGraphOwned){
+        commandList.setTextureState(targets.csgRemovedIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.csgRemovedIntervalCapNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.csgRemovedIntervalData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.csgRemovedIntervalCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    }
 }
 
 static void SetCsgIntervalSampleStorageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
@@ -274,7 +281,8 @@ void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
 void RendererCsgSystem::dispatchCsgIntervalCombine(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const CsgFrameGpuData& csgFrameData
+    const CsgFrameGpuData& csgFrameData,
+    const bool removedIntervalOutputImageStatesGraphOwned
 ){
     if(!csgFrameData.hasWork())
         return;
@@ -284,7 +292,11 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalCombine, graphics().getDevice(), commandList);
 
     commandList.endRenderPass();
-    __hidden_csg_interval_peel::SetCsgIntervalCombineStorageStates(commandList, targets);
+    __hidden_csg_interval_peel::SetCsgIntervalCombineStorageStates(
+        commandList,
+        targets,
+        removedIntervalOutputImageStatesGraphOwned
+    );
     commandList.commitBarriers();
 
     __hidden_csg_interval_peel::DispatchCsgIntervalCompute(

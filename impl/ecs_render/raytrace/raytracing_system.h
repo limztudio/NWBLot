@@ -603,8 +603,13 @@ private:
     void advanceCausticTemporalReuse();
     // Bootstrap or decay temporal splat accumulation before photon atomic adds.
     void prepareCausticAccumulatorForSplat(Core::CommandList& commandList, DeferredFrameTargets& targets, f32 decayFactor);
-    // Shared software/hardware caustic wavelet resolve.
-    void dispatchCausticResolve(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    // Shared software/hardware caustic wavelet resolve. Normal graph callers already declare the geometry-downsample
+    // entry states; direct compatibility callers retain that native setup.
+    void dispatchCausticResolve(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned = false
+    );
     [[nodiscard]] bool ensureCausticRtPipeline();
     [[nodiscard]] bool ensureBvhSortPipeline();
     [[nodiscard]] bool ensureBvhSortBuffers(usize paddedCount);

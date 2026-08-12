@@ -649,7 +649,11 @@ void RendererRayTracingSystem::confirmCausticAccumulatorBootstrapClear(){
     rayTracingState().m_causticAccumulatorInitialized = true;
 }
 
-void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& commandList, DeferredFrameTargets& targets){
+void RendererRayTracingSystem::dispatchCausticResolve(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool graphEntryStatesOwned
+){
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticResolve, graphics().getDevice(), commandList);
     NWB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
@@ -670,12 +674,16 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
     const u32 fullGroupsX = DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const u32 fullGroupsY = DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
 
-    // Downsample geometry once for all edge-aware wavelet taps.
+    // Downsample geometry once for all edge-aware wavelet taps. The normal deferred graph already lowers these
+    // descriptor-visible sources and the writable cache through the selected caustics task's declared uses; direct
+    // compatibility callers retain the original native setup.
     {
-        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.causticResolveGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.commitBarriers();
+        if(!graphEntryStatesOwned){
+            commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(targets.causticResolveGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
+            commandList.commitBarriers();
+        }
 
         CausticGeometryDownsamplePushConstants geometryPush;
         geometryPush.width = targets.width;
@@ -1119,7 +1127,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
         recordPhotons();
     }
 
-    dispatchCausticResolve(commandList, targets);
+    dispatchCausticResolve(commandList, targets, graphEntryStatesOwned);
 
     if(!rayTracingState().m_swCausticDispatchLogged){
         rayTracingState().m_swCausticDispatchLogged = true;
@@ -1642,7 +1650,7 @@ bool RendererRayTracingSystem::renderHwCaustics(
         recordPhotons();
     }
 
-    dispatchCausticResolve(commandList, targets);
+    dispatchCausticResolve(commandList, targets, graphEntryStatesOwned);
 
     if(!rayTracingState().m_hwCausticDispatchLogged){
         rayTracingState().m_hwCausticDispatchLogged = true;

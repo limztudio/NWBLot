@@ -934,7 +934,9 @@ struct NativePacketPostGbufferTraceGeometryProbeTask{
 // Software caustics follows Shadow Visibility and uses the same descriptor-selected geometry plus its own
 // emission/mesh-view inputs. Keep this callback getter-only so a missing graph state seed cannot be hidden by
 // renderer-native setup. The graph-owned irradiance and fresh-accumulator clears must hand off CopyDest to UAV
-// before this callback; warm temporal decay has its own preceding graph task and resolve remains local.
+// before this callback; warm temporal decay has its own preceding graph task. The graph also provides the
+// geometry-downsample's world/depth SRV and geometry-cache UAV entry states; only subsequent resolve handoffs stay
+// task-local.
 struct NativePacketSoftwareCausticsEntryProbeTask{
     static constexpr u32 s_ShaderBufferCount = 11u;
     static constexpr u32 s_ConstantBufferCount = 4u;

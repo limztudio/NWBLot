@@ -5231,7 +5231,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedPostGbufferTraceGeometryStates){
 // Software caustics succeeds the graph-owned shadow callback. Its photon shader samples the same depth layout and
 // descriptor-selected traversal inputs, so the task must inherit those states rather than reintroducing a native
 // entry bridge. A fresh temporal accumulator is zeroed by a typed graph clear; warm decay now has its own preceding
-// graph task, while resolve work remains task-local and is represented here only by its entry UAvs.
+// graph task, and the geometry-downsample starts from these graph-owned entry states while later resolve handoffs
+// remain task-local.
 TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

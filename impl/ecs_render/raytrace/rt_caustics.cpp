@@ -710,8 +710,12 @@ void RendererRayTracingSystem::dispatchCausticResolve(
         NWB_ASSERT(input.texture);
         NWB_ASSERT(output.texture);
         NWB_ASSERT(input.texture != output.texture);
-        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        // The normal caustics task declared these shared G-buffer reads before geometry downsample, and no resolve
+        // stage mutates either texture. Compatibility callers retain the original per-pass state reassertion.
+        if(!graphEntryStatesOwned){
+            commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        }
         commandList.setTextureState(input.texture, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.causticResolveGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(output.texture, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);

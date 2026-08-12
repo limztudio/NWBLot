@@ -1216,73 +1216,68 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         rayTracingState().m_tlasHeapHandle = tlasHeapHandle;
     }
 
-    // Preserve a valid typed buffer and hash the descriptor-slot representation.
-    if(shadowMaterialTypedBytes.empty())
-        shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
-    usize materialTypedUploadBytes = 0u;
-    if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(shadowMaterialTypedBytes, materialTypedUploadBytes))
-        return false;
-    if(
+    // A healthy hybrid packet publishes the software-compatible descriptor slots as the final shared material
+    // context. The HW TLAS itself never reads that buffer; its caustic/surfel consumers run after the software tail
+    // has revalidated the frozen bytes. Do not overwrite or validate it as a HW-only snapshot here. If that optional
+    // tail misses, recordPreflightShadowVisibilityResources clears the plan and calls this path again directly.
+    const bool hybridSoftwareMaterialContextGraphOwned =
         commandList
-        && !HasPreparedShadowMaterialContextBuffers(
-            rayTracingState(),
-            instanceMaterials.size(),
-            shadowInstanceData.size(),
-            materialTypedUploadBytes
-        )
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW shadow material context changed after preflight; skipping recording-time replacement"));
-        return false;
-    }
-    const u64 hwMaterialContextHash = ComputeShadowMaterialContextHash(
-        instanceMaterials,
-        shadowInstanceData,
-        shadowMaterialTypedBytes
-    );
-    const bool canReuseHwMaterialContext =
-        staticScene
-        && !rayTracingState().m_sceneHasTransparentOccluder
-        && rayTracingState().m_hwShadowMaterialContextHashValid
-        && rayTracingState().m_hwShadowMaterialContextHash == hwMaterialContextHash
-        && HasPreparedShadowMaterialContextBuffers(
-            rayTracingState(),
-            instanceMaterials.size(),
-            shadowInstanceData.size(),
-            materialTypedUploadBytes
-        )
+        && shadowMaterialContextBatchGraphOwned
+        && m_shadowVisibilityHybridPipelinePreflighted
+        && m_preparedShadowMaterialContextReady
+        && m_preparedShadowMaterialContextRoute == PreparedShadowMaterialContextRoute::Software
     ;
-    if(!canReuseHwMaterialContext){
-        if(!commandList){
-            if(
-                !ensureShadowInstanceMaterialBuffer(instances.size())
-                || !ensureShadowInstanceContextBuffer(shadowInstanceData.size())
-                || !ensureShadowMaterialTypedBuffer(materialTypedUploadBytes)
-                || !HasPreparedShadowMaterialContextBuffers(
-                    rayTracingState(),
-                    instanceMaterials.size(),
-                    shadowInstanceData.size(),
-                    materialTypedUploadBytes
-                )
-            )
-                return false;
-            if(!capturePreparedShadowMaterialContext(
-                PreparedShadowMaterialContextRoute::Hardware,
-                staticScene,
-                hwMaterialContextHash,
-                instanceMaterials.data(),
+    if(!hybridSoftwareMaterialContextGraphOwned){
+        // Preserve a valid typed buffer and hash the descriptor-slot representation.
+        if(shadowMaterialTypedBytes.empty())
+            shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
+        usize materialTypedUploadBytes = 0u;
+        if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(shadowMaterialTypedBytes, materialTypedUploadBytes))
+            return false;
+        if(
+            commandList
+            && !HasPreparedShadowMaterialContextBuffers(
+                rayTracingState(),
                 instanceMaterials.size(),
-                instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu),
-                shadowInstanceData.data(),
                 shadowInstanceData.size(),
-                shadowInstanceData.size() * sizeof(InstanceGpuData),
-                shadowMaterialTypedBytes.data(),
                 materialTypedUploadBytes
-            ))
-                return false;
+            )
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW shadow material context changed after preflight; skipping recording-time replacement"));
+            return false;
         }
-        if(commandList){
-            if(shadowMaterialContextBatchGraphOwned){
-                if(!matchesPreparedShadowMaterialContext(
+        const u64 hwMaterialContextHash = ComputeShadowMaterialContextHash(
+            instanceMaterials,
+            shadowInstanceData,
+            shadowMaterialTypedBytes
+        );
+        const bool canReuseHwMaterialContext =
+            staticScene
+            && !rayTracingState().m_sceneHasTransparentOccluder
+            && rayTracingState().m_hwShadowMaterialContextHashValid
+            && rayTracingState().m_hwShadowMaterialContextHash == hwMaterialContextHash
+            && HasPreparedShadowMaterialContextBuffers(
+                rayTracingState(),
+                instanceMaterials.size(),
+                shadowInstanceData.size(),
+                materialTypedUploadBytes
+            )
+        ;
+        if(!canReuseHwMaterialContext){
+            if(!commandList){
+                if(
+                    !ensureShadowInstanceMaterialBuffer(instances.size())
+                    || !ensureShadowInstanceContextBuffer(shadowInstanceData.size())
+                    || !ensureShadowMaterialTypedBuffer(materialTypedUploadBytes)
+                    || !HasPreparedShadowMaterialContextBuffers(
+                        rayTracingState(),
+                        instanceMaterials.size(),
+                        shadowInstanceData.size(),
+                        materialTypedUploadBytes
+                    )
+                )
+                    return false;
+                if(!capturePreparedShadowMaterialContext(
                     PreparedShadowMaterialContextRoute::Hardware,
                     staticScene,
                     hwMaterialContextHash,
@@ -1294,42 +1289,60 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
                     shadowInstanceData.size() * sizeof(InstanceGpuData),
                     shadowMaterialTypedBytes.data(),
                     materialTypedUploadBytes
-                )){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW shadow material context changed after graph preflight; rejecting frozen upload batch"));
-                    return false;
-                }
-            }
-            else{
-                Core::Buffer* materialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
-                commandList->setBufferState(materialBuffer, Core::ResourceStates::CopyDest);
-                commandList->commitBarriers();
-                commandList->writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
-                commandList->setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
-                commandList->commitBarriers();
-                if(!UploadPreparedShadowMaterialContextBuffers(
-                    *commandList,
-                    *rayTracingState().m_shadowInstanceBuffer.get(),
-                    *rayTracingState().m_shadowMaterialTypedBuffer.get(),
-                    shadowInstanceData,
-                    shadowMaterialTypedBytes,
-                    materialTypedUploadBytes
                 ))
                     return false;
-
-                if(staticScene){
-                    rayTracingState().m_hwShadowMaterialContextHash = hwMaterialContextHash;
-                    rayTracingState().m_hwShadowMaterialContextHashValid = true;
+            }
+            if(commandList){
+                if(shadowMaterialContextBatchGraphOwned){
+                    if(!matchesPreparedShadowMaterialContext(
+                        PreparedShadowMaterialContextRoute::Hardware,
+                        staticScene,
+                        hwMaterialContextHash,
+                        instanceMaterials.data(),
+                        instanceMaterials.size(),
+                        instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu),
+                        shadowInstanceData.data(),
+                        shadowInstanceData.size(),
+                        shadowInstanceData.size() * sizeof(InstanceGpuData),
+                        shadowMaterialTypedBytes.data(),
+                        materialTypedUploadBytes
+                    )){
+                        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW shadow material context changed after graph preflight; rejecting frozen upload batch"));
+                        return false;
+                    }
                 }
-                else
-                    rayTracingState().m_hwShadowMaterialContextHashValid = false;
-                // HW context cannot represent SW node slots.
-                rayTracingState().m_swShadowMaterialContextHashValid = false;
+                else{
+                    Core::Buffer* materialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
+                    commandList->setBufferState(materialBuffer, Core::ResourceStates::CopyDest);
+                    commandList->commitBarriers();
+                    commandList->writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
+                    commandList->setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
+                    commandList->commitBarriers();
+                    if(!UploadPreparedShadowMaterialContextBuffers(
+                        *commandList,
+                        *rayTracingState().m_shadowInstanceBuffer.get(),
+                        *rayTracingState().m_shadowMaterialTypedBuffer.get(),
+                        shadowInstanceData,
+                        shadowMaterialTypedBytes,
+                        materialTypedUploadBytes
+                    ))
+                        return false;
+
+                    if(staticScene){
+                        rayTracingState().m_hwShadowMaterialContextHash = hwMaterialContextHash;
+                        rayTracingState().m_hwShadowMaterialContextHashValid = true;
+                    }
+                    else
+                        rayTracingState().m_hwShadowMaterialContextHashValid = false;
+                    // HW context cannot represent SW node slots.
+                    rayTracingState().m_swShadowMaterialContextHashValid = false;
+                }
             }
         }
-    }
-    else if(commandList && shadowMaterialContextBatchGraphOwned){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned HW shadow material context unexpectedly reused a native cache"));
-        return false;
+        else if(commandList && shadowMaterialContextBatchGraphOwned){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned HW shadow material context unexpectedly reused a native cache"));
+            return false;
+        }
     }
 
     // Freeze only the opaque hardware route. Hybrid recording deliberately keeps its native HW/SW fallback: its

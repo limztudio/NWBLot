@@ -161,6 +161,7 @@ public:
 #if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
     // Test-only proxy; keep the ray-tracing subsystem itself private to ordinary renderer callers.
     void forceHybridSceneTraversalFallbackForTesting()noexcept;
+    void forceHybridHardwareFallbackSnapshotStaleForTesting()noexcept;
 #endif
 
 private:

@@ -768,6 +768,10 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
 void RendererRayTracingSystem::forceHybridSceneTraversalFallbackForTesting()noexcept{
     m_forceHybridSceneTraversalFallbackForTesting = true;
 }
+
+void RendererRayTracingSystem::forceHybridHardwareFallbackSnapshotStaleForTesting()noexcept{
+    m_forceHybridHardwareFallbackSnapshotStaleForTesting = true;
+}
 #endif
 
 bool RendererRayTracingSystem::retainPreparedSceneBvhUploads(
@@ -1740,10 +1744,19 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
                     // HW snapshot retained before the SW context replaced it; only a stale snapshot regathers via
                     // the established direct compatibility retry.
                     discardHybridGraphMaterialContext();
-                    if(
-                        !recordPreparedHybridHardwareMaterialContextFallback(commandList)
-                        && !buildSceneTlas(commandList, scratchArena, false)
-                    ){
+                    const bool restoredFrozenHardwareContext =
+                        recordPreparedHybridHardwareMaterialContextFallback(commandList);
+                    const bool restoredDirectHardwareContext =
+                        !restoredFrozenHardwareContext
+                        && buildSceneTlas(commandList, scratchArena, false);
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+                    if(m_expectHybridHardwareFallbackDirectRetryForTesting){
+                        m_expectHybridHardwareFallbackDirectRetryForTesting = false;
+                        if(restoredDirectHardwareContext)
+                            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test hybrid hardware material fallback retried directly"));
+                    }
+#endif
+                    if(!restoredFrozenHardwareContext && !restoredDirectHardwareContext){
                         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid hardware material-context fallback failed; caustics and surfel GI are disabled this frame"));
                         disableHybridMaterialConsumers();
                     }

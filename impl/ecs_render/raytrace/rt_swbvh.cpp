@@ -1395,6 +1395,14 @@ bool RendererRayTracingSystem::buildSceneSwBvh(
 
 bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallback(Core::CommandList& commandList){
     m_preparedHybridHardwareFallbackRecorded = false;
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+    if(m_forceHybridHardwareFallbackSnapshotStaleForTesting){
+        m_forceHybridHardwareFallbackSnapshotStaleForTesting = false;
+        m_expectHybridHardwareFallbackDirectRetryForTesting = true;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test forced frozen hybrid hardware material context stale"));
+        return false;
+    }
+#endif
     const auto isStorageHandle = [](const Core::GpuDescriptorHandle handle){
         return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
     };

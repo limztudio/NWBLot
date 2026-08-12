@@ -248,6 +248,8 @@ public:
     // One-shot test seam for the healthy hybrid tail. It models a traversal-table miss whose direct revalidation also
     // cannot record, so Shadow Preparation must retain the opaque-HW fallback without accepting stale SW state.
     void forceHybridSceneTraversalFallbackForTesting()noexcept;
+    // Makes the retained HW fallback snapshot fail validation once, proving the direct hardware retry boundary.
+    void forceHybridHardwareFallbackSnapshotStaleForTesting()noexcept;
 #endif
     // Opaque and healthy hybrid hardware TLAS work records from this frozen preflight plan in Shadow Preparation.
     // Its static cache becomes valid only after that packet accepts; a hybrid record miss retries direct TLAS work.
@@ -618,6 +620,8 @@ private:
 #if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
     bool m_forceHybridSceneTraversalFallbackForTesting = false;
     bool m_expectHybridSceneTraversalRecoveryForTesting = false;
+    bool m_forceHybridHardwareFallbackSnapshotStaleForTesting = false;
+    bool m_expectHybridHardwareFallbackDirectRetryForTesting = false;
 #endif
     // RayTracingInstanceDesc stores raw BLAS pointers, so the frozen TLAS plan retains every corresponding BLAS
     // handle until Shadow Preparation accepts or discards it. The selected TLAS/backing generation is retained too.

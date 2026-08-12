@@ -5434,6 +5434,12 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
         false,
         false,
     };
+    const Graphics::GpuQueueRequest computeTransferRequest{
+        Graphics::GpuQueueCapability::Transfer,
+        Graphics::GpuQueuePreference::Compute,
+        true,
+        false,
+    };
     Graphics::GpuTaskSchedulingHint boundaryScheduling;
     boundaryScheduling.cost = Graphics::GpuTaskCostHint::Large;
     boundaryScheduling.forceSubmissionBoundary = true;
@@ -5513,6 +5519,25 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
     const Graphics::GpuTaskId shadowVisibilityTask = graph.addTask(shadowVisibilityDesc);
     ASSERT_TRUE(shadowVisibilityTask.valid());
 
+    // The no-producer black result starts the Software Caustics packet; the producer merges with it below.
+    Graphics::GpuTaskSchedulingHint irradianceClearScheduling;
+    irradianceClearScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    irradianceClearScheduling.allowPacketMerge = true;
+    const Graphics::GpuTaskResourceUse irradianceClearUses[] = {
+        { .resource = causticIrradiance, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+    };
+    Graphics::GpuTaskDesc irradianceClearDesc;
+    irradianceClearDesc
+        .setIdentity(Name("tests/task_graph/graph_owned_software_caustics_irradiance_clear"))
+        .setMarkerLabel("Software Caustics Irradiance Clear")
+        .setQueue(computeTransferRequest)
+        .setScheduling(irradianceClearScheduling)
+        .setDependencies(&shadowVisibilityTask, 1u)
+        .setResourceUses(irradianceClearUses, LengthOf(irradianceClearUses))
+    ;
+    const Graphics::GpuTaskId irradianceClearTask = graph.addTask(irradianceClearDesc);
+    ASSERT_TRUE(irradianceClearTask.valid());
+
     const Graphics::GpuTaskResourceUse softwareCausticsUses[] = {
         { .resource = worldPosition, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = depth, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
@@ -5537,13 +5562,17 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
         { .resource = causticResolveGeometry, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
         { .resource = causticIrradiance, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
     };
+    Graphics::GpuTaskSchedulingHint causticsScheduling = boundaryScheduling;
+    causticsScheduling.forceSubmissionBoundary = false;
+    causticsScheduling.allowPacketMerge = true;
+    causticsScheduling.mergeWithPrevious = true;
     Graphics::GpuTaskDesc softwareCausticsDesc;
     softwareCausticsDesc
         .setIdentity(Name("tests/task_graph/graph_owned_software_caustics"))
         .setMarkerLabel("Software Caustics")
         .setQueue(computeRequest)
-        .setScheduling(boundaryScheduling)
-        .setDependencies(&shadowVisibilityTask, 1u)
+        .setScheduling(causticsScheduling)
+        .setDependencies(&irradianceClearTask, 1u)
         .setResourceUses(softwareCausticsUses, LengthOf(softwareCausticsUses))
     ;
     const Graphics::GpuTaskId softwareCausticsTask = graph.addTask(softwareCausticsDesc);
@@ -5585,21 +5614,35 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
         causticIrradiance,
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
+    ASSERT_TRUE(HasInferredHazard(
+        analysis,
+        irradianceClearTask,
+        softwareCausticsTask,
+        causticIrradiance,
+        Graphics::GpuTaskHazardType::WriteAfterWrite
+    ));
 
+    const Graphics::GpuTaskQueueAssignment* const clearAssignment = assignments.find(irradianceClearTask);
+    ASSERT_NE(clearAssignment, nullptr);
+    EXPECT_EQ(clearAssignment->queueClass, Graphics::CommandQueue::Compute);
     const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
     const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
     const Graphics::GpuSubmissionPacketId shadowPacket = compiledGraph.packetForTask(shadowVisibilityTask);
+    const Graphics::GpuSubmissionPacketId irradianceClearPacket = compiledGraph.packetForTask(irradianceClearTask);
     const Graphics::GpuSubmissionPacketId causticsPacket = compiledGraph.packetForTask(softwareCausticsTask);
     const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
     ASSERT_TRUE(shadowPreparePacket.valid());
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(shadowPacket.valid());
+    ASSERT_TRUE(irradianceClearPacket.valid());
     ASSERT_TRUE(causticsPacket.valid());
     ASSERT_TRUE(lightingPacket.valid());
     EXPECT_NE(shadowPreparePacket, prefixPacket);
     EXPECT_NE(prefixPacket, shadowPacket);
     EXPECT_NE(shadowPacket, causticsPacket);
+    EXPECT_EQ(irradianceClearPacket, causticsPacket);
     EXPECT_NE(causticsPacket, lightingPacket);
+    EXPECT_EQ(compiledGraph.packetCount(), 5u);
 
     const Graphics::GpuCompiledTask* const compiledShadow = compiledGraph.findTask(shadowVisibilityTask);
     const Graphics::GpuCompiledTask* const compiledCaustics = compiledGraph.findTask(softwareCausticsTask);
@@ -5711,7 +5754,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
     EXPECT_TRUE(hasCausticsBarrier(
         Graphics::GpuCompiledBarrierType::TextureTransition,
         causticIrradiance,
-        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::CopyDest,
         Graphics::ResourceStates::UnorderedAccess
     ));
 
@@ -6291,6 +6334,13 @@ TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
         Graphics::ResourceStates::Common,
         queueSharing
     );
+    const Graphics::GpuGraphResourceId irradiance = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/hardware_caustics_irradiance"),
+        "Hardware Caustics Irradiance",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
     const Graphics::GpuGraphResourceId meshAttributes = AddBufferMetadata(
         graph,
         Name("tests/task_graph/hardware_caustics_mesh_attributes"),
@@ -6363,6 +6413,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
     );
     ASSERT_TRUE(worldPosition.valid());
     ASSERT_TRUE(depth.valid());
+    ASSERT_TRUE(irradiance.valid());
     ASSERT_TRUE(meshAttributes.valid());
     ASSERT_TRUE(instanceMaterials.valid());
     ASSERT_TRUE(typedMaterials.valid());
@@ -6376,6 +6427,12 @@ TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
 
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest graphicsTransferRequest{
+        Graphics::GpuQueueCapability::Transfer,
         Graphics::GpuQueuePreference::Graphics,
         false,
         false,
@@ -6410,6 +6467,25 @@ TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
     const Graphics::GpuTaskId prefix = graph.addTask(prefixDesc);
     ASSERT_TRUE(prefix.valid());
 
+    // Keep the no-producer black result in the existing Hardware Caustics Graphics packet.
+    Graphics::GpuTaskSchedulingHint irradianceClearScheduling;
+    irradianceClearScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    irradianceClearScheduling.allowPacketMerge = true;
+    const Graphics::GpuTaskResourceUse irradianceClearUses[] = {
+        { .resource = irradiance, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+    };
+    Graphics::GpuTaskDesc irradianceClearDesc;
+    irradianceClearDesc
+        .setIdentity(Name("tests/task_graph/graph_owned_hardware_caustics_irradiance_clear"))
+        .setMarkerLabel("Hardware Caustics Irradiance Clear")
+        .setQueue(graphicsTransferRequest)
+        .setScheduling(irradianceClearScheduling)
+        .setDependencies(&prefix, 1u)
+        .setResourceUses(irradianceClearUses, LengthOf(irradianceClearUses))
+    ;
+    const Graphics::GpuTaskId irradianceClearTask = graph.addTask(irradianceClearDesc);
+    ASSERT_TRUE(irradianceClearTask.valid());
+
     const Graphics::GpuTaskResourceUse causticsUses[] = {
         { .resource = worldPosition, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = depth, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
@@ -6423,14 +6499,19 @@ TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
         { .resource = bindlessSlots, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = materialContextSlots, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = sceneShading, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = irradiance, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
     };
+    Graphics::GpuTaskSchedulingHint causticsScheduling = boundaryScheduling;
+    causticsScheduling.forceSubmissionBoundary = false;
+    causticsScheduling.allowPacketMerge = true;
+    causticsScheduling.mergeWithPrevious = true;
     Graphics::GpuTaskDesc causticsDesc;
     causticsDesc
         .setIdentity(Name("tests/task_graph/graph_owned_hardware_caustics"))
         .setMarkerLabel("Hardware Caustics")
         .setQueue(graphicsRequest)
-        .setScheduling(boundaryScheduling)
-        .setDependencies(&prefix, 1u)
+        .setScheduling(causticsScheduling)
+        .setDependencies(&irradianceClearTask, 1u)
         .setResourceUses(causticsUses, LengthOf(causticsUses))
     ;
     const Graphics::GpuTaskId caustics = graph.addTask(causticsDesc);
@@ -6452,15 +6533,26 @@ TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
         meshAttributes,
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
+    ASSERT_TRUE(HasInferredHazard(
+        analysis,
+        irradianceClearTask,
+        caustics,
+        irradiance,
+        Graphics::GpuTaskHazardType::WriteAfterWrite
+    ));
 
     const Graphics::GpuTaskQueueAssignment* const causticsAssignment = assignments.find(caustics);
     ASSERT_NE(causticsAssignment, nullptr);
     EXPECT_EQ(causticsAssignment->queueClass, Graphics::CommandQueue::Graphics);
     const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId irradianceClearPacket = compiledGraph.packetForTask(irradianceClearTask);
     const Graphics::GpuSubmissionPacketId causticsPacket = compiledGraph.packetForTask(caustics);
     ASSERT_TRUE(prefixPacket.valid());
+    ASSERT_TRUE(irradianceClearPacket.valid());
     ASSERT_TRUE(causticsPacket.valid());
     EXPECT_NE(prefixPacket, causticsPacket);
+    EXPECT_EQ(irradianceClearPacket, causticsPacket);
+    EXPECT_EQ(compiledGraph.packetCount(), 2u);
     const Graphics::GpuCompiledTask* const compiledCaustics = compiledGraph.findTask(caustics);
     ASSERT_NE(compiledCaustics, nullptr);
     const Graphics::GpuCompiledBarrier* const causticsBarriers = compiledGraph.taskPrologueBarriers(caustics);
@@ -6507,6 +6599,12 @@ TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
         sceneShading,
         Graphics::ResourceStates::CopyDest,
         Graphics::ResourceStates::ConstantBuffer
+    ));
+    EXPECT_TRUE(hasCausticsBarrier(
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        irradiance,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::UnorderedAccess
     ));
     ASSERT_EQ(compiledGraph.packet(causticsPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(causticsPacket)[0u].producer, prefixPacket);

@@ -380,6 +380,9 @@ private:
     Core::GpuTaskId m_graphicsPrefixTask;
     Core::GpuTaskId m_deferredShadowVisibilityTask;
     Core::GpuTaskId m_deferredSoftwareCausticsTask;
+    // Both hardware and software caustics use this typed black-output clear. The selected producer must share its
+    // packet so the established effects timing and acceptance endpoint remains unchanged.
+    Core::GpuTaskId m_deferredCausticIrradianceClearTask;
     // The typed output clear plus optional initialize/copy prefix form Surfel GI's graph-owned setup. The final GI
     // task remains the semantic effects endpoint, but must share the output-clear packet.
     Core::GpuTaskId m_deferredSurfelGiPreparationTask;

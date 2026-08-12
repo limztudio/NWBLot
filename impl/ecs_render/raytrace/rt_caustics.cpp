@@ -49,8 +49,9 @@ struct SoftwareCausticsGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        // Retain black caustics whenever no software producer dispatches.
-        payload.raytracingSystem->clearCausticTargets(commandList, *payload.targets);
+        // The typed graph clear retains black irradiance whenever no producer dispatches. The temporal accumulator
+        // reset remains packet-local until its CPU acceptance bookkeeping is graph-owned too.
+        payload.raytracingSystem->clearNonTemporalCausticAccumulator(commandList, *payload.targets);
         if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
             const bool causticsDispatched = payload.raytracingSystem->renderGpuBvhCaustics(
                 commandList,
@@ -84,8 +85,9 @@ struct HardwareCausticsGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        // Retain black caustics whenever no hardware producer dispatches.
-        payload.raytracingSystem->clearCausticTargets(commandList, *payload.targets);
+        // The typed graph clear retains black irradiance whenever no producer dispatches. The temporal accumulator
+        // reset remains packet-local until its CPU acceptance bookkeeping is graph-owned too.
+        payload.raytracingSystem->clearNonTemporalCausticAccumulator(commandList, *payload.targets);
         if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
             const bool causticsDispatched = payload.raytracingSystem->renderHwCaustics(
                 commandList,
@@ -462,6 +464,13 @@ void RendererRayTracingSystem::clearCausticTargets(Core::CommandList& commandLis
     commandList.setTextureState(targets.causticIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.clearTextureFloat(targets.causticIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+
+    clearNonTemporalCausticAccumulator(commandList, targets);
+}
+
+void RendererRayTracingSystem::clearNonTemporalCausticAccumulator(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    if(!targets.causticAccumulator)
+        return;
 
     // Temporal splat accumulation persists; non-temporal accumulation is cleared per frame.
     if(causticTemporalDecay() <= 0.f){

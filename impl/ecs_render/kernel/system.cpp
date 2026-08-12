@@ -247,6 +247,7 @@ void RendererSystem::invalidateResources(){
     m_deferredShadowPrepareTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
+    m_deferredCausticIrradianceClearTask = {};
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
@@ -503,6 +504,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredLightingTaskGraphValid = false;
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
+    m_deferredCausticIrradianceClearTask = {};
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
@@ -1207,6 +1209,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId hardwareCausticsPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredHardwareCausticsTask
     );
+    const Core::GpuSubmissionPacketId causticIrradianceClearPacket = m_deferredLightingCompiledGraph.packetForTask(
+        m_deferredCausticIrradianceClearTask
+    );
     const Core::GpuSubmissionPacketId surfelGiPreparationPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredSurfelGiPreparationTask
     );
@@ -1323,6 +1328,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && surfelGiIrradianceClearPacket.valid()
         && surfelGiPacket.valid()
         && surfelGiIrradianceClearPacket == surfelGiPacket
+    ;
+    // Both caustic routes retain a black output on a no-producer frame. Keep the typed clear in the selected
+    // producer packet so effects timing, acceptance, and the lagged-history wait still protect the first write.
+    const Core::GpuSubmissionPacketId causticsPacket = hardwareShadowSupported
+        ? hardwareCausticsPacket
+        : softwareCausticsPacket
+    ;
+    const bool causticIrradianceClearMergedIntoCausticsPacket =
+        m_deferredCausticIrradianceClearTask.valid()
+        && causticIrradianceClearPacket.valid()
+        && causticsPacket.valid()
+        && causticIrradianceClearPacket == causticsPacket
     ;
     // Keep every recording and submission span derived from compiled packet handles. The renderer names semantic
     // endpoints only; raw compiler-order indices remain inside the task-graph runtime.
@@ -1443,6 +1460,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !softwareCausticsPacket.valid()
             || !softwareCausticsQueue
         ))
+        || !m_deferredCausticIrradianceClearTask.valid()
+        || !causticIrradianceClearMergedIntoCausticsPacket
         || !m_deferredSurfelGiTask.valid()
         || !m_deferredSurfelGiIrradianceClearTask.valid()
         || !surfelGiOutputClearMergedIntoGiPacket

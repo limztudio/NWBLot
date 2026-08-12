@@ -292,6 +292,9 @@ public:
         bool graphEntryStatesOwned = false
     );
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    // The normal deferred graph owns the unconditional irradiance clear. This retains only the temporal
+    // accumulator reset, whose CPU bookkeeping remains packet-local until its acceptance contract is migrated.
+    void clearNonTemporalCausticAccumulator(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearCausticTargets(Core::CommandList& commandList, DeferredFrameTargets& targets);
     // Hybrid mode folds software transparent transmittance onto hardware opaque visibility. The shared deferred
     // graph can supply the traversal entry states; direct compatibility callers retain their native setup.

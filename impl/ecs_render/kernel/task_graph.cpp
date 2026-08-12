@@ -3728,6 +3728,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     using namespace __hidden_renderer_task_graph;
 
     m_deferredSoftwareCausticsTask = {};
+    m_deferredCausticIrradianceClearTask = {};
 
     // This remains the direct successor of Shadow Visibility in the deferred graph. A distinct Compute family is
     // optional; on other devices the compiler routes the same packet through Graphics.
@@ -3877,14 +3878,48 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     scheduling.cost = Core::GpuTaskCostHint::Large;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
-    const Core::GpuTaskId dependencies[] = { m_deferredShadowVisibilityTask };
+    const Core::GpuTaskId shadowVisibilityDependency[] = { m_deferredShadowVisibilityTask };
+
+    // Black irradiance is the no-producer result. Start the existing Software Caustics Compute packet with this
+    // typed CopyDest clear, then explicitly merge the producer callback into it below. The temporal accumulator
+    // retains local acceptance-sensitive reset/decay work.
+    Core::GpuTaskSchedulingHint irradianceClearScheduling;
+    irradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
+    irradianceClearScheduling.allowPacketMerge = true;
+    Core::GpuTaskDesc irradianceClearDesc;
+    irradianceClearDesc
+        .setIdentity(Name("render.software_caustics.irradiance_clear"))
+        .setMarkerLabel("Software Caustics Irradiance Clear")
+        .setQueue(ComputeTransferQueueRequest())
+        .setScheduling(irradianceClearScheduling)
+        .setDependencies(shadowVisibilityDependency, LengthOf(shadowVisibilityDependency))
+    ;
+    Core::GpuClearTextureTaskDesc irradianceClear;
+    irradianceClear.destination = causticIrradiance;
+    irradianceClear.subresources = ECSRenderDetail::s_FramebufferSubresources;
+    irradianceClear.valueType = Core::GpuClearTextureTaskValueType::Float;
+    irradianceClear.floatValue = Core::Color(0.f, 0.f, 0.f, 0.f);
+    const Core::GpuTaskId irradianceClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
+        irradianceClearDesc,
+        irradianceClear
+    );
+    if(!irradianceClearTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics irradiance clear"));
+        return false;
+    }
+    m_deferredCausticIrradianceClearTask = irradianceClearTask;
+
+    Core::GpuTaskSchedulingHint causticsScheduling = scheduling;
+    causticsScheduling.forceSubmissionBoundary = false;
+    causticsScheduling.allowPacketMerge = true;
+    causticsScheduling.mergeWithPrevious = true;
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.software_caustics"))
         .setMarkerLabel("Software Caustics")
         .setQueue(ComputeQueueRequest())
-        .setScheduling(scheduling)
-        .setDependencies(dependencies, LengthOf(dependencies))
+        .setScheduling(causticsScheduling)
+        .setDependencies(&irradianceClearTask, 1u)
         .setResourceUses(resourceUses.data(), resourceUses.size())
     ;
     m_deferredSoftwareCausticsTask = m_raytracingSystem.declareSoftwareCausticsTask(
@@ -4400,6 +4435,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_graphicsPrefixTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
+    m_deferredCausticIrradianceClearTask = {};
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
@@ -5328,14 +5364,47 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwareScheduling.cost = Core::GpuTaskCostHint::Large;
         hardwareScheduling.forceSubmissionBoundary = true;
         hardwareScheduling.allowPacketMerge = false;
+
+        // The lagged-history completion must protect the first writer too: clear starts the existing Hardware
+        // Caustics Graphics packet and the ray-tracing producer merges into it below.
+        Core::GpuTaskSchedulingHint irradianceClearScheduling;
+        irradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
+        irradianceClearScheduling.allowPacketMerge = true;
+        Core::GpuTaskDesc irradianceClearDesc;
+        irradianceClearDesc
+            .setIdentity(Name("render.hardware_caustics.irradiance_clear"))
+            .setMarkerLabel("Hardware Caustics Irradiance Clear")
+            .setQueue(GraphicsUploadQueueRequest())
+            .setScheduling(irradianceClearScheduling)
+            .setDependencies(hardwareDependencies, LengthOf(hardwareDependencies))
+            .setExternalDependencies(hardwareExternalDependencies, hardwareExternalDependencyCount)
+        ;
+        Core::GpuClearTextureTaskDesc irradianceClear;
+        irradianceClear.destination = currentCausticIrradiance;
+        irradianceClear.subresources = ECSRenderDetail::s_FramebufferSubresources;
+        irradianceClear.valueType = Core::GpuClearTextureTaskValueType::Float;
+        irradianceClear.floatValue = Core::Color(0.f, 0.f, 0.f, 0.f);
+        const Core::GpuTaskId irradianceClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
+            irradianceClearDesc,
+            irradianceClear
+        );
+        if(!irradianceClearTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics irradiance clear"));
+            return;
+        }
+        m_deferredCausticIrradianceClearTask = irradianceClearTask;
+
+        Core::GpuTaskSchedulingHint hardwareCausticsScheduling = hardwareScheduling;
+        hardwareCausticsScheduling.forceSubmissionBoundary = false;
+        hardwareCausticsScheduling.allowPacketMerge = true;
+        hardwareCausticsScheduling.mergeWithPrevious = true;
         Core::GpuTaskDesc hardwareDesc;
         hardwareDesc
             .setIdentity(Name("render.hardware_caustics"))
             .setMarkerLabel("Hardware Caustics")
             .setQueue(GraphicsQueueRequest())
-            .setScheduling(hardwareScheduling)
-            .setDependencies(hardwareDependencies, LengthOf(hardwareDependencies))
-            .setExternalDependencies(hardwareExternalDependencies, hardwareExternalDependencyCount)
+            .setScheduling(hardwareCausticsScheduling)
+            .setDependencies(&irradianceClearTask, 1u)
             .setResourceUses(hardwareResourceUses.data(), hardwareResourceUses.size())
         ;
         m_deferredHardwareCausticsTask = m_raytracingSystem.declareHardwareCausticsTask(

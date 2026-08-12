@@ -933,8 +933,8 @@ struct NativePacketPostGbufferTraceGeometryProbeTask{
 
 // Software caustics follows Shadow Visibility and uses the same descriptor-selected geometry plus its own
 // emission/mesh-view inputs. Keep this callback getter-only so a missing graph state seed cannot be hidden by
-// renderer-native setup. Accumulator and irradiance are intentionally excluded: the real task clears them locally
-// before restoring its UAV phase.
+// renderer-native setup. The graph-owned irradiance clear must hand off CopyDest to UAV before this callback;
+// only the acceptance-sensitive accumulator lifecycle remains local.
 struct NativePacketSoftwareCausticsEntryProbeTask{
     static constexpr u32 s_ShaderBufferCount = 11u;
     static constexpr u32 s_ConstantBufferCount = 4u;
@@ -946,6 +946,7 @@ struct NativePacketSoftwareCausticsEntryProbeTask{
         Buffer* constantBuffers[s_ConstantBufferCount] = {};
         Texture* shaderTextures[s_ShaderTextureCount] = {};
         Texture* uavTextures[s_UavTextureCount] = {};
+        Texture* irradiance = nullptr;
         bool* recorded = nullptr;
     };
 
@@ -982,6 +983,10 @@ struct NativePacketSoftwareCausticsEntryProbeTask{
                     == ResourceStates::UnorderedAccess
             ;
         }
+        ready = ready
+            && payload.irradiance
+            && commandList.getTextureSubresourceState(payload.irradiance, 0u, 0u) == ResourceStates::UnorderedAccess
+        ;
         if(payload.recorded)
             *payload.recorded = ready;
         return ready;
@@ -990,8 +995,8 @@ struct NativePacketSoftwareCausticsEntryProbeTask{
 
 
 // Hardware caustics shares the descriptor-visible static producer batch with its Graphics-prefix dependency. Its
-// accumulator and resolve lifecycle remains callback-local, so this probe observes only the graph-owned inputs that
-// the ray-tracing producer would otherwise transition itself.
+// accumulator and resolve lifecycle remains callback-local, while the graph-owned irradiance clear must reach this
+// producer as an UnorderedAccess handoff.
 struct NativePacketHardwareCausticsEntryProbeTask{
     static constexpr u32 s_ShaderBufferCount = 6u;
     static constexpr u32 s_ConstantBufferCount = 4u;
@@ -1001,6 +1006,7 @@ struct NativePacketHardwareCausticsEntryProbeTask{
         Buffer* shaderBuffers[s_ShaderBufferCount] = {};
         Buffer* constantBuffers[s_ConstantBufferCount] = {};
         Texture* shaderTextures[s_ShaderTextureCount] = {};
+        Texture* irradiance = nullptr;
         bool* recorded = nullptr;
     };
 
@@ -1030,6 +1036,10 @@ struct NativePacketHardwareCausticsEntryProbeTask{
                     == ResourceStates::ShaderResource
             ;
         }
+        ready = ready
+            && payload.irradiance
+            && commandList.getTextureSubresourceState(payload.irradiance, 0u, 0u) == ResourceStates::UnorderedAccess
+        ;
         if(payload.recorded)
             *payload.recorded = ready;
         return ready;
@@ -3349,6 +3359,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftwareCausticsEntryStatesRecor
         true,
         true,
     };
+    const GpuQueueRequest computeTransferQueue{
+        GpuQueueCapability::Transfer,
+        GpuQueuePreference::Compute,
+        true,
+        false,
+    };
     GpuTaskSchedulingHint boundaryScheduling;
     boundaryScheduling.cost = GpuTaskCostHint::Large;
     boundaryScheduling.forceSubmissionBoundary = true;
@@ -3449,6 +3465,28 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftwareCausticsEntryStatesRecor
     );
     ASSERT_TRUE(shadowVisibilityTask.valid());
 
+    GpuTaskSchedulingHint irradianceClearScheduling;
+    irradianceClearScheduling.cost = GpuTaskCostHint::Tiny;
+    irradianceClearScheduling.allowPacketMerge = true;
+    GpuTaskDesc irradianceClearDesc;
+    irradianceClearDesc
+        .setIdentity(Name("tests/descriptor_buffer/graph_owned_software_caustics_irradiance_clear"))
+        .setMarkerLabel("Software Caustics Irradiance Clear")
+        .setQueue(computeTransferQueue)
+        .setScheduling(irradianceClearScheduling)
+        .setDependencies(&shadowVisibilityTask, 1u)
+    ;
+    GpuClearTextureTaskDesc irradianceClear;
+    irradianceClear.destination = causticIrradianceResource;
+    irradianceClear.subresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
+    irradianceClear.valueType = GpuClearTextureTaskValueType::Float;
+    irradianceClear.floatValue = Color(0.f, 0.f, 0.f, 0.f);
+    const GpuTaskId irradianceClearTask = graph.addClearTextureTask(
+        irradianceClearDesc,
+        irradianceClear
+    );
+    ASSERT_TRUE(irradianceClearTask.valid());
+
     const GpuTaskResourceUse causticsUses[] = {
         { .resource = worldPositionResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
         { .resource = depthResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
@@ -3472,13 +3510,17 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftwareCausticsEntryStatesRecor
         { .resource = causticResolveGeometryResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
         { .resource = causticIrradianceResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write },
     };
+    GpuTaskSchedulingHint causticsScheduling = boundaryScheduling;
+    causticsScheduling.forceSubmissionBoundary = false;
+    causticsScheduling.allowPacketMerge = true;
+    causticsScheduling.mergeWithPrevious = true;
     GpuTaskDesc causticsDesc;
     causticsDesc
         .setIdentity(Name("tests/descriptor_buffer/graph_owned_software_caustics"))
         .setMarkerLabel("Software Caustics")
         .setQueue(computeQueue)
-        .setScheduling(boundaryScheduling)
-        .setDependencies(&shadowVisibilityTask, 1u)
+        .setScheduling(causticsScheduling)
+        .setDependencies(&irradianceClearTask, 1u)
         .setResourceUses(causticsUses, LengthOf(causticsUses))
     ;
     NativePacketSoftwareCausticsEntryProbeTask::Payload causticsPayload{};
@@ -3490,6 +3532,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftwareCausticsEntryStatesRecor
         causticsPayload.shaderTextures[textureIndex] = shaderTextures[textureIndex].get();
     for(u32 textureIndex = 0u; textureIndex < uavTextureCount; ++textureIndex)
         causticsPayload.uavTextures[textureIndex] = uavTextures[textureIndex].get();
+    causticsPayload.irradiance = causticIrradiance.get();
     bool causticsRecorded = false;
     causticsPayload.recorded = &causticsRecorded;
     const GpuTaskId causticsTask = graph.addTask<NativePacketSoftwareCausticsEntryProbeTask>(
@@ -3550,13 +3593,16 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftwareCausticsEntryStatesRecor
     const GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepareTask);
     const GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefixTask);
     const GpuSubmissionPacketId shadowPacket = compiledGraph.packetForTask(shadowVisibilityTask);
+    const GpuSubmissionPacketId irradianceClearPacket = compiledGraph.packetForTask(irradianceClearTask);
     const GpuSubmissionPacketId causticsPacket = compiledGraph.packetForTask(causticsTask);
     const GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lightingTask);
     ASSERT_TRUE(shadowPreparePacket.valid());
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(shadowPacket.valid());
+    ASSERT_TRUE(irradianceClearPacket.valid());
     ASSERT_TRUE(causticsPacket.valid());
     ASSERT_TRUE(lightingPacket.valid());
+    EXPECT_EQ(irradianceClearPacket, causticsPacket);
     const GpuCompiledTask* const compiledShadow = compiledGraph.findTask(shadowVisibilityTask);
     const GpuCompiledTask* const compiledCaustics = compiledGraph.findTask(causticsTask);
     ASSERT_NE(compiledShadow, nullptr);
@@ -3576,22 +3622,23 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftwareCausticsEntryStatesRecor
         );
     }
     EXPECT_TRUE(shadowTransitionsDepthToShaderResource);
-    const auto hasCausticsTransition = [&](const GpuGraphResourceId resource){
+    const auto hasCausticsTransition = [&](const GpuGraphResourceId resource, const ResourceStates::Mask before){
         for(u32 barrierIndex = 0u; barrierIndex < compiledCaustics->prologueBarrierCount; ++barrierIndex){
             const GpuCompiledBarrier& barrier = causticsBarriers[barrierIndex];
             if(
                 barrier.type == GpuCompiledBarrierType::TextureTransition
                 && barrier.resource == resource
-                && barrier.before == ResourceStates::Common
+                && barrier.before == before
                 && barrier.after == ResourceStates::UnorderedAccess
             )
                 return true;
         }
         return false;
     };
-    EXPECT_TRUE(hasCausticsTransition(causticHistoryResource));
-    EXPECT_TRUE(hasCausticsTransition(causticResolveHalfResource));
-    EXPECT_TRUE(hasCausticsTransition(causticResolveGeometryResource));
+    EXPECT_TRUE(hasCausticsTransition(causticHistoryResource, ResourceStates::Common));
+    EXPECT_TRUE(hasCausticsTransition(causticResolveHalfResource, ResourceStates::Common));
+    EXPECT_TRUE(hasCausticsTransition(causticResolveGeometryResource, ResourceStates::Common));
+    EXPECT_TRUE(hasCausticsTransition(causticIrradianceResource, ResourceStates::CopyDest));
     for(u32 barrierIndex = 0u; barrierIndex < compiledCaustics->prologueBarrierCount; ++barrierIndex){
         const GpuCompiledBarrier& barrier = causticsBarriers[barrierIndex];
         if(barrier.resource == depthResource)
@@ -3698,6 +3745,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
     );
     for(u32 textureIndex = 0u; textureIndex < shaderTextureCount; ++textureIndex)
         ASSERT_NE(shaderTextures[textureIndex].get(), nullptr);
+    const TextureHandle irradiance = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(irradiance.get(), nullptr);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importBuffer = [&graph](const BufferHandle& buffer, const Name identity, const AStringView label){
@@ -3764,11 +3820,23 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
         Name("tests/descriptor_buffer/hardware_caustics_depth"),
         "Depth"
     );
+    const GpuGraphResourceId irradianceResource = importTexture(
+        irradiance,
+        Name("tests/descriptor_buffer/hardware_caustics_irradiance"),
+        "Caustic Irradiance"
+    );
     ASSERT_TRUE(worldPositionResource.valid());
     ASSERT_TRUE(depthResource.valid());
+    ASSERT_TRUE(irradianceResource.valid());
 
     const GpuQueueRequest graphicsQueue{
         GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const GpuQueueRequest graphicsTransferQueue{
+        GpuQueueCapability::Transfer,
         GpuQueuePreference::Graphics,
         false,
         false,
@@ -3806,6 +3874,28 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
     );
     ASSERT_TRUE(prefixTask.valid());
 
+    GpuTaskSchedulingHint irradianceClearScheduling;
+    irradianceClearScheduling.cost = GpuTaskCostHint::Tiny;
+    irradianceClearScheduling.allowPacketMerge = true;
+    GpuTaskDesc irradianceClearDesc;
+    irradianceClearDesc
+        .setIdentity(Name("tests/descriptor_buffer/graph_owned_hardware_caustics_irradiance_clear"))
+        .setMarkerLabel("Hardware Caustics Irradiance Clear")
+        .setQueue(graphicsTransferQueue)
+        .setScheduling(irradianceClearScheduling)
+        .setDependencies(&prefixTask, 1u)
+    ;
+    GpuClearTextureTaskDesc irradianceClear;
+    irradianceClear.destination = irradianceResource;
+    irradianceClear.subresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
+    irradianceClear.valueType = GpuClearTextureTaskValueType::Float;
+    irradianceClear.floatValue = Color(0.f, 0.f, 0.f, 0.f);
+    const GpuTaskId irradianceClearTask = graph.addClearTextureTask(
+        irradianceClearDesc,
+        irradianceClear
+    );
+    ASSERT_TRUE(irradianceClearTask.valid());
+
     Vector<GpuTaskResourceUse, Alloc::ScratchArena> causticsUses(resourceUseArena);
     causticsUses.reserve(shaderBufferCount + constantBufferCount + shaderTextureCount);
     for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)
@@ -3814,13 +3904,18 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
         causticsUses.push_back({ .resource = constantBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read });
     causticsUses.push_back({ .resource = worldPositionResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read });
     causticsUses.push_back({ .resource = depthResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read });
+    causticsUses.push_back({ .resource = irradianceResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write });
+    GpuTaskSchedulingHint causticsScheduling = boundaryScheduling;
+    causticsScheduling.forceSubmissionBoundary = false;
+    causticsScheduling.allowPacketMerge = true;
+    causticsScheduling.mergeWithPrevious = true;
     GpuTaskDesc causticsDesc;
     causticsDesc
         .setIdentity(Name("tests/descriptor_buffer/graph_owned_hardware_caustics"))
         .setMarkerLabel("Hardware Caustics")
         .setQueue(graphicsQueue)
-        .setScheduling(boundaryScheduling)
-        .setDependencies(&prefixTask, 1u)
+        .setScheduling(causticsScheduling)
+        .setDependencies(&irradianceClearTask, 1u)
         .setResourceUses(causticsUses.data(), causticsUses.size())
     ;
     NativePacketHardwareCausticsEntryProbeTask::Payload causticsPayload{};
@@ -3830,6 +3925,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
         causticsPayload.constantBuffers[bufferIndex] = constantBuffers[bufferIndex].get();
     for(u32 textureIndex = 0u; textureIndex < shaderTextureCount; ++textureIndex)
         causticsPayload.shaderTextures[textureIndex] = shaderTextures[textureIndex].get();
+    causticsPayload.irradiance = irradiance.get();
     bool causticsRecorded = false;
     causticsPayload.recorded = &causticsRecorded;
     const GpuTaskId causticsTask = graph.addTask<NativePacketHardwareCausticsEntryProbeTask>(
@@ -3862,9 +3958,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
     ASSERT_EQ(compiledGraph.packetCount(), 2u);
     const GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefixTask);
+    const GpuSubmissionPacketId irradianceClearPacket = compiledGraph.packetForTask(irradianceClearTask);
     const GpuSubmissionPacketId causticsPacket = compiledGraph.packetForTask(causticsTask);
     ASSERT_TRUE(prefixPacket.valid());
+    ASSERT_TRUE(irradianceClearPacket.valid());
     ASSERT_TRUE(causticsPacket.valid());
+    EXPECT_EQ(irradianceClearPacket, causticsPacket);
     const GpuCompiledTask* const compiledCaustics = compiledGraph.findTask(causticsTask);
     ASSERT_NE(compiledCaustics, nullptr);
     const GpuCompiledBarrier* const causticsBarriers = compiledGraph.taskPrologueBarriers(causticsTask);
@@ -3886,6 +3985,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
     EXPECT_TRUE(hasCausticsTransition(shaderBufferResources[0u], ResourceStates::CopyDest, ResourceStates::ShaderResource));
     EXPECT_TRUE(hasCausticsTransition(constantBufferResources[0u], ResourceStates::CopyDest, ResourceStates::ConstantBuffer));
     EXPECT_TRUE(hasCausticsTransition(constantBufferResources[3u], ResourceStates::CopyDest, ResourceStates::ConstantBuffer));
+    EXPECT_TRUE(hasCausticsTransition(irradianceResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
     ASSERT_EQ(compiledGraph.packet(causticsPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(causticsPacket)[0u].producer, prefixPacket);
 

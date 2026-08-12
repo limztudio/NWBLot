@@ -26,14 +26,16 @@ static void SetCsgHeapResourceStates(
     RendererCsgSystem& csgSystem,
     Core::CommandList& commandList,
     const DeferredFrameTargets& targets,
-    const MaterialPipelineCsgBindingUse& csgBindingUse
+    const MaterialPipelineCsgBindingUse& csgBindingUse,
+    const bool receiverSurfaceImageStatesGraphOwned
 ){
     if(!csgBindingUse.clip)
         return;
 
     csgSystem.setCsgClipBufferStates(commandList);
-    if(csgBindingUse.receiverSurface){
-        // Receiver-event images are heap-selected, so preserve their pixel-UAV states explicitly.
+    if(csgBindingUse.receiverSurface && !receiverSurfaceImageStatesGraphOwned){
+        // Compatibility callers still stage the heap-selected receiver-event images themselves. The normal graph
+        // declares this exact StorageImage pair before its receiver-surface task records.
         commandList.setTextureState(targets.csgReceiverEventData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.csgReceiverEventCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
     }
@@ -229,7 +231,8 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
             m_renderer.csgSystem(),
             context.commandList,
             deferredState().m_targets,
-            csgBindingUse
+            csgBindingUse,
+            context.csgReceiverSurfaceImageStatesGraphOwned
         );
 
         Core::MeshletState meshletState;
@@ -272,7 +275,8 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
             m_renderer.csgSystem(),
             context.commandList,
             deferredState().m_targets,
-            csgBindingUse
+            csgBindingUse,
+            context.csgReceiverSurfaceImageStatesGraphOwned
         );
         context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
 

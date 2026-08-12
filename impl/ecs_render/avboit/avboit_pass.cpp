@@ -355,7 +355,8 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     const CsgFrameGpuData& csgFrameData,
     const usize instanceCount,
     const usize materialTypedByteCount,
-    const bool intervalTargetsGraphOwned
+    const bool intervalTargetsGraphOwned,
+    const bool receiverSurfaceImageStatesGraphOwned
 ){
     if(
         !targets.framebuffer
@@ -407,7 +408,8 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         targets.framebuffer.get(),
         MaterialPipelinePass::CsgReceiverSurface,
         nullptr,
-        viewportState
+        viewportState,
+        receiverSurfaceImageStatesGraphOwned
     };
     m_renderer.materialSystem().renderMaterialPassDrawItems(
         csgReceiverSurfaceDrawContext,
@@ -426,7 +428,8 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     const CsgFrameGpuData* const preparedTransparentCsgFrameData,
     const usize preparedTransparentCsgInstanceCount,
     const usize preparedTransparentCsgMaterialTypedByteCount,
-    const bool preparedTransparentCsgIntervalTargetsGraphOwned
+    const bool preparedTransparentCsgIntervalTargetsGraphOwned,
+    const bool preparedTransparentCsgReceiverSurfaceImageStatesGraphOwned
 ){
     if(preparedTransparentCsgReceiverSurfaceDrawItems || preparedTransparentCsgFrameData){
         NWB_ASSERT(preparedTransparentCsgReceiverSurfaceDrawItems);
@@ -439,7 +442,8 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
                 *preparedTransparentCsgFrameData,
                 preparedTransparentCsgInstanceCount,
                 preparedTransparentCsgMaterialTypedByteCount,
-                preparedTransparentCsgIntervalTargetsGraphOwned
+                preparedTransparentCsgIntervalTargetsGraphOwned,
+                preparedTransparentCsgReceiverSurfaceImageStatesGraphOwned
             );
         }
     }

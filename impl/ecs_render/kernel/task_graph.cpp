@@ -607,6 +607,7 @@ struct GbufferGraphTask{
         OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
         bool materialDrawBuffersUploaded = false;
         bool csgFrameBuffersUploaded = false;
+        bool csgReceiverSurfaceImageStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : opaqueDrawSnapshot(arena)
@@ -713,7 +714,8 @@ struct GbufferGraphTask{
                 deferredTargets.framebuffer.get(),
                 MaterialPipelinePass::CsgReceiverSurface,
                 nullptr,
-                csgIntervalViewportState
+                csgIntervalViewportState,
+                payload.csgReceiverSurfaceImageStatesGraphOwned
             };
             if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
                 Core::GpuTimingMeasure timing(
@@ -932,6 +934,7 @@ struct AvboitPreGraphTask{
         ECSRenderDetail::TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
         bool transparentCsgStreamsUploaded = false;
         bool transparentCsgIntervalTargetsGraphOwned = false;
+        bool transparentCsgReceiverSurfaceImageStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : transparentCsgSnapshot(arena)
@@ -974,7 +977,8 @@ struct AvboitPreGraphTask{
                 preparedTransparentCsgFrameData,
                 preparedTransparentCsgInstanceCount,
                 preparedTransparentCsgMaterialTypedByteCount,
-                payload.transparentCsgIntervalTargetsGraphOwned
+                payload.transparentCsgIntervalTargetsGraphOwned,
+                payload.transparentCsgReceiverSurfaceImageStatesGraphOwned
             );
         }
         return true;
@@ -2090,6 +2094,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     const Core::GpuGraphResourceId csgClipContextSlots,
     const Core::GpuGraphResourceId csgIntervalSampleState,
     const Core::GpuGraphResourceId csgIntervalId,
+    const Core::GpuGraphResourceId csgReceiverEventData,
     const Core::GpuGraphResourceId csgReceiverEventCount,
     const Core::GpuGraphResourceId currentBindlessSlots,
     const Core::GpuGraphResourceId materialContextSlots,
@@ -2130,7 +2135,11 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         || !meshView.valid()
         || !currentBindlessSlots.valid()
         || !materialContextSlots.valid()
-        || (hasOpaqueCsgFrameWork && (!csgIntervalId.valid() || !csgReceiverEventCount.valid()))
+        || (hasOpaqueCsgFrameWork && (
+            !csgIntervalId.valid()
+            || !csgReceiverEventData.valid()
+            || !csgReceiverEventCount.valid()
+        ))
         || !timingTickets
         || !asyncPrefixTimingSpansOnePacket
         || !deferredClearTimingState.graphics
@@ -2151,6 +2160,12 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         1u,
         0u,
         deferredTargets.csgPeelLayerCount
+    );
+    const Core::TextureSubresourceSet csgReceiverEventDataSubresources(
+        0u,
+        1u,
+        0u,
+        deferredTargets.csgReceiverEventLayerCount
     );
     const Core::TextureSubresourceSet csgReceiverEventCountSubresources(0u, 1u, 0u, 1u);
 
@@ -2772,6 +2787,9 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         instanceData.size(),
         materialTypedBytes.size()
     );
+    // The receiver-event data/count pair is declared by the G-buffer task below whenever this semantic CSG
+    // producer exists. Its native material draw can therefore consume the graph-owned StorageImage state.
+    gbufferPayload.csgReceiverSurfaceImageStatesGraphOwned = hasOpaqueCsgFrameWork;
 
     // The clear is intentionally keyed to the semantic opaque-CSG frame flag, rather than the later native
     // readiness checks. This preserves the old defensive clear timing while making its two actual CopyDest writes
@@ -2817,7 +2835,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
     Core::Alloc::ScratchArena gbufferResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferResourceUses{ gbufferResourceScratch };
-    gbufferResourceUses.reserve((hasOpaqueDrawItems ? 7u : 5u) + (hasCsgFrameGpuWork ? 5u : 0u) + (hasOpaqueCsgFrameWork ? 2u : 0u));
+    gbufferResourceUses.reserve((hasOpaqueDrawItems ? 7u : 5u) + (hasCsgFrameGpuWork ? 5u : 0u) + (hasOpaqueCsgFrameWork ? 3u : 0u));
     gbufferResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
     if(hasOpaqueDrawItems){
         gbufferResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
@@ -2835,6 +2853,11 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         gbufferResourceUses.push_back(
             ReadWriteTextureUse(csgIntervalId, csgIntervalIdSubresources, Core::ResourceStates::UnorderedAccess)
         );
+        gbufferResourceUses.push_back(ReadWriteTextureUse(
+            csgReceiverEventData,
+            csgReceiverEventDataSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
         gbufferResourceUses.push_back(ReadWriteTextureUse(
             csgReceiverEventCount,
             csgReceiverEventCountSubresources,
@@ -4099,13 +4122,18 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         Name("render.deferred_lighting.depth"),
         "G-Buffer Depth"
     );
-    // These are the only CSG interval images whose contents persist across a work region. Their exact subresource
-    // clears and immediate UAV consumers are now declared by the graph; the wider CSG target lifecycle remains in
-    // the native compatibility producers for its own bounded migration.
+    // The persistent interval id/count values and the receiver-surface event data are declared by the graph. Their
+    // exact clear/StorageImage handoffs are visible here; the wider CSG target lifecycle remains in the native
+    // compatibility producers for its own bounded migration.
     const Core::GpuGraphResourceId csgIntervalId = importTexture(
         deferredTargets.csgIntervalId,
         Name("render.deferred.csg_interval_id"),
         "CSG Interval ID"
+    );
+    const Core::GpuGraphResourceId csgReceiverEventData = importTexture(
+        deferredTargets.csgReceiverEventData,
+        Name("render.deferred.csg_receiver_event_data"),
+        "CSG Receiver Event Data"
     );
     const Core::GpuGraphResourceId csgReceiverEventCount = importTexture(
         deferredTargets.csgReceiverEventCount,
@@ -4347,6 +4375,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         || !worldPosition.valid()
         || !depth.valid()
         || !csgIntervalId.valid()
+        || !csgReceiverEventData.valid()
         || !csgReceiverEventCount.valid()
         || !shadowVisibility.valid()
         || !causticIrradiance.valid()
@@ -4390,6 +4419,12 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         0u,
         deferredTargets.csgPeelLayerCount
     );
+    const Core::TextureSubresourceSet csgReceiverEventDataSubresources(
+        0u,
+        1u,
+        0u,
+        deferredTargets.csgReceiverEventLayerCount
+    );
     const Core::TextureSubresourceSet csgReceiverEventCountSubresources(0u, 1u, 0u, 1u);
 
     if(!declareDeferredShadowPrepareTask(
@@ -4428,6 +4463,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         csgClipContextSlots,
         csgIntervalSampleState,
         csgIntervalId,
+        csgReceiverEventData,
         csgReceiverEventCount,
         currentBindlessSlots,
         materialContextSlots,
@@ -5058,13 +5094,14 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             return;
         }
         avboitPrePayload.transparentCsgIntervalTargetsGraphOwned = true;
+        avboitPrePayload.transparentCsgReceiverSurfaceImageStatesGraphOwned = true;
     }
 
     // The interval producer consumes the first frozen transparent CSG stream. Its graph-visible states must be
     // declared here, before its native work records, rather than on the later occupancy task.
     Core::Alloc::ScratchArena avboitIntervalResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitIntervalResourceUses{ avboitIntervalResourceScratch };
-    avboitIntervalResourceUses.reserve(13u);
+    avboitIntervalResourceUses.reserve(14u);
     if(avboitPrePayload.transparentCsgStreamsUploaded){
         avboitIntervalResourceUses.push_back(ReadUse(depth));
         avboitIntervalResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
@@ -5077,6 +5114,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         avboitIntervalResourceUses.push_back(
             ReadWriteTextureUse(csgIntervalId, csgIntervalIdSubresources, Core::ResourceStates::UnorderedAccess)
         );
+        avboitIntervalResourceUses.push_back(ReadWriteTextureUse(
+            csgReceiverEventData,
+            csgReceiverEventDataSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
         avboitIntervalResourceUses.push_back(ReadWriteTextureUse(
             csgReceiverEventCount,
             csgReceiverEventCountSubresources,

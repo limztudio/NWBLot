@@ -207,6 +207,7 @@ private:
         Core::GpuGraphResourceId csgClipContextSlots,
         Core::GpuGraphResourceId csgIntervalSampleState,
         Core::GpuGraphResourceId csgIntervalId,
+        Core::GpuGraphResourceId csgReceiverEventData,
         Core::GpuGraphResourceId csgReceiverEventCount,
         Core::GpuGraphResourceId currentBindlessSlots,
         Core::GpuGraphResourceId materialContextSlots,

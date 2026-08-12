@@ -96,6 +96,9 @@ struct MaterialPassDrawContext{
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
     const AvboitFrameTargets* avboitTargets = nullptr;
     const Core::ViewportState& viewportState;
+    // Prepared graph tasks declare the receiver-event images before the material thunk records. Compatibility
+    // callers leave this false and retain their direct heap-image state setup.
+    bool csgReceiverSurfaceImageStatesGraphOwned = false;
 };
 
 

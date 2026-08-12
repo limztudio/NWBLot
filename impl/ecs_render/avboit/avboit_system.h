@@ -46,7 +46,8 @@ public:
         const CsgFrameGpuData* preparedTransparentCsgFrameData = nullptr,
         usize preparedTransparentCsgInstanceCount = 0u,
         usize preparedTransparentCsgMaterialTypedByteCount = 0u,
-        bool preparedTransparentCsgIntervalTargetsGraphOwned = false
+        bool preparedTransparentCsgIntervalTargetsGraphOwned = false,
+        bool preparedTransparentCsgReceiverSurfaceImageStatesGraphOwned = false
     );
     void renderAvboitOccupancyPass(
         Core::CommandList& commandList,
@@ -133,7 +134,8 @@ private:
         const CsgFrameGpuData& csgFrameData,
         usize instanceCount,
         usize materialTypedByteCount,
-        bool intervalTargetsGraphOwned
+        bool intervalTargetsGraphOwned,
+        bool receiverSurfaceImageStatesGraphOwned
     );
 };
 

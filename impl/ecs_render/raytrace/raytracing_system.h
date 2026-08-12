@@ -292,10 +292,11 @@ public:
         bool graphEntryStatesOwned = false
     );
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    // The normal deferred graph owns the unconditional irradiance clear and fresh temporal bootstrap clear. This
-    // retains only the non-temporal reset, which remains a direct compatibility fallback.
+    // Direct compatibility helper for the per-frame non-temporal accumulator reset. The normal deferred graph owns
+    // its typed clear and commits the matching CPU reset only after the containing producer packet accepts.
     void clearNonTemporalCausticAccumulator(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearCausticTargets(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    void confirmCausticAccumulatorNonTemporalClear();
     // The temporal bootstrap clear is recorded by a graph task, but this mirror changes only when the containing
     // caustic producer packet accepts.
     void confirmCausticAccumulatorBootstrapClear();
@@ -337,6 +338,7 @@ public:
         Core::GpuTimingSubmissionTicket& timingTicket,
         bool graphEntryStatesOwned = false,
         bool graphOwnsAccumulatorBootstrapClear = false,
+        bool graphOwnsNonTemporalAccumulatorClear = false,
         bool graphOwnsAccumulatorDecay = false,
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr,
         bool* accumulatorBootstrapProducerDispatched = nullptr
@@ -361,6 +363,7 @@ public:
         Core::GpuTimingSubmissionTicket& timingTicket,
         bool graphEntryStatesOwned = false,
         bool graphOwnsAccumulatorBootstrapClear = false,
+        bool graphOwnsNonTemporalAccumulatorClear = false,
         bool graphOwnsAccumulatorDecay = false,
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr,
         bool* accumulatorBootstrapProducerDispatched = nullptr

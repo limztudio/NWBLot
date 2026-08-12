@@ -117,6 +117,7 @@ struct SoftwareCausticsGraphTask{
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr;
         bool graphEntryStatesOwned = false;
         bool graphOwnsAccumulatorBootstrapClear = false;
+        bool graphOwnsNonTemporalAccumulatorClear = false;
         bool graphOwnsAccumulatorDecay = false;
         bool* accumulatorBootstrapProducerDispatched = nullptr;
     };
@@ -133,9 +134,11 @@ struct SoftwareCausticsGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        // The typed graph clear retains black irradiance whenever no producer dispatches. Fresh bootstrap and warm
-        // temporal decay can both be graph-owned before this callback; only non-temporal reset remains local.
-        payload.raytracingSystem->clearNonTemporalCausticAccumulator(commandList, *payload.targets);
+        // The typed graph clear retains black irradiance whenever no producer dispatches. Non-temporal reset, fresh
+        // bootstrap, and warm temporal decay can all be graph-owned before this callback; direct callers retain the
+        // legacy non-temporal reset here.
+        if(!payload.graphOwnsNonTemporalAccumulatorClear)
+            payload.raytracingSystem->clearNonTemporalCausticAccumulator(commandList, *payload.targets);
         if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
             const bool causticsDispatched = payload.raytracingSystem->renderGpuBvhCaustics(
                 commandList,
@@ -159,6 +162,8 @@ struct SoftwareCausticsGraphTask{
 
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         static_cast<void>(token);
+        if(payload.raytracingSystem && payload.graphOwnsNonTemporalAccumulatorClear)
+            payload.raytracingSystem->confirmCausticAccumulatorNonTemporalClear();
         if(
             payload.raytracingSystem
             && payload.graphOwnsAccumulatorBootstrapClear
@@ -188,6 +193,7 @@ struct HardwareCausticsGraphTask{
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr;
         bool graphEntryStatesOwned = false;
         bool graphOwnsAccumulatorBootstrapClear = false;
+        bool graphOwnsNonTemporalAccumulatorClear = false;
         bool graphOwnsAccumulatorDecay = false;
         bool* accumulatorBootstrapProducerDispatched = nullptr;
     };
@@ -204,9 +210,11 @@ struct HardwareCausticsGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        // The typed graph clear retains black irradiance whenever no producer dispatches. Fresh bootstrap and warm
-        // temporal decay can both be graph-owned before this callback; only non-temporal reset remains local.
-        payload.raytracingSystem->clearNonTemporalCausticAccumulator(commandList, *payload.targets);
+        // The typed graph clear retains black irradiance whenever no producer dispatches. Non-temporal reset, fresh
+        // bootstrap, and warm temporal decay can all be graph-owned before this callback; direct callers retain the
+        // legacy non-temporal reset here.
+        if(!payload.graphOwnsNonTemporalAccumulatorClear)
+            payload.raytracingSystem->clearNonTemporalCausticAccumulator(commandList, *payload.targets);
         if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
             const bool causticsDispatched = payload.raytracingSystem->renderHwCaustics(
                 commandList,
@@ -230,6 +238,8 @@ struct HardwareCausticsGraphTask{
 
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         static_cast<void>(token);
+        if(payload.raytracingSystem && payload.graphOwnsNonTemporalAccumulatorClear)
+            payload.raytracingSystem->confirmCausticAccumulatorNonTemporalClear();
         if(
             payload.raytracingSystem
             && payload.graphOwnsAccumulatorBootstrapClear
@@ -630,6 +640,11 @@ void RendererRayTracingSystem::clearNonTemporalCausticAccumulator(Core::CommandL
     }
 }
 
+void RendererRayTracingSystem::confirmCausticAccumulatorNonTemporalClear(){
+    rayTracingState().m_causticAccumulatorInitialized = false;
+    rayTracingState().m_causticTemporalReuseFrameCount = 0u;
+}
+
 void RendererRayTracingSystem::confirmCausticAccumulatorBootstrapClear(){
     rayTracingState().m_causticAccumulatorInitialized = true;
 }
@@ -937,6 +952,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSoftwareCausticsTask(
     Core::GpuTimingSubmissionTicket& timingTicket,
     const bool graphEntryStatesOwned,
     const bool graphOwnsAccumulatorBootstrapClear,
+    const bool graphOwnsNonTemporalAccumulatorClear,
     const bool graphOwnsAccumulatorDecay,
     Optional<Core::GpuTimingMeasure>* const causticPhotonTiming,
     bool* const accumulatorBootstrapProducerDispatched
@@ -951,6 +967,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSoftwareCausticsTask(
             .causticPhotonTiming = causticPhotonTiming,
             .graphEntryStatesOwned = graphEntryStatesOwned,
             .graphOwnsAccumulatorBootstrapClear = graphOwnsAccumulatorBootstrapClear,
+            .graphOwnsNonTemporalAccumulatorClear = graphOwnsNonTemporalAccumulatorClear,
             .graphOwnsAccumulatorDecay = graphOwnsAccumulatorDecay,
             .accumulatorBootstrapProducerDispatched = accumulatorBootstrapProducerDispatched,
         }
@@ -965,6 +982,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareHardwareCausticsTask(
     Core::GpuTimingSubmissionTicket& timingTicket,
     const bool graphEntryStatesOwned,
     const bool graphOwnsAccumulatorBootstrapClear,
+    const bool graphOwnsNonTemporalAccumulatorClear,
     const bool graphOwnsAccumulatorDecay,
     Optional<Core::GpuTimingMeasure>* const causticPhotonTiming,
     bool* const accumulatorBootstrapProducerDispatched
@@ -979,6 +997,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareHardwareCausticsTask(
             .causticPhotonTiming = causticPhotonTiming,
             .graphEntryStatesOwned = graphEntryStatesOwned,
             .graphOwnsAccumulatorBootstrapClear = graphOwnsAccumulatorBootstrapClear,
+            .graphOwnsNonTemporalAccumulatorClear = graphOwnsNonTemporalAccumulatorClear,
             .graphOwnsAccumulatorDecay = graphOwnsAccumulatorDecay,
             .accumulatorBootstrapProducerDispatched = accumulatorBootstrapProducerDispatched,
         }

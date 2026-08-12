@@ -6685,6 +6685,161 @@ TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
 }
 
 
+// A non-temporal accumulator is cleared every frame before the selected photon producer.  The clear starts in
+// CopyDest state and the producer must receive the compiler-owned CopyDest -> UAV handoff in the same packet.
+// Exercise both software's locked Compute transfer route and hardware's Graphics transfer route.
+TEST(GpuTaskGraph, PlansNonTemporalCausticAccumulatorClearBeforePhotonProducer){
+    const auto verifyRoute = [](const bool hardwareCaustics){
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId accumulator = AddTextureMetadata(
+            graph,
+            Name("tests/task_graph/non_temporal_caustics_accumulator"),
+            "Non-Temporal Caustic Accumulator",
+            Graphics::ResourceStates::ShaderResource,
+            Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+        );
+        ASSERT_TRUE(accumulator.valid());
+
+        const Graphics::GpuQueueRequest graphicsUploadRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Graphics,
+            false,
+            false,
+        };
+        const Graphics::GpuQueueRequest computeTransferRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Compute,
+            true,
+            false,
+        };
+        const Graphics::GpuQueueRequest graphicsRequest{
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueuePreference::Graphics,
+            false,
+            false,
+        };
+        const Graphics::GpuQueueRequest computeRequest{
+            Graphics::GpuQueueCapability::Compute,
+            Graphics::GpuQueuePreference::Compute,
+            true,
+            true,
+        };
+        Graphics::GpuTaskSchedulingHint clearScheduling;
+        clearScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+        clearScheduling.allowPacketMerge = true;
+        const Graphics::GpuTaskResourceUse clearUses[] = {
+            Graphics::GpuTaskResourceUse{
+                .resource = accumulator,
+                .range = {},
+                .requiredState = Graphics::ResourceStates::CopyDest,
+                .access = Graphics::GpuTaskResourceAccess::Write,
+            },
+        };
+        Graphics::GpuTaskDesc clearDesc;
+        clearDesc
+            .setIdentity(Name("tests/task_graph/non_temporal_caustics_accumulator_clear"))
+            .setMarkerLabel("Caustic Accumulator Clear")
+            .setQueue(hardwareCaustics ? graphicsUploadRequest : computeTransferRequest)
+            .setScheduling(clearScheduling)
+            .setResourceUses(clearUses, LengthOf(clearUses))
+        ;
+        const Graphics::GpuTaskId clear = graph.addTask(clearDesc);
+        ASSERT_TRUE(clear.valid());
+
+        Graphics::GpuTaskSchedulingHint producerScheduling;
+        producerScheduling.cost = Graphics::GpuTaskCostHint::Large;
+        producerScheduling.allowPacketMerge = true;
+        producerScheduling.mergeWithPrevious = true;
+        const Graphics::GpuTaskResourceUse producerUses[] = {
+            Graphics::GpuTaskResourceUse{
+                .resource = accumulator,
+                .range = {},
+                .requiredState = Graphics::ResourceStates::UnorderedAccess,
+                .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+            },
+        };
+        Graphics::GpuTaskDesc producerDesc;
+        producerDesc
+            .setIdentity(Name("tests/task_graph/non_temporal_caustics_photon_producer"))
+            .setMarkerLabel(hardwareCaustics ? "Hardware Caustics" : "Software Caustics")
+            .setQueue(hardwareCaustics ? graphicsRequest : computeRequest)
+            .setScheduling(producerScheduling)
+            .setDependencies(&clear, 1u)
+            .setResourceUses(producerUses, LengthOf(producerUses))
+        ;
+        const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+        ASSERT_TRUE(producer.valid());
+
+        const Graphics::GpuPhysicalQueueInfo queues[] = {
+            GraphicsQueue(),
+            DedicatedComputeQueue(),
+        };
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = queues,
+            .queueCount = LengthOf(queues),
+        };
+        Graphics::GpuTaskGraphCompileOptions compileOptions;
+        compileOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, compileOptions));
+        EXPECT_TRUE(HasInferredHazard(
+            analysis,
+            clear,
+            producer,
+            accumulator,
+            Graphics::GpuTaskHazardType::WriteAfterWrite
+        ));
+
+        const Graphics::GpuTaskQueueAssignment* const clearAssignment = assignments.find(clear);
+        const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
+        ASSERT_NE(clearAssignment, nullptr);
+        ASSERT_NE(producerAssignment, nullptr);
+        const Graphics::CommandQueue::Enum expectedQueue = hardwareCaustics
+            ? Graphics::CommandQueue::Graphics
+            : Graphics::CommandQueue::Compute
+        ;
+        EXPECT_EQ(clearAssignment->queueClass, expectedQueue);
+        EXPECT_EQ(producerAssignment->queueClass, expectedQueue);
+
+        const Graphics::GpuSubmissionPacketId clearPacket = compiledGraph.packetForTask(clear);
+        const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
+        ASSERT_TRUE(clearPacket.valid());
+        EXPECT_EQ(producerPacket, clearPacket);
+        ASSERT_EQ(compiledGraph.packetCount(), 1u);
+        const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(clearPacket);
+        ASSERT_EQ(packet.taskCount, 2u);
+        ASSERT_NE(compiledGraph.packetTasks(clearPacket), nullptr);
+        EXPECT_EQ(compiledGraph.packetTasks(clearPacket)[0u], clear);
+        EXPECT_EQ(compiledGraph.packetTasks(clearPacket)[1u], producer);
+
+        const Graphics::GpuCompiledTask* const compiledClear = compiledGraph.findTask(clear);
+        const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+        ASSERT_NE(compiledClear, nullptr);
+        ASSERT_NE(compiledProducer, nullptr);
+        ASSERT_EQ(compiledClear->prologueBarrierCount, 1u);
+        ASSERT_EQ(compiledProducer->prologueBarrierCount, 1u);
+        const Graphics::GpuCompiledBarrier* const clearBarrier = compiledGraph.taskPrologueBarriers(clear);
+        const Graphics::GpuCompiledBarrier* const producerBarrier = compiledGraph.taskPrologueBarriers(producer);
+        ASSERT_NE(clearBarrier, nullptr);
+        ASSERT_NE(producerBarrier, nullptr);
+        EXPECT_EQ(clearBarrier[0u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
+        EXPECT_EQ(clearBarrier[0u].resource, accumulator);
+        EXPECT_EQ(clearBarrier[0u].before, Graphics::ResourceStates::ShaderResource);
+        EXPECT_EQ(clearBarrier[0u].after, Graphics::ResourceStates::CopyDest);
+        EXPECT_EQ(producerBarrier[0u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
+        EXPECT_EQ(producerBarrier[0u].resource, accumulator);
+        EXPECT_EQ(producerBarrier[0u].before, Graphics::ResourceStates::CopyDest);
+        EXPECT_EQ(producerBarrier[0u].after, Graphics::ResourceStates::UnorderedAccess);
+    };
+
+    verifyRoute(false);
+    verifyRoute(true);
+}
+
+
 // Once temporal caustic history is initialized, its decay must be a real graph task before the selected photon
 // producer. The initial ShaderResource -> UAV transition belongs to decay; the producer then needs a same-UAV
 // ordering barrier. Exercise both software's Compute route and hardware's Graphics route without a native bridge.

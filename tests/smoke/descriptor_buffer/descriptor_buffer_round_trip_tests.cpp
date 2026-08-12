@@ -4156,6 +4156,201 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
 }
 
 
+// A non-temporal accumulator begins each producer packet as ShaderResource history. The typed clear must transition
+// it to CopyDest, and the producer callback must receive the compiler-owned CopyDest -> UAV handoff without a local
+// bridge. Successful Vulkan recording proves the native clear and the selected photon producer share that packet.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedNonTemporalCausticAccumulatorClearRecordsBeforePhotonProducer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    constexpr u32 layerCount = 3u;
+    const TextureHandle accumulator = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setArraySize(layerCount)
+            .setDimension(TextureDimension::Texture2DArray)
+            .setFormat(Format::R32_UINT)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::ShaderResource)
+            .setKeepInitialState(true)
+    );
+    ASSERT_NE(accumulator.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId accumulatorResource = graph.importTexture(
+        accumulator,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/non_temporal_caustics_accumulator"))
+            .setMarkerLabel("Non-Temporal Caustic Accumulator")
+            .setType(GpuGraphResourceType::Texture)
+            .setInitialState(ResourceStates::ShaderResource)
+    );
+    ASSERT_TRUE(accumulatorResource.valid());
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const GpuQueueRequest graphicsTransferQueue{
+        GpuQueueCapability::Transfer,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const TextureSubresourceSet accumulatorSubresources(0u, 1u, 0u, layerCount);
+    GpuTaskSchedulingHint clearScheduling;
+    clearScheduling.cost = GpuTaskCostHint::Tiny;
+    clearScheduling.allowPacketMerge = true;
+    GpuTaskDesc clearDesc;
+    clearDesc
+        .setIdentity(Name("tests/descriptor_buffer/non_temporal_caustics_accumulator_clear"))
+        .setMarkerLabel("Caustic Accumulator Clear")
+        .setQueue(graphicsTransferQueue)
+        .setScheduling(clearScheduling)
+    ;
+    QueueSubmissionToken accumulatorClearAcceptedToken;
+    GpuClearTextureTaskDesc clear;
+    clear.destination = accumulatorResource;
+    clear.subresources = accumulatorSubresources;
+    clear.valueType = GpuClearTextureTaskValueType::UInt;
+    clear.uintValue = UIntColor(0u);
+    clear.acceptedToken = &accumulatorClearAcceptedToken;
+    const GpuTaskId clearTask = graph.addClearTextureTask(clearDesc, clear);
+    ASSERT_TRUE(clearTask.valid());
+
+    const GpuTaskResourceUse accumulatorUses[] = {
+        GpuTaskResourceUse{
+            .resource = accumulatorResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = accumulatorSubresources },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    GpuTaskSchedulingHint producerScheduling = clearScheduling;
+    producerScheduling.mergeWithPrevious = true;
+    GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/descriptor_buffer/non_temporal_caustics_photon_producer"))
+        .setMarkerLabel("Hardware Caustic Photons")
+        .setQueue(graphicsQueue)
+        .setScheduling(producerScheduling)
+        .setDependencies(&clearTask, 1u)
+        .setResourceUses(accumulatorUses, LengthOf(accumulatorUses))
+    ;
+    bool producerRecorded = false;
+    const GpuTaskId producerTask = graph.addTask<NativePacketCausticAccumulatorDecayProbeTask>(
+        producerDesc,
+        NativePacketCausticAccumulatorDecayProbeTask::Payload{
+            .accumulator = accumulator.get(),
+            .layerCount = layerCount,
+            .recorded = &producerRecorded,
+        }
+    );
+    ASSERT_TRUE(producerTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/non_temporal_caustics_clear_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId clearPacket = compiledGraph.packetForTask(clearTask);
+    const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producerTask);
+    ASSERT_TRUE(clearPacket.valid());
+    EXPECT_EQ(producerPacket, clearPacket);
+    const GpuTaskQueueAssignment* const clearAssignment = assignments.find(clearTask);
+    const GpuTaskQueueAssignment* const producerAssignment = assignments.find(producerTask);
+    ASSERT_NE(clearAssignment, nullptr);
+    ASSERT_NE(producerAssignment, nullptr);
+    EXPECT_EQ(clearAssignment->queueClass, CommandQueue::Graphics);
+    EXPECT_EQ(producerAssignment->queueClass, CommandQueue::Graphics);
+
+    const GpuCompiledTask* const compiledClear = compiledGraph.findTask(clearTask);
+    const GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producerTask);
+    ASSERT_NE(compiledClear, nullptr);
+    ASSERT_NE(compiledProducer, nullptr);
+    const GpuCompiledBarrier* const clearBarriers = compiledGraph.taskPrologueBarriers(clearTask);
+    const GpuCompiledBarrier* const producerBarriers = compiledGraph.taskPrologueBarriers(producerTask);
+    ASSERT_NE(clearBarriers, nullptr);
+    ASSERT_NE(producerBarriers, nullptr);
+    bool hasClearTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledClear->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = clearBarriers[barrierIndex];
+        hasClearTransition = hasClearTransition || (
+            barrier.type == GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == accumulatorResource
+            && barrier.range.textureSubresources == accumulatorSubresources
+            && barrier.before == ResourceStates::ShaderResource
+            && barrier.after == ResourceStates::CopyDest
+        );
+    }
+    bool hasProducerTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledProducer->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = producerBarriers[barrierIndex];
+        hasProducerTransition = hasProducerTransition || (
+            barrier.type == GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == accumulatorResource
+            && barrier.range.textureSubresources == accumulatorSubresources
+            && barrier.before == ResourceStates::CopyDest
+            && barrier.after == ResourceStates::UnorderedAccess
+        );
+    }
+    EXPECT_TRUE(hasClearTransition);
+    EXPECT_TRUE(hasProducerTransition);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(producerRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(clearPacket).valid());
+    EXPECT_TRUE(accumulatorClearAcceptedToken.valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // A warm temporal accumulator enters this packet as last frame's ShaderResource history. The graph-owned decay
 // transitions it to UAV, then the selected photon producer must receive a compiler-owned UAV-to-UAV ordering fence.
 // Both callbacks are getter-only, so successful Vulkan recording proves there is no local transition bridge.

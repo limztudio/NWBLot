@@ -249,6 +249,7 @@ void RendererSystem::invalidateResources(){
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
     m_deferredCausticAccumulatorBootstrapClearTask = {};
+    m_deferredCausticAccumulatorNonTemporalClearTask = {};
     m_deferredCausticAccumulatorDecayTask = {};
     m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
@@ -509,6 +510,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
     m_deferredCausticAccumulatorBootstrapClearTask = {};
+    m_deferredCausticAccumulatorNonTemporalClearTask = {};
     m_deferredCausticAccumulatorDecayTask = {};
     m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
@@ -1351,6 +1353,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && causticsPacket.valid()
         && causticIrradianceClearPacket == causticsPacket
     ;
+    // Non-temporal accumulation resets every frame through a typed graph clear before its selected producer. The
+    // producer commits the matching CPU reset only after that shared packet accepts.
+    const Core::GpuSubmissionPacketId causticAccumulatorNonTemporalClearPacket =
+        m_deferredCausticAccumulatorNonTemporalClearTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticAccumulatorNonTemporalClearTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    const bool causticAccumulatorNonTemporalClearMergedIntoCausticsPacket =
+        !m_deferredCausticAccumulatorNonTemporalClearTask.valid()
+        || (
+            causticAccumulatorNonTemporalClearPacket.valid()
+            && causticsPacket.valid()
+            && causticAccumulatorNonTemporalClearPacket == causticsPacket
+        )
+    ;
     // A fresh temporal accumulator is zeroed by a typed graph clear before its selected producer. Like the
     // irradiance clear, it must remain in that producer packet so the accepted callback is the sole publisher of
     // the initialized mirror and no hidden submission can write the accumulator.
@@ -1504,6 +1521,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ))
         || !m_deferredCausticIrradianceClearTask.valid()
         || !causticIrradianceClearMergedIntoCausticsPacket
+        || !causticAccumulatorNonTemporalClearMergedIntoCausticsPacket
         || !causticAccumulatorBootstrapClearMergedIntoCausticsPacket
         || !causticAccumulatorDecayMergedIntoCausticsPacket
         || !m_deferredSurfelGiTask.valid()

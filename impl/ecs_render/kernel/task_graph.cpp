@@ -3743,6 +3743,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
     m_deferredCausticAccumulatorBootstrapClearTask = {};
+    m_deferredCausticAccumulatorNonTemporalClearTask = {};
     m_deferredCausticAccumulatorDecayTask = {};
     m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
 
@@ -3927,6 +3928,34 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     m_deferredCausticIrradianceClearTask = irradianceClearTask;
 
     Core::GpuTaskId causticsDependency = irradianceClearTask;
+    const bool graphOwnsNonTemporalAccumulatorClear = m_rayTracingState.m_causticTemporalDecay <= 0.f;
+    if(graphOwnsNonTemporalAccumulatorClear){
+        Core::GpuTaskSchedulingHint accumulatorNonTemporalClearScheduling = irradianceClearScheduling;
+        accumulatorNonTemporalClearScheduling.mergeWithPrevious = true;
+        Core::GpuTaskDesc accumulatorNonTemporalClearDesc;
+        accumulatorNonTemporalClearDesc
+            .setIdentity(Name("render.software_caustics.accumulator_non_temporal_clear"))
+            .setMarkerLabel("Software Caustics Accumulator Clear")
+            .setQueue(ComputeTransferQueueRequest())
+            .setScheduling(accumulatorNonTemporalClearScheduling)
+            .setDependencies(&causticsDependency, 1u)
+        ;
+        Core::GpuClearTextureTaskDesc accumulatorNonTemporalClear;
+        accumulatorNonTemporalClear.destination = causticAccumulator;
+        accumulatorNonTemporalClear.subresources = ECSRenderDetail::s_CausticAccumulatorSubresources;
+        accumulatorNonTemporalClear.valueType = Core::GpuClearTextureTaskValueType::UInt;
+        accumulatorNonTemporalClear.uintValue = Core::UIntColor(0u);
+        const Core::GpuTaskId accumulatorNonTemporalClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
+            accumulatorNonTemporalClearDesc,
+            accumulatorNonTemporalClear
+        );
+        if(!accumulatorNonTemporalClearTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics non-temporal accumulator clear"));
+            return false;
+        }
+        m_deferredCausticAccumulatorNonTemporalClearTask = accumulatorNonTemporalClearTask;
+        causticsDependency = accumulatorNonTemporalClearTask;
+    }
     const bool graphOwnsAccumulatorBootstrapClear =
         !m_rayTracingState.m_causticAccumulatorInitialized
         && m_rayTracingState.m_causticTemporalDecay > 0.f
@@ -4026,6 +4055,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         timingTicket,
         true,
         graphOwnsAccumulatorBootstrapClear,
+        graphOwnsNonTemporalAccumulatorClear,
         graphOwnsAccumulatorDecay,
         &causticPhotonTiming,
         graphOwnsAccumulatorBootstrapClear
@@ -4540,6 +4570,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
     m_deferredCausticAccumulatorBootstrapClearTask = {};
+    m_deferredCausticAccumulatorNonTemporalClearTask = {};
     m_deferredCausticAccumulatorDecayTask = {};
     m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
@@ -5503,6 +5534,34 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         m_deferredCausticIrradianceClearTask = irradianceClearTask;
 
         Core::GpuTaskId causticsDependency = irradianceClearTask;
+        const bool graphOwnsNonTemporalAccumulatorClear = m_rayTracingState.m_causticTemporalDecay <= 0.f;
+        if(graphOwnsNonTemporalAccumulatorClear){
+            Core::GpuTaskSchedulingHint accumulatorNonTemporalClearScheduling = irradianceClearScheduling;
+            accumulatorNonTemporalClearScheduling.mergeWithPrevious = true;
+            Core::GpuTaskDesc accumulatorNonTemporalClearDesc;
+            accumulatorNonTemporalClearDesc
+                .setIdentity(Name("render.hardware_caustics.accumulator_non_temporal_clear"))
+                .setMarkerLabel("Hardware Caustics Accumulator Clear")
+                .setQueue(GraphicsUploadQueueRequest())
+                .setScheduling(accumulatorNonTemporalClearScheduling)
+                .setDependencies(&causticsDependency, 1u)
+            ;
+            Core::GpuClearTextureTaskDesc accumulatorNonTemporalClear;
+            accumulatorNonTemporalClear.destination = causticAccumulator;
+            accumulatorNonTemporalClear.subresources = ECSRenderDetail::s_CausticAccumulatorSubresources;
+            accumulatorNonTemporalClear.valueType = Core::GpuClearTextureTaskValueType::UInt;
+            accumulatorNonTemporalClear.uintValue = Core::UIntColor(0u);
+            const Core::GpuTaskId accumulatorNonTemporalClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
+                accumulatorNonTemporalClearDesc,
+                accumulatorNonTemporalClear
+            );
+            if(!accumulatorNonTemporalClearTask.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics non-temporal accumulator clear"));
+                return;
+            }
+            m_deferredCausticAccumulatorNonTemporalClearTask = accumulatorNonTemporalClearTask;
+            causticsDependency = accumulatorNonTemporalClearTask;
+        }
         const bool graphOwnsAccumulatorBootstrapClear =
             !m_rayTracingState.m_causticAccumulatorInitialized
             && m_rayTracingState.m_causticTemporalDecay > 0.f
@@ -5602,6 +5661,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             hardwareCausticsTimingTicket,
             true,
             graphOwnsAccumulatorBootstrapClear,
+            graphOwnsNonTemporalAccumulatorClear,
             graphOwnsAccumulatorDecay,
             &causticPhotonTiming,
             graphOwnsAccumulatorBootstrapClear

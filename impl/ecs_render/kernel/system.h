@@ -388,6 +388,9 @@ private:
     // The temporal accumulator bootstrap is conditional, but when present it must remain in the same packet as the
     // selected caustic producer; that producer commits initialization only on acceptance.
     Core::GpuTaskId m_deferredCausticAccumulatorBootstrapClearTask;
+    // Non-temporal caustics reset the accumulator every frame through the selected producer packet; the producer
+    // commits the matching CPU reset only after that packet accepts.
+    Core::GpuTaskId m_deferredCausticAccumulatorNonTemporalClearTask;
     // A warm temporal accumulator decays in a mergeable graph task before its selected photon producer.
     Core::GpuTaskId m_deferredCausticAccumulatorDecayTask;
     bool m_deferredCausticAccumulatorBootstrapProducerDispatched = false;

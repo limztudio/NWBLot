@@ -114,8 +114,10 @@ can receive an unconditional final sign-off.
   descriptor slots, bounds, rebuild/refit decision, and the shared sort/payload/counter scratch generation before
   graph compilation. They record serially inside Shadow Preparation; parent links and shared scratch stay in their
   true `UnorderedAccess` state and join the accepted cross-frame state seed. Mesh topology/refit flags commit only
-  after that state handoff accepts. Hybrid keeps its direct non-fatal software tail, while the same state-only
-  imports preserve its UAV producer state across a later route switch.
+  after that state handoff accepts. Hybrid frames now use that frozen plan for the independent per-mesh SW-BVH
+  portion too: if it cannot record, the plan is discarded and the valid hardware opaque result still submits.
+  Hybrid scene/material construction remains native until both routes share one frozen scene plan, while the same
+  state-only imports preserve UAV producer state across a later route switch.
 - Opaque hardware TLAS builds now retain exact preflight instance descriptors together with the referenced BLAS,
   selected TLAS, and backing-buffer handles. The native build stays inside the existing Shadow Preparation Graphics
   packet, explicitly transitions acceleration structures from build-write to read, and commits its static cache and
@@ -216,6 +218,7 @@ can receive an unconditional final sign-off.
 | Graph-owned opaque hardware TLAS build follow-up: renderer build, FrontierSafe graph unit, and descriptor-buffer smoke | passed; `nwb_ecs_render` built, graph tests passed 50/50, and descriptor smoke passed 75 tests with 10 expected topology skips. The graph unit proves the backing-buffer `Common` to `AccelStructRead` handoff and that Shadow Preparation, rather than the frozen preflight data, owns later Compute consumers. |
 | Graph-owned opaque hardware BLAS build/refit follow-up: renderer build, FrontierSafe graph unit, and descriptor-buffer smoke | passed; `nwb_ecs_render` built, graph tests passed 50/50, and descriptor smoke passed 75 tests with 10 expected topology skips. The graph unit covers both a frozen BLAS build and a state-only compatibility BLAS backing, proving their `Common` to `AccelStructRead` handoff remains owned by Shadow Preparation before later Compute consumers. |
 | Graph-owned software-only per-mesh SW-BVH build/refit follow-up: renderer/runtime build, FrontierSafe graph unit, descriptor-buffer smoke, and forced-software transparent capture | passed; the graph unit proves `Common` to `UnorderedAccess` ownership for parent and shared scratch state, graph tests passed 50/50, descriptor smoke passed 75 tests with 10 expected topology skips, and the forced-software transparent capture completed. |
+| Graph-owned hybrid per-mesh SW-BVH follow-up: renderer build, FrontierSafe graph unit, descriptor-buffer smoke, and hardware transparent-multi capture | passed; the frozen mesh build is accepted only after its commands record, while a failed optional software tail discards that plan and still submits the valid hardware opaque result. Graph tests passed 50/50, descriptor smoke passed 77 tests with 11 expected topology skips, and the Vulkan/X11 transparent-multi capture passed. |
 | Dedicated-Transfer recovery-frontier follow-up: graph unit and descriptor-buffer smoke | passed; graph tests passed 50/50 and descriptor smoke passed 77 tests with 11 expected topology skips. The new native test accepts a graph-owned Transfer upload, injects a rejected dependent Graphics suffix, verifies the transaction emits its exact physical Transfer token, then confirms the Device receives that token on the independent recovery-tail submission. This adapter skips only the dedicated-Transfer execution because it has no Transfer-only family. |
 
 The latest local command-IR evidence is under
@@ -246,8 +249,8 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    accumulation phases now freeze and publish their own per-write-point material/CSG streams, preserving the shared
    interval sample state across the low-resolution raster passes. Current and lagged deferred bindless selectors,
    the ray-trace material-context selector, caustic emission-target stream, surfel-frame constants, shadow
-   material-context batch, software scene-BVH pair, software-only per-mesh SW-BVH build/refit, and opaque hardware
-   TLAS and BLAS build/refit transactions are acceptance-safe
+   material-context batch, software scene-BVH pair, software-only and hybrid per-mesh SW-BVH build/refit, and
+   opaque hardware TLAS and BLAS build/refit transactions are acceptance-safe
    graph-owned preparation work; skinning compute dispatch and other specialized descriptor/resource updates still
    retain direct native recording or submission. The graph
    therefore does not yet authoritatively own all frame work and state retirement.

@@ -992,8 +992,15 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
             ;
             m_shadowVisibilityHybridResourcesPreflighted = swReady;
             m_shadowVisibilityHybridPipelinePreflighted = swReady && ensureSwShadowPipeline();
-            if(m_shadowVisibilityHybridPipelinePreflighted)
+            if(m_shadowVisibilityHybridPipelinePreflighted){
                 rayTracingState().m_hybridTransparentShadowReady = true;
+                // The per-mesh build is independent from the later CPU scene/material gather.  Freeze it as a
+                // graph-owned plan when possible, but keep the latter native: a scene/material recording miss must
+                // not turn an otherwise valid HW opaque result into a rejected frame.  A capture miss simply keeps
+                // the established direct mesh-build compatibility path for this frame.
+                if(!capturePreparedMeshSwBvhBuilds())
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze hybrid transparent software BVH build plan"));
+            }
             else
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow preparation failed; transparent shadows absent this frame"));
         }
@@ -1205,6 +1212,10 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
         if(!meshBlasReady){
             if(sceneTlasBuildGraphOwned || meshBlasBuildsGraphOwned)
                 return false;
+            // A hybrid SW-BVH plan has not recorded when the HW precursor misses. Do not let packet acceptance
+            // publish optimistic mesh topology state for work that never reached this command list.
+            if(meshSwBvhBuildsGraphOwned)
+                clearPreparedMeshSwBvhBuilds();
             return true;
         }
         const bool sceneTlasReady = sceneTlasBuildGraphOwned
@@ -1216,20 +1227,44 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
                 return false;
             rayTracingState().m_surfelEnabled = false;
             rayTracingState().m_surfelUseHwTrace = false;
+            // As above, retain only plans whose native commands were actually recorded.
+            if(meshSwBvhBuildsGraphOwned)
+                clearPreparedMeshSwBvhBuilds();
             return true;
         }
 
         outBackendReady = m_shadowVisibilityBackendPipelinePreflighted;
         rayTracingState().m_hybridTransparentShadowReady = false;
+        bool hybridMeshSwBvhBuildRecorded = false;
         if(
             outBackendReady
             && m_shadowVisibilityHybridResourcesPreflighted
             && rayTracingState().m_sceneHasTransparentOccluder
         ){
-            if(!buildPendingMeshSwBvh(commandList))
+            const bool meshSwBvhReady = meshSwBvhBuildsGraphOwned
+                ? recordPreparedMeshSwBvhBuilds(commandList)
+                : buildPendingMeshSwBvh(commandList)
+            ;
+            hybridMeshSwBvhBuildRecorded = meshSwBvhBuildsGraphOwned && meshSwBvhReady;
+            if(!meshSwBvhReady){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent shadow per-mesh software BVH build failed"));
+                // This failure is deliberately non-fatal: HW opaque shadows still submit.  Drop the frozen plan so
+                // the accepted packet cannot commit a topology build that did not record.
+                if(meshSwBvhBuildsGraphOwned)
+                    clearPreparedMeshSwBvhBuilds();
+            }
             const bool swReady =
-                buildSceneSwBvh(commandList, scratchArena, shadowMaterialContextBatchGraphOwned, false)
+                // The direct compatibility loop historically continues gathering the scene after an unrelated
+                // mesh build miss. Preserve that best-effort behavior; only a failed frozen plan is all-or-nothing
+                // because its scene gather may otherwise observe topology that never recorded.
+                (!meshSwBvhBuildsGraphOwned || meshSwBvhReady)
+                && buildSceneSwBvh(
+                    commandList,
+                    scratchArena,
+                    shadowMaterialContextBatchGraphOwned,
+                    false,
+                    meshSwBvhBuildsGraphOwned
+                )
                 && rayTracingState().m_swShadowMeshCount > 0u
                 && rayTracingState().m_sceneBvhInstanceCount > 0u
                 && m_shadowVisibilityHybridPipelinePreflighted
@@ -1239,6 +1274,11 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
             else
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow recording failed; transparent shadows absent this frame"));
         }
+        // A graph-owned hybrid plan may exist only for the optional software tail.  It is eligible for the common
+        // acceptance callback exactly when its commands were emitted; all other HW-only early-outs retain their
+        // native fallback without falsely advancing the SW-BVH CPU cache.
+        if(meshSwBvhBuildsGraphOwned && !hybridMeshSwBvhBuildRecorded)
+            clearPreparedMeshSwBvhBuilds();
         if(
             rayTracingState().m_surfelEnabled
             && !surfelFrameConstantsGraphOwned

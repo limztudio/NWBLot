@@ -226,8 +226,9 @@ public:
     [[nodiscard]] bool preparedMeshBlasBuildsReady()const noexcept;
     [[nodiscard]] const PreparedMeshBlasBuildVector& preparedMeshBlasBuilds()const noexcept;
     void confirmPreparedMeshBlasBuilds()noexcept;
-    // Software-only frames freeze every selected mesh build/refit against its shared scratch generation. Hybrid
-    // hardware-to-software fallback intentionally retains the direct native path because its SW half is non-fatal.
+    // Software-only frames and the independent per-mesh portion of hybrid frames freeze selected build/refit work
+    // against its shared scratch generation. Hybrid scene/material construction remains native because its SW half
+    // is non-fatal after hardware preparation has already succeeded.
     [[nodiscard]] bool preparedMeshSwBvhBuildsReady()const noexcept;
     [[nodiscard]] const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds()const noexcept;
     void confirmPreparedMeshSwBvhBuilds()noexcept;

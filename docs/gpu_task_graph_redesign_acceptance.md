@@ -9,7 +9,7 @@ graph-owned per-frame ImGui uploads, opt-in ready-frontier native recording, and
 routing, actual-device stale packet-recording recreation coverage, qualified dedicated-Transfer recovery-frontier
 coverage, graph-owned public setup uploads,
 graph-owned deferred mesh-view, scene-light, and scene-shading frame updates, and graph-owned decoded texture-asset
-uploads, graph-owned runtime-skinning joint-palette uploads and no-active rest-to-skinned copies, graph-owned opaque material draw-stream uploads, and
+uploads, graph-owned runtime-skinning dispatch packets, graph-owned opaque material draw-stream uploads, and
 graph-owned opaque CSG receiver/cutter/context/interval streams, graph-owned transparent CSG interval-producer
 streams, and graph-owned transparent AVBOIT occupancy, extinction, and accumulation material/CSG streams,
 and graph-owned current and lagged deferred bindless-selector, ray-trace material-context selector, caustic
@@ -46,15 +46,13 @@ can receive an unconditional final sign-off.
   retains each region as a graph upload blob, serializes the subresources to one terminal accepted token, declares
   `ShaderResource` as the visible final state, and keeps the automatic Transfer -> Compute -> Graphics route plus
   consumer readiness bridge. Bindless sampled-image allocation/commit follows only after that graph batch accepts.
-- Active runtime skinning joint palettes and one-time bindless resource selectors are now derived before recording,
-  copied into immutable graph upload blobs, compiled and submitted on the primary Graphics transport, then exposed
-  through the terminal native state handoff to the established skinning compute list. Automatic selector buffers
-  publish `Common`; the native continuation owns the `ConstantBuffer` transition and accepted graph packets alone
-  commit selector residency. The compute dispatch and dirty-state commit remain native.
-- No-active runtime skinning now graph-owns the serial three-region rest-position/normal/tangent to skinned-stream
-  copy in that same primary-Graphics packet. Its accepted state seeds the native bounds/repack continuation, which
-  promotes every skinned stream to `ShaderResource`; dirty-state commits remain owned by the later native
-  submission, and releasing a pose forces one bind-pose copy/repack.
+- Runtime skinning now derives immutable per-mesh dispatch plans before recording. Active joint palettes and one-time
+  bindless selectors upload into the same primary-Graphics graph packet as deformation, meshlet-bounds, and optional
+  normal-repack compute work; no-active poses similarly merge their three-region rest-to-skinned copy with the
+  bounds/repack continuation. The graph-owned compute task consumes selectors as `ConstantBuffer` (automatic
+  tracking restores their cross-frame `Common` state), publishes every renderer-visible output as `ShaderResource`,
+  and commits selector residency plus dirty-state changes only when the packet accepts. Releasing a pose still forces
+  one bind-pose copy/repack.
 - In the shared deferred path, ImGui vertex/index payloads and requested font/texture updates are retained as
   immutable graph blobs, lowered through the built-in upload tasks, and made dependencies of the terminal overlay
   or upload-completion packet. Small deltas stay on Graphics; amortizable updates prefer Transfer.
@@ -216,8 +214,7 @@ can receive an unconditional final sign-off.
 | Graph-owned deferred-frame upload follow-up: `nwb_ecs_graphics_tests`, `nwb_graphics_task_graph_tests`, and `nwb_descriptor_buffer_tests` | 3/3 passed |
 | Graph-owned deferred-frame upload follow-up: rebuilt `nwb_testbed` window capture | passed; a real X11/Vulkan deferred frame completed with the graph-owned mesh-view, scene-light, and scene-shading uploads |
 | Graph-owned decoded-texture upload follow-up: `nwb_assets_texture_loader`, `nwb_graphics_task_graph_tests`, and `nwb_descriptor_buffer_tests` | passed; the native smoke now reads back two graph-owned mip payloads after their caller arrays are overwritten (74 passed; 10 expected topology skips) |
-| Graph-owned skinning joint-palette follow-up: `nwb_ecs_mesh_skinning`, `nwb_ecs_graphics_tests`, graph/descriptor smoke, and runtime skinning smoke | passed; the graph packet publishes `ShaderResource` joint palettes to the primary-Graphics skinning compute list; 17/17 ECS unit tests, 45/45 graph tests, descriptor smoke 74 passed with 10 expected topology skips, and the opt-in one-character fast smoke completed its animated case |
-| Graph-owned no-active skinning copy follow-up: `nwb_ecs_mesh_skinning`, `nwb_ecs_graphics_tests`, and descriptor smoke | passed; one primary-Graphics packet serializes the palette upload with a three-region rest-to-skinned copy, then a native continuation proves position, normal, and tangent handoff to `ShaderResource`; 2/2 ECS lifecycle tests and 75 descriptor smoke tests passed |
+| Graph-owned skinning-dispatch follow-up: `nwb_ecs_mesh_skinning`, `nwb_ecs_graphics_tests`, graph/descriptor smoke, and runtime skinning smoke | passed; one primary-Graphics graph packet combines selector/palette uploads, rest-stream copies, deform, bounds, normal repack, and acceptance-only CPU commits without a native continuation. 18/18 ECS unit tests, 50/50 graph tests, and descriptor smoke 77 passed with 11 expected topology skips; the one-character animated 339-joint Vulkan fast smoke completed its warm-up and sampled frames. |
 | Graph-owned opaque material-stream follow-up: `nwb_ecs_graphics_tests`, graph/descriptor smoke, and runtime skinning smoke | passed; 17/17 ECS unit tests, 45/45 graph tests, descriptor smoke 74 passed with 10 expected topology skips, and the one-character Vulkan smoke completed its animated opaque-material case |
 | Graph-owned opaque CSG complete-stream follow-up: static/compute opaque capture plus transparent CSG regression captures | 5/5 passed; both opaque Vulkan/X11 paths consumed graph-owned receiver, cutter, context, and interval-state buffers before Opaque G-Buffer, while all three transparent compatibility captures remained correct |
 | Graph-owned transparent CSG interval-producer follow-up: ECS graphics unit plus static and skinned transparent CSG early/mid/late captures | 7/7 passed; the frozen receiver-surface payload is uploaded before AVBOIT-pre while the existing one/five-packet AVBOIT contract and visible transparent CSG cuts remain intact |
@@ -268,8 +265,7 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    legacy state-handoff data. The shared deferred path now owns per-frame ImGui draw/font/texture uploads; its
    direct path remains only as a compatibility fallback for worlds without a graph-owning renderer or a rejected
    graph attempt. Public buffer/texture setup uploads, decoded texture-asset uploads, and the shared deferred
-   mesh-view, scene-light, scene-shading, runtime skinning joint-palette, selector, and no-active rest-stream
-   updates, and opaque material instance/typed updates
+   mesh-view, scene-light, scene-shading, runtime skinning selector/palette/copy/compute updates, and opaque material instance/typed updates
    now use the graph-owned primitive path. The transparent AVBOIT interval producer, occupancy, extinction, and
    accumulation phases now freeze and publish their own per-write-point material/CSG streams, preserving the shared
    interval sample state across the low-resolution raster passes. Current and lagged deferred bindless selectors,
@@ -278,8 +274,8 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    fallback context, software-only and hybrid scene-BVH pairs
    and healthy hybrid software traversal tables, software-only and hybrid per-mesh SW-BVH build/refit,
    opaque and healthy hybrid hardware TLAS, and opaque and hybrid hardware BLAS build/refit transactions are acceptance-safe
-   graph-owned preparation work; skinning compute dispatch and other specialized descriptor/resource updates still
-   retain direct native recording or submission. The graph
+   graph-owned preparation work; other specialized descriptor/resource updates still retain direct native recording
+   or submission. The graph
    therefore does not yet authoritatively own all frame work and state retirement.
 
 3. **Packet scheduling and recording completion (partially addressed).** Current merging is limited to compatible

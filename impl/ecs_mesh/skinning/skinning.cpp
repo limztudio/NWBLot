@@ -12,8 +12,11 @@
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
+#include <core/graphics/gpu_timing.h>
 #include <core/graphics/module.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
+#include <core/graphics/task_graph/compiled_graph.h>
+#include <core/graphics/task_graph/task_graph.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
 
 
@@ -277,24 +280,212 @@ bool MeshSkinningSystem::hasGraphOwnedRestCopyPlan(const MeshSkinningRuntimeInst
     return false;
 }
 
-void MeshSkinningSystem::confirmGraphOwnedBindlessResourceSlotsUploads(){
-    for(const GraphOwnedBindlessResourceSlotsPlan& plan : m_graphOwnedBindlessResourceSlotsPlans){
-        const auto foundResources = m_runtimeResources.find(plan.handle.value);
-        if(foundResources == m_runtimeResources.end())
-            continue;
+bool MeshSkinningSystem::recordGraphOwnedSkinningDispatch(
+    const GraphOwnedSkinningDispatchPlan& plan,
+    Core::CommandList& commandList,
+    const Core::GpuTaskRecordContext& context
+){
+    const auto resolveBuffer = [&](const Core::GpuGraphResourceId resource){
+        return context.taskGraph.bufferForResource(resource);
+    };
 
-        RuntimeResources& resources = foundResources.value();
+    Core::Buffer* const bindlessResourceSlots = resolveBuffer(plan.bindlessResourceSlotsResource);
+    Core::Buffer* const skinnedPosition = resolveBuffer(plan.skinnedPositionResource);
+    Core::Buffer* const meshletDesc = resolveBuffer(plan.meshletDescResource);
+    Core::Buffer* const meshletPositionRefDeltas = resolveBuffer(plan.meshletPositionRefDeltaResource);
+    Core::Buffer* const meshletLocalVertexRefs = resolveBuffer(plan.meshletLocalVertexRefResource);
+    Core::Buffer* const meshletPrimitiveIndices = resolveBuffer(plan.meshletPrimitiveIndexResource);
+    Core::Buffer* const meshletBounds = resolveBuffer(plan.meshletBoundsResource);
+    Core::ComputePipeline* const boundsPipeline = context.taskGraph.computePipelineFor(plan.boundsPipeline);
+    if(
+        !bindlessResourceSlots
+        || !skinnedPosition
+        || !meshletDesc
+        || !meshletPositionRefDeltas
+        || !meshletLocalVertexRefs
+        || !meshletPrimitiveIndices
+        || !meshletBounds
+        || !boundsPipeline
+    )
+        return false;
+
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
+
+    // The selector is consumed indirectly by every skinning pipeline through its bindless slot. The graph
+    // declaration makes that dependency visible to scheduling; retain the concrete ConstantBuffer transition in
+    // this packet so native descriptor-buffer binding never inherits Common from its preceding upload.
+    commandList.setBufferState(bindlessResourceSlots, Core::ResourceStates::ConstantBuffer);
+    commandList.commitBarriers();
+
+    if(plan.hasActiveSkin){
+        Core::Buffer* const restPosition = resolveBuffer(plan.restPositionResource);
+        Core::Buffer* const restNormal = resolveBuffer(plan.restNormalResource);
+        Core::Buffer* const restTangent = resolveBuffer(plan.restTangentResource);
+        Core::Buffer* const skinnedNormal = resolveBuffer(plan.skinnedNormalResource);
+        Core::Buffer* const skinnedTangent = resolveBuffer(plan.skinnedTangentResource);
+        Core::Buffer* const meshletAttributeRefDeltas = resolveBuffer(plan.meshletAttributeRefDeltaResource);
+        Core::Buffer* const attributeSkins = resolveBuffer(plan.attributeSkinResource);
+        Core::Buffer* const skinInfluences = resolveBuffer(plan.skinResource);
+        Core::Buffer* const jointPalette = resolveBuffer(plan.jointPaletteResource);
+        Core::ComputePipeline* const skinningPipeline = context.taskGraph.computePipelineFor(plan.skinningPipeline);
         if(
-            resources.editRevision != plan.editRevision
-            || resources.bindlessResourceSlotsBuffer.get() != plan.slotsBuffer.get()
-            || resources.bindlessHeapHandles.resourceSlots != plan.slotsDescriptor
+            !restPosition
+            || !restNormal
+            || !restTangent
+            || !skinnedNormal
+            || !skinnedTangent
+            || !meshletAttributeRefDeltas
+            || !attributeSkins
+            || !skinInfluences
+            || !jointPalette
+            || !skinningPipeline
         )
-            continue;
+            return false;
 
-        if(resources.bindlessResourceSlots == plan.payload)
-            resources.bindlessResourceSlotsUploaded = true;
+        commandList.setBufferState(restPosition, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(restNormal, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(restTangent, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(skinnedPosition, Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(skinnedNormal, Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(skinnedTangent, Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(meshletDesc, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(meshletPositionRefDeltas, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(meshletAttributeRefDeltas, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(attributeSkins, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(skinInfluences, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(jointPalette, Core::ResourceStates::ShaderResource);
+        commandList.commitBarriers();
+
+        Core::ComputeState computeState;
+        computeState.setPipeline(skinningPipeline);
+        commandList.setComputeState(computeState);
+        heap.bindCompute(commandList, *skinningPipeline);
+
+        MeshSkinningPushConstants pushConstants;
+        pushConstants.meshletCount = plan.meshletCount;
+        pushConstants.skinCount = plan.skinCount;
+        pushConstants.jointCount = plan.jointCount;
+        pushConstants.skinningMode = plan.skinningMode;
+        pushConstants.attributeCount = plan.attributeCount;
+        pushConstants.bindlessResourceSlots = plan.bindlessResourceSlots;
+        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+        {
+            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_Skinning, device, commandList);
+
+            commandList.dispatch(pushConstants.meshletCount, 1u, 1u);
+        }
+
+        commandList.setBufferState(skinnedPosition, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(skinnedNormal, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(skinnedTangent, Core::ResourceStates::ShaderResource);
+        commandList.commitBarriers();
     }
-    m_graphOwnedBindlessResourceSlotsPlans.clear();
+    else if(plan.copiedRestStreams){
+        Core::Buffer* const skinnedNormal = resolveBuffer(plan.skinnedNormalResource);
+        Core::Buffer* const skinnedTangent = resolveBuffer(plan.skinnedTangentResource);
+        if(!skinnedNormal || !skinnedTangent)
+            return false;
+
+        // The preceding graph-owned copy leaves every output in CopyDest. Promote the complete stream set in this
+        // same packet before bounds and later renderer consumers observe it.
+        commandList.setBufferState(skinnedPosition, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(skinnedNormal, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(skinnedTangent, Core::ResourceStates::ShaderResource);
+        commandList.commitBarriers();
+    }
+
+    if(plan.updatesMeshletBounds){
+        commandList.setBufferState(skinnedPosition, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(meshletDesc, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(meshletPositionRefDeltas, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(meshletLocalVertexRefs, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(meshletPrimitiveIndices, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(meshletBounds, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+
+        Core::ComputeState computeState;
+        computeState.setPipeline(boundsPipeline);
+        commandList.setComputeState(computeState);
+        heap.bindCompute(commandList, *boundsPipeline);
+
+        MeshletBoundsPushConstants pushConstants;
+        pushConstants.meshletCount = plan.meshletCount;
+        pushConstants.bindlessResourceSlots = plan.bindlessResourceSlots;
+        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+        {
+            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_MeshletBounds, device, commandList);
+
+            commandList.dispatch(pushConstants.meshletCount, 1u, 1u);
+        }
+
+        commandList.setBufferState(meshletBounds, Core::ResourceStates::ShaderResource);
+        commandList.commitBarriers();
+    }
+
+    if(plan.repacksNormals){
+        Core::Buffer* const skinnedNormal = resolveBuffer(plan.skinnedNormalResource);
+        Core::Buffer* const meshletAttributeRefDeltas = resolveBuffer(plan.meshletAttributeRefDeltaResource);
+        Core::Buffer* const attributeBuffer = resolveBuffer(plan.attributeResource);
+        Core::ComputePipeline* const repackPipeline = context.taskGraph.computePipelineFor(plan.repackPipeline);
+        if(!skinnedNormal || !meshletAttributeRefDeltas || !attributeBuffer || !repackPipeline)
+            return false;
+
+        commandList.setBufferState(skinnedNormal, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(meshletDesc, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(meshletPrimitiveIndices, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(meshletAttributeRefDeltas, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(meshletLocalVertexRefs, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(attributeBuffer, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+
+        Core::ComputeState computeState;
+        computeState.setPipeline(repackPipeline);
+        commandList.setComputeState(computeState);
+        heap.bindCompute(commandList, *repackPipeline);
+
+        MeshletRepackPushConstants pushConstants;
+        pushConstants.meshletCount = plan.meshletCount;
+        pushConstants.bindlessResourceSlots = plan.bindlessResourceSlots;
+        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+        {
+            Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_RepackNormals, device, commandList);
+
+            commandList.dispatch(pushConstants.meshletCount, 1u, 1u);
+        }
+
+        commandList.setBufferState(attributeBuffer, Core::ResourceStates::ShaderResource);
+        commandList.commitBarriers();
+    }
+    return true;
+}
+
+void MeshSkinningSystem::confirmGraphOwnedSkinningDispatch(const GraphOwnedSkinningDispatchPlan& plan)noexcept{
+    MeshSkinningRuntimeInstance* const instance = m_runtimeMeshCache.findInstance(plan.handle);
+    if(!instance || instance->editRevision != plan.submissionCommit.editRevision)
+        return;
+
+    const auto foundResources = m_runtimeResources.find(plan.handle.value);
+    if(foundResources == m_runtimeResources.end())
+        return;
+    RuntimeResources& resources = foundResources.value();
+    if(
+        resources.editRevision != plan.submissionCommit.editRevision
+        || resources.bindlessResourceSlotsBuffer.get() != plan.bindlessResourceSlotsBuffer.get()
+        || resources.bindlessHeapHandles.resourceSlots != plan.bindlessResourceSlotsDescriptor
+        || resources.bindlessResourceSlots != plan.bindlessResourceSlotsPayload
+    )
+        return;
+
+    ApplyMeshSkinningSubmissionCommit(
+        true,
+        instance->editRevision,
+        instance->dirtyFlags,
+        resources.bindlessResourceSlotsUploaded,
+        plan.submissionCommit
+    );
 }
 
 void MeshSkinningSystem::transitionGraphCopiedRestStreams(

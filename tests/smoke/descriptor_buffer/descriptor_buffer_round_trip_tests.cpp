@@ -229,6 +229,77 @@ Optional<Common::LoggerRegistrationGuard> DescriptorBufferRoundTripTest::s_logge
 }
 
 
+// These compact graph tasks model skinning's descriptor-visible compute endpoint. They deliberately perform no
+// synthetic native submission: their packet-local barriers publish the required compute states, and the task's
+// accepted callback observes the same packet token as its uploads/copies.
+struct SkinningGraphSelectorConsumerTask{
+    struct Payload{
+        GpuGraphResourceId selector;
+        bool* observedConstantBuffer = nullptr;
+        QueueSubmissionToken* acceptedToken = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        Buffer* const selector = context.taskGraph.bufferForResource(payload.selector);
+        if(!selector)
+            return false;
+
+        commandList.setBufferState(selector, ResourceStates::ConstantBuffer);
+        commandList.commitBarriers();
+        const bool observedConstantBuffer = commandList.getBufferState(selector) == ResourceStates::ConstantBuffer;
+        if(payload.observedConstantBuffer)
+            *payload.observedConstantBuffer = observedConstantBuffer;
+        return observedConstantBuffer;
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(payload.acceptedToken)
+            *payload.acceptedToken = token;
+    }
+};
+
+
+struct SkinningGraphRestStreamConsumerTask{
+    struct Payload{
+        GpuGraphResourceId position;
+        GpuGraphResourceId normal;
+        GpuGraphResourceId tangent;
+        QueueSubmissionToken* acceptedToken = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        Buffer* const position = context.taskGraph.bufferForResource(payload.position);
+        Buffer* const normal = context.taskGraph.bufferForResource(payload.normal);
+        Buffer* const tangent = context.taskGraph.bufferForResource(payload.tangent);
+        if(!position || !normal || !tangent)
+            return false;
+
+        commandList.setBufferState(position, ResourceStates::ShaderResource);
+        commandList.setBufferState(normal, ResourceStates::ShaderResource);
+        commandList.setBufferState(tangent, ResourceStates::ShaderResource);
+        commandList.commitBarriers();
+        return
+            commandList.getBufferState(position) == ResourceStates::ShaderResource
+            && commandList.getBufferState(normal) == ResourceStates::ShaderResource
+            && commandList.getBufferState(tangent) == ResourceStates::ShaderResource
+        ;
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(payload.acceptedToken)
+            *payload.acceptedToken = token;
+    }
+};
+
+
 // RendererSystem requests this terminal policy only when accepted cross-queue ownership cannot be recovered. The
 // Graphics owner must stop the current generation before it records another frame, leaving orderly teardown and
 // recreation to the caller that owns the device lifetime.
@@ -2526,9 +2597,9 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
 }
 
 
-// Skinning publishes its immutable bindless selector through the primary-Graphics graph packet, then the retained
-// native compute continuation owns Common -> ConstantBuffer before it dereferences the selector heap slot.
-TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesAndHandsOffToNativeCompute){
+// Skinning publishes its immutable bindless selector and consumes it from a graph-owned compute endpoint in one
+// primary-Graphics packet. No second native command list may bridge Common -> ConstantBuffer.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphCompute){
     auto& device = DescriptorBufferRoundTripTest::device();
     static constexpr u32 s_SelectorWords[] = {
         0x14a6f3c9u,
@@ -2601,13 +2672,46 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesAndHandsOf
         GpuUploadBufferTaskDesc{
             .source = selectorBlob,
             .destination = selectorResource,
-            // Automatic state tracking requires the graph-visible state to remain its Common initial state. The
-            // following native list declares the descriptor-visible ConstantBuffer use.
+            // The graph-owned compute task promotes the selector to its descriptor-visible ConstantBuffer state,
+            // while automatic tracking restores Common as the cross-frame handoff state.
             .finalState = ResourceStates::Common,
             .acceptedToken = &selectorAcceptedToken,
         }
     );
     ASSERT_TRUE(selectorTask.valid());
+
+    const GpuTaskResourceUse selectorConsumerUses[] = {
+        GpuTaskResourceUse{
+            .resource = selectorResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskSchedulingHint selectorConsumerScheduling = selectorScheduling;
+    selectorConsumerScheduling.mergeWithPrevious = true;
+    bool selectorConsumerObservedConstantBuffer = false;
+    QueueSubmissionToken selectorConsumerAcceptedToken;
+    const GpuTaskId selectorConsumerTask = graph.addTask<SkinningGraphSelectorConsumerTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/skinning_bindless_selector_consume"))
+            .setMarkerLabel("Skinning Graph Compute Consume")
+            .setQueue(GpuQueueRequest{
+                GpuQueueCapability::Compute,
+                GpuQueuePreference::Graphics,
+                false,
+                false,
+            })
+            .setScheduling(selectorConsumerScheduling)
+            .setDependencies(&selectorTask, 1u)
+            .setResourceUses(selectorConsumerUses, LengthOf(selectorConsumerUses)),
+        SkinningGraphSelectorConsumerTask::Payload{
+            .selector = selectorResource,
+            .observedConstantBuffer = &selectorConsumerObservedConstantBuffer,
+            .acceptedToken = &selectorConsumerAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(selectorConsumerTask.valid());
 
     const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
     const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
@@ -2624,10 +2728,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesAndHandsOf
     ASSERT_NE(selectorAssignment, nullptr);
     EXPECT_EQ(selectorAssignment->queue, primaryGraphicsQueue);
     const GpuSubmissionPacketId selectorPacket = compiledGraph.packetForTask(selectorTask);
+    const GpuSubmissionPacketId selectorConsumerPacket = compiledGraph.packetForTask(selectorConsumerTask);
     ASSERT_TRUE(selectorPacket.valid());
+    ASSERT_TRUE(selectorConsumerPacket.valid());
     EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(selectorConsumerPacket, selectorPacket);
     EXPECT_EQ(compiledGraph.packet(selectorPacket).queue, primaryGraphicsQueue);
-    EXPECT_EQ(compiledGraph.packet(selectorPacket).taskCount, 1u);
+    EXPECT_EQ(compiledGraph.packet(selectorPacket).taskCount, 2u);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -2641,6 +2748,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesAndHandsOf
         0u,
         recordedGraph
     ));
+    EXPECT_TRUE(selectorConsumerObservedConstantBuffer);
     const CommandListResourceStateHandoff* const graphFinalState = recordedGraph.packetFinalStateSeed(selectorPacket);
     ASSERT_NE(graphFinalState, nullptr);
     auto graphStateProbe = device.createCommandList();
@@ -2667,35 +2775,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesAndHandsOf
     ASSERT_TRUE(selectorAcceptedToken.valid());
     EXPECT_EQ(selectorAcceptedToken.queue, graphToken.queue);
     EXPECT_EQ(selectorAcceptedToken.value, graphToken.value);
-
-    CommandListResourceStateHandoff nativeFinalState(DescriptorBufferRoundTripTest::arena());
-    auto nativeContinuation = device.createCommandList();
-    ASSERT_NE(nativeContinuation.get(), nullptr);
-    nativeContinuation->open(graphFinalState);
-    EXPECT_EQ(nativeContinuation->getBufferState(selectorBuffer.get()), ResourceStates::Common);
-    nativeContinuation->setBufferState(selectorBuffer.get(), ResourceStates::ConstantBuffer);
-    nativeContinuation->commitBarriers();
-    EXPECT_EQ(nativeContinuation->getBufferState(selectorBuffer.get()), ResourceStates::ConstantBuffer);
-    nativeContinuation->close(&nativeFinalState);
-    ASSERT_TRUE(nativeFinalState.valid());
-    auto nativeStateProbe = device.createCommandList();
-    ASSERT_NE(nativeStateProbe.get(), nullptr);
-    nativeStateProbe->open(&nativeFinalState);
-    EXPECT_EQ(nativeStateProbe->getBufferState(selectorBuffer.get()), ResourceStates::Common);
-    nativeStateProbe->close();
-
-    CommandList* const nativeContinuationLists[] = { nativeContinuation.get() };
-    const QueueSubmissionToken nativeToken = device.executeCommandLists(
-        nativeContinuationLists,
-        LengthOf(nativeContinuationLists),
-        primaryGraphicsQueue,
-        QueueSubmissionDesc{}
-    );
-    ASSERT_TRUE(nativeToken.valid());
-    EXPECT_TRUE(nativeToken.matchesPhysicalQueue(
-        primaryGraphicsQueue.index,
-        primaryGraphicsQueue.deviceGeneration
-    ));
+    ASSERT_TRUE(selectorConsumerAcceptedToken.valid());
+    EXPECT_EQ(selectorConsumerAcceptedToken.queue, graphToken.queue);
+    EXPECT_EQ(selectorConsumerAcceptedToken.value, graphToken.value);
     ASSERT_TRUE(device.waitForIdle());
 
     const u32* const uploadedWords = static_cast<const u32*>(device.mapBuffer(selectorBuffer.get(), CpuAccessMode::Read));
@@ -2706,10 +2788,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesAndHandsOf
 }
 
 
-// Skinning's no-active-pose path uploads a small palette payload then copies rest position, normal, and tangent
-// streams into their skinned counterparts.  Keep this as a real primary-Graphics packet proof: the native bounds
-// continuation must observe every copy state and explicitly promote all three outputs before renderer consumption.
-TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesAndHandsOffAllStreams){
+// Skinning's no-active-pose path copies rest position, normal, and tangent streams into their skinned counterparts,
+// then a graph-owned compute endpoint promotes every output before renderer consumption.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesWithGraphCompute){
     auto& device = DescriptorBufferRoundTripTest::device();
     static constexpr u32 s_PaletteWords[] = {
         0x6a5d39c1u,
@@ -2922,6 +3003,51 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesAndHandsOf
     ASSERT_TRUE(restCopyTask.valid());
     ASSERT_EQ(graph.taskAt(restCopyTask.index).resourceUseCount, 6u);
 
+    const GpuTaskResourceUse restStreamConsumerUses[] = {
+        GpuTaskResourceUse{
+            .resource = skinnedPositionResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = skinnedNormalResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = skinnedTangentResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskSchedulingHint restStreamConsumerScheduling = restCopyScheduling;
+    restStreamConsumerScheduling.mergeWithPrevious = true;
+    QueueSubmissionToken restStreamConsumerAcceptedToken;
+    const GpuTaskId restStreamConsumerTask = graph.addTask<SkinningGraphRestStreamConsumerTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/skinning_rest_stream_consume"))
+            .setMarkerLabel("Skinning Graph Rest Stream Consume")
+            .setQueue(GpuQueueRequest{
+                GpuQueueCapability::Compute,
+                GpuQueuePreference::Graphics,
+                false,
+                false,
+            })
+            .setScheduling(restStreamConsumerScheduling)
+            .setDependencies(&restCopyTask, 1u)
+            .setResourceUses(restStreamConsumerUses, LengthOf(restStreamConsumerUses)),
+        SkinningGraphRestStreamConsumerTask::Payload{
+            .position = skinnedPositionResource,
+            .normal = skinnedNormalResource,
+            .tangent = skinnedTangentResource,
+            .acceptedToken = &restStreamConsumerAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(restStreamConsumerTask.valid());
+
     const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
     const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     ASSERT_NE(topology.queues, nullptr);
@@ -2935,18 +3061,24 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesAndHandsOf
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
     const GpuTaskQueueAssignment* const paletteAssignment = assignments.find(paletteTask);
     const GpuTaskQueueAssignment* const restCopyAssignment = assignments.find(restCopyTask);
+    const GpuTaskQueueAssignment* const restStreamConsumerAssignment = assignments.find(restStreamConsumerTask);
     ASSERT_NE(paletteAssignment, nullptr);
     ASSERT_NE(restCopyAssignment, nullptr);
+    ASSERT_NE(restStreamConsumerAssignment, nullptr);
     EXPECT_EQ(paletteAssignment->queue, primaryGraphicsQueue);
     EXPECT_EQ(restCopyAssignment->queue, primaryGraphicsQueue);
+    EXPECT_EQ(restStreamConsumerAssignment->queue, primaryGraphicsQueue);
     const GpuSubmissionPacketId palettePacket = compiledGraph.packetForTask(paletteTask);
     const GpuSubmissionPacketId restCopyPacket = compiledGraph.packetForTask(restCopyTask);
+    const GpuSubmissionPacketId restStreamConsumerPacket = compiledGraph.packetForTask(restStreamConsumerTask);
     ASSERT_TRUE(palettePacket.valid());
     ASSERT_TRUE(restCopyPacket.valid());
+    ASSERT_TRUE(restStreamConsumerPacket.valid());
     EXPECT_EQ(compiledGraph.packetCount(), 1u);
     EXPECT_EQ(palettePacket, restCopyPacket);
+    EXPECT_EQ(restStreamConsumerPacket, restCopyPacket);
     EXPECT_EQ(compiledGraph.packet(restCopyPacket).queue, primaryGraphicsQueue);
-    EXPECT_EQ(compiledGraph.packet(restCopyPacket).taskCount, 2u);
+    EXPECT_EQ(compiledGraph.packet(restCopyPacket).taskCount, 3u);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -2969,9 +3101,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesAndHandsOf
     EXPECT_EQ(graphStateProbe->getBufferState(restPosition.get()), ResourceStates::CopySource);
     EXPECT_EQ(graphStateProbe->getBufferState(restNormal.get()), ResourceStates::CopySource);
     EXPECT_EQ(graphStateProbe->getBufferState(restTangent.get()), ResourceStates::CopySource);
-    EXPECT_EQ(graphStateProbe->getBufferState(skinnedPosition.get()), ResourceStates::CopyDest);
-    EXPECT_EQ(graphStateProbe->getBufferState(skinnedNormal.get()), ResourceStates::CopyDest);
-    EXPECT_EQ(graphStateProbe->getBufferState(skinnedTangent.get()), ResourceStates::CopyDest);
+    EXPECT_EQ(graphStateProbe->getBufferState(skinnedPosition.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(graphStateProbe->getBufferState(skinnedNormal.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(graphStateProbe->getBufferState(skinnedTangent.get()), ResourceStates::ShaderResource);
     graphStateProbe->close();
 
     const GpuTaskGraphSubmitter submitter(device);
@@ -2992,40 +3124,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesAndHandsOf
     ASSERT_TRUE(copyAcceptedToken.valid());
     EXPECT_EQ(copyAcceptedToken.queue, graphToken.queue);
     EXPECT_EQ(copyAcceptedToken.value, graphToken.value);
-
-    CommandListResourceStateHandoff nativeFinalState(DescriptorBufferRoundTripTest::arena());
-    auto nativeContinuation = device.createCommandList();
-    ASSERT_NE(nativeContinuation.get(), nullptr);
-    nativeContinuation->open(graphFinalState);
-    EXPECT_EQ(nativeContinuation->getBufferState(skinnedPosition.get()), ResourceStates::CopyDest);
-    EXPECT_EQ(nativeContinuation->getBufferState(skinnedNormal.get()), ResourceStates::CopyDest);
-    EXPECT_EQ(nativeContinuation->getBufferState(skinnedTangent.get()), ResourceStates::CopyDest);
-    nativeContinuation->setBufferState(skinnedPosition.get(), ResourceStates::ShaderResource);
-    nativeContinuation->setBufferState(skinnedNormal.get(), ResourceStates::ShaderResource);
-    nativeContinuation->setBufferState(skinnedTangent.get(), ResourceStates::ShaderResource);
-    nativeContinuation->commitBarriers();
-    nativeContinuation->close(&nativeFinalState);
-    ASSERT_TRUE(nativeFinalState.valid());
-    auto nativeStateProbe = device.createCommandList();
-    ASSERT_NE(nativeStateProbe.get(), nullptr);
-    nativeStateProbe->open(&nativeFinalState);
-    EXPECT_EQ(nativeStateProbe->getBufferState(skinnedPosition.get()), ResourceStates::ShaderResource);
-    EXPECT_EQ(nativeStateProbe->getBufferState(skinnedNormal.get()), ResourceStates::ShaderResource);
-    EXPECT_EQ(nativeStateProbe->getBufferState(skinnedTangent.get()), ResourceStates::ShaderResource);
-    nativeStateProbe->close();
-
-    CommandList* const nativeContinuationLists[] = { nativeContinuation.get() };
-    const QueueSubmissionToken nativeToken = device.executeCommandLists(
-        nativeContinuationLists,
-        LengthOf(nativeContinuationLists),
-        primaryGraphicsQueue,
-        QueueSubmissionDesc{}
-    );
-    ASSERT_TRUE(nativeToken.valid());
-    EXPECT_TRUE(nativeToken.matchesPhysicalQueue(
-        primaryGraphicsQueue.index,
-        primaryGraphicsQueue.deviceGeneration
-    ));
+    ASSERT_TRUE(restStreamConsumerAcceptedToken.valid());
+    EXPECT_EQ(restStreamConsumerAcceptedToken.queue, graphToken.queue);
+    EXPECT_EQ(restStreamConsumerAcceptedToken.value, graphToken.value);
     ASSERT_TRUE(device.waitForIdle());
 
     const auto expectCopiedWords = [&device](Buffer* const buffer, const u32* const expectedWords){

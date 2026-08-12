@@ -155,17 +155,18 @@ TEST(EcsGraphics, MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending)
     EXPECT_TRUE(bindlessResourceSlotsUploaded);
 }
 
-TEST(EcsGraphics, MeshSkinningGraphOwnedSelectorStaysResidentWhenNativeDispatchRetries){
+TEST(EcsGraphics, MeshSkinningGraphOwnedDispatchCommitsSelectorWithAcceptedCompute){
     NWB::Impl::RuntimeMeshDirtyFlags dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
         NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty
         | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty
     );
-    // The selector's immutable graph packet has already been accepted. A later native compute rejection must keep
-    // the selector resident while leaving the deformation work retryable.
-    bool bindlessResourceSlotsUploaded = true;
+    // The immutable selector upload and compute dispatch share one graph packet. A rejected packet keeps both the
+    // selector and deformation retryable; acceptance publishes both CPU facts together.
+    bool bindlessResourceSlotsUploaded = false;
     NWB::Impl::MeshSkinningSubmissionCommit commit;
     commit.editRevision = 23u;
     commit.handledDirtyFlags = dirtyFlags;
+    commit.bindlessResourceSlotsUploadRecorded = true;
 
     NWB::Impl::ApplyMeshSkinningSubmissionCommit(
         false,
@@ -179,7 +180,7 @@ TEST(EcsGraphics, MeshSkinningGraphOwnedSelectorStaysResidentWhenNativeDispatchR
         NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty
         | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty
     ));
-    EXPECT_TRUE(bindlessResourceSlotsUploaded);
+    EXPECT_FALSE(bindlessResourceSlotsUploaded);
 
     NWB::Impl::ApplyMeshSkinningSubmissionCommit(
         true,

@@ -21,6 +21,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct GpuTaskRecordContext;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ASSETS_BEGIN
 
 
@@ -225,16 +243,51 @@ private:
         usize tangentBytes = 0u;
     };
 
-    // The selector blob is accepted by the primary-Graphics graph packet before the native skinning continuation
-    // opens. Retain the exact generation and graph task until that accepted packet can publish residency.
-    struct GraphOwnedBindlessResourceSlotsPlan{
+    // The graph task retains only immutable per-mesh dispatch inputs. It resolves its imported buffers and pipelines
+    // from graph-owned IDs while recording, then publishes the dirty-state and selector-residency commit only after
+    // the containing primary-Graphics packet is accepted.
+    struct GraphOwnedSkinningDispatchPlan{
         RuntimeMeshHandle handle;
-        u32 editRevision = 0u;
-        Core::BufferHandle slotsBuffer;
-        Core::GpuDescriptorHandle slotsDescriptor = Core::GpuDescriptorHandle::invalid();
-        RuntimeBindlessResourceSlots payload;
-        Core::GpuTaskId uploadTask;
+        MeshSkinningSubmissionCommit submissionCommit;
+        bool hasActiveSkin = false;
+        bool copiedRestStreams = false;
+        bool updatesMeshletBounds = false;
+        bool repacksNormals = false;
+        u32 meshletCount = 0u;
+        u32 skinCount = 0u;
+        u32 jointCount = 0u;
+        u32 skinningMode = SkeletonSkinningMode::LinearBlend;
+        u32 attributeCount = 0u;
+        u32 bindlessResourceSlots = 0u;
+
+        // Acceptance validates this exact selector generation before setting its residency bit.
+        Core::BufferHandle bindlessResourceSlotsBuffer;
+        Core::GpuDescriptorHandle bindlessResourceSlotsDescriptor = Core::GpuDescriptorHandle::invalid();
+        RuntimeBindlessResourceSlots bindlessResourceSlotsPayload;
+
+        Core::GpuGraphResourceId bindlessResourceSlotsResource;
+        Core::GpuGraphResourceId restPositionResource;
+        Core::GpuGraphResourceId restNormalResource;
+        Core::GpuGraphResourceId restTangentResource;
+        Core::GpuGraphResourceId skinnedPositionResource;
+        Core::GpuGraphResourceId skinnedNormalResource;
+        Core::GpuGraphResourceId skinnedTangentResource;
+        Core::GpuGraphResourceId meshletDescResource;
+        Core::GpuGraphResourceId meshletBoundsResource;
+        Core::GpuGraphResourceId meshletPositionRefDeltaResource;
+        Core::GpuGraphResourceId meshletAttributeRefDeltaResource;
+        Core::GpuGraphResourceId meshletLocalVertexRefResource;
+        Core::GpuGraphResourceId meshletPrimitiveIndexResource;
+        Core::GpuGraphResourceId attributeSkinResource;
+        Core::GpuGraphResourceId skinResource;
+        Core::GpuGraphResourceId jointPaletteResource;
+        Core::GpuGraphResourceId attributeResource;
+        Core::GpuGraphPipelineId skinningPipeline;
+        Core::GpuGraphPipelineId boundsPipeline;
+        Core::GpuGraphPipelineId repackPipeline;
     };
+
+    struct TaskGraphSkinningDispatchTask;
 
 
 public:
@@ -266,7 +319,6 @@ public:
     virtual bool containsRuntimeMesh(const Name& meshKey, u64 version)override;
 
 private:
-    [[nodiscard]] bool ensureFrameCommandList();
     [[nodiscard]] bool ensureSkinningPipeline();
     [[nodiscard]] bool ensureBoundsPipeline();
     [[nodiscard]] bool ensureRepackPipeline();
@@ -277,10 +329,9 @@ private:
         const SkeletonPoseComponent* skeletonPose,
         MeshSkinningSubmissionCommit& outCommit
     );
-    // Declares frame-local skinning updates as graph-owned work on primary Graphics: active joint palettes upload
-    // immutable bytes and no-active-skin meshes copy rest streams into their skinned outputs.  The terminal state
-    // handoff opens the established native bounds/selector command list.
-    [[nodiscard]] bool submitFrameJointPaletteUploads();
+    // Declares all frame-local skinning work as one graph-owned primary-Graphics packet: immutable palette/selector
+    // uploads and rest-stream copies feed the compute continuation, whose accepted task commits dirty-state changes.
+    [[nodiscard]] bool submitFrameSkinningGraph();
     [[nodiscard]] bool prepareRuntimeMeshResources(
         MeshSkinningRuntimeInstance& instance,
         const SkeletonJointPaletteComponent* jointPalette,
@@ -288,7 +339,12 @@ private:
     );
     [[nodiscard]] bool copyRestToSkinned(Core::CommandList& commandList, MeshSkinningRuntimeInstance& instance);
     [[nodiscard]] bool hasGraphOwnedRestCopyPlan(const MeshSkinningRuntimeInstance& instance)const;
-    void confirmGraphOwnedBindlessResourceSlotsUploads();
+    [[nodiscard]] bool recordGraphOwnedSkinningDispatch(
+        const GraphOwnedSkinningDispatchPlan& plan,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    );
+    void confirmGraphOwnedSkinningDispatch(const GraphOwnedSkinningDispatchPlan& plan)noexcept;
     void transitionGraphCopiedRestStreams(Core::CommandList& commandList, MeshSkinningRuntimeInstance& instance)const;
     [[nodiscard]] static bool resolveRestToSkinnedCopyByteCounts(
         const MeshSkinningRuntimeInstance& instance,
@@ -335,12 +391,9 @@ private:
 
     HashMap<u64, RuntimeResources, Hasher<u64>, EqualTo<u64>, Core::Alloc::GlobalArena> m_runtimeResources;
     Vector<GraphOwnedRestCopyPlan, Core::Alloc::GlobalArena> m_graphOwnedRestCopyPlans;
-    Vector<GraphOwnedBindlessResourceSlotsPlan, Core::Alloc::GlobalArena> m_graphOwnedBindlessResourceSlotsPlans;
-    // The accepted frame state persists across graph/native boundaries and across frames. The per-frame graph
-    // snapshot below opens the native continuation immediately after its accepted packet.
+    // The accepted graph state persists across frames and seeds the next graph packet with live resource states.
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedSkinningStateBuffers;
     Core::CommandListResourceStateHandoff m_acceptedSkinningStateHandoff;
-    Core::CommandListResourceStateHandoff m_graphOwnedJointPaletteStateHandoff;
     Core::BindingLayoutHandle m_skinningBindingLayout;
     Core::ShaderHandle m_skinningComputeShader;
     Core::ComputePipelineHandle m_skinningComputePipeline;
@@ -350,7 +403,6 @@ private:
     Core::BindingLayoutHandle m_repackBindingLayout;
     Core::ShaderHandle m_repackComputeShader;
     Core::ComputePipelineHandle m_repackComputePipeline;
-    Core::CommandListHandle m_renderCommandList;
 };
 
 

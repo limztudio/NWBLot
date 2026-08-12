@@ -34,6 +34,9 @@ public:
     [[nodiscard]] bool registerAvboitFrameTargetDescriptors(DeferredFrameTargets& createdTargets, AvboitFrameTargets& avboitTargets);
     [[nodiscard]] bool prepareAvboitPassResources(DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
     void clearAvboitTargets(Core::CommandList& commandList, AvboitFrameTargets& targets);
+    // The normal graph path declares its nine CopyDest writes before calling this value-only clear. Keep the full
+    // transition helper above for direct compatibility callers that cannot declare those resources yet.
+    void clearGraphOwnedAvboitTargets(Core::CommandList& commandList, AvboitFrameTargets& targets);
     void buildTransparentCsgIntervals(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
     void renderAvboitTransparentCsgIntervals(
         Core::CommandList& commandList,

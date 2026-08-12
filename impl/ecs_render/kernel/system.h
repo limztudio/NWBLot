@@ -374,6 +374,8 @@ private:
     // A rare diagnostic tail: it depends on GI but records/submits after Present on Transfer when available.
     Core::GpuTaskId m_deferredSurfelGiCounterReadbackTask;
     Core::GpuTaskId m_deferredHardwareCausticsTask;
+    // The normal graph path keeps this CopyDest clear in AVBOIT Pre's timed Graphics packet.
+    Core::GpuTaskId m_deferredAvboitClearTask;
     Core::GpuTaskId m_deferredAvboitPreTask;
     Core::GpuTaskId m_deferredAvboitOccupancyTask;
     Core::GpuTaskId m_deferredAvboitDepthWarpTask;

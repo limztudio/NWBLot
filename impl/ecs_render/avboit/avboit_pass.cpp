@@ -59,6 +59,23 @@ static void DispatchAvboitCompute(
     commandList.dispatch(groupCountX, 1, 1);
 }
 
+static void ClearAvboitTargetValues(Core::CommandList& commandList, AvboitFrameTargets& targets){
+    const Core::Color transparentBlack(0.f, 0.f, 0.f, 0.f);
+    commandList.clearTextureFloat(targets.lowRasterTarget.get(), ECSRenderDetail::s_FramebufferSubresources, transparentBlack);
+    commandList.clearTextureFloat(targets.accumColor.get(), ECSRenderDetail::s_FramebufferSubresources, transparentBlack);
+    commandList.clearTextureFloat(targets.accumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources, transparentBlack);
+    commandList.clearBufferUInt(targets.coverageBuffer.get(), 0u);
+    commandList.clearBufferUInt(targets.depthWarpBuffer.get(), 0u);
+    commandList.clearBufferUInt(targets.controlBuffer.get(), 0u);
+    commandList.clearBufferUInt(targets.extinctionBuffer.get(), 0u);
+    commandList.clearBufferUInt(targets.extinctionOverflowBuffer.get(), NWB_AVBOIT_OVERFLOW_INVALID);
+    commandList.clearTextureFloat(
+        targets.transmittanceTexture.get(),
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::Color(1.f, 1.f, 1.f, 1.f)
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -181,16 +198,14 @@ void RendererAvboitSystem::clearAvboitTargets(Core::CommandList& commandList, Av
 
     commandList.commitBarriers();
 
-    const Core::Color transparentBlack(0.f, 0.f, 0.f, 0.f);
-    commandList.clearTextureFloat(targets.lowRasterTarget.get(), ECSRenderDetail::s_FramebufferSubresources, transparentBlack);
-    commandList.clearTextureFloat(targets.accumColor.get(), ECSRenderDetail::s_FramebufferSubresources, transparentBlack);
-    commandList.clearTextureFloat(targets.accumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources, transparentBlack);
-    commandList.clearBufferUInt(targets.coverageBuffer.get(), 0u);
-    commandList.clearBufferUInt(targets.depthWarpBuffer.get(), 0u);
-    commandList.clearBufferUInt(targets.controlBuffer.get(), 0u);
-    commandList.clearBufferUInt(targets.extinctionBuffer.get(), 0u);
-    commandList.clearBufferUInt(targets.extinctionOverflowBuffer.get(), NWB_AVBOIT_OVERFLOW_INVALID);
-    commandList.clearTextureFloat(targets.transmittanceTexture.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
+    __hidden_avboit::ClearAvboitTargetValues(commandList, targets);
+}
+
+void RendererAvboitSystem::clearGraphOwnedAvboitTargets(Core::CommandList& commandList, AvboitFrameTargets& targets){
+    NWB_ASSERT(targets.valid());
+
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_AvboitClear, graphics().getDevice(), commandList);
+    __hidden_avboit::ClearAvboitTargetValues(commandList, targets);
 }
 
 bool RendererAvboitSystem::prepareAvboitPassResources(

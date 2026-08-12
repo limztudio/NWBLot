@@ -897,8 +897,9 @@ struct PostGbufferNormalizeGraphTask{
 };
 
 
-// AVBOIT remains explicitly staged because its raster/compute alternation is a real dependency chain.  The graph
-// owns those packets now; manual state handoffs only seed native recording until automatic graph barriers arrive.
+// AVBOIT remains explicitly staged because its raster/compute alternation is a real dependency chain. The normal
+// graph path owns its clear-state transitions in a separate task; direct compatibility callers retain the wider
+// native helper for now.
 static void RestoreAvboitGbufferInputs(Core::CommandList& commandList, DeferredFrameTargets& targets){
     commandList.setTextureState(
         targets.albedo.get(),
@@ -921,6 +922,31 @@ static void RestoreAvboitGbufferInputs(Core::CommandList& commandList, DeferredF
         Core::ResourceStates::ShaderResource
     );
 }
+
+
+// The AVBOIT targets have no semantic lifetime before the first transparent phase. Keep their clear as one
+// graph-declared CopyDest operation so its exact nine writes and following producer transitions stay visible to the
+// compiler, while the clear thunk itself remains a value-only native operation with its established timing scope.
+struct AvboitClearGraphTask{
+    struct Payload{
+        RendererAvboitSystem* avboitSystem = nullptr;
+        AvboitFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.avboitSystem || !payload.targets || !payload.timingTicket)
+            return false;
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        payload.avboitSystem->clearGraphOwnedAvboitTargets(commandList, *payload.targets);
+        return true;
+    }
+};
 
 
 struct AvboitPreGraphTask{
@@ -991,7 +1017,6 @@ struct AvboitOccupancyGraphTask{
         DeferredFrameTargets* targets = nullptr;
         const CsgFrameState* csgFrameState = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        bool clearTargets = false;
         bool hasTransparentRenderers = false;
         bool splitStages = false;
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot occupancySnapshot;
@@ -1029,8 +1054,6 @@ struct AvboitOccupancyGraphTask{
             preparedOccupancyInstanceCount = payload.occupancySnapshot.instanceCount;
             preparedOccupancyMaterialTypedByteCount = payload.occupancySnapshot.materialTypedByteCount;
         }
-        if(payload.clearTargets)
-            payload.avboitSystem->clearAvboitTargets(commandList, payload.targets->avboit);
         if(payload.hasTransparentRenderers){
             payload.avboitSystem->renderAvboitOccupancyPass(
                 commandList,
@@ -3847,6 +3870,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
+    m_deferredAvboitClearTask = {};
     m_deferredAvboitPreTask = {};
     m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
@@ -5098,7 +5122,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitOccupancyPayload.targets = &deferredTargets;
     avboitOccupancyPayload.csgFrameState = &csgFrameState;
     avboitOccupancyPayload.timingTicket = &avboitPreTimingTicket;
-    avboitOccupancyPayload.clearTargets = clearAvboitTargets;
     avboitOccupancyPayload.hasTransparentRenderers = hasTransparentRenderers;
     avboitOccupancyPayload.splitStages = splitAvboitStages;
 
@@ -5352,24 +5375,67 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         }
     }
 
+    // Preserve the native order: phase-local material/CSG uploads first, then the one AVBOIT target clear, then
+    // occupancy. The clear's real CopyDest contract is now separate from the raster consumer's declared state.
+    Core::GpuTaskId avboitClearTask = occupancyUploadTask;
+    if(clearAvboitTargets){
+        const Core::GpuTaskResourceUse avboitClearResourceUses[] = {
+            WriteTextureUse(avboitLowRaster, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest),
+            WriteTextureUse(avboitAccumColor, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest),
+            WriteTextureUse(
+                avboitAccumExtinction,
+                ECSRenderDetail::s_FramebufferSubresources,
+                Core::ResourceStates::CopyDest
+            ),
+            WriteTextureUse(
+                avboitTransmittance,
+                ECSRenderDetail::s_FramebufferSubresources,
+                Core::ResourceStates::CopyDest
+            ),
+            WriteUse(avboitCoverage, Core::ResourceStates::CopyDest),
+            WriteUse(avboitDepthWarp, Core::ResourceStates::CopyDest),
+            WriteUse(avboitControl, Core::ResourceStates::CopyDest),
+            WriteUse(avboitExtinction, Core::ResourceStates::CopyDest),
+            WriteUse(avboitExtinctionOverflow, Core::ResourceStates::CopyDest),
+        };
+        Core::GpuTaskSchedulingHint avboitClearScheduling;
+        avboitClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
+        avboitClearScheduling.forceSubmissionBoundary = false;
+        avboitClearScheduling.allowPacketMerge = true;
+        avboitClearScheduling.mergeWithPrevious = true;
+        Core::GpuTaskDesc avboitClearDesc;
+        avboitClearDesc
+            .setIdentity(Name("render.avboit.clear"))
+            .setMarkerLabel("AVBOIT Clear")
+            .setQueue(GraphicsQueueRequest())
+            .setScheduling(avboitClearScheduling)
+            .setDependencies(&occupancyUploadTask, 1u)
+            .setResourceUses(avboitClearResourceUses, LengthOf(avboitClearResourceUses))
+        ;
+        avboitClearTask = m_deferredLightingTaskGraph.addTask<AvboitClearGraphTask>(
+            avboitClearDesc,
+            AvboitClearGraphTask::Payload{
+                .avboitSystem = &m_avboitSystem,
+                .targets = &deferredTargets.avboit,
+                .timingTicket = &avboitPreTimingTicket,
+            }
+        );
+        if(!avboitClearTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT target clear"));
+            return;
+        }
+        m_deferredAvboitClearTask = avboitClearTask;
+    }
+
     Core::Alloc::ScratchArena avboitPreResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitPreResourceUses{ avboitPreResourceScratch };
-    avboitPreResourceUses.reserve(20u + (avboitOccupancyPayload.occupancyStreamsUploaded ? 7u : 0u));
+    avboitPreResourceUses.reserve(13u + (avboitOccupancyPayload.occupancyStreamsUploaded ? 7u : 0u));
     avboitPreResourceUses.push_back(ReadUse(albedo));
     avboitPreResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource, true));
     avboitPreResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
     avboitPreResourceUses.push_back(ReadUse(depth));
     avboitPreResourceUses.push_back(ReadWriteUse(avboitLowRaster, Core::ResourceStates::RenderTarget));
-    // Clear owns the untouched post-occupancy targets here; the extinction tail later declares their actual
-    // raster/compute states. Keeping only CopyDest for this clear avoids retaining a false post-phase producer.
-    avboitPreResourceUses.push_back(WriteUse(avboitAccumColor, Core::ResourceStates::CopyDest));
-    avboitPreResourceUses.push_back(WriteUse(avboitAccumExtinction, Core::ResourceStates::CopyDest));
-    avboitPreResourceUses.push_back(WriteUse(avboitTransmittance, Core::ResourceStates::CopyDest));
     avboitPreResourceUses.push_back(ReadWriteUse(avboitCoverage, Core::ResourceStates::UnorderedAccess));
-    avboitPreResourceUses.push_back(WriteUse(avboitDepthWarp, Core::ResourceStates::CopyDest));
-    avboitPreResourceUses.push_back(WriteUse(avboitControl, Core::ResourceStates::CopyDest));
-    avboitPreResourceUses.push_back(WriteUse(avboitExtinction, Core::ResourceStates::CopyDest));
-    avboitPreResourceUses.push_back(WriteUse(avboitExtinctionOverflow, Core::ResourceStates::CopyDest));
     if(avboitOccupancyPayload.occupancyStreamsUploaded){
         avboitPreResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
         avboitPreResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
@@ -5397,7 +5463,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .setMarkerLabel(splitAvboitStages ? "AVBOIT Pre" : "AVBOIT")
         .setQueue(GraphicsQueueRequest())
         .setScheduling(avboitOccupancyScheduling)
-        .setDependencies(&occupancyUploadTask, 1u)
+        .setDependencies(&avboitClearTask, 1u)
         .setResourceUses(avboitPreResourceUses.data(), avboitPreResourceUses.size())
     ;
     m_deferredAvboitOccupancyTask = m_deferredLightingTaskGraph.addTask<AvboitOccupancyGraphTask>(

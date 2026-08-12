@@ -251,6 +251,7 @@ void RendererSystem::invalidateResources(){
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
+    m_deferredAvboitClearTask = {};
     m_deferredAvboitPreTask = {};
     m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
@@ -503,6 +504,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
+    m_deferredAvboitClearTask = {};
     m_deferredAvboitPreTask = {};
     m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
@@ -1076,8 +1078,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId avboitPrePacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitPreTask
     );
+    const Core::GpuSubmissionPacketId avboitClearPacket = m_deferredAvboitClearTask.valid()
+        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitClearTask)
+        : avboitPrePacket
+    ;
     const Core::GpuSubmissionPacketId avboitOccupancyPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitOccupancyTask
+    );
+    const bool avboitPrePacketContainsClear = !clearAvboitTargets || (
+        avboitClearPacket.valid()
+        && avboitPrePacket.valid()
+        && avboitClearPacket == avboitPrePacket
     );
     const bool avboitPrePacketContainsOccupancy = avboitPrePacket.valid()
         && avboitOccupancyPacket.valid()
@@ -1415,6 +1426,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredAvboitPreTask.valid()
         || !m_deferredAvboitOccupancyTask.valid()
         || !avboitPrePacket.valid()
+        || !avboitPrePacketContainsClear
         || !avboitPrePacketContainsOccupancy
         || !avboitExtinctionPacketContainsStreams
         || !avboitAccumulationPacketContainsStreams
@@ -2017,6 +2029,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredAvboitPreTask.valid()
         && m_deferredAvboitOccupancyTask.valid()
         && avboitPrePacket.valid()
+        && avboitPrePacketContainsClear
         && avboitPrePacketContainsOccupancy
         && avboitExtinctionPacketContainsStreams
         && avboitAccumulationPacketContainsStreams
@@ -2296,6 +2309,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredAvboitPreTask.valid()
             && m_deferredAvboitOccupancyTask.valid()
             && avboitPrePacket.valid()
+            && avboitPrePacketContainsClear
             && avboitPrePacketContainsOccupancy
             && avboitExtinctionPacketContainsStreams
             && avboitAccumulationPacketContainsStreams

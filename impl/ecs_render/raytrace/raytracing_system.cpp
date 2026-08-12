@@ -1012,10 +1012,12 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         // non-fatal, so do not let an opaque-only frozen TLAS build publish a partial hybrid frame.
         if(rayTracingState().m_sceneHasTransparentOccluder)
             clearPreparedSceneTlasBuild();
-        // The first graph-owned scene-BVH migration intentionally excludes every hardware route. In a hybrid frame
-        // the later software half is non-fatal after hardware preparation has succeeded, so retain its established
-        // direct writers instead of publishing a frozen pair whose acceptance would imply that SW work completed.
-        clearPreparedSceneBvh();
+        // The scene-BVH pair is independent from the native material-context writer. Retain it for a hybrid frame
+        // when preflight completed the software gather: recording revalidates the exact pair, and a miss discards
+        // only this optional plan so the already valid HW opaque result still submits. Hardware-only frames retain
+        // no stale software pair from an earlier route.
+        if(!m_shadowVisibilityHybridResourcesPreflighted)
+            clearPreparedSceneBvh();
 
         // Route the HW opaque shadow through the same half-res soft denoise chain the SW path uses: half-res jittered trace
         // -> temporal reproject-merge -> a-trous resolve -> upsample. The HW opaque-soft trace writes shadowSoftHalfA, then
@@ -1216,6 +1218,8 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
             // publish optimistic mesh topology state for work that never reached this command list.
             if(meshSwBvhBuildsGraphOwned)
                 clearPreparedMeshSwBvhBuilds();
+            if(sceneBvhBatchGraphOwned)
+                clearPreparedSceneBvh();
             return true;
         }
         const bool sceneTlasReady = sceneTlasBuildGraphOwned
@@ -1230,12 +1234,15 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
             // As above, retain only plans whose native commands were actually recorded.
             if(meshSwBvhBuildsGraphOwned)
                 clearPreparedMeshSwBvhBuilds();
+            if(sceneBvhBatchGraphOwned)
+                clearPreparedSceneBvh();
             return true;
         }
 
         outBackendReady = m_shadowVisibilityBackendPipelinePreflighted;
         rayTracingState().m_hybridTransparentShadowReady = false;
         bool hybridMeshSwBvhBuildRecorded = false;
+        bool hybridSceneBvhBuildRecorded = false;
         if(
             outBackendReady
             && m_shadowVisibilityHybridResourcesPreflighted
@@ -1253,18 +1260,22 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
                 if(meshSwBvhBuildsGraphOwned)
                     clearPreparedMeshSwBvhBuilds();
             }
-            const bool swReady =
+            const bool sceneSwBvhReady =
                 // The direct compatibility loop historically continues gathering the scene after an unrelated
-                // mesh build miss. Preserve that best-effort behavior; only a failed frozen plan is all-or-nothing
-                // because its scene gather may otherwise observe topology that never recorded.
+                // mesh build miss. Preserve that best-effort behavior; only a failed frozen mesh plan is
+                // all-or-nothing because its scene gather may otherwise observe topology that never recorded.
                 (!meshSwBvhBuildsGraphOwned || meshSwBvhReady)
                 && buildSceneSwBvh(
                     commandList,
                     scratchArena,
                     shadowMaterialContextBatchGraphOwned,
-                    false,
+                    sceneBvhBatchGraphOwned,
                     meshSwBvhBuildsGraphOwned
                 )
+            ;
+            hybridSceneBvhBuildRecorded = sceneBvhBatchGraphOwned && sceneSwBvhReady;
+            const bool swReady =
+                sceneSwBvhReady
                 && rayTracingState().m_swShadowMeshCount > 0u
                 && rayTracingState().m_sceneBvhInstanceCount > 0u
                 && m_shadowVisibilityHybridPipelinePreflighted
@@ -1279,6 +1290,11 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
         // native fallback without falsely advancing the SW-BVH CPU cache.
         if(meshSwBvhBuildsGraphOwned && !hybridMeshSwBvhBuildRecorded)
             clearPreparedMeshSwBvhBuilds();
+        // The graph may already contain the immutable pair upload, but only a matching native software gather may
+        // publish its static-scene cache. A mismatch is an optional-tail failure, not a reason to reject hardware
+        // opaque shadows; clear the retained pair before the common acceptance callback can observe it.
+        if(sceneBvhBatchGraphOwned && !hybridSceneBvhBuildRecorded)
+            clearPreparedSceneBvh();
         if(
             rayTracingState().m_surfelEnabled
             && !surfelFrameConstantsGraphOwned

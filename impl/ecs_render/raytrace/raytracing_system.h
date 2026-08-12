@@ -524,7 +524,8 @@ private:
     bool m_preparedShadowMaterialContextStatic = false;
     bool m_preparedShadowMaterialContextReady = false;
     // The CPU-built software scene BVH must retain node and leaf-instance bytes together: each node's leaf range
-    // indexes this exact instance stream. Hybrid HW-to-SW frames intentionally leave this compatibility-direct.
+    // indexes this exact instance stream. Hybrid frames may graph-own this independent pair while their material
+    // context remains compatibility-direct until both paths use one frozen scene plan.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedSceneBvhNodeBytes;
     Vector<u8, Core::Alloc::GlobalArena> m_preparedSceneBvhInstanceBytes;
     Core::BufferHandle m_preparedSceneBvhNodeBuffer;

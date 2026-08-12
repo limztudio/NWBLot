@@ -26,6 +26,7 @@ RendererRayTracingSystem::RendererRayTracingSystem(RendererSystem& renderer)
     , m_preparedShadowMaterialTypedBytes(arena())
     , m_preparedSceneBvhNodeBytes(arena())
     , m_preparedSceneBvhInstanceBytes(arena())
+    , m_preparedSceneSwBvhMeshes(arena())
     , m_preparedSceneTlasInstances(arena())
     , m_preparedSceneTlasBlases(arena())
     , m_preparedMeshBlasBuilds(arena())
@@ -100,6 +101,7 @@ void RendererRayTracingSystem::clearPreparedShadowMaterialContext()noexcept{
     m_preparedShadowMaterialContextRoute = PreparedShadowMaterialContextRoute::None;
     m_preparedShadowMaterialContextStatic = false;
     m_preparedShadowMaterialContextReady = false;
+    clearPreparedSceneSwBvhTraversal();
 }
 
 bool RendererRayTracingSystem::capturePreparedShadowMaterialContext(
@@ -317,6 +319,7 @@ void RendererRayTracingSystem::confirmPreparedShadowMaterialContextUploads()noex
 }
 
 void RendererRayTracingSystem::clearPreparedSceneBvh()noexcept{
+    clearPreparedSceneSwBvhTraversal();
     m_preparedSceneBvhNodeBytes.clear();
     m_preparedSceneBvhInstanceBytes.clear();
     m_preparedSceneBvhNodeBuffer = nullptr;
@@ -432,6 +435,206 @@ bool RendererRayTracingSystem::matchesPreparedSceneBvh(
         NWB_MEMCMP(m_preparedSceneBvhNodeBytes.data(), nodeData, nodeByteCount) == 0
         && NWB_MEMCMP(m_preparedSceneBvhInstanceBytes.data(), instanceData, instanceByteCount) == 0
     ;
+}
+
+void RendererRayTracingSystem::clearPreparedSceneSwBvhTraversal()noexcept{
+    m_preparedSceneSwBvhMeshes.clear();
+    m_preparedSceneSwBvhInstanceCount = 0u;
+    m_preparedSceneSwBvhRendererMutationVersion = 0u;
+    m_preparedSceneSwBvhTransformMutationVersion = 0u;
+    m_preparedSceneSwBvhMaterialMutationVersion = 0u;
+    m_preparedSceneSwBvhReady = false;
+}
+
+bool RendererRayTracingSystem::capturePreparedSceneSwBvhTraversal(
+    const PreparedSceneSwBvhMesh* const meshes,
+    const usize meshCount,
+    const u32 instanceCount
+){
+    clearPreparedSceneSwBvhTraversal();
+    const auto& state = rayTracingState();
+    const auto validStorageHandle = [](const Core::GpuDescriptorHandle handle){
+        return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
+    };
+    if(
+        !meshes
+        || meshCount == 0u
+        || meshCount > static_cast<usize>(Limit<u32>::s_Max)
+        || instanceCount == 0u
+        || !m_preparedSceneBvhReady
+        || !m_preparedShadowMaterialContextReady
+        || m_preparedShadowMaterialContextRoute != PreparedShadowMaterialContextRoute::Software
+        || m_preparedSceneBvhInstanceCount != instanceCount
+        || m_preparedShadowInstanceMaterialCount != instanceCount
+        || m_preparedShadowInstanceCount != instanceCount
+        || state.m_sceneBvhNodeBuffer.get() != m_preparedSceneBvhNodeBuffer.get()
+        || state.m_sceneInstanceBuffer.get() != m_preparedSceneBvhInstanceBuffer.get()
+        || state.m_sceneBvhNodeCapacity != m_preparedSceneBvhNodeCapacity
+        || state.m_sceneInstanceCapacity != m_preparedSceneBvhInstanceCapacity
+        || state.m_sceneBvhNodeHeapHandle != m_preparedSceneBvhNodeHeapHandle
+        || state.m_sceneInstanceHeapHandle != m_preparedSceneBvhInstanceHeapHandle
+        || state.m_shadowInstanceMaterialBuffer.get() != m_preparedShadowInstanceMaterialBuffer.get()
+        || state.m_shadowInstanceBuffer.get() != m_preparedShadowInstanceBuffer.get()
+        || state.m_shadowMaterialTypedBuffer.get() != m_preparedShadowMaterialTypedBuffer.get()
+        || state.m_shadowInstanceMaterialHeapHandle != m_preparedShadowInstanceMaterialHeapHandle
+        || state.m_shadowInstanceHeapHandle != m_preparedShadowInstanceHeapHandle
+        || state.m_shadowMaterialTypedHeapHandle != m_preparedShadowMaterialTypedHeapHandle
+    )
+        return false;
+
+    m_preparedSceneSwBvhMeshes.reserve(meshCount);
+    for(usize index = 0u; index < meshCount; ++index){
+        const PreparedSceneSwBvhMesh& mesh = meshes[index];
+        if(
+            mesh.meshName == NAME_NONE
+            || !mesh.nodeBuffer
+            || !mesh.positionBuffer
+            || !mesh.triangleIndexBuffer
+            || !mesh.attributeBuffer
+            || !validStorageHandle(mesh.nodeHeapHandle)
+            || !validStorageHandle(mesh.positionHeapHandle)
+            || !validStorageHandle(mesh.triangleIndexHeapHandle)
+            || !validStorageHandle(mesh.attributeHeapHandle)
+            || mesh.primitiveCount == 0u
+            || mesh.nodeByteSize == 0u
+            || mesh.positionByteSize == 0u
+            || mesh.triangleIndexByteSize == 0u
+            || mesh.attributeByteSize == 0u
+        ){
+            clearPreparedSceneSwBvhTraversal();
+            return false;
+        }
+        m_preparedSceneSwBvhMeshes.push_back(mesh);
+    }
+    m_preparedSceneSwBvhInstanceCount = instanceCount;
+    m_preparedSceneSwBvhRendererMutationVersion = world().componentMutationVersion<RendererComponent>();
+    m_preparedSceneSwBvhTransformMutationVersion = world().componentMutationVersion<NWB::Impl::Scene::TransformComponent>();
+    m_preparedSceneSwBvhMaterialMutationVersion = world().componentMutationVersion<MaterialInstanceComponent>();
+    m_preparedSceneSwBvhReady = true;
+    return true;
+}
+
+bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
+    const auto validStorageHandle = [](const Core::GpuDescriptorHandle handle){
+        return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
+    };
+    const auto& state = rayTracingState();
+    if(
+        !m_preparedSceneSwBvhReady
+        || m_preparedSceneSwBvhMeshes.empty()
+        || m_preparedSceneSwBvhInstanceCount == 0u
+        || !m_preparedSceneBvhReady
+        || !m_preparedShadowMaterialContextReady
+        || m_preparedShadowMaterialContextRoute != PreparedShadowMaterialContextRoute::Software
+        || m_preparedSceneBvhInstanceCount != m_preparedSceneSwBvhInstanceCount
+        || m_preparedShadowInstanceMaterialCount != m_preparedSceneSwBvhInstanceCount
+        || m_preparedShadowInstanceCount != m_preparedSceneSwBvhInstanceCount
+        || state.m_sceneBvhNodeBuffer.get() != m_preparedSceneBvhNodeBuffer.get()
+        || state.m_sceneInstanceBuffer.get() != m_preparedSceneBvhInstanceBuffer.get()
+        || state.m_sceneBvhNodeCapacity != m_preparedSceneBvhNodeCapacity
+        || state.m_sceneInstanceCapacity != m_preparedSceneBvhInstanceCapacity
+        || state.m_sceneBvhNodeHeapHandle != m_preparedSceneBvhNodeHeapHandle
+        || state.m_sceneInstanceHeapHandle != m_preparedSceneBvhInstanceHeapHandle
+        || state.m_shadowInstanceMaterialBuffer.get() != m_preparedShadowInstanceMaterialBuffer.get()
+        || state.m_shadowInstanceBuffer.get() != m_preparedShadowInstanceBuffer.get()
+        || state.m_shadowMaterialTypedBuffer.get() != m_preparedShadowMaterialTypedBuffer.get()
+        || state.m_shadowInstanceMaterialHeapHandle != m_preparedShadowInstanceMaterialHeapHandle
+        || state.m_shadowInstanceHeapHandle != m_preparedShadowInstanceHeapHandle
+        || state.m_shadowMaterialTypedHeapHandle != m_preparedShadowMaterialTypedHeapHandle
+        || !validStorageHandle(state.m_sceneBvhNodeHeapHandle)
+        || !validStorageHandle(state.m_sceneInstanceHeapHandle)
+        || !validStorageHandle(state.m_shadowInstanceMaterialHeapHandle)
+        || !validStorageHandle(state.m_shadowInstanceHeapHandle)
+        || !validStorageHandle(state.m_shadowMaterialTypedHeapHandle)
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen hybrid software scene traversal no longer matches preflight storage"));
+        return false;
+    }
+    if(
+        world().componentMutationVersion<RendererComponent>() != m_preparedSceneSwBvhRendererMutationVersion
+        || world().componentMutationVersion<NWB::Impl::Scene::TransformComponent>() != m_preparedSceneSwBvhTransformMutationVersion
+        || world().componentMutationVersion<MaterialInstanceComponent>() != m_preparedSceneSwBvhMaterialMutationVersion
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid software scene inputs changed after graph preflight"));
+        return false;
+    }
+
+    const auto matchesMesh = [this, &validStorageHandle](
+        const MeshResources& mesh,
+        const PreparedSceneSwBvhMesh& prepared
+    ){
+        const auto attributeCache = rayTracingState().m_swMeshHeapHandleCache.find(prepared.attributeBuffer.get());
+        const bool topologyReady = mesh.swBvhTopologyBuilt || preparedMeshSwBvhBuildProducesTopology(mesh);
+        return
+            mesh.meshName == prepared.meshName
+            && mesh.runtimeMesh == prepared.runtimeMesh
+            && mesh.runtimeMeshVersion == prepared.runtimeMeshVersion
+            && mesh.swBvhNodeBuffer.get() == prepared.nodeBuffer.get()
+            && mesh.positionBuffer.get() == prepared.positionBuffer.get()
+            && mesh.triangleIndexBuffer.get() == prepared.triangleIndexBuffer.get()
+            && mesh.attributeBuffer.get() == prepared.attributeBuffer.get()
+            && mesh.swBvhNodeHeapHandle == prepared.nodeHeapHandle
+            && mesh.swBvhPositionHeapHandle == prepared.positionHeapHandle
+            && mesh.swBvhTriangleIndexHeapHandle == prepared.triangleIndexHeapHandle
+            && attributeCache != rayTracingState().m_swMeshHeapHandleCache.end()
+            && attributeCache.value().handle == prepared.attributeHeapHandle
+            && topologyReady
+            && mesh.meshletPrimitiveIndexCount == prepared.primitiveCount * s_RayTracingTriangleIndexCount
+            && mesh.swBvhNodeBuffer->getDescription().byteSize == prepared.nodeByteSize
+            && mesh.positionBuffer->getDescription().byteSize == prepared.positionByteSize
+            && mesh.triangleIndexBuffer->getDescription().byteSize == prepared.triangleIndexByteSize
+            && mesh.attributeBuffer->getDescription().byteSize == prepared.attributeByteSize
+            && validStorageHandle(prepared.nodeHeapHandle)
+            && validStorageHandle(prepared.positionHeapHandle)
+            && validStorageHandle(prepared.triangleIndexHeapHandle)
+            && validStorageHandle(prepared.attributeHeapHandle)
+        ;
+    };
+
+    const auto& meshes = meshState().m_meshes;
+    for(const PreparedSceneSwBvhMesh& prepared : m_preparedSceneSwBvhMeshes){
+        const auto found = meshes.find(prepared.meshName);
+        if(found == meshes.end() || !matchesMesh(found.value(), prepared)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen hybrid software scene lost mesh '{}'")
+                , StringConvert(prepared.meshName.c_str())
+            );
+            return false;
+        }
+    }
+
+    auto& mutableState = rayTracingState();
+    mutableState.m_swShadowMeshNodeBuffers.clear();
+    mutableState.m_swShadowMeshPositionBuffers.clear();
+    mutableState.m_swShadowMeshIndexBuffers.clear();
+    mutableState.m_swShadowMeshAttributeBuffers.clear();
+    mutableState.m_swShadowMeshNodeHandles.clear();
+    mutableState.m_swShadowMeshPositionHandles.clear();
+    mutableState.m_swShadowMeshIndexHandles.clear();
+    mutableState.m_swShadowMeshAttributeHandles.clear();
+    mutableState.m_swShadowMeshNodeBuffers.reserve(m_preparedSceneSwBvhMeshes.size());
+    mutableState.m_swShadowMeshPositionBuffers.reserve(m_preparedSceneSwBvhMeshes.size());
+    mutableState.m_swShadowMeshIndexBuffers.reserve(m_preparedSceneSwBvhMeshes.size());
+    mutableState.m_swShadowMeshAttributeBuffers.reserve(m_preparedSceneSwBvhMeshes.size());
+    mutableState.m_swShadowMeshNodeHandles.reserve(m_preparedSceneSwBvhMeshes.size());
+    mutableState.m_swShadowMeshPositionHandles.reserve(m_preparedSceneSwBvhMeshes.size());
+    mutableState.m_swShadowMeshIndexHandles.reserve(m_preparedSceneSwBvhMeshes.size());
+    mutableState.m_swShadowMeshAttributeHandles.reserve(m_preparedSceneSwBvhMeshes.size());
+    for(const PreparedSceneSwBvhMesh& prepared : m_preparedSceneSwBvhMeshes){
+        const auto attributeCache = mutableState.m_swMeshHeapHandleCache.find(prepared.attributeBuffer.get());
+        if(attributeCache != mutableState.m_swMeshHeapHandleCache.end())
+            attributeCache.value().seenThisFrame = true;
+        mutableState.m_swShadowMeshNodeBuffers.push_back(prepared.nodeBuffer.get());
+        mutableState.m_swShadowMeshPositionBuffers.push_back(prepared.positionBuffer.get());
+        mutableState.m_swShadowMeshIndexBuffers.push_back(prepared.triangleIndexBuffer.get());
+        mutableState.m_swShadowMeshAttributeBuffers.push_back(prepared.attributeBuffer.get());
+        mutableState.m_swShadowMeshNodeHandles.push_back(prepared.nodeHeapHandle);
+        mutableState.m_swShadowMeshPositionHandles.push_back(prepared.positionHeapHandle);
+        mutableState.m_swShadowMeshIndexHandles.push_back(prepared.triangleIndexHeapHandle);
+        mutableState.m_swShadowMeshAttributeHandles.push_back(prepared.attributeHeapHandle);
+    }
+    mutableState.m_swShadowMeshCount = static_cast<u32>(m_preparedSceneSwBvhMeshes.size());
+    mutableState.m_sceneBvhInstanceCount = m_preparedSceneSwBvhInstanceCount;
+    return true;
 }
 
 bool RendererRayTracingSystem::retainPreparedSceneBvhUploads(
@@ -1017,10 +1220,10 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
             && !m_shadowVisibilityHybridPipelinePreflighted
         )
             clearPreparedSceneTlasBuild();
-        // The scene-BVH pair is independent from the native material-context writer. Retain it for a hybrid frame
-        // when preflight completed the software gather: recording revalidates the exact pair, and a miss discards
-        // only this optional plan so the already valid HW opaque result still submits. Hardware-only frames retain
-        // no stale software pair from an earlier route.
+        // The scene-BVH pair is independent from the native material-context writer. Retain it for a healthy hybrid
+        // frame with its matching traversal table: recording restores that table without a CPU regather, while a
+        // source miss takes the established direct revalidation boundary. Hardware-only frames retain no stale
+        // software pair from an earlier route.
         if(!m_shadowVisibilityHybridResourcesPreflighted)
             clearPreparedSceneBvh();
 
@@ -1213,8 +1416,9 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
 
     if(m_shadowVisibilityHardwareSupported){
         // When a complete hybrid preflight froze the final software-compatible context, the hardware TLAS must not
-        // overwrite it before the optional software tail revalidates it. A tail miss restores the current hardware
-        // context below; a precursor miss simply disables material consumers while preserving the packet fallback.
+        // overwrite it before the optional software tail restores its retained traversal table. A tail miss restores
+        // the current hardware context below; a precursor miss simply disables material consumers while preserving
+        // the packet fallback.
         const bool hybridSoftwareMaterialContextGraphOwned =
             shadowMaterialContextBatchGraphOwned
             && m_shadowVisibilityHybridPipelinePreflighted
@@ -1326,19 +1530,39 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
                 if(meshSwBvhBuildsGraphOwned)
                     clearPreparedMeshSwBvhBuilds();
             }
-            const bool sceneSwBvhReady =
-                // The direct compatibility loop historically continues gathering the scene after an unrelated
-                // mesh build miss. Preserve that best-effort behavior; only a failed frozen mesh plan is
-                // all-or-nothing because its scene gather may otherwise observe topology that never recorded.
-                (!meshSwBvhBuildsGraphOwned || meshSwBvhReady)
-                && buildSceneSwBvh(
+            // The direct compatibility loop historically continues gathering the scene after an unrelated mesh
+            // build miss. Preserve that best-effort behavior; only a failed frozen mesh plan is all-or-nothing
+            // because its scene gather may otherwise observe topology that never recorded.
+            const bool canRecordSceneSwBvh = !meshSwBvhBuildsGraphOwned || meshSwBvhReady;
+            // A complete healthy hybrid retains both graph-upload batches plus the exact distinct-mesh descriptor
+            // table. Record it directly instead of rebuilding CPU BVH/material data. A source-version or resource
+            // miss drops to the established direct revalidation path before deciding the optional-tail fallback.
+            const bool hybridSceneTraversalGraphOwned =
+                canRecordSceneSwBvh
+                && shadowMaterialContextBatchGraphOwned
+                && sceneBvhBatchGraphOwned
+                && m_shadowVisibilityHybridPipelinePreflighted
+            ;
+            bool sceneSwBvhReady = canRecordSceneSwBvh && (
+                hybridSceneTraversalGraphOwned
+                    ? recordPreparedSceneSwBvhTraversal()
+                    : buildSceneSwBvh(
+                        commandList,
+                        scratchArena,
+                        shadowMaterialContextBatchGraphOwned,
+                        sceneBvhBatchGraphOwned,
+                        meshSwBvhBuildsGraphOwned
+                    )
+            );
+            if(!sceneSwBvhReady && hybridSceneTraversalGraphOwned){
+                sceneSwBvhReady = buildSceneSwBvh(
                     commandList,
                     scratchArena,
                     shadowMaterialContextBatchGraphOwned,
                     sceneBvhBatchGraphOwned,
                     meshSwBvhBuildsGraphOwned
-                )
-            ;
+                );
+            }
             hybridSceneBvhBuildRecorded = sceneBvhBatchGraphOwned && sceneSwBvhReady;
             const bool swReady =
                 sceneSwBvhReady
@@ -1368,9 +1592,10 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
         // native fallback without falsely advancing the SW-BVH CPU cache.
         if(meshSwBvhBuildsGraphOwned && !hybridMeshSwBvhBuildRecorded)
             clearPreparedMeshSwBvhBuilds();
-        // The graph may already contain the immutable pair upload, but only a matching native software gather may
-        // publish its static-scene cache. A mismatch is an optional-tail failure, not a reason to reject hardware
-        // opaque shadows; clear the retained pair before the common acceptance callback can observe it.
+        // The graph may already contain the immutable pair upload, but only a restored traversal table or successful
+        // direct revalidation may publish its static-scene cache. A mismatch is an optional-tail failure, not a
+        // reason to reject hardware opaque shadows; clear the retained pair before the common acceptance callback
+        // can observe it.
         if(sceneBvhBatchGraphOwned && !hybridSceneBvhBuildRecorded)
             clearPreparedSceneBvh();
         if(

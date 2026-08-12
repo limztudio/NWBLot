@@ -1217,9 +1217,10 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     }
 
     // A healthy hybrid packet publishes the software-compatible descriptor slots as the final shared material
-    // context. The HW TLAS itself never reads that buffer; its caustic/surfel consumers run after the software tail
-    // has revalidated the frozen bytes. Do not overwrite or validate it as a HW-only snapshot here. If that optional
-    // tail misses, recordPreflightShadowVisibilityResources clears the plan and calls this path again directly.
+    // context. The HW TLAS itself never reads that buffer; its caustic/surfel consumers run after the retained
+    // software traversal table confirms the frozen graph context. Do not overwrite or validate it as a HW-only
+    // snapshot here. If that optional tail misses, recordPreflightShadowVisibilityResources clears the plan and
+    // calls this path again directly.
     const bool hybridSoftwareMaterialContextGraphOwned =
         commandList
         && shadowMaterialContextBatchGraphOwned
@@ -1417,6 +1418,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     // All-occluder trace context; draw buffers hold one transparency class.
     InstanceGpuDataVector shadowInstanceData{ scratchArena };
     MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
+    Vector<PreparedSceneSwBvhMesh, Core::Alloc::ScratchArena> preparedMeshes{ scratchArena };
     ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(
         0,
         ECSRenderDetail::MaterialTypedByteContentKeyHasher(),
@@ -1427,6 +1429,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     instanceBvhPrimitives.reserve(candidateCount);
     instanceMaterials.reserve(candidateCount);
     shadowInstanceData.reserve(candidateCount);
+    preparedMeshes.reserve(candidateCount);
     shadowMutableTypedRanges.reserve(candidateCount);
     MeshBufferSlotLookup meshSlotLookup(
         0,
@@ -1523,6 +1526,31 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                 else
                     NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: SW scene mesh descriptor was not prepared before recording"));
                 return false;
+            }
+
+            if(!commandList){
+                const Core::BufferDesc& nodeDesc = mesh->swBvhNodeBuffer->getDescription();
+                const Core::BufferDesc& positionDesc = mesh->positionBuffer->getDescription();
+                const Core::BufferDesc& indexDesc = mesh->triangleIndexBuffer->getDescription();
+                const Core::BufferDesc& attributeDesc = mesh->attributeBuffer->getDescription();
+                preparedMeshes.push_back(PreparedSceneSwBvhMesh{
+                    .meshName = mesh->meshName,
+                    .nodeBuffer = mesh->swBvhNodeBuffer,
+                    .positionBuffer = mesh->positionBuffer,
+                    .triangleIndexBuffer = mesh->triangleIndexBuffer,
+                    .attributeBuffer = mesh->attributeBuffer,
+                    .nodeHeapHandle = nodeHandle,
+                    .positionHeapHandle = positionHandle,
+                    .triangleIndexHeapHandle = indexHandle,
+                    .attributeHeapHandle = attributeHandle,
+                    .runtimeMeshVersion = mesh->runtimeMeshVersion,
+                    .nodeByteSize = nodeDesc.byteSize,
+                    .positionByteSize = positionDesc.byteSize,
+                    .triangleIndexByteSize = indexDesc.byteSize,
+                    .attributeByteSize = attributeDesc.byteSize,
+                    .primitiveCount = mesh->meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount,
+                    .runtimeMesh = mesh->runtimeMesh,
+                });
             }
 
             meshSlot = rayTracingState().m_swShadowMeshCount;
@@ -1855,6 +1883,27 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     if(staticScene && commandList && !sceneBvhBatchGraphOwned){
         rayTracingState().m_sceneSwBvhStaticSceneHash = sceneStaticHash;
         rayTracingState().m_sceneSwBvhStaticSceneHashValid = true;
+    }
+    if(!commandList){
+        const bool frozenGraphScene =
+            m_preparedSceneBvhReady
+            && m_preparedShadowMaterialContextReady
+            && m_preparedShadowMaterialContextRoute == PreparedShadowMaterialContextRoute::Software
+        ;
+        if(frozenGraphScene){
+            if(!capturePreparedSceneSwBvhTraversal(
+                preparedMeshes.data(),
+                preparedMeshes.size(),
+                instanceCount
+            )){
+                // The paired immutable uploads remain valid even when the optional traversal-table snapshot cannot
+                // be retained. Keep the established recording-time revalidation path rather than dropping hybrid
+                // transparent shadows during preflight.
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze hybrid software scene traversal; retaining direct retry fallback"));
+            }
+        }
+        else
+            clearPreparedSceneSwBvhTraversal();
     }
     return true;
 }

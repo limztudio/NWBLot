@@ -127,6 +127,33 @@ using PreparedMeshSwBvhBuildVector = Vector<
 >;
 
 
+// The scene-level software traversal consumes one descriptor-table entry per distinct mesh. Retain owning buffer
+// handles rather than the mutable raw tables rebuilt by the legacy recording path.
+struct PreparedSceneSwBvhMesh{
+    Name meshName = NAME_NONE;
+    Core::BufferHandle nodeBuffer;
+    Core::BufferHandle positionBuffer;
+    Core::BufferHandle triangleIndexBuffer;
+    Core::BufferHandle attributeBuffer;
+    Core::GpuDescriptorHandle nodeHeapHandle;
+    Core::GpuDescriptorHandle positionHeapHandle;
+    Core::GpuDescriptorHandle triangleIndexHeapHandle;
+    Core::GpuDescriptorHandle attributeHeapHandle;
+    u64 runtimeMeshVersion = 0u;
+    usize nodeByteSize = 0u;
+    usize positionByteSize = 0u;
+    usize triangleIndexByteSize = 0u;
+    usize attributeByteSize = 0u;
+    u32 primitiveCount = 0u;
+    bool runtimeMesh = false;
+};
+
+using PreparedSceneSwBvhMeshVector = Vector<
+    PreparedSceneSwBvhMesh,
+    Core::Alloc::GlobalArena
+>;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -385,6 +412,13 @@ private:
         usize instanceByteCount
     )const;
     void clearPreparedSceneBvh()noexcept;
+    [[nodiscard]] bool capturePreparedSceneSwBvhTraversal(
+        const PreparedSceneSwBvhMesh* meshes,
+        usize meshCount,
+        u32 instanceCount
+    );
+    [[nodiscard]] bool recordPreparedSceneSwBvhTraversal();
+    void clearPreparedSceneSwBvhTraversal()noexcept;
     [[nodiscard]] bool capturePreparedSceneTlasBuild(
         bool staticScene,
         u64 staticSceneHash,
@@ -540,6 +574,14 @@ private:
     u64 m_preparedSceneBvhStaticSceneHash = 0u;
     bool m_preparedSceneBvhStatic = false;
     bool m_preparedSceneBvhReady = false;
+    // The graph uploads frozen scene/material bytes, and this companion plan freezes the matching traversal table so
+    // healthy hybrid recording need not rebuild CPU scene data. ECS mutation versions preserve the direct retry path.
+    PreparedSceneSwBvhMeshVector m_preparedSceneSwBvhMeshes;
+    u32 m_preparedSceneSwBvhInstanceCount = 0u;
+    u64 m_preparedSceneSwBvhRendererMutationVersion = 0u;
+    u64 m_preparedSceneSwBvhTransformMutationVersion = 0u;
+    u64 m_preparedSceneSwBvhMaterialMutationVersion = 0u;
+    bool m_preparedSceneSwBvhReady = false;
     // RayTracingInstanceDesc stores raw BLAS pointers, so the frozen TLAS plan retains every corresponding BLAS
     // handle until Shadow Preparation accepts or discards it. The selected TLAS/backing generation is retained too.
     Vector<Core::RayTracingInstanceDesc, Core::Alloc::GlobalArena> m_preparedSceneTlasInstances;

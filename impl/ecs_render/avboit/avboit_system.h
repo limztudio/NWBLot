@@ -85,7 +85,10 @@ public:
         const MaterialPassDrawItemPartitions* preparedExtinctionDrawItems = nullptr,
         const CsgFrameGpuData* preparedExtinctionCsgFrameData = nullptr,
         usize preparedExtinctionInstanceCount = 0u,
-        usize preparedExtinctionMaterialTypedByteCount = 0u
+        usize preparedExtinctionMaterialTypedByteCount = 0u,
+        // A prepared graph consumer can receive the interval producer's UAV handoff before extinction sampling.
+        // Direct and other compatibility callers retain the native bridge by leaving this false.
+        bool extinctionCsgIntervalSampleImageStatesGraphOwned = false
     );
     // AVBOIT alternates raster and compute work. The Graphics-routed plan calls the three slices consecutively,
     // while the dedicated AsyncCompute schedule brackets the two compute dispatches with Graphics submissions.
@@ -105,7 +108,8 @@ public:
         const MaterialPassDrawItemPartitions* preparedExtinctionDrawItems = nullptr,
         const CsgFrameGpuData* preparedExtinctionCsgFrameData = nullptr,
         usize preparedExtinctionInstanceCount = 0u,
-        usize preparedExtinctionMaterialTypedByteCount = 0u
+        usize preparedExtinctionMaterialTypedByteCount = 0u,
+        bool extinctionCsgIntervalSampleImageStatesGraphOwned = false
     );
     void renderAvboitAccumulatePass(
         Core::CommandList& commandList,

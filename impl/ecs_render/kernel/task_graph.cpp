@@ -1207,6 +1207,7 @@ struct AvboitExtinctionGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot extinctionSnapshot;
         bool extinctionPhasePrepared = false;
+        bool extinctionCsgIntervalSampleImageStatesGraphOwned = false;
         bool hasTransparentRenderers = false;
         bool splitStages = false;
 
@@ -1250,7 +1251,8 @@ struct AvboitExtinctionGraphTask{
                     preparedExtinctionDrawItems,
                     preparedExtinctionCsgFrameData,
                     preparedExtinctionInstanceCount,
-                    preparedExtinctionMaterialTypedByteCount
+                    preparedExtinctionMaterialTypedByteCount,
+                    payload.extinctionCsgIntervalSampleImageStatesGraphOwned
                 );
             }
             else{
@@ -1261,7 +1263,8 @@ struct AvboitExtinctionGraphTask{
                     preparedExtinctionDrawItems,
                     preparedExtinctionCsgFrameData,
                     preparedExtinctionInstanceCount,
-                    preparedExtinctionMaterialTypedByteCount
+                    preparedExtinctionMaterialTypedByteCount,
+                    payload.extinctionCsgIntervalSampleImageStatesGraphOwned
                 );
             }
         }
@@ -6258,9 +6261,26 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             );
             avboitExtinctionPayload.extinctionPhasePrepared = true;
         }
+    const bool extinctionCsgIntervalSampleImageStatesGraphOwned =
+        avboitIntervalOutputsGraphOwned && extinctionCsgStreamsUploaded
+    ;
+    NWB_ASSERT(
+        !extinctionCsgIntervalSampleImageStatesGraphOwned
+        || (
+            avboitExtinctionPayload.extinctionPhasePrepared
+            && avboitExtinctionPayload.extinctionSnapshot.captured
+        )
+    );
+    avboitExtinctionPayload.extinctionCsgIntervalSampleImageStatesGraphOwned =
+        extinctionCsgIntervalSampleImageStatesGraphOwned
+    ;
     Core::Alloc::ScratchArena extinctionResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionResourceUses{ extinctionResourceScratch };
-    extinctionResourceUses.reserve((splitAvboitStages ? 9u : 16u) + (extinctionStreamsUploaded ? 7u : 0u));
+    extinctionResourceUses.reserve(
+        (splitAvboitStages ? 9u : 16u)
+        + (extinctionStreamsUploaded ? 7u : 0u)
+        + (extinctionCsgIntervalSampleImageStatesGraphOwned ? 4u : 0u)
+    );
     if(splitAvboitStages){
         extinctionResourceUses.push_back(ReadUse(depth));
         extinctionResourceUses.push_back(ReadUse(avboitLowRaster, Core::ResourceStates::RenderTarget));
@@ -6294,6 +6314,30 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             extinctionResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
             // The full-resolution interval producer owns this sample state throughout all low-raster AVBOIT phases.
             extinctionResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
+            if(extinctionCsgIntervalSampleImageStatesGraphOwned){
+                // The prepared transparent interval producer wrote these aliases. Extinction loads them through
+                // StorageImage descriptors, so the graph lowers its same-UAV handoff before this thunk records.
+                extinctionResourceUses.push_back(ReadTextureUse(
+                    csgRemovedIntervalDepth,
+                    csgRemovedIntervalSubresources,
+                    Core::ResourceStates::UnorderedAccess
+                ));
+                extinctionResourceUses.push_back(ReadTextureUse(
+                    csgRemovedIntervalCapNormal,
+                    csgRemovedIntervalSubresources,
+                    Core::ResourceStates::UnorderedAccess
+                ));
+                extinctionResourceUses.push_back(ReadTextureUse(
+                    csgRemovedIntervalData,
+                    csgRemovedIntervalSubresources,
+                    Core::ResourceStates::UnorderedAccess
+                ));
+                extinctionResourceUses.push_back(ReadTextureUse(
+                    csgRemovedIntervalCount,
+                    csgRemovedIntervalCountSubresources,
+                    Core::ResourceStates::UnorderedAccess
+                ));
+            }
         }
     }
     extinctionResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));

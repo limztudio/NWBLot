@@ -568,7 +568,8 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
     const MaterialPassDrawItemPartitions* const preparedExtinctionDrawItems,
     const CsgFrameGpuData* const preparedExtinctionCsgFrameData,
     const usize preparedExtinctionInstanceCount,
-    const usize preparedExtinctionMaterialTypedByteCount
+    const usize preparedExtinctionMaterialTypedByteCount,
+    const bool extinctionCsgIntervalSampleImageStatesGraphOwned
 ){
     NWB_ASSERT(avboitTargets.valid());
 
@@ -587,7 +588,8 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
                 *preparedExtinctionDrawItems,
                 *preparedExtinctionCsgFrameData,
                 preparedExtinctionInstanceCount,
-                preparedExtinctionMaterialTypedByteCount
+                preparedExtinctionMaterialTypedByteCount,
+                extinctionCsgIntervalSampleImageStatesGraphOwned
             );
         }
     }
@@ -677,7 +679,8 @@ void RendererAvboitSystem::renderAvboitPostOccupancyPreAccumulationPasses(
     const MaterialPassDrawItemPartitions* const preparedExtinctionDrawItems,
     const CsgFrameGpuData* const preparedExtinctionCsgFrameData,
     const usize preparedExtinctionInstanceCount,
-    const usize preparedExtinctionMaterialTypedByteCount
+    const usize preparedExtinctionMaterialTypedByteCount,
+    const bool extinctionCsgIntervalSampleImageStatesGraphOwned
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -692,7 +695,8 @@ void RendererAvboitSystem::renderAvboitPostOccupancyPreAccumulationPasses(
         preparedExtinctionDrawItems,
         preparedExtinctionCsgFrameData,
         preparedExtinctionInstanceCount,
-        preparedExtinctionMaterialTypedByteCount
+        preparedExtinctionMaterialTypedByteCount,
+        extinctionCsgIntervalSampleImageStatesGraphOwned
     );
     dispatchAvboitIntegration(commandList, avboitTargets);
 }

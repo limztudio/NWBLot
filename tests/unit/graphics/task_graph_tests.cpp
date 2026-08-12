@@ -8557,6 +8557,253 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToOccupancySampleUavDependencie
 }
 
 
+// Extinction can run after the dedicated-Compute depth-warp packet. Its prepared CSG material draw still samples
+// the interval producer's four StorageImage aliases, so retain their UAV state seed and ordering edge across that
+// intervening packet instead of depending on an extinction-local native state bridge.
+TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToExtinctionSampleAcrossAsyncGap){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId removedIntervalDepth = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_extinction_removed_interval_depth"),
+        "AVBOIT Extinction Removed Interval Depth"
+    );
+    const Graphics::GpuGraphResourceId removedIntervalCapNormal = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_extinction_removed_interval_cap_normal"),
+        "AVBOIT Extinction Removed Interval Cap Normal"
+    );
+    const Graphics::GpuGraphResourceId removedIntervalData = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_extinction_removed_interval_data"),
+        "AVBOIT Extinction Removed Interval Data"
+    );
+    const Graphics::GpuGraphResourceId removedIntervalCount = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_extinction_removed_interval_count"),
+        "AVBOIT Extinction Removed Interval Count"
+    );
+    ASSERT_TRUE(removedIntervalDepth.valid());
+    ASSERT_TRUE(removedIntervalCapNormal.valid());
+    ASSERT_TRUE(removedIntervalData.valid());
+    ASSERT_TRUE(removedIntervalCount.valid());
+
+    const Graphics::TextureSubresourceSet removedIntervalRange(0u, 1u, 0u, 16u);
+    const Graphics::TextureSubresourceSet removedIntervalCountRange(0u, 1u, 0u, 1u);
+    const Graphics::GpuTaskResourceUse intervalUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = removedIntervalDepth,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = removedIntervalCapNormal,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = removedIntervalData,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = removedIntervalCount,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalCountRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    const Graphics::GpuTaskResourceUse extinctionUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = removedIntervalDepth,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = removedIntervalCapNormal,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = removedIntervalData,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = removedIntervalCount,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalCountRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        true,
+        true,
+    };
+    Graphics::GpuTaskSchedulingHint boundaryScheduling;
+    boundaryScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    boundaryScheduling.forceSubmissionBoundary = true;
+    boundaryScheduling.allowPacketMerge = false;
+
+    Graphics::GpuTaskDesc intervalDesc;
+    intervalDesc
+        .setIdentity(Name("tests/task_graph/avboit_extinction_intervals"))
+        .setMarkerLabel("Transparent CSG Intervals")
+        .setQueue(graphicsRequest)
+        .setScheduling(boundaryScheduling)
+        .setResourceUses(intervalUses, LengthOf(intervalUses))
+    ;
+    const Graphics::GpuTaskId intervals = graph.addTask(intervalDesc);
+    ASSERT_TRUE(intervals.valid());
+
+    Graphics::GpuTaskDesc depthWarpDesc;
+    depthWarpDesc
+        .setIdentity(Name("tests/task_graph/avboit_extinction_depth_warp"))
+        .setMarkerLabel("AVBOIT Depth Warp")
+        .setQueue(computeRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&intervals, 1u)
+    ;
+    const Graphics::GpuTaskId depthWarp = graph.addTask(depthWarpDesc);
+    ASSERT_TRUE(depthWarp.valid());
+
+    Graphics::GpuTaskDesc extinctionDesc;
+    extinctionDesc
+        .setIdentity(Name("tests/task_graph/avboit_extinction_csg_sample"))
+        .setMarkerLabel("AVBOIT Extinction")
+        .setQueue(graphicsRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&depthWarp, 1u)
+        .setResourceUses(extinctionUses, LengthOf(extinctionUses))
+    ;
+    const Graphics::GpuTaskId extinction = graph.addTask(extinctionDesc);
+    ASSERT_TRUE(extinction.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        intervals,
+        extinction,
+        removedIntervalDepth,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        intervals,
+        extinction,
+        removedIntervalCapNormal,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        intervals,
+        extinction,
+        removedIntervalData,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        intervals,
+        extinction,
+        removedIntervalCount,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    const Graphics::GpuSubmissionPacketId intervalsPacket = compiledGraph.packetForTask(intervals);
+    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledGraph.packetForTask(depthWarp);
+    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledGraph.packetForTask(extinction);
+    ASSERT_TRUE(intervalsPacket.valid());
+    ASSERT_TRUE(depthWarpPacket.valid());
+    ASSERT_TRUE(extinctionPacket.valid());
+    EXPECT_NE(intervalsPacket, depthWarpPacket);
+    EXPECT_NE(depthWarpPacket, extinctionPacket);
+    EXPECT_NE(intervalsPacket, extinctionPacket);
+    const Graphics::GpuSubmissionPacket& extinctionPacketPlan = compiledGraph.packet(extinctionPacket);
+    ASSERT_EQ(extinctionPacketPlan.dependencyCount, 2u);
+    const Graphics::GpuPacketDependency* const extinctionDependencies = compiledGraph.packetDependencies(extinctionPacket);
+    ASSERT_NE(extinctionDependencies, nullptr);
+    bool waitsForIntervals = false;
+    bool waitsForDepthWarp = false;
+    for(u32 dependencyIndex = 0u; dependencyIndex < extinctionPacketPlan.dependencyCount; ++dependencyIndex){
+        waitsForIntervals = waitsForIntervals || extinctionDependencies[dependencyIndex].producer == intervalsPacket;
+        waitsForDepthWarp = waitsForDepthWarp || extinctionDependencies[dependencyIndex].producer == depthWarpPacket;
+    }
+    EXPECT_TRUE(waitsForIntervals);
+    EXPECT_TRUE(waitsForDepthWarp);
+
+    const Graphics::GpuCompiledTask* const compiledIntervals = compiledGraph.findTask(intervals);
+    const Graphics::GpuCompiledTask* const compiledExtinction = compiledGraph.findTask(extinction);
+    ASSERT_NE(compiledIntervals, nullptr);
+    ASSERT_NE(compiledExtinction, nullptr);
+    ASSERT_EQ(compiledIntervals->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledIntervals->prologueBarrierCount, 4u);
+    ASSERT_EQ(compiledExtinction->prologueStateSeedCount, 4u);
+    ASSERT_EQ(compiledExtinction->prologueBarrierCount, 4u);
+    const Graphics::GpuPacketStateSeed* const extinctionSeeds = compiledGraph.taskPrologueStateSeeds(extinction);
+    const Graphics::GpuCompiledBarrier* const extinctionBarriers = compiledGraph.taskPrologueBarriers(extinction);
+    ASSERT_NE(extinctionSeeds, nullptr);
+    ASSERT_NE(extinctionBarriers, nullptr);
+    const auto hasExtinctionStateSeed = [&](const Graphics::GpuGraphResourceId resource){
+        for(u32 seedIndex = 0u; seedIndex < compiledExtinction->prologueStateSeedCount; ++seedIndex){
+            const Graphics::GpuPacketStateSeed& seed = extinctionSeeds[seedIndex];
+            if(seed.resource == resource && seed.sourcePacket == intervalsPacket)
+                return true;
+        }
+        return false;
+    };
+    const auto hasExtinctionUav = [&](const Graphics::GpuGraphResourceId resource, const Graphics::TextureSubresourceSet& range){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledExtinction->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = extinctionBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureUav
+                && barrier.resource == resource
+                && barrier.range.textureSubresources == range
+                && barrier.before == Graphics::ResourceStates::UnorderedAccess
+                && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasExtinctionStateSeed(removedIntervalDepth));
+    EXPECT_TRUE(hasExtinctionStateSeed(removedIntervalCapNormal));
+    EXPECT_TRUE(hasExtinctionStateSeed(removedIntervalData));
+    EXPECT_TRUE(hasExtinctionStateSeed(removedIntervalCount));
+    EXPECT_TRUE(hasExtinctionUav(removedIntervalDepth, removedIntervalRange));
+    EXPECT_TRUE(hasExtinctionUav(removedIntervalCapNormal, removedIntervalRange));
+    EXPECT_TRUE(hasExtinctionUav(removedIntervalData, removedIntervalRange));
+    EXPECT_TRUE(hasExtinctionUav(removedIntervalCount, removedIntervalCountRange));
+}
+
+
 TEST(GpuTaskGraph, CompilesTransferPreferenceToGraphicsFallbackWithoutARendererPath){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

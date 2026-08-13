@@ -411,8 +411,8 @@ private:
     Core::GpuTaskId m_deferredCausticResolveUpsampleTask;
     bool m_deferredCausticProducerDispatched = false;
     // The typed output clear plus optional initialize/copy prefix form Surfel GI's graph-owned setup. Age/free,
-    // the per-frame cell-head clear, hash build, Spawn, trace-build-args, and remaining GI work stay in the same
-    // semantic effects packet so the compiler owns each handoff without changing the effects endpoint.
+    // the per-frame cell-head clear, hash build, Spawn, trace-build-args, trace, and remaining GI work stay in the
+    // same semantic effects packet so the compiler owns each handoff without changing the effects endpoint.
     Core::GpuTaskId m_deferredSurfelGiPreparationTask;
     Core::GpuTaskId m_deferredSurfelGiSnapshotCopyTask;
     Core::GpuTaskId m_deferredSurfelGiIrradianceClearTask;
@@ -421,6 +421,7 @@ private:
     Core::GpuTaskId m_deferredSurfelGiHashBuildTask;
     Core::GpuTaskId m_deferredSurfelGiSpawnTask;
     Core::GpuTaskId m_deferredSurfelGiTraceBuildArgsTask;
+    Core::GpuTaskId m_deferredSurfelGiTraceTask;
     Core::GpuTaskId m_deferredSurfelGiTask;
     // A rare diagnostic tail: it depends on GI but records/submits after Present on Transfer when available.
     Core::GpuTaskId m_deferredSurfelGiCounterReadbackTask;

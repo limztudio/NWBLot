@@ -159,6 +159,7 @@ namespace __hidden_surfel_gi_task{
     struct SurfelGiHashBuildGraphTask;
     struct SurfelGiSpawnGraphTask;
     struct SurfelGiTraceBuildArgsGraphTask;
+    struct SurfelGiTraceGraphTask;
     struct SurfelGiGraphTask;
 }
 
@@ -545,6 +546,14 @@ public:
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr,
         bool graphEntryStatesOwned = false
     );
+    [[nodiscard]] Core::GpuTaskId declareSurfelGiTraceTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr,
+        bool graphEntryStatesOwned = false
+    );
     [[nodiscard]] Core::GpuTaskId declareSurfelGiTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -555,10 +564,11 @@ public:
         bool graphOwnsHashBuild = false,
         bool graphOwnsSpawn = false,
         bool graphOwnsTraceBuildArgs = false,
+        bool graphOwnsTrace = false,
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr
     );
     // Direct compatibility callers retain the complete native age/free, cell-head-clear, hash-build, Spawn,
-    // trace-build-args, and remaining-GI sequence.
+    // trace-build-args, trace, and remaining-GI sequence.
     [[nodiscard]] bool renderSurfelGi(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -594,6 +604,7 @@ private:
     friend struct __hidden_surfel_gi_task::SurfelGiHashBuildGraphTask;
     friend struct __hidden_surfel_gi_task::SurfelGiSpawnGraphTask;
     friend struct __hidden_surfel_gi_task::SurfelGiTraceBuildArgsGraphTask;
+    friend struct __hidden_surfel_gi_task::SurfelGiTraceGraphTask;
     friend struct __hidden_surfel_gi_task::SurfelGiGraphTask;
     enum class PreparedShadowMaterialContextRoute : u8{
         None,
@@ -712,7 +723,8 @@ private:
         bool graphOwnsCellHeadClear = false,
         bool graphOwnsHashBuild = false,
         bool graphOwnsSpawn = false,
-        bool graphOwnsTraceBuildArgs = false
+        bool graphOwnsTraceBuildArgs = false,
+        bool graphOwnsTrace = false
     );
     [[nodiscard]] bool renderSurfelGiHashBuild(
         Core::CommandList& commandList,
@@ -729,6 +741,11 @@ private:
         DeferredFrameTargets& targets,
         bool graphEntryStatesOwned = false
     );
+    [[nodiscard]] bool renderSurfelGiTrace(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned = false
+    );
     [[nodiscard]] bool renderSurfelGiPhases(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -737,10 +754,12 @@ private:
         bool dispatchHashBuild,
         bool dispatchSpawn,
         bool dispatchTraceBuildArgs,
+        bool dispatchTrace,
         bool dispatchRemaining,
         bool graphOwnsCellHeadClear,
         bool graphOwnsHashBuild,
-        bool graphOwnsTraceBuildArgs
+        bool graphOwnsTraceBuildArgs,
+        bool graphOwnsTrace
     );
     [[nodiscard]] bool prepareMeshBlasResources(MeshResources& meshResources);
     [[nodiscard]] bool buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources);

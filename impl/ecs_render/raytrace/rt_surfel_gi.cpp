@@ -235,6 +235,59 @@ struct SurfelGiSpawnGraphTask{
 };
 
 
+struct SurfelGiTraceBuildArgsGraphTask{
+    struct Payload{
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
+        bool graphEntryStatesOwned = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        if(
+            !payload.raytracingSystem
+            || !payload.targets
+            || !payload.timingTicket
+            || !payload.asyncTiming
+        )
+            return false;
+
+        const Core::GpuPhysicalQueueInfo* const queue = context.graph.queueInfo(context.queue);
+        if(
+            !queue
+            || (queue->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming->has_value())
+        )
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        if(!payload.raytracingSystem->renderSurfelGiTraceBuildArgs(
+            commandList,
+            *payload.targets,
+            payload.graphEntryStatesOwned
+        )){
+            if(payload.asyncTiming->has_value()){
+                payload.asyncTiming->value().discardTiming();
+                payload.asyncTiming->reset();
+            }
+            return false;
+        }
+        return true;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.asyncTiming && payload.asyncTiming->has_value()){
+            payload.asyncTiming->value().discardTiming();
+            payload.asyncTiming->reset();
+        }
+    }
+};
+
+
 struct SurfelGiGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -246,6 +299,7 @@ struct SurfelGiGraphTask{
         bool graphOwnsCellHeadClear = false;
         bool graphOwnsHashBuild = false;
         bool graphOwnsSpawn = false;
+        bool graphOwnsTraceBuildArgs = false;
     };
 
     [[nodiscard]] static bool record(
@@ -273,7 +327,8 @@ struct SurfelGiGraphTask{
                 payload.graphEntryStatesOwned,
                 true,
                 payload.graphOwnsHashBuild,
-                payload.graphOwnsSpawn
+                payload.graphOwnsSpawn,
+                payload.graphOwnsTraceBuildArgs
             )){
                 if(payload.asyncTiming && payload.asyncTiming->has_value()){
                     payload.asyncTiming->value().discardTiming();
@@ -1225,6 +1280,26 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiSpawnTask(
     );
 }
 
+Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceBuildArgsTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    Optional<Core::GpuTimingMeasure>* const asyncTiming,
+    const bool graphEntryStatesOwned
+){
+    return graph.addTask<__hidden_surfel_gi_task::SurfelGiTraceBuildArgsGraphTask>(
+        desc,
+        __hidden_surfel_gi_task::SurfelGiTraceBuildArgsGraphTask::Payload{
+            .raytracingSystem = this,
+            .targets = &targets,
+            .timingTicket = &timingTicket,
+            .asyncTiming = asyncTiming,
+            .graphEntryStatesOwned = graphEntryStatesOwned,
+        }
+    );
+}
+
 Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
@@ -1234,6 +1309,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
     const bool graphOwnsCellHeadClear,
     const bool graphOwnsHashBuild,
     const bool graphOwnsSpawn,
+    const bool graphOwnsTraceBuildArgs,
     Optional<Core::GpuTimingMeasure>* const asyncTiming
 ){
     return graph.addTask<__hidden_surfel_gi_task::SurfelGiGraphTask>(
@@ -1248,6 +1324,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
             .graphOwnsCellHeadClear = graphOwnsCellHeadClear,
             .graphOwnsHashBuild = graphOwnsHashBuild,
             .graphOwnsSpawn = graphOwnsSpawn,
+            .graphOwnsTraceBuildArgs = graphOwnsTraceBuildArgs,
         }
     );
 }
@@ -1281,6 +1358,8 @@ bool RendererRayTracingSystem::renderSurfelGi(
         true,
         true,
         true,
+        true,
+        false,
         false,
         false
     );
@@ -1301,6 +1380,8 @@ bool RendererRayTracingSystem::renderSurfelGiAgeFree(
         false,
         false,
         false,
+        false,
+        false,
         false
     );
 }
@@ -1312,7 +1393,8 @@ bool RendererRayTracingSystem::renderSurfelGiAfterAgeFree(
     const bool graphEntryStatesOwned,
     const bool graphOwnsCellHeadClear,
     const bool graphOwnsHashBuild,
-    const bool graphOwnsSpawn
+    const bool graphOwnsSpawn,
+    const bool graphOwnsTraceBuildArgs
 ){
     return renderSurfelGiPhases(
         commandList,
@@ -1321,9 +1403,11 @@ bool RendererRayTracingSystem::renderSurfelGiAfterAgeFree(
         false,
         !graphOwnsHashBuild,
         !graphOwnsSpawn,
+        !graphOwnsTraceBuildArgs,
         true,
         graphOwnsCellHeadClear,
-        graphOwnsHashBuild
+        graphOwnsHashBuild,
+        graphOwnsTraceBuildArgs
     );
 }
 
@@ -1341,7 +1425,9 @@ bool RendererRayTracingSystem::renderSurfelGiHashBuild(
         true,
         false,
         false,
+        false,
         true,
+        false,
         false
     );
 }
@@ -1360,6 +1446,29 @@ bool RendererRayTracingSystem::renderSurfelGiSpawn(
         false,
         true,
         false,
+        false,
+        true,
+        true,
+        false
+    );
+}
+
+
+bool RendererRayTracingSystem::renderSurfelGiTraceBuildArgs(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool graphEntryStatesOwned
+){
+    return renderSurfelGiPhases(
+        commandList,
+        targets,
+        graphEntryStatesOwned,
+        false,
+        false,
+        false,
+        true,
+        false,
+        true,
         true,
         true
     );
@@ -1373,9 +1482,11 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
     const bool dispatchAgeFree,
     const bool dispatchHashBuild,
     const bool dispatchSpawn,
+    const bool dispatchTraceBuildArgs,
     const bool dispatchRemaining,
     const bool graphOwnsCellHeadClear,
-    const bool graphOwnsHashBuild
+    const bool graphOwnsHashBuild,
+    const bool graphOwnsTraceBuildArgs
 ){
     if(!hasSurfelWork())
         return true;
@@ -1464,7 +1575,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         commandList.dispatch(DivideUp(poolCapacity, static_cast<u32>(NWB_SURFEL_LINEAR_GROUP_SIZE)), 1u, 1u);
     }
 
-    if(!dispatchHashBuild && !dispatchSpawn && !dispatchRemaining)
+    if(!dispatchHashBuild && !dispatchSpawn && !dispatchTraceBuildArgs && !dispatchRemaining)
         return true;
 
     // Rebuild occupancy before spawning into empty cells.
@@ -1492,7 +1603,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         commandList.dispatch(DivideUp(poolCapacity, static_cast<u32>(NWB_SURFEL_LINEAR_GROUP_SIZE)), 1u, 1u);
     }
 
-    if(!dispatchSpawn && !dispatchRemaining)
+    if(!dispatchSpawn && !dispatchTraceBuildArgs && !dispatchRemaining)
         return true;
 
     // Spawn claims only empty hash cells.
@@ -1525,11 +1636,11 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         commandList.dispatch(DivideUp(tilesX, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), DivideUp(tilesY, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), 1u);
     }
 
-    if(!dispatchRemaining)
+    if(!dispatchTraceBuildArgs && !dispatchRemaining)
         return true;
 
     // Build an indirect dispatch sized for live surfels.
-    {
+    if(dispatchTraceBuildArgs){
         if(!graphEntryStatesOwned){
             commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
             commandList.setBufferState(rayTracingState().m_surfelCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
@@ -1548,8 +1659,11 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         );
     }
 
-    // Direct callers stage heap-selected trace inputs locally; graph callers retain only the indirect-argument
-    // transition produced within this task after the graph-owned build-arguments phase.
+    if(!dispatchRemaining)
+        return true;
+
+    // Direct callers stage heap-selected trace inputs locally; prepared graph callers inherit the compiler-lowered
+    // trace-argument state after the graph-owned build-arguments task.
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelTrace, graphics().getDevice(), commandList);
         if(!graphEntryStatesOwned && useHwTrace){
@@ -1578,7 +1692,8 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
             commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
             commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
         }
-        commandList.setBufferState(rayTracingState().m_surfelTraceIndirectArgsBuffer.get(), Core::ResourceStates::IndirectArgument);
+        if(!graphOwnsTraceBuildArgs)
+            commandList.setBufferState(rayTracingState().m_surfelTraceIndirectArgsBuffer.get(), Core::ResourceStates::IndirectArgument);
         commandList.commitBarriers();
         Core::ComputeState state;
         state.setPipeline(tracePipeline);

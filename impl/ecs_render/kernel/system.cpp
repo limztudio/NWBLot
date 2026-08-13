@@ -268,6 +268,7 @@ void RendererSystem::invalidateResources(){
     m_deferredSurfelGiCellHeadClearTask = {};
     m_deferredSurfelGiHashBuildTask = {};
     m_deferredSurfelGiSpawnTask = {};
+    m_deferredSurfelGiTraceBuildArgsTask = {};
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
@@ -542,6 +543,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredSurfelGiCellHeadClearTask = {};
     m_deferredSurfelGiHashBuildTask = {};
     m_deferredSurfelGiSpawnTask = {};
+    m_deferredSurfelGiTraceBuildArgsTask = {};
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
@@ -1319,6 +1321,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? m_deferredLightingCompiledGraph.packetForTask(m_deferredSurfelGiSpawnTask)
         : Core::GpuSubmissionPacketId{}
     ;
+    const Core::GpuSubmissionPacketId surfelGiTraceBuildArgsPacket = m_deferredSurfelGiTraceBuildArgsTask.valid()
+        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredSurfelGiTraceBuildArgsTask)
+        : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuSubmissionPacketId surfelGiPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredSurfelGiTask
     );
@@ -1427,30 +1433,34 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && surfelGiPacket.valid()
         && surfelGiIrradianceClearPacket == surfelGiPacket
     ;
-    // A prepared Surfel GI frame splits age/free, its per-frame cell-head reset, hash build, and Spawn from the
-    // remaining passes. Every callback must still share the semantic GI packet, including one async timing interval
-    // and the existing effects acceptance endpoint. A missing prefix denotes the compatibility callback.
+    // A prepared Surfel GI frame splits age/free, its per-frame cell-head reset, hash build, Spawn, and trace-build-
+    // args from the remaining passes. Every callback must still share the semantic GI packet, including one async
+    // timing interval and the existing effects acceptance endpoint. A missing prefix denotes compatibility callback.
     const bool surfelGiPreparedPrefixMergedIntoGiPacket =
         (
             !m_deferredSurfelGiAgeFreeTask.valid()
             && !m_deferredSurfelGiCellHeadClearTask.valid()
             && !m_deferredSurfelGiHashBuildTask.valid()
             && !m_deferredSurfelGiSpawnTask.valid()
+            && !m_deferredSurfelGiTraceBuildArgsTask.valid()
         )
         || (
             m_deferredSurfelGiAgeFreeTask.valid()
             && m_deferredSurfelGiCellHeadClearTask.valid()
             && m_deferredSurfelGiHashBuildTask.valid()
             && m_deferredSurfelGiSpawnTask.valid()
+            && m_deferredSurfelGiTraceBuildArgsTask.valid()
             && surfelGiAgeFreePacket.valid()
             && surfelGiCellHeadClearPacket.valid()
             && surfelGiHashBuildPacket.valid()
             && surfelGiSpawnPacket.valid()
+            && surfelGiTraceBuildArgsPacket.valid()
             && surfelGiPacket.valid()
             && surfelGiAgeFreePacket == surfelGiPacket
             && surfelGiCellHeadClearPacket == surfelGiPacket
             && surfelGiHashBuildPacket == surfelGiPacket
             && surfelGiSpawnPacket == surfelGiPacket
+            && surfelGiTraceBuildArgsPacket == surfelGiPacket
         )
     ;
     // Both caustic routes retain a black output on a no-producer frame. Keep the typed clear in the selected

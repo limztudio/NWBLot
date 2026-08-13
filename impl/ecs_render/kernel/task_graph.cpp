@@ -4546,6 +4546,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     m_deferredSurfelGiCellHeadClearTask = {};
     m_deferredSurfelGiHashBuildTask = {};
     m_deferredSurfelGiSpawnTask = {};
+    m_deferredSurfelGiTraceBuildArgsTask = {};
     asyncTiming.reset();
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
@@ -4590,10 +4591,12 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> ageFreeResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hashBuildResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> spawnResourceUses{ scratchArena };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> traceBuildArgsResourceUses{ scratchArena };
     resourceUses.reserve(28u + traceGeometryResourceCount);
     ageFreeResourceUses.reserve(4u);
     hashBuildResourceUses.reserve(3u);
     spawnResourceUses.reserve(7u);
+    traceBuildArgsResourceUses.reserve(3u);
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));
     resourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -4643,6 +4646,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     Core::GpuGraphResourceId surfelPool;
     Core::GpuGraphResourceId surfelCellHead;
     Core::GpuGraphResourceId surfelCounter;
+    Core::GpuGraphResourceId surfelTraceIndirectArgs;
     Core::GpuGraphResourceId surfelFreeList;
     Core::GpuGraphResourceId surfelPoolSnapshot;
     Core::GpuGraphResourceId surfelCellHeadSnapshot;
@@ -4694,12 +4698,6 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             &surfelCounter
         )
         && appendOptionalWriteBuffer(
-            m_rayTracingState.m_surfelTraceIndirectArgsBuffer,
-            Name("render.surfel_gi.trace_args"),
-            "Surfel Trace Arguments",
-            Core::ResourceStates::UnorderedAccess
-        )
-        && appendOptionalWriteBuffer(
             m_rayTracingState.m_surfelFreeListBuffer,
             Name("render.surfel_gi.free_list"),
             "Surfel Free List",
@@ -4721,6 +4719,14 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             &surfelCellHeadSnapshot
         )
     ;
+    if(optionalResourcesImported && m_rayTracingState.m_surfelTraceIndirectArgsBuffer){
+        surfelTraceIndirectArgs = importBuffer(
+            m_rayTracingState.m_surfelTraceIndirectArgsBuffer,
+            Name("render.surfel_gi.trace_args"),
+            "Surfel Trace Arguments"
+        );
+        optionalResourcesImported = surfelTraceIndirectArgs.valid();
+    }
     if(optionalResourcesImported && !useHwTrace){
         optionalResourcesImported =
             appendOptionalReadBuffer(
@@ -4771,6 +4777,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         && surfelPool.valid()
         && surfelCellHead.valid()
         && surfelCounter.valid()
+        && surfelTraceIndirectArgs.valid()
         && surfelFreeList.valid()
         && m_rayTracingState.m_surfelAgeFreePipeline
         && m_rayTracingState.m_surfelHashBuildPipeline
@@ -4780,6 +4787,12 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         && m_rayTracingState.m_surfelUpsamplePipeline
         && m_rayTracingState.m_surfelTraceBuildArgsPipeline
     ;
+    if(surfelTraceIndirectArgs.valid()){
+        resourceUses.push_back(graphOwnsSurfelCellHeadClear
+            ? ReadUse(surfelTraceIndirectArgs, Core::ResourceStates::IndirectArgument)
+            : WriteUse(surfelTraceIndirectArgs, Core::ResourceStates::UnorderedAccess)
+        );
+    }
 
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
@@ -5012,7 +5025,32 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI spawn graph task"));
             return false;
         }
-        surfelGiDependency = m_deferredSurfelGiSpawnTask;
+
+        traceBuildArgsResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
+        traceBuildArgsResourceUses.push_back(ReadUse(surfelCounter, Core::ResourceStates::UnorderedAccess));
+        traceBuildArgsResourceUses.push_back(WriteUse(surfelTraceIndirectArgs, Core::ResourceStates::UnorderedAccess));
+        Core::GpuTaskDesc traceBuildArgsDesc;
+        traceBuildArgsDesc
+            .setIdentity(Name("render.surfel_gi.trace_build_args"))
+            .setMarkerLabel("Surfel GI Trace Build Args")
+            .setQueue(ComputeQueueRequest())
+            .setScheduling(surfelGiScheduling)
+            .setDependencies(&m_deferredSurfelGiSpawnTask, 1u)
+            .setResourceUses(traceBuildArgsResourceUses.data(), traceBuildArgsResourceUses.size())
+        ;
+        m_deferredSurfelGiTraceBuildArgsTask = m_raytracingSystem.declareSurfelGiTraceBuildArgsTask(
+            m_deferredLightingTaskGraph,
+            traceBuildArgsDesc,
+            deferredTargets,
+            timingTicket,
+            &asyncTiming,
+            true
+        );
+        if(!m_deferredSurfelGiTraceBuildArgsTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI trace-build-args graph task"));
+            return false;
+        }
+        surfelGiDependency = m_deferredSurfelGiTraceBuildArgsTask;
     }
 
     Core::GpuTaskDesc desc;
@@ -5034,6 +5072,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         deferredTargets,
         timingTicket,
         true,
+        graphOwnsSurfelCellHeadClear,
         graphOwnsSurfelCellHeadClear,
         graphOwnsSurfelCellHeadClear,
         graphOwnsSurfelCellHeadClear,
@@ -5187,6 +5226,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredSurfelGiCellHeadClearTask = {};
     m_deferredSurfelGiHashBuildTask = {};
     m_deferredSurfelGiSpawnTask = {};
+    m_deferredSurfelGiTraceBuildArgsTask = {};
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};

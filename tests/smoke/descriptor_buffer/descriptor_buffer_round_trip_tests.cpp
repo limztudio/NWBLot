@@ -1369,14 +1369,46 @@ struct NativePacketSurfelGiSpawnProbeTask{
 };
 
 
-// Surfel GI's persistent resources start with the graph-established descriptor-visible state batch. The actual
-// remaining renderer callback owns only its intra-task ordering and indirect-argument transition. This getter-only
-// probe keeps the graph-owned Spawn-to-trace-arguments UAV handoff observable before native setup could mask it.
+// Trace-build-args consumes Spawn's counter and writes the indirect argument buffer. This getter-only probe proves
+// its graph-owned UAV entry before the renderer callback records the dispatch.
+struct NativePacketSurfelGiTraceBuildArgsProbeTask{
+    struct Payload{
+        Buffer* constants = nullptr;
+        Buffer* counter = nullptr;
+        Buffer* traceArgs = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        const bool ready =
+            payload.constants
+            && payload.counter
+            && payload.traceArgs
+            && commandList.getBufferState(payload.constants) == ResourceStates::ConstantBuffer
+            && commandList.getBufferState(payload.counter) == ResourceStates::UnorderedAccess
+            && commandList.getBufferState(payload.traceArgs) == ResourceStates::UnorderedAccess
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
+// Surfel GI's persistent resources start with the graph-established descriptor-visible state batch. The remaining
+// renderer callback sees trace arguments already lowered to IndirectArgument, while its other persistent writes
+// remain UAVs. This getter-only probe keeps that graph-owned handoff observable before native setup could mask it.
 struct NativePacketSurfelGiEntryProbeTask{
     static constexpr u32 s_ShaderBufferCount = 9u;
     static constexpr u32 s_ConstantBufferCount = 4u;
     static constexpr u32 s_ShaderTextureCount = 2u;
     static constexpr u32 s_UavBufferCount = 5u;
+    static constexpr u32 s_TraceArgsBufferIndex = 3u;
     static constexpr u32 s_UavTextureCount = 1u;
 
     struct Payload{
@@ -1417,7 +1449,11 @@ struct NativePacketSurfelGiEntryProbeTask{
         for(u32 bufferIndex = 0u; bufferIndex < s_UavBufferCount; ++bufferIndex){
             ready = ready
                 && payload.uavBuffers[bufferIndex]
-                && commandList.getBufferState(payload.uavBuffers[bufferIndex]) == ResourceStates::UnorderedAccess
+                && commandList.getBufferState(payload.uavBuffers[bufferIndex]) == (
+                    bufferIndex == s_TraceArgsBufferIndex
+                        ? ResourceStates::IndirectArgument
+                        : ResourceStates::UnorderedAccess
+                )
             ;
         }
         for(u32 textureIndex = 0u; textureIndex < s_UavTextureCount; ++textureIndex){
@@ -5770,10 +5806,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
 }
 
 
-// Surfel GI's typed output clear, age/free, per-frame cell-head clear, hash build, and Spawn now receive their
-// states from the graph. The test intentionally has no renderer-native state setup: Hash Build observes the typed
-// clear transition, Spawn observes the hash handoff, and the remaining callback observes Spawn's UAV ordering.
-TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiSpawnRecordsWithoutNativeBridge){
+// Surfel GI's typed output clear, age/free, per-frame cell-head clear, Hash Build, Spawn, and trace-build-args now
+// receive their states from the graph. The test intentionally has no renderer-native state setup: Hash Build observes
+// the typed clear transition, Spawn observes hash ordering, args observes Spawn's counter, and remaining GI receives
+// the compiler-lowered indirect-argument state.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiTraceBuildArgsRecordsWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
     constexpr u32 shaderBufferCount = NativePacketSurfelGiEntryProbeTask::s_ShaderBufferCount;
     constexpr u32 constantBufferCount = NativePacketSurfelGiEntryProbeTask::s_ConstantBufferCount;
@@ -6128,6 +6165,32 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiSpawnRecordsWithoutNativ
     );
     ASSERT_TRUE(spawnTask.valid());
 
+    const GpuTaskResourceUse traceBuildArgsUses[] = {
+        { .resource = constantBufferResources[2u], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read },
+        { .resource = uavBufferResources[2u], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Read },
+        { .resource = uavBufferResources[3u], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write },
+    };
+    GpuTaskDesc traceBuildArgsDesc;
+    traceBuildArgsDesc
+        .setIdentity(Name("tests/descriptor_buffer/graph_owned_surfel_gi_trace_build_args"))
+        .setMarkerLabel("Surfel GI Trace Build Args")
+        .setQueue(computeQueue)
+        .setScheduling(surfelScheduling)
+        .setDependencies(&spawnTask, 1u)
+        .setResourceUses(traceBuildArgsUses, LengthOf(traceBuildArgsUses))
+    ;
+    bool traceBuildArgsRecorded = false;
+    const GpuTaskId traceBuildArgsTask = graph.addTask<NativePacketSurfelGiTraceBuildArgsProbeTask>(
+        traceBuildArgsDesc,
+        NativePacketSurfelGiTraceBuildArgsProbeTask::Payload{
+            .constants = constantBuffers[2u].get(),
+            .counter = uavBuffers[2u].get(),
+            .traceArgs = uavBuffers[3u].get(),
+            .recorded = &traceBuildArgsRecorded,
+        }
+    );
+    ASSERT_TRUE(traceBuildArgsTask.valid());
+
     Vector<GpuTaskResourceUse, Alloc::ScratchArena> surfelUses(resourceUseArena);
     surfelUses.reserve(shaderBufferCount + constantBufferCount + uavBufferCount + shaderTextureCount + uavTextureCount + 1u);
     for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)
@@ -6138,8 +6201,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiSpawnRecordsWithoutNativ
         const GpuGraphResourceId resource = textureIndex == 0u ? worldPositionResource : normalResource;
         surfelUses.push_back({ .resource = resource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read });
     }
-    for(u32 bufferIndex = 0u; bufferIndex < uavBufferCount; ++bufferIndex)
-        surfelUses.push_back({ .resource = uavBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write });
+    for(u32 bufferIndex = 0u; bufferIndex < uavBufferCount; ++bufferIndex){
+        const bool isTraceArgs = bufferIndex == NativePacketSurfelGiEntryProbeTask::s_TraceArgsBufferIndex;
+        surfelUses.push_back({
+            .resource = uavBufferResources[bufferIndex],
+            .range = {},
+            .requiredState = isTraceArgs ? ResourceStates::IndirectArgument : ResourceStates::UnorderedAccess,
+            .access = isTraceArgs ? GpuTaskResourceAccess::Read : GpuTaskResourceAccess::Write,
+        });
+    }
     surfelUses.push_back({ .resource = irradianceHalfResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write });
     surfelUses.push_back({ .resource = irradianceResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write });
     GpuTaskDesc surfelDesc;
@@ -6148,7 +6218,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiSpawnRecordsWithoutNativ
         .setMarkerLabel("Surfel GI")
         .setQueue(computeQueue)
         .setScheduling(surfelScheduling)
-        .setDependencies(&spawnTask, 1u)
+        .setDependencies(&traceBuildArgsTask, 1u)
         .setResourceUses(surfelUses.data(), surfelUses.size())
     ;
     NativePacketSurfelGiEntryProbeTask::Payload surfelPayload{};
@@ -6201,6 +6271,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiSpawnRecordsWithoutNativ
     const GpuSubmissionPacketId cellHeadClearPacket = compiledGraph.packetForTask(cellHeadClearTask);
     const GpuSubmissionPacketId hashBuildPacket = compiledGraph.packetForTask(hashBuildTask);
     const GpuSubmissionPacketId spawnPacket = compiledGraph.packetForTask(spawnTask);
+    const GpuSubmissionPacketId traceBuildArgsPacket = compiledGraph.packetForTask(traceBuildArgsTask);
     const GpuSubmissionPacketId surfelPacket = compiledGraph.packetForTask(surfelTask);
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(clearPacket.valid());
@@ -6208,24 +6279,28 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiSpawnRecordsWithoutNativ
     ASSERT_TRUE(cellHeadClearPacket.valid());
     ASSERT_TRUE(hashBuildPacket.valid());
     ASSERT_TRUE(spawnPacket.valid());
+    ASSERT_TRUE(traceBuildArgsPacket.valid());
     ASSERT_TRUE(surfelPacket.valid());
     EXPECT_EQ(clearPacket, surfelPacket);
     EXPECT_EQ(ageFreePacket, surfelPacket);
     EXPECT_EQ(cellHeadClearPacket, surfelPacket);
     EXPECT_EQ(hashBuildPacket, surfelPacket);
     EXPECT_EQ(spawnPacket, surfelPacket);
+    EXPECT_EQ(traceBuildArgsPacket, surfelPacket);
     EXPECT_TRUE(analysis.hasExplicitEdge(ageFreeTask, cellHeadClearTask));
     EXPECT_TRUE(analysis.hasExplicitEdge(cellHeadClearTask, hashBuildTask));
     EXPECT_TRUE(analysis.hasExplicitEdge(hashBuildTask, spawnTask));
-    EXPECT_TRUE(analysis.hasExplicitEdge(spawnTask, surfelTask));
+    EXPECT_TRUE(analysis.hasExplicitEdge(spawnTask, traceBuildArgsTask));
+    EXPECT_TRUE(analysis.hasExplicitEdge(traceBuildArgsTask, surfelTask));
     ASSERT_NE(compiledGraph.packetTasks(surfelPacket), nullptr);
-    ASSERT_EQ(compiledGraph.packet(surfelPacket).taskCount, 6u);
+    ASSERT_EQ(compiledGraph.packet(surfelPacket).taskCount, 7u);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[0u], outputClearTask);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[1u], ageFreeTask);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[2u], cellHeadClearTask);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[3u], hashBuildTask);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[4u], spawnTask);
-    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[5u], surfelTask);
+    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[5u], traceBuildArgsTask);
+    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[6u], surfelTask);
     const GpuCompiledTask* const compiledAgeFree = compiledGraph.findTask(ageFreeTask);
     ASSERT_NE(compiledAgeFree, nullptr);
     const GpuCompiledBarrier* const ageFreeBarriers = compiledGraph.taskPrologueBarriers(ageFreeTask);
@@ -6297,6 +6372,35 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiSpawnRecordsWithoutNativ
         ResourceStates::UnorderedAccess,
         ResourceStates::UnorderedAccess
     ));
+    const GpuCompiledTask* const compiledTraceBuildArgs = compiledGraph.findTask(traceBuildArgsTask);
+    ASSERT_NE(compiledTraceBuildArgs, nullptr);
+    const GpuCompiledBarrier* const traceBuildArgsBarriers = compiledGraph.taskPrologueBarriers(traceBuildArgsTask);
+    ASSERT_NE(traceBuildArgsBarriers, nullptr);
+    const auto hasTraceBuildArgsBarrier = [&](const GpuCompiledBarrierType::Enum type, const GpuGraphResourceId resource, const ResourceStates::Mask before, const ResourceStates::Mask after){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledTraceBuildArgs->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = traceBuildArgsBarriers[barrierIndex];
+            if(
+                barrier.type == type
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTraceBuildArgsBarrier(
+        GpuCompiledBarrierType::BufferUav,
+        uavBufferResources[2u],
+        ResourceStates::UnorderedAccess,
+        ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasTraceBuildArgsBarrier(
+        GpuCompiledBarrierType::BufferTransition,
+        uavBufferResources[3u],
+        ResourceStates::CopyDest,
+        ResourceStates::UnorderedAccess
+    ));
     const GpuCompiledTask* const compiledSurfel = compiledGraph.findTask(surfelTask);
     ASSERT_NE(compiledSurfel, nullptr);
     const GpuCompiledBarrier* const surfelBarriers = compiledGraph.taskPrologueBarriers(surfelTask);
@@ -6314,6 +6418,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiSpawnRecordsWithoutNativ
         return false;
     };
     EXPECT_TRUE(hasSurfelTransition(shaderBufferResources[5u], ResourceStates::CopyDest, ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasSurfelTransition(uavBufferResources[3u], ResourceStates::UnorderedAccess, ResourceStates::IndirectArgument));
     EXPECT_TRUE(hasSurfelTransition(irradianceHalfResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasSurfelTransition(irradianceResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
     const auto hasSurfelUavBarrier = [&](const GpuGraphResourceId resource){
@@ -6351,6 +6456,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiSpawnRecordsWithoutNativ
     EXPECT_TRUE(ageFreeRecorded);
     EXPECT_TRUE(hashBuildRecorded);
     EXPECT_TRUE(spawnRecorded);
+    EXPECT_TRUE(traceBuildArgsRecorded);
     EXPECT_TRUE(surfelRecorded);
     ASSERT_EQ(commandIrCapture.recordCount(), 2u);
     const GpuCommandIrBuiltinTaskRecord* const outputClearCapture = commandIrCapture.recordAt(0u);

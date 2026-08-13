@@ -418,6 +418,7 @@ private:
     Core::GpuTaskId m_deferredSurfelGiIrradianceClearTask;
     Core::GpuTaskId m_deferredSurfelGiAgeFreeTask;
     Core::GpuTaskId m_deferredSurfelGiCellHeadClearTask;
+    Core::GpuTaskId m_deferredSurfelGiHashBuildTask;
     Core::GpuTaskId m_deferredSurfelGiTask;
     // A rare diagnostic tail: it depends on GI but records/submits after Present on Transfer when available.
     Core::GpuTaskId m_deferredSurfelGiCounterReadbackTask;

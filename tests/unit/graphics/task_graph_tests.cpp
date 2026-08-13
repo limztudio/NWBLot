@@ -6360,9 +6360,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
 
 
 // Surfel GI starts after the shared graphics prefix has produced G-buffer, descriptor, traversal, and persistent
-// resource data. Age/free then precedes a graph-owned cell-head reset in the same Compute packet, and the remaining
-// callback must inherit its exact CopyDest-to-UAV handoff without restoring that native bridge.
-TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiCellHeadClearAndEntryStates){
+// resource data. Age/free and the graph-owned cell-head reset precede Hash Build in one Compute packet; the final
+// callback must then inherit the compiler-owned UAV ordering without restoring either native bridge.
+TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiHashBuildAndEntryStates){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     constexpr Graphics::ResourceQueueSharing::Mask queueSharing =
@@ -6614,6 +6614,23 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiCellHeadClearAndEntryStates){
     const Graphics::GpuTaskId cellHeadClear = graph.addTask(cellHeadClearDesc);
     ASSERT_TRUE(cellHeadClear.valid());
 
+    const Graphics::GpuTaskResourceUse hashBuildUses[] = {
+        { .resource = surfelConstants, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = pool, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
+        { .resource = cellHeads, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
+    };
+    Graphics::GpuTaskDesc hashBuildDesc;
+    hashBuildDesc
+        .setIdentity(Name("tests/task_graph/graph_owned_surfel_gi_hash_build"))
+        .setMarkerLabel("Surfel GI Hash Build")
+        .setQueue(computeRequest)
+        .setScheduling(surfelScheduling)
+        .setDependencies(&cellHeadClear, 1u)
+        .setResourceUses(hashBuildUses, LengthOf(hashBuildUses))
+    ;
+    const Graphics::GpuTaskId hashBuild = graph.addTask(hashBuildDesc);
+    ASSERT_TRUE(hashBuild.valid());
+
     const Graphics::GpuTaskResourceUse surfelUses[] = {
         { .resource = worldPosition, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = normal, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
@@ -6639,7 +6656,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiCellHeadClearAndEntryStates){
         .setMarkerLabel("Surfel GI")
         .setQueue(computeRequest)
         .setScheduling(surfelScheduling)
-        .setDependencies(&cellHeadClear, 1u)
+        .setDependencies(&hashBuild, 1u)
         .setResourceUses(surfelUses, LengthOf(surfelUses))
     ;
     const Graphics::GpuTaskId surfelGi = graph.addTask(surfelDesc);
@@ -6660,7 +6677,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiCellHeadClearAndEntryStates){
     compileOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, compileOptions));
     EXPECT_TRUE(analysis.hasExplicitEdge(ageFree, cellHeadClear));
-    EXPECT_TRUE(analysis.hasExplicitEdge(cellHeadClear, surfelGi));
+    EXPECT_TRUE(analysis.hasExplicitEdge(cellHeadClear, hashBuild));
+    EXPECT_TRUE(analysis.hasExplicitEdge(hashBuild, surfelGi));
     ASSERT_TRUE(HasInferredHazard(
         analysis,
         prefix,
@@ -6679,13 +6697,20 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiCellHeadClearAndEntryStates){
     ASSERT_TRUE(HasInferredHazard(
         analysis,
         ageFree,
-        surfelGi,
+        hashBuild,
         pool,
         Graphics::GpuTaskHazardType::WriteAfterWrite
     ));
     ASSERT_TRUE(HasInferredHazard(
         analysis,
         cellHeadClear,
+        hashBuild,
+        cellHeads,
+        Graphics::GpuTaskHazardType::WriteAfterWrite
+    ));
+    ASSERT_TRUE(HasInferredHazard(
+        analysis,
+        hashBuild,
         surfelGi,
         cellHeads,
         Graphics::GpuTaskHazardType::WriteAfterWrite
@@ -6701,23 +6726,27 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiCellHeadClearAndEntryStates){
     const Graphics::GpuSubmissionPacketId clearPacket = compiledGraph.packetForTask(outputClear);
     const Graphics::GpuSubmissionPacketId ageFreePacket = compiledGraph.packetForTask(ageFree);
     const Graphics::GpuSubmissionPacketId cellHeadClearPacket = compiledGraph.packetForTask(cellHeadClear);
+    const Graphics::GpuSubmissionPacketId hashBuildPacket = compiledGraph.packetForTask(hashBuild);
     const Graphics::GpuSubmissionPacketId surfelPacket = compiledGraph.packetForTask(surfelGi);
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(clearPacket.valid());
     ASSERT_TRUE(ageFreePacket.valid());
     ASSERT_TRUE(cellHeadClearPacket.valid());
+    ASSERT_TRUE(hashBuildPacket.valid());
     ASSERT_TRUE(surfelPacket.valid());
     EXPECT_NE(prefixPacket, surfelPacket);
     EXPECT_EQ(clearPacket, surfelPacket);
     EXPECT_EQ(ageFreePacket, surfelPacket);
     EXPECT_EQ(cellHeadClearPacket, surfelPacket);
+    EXPECT_EQ(hashBuildPacket, surfelPacket);
     EXPECT_EQ(compiledGraph.packetCount(), 2u);
     ASSERT_NE(compiledGraph.packetTasks(surfelPacket), nullptr);
-    ASSERT_EQ(compiledGraph.packet(surfelPacket).taskCount, 4u);
+    ASSERT_EQ(compiledGraph.packet(surfelPacket).taskCount, 5u);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[0u], outputClear);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[1u], ageFree);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[2u], cellHeadClear);
-    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[3u], surfelGi);
+    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[3u], hashBuild);
+    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[4u], surfelGi);
     const Graphics::GpuCompiledTask* const compiledAgeFree = compiledGraph.findTask(ageFree);
     ASSERT_NE(compiledAgeFree, nullptr);
     const Graphics::GpuPacketStateSeed* const ageFreeSeeds = compiledGraph.taskPrologueStateSeeds(ageFree);
@@ -6791,6 +6820,30 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiCellHeadClearAndEntryStates){
         Graphics::ResourceStates::UnorderedAccess
     ));
 
+    const Graphics::GpuCompiledTask* const compiledHashBuild = compiledGraph.findTask(hashBuild);
+    ASSERT_NE(compiledHashBuild, nullptr);
+    const Graphics::GpuCompiledBarrier* const hashBuildBarriers = compiledGraph.taskPrologueBarriers(hashBuild);
+    ASSERT_NE(hashBuildBarriers, nullptr);
+    const auto hasHashBuildBarrier = [&](const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
+        for(usize barrierIndex = 0u; barrierIndex < compiledHashBuild->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = hashBuildBarriers[barrierIndex];
+            if(
+                barrier.type == type
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasHashBuildBarrier(
+        Graphics::GpuCompiledBarrierType::BufferTransition,
+        cellHeads,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+
     const Graphics::GpuCompiledBarrier* const surfelBarriers = compiledGraph.taskPrologueBarriers(surfelGi);
     ASSERT_NE(surfelBarriers, nullptr);
     const auto hasSurfelBarrier = [&](const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
@@ -6819,9 +6872,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiCellHeadClearAndEntryStates){
         Graphics::ResourceStates::ShaderResource
     ));
     EXPECT_TRUE(hasSurfelBarrier(
-        Graphics::GpuCompiledBarrierType::BufferTransition,
+        Graphics::GpuCompiledBarrierType::BufferUav,
         cellHeads,
-        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::UnorderedAccess,
         Graphics::ResourceStates::UnorderedAccess
     ));
     EXPECT_TRUE(hasSurfelBarrier(

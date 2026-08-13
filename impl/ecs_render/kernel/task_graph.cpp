@@ -4544,6 +4544,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     m_deferredSurfelGiIrradianceClearTask = {};
     m_deferredSurfelGiAgeFreeTask = {};
     m_deferredSurfelGiCellHeadClearTask = {};
+    m_deferredSurfelGiHashBuildTask = {};
     asyncTiming.reset();
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
@@ -4586,8 +4587,10 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> ageFreeResourceUses{ scratchArena };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hashBuildResourceUses{ scratchArena };
     resourceUses.reserve(28u + traceGeometryResourceCount);
     ageFreeResourceUses.reserve(4u);
+    hashBuildResourceUses.reserve(3u);
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));
     resourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -4756,9 +4759,9 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         return false;
     }
 
-    // A prepared normal Surfel GI frame can split exactly at its per-frame cell-head reset. Keep unavailable
-    // pipelines on the established monolithic compatibility callback; otherwise the graph owns age/free -> reset ->
-    // hash state handoff in one selected Compute packet.
+    // A prepared normal Surfel GI frame can split its age/free, per-frame cell-head reset, and hash build. Keep
+    // unavailable pipelines on the established monolithic compatibility callback; otherwise the graph owns each
+    // handoff in one selected Compute packet.
     const bool graphOwnsSurfelCellHeadClear =
         hasSurfelWork
         && surfelConstants.valid()
@@ -4952,7 +4955,32 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred surfel cell-head clear"));
             return false;
         }
-        surfelGiDependency = m_deferredSurfelGiCellHeadClearTask;
+
+        hashBuildResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
+        hashBuildResourceUses.push_back(ReadWriteUse(surfelPool, Core::ResourceStates::UnorderedAccess));
+        hashBuildResourceUses.push_back(ReadWriteUse(surfelCellHead, Core::ResourceStates::UnorderedAccess));
+        Core::GpuTaskDesc hashBuildDesc;
+        hashBuildDesc
+            .setIdentity(Name("render.surfel_gi.hash_build"))
+            .setMarkerLabel("Surfel GI Hash Build")
+            .setQueue(ComputeQueueRequest())
+            .setScheduling(surfelGiScheduling)
+            .setDependencies(&m_deferredSurfelGiCellHeadClearTask, 1u)
+            .setResourceUses(hashBuildResourceUses.data(), hashBuildResourceUses.size())
+        ;
+        m_deferredSurfelGiHashBuildTask = m_raytracingSystem.declareSurfelGiHashBuildTask(
+            m_deferredLightingTaskGraph,
+            hashBuildDesc,
+            deferredTargets,
+            timingTicket,
+            &asyncTiming,
+            true
+        );
+        if(!m_deferredSurfelGiHashBuildTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI hash-build graph task"));
+            return false;
+        }
+        surfelGiDependency = m_deferredSurfelGiHashBuildTask;
     }
 
     Core::GpuTaskDesc desc;
@@ -4974,6 +5002,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         deferredTargets,
         timingTicket,
         true,
+        graphOwnsSurfelCellHeadClear,
         graphOwnsSurfelCellHeadClear,
         graphOwnsSurfelCellHeadClear ? &asyncTiming : nullptr
     );
@@ -5121,6 +5150,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
+    m_deferredSurfelGiAgeFreeTask = {};
+    m_deferredSurfelGiCellHeadClearTask = {};
+    m_deferredSurfelGiHashBuildTask = {};
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};

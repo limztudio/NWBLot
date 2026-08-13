@@ -245,7 +245,11 @@ private:
         const Core::GpuGraphResourceId* softwareTraceGeometryResources,
         usize softwareTraceGeometryResourceCount,
         Core::GpuTaskId prefixTask,
-        Core::GpuTimingSubmissionTicket& timingTicket
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        Optional<Core::GpuTimingMeasure>& asyncTiming,
+        Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
+        bool& opaqueProduced,
+        u32& opaqueFrameIndex
     );
     [[nodiscard]] bool declareDeferredSoftwareCausticsTask(
         bool hardwareCaustics,
@@ -303,6 +307,10 @@ private:
         Core::GpuTimingSubmissionTicket& avboitIntegrationTimingTicket,
         Core::GpuTimingSubmissionTicket& avboitAccumulationTimingTicket,
         Core::GpuTimingSubmissionTicket& shadowVisibilityTimingTicket,
+        Optional<Core::GpuTimingMeasure>& shadowVisibilityAsyncTiming,
+        Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
+        bool& shadowVisibilityOpaqueProduced,
+        u32& shadowVisibilityOpaqueFrameIndex,
         Core::GpuTimingSubmissionTicket& softwareCausticsTimingTicket,
         Core::GpuTimingSubmissionTicket& surfelGiTimingTicket,
         Optional<Core::GpuTimingMeasure>& surfelGiAsyncTiming,
@@ -384,6 +392,9 @@ private:
     Core::GpuTaskId m_graphicsPrefixGbufferTask;
     Core::GpuTaskId m_graphicsPrefixCsgIntervalSampleTask;
     Core::GpuTaskId m_graphicsPrefixTask;
+    // Prepared soft-transparent shadow frames split opaque visibility and the fold, but these tasks must compile
+    // into one packet. The terminal ID below remains the output/acceptance/recovery owner.
+    Core::GpuTaskId m_deferredShadowVisibilityOpaqueTask;
     Core::GpuTaskId m_deferredShadowVisibilityTask;
     Core::GpuTaskId m_deferredSoftwareCausticsTask;
     // Both hardware and software caustics use this typed black-output clear. The selected producer must share its

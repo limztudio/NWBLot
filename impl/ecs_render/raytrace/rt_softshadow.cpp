@@ -61,7 +61,10 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const u32 frameIndex,
     const u32 softGroupsX,
     const u32 softGroupsY,
-    const bool graphEntryStatesOwned
+    const bool graphEntryStatesOwned,
+    const bool dispatchOpaque,
+    const bool dispatchTransparent,
+    const bool graphOwnsOpaqueToTransparentBoundary
 ){
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
@@ -92,41 +95,43 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         heap.bindCompute(commandList, *pipeline.get());
     };
 
-    // Geometry downsample: the shared graph already declares its descriptor-visible inputs and the first geometry
-    // cache UAV state. Direct compatibility callers retain the native prologue; all later soft-shadow lifecycle
-    // transitions remain local to this task.
-    if(!graphEntryStatesOwned){
-        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
-    }
-    commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
-    if(!graphEntryStatesOwned)
-        commandList.commitBarriers();
+    if(dispatchOpaque){
+        // Geometry downsample: the shared graph already declares its descriptor-visible inputs and the first geometry
+        // cache UAV state. Direct compatibility callers retain the native prologue; all later soft-shadow lifecycle
+        // transitions remain local to this task.
+        if(!graphEntryStatesOwned){
+            commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
+        }
+        commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
+        if(!graphEntryStatesOwned)
+            commandList.commitBarriers();
 
-    {
-        Core::GpuTimingMeasure geometryTiming(
-            graphics().gpuTiming(),
-            RendererGpuTimingScope::s_ShadowGeometryDownsample,
-            graphics().getDevice(),
-            commandList
-        );
-        ShadowGeometryDownsamplePushConstants geometryPush;
-        geometryPush.width = targets.width;
-        geometryPush.height = targets.height;
-        geometryPush.halfWidth = softHalfWidth;
-        geometryPush.halfHeight = softHalfHeight;
-        geometryPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
-        geometryPush.normalSlot = targets.bindless.gbufferNormal.slot();
-        geometryPush.depthSlot = targets.bindless.gbufferDepth.slot();
-        geometryPush.outputStorageSlot = targets.bindless.shadowSoftGeometryStorage.slot();
-        geometryPush.sceneShadingSlot = targets.bindless.sceneShading.slot();
-        commandList.setComputeState(passState(rayTracingState().m_shadowGeometryDownsamplePipeline));
-        bindHeap(rayTracingState().m_shadowGeometryDownsamplePipeline);
-        commandList.setPushConstants(&geometryPush, sizeof(geometryPush));
-        commandList.dispatch(softGroupsX, softGroupsY, 1u);
+        {
+            Core::GpuTimingMeasure geometryTiming(
+                graphics().gpuTiming(),
+                RendererGpuTimingScope::s_ShadowGeometryDownsample,
+                graphics().getDevice(),
+                commandList
+            );
+            ShadowGeometryDownsamplePushConstants geometryPush;
+            geometryPush.width = targets.width;
+            geometryPush.height = targets.height;
+            geometryPush.halfWidth = softHalfWidth;
+            geometryPush.halfHeight = softHalfHeight;
+            geometryPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
+            geometryPush.normalSlot = targets.bindless.gbufferNormal.slot();
+            geometryPush.depthSlot = targets.bindless.gbufferDepth.slot();
+            geometryPush.outputStorageSlot = targets.bindless.shadowSoftGeometryStorage.slot();
+            geometryPush.sceneShadingSlot = targets.bindless.sceneShading.slot();
+            commandList.setComputeState(passState(rayTracingState().m_shadowGeometryDownsamplePipeline));
+            bindHeap(rayTracingState().m_shadowGeometryDownsamplePipeline);
+            commandList.setPushConstants(&geometryPush, sizeof(geometryPush));
+            commandList.dispatch(softGroupsX, softGroupsY, 1u);
+        }
     }
 
     u32 slotRangeCount = 0u;
@@ -179,6 +184,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         commandList.dispatch(softGroupsX, softGroupsY, 1u);
     };
 
+    if(dispatchOpaque){
     const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources opaqueMerge = frontIsA
         ? __hidden_rt_softshadow::ShadowReprojectMergeHeapResources{
             targets.shadowSoftHalfA.get(), targets.shadowHistA.get(), targets.shadowMomentsA.get(), targets.shadowHistB.get(), targets.shadowMomentsB.get(),
@@ -249,8 +255,9 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         );
         dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, opaqueDispatch);
     }
+    }
 
-    if(rayTracingState().m_softTransparentReady){
+    if(dispatchTransparent && rayTracingState().m_softTransparentReady){
         {
             Core::GpuTimingMeasure transparentTraceTiming(
                 graphics().gpuTiming(),
@@ -259,8 +266,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 commandList
             );
             // The normal deferred graph already supplies the transparent trace's heap-selected traversal and
-            // descriptor buffers. Direct compatibility callers retain the native static bridge. Keep the image
-            // transitions below: they form the required opaque-resolve-to-transparent-trace UAV boundary.
+            // descriptor buffers. Direct compatibility callers retain the native static bridge. A split graph tail
+            // additionally owns the opaque-resolve-to-transparent-trace image/UAV boundary in its prologue.
             if(!graphEntryStatesOwned){
                 transitionSwShadowTraversalResources(commandList);
                 commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -268,10 +275,13 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
                 commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
             }
-            commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-            commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+            if(!graphOwnsOpaqueToTransparentBoundary){
+                commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+                commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+            }
             commandList.setEnableUavBarriersForTexture(targets.transparentSoftHalf.get(), true);
-            commandList.commitBarriers();
+            if(!graphOwnsOpaqueToTransparentBoundary || !graphEntryStatesOwned)
+                commandList.commitBarriers();
 
             SwShadowHeapPushConstants tracePush;
             tracePush.width = targets.width;
@@ -368,7 +378,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     // Do not mutate the target-generation handles while the sibling caustics and surfel-GI workers can still validate
     // targets.bindless. RendererSystem finalizes this pending CPU-side swap only after its complete ordered Graphics
     // submission succeeds.
-    if(rayTracingState().m_softShadowTemporalReady)
+    if(dispatchTransparent && rayTracingState().m_softShadowTemporalReady)
         rayTracingState().m_softShadowTemporalHistoryAdvancePending = true;
 }
 

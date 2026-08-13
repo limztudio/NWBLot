@@ -245,6 +245,7 @@ void RendererSystem::invalidateResources(){
     m_graphicsPrefixSceneShadingSetupReady = false;
     m_deferredLightingTaskGraphValid = false;
     m_deferredShadowPrepareTask = {};
+    m_deferredShadowVisibilityOpaqueTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
@@ -522,6 +523,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
     m_deferredLightingTaskGraphValid = false;
+    m_deferredShadowVisibilityOpaqueTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
@@ -807,6 +809,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         )],
     };
     Core::GpuTimingSubmissionTicket shadowVisibilityTimingTicket(m_graphics.gpuTiming());
+    // The prepared soft-transparent route starts both ranges in its opaque callback and closes them in the terminal
+    // fold callback. The normal monolithic shadow task leaves these empty.
+    Optional<Core::GpuTimingMeasure> shadowVisibilityAsyncTiming;
+    Optional<Core::GpuTimingMeasure> shadowVisibilityTiming;
+    bool shadowVisibilityOpaqueProduced = false;
+    u32 shadowVisibilityOpaqueFrameIndex = 0u;
     Core::GpuTimingSubmissionTicket softwareCausticsTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket surfelGiTimingTicket(m_graphics.gpuTiming());
     // Age/free begins this interval and the remaining GI callback closes it after the graph-owned cell-head clear.
@@ -855,6 +863,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         avboitIntegrationTimingTicket,
         avboitAccumulationTimingTicket,
         shadowVisibilityTimingTicket,
+        shadowVisibilityAsyncTiming,
+        shadowVisibilityTiming,
+        shadowVisibilityOpaqueProduced,
+        shadowVisibilityOpaqueFrameIndex,
         softwareCausticsTimingTicket,
         surfelGiTimingTicket,
         surfelGiAsyncTiming,
@@ -891,6 +903,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitIntegrationTimingTicket,
             avboitAccumulationTimingTicket,
             shadowVisibilityTimingTicket,
+            shadowVisibilityAsyncTiming,
+            shadowVisibilityTiming,
+            shadowVisibilityOpaqueProduced,
+            shadowVisibilityOpaqueFrameIndex,
             softwareCausticsTimingTicket,
             surfelGiTimingTicket,
             surfelGiAsyncTiming,
@@ -1084,6 +1100,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId shadowVisibilityPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredShadowVisibilityTask
     );
+    const Core::GpuSubmissionPacketId shadowVisibilityOpaquePacket =
+        m_deferredShadowVisibilityOpaqueTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowVisibilityOpaqueTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    const bool shadowVisibilityOpaqueMerged =
+        !m_deferredShadowVisibilityOpaqueTask.valid()
+        || (
+            shadowVisibilityOpaquePacket.valid()
+            && shadowVisibilityOpaquePacket == shadowVisibilityPacket
+        )
+    ;
     const Core::GpuSubmissionPacketId softwareCausticsPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredSoftwareCausticsTask
     );
@@ -1713,6 +1741,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || graphicsPrefixQueue->queueClass != Core::CommandQueue::Graphics
         || !m_deferredShadowVisibilityTask.valid()
         || !shadowVisibilityPacket.valid()
+        || !shadowVisibilityOpaqueMerged
         || !shadowVisibilityQueue
         || (!hardwareShadowSupported && (
             !m_deferredSoftwareCausticsTask.valid()
@@ -2386,6 +2415,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && graphicsPrefixDeferredClearBundleMerged
         && m_deferredShadowVisibilityTask.valid()
         && shadowVisibilityPacket.valid()
+        && shadowVisibilityOpaqueMerged
         && (hardwareShadowSupported || (
             m_deferredSoftwareCausticsTask.valid()
             && softwareCausticsPacket.valid()
@@ -3339,6 +3369,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingTaskGraphValid
             && m_deferredShadowVisibilityTask.valid()
             && shadowVisibilityPacket.valid()
+            && shadowVisibilityOpaqueMerged
             && shadowEffectsPacketRange.valid()
             && shadowEffectsPacketRange.packetCount == shadowEffectsTimingTicketCount
             && (hardwareShadowSupported || (

@@ -865,8 +865,8 @@ struct NativePacketShadowVisibilityEntryProbeTask{
 
 
 // The transparent software trace begins after opaque soft-shadow work, but its traversal/material/selector inputs
-// remain unchanged descriptor-visible reads. This probe intentionally excludes the image/UAV boundary, which the
-// renderer keeps local to order the opaque resolve before the transparent fold.
+// remain unchanged descriptor-visible reads. Its shared visibility image/UAV boundary is covered by the fold probe
+// below, so this entry-state probe remains focused on the descriptor-visible buffers.
 struct NativePacketSoftTransparentTraceEntryProbeTask{
     static constexpr u32 s_ShaderBufferCount = 10u;
     static constexpr u32 s_ConstantBufferCount = 3u;
@@ -896,6 +896,36 @@ struct NativePacketSoftTransparentTraceEntryProbeTask{
                 && commandList.getBufferState(payload.constantBuffers[bufferIndex]) == ResourceStates::ConstantBuffer
             ;
         }
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
+// The terminal transparent fold must inherit the opaque visibility image in UAV state from the compiler prologue.
+// It deliberately performs only getters: any renderer-native bridge would hide a missing same-UAV barrier.
+struct NativePacketSoftTransparentFoldProbeTask{
+    struct Payload{
+        Texture* shadowVisibility = nullptr;
+        Texture* transparentSoftHalf = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        const bool ready =
+            payload.shadowVisibility
+            && payload.transparentSoftHalf
+            && commandList.getTextureSubresourceState(payload.shadowVisibility, 0u, 0u)
+                == ResourceStates::UnorderedAccess
+            && commandList.getTextureSubresourceState(payload.transparentSoftHalf, 0u, 0u)
+                == ResourceStates::UnorderedAccess
+        ;
         if(payload.recorded)
             *payload.recorded = ready;
         return ready;
@@ -3576,6 +3606,203 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceEntryStatesR
         scratchArena
     ));
     EXPECT_TRUE(transaction.packetToken(tracePacket).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// The normal deferred soft-transparent route records opaque visibility and its transparent fold as adjacent tasks
+// in one packet. Prove the fold sees both UAV images without calling a native setTextureState/commit bridge.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentFoldRecordsWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const auto makeShadowTarget = [&device](){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setFormat(Format::RGBA8_UNORM)
+                .setInUAV(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    auto shadowVisibility = makeShadowTarget();
+    auto transparentSoftHalf = makeShadowTarget();
+    ASSERT_NE(shadowVisibility.get(), nullptr);
+    ASSERT_NE(transparentSoftHalf.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importTexture = [&graph](const TextureHandle& texture, const Name identity, const AStringView label){
+        return graph.importTexture(
+            texture,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Texture)
+        );
+    };
+    const GpuGraphResourceId shadowVisibilityResource = importTexture(
+        shadowVisibility,
+        Name("tests/descriptor_buffer/soft_transparent_fold_shadow_visibility"),
+        "Shadow Visibility"
+    );
+    const GpuGraphResourceId transparentSoftHalfResource = importTexture(
+        transparentSoftHalf,
+        Name("tests/descriptor_buffer/soft_transparent_fold_half"),
+        "Transparent Shadow Soft Half"
+    );
+    ASSERT_TRUE(shadowVisibilityResource.valid());
+    ASSERT_TRUE(transparentSoftHalfResource.valid());
+
+    const GpuQueueRequest computeQueue{
+        GpuQueueCapability::Compute,
+        GpuQueuePreference::Compute,
+        true,
+        false,
+    };
+    GpuTaskSchedulingHint opaqueScheduling;
+    opaqueScheduling.cost = GpuTaskCostHint::Large;
+    opaqueScheduling.forceSubmissionBoundary = false;
+    opaqueScheduling.allowPacketMerge = true;
+    opaqueScheduling.mergeWithPrevious = false;
+    const GpuTaskResourceUse opaqueUses[] = {
+        {
+            .resource = shadowVisibilityResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    GpuTaskDesc opaqueDesc;
+    opaqueDesc
+        .setIdentity(Name("tests/descriptor_buffer/soft_transparent_fold_opaque"))
+        .setMarkerLabel("Shadow Visibility Opaque")
+        .setQueue(computeQueue)
+        .setScheduling(opaqueScheduling)
+        .setResourceUses(opaqueUses, LengthOf(opaqueUses))
+    ;
+    bool shouldRecord = true;
+    bool opaqueRecorded = false;
+    const GpuTaskId opaqueTask = graph.addTask<NativePacketCaptureRetryTask>(
+        opaqueDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &opaqueRecorded,
+        }
+    );
+    ASSERT_TRUE(opaqueTask.valid());
+
+    GpuTaskSchedulingHint foldScheduling = opaqueScheduling;
+    foldScheduling.cost = GpuTaskCostHint::Medium;
+    foldScheduling.mergeWithPrevious = true;
+    const GpuTaskResourceUse foldUses[] = {
+        {
+            .resource = shadowVisibilityResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+        {
+            .resource = transparentSoftHalfResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    GpuTaskDesc foldDesc;
+    foldDesc
+        .setIdentity(Name("tests/descriptor_buffer/soft_transparent_fold"))
+        .setMarkerLabel("Shadow Transparent Soft Fold")
+        .setQueue(computeQueue)
+        .setScheduling(foldScheduling)
+        .setDependencies(&opaqueTask, 1u)
+        .setResourceUses(foldUses, LengthOf(foldUses))
+    ;
+    bool foldRecorded = false;
+    const GpuTaskId foldTask = graph.addTask<NativePacketSoftTransparentFoldProbeTask>(
+        foldDesc,
+        NativePacketSoftTransparentFoldProbeTask::Payload{
+            .shadowVisibility = shadowVisibility.get(),
+            .transparentSoftHalf = transparentSoftHalf.get(),
+            .recorded = &foldRecorded,
+        }
+    );
+    ASSERT_TRUE(foldTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/soft_transparent_fold_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(opaqueTask);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(foldTask), packet);
+    const GpuCompiledTask* const compiledFold = compiledGraph.findTask(foldTask);
+    ASSERT_NE(compiledFold, nullptr);
+    const GpuCompiledBarrier* const foldBarriers = compiledGraph.taskPrologueBarriers(foldTask);
+    ASSERT_NE(foldBarriers, nullptr);
+    bool hasVisibilityUav = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledFold->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = foldBarriers[barrierIndex];
+        if(
+            barrier.type == GpuCompiledBarrierType::TextureUav
+            && barrier.resource == shadowVisibilityResource
+            && barrier.before == ResourceStates::UnorderedAccess
+            && barrier.after == ResourceStates::UnorderedAccess
+        ){
+            hasVisibilityUav = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(hasVisibilityUav);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(opaqueRecorded);
+    EXPECT_TRUE(foldRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(packet).valid());
     EXPECT_TRUE(device.waitForIdle());
 }
 

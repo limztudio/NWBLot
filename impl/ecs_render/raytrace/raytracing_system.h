@@ -164,6 +164,12 @@ namespace __hidden_surfel_gi_task{
     struct SurfelGiGraphTask;
 }
 
+namespace __hidden_shadow_visibility_task{
+    struct ShadowVisibilityOpaqueGraphTask;
+    struct ShadowTransparentSoftFoldGraphTask;
+    struct ShadowVisibilityGraphTask;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -291,7 +297,9 @@ public:
     [[nodiscard]] bool renderShadowVisibility(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        bool graphEntryStatesOwned = false
+        bool graphEntryStatesOwned = false,
+        bool splitSoftTransparentFold = false,
+        u32* opaqueFrameIndex = nullptr
     );
     [[nodiscard]] Core::GpuTaskId declareShadowVisibilityTask(
         Core::GpuTaskGraph& graph,
@@ -300,6 +308,33 @@ public:
         const bool* prepared,
         bool hardwareShadowSupported,
         Core::GpuTimingSubmissionTicket& timingTicket,
+        bool graphEntryStatesOwned = false
+    );
+    // A prepared soft-transparent frame splits opaque soft visibility from its transparent fold while retaining one
+    // semantic Shadow Visibility packet. The opaque task starts the legacy timing scopes; the terminal fold task
+    // closes them and remains the accepted output owner.
+    [[nodiscard]] Core::GpuTaskId declareShadowVisibilityOpaqueTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        const bool* prepared,
+        bool hardwareShadowSupported,
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        Optional<Core::GpuTimingMeasure>* asyncTiming,
+        Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming,
+        bool* opaqueProduced,
+        u32* opaqueFrameIndex,
+        bool graphEntryStatesOwned = false
+    );
+    [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftFoldTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        Optional<Core::GpuTimingMeasure>* asyncTiming,
+        Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming,
+        const bool* opaqueProduced,
+        const u32* opaqueFrameIndex,
         bool graphEntryStatesOwned = false
     );
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
@@ -338,7 +373,9 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool multiplyOntoOpaque = false,
-        bool graphEntryStatesOwned = false
+        bool graphEntryStatesOwned = false,
+        bool splitSoftTransparentFold = false,
+        u32* opaqueFrameIndex = nullptr
     );
     [[nodiscard]] bool prepareGpuBvhCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] Core::GpuTaskId declareSoftwareCausticsTask(
@@ -610,6 +647,9 @@ public:
 
 private:
     struct SurfelGiInitializationGraphTask;
+    friend struct __hidden_shadow_visibility_task::ShadowVisibilityOpaqueGraphTask;
+    friend struct __hidden_shadow_visibility_task::ShadowTransparentSoftFoldGraphTask;
+    friend struct __hidden_shadow_visibility_task::ShadowVisibilityGraphTask;
     friend struct __hidden_surfel_gi_task::SurfelGiAgeFreeGraphTask;
     friend struct __hidden_surfel_gi_task::SurfelGiHashBuildGraphTask;
     friend struct __hidden_surfel_gi_task::SurfelGiSpawnGraphTask;
@@ -831,7 +871,31 @@ private:
         u32 frameIndex,
         u32 softGroupsX,
         u32 softGroupsY,
-        bool graphEntryStatesOwned = false
+        bool graphEntryStatesOwned = false,
+        bool dispatchOpaque = true,
+        bool dispatchTransparent = true,
+        bool graphOwnsOpaqueToTransparentBoundary = false
+    );
+    // Graph-only phase helpers preserve the complete direct route above while exposing the opaque-resolve to
+    // transparent-fold same-UAV handoff to the shared deferred graph.
+    [[nodiscard]] bool renderShadowVisibilityOpaque(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        u32& outFrameIndex,
+        bool graphEntryStatesOwned
+    );
+    [[nodiscard]] bool renderGpuBvhShadowVisibilityOpaque(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        u32& outFrameIndex,
+        bool graphEntryStatesOwned
+    );
+    [[nodiscard]] bool renderSoftTransparentShadowFold(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        u32 frameIndex,
+        bool graphEntryStatesOwned,
+        bool graphOwnsOpaqueToTransparentBoundary
     );
     // Temporal merge precedes soft resolve and swaps history at frame end.
     [[nodiscard]] bool ensureShadowReprojectMergePipeline();

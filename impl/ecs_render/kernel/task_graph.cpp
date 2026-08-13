@@ -3445,10 +3445,15 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     const Core::GpuGraphResourceId* const softwareTraceGeometryResources,
     const usize softwareTraceGeometryResourceCount,
     const Core::GpuTaskId prefixTask,
-    Core::GpuTimingSubmissionTicket& timingTicket
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    Optional<Core::GpuTimingMeasure>& asyncTiming,
+    Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
+    bool& opaqueProduced,
+    u32& opaqueFrameIndex
 ){
     using namespace __hidden_renderer_task_graph;
 
+    m_deferredShadowVisibilityOpaqueTask = {};
     m_deferredShadowVisibilityTask = {};
     if(
         !deferredTargets.valid()
@@ -3464,6 +3469,37 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         || (softwareTraceGeometryResourceCount != 0u && !softwareTraceGeometryResources)
     )
         return false;
+
+    opaqueProduced = false;
+    opaqueFrameIndex = 0u;
+    // Only the fully prepared soft-transparent route can expose this boundary. Direct, adaptive/hybrid, and
+    // resource-degraded paths retain the established monolithic Shadow Visibility callback.
+    const bool splitSoftTransparentFold =
+        m_rayTracingState.m_softShadowReady
+        && m_rayTracingState.m_softShadowSlotMask != 0u
+        && m_raytracingSystem.softTransparentShadowReady()
+        && deferredTargets.shadowCoarseTransmittance
+        && deferredTargets.shadowSoftHalfA
+        && deferredTargets.shadowSoftHalfB
+        && deferredTargets.shadowSoftGeometry
+        && deferredTargets.shadowSoftGeometryPrev
+        && deferredTargets.shadowHistA
+        && deferredTargets.shadowHistB
+        && deferredTargets.shadowMomentsA
+        && deferredTargets.shadowMomentsB
+        && deferredTargets.transparentSoftHalf
+        && deferredTargets.transparentHistA
+        && deferredTargets.transparentHistB
+        && deferredTargets.transparentMomentsA
+        && deferredTargets.transparentMomentsB
+        && m_rayTracingState.m_sceneBvhNodeBuffer
+        && m_rayTracingState.m_sceneInstanceBuffer
+        && m_rayTracingState.m_shadowInstanceMaterialBuffer
+        && m_rayTracingState.m_shadowMaterialTypedBuffer
+        && m_rayTracingState.m_shadowInstanceBuffer
+        && materialContextSlots.valid()
+        && softwareTraceGeometryResourceCount != 0u
+    ;
 
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
@@ -3487,9 +3523,12 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     // Shadow visibility samples the bindless depth image, so its declared layout must match the native shader read.
     resourceUses.push_back(ReadUse(depth, Core::ResourceStates::ShaderResource));
     resourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
-    // Hybrid transparent shadows multiply onto the opaque result, so this remains a read/write declaration even
-    // when the hardware-only path overwrites it.
-    resourceUses.push_back(ReadWriteUse(shadowVisibility, Core::ResourceStates::UnorderedAccess));
+    // The split opaque producer overwrites visibility; the retained monolith may also fold hybrid transparency in
+    // place, so it remains ReadWrite on every compatibility route.
+    resourceUses.push_back(splitSoftTransparentFold
+        ? WriteUse(shadowVisibility, Core::ResourceStates::UnorderedAccess)
+        : ReadWriteUse(shadowVisibility, Core::ResourceStates::UnorderedAccess)
+    );
     resourceUses.push_back(ReadUse(sceneGeometryDomain));
 
     const auto appendOptionalReadWriteTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
@@ -3691,6 +3730,205 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         if(!resource.valid())
             return false;
         resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+    }
+
+    // The tail only contains the prepared soft-transparent trace/temporal/RGB-fold work. Re-importing retains the
+    // shared graph identities established above while making its descriptor-visible entry states explicit.
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentFoldResourceUses{ scratchArena };
+    if(splitSoftTransparentFold){
+        const Core::GpuGraphResourceId shadowCoarseTransmittance = importTexture(
+            deferredTargets.shadowCoarseTransmittance,
+            Name("render.shadow_visibility.coarse_transmittance"),
+            "Shadow Coarse Transmittance"
+        );
+        const Core::GpuGraphResourceId shadowSoftHalfA = importTexture(
+            deferredTargets.shadowSoftHalfA,
+            Name("render.shadow_visibility.soft_half_a"),
+            "Shadow Soft Half A"
+        );
+        const Core::GpuGraphResourceId shadowSoftHalfB = importTexture(
+            deferredTargets.shadowSoftHalfB,
+            Name("render.shadow_visibility.soft_half_b"),
+            "Shadow Soft Half B"
+        );
+        const Core::GpuGraphResourceId shadowSoftGeometry = importTexture(
+            deferredTargets.shadowSoftGeometry,
+            Name("render.shadow_visibility.soft_geometry"),
+            "Shadow Soft Geometry"
+        );
+        const Core::GpuGraphResourceId shadowSoftGeometryPrevious = importTexture(
+            deferredTargets.shadowSoftGeometryPrev,
+            Name("render.shadow_visibility.soft_geometry_previous"),
+            "Previous Shadow Soft Geometry"
+        );
+        const Core::GpuGraphResourceId transparentSoftHalf = importTexture(
+            deferredTargets.transparentSoftHalf,
+            Name("render.shadow_visibility.transparent_soft_half"),
+            "Transparent Shadow Soft Half"
+        );
+        const Core::GpuGraphResourceId transparentHistoryA = importTexture(
+            deferredTargets.transparentHistA,
+            Name("render.shadow_visibility.transparent_history_a"),
+            "Transparent Shadow History A"
+        );
+        const Core::GpuGraphResourceId transparentHistoryB = importTexture(
+            deferredTargets.transparentHistB,
+            Name("render.shadow_visibility.transparent_history_b"),
+            "Transparent Shadow History B"
+        );
+        const Core::GpuGraphResourceId transparentMomentsA = importTexture(
+            deferredTargets.transparentMomentsA,
+            Name("render.shadow_visibility.transparent_moments_a"),
+            "Transparent Shadow Moments A"
+        );
+        const Core::GpuGraphResourceId transparentMomentsB = importTexture(
+            deferredTargets.transparentMomentsB,
+            Name("render.shadow_visibility.transparent_moments_b"),
+            "Transparent Shadow Moments B"
+        );
+        const Core::GpuGraphResourceId sceneBvhNodes = importBuffer(
+            m_rayTracingState.m_sceneBvhNodeBuffer,
+            Name("render.shadow_visibility.scene_bvh_nodes"),
+            "Scene BVH Nodes"
+        );
+        const Core::GpuGraphResourceId sceneInstances = importBuffer(
+            m_rayTracingState.m_sceneInstanceBuffer,
+            Name("render.shadow_visibility.scene_instances"),
+            "Scene Instances"
+        );
+        const Core::GpuGraphResourceId shadowInstanceMaterials = importBuffer(
+            m_rayTracingState.m_shadowInstanceMaterialBuffer,
+            Name("render.deferred_effects.instance_material"),
+            "Shadow Instance Materials"
+        );
+        const Core::GpuGraphResourceId shadowTypedMaterials = importBuffer(
+            m_rayTracingState.m_shadowMaterialTypedBuffer,
+            Name("render.deferred_effects.material_typed"),
+            "Shadow Typed Materials"
+        );
+        const Core::GpuGraphResourceId shadowInstances = importBuffer(
+            m_rayTracingState.m_shadowInstanceBuffer,
+            Name("render.deferred_effects.shadow_instances"),
+            "Shadow Instances"
+        );
+        if(
+            !shadowCoarseTransmittance.valid()
+            || !shadowSoftHalfA.valid()
+            || !shadowSoftHalfB.valid()
+            || !shadowSoftGeometry.valid()
+            || !shadowSoftGeometryPrevious.valid()
+            || !transparentSoftHalf.valid()
+            || !transparentHistoryA.valid()
+            || !transparentHistoryB.valid()
+            || !transparentMomentsA.valid()
+            || !transparentMomentsB.valid()
+            || !sceneBvhNodes.valid()
+            || !sceneInstances.valid()
+            || !shadowInstanceMaterials.valid()
+            || !shadowTypedMaterials.valid()
+            || !shadowInstances.valid()
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import prepared soft-transparent shadow-fold resources"));
+            return false;
+        }
+
+        transparentFoldResourceUses.reserve(28u + softwareTraceGeometryResourceCount);
+        transparentFoldResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
+        transparentFoldResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
+        transparentFoldResourceUses.push_back(ReadUse(depth, Core::ResourceStates::ShaderResource));
+        transparentFoldResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+        // This ReadWrite declaration is the opaque soft result -> transparent fold ordering edge. The compiler lowers
+        // it to a same-state TextureUav barrier in the tail packet prologue.
+        transparentFoldResourceUses.push_back(ReadWriteUse(shadowVisibility, Core::ResourceStates::UnorderedAccess));
+        transparentFoldResourceUses.push_back(ReadUse(sceneGeometryDomain));
+        transparentFoldResourceUses.push_back(ReadWriteUse(shadowCoarseTransmittance, Core::ResourceStates::UnorderedAccess));
+        transparentFoldResourceUses.push_back(ReadWriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
+        transparentFoldResourceUses.push_back(ReadWriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));
+        transparentFoldResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
+        transparentFoldResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious, Core::ResourceStates::ShaderResource));
+        transparentFoldResourceUses.push_back(WriteUse(transparentSoftHalf, Core::ResourceStates::UnorderedAccess));
+        transparentFoldResourceUses.push_back(ReadWriteUse(transparentHistoryA, Core::ResourceStates::UnorderedAccess));
+        transparentFoldResourceUses.push_back(ReadWriteUse(transparentHistoryB, Core::ResourceStates::UnorderedAccess));
+        transparentFoldResourceUses.push_back(ReadWriteUse(transparentMomentsA, Core::ResourceStates::UnorderedAccess));
+        transparentFoldResourceUses.push_back(ReadWriteUse(transparentMomentsB, Core::ResourceStates::UnorderedAccess));
+        transparentFoldResourceUses.push_back(ReadUse(sceneBvhNodes, Core::ResourceStates::ShaderResource));
+        transparentFoldResourceUses.push_back(ReadUse(sceneInstances, Core::ResourceStates::ShaderResource));
+        transparentFoldResourceUses.push_back(ReadUse(shadowInstanceMaterials, Core::ResourceStates::ShaderResource));
+        transparentFoldResourceUses.push_back(ReadUse(shadowTypedMaterials, Core::ResourceStates::ShaderResource));
+        transparentFoldResourceUses.push_back(ReadUse(shadowInstances, Core::ResourceStates::ShaderResource));
+        transparentFoldResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
+        transparentFoldResourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource));
+        transparentFoldResourceUses.push_back(ReadUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
+        for(usize resourceIndex = 0u; resourceIndex < softwareTraceGeometryResourceCount; ++resourceIndex)
+            transparentFoldResourceUses.push_back(ReadUse(softwareTraceGeometryResources[resourceIndex], Core::ResourceStates::ShaderResource));
+    }
+
+    if(splitSoftTransparentFold){
+        Core::GpuTaskSchedulingHint opaqueScheduling;
+        opaqueScheduling.cost = Core::GpuTaskCostHint::Large;
+        opaqueScheduling.forceSubmissionBoundary = false;
+        opaqueScheduling.allowPacketMerge = true;
+        opaqueScheduling.mergeWithPrevious = false;
+        Core::GpuTaskDesc opaqueDesc;
+        opaqueDesc
+            .setIdentity(Name("render.shadow_visibility.opaque"))
+            .setMarkerLabel("Shadow Visibility Opaque")
+            .setQueue(ComputeQueueRequest())
+            .setScheduling(opaqueScheduling)
+            .setDependencies(&prefixTask, 1u)
+            .setResourceUses(resourceUses.data(), resourceUses.size())
+        ;
+        m_deferredShadowVisibilityOpaqueTask = m_raytracingSystem.declareShadowVisibilityOpaqueTask(
+            m_deferredLightingTaskGraph,
+            opaqueDesc,
+            deferredTargets,
+            &m_preparedShadowVisibilityReady,
+            hardwareShadowSupported,
+            timingTicket,
+            &asyncTiming,
+            &shadowVisibilityTiming,
+            &opaqueProduced,
+            &opaqueFrameIndex,
+            true
+        );
+        if(!m_deferredShadowVisibilityOpaqueTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque shadow-visibility graph task"));
+            return false;
+        }
+
+        Core::GpuTaskSchedulingHint foldScheduling;
+        foldScheduling.cost = Core::GpuTaskCostHint::Medium;
+        foldScheduling.forceSubmissionBoundary = false;
+        foldScheduling.allowPacketMerge = true;
+        foldScheduling.mergeWithPrevious = true;
+        const Core::GpuTaskId foldDependencies[] = { m_deferredShadowVisibilityOpaqueTask };
+        Core::GpuTaskDesc foldDesc;
+        foldDesc
+            .setIdentity(Name("render.shadow_visibility.soft_transparent_fold"))
+            .setMarkerLabel("Shadow Transparent Soft Fold")
+            .setQueue(ComputeQueueRequest())
+            .setScheduling(foldScheduling)
+            .setDependencies(foldDependencies, LengthOf(foldDependencies))
+            .setResourceUses(transparentFoldResourceUses.data(), transparentFoldResourceUses.size())
+        ;
+        // This terminal ID deliberately replaces the opaque producer as the effect/output owner. Existing caustics,
+        // lighting, state-handoff, recovery, and acceptance paths therefore observe the fully folded visibility.
+        m_deferredShadowVisibilityTask = m_raytracingSystem.declareShadowTransparentSoftFoldTask(
+            m_deferredLightingTaskGraph,
+            foldDesc,
+            deferredTargets,
+            timingTicket,
+            &asyncTiming,
+            &shadowVisibilityTiming,
+            &opaqueProduced,
+            &opaqueFrameIndex,
+            true
+        );
+        if(!m_deferredShadowVisibilityTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred soft-transparent shadow-fold graph task"));
+            return false;
+        }
+        return true;
     }
 
     Core::GpuTaskSchedulingHint scheduling;
@@ -5277,6 +5515,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::GpuTimingSubmissionTicket& avboitIntegrationTimingTicket,
     Core::GpuTimingSubmissionTicket& avboitAccumulationTimingTicket,
     Core::GpuTimingSubmissionTicket& shadowVisibilityTimingTicket,
+    Optional<Core::GpuTimingMeasure>& shadowVisibilityAsyncTiming,
+    Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
+    bool& shadowVisibilityOpaqueProduced,
+    u32& shadowVisibilityOpaqueFrameIndex,
     Core::GpuTimingSubmissionTicket& softwareCausticsTimingTicket,
     Core::GpuTimingSubmissionTicket& surfelGiTimingTicket,
     Optional<Core::GpuTimingMeasure>& surfelGiAsyncTiming,
@@ -5309,6 +5551,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixCsgIntervalSampleTask = {};
     m_graphicsPrefixTask = {};
+    m_deferredShadowVisibilityOpaqueTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
@@ -6052,7 +6295,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         softwareTraceGeometryResources.data(),
         softwareTraceGeometryResources.size(),
         m_graphicsPrefixTask,
-        shadowVisibilityTimingTicket
+        shadowVisibilityTimingTicket,
+        shadowVisibilityAsyncTiming,
+        shadowVisibilityTiming,
+        shadowVisibilityOpaqueProduced,
+        shadowVisibilityOpaqueFrameIndex
     ))
         return;
     if(!declaresHardwareCaustics && !declareDeferredSoftwareCausticsTask(

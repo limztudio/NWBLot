@@ -1444,11 +1444,9 @@ struct NativePacketSurfelGiTraceProbeTask{
 };
 
 
-// Surfel GI's persistent resources start with the graph-established descriptor-visible state batch. Resolve sees
-// the live pool and cell heads already lowered to ShaderResource, while unrelated prior persistent writes retain
-// their valid task-local states. This getter-only probe keeps that graph-owned boundary observable before native
-// setup could mask it.
-struct NativePacketSurfelGiEntryProbeTask{
+// Resolve receives only its G-buffer, field, constant, and half-resolution output states from the graph. This
+// getter-only probe keeps the live-field shader-resource handoff observable before native setup could mask it.
+struct NativePacketSurfelGiResolveProbeTask{
     static constexpr u32 s_ShaderBufferCount = 9u;
     static constexpr u32 s_ConstantBufferCount = 4u;
     static constexpr u32 s_ShaderTextureCount = 2u;
@@ -1459,11 +1457,12 @@ struct NativePacketSurfelGiEntryProbeTask{
     static constexpr u32 s_UavTextureCount = 1u;
 
     struct Payload{
-        Buffer* shaderBuffers[s_ShaderBufferCount] = {};
-        Buffer* constantBuffers[s_ConstantBufferCount] = {};
-        Texture* shaderTextures[s_ShaderTextureCount] = {};
-        Buffer* uavBuffers[s_UavBufferCount] = {};
-        Texture* uavTextures[s_UavTextureCount] = {};
+        Buffer* constants = nullptr;
+        Buffer* pool = nullptr;
+        Buffer* cellHeads = nullptr;
+        Texture* worldPosition = nullptr;
+        Texture* normal = nullptr;
+        Texture* irradianceHalf = nullptr;
         bool* recorded = nullptr;
     };
 
@@ -1473,45 +1472,53 @@ struct NativePacketSurfelGiEntryProbeTask{
         const GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        bool ready = true;
-        for(u32 bufferIndex = 0u; bufferIndex < s_ShaderBufferCount; ++bufferIndex){
-            ready = ready
-                && payload.shaderBuffers[bufferIndex]
-                && commandList.getBufferState(payload.shaderBuffers[bufferIndex]) == ResourceStates::ShaderResource
-            ;
-        }
-        for(u32 bufferIndex = 0u; bufferIndex < s_ConstantBufferCount; ++bufferIndex){
-            ready = ready
-                && payload.constantBuffers[bufferIndex]
-                && commandList.getBufferState(payload.constantBuffers[bufferIndex]) == ResourceStates::ConstantBuffer
-            ;
-        }
-        for(u32 textureIndex = 0u; textureIndex < s_ShaderTextureCount; ++textureIndex){
-            ready = ready
-                && payload.shaderTextures[textureIndex]
-                && commandList.getTextureSubresourceState(payload.shaderTextures[textureIndex], 0u, 0u)
-                    == ResourceStates::ShaderResource
-            ;
-        }
-        for(u32 bufferIndex = 0u; bufferIndex < s_UavBufferCount; ++bufferIndex){
-            ready = ready
-                && payload.uavBuffers[bufferIndex]
-                && commandList.getBufferState(payload.uavBuffers[bufferIndex]) == (
-                    bufferIndex == s_PoolBufferIndex || bufferIndex == s_CellHeadsBufferIndex
-                        ? ResourceStates::ShaderResource
-                        : bufferIndex == s_TraceArgsBufferIndex
-                            ? ResourceStates::IndirectArgument
-                            : ResourceStates::UnorderedAccess
-                )
-            ;
-        }
-        for(u32 textureIndex = 0u; textureIndex < s_UavTextureCount; ++textureIndex){
-            ready = ready
-                && payload.uavTextures[textureIndex]
-                && commandList.getTextureSubresourceState(payload.uavTextures[textureIndex], 0u, 0u)
-                    == ResourceStates::UnorderedAccess
-            ;
-        }
+        const bool ready =
+            payload.constants
+            && payload.pool
+            && payload.cellHeads
+            && payload.worldPosition
+            && payload.normal
+            && payload.irradianceHalf
+            && commandList.getBufferState(payload.constants) == ResourceStates::ConstantBuffer
+            && commandList.getBufferState(payload.pool) == ResourceStates::ShaderResource
+            && commandList.getBufferState(payload.cellHeads) == ResourceStates::ShaderResource
+            && commandList.getTextureSubresourceState(payload.worldPosition, 0u, 0u) == ResourceStates::ShaderResource
+            && commandList.getTextureSubresourceState(payload.normal, 0u, 0u) == ResourceStates::ShaderResource
+            && commandList.getTextureSubresourceState(payload.irradianceHalf, 0u, 0u) == ResourceStates::UnorderedAccess
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
+// Upsample consumes only its graph-declared G-buffer and half-resolution input, and writes the final irradiance.
+struct NativePacketSurfelGiUpsampleProbeTask{
+    struct Payload{
+        Texture* worldPosition = nullptr;
+        Texture* normal = nullptr;
+        Texture* irradianceHalf = nullptr;
+        Texture* irradiance = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        const bool ready =
+            payload.worldPosition
+            && payload.normal
+            && payload.irradianceHalf
+            && payload.irradiance
+            && commandList.getTextureSubresourceState(payload.worldPosition, 0u, 0u) == ResourceStates::ShaderResource
+            && commandList.getTextureSubresourceState(payload.normal, 0u, 0u) == ResourceStates::ShaderResource
+            && commandList.getTextureSubresourceState(payload.irradianceHalf, 0u, 0u) == ResourceStates::ShaderResource
+            && commandList.getTextureSubresourceState(payload.irradiance, 0u, 0u) == ResourceStates::UnorderedAccess
+        ;
         if(payload.recorded)
             *payload.recorded = ready;
         return ready;
@@ -5855,17 +5862,17 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
 }
 
 
-// Surfel GI's typed output clear, age/free, per-frame cell-head clear, Hash Build, Spawn, trace-build-args, and Trace
-// now receive their states from the graph. The test intentionally has no renderer-native state setup: Hash Build
-// observes the typed clear transition, Args observes Spawn's counter, Trace receives indirect arguments, and Resolve
-// receives the compiler-lowered live-field shader-resource state.
-TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiTraceRecordsWithoutNativeBridge){
+// Surfel GI's typed output clear, age/free, per-frame cell-head clear, Hash Build, Spawn, trace-build-args, Trace,
+// and Resolve now receive their states from the graph. The test intentionally has no renderer-native state setup:
+// Hash Build observes the typed clear transition, Args observes Spawn's counter, Trace receives indirect arguments,
+// Resolve receives the compiler-lowered live-field shader-resource state, and Upsample receives Resolve's result.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
-    constexpr u32 shaderBufferCount = NativePacketSurfelGiEntryProbeTask::s_ShaderBufferCount;
-    constexpr u32 constantBufferCount = NativePacketSurfelGiEntryProbeTask::s_ConstantBufferCount;
-    constexpr u32 shaderTextureCount = NativePacketSurfelGiEntryProbeTask::s_ShaderTextureCount;
-    constexpr u32 uavBufferCount = NativePacketSurfelGiEntryProbeTask::s_UavBufferCount;
-    constexpr u32 uavTextureCount = NativePacketSurfelGiEntryProbeTask::s_UavTextureCount;
+    constexpr u32 shaderBufferCount = NativePacketSurfelGiResolveProbeTask::s_ShaderBufferCount;
+    constexpr u32 constantBufferCount = NativePacketSurfelGiResolveProbeTask::s_ConstantBufferCount;
+    constexpr u32 shaderTextureCount = NativePacketSurfelGiResolveProbeTask::s_ShaderTextureCount;
+    constexpr u32 uavBufferCount = NativePacketSurfelGiResolveProbeTask::s_UavBufferCount;
+    constexpr u32 uavTextureCount = NativePacketSurfelGiResolveProbeTask::s_UavTextureCount;
     const auto makeStorageBuffer = [&device](){
         return device.createBuffer(
             BufferDesc()
@@ -6246,8 +6253,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiTraceRecordsWithoutNativ
         traceUses.push_back({ .resource = shaderBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read });
     for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex)
         traceUses.push_back({ .resource = constantBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read });
-    traceUses.push_back({ .resource = uavBufferResources[NativePacketSurfelGiEntryProbeTask::s_PoolBufferIndex], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite });
-    traceUses.push_back({ .resource = uavBufferResources[NativePacketSurfelGiEntryProbeTask::s_TraceArgsBufferIndex], .range = {}, .requiredState = ResourceStates::IndirectArgument, .access = GpuTaskResourceAccess::Read });
+    traceUses.push_back({ .resource = uavBufferResources[NativePacketSurfelGiResolveProbeTask::s_PoolBufferIndex], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite });
+    traceUses.push_back({ .resource = uavBufferResources[NativePacketSurfelGiResolveProbeTask::s_TraceArgsBufferIndex], .range = {}, .requiredState = ResourceStates::IndirectArgument, .access = GpuTaskResourceAccess::Read });
     GpuTaskDesc traceDesc;
     traceDesc
         .setIdentity(Name("tests/descriptor_buffer/graph_owned_surfel_gi_trace"))
@@ -6262,8 +6269,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiTraceRecordsWithoutNativ
         tracePayload.shaderBuffers[bufferIndex] = shaderBuffers[bufferIndex].get();
     for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex)
         tracePayload.constantBuffers[bufferIndex] = constantBuffers[bufferIndex].get();
-    tracePayload.pool = uavBuffers[NativePacketSurfelGiEntryProbeTask::s_PoolBufferIndex].get();
-    tracePayload.traceArgs = uavBuffers[NativePacketSurfelGiEntryProbeTask::s_TraceArgsBufferIndex].get();
+    tracePayload.pool = uavBuffers[NativePacketSurfelGiResolveProbeTask::s_PoolBufferIndex].get();
+    tracePayload.traceArgs = uavBuffers[NativePacketSurfelGiResolveProbeTask::s_TraceArgsBufferIndex].get();
     bool traceRecorded = false;
     tracePayload.recorded = &traceRecorded;
     const GpuTaskId traceTask = graph.addTask<NativePacketSurfelGiTraceProbeTask>(
@@ -6272,13 +6279,42 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiTraceRecordsWithoutNativ
     );
     ASSERT_TRUE(traceTask.valid());
 
-    const GpuTaskResourceUse surfelUses[] = {
+    const GpuTaskResourceUse resolveUses[] = {
         { .resource = worldPositionResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
         { .resource = normalResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
         { .resource = constantBufferResources[2u], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read },
-        { .resource = uavBufferResources[NativePacketSurfelGiEntryProbeTask::s_PoolBufferIndex], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
-        { .resource = uavBufferResources[NativePacketSurfelGiEntryProbeTask::s_CellHeadsBufferIndex], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
+        { .resource = uavBufferResources[NativePacketSurfelGiResolveProbeTask::s_PoolBufferIndex], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
+        { .resource = uavBufferResources[NativePacketSurfelGiResolveProbeTask::s_CellHeadsBufferIndex], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
         { .resource = irradianceHalfResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write },
+    };
+    GpuTaskDesc resolveDesc;
+    resolveDesc
+        .setIdentity(Name("tests/descriptor_buffer/graph_owned_surfel_gi_resolve"))
+        .setMarkerLabel("Surfel GI Resolve")
+        .setQueue(computeQueue)
+        .setScheduling(surfelScheduling)
+        .setDependencies(&traceTask, 1u)
+        .setResourceUses(resolveUses, LengthOf(resolveUses))
+    ;
+    bool resolveRecorded = false;
+    const GpuTaskId resolveTask = graph.addTask<NativePacketSurfelGiResolveProbeTask>(
+        resolveDesc,
+        NativePacketSurfelGiResolveProbeTask::Payload{
+            .constants = constantBuffers[2u].get(),
+            .pool = uavBuffers[NativePacketSurfelGiResolveProbeTask::s_PoolBufferIndex].get(),
+            .cellHeads = uavBuffers[NativePacketSurfelGiResolveProbeTask::s_CellHeadsBufferIndex].get(),
+            .worldPosition = shaderTextures[0u].get(),
+            .normal = shaderTextures[1u].get(),
+            .irradianceHalf = irradianceHalf.get(),
+            .recorded = &resolveRecorded,
+        }
+    );
+    ASSERT_TRUE(resolveTask.valid());
+
+    const GpuTaskResourceUse surfelUses[] = {
+        { .resource = worldPositionResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
+        { .resource = normalResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
+        { .resource = irradianceHalfResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
         { .resource = irradianceResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write },
     };
     GpuTaskDesc surfelDesc;
@@ -6287,25 +6323,19 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiTraceRecordsWithoutNativ
         .setMarkerLabel("Surfel GI")
         .setQueue(computeQueue)
         .setScheduling(surfelScheduling)
-        .setDependencies(&traceTask, 1u)
+        .setDependencies(&resolveTask, 1u)
         .setResourceUses(surfelUses, LengthOf(surfelUses))
     ;
-    NativePacketSurfelGiEntryProbeTask::Payload surfelPayload{};
-    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)
-        surfelPayload.shaderBuffers[bufferIndex] = shaderBuffers[bufferIndex].get();
-    for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex)
-        surfelPayload.constantBuffers[bufferIndex] = constantBuffers[bufferIndex].get();
-    for(u32 textureIndex = 0u; textureIndex < shaderTextureCount; ++textureIndex)
-        surfelPayload.shaderTextures[textureIndex] = shaderTextures[textureIndex].get();
-    for(u32 bufferIndex = 0u; bufferIndex < uavBufferCount; ++bufferIndex)
-        surfelPayload.uavBuffers[bufferIndex] = uavBuffers[bufferIndex].get();
-    for(u32 textureIndex = 0u; textureIndex < uavTextureCount; ++textureIndex)
-        surfelPayload.uavTextures[textureIndex] = uavTextures[textureIndex].get();
     bool surfelRecorded = false;
-    surfelPayload.recorded = &surfelRecorded;
-    const GpuTaskId surfelTask = graph.addTask<NativePacketSurfelGiEntryProbeTask>(
+    const GpuTaskId surfelTask = graph.addTask<NativePacketSurfelGiUpsampleProbeTask>(
         surfelDesc,
-        Move(surfelPayload)
+        NativePacketSurfelGiUpsampleProbeTask::Payload{
+            .worldPosition = shaderTextures[0u].get(),
+            .normal = shaderTextures[1u].get(),
+            .irradianceHalf = irradianceHalf.get(),
+            .irradiance = uavTextures[0u].get(),
+            .recorded = &surfelRecorded,
+        }
     );
     ASSERT_TRUE(surfelTask.valid());
 
@@ -6342,6 +6372,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiTraceRecordsWithoutNativ
     const GpuSubmissionPacketId spawnPacket = compiledGraph.packetForTask(spawnTask);
     const GpuSubmissionPacketId traceBuildArgsPacket = compiledGraph.packetForTask(traceBuildArgsTask);
     const GpuSubmissionPacketId tracePacket = compiledGraph.packetForTask(traceTask);
+    const GpuSubmissionPacketId resolvePacket = compiledGraph.packetForTask(resolveTask);
     const GpuSubmissionPacketId surfelPacket = compiledGraph.packetForTask(surfelTask);
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(clearPacket.valid());
@@ -6351,6 +6382,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiTraceRecordsWithoutNativ
     ASSERT_TRUE(spawnPacket.valid());
     ASSERT_TRUE(traceBuildArgsPacket.valid());
     ASSERT_TRUE(tracePacket.valid());
+    ASSERT_TRUE(resolvePacket.valid());
     ASSERT_TRUE(surfelPacket.valid());
     EXPECT_EQ(clearPacket, surfelPacket);
     EXPECT_EQ(ageFreePacket, surfelPacket);
@@ -6359,14 +6391,16 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiTraceRecordsWithoutNativ
     EXPECT_EQ(spawnPacket, surfelPacket);
     EXPECT_EQ(traceBuildArgsPacket, surfelPacket);
     EXPECT_EQ(tracePacket, surfelPacket);
+    EXPECT_EQ(resolvePacket, surfelPacket);
     EXPECT_TRUE(analysis.hasExplicitEdge(ageFreeTask, cellHeadClearTask));
     EXPECT_TRUE(analysis.hasExplicitEdge(cellHeadClearTask, hashBuildTask));
     EXPECT_TRUE(analysis.hasExplicitEdge(hashBuildTask, spawnTask));
     EXPECT_TRUE(analysis.hasExplicitEdge(spawnTask, traceBuildArgsTask));
     EXPECT_TRUE(analysis.hasExplicitEdge(traceBuildArgsTask, traceTask));
-    EXPECT_TRUE(analysis.hasExplicitEdge(traceTask, surfelTask));
+    EXPECT_TRUE(analysis.hasExplicitEdge(traceTask, resolveTask));
+    EXPECT_TRUE(analysis.hasExplicitEdge(resolveTask, surfelTask));
     ASSERT_NE(compiledGraph.packetTasks(surfelPacket), nullptr);
-    ASSERT_EQ(compiledGraph.packet(surfelPacket).taskCount, 8u);
+    ASSERT_EQ(compiledGraph.packet(surfelPacket).taskCount, 9u);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[0u], outputClearTask);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[1u], ageFreeTask);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[2u], cellHeadClearTask);
@@ -6374,7 +6408,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiTraceRecordsWithoutNativ
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[4u], spawnTask);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[5u], traceBuildArgsTask);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[6u], traceTask);
-    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[7u], surfelTask);
+    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[7u], resolveTask);
+    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[8u], surfelTask);
     const GpuCompiledTask* const compiledAgeFree = compiledGraph.findTask(ageFreeTask);
     ASSERT_NE(compiledAgeFree, nullptr);
     const GpuCompiledBarrier* const ageFreeBarriers = compiledGraph.taskPrologueBarriers(ageFreeTask);
@@ -6504,6 +6539,25 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiTraceRecordsWithoutNativ
         ResourceStates::UnorderedAccess,
         ResourceStates::IndirectArgument
     ));
+    const GpuCompiledTask* const compiledResolve = compiledGraph.findTask(resolveTask);
+    ASSERT_NE(compiledResolve, nullptr);
+    const GpuCompiledBarrier* const resolveBarriers = compiledGraph.taskPrologueBarriers(resolveTask);
+    ASSERT_NE(resolveBarriers, nullptr);
+    const auto hasResolveTransition = [&](const GpuGraphResourceId resource, const ResourceStates::Mask before, const ResourceStates::Mask after){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledResolve->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = resolveBarriers[barrierIndex];
+            if(
+                barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasResolveTransition(uavBufferResources[0u], ResourceStates::UnorderedAccess, ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasResolveTransition(uavBufferResources[1u], ResourceStates::UnorderedAccess, ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasResolveTransition(irradianceHalfResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
     const GpuCompiledTask* const compiledSurfel = compiledGraph.findTask(surfelTask);
     ASSERT_NE(compiledSurfel, nullptr);
     const GpuCompiledBarrier* const surfelBarriers = compiledGraph.taskPrologueBarriers(surfelTask);
@@ -6520,9 +6574,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiTraceRecordsWithoutNativ
         }
         return false;
     };
-    EXPECT_TRUE(hasSurfelTransition(uavBufferResources[0u], ResourceStates::UnorderedAccess, ResourceStates::ShaderResource));
-    EXPECT_TRUE(hasSurfelTransition(uavBufferResources[1u], ResourceStates::UnorderedAccess, ResourceStates::ShaderResource));
-    EXPECT_TRUE(hasSurfelTransition(irradianceHalfResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasSurfelTransition(irradianceHalfResource, ResourceStates::UnorderedAccess, ResourceStates::ShaderResource));
     EXPECT_TRUE(hasSurfelTransition(irradianceResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
     ASSERT_EQ(compiledGraph.packet(surfelPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(surfelPacket)[0u].producer, prefixPacket);
@@ -6547,6 +6599,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiTraceRecordsWithoutNativ
     EXPECT_TRUE(spawnRecorded);
     EXPECT_TRUE(traceBuildArgsRecorded);
     EXPECT_TRUE(traceRecorded);
+    EXPECT_TRUE(resolveRecorded);
     EXPECT_TRUE(surfelRecorded);
     ASSERT_EQ(commandIrCapture.recordCount(), 2u);
     const GpuCommandIrBuiltinTaskRecord* const outputClearCapture = commandIrCapture.recordAt(0u);

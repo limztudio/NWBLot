@@ -6360,9 +6360,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
 
 
 // Surfel GI starts after the shared graphics prefix has produced G-buffer, descriptor, traversal, and persistent
-// resource data. Age/free, the graph-owned cell-head reset, Hash Build, Spawn, trace-build-args, and Trace share
-// one Compute packet; Resolve must inherit the compiler-owned trace result without a native state bridge.
-TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiTraceAndEntryStates){
+// resource data. Age/free, the graph-owned cell-head reset, Hash Build, Spawn, trace-build-args, Trace, and Resolve
+// share one Compute packet; Upsample must inherit the compiler-owned half-irradiance result without a native bridge.
+TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     constexpr Graphics::ResourceQueueSharing::Mask queueSharing =
@@ -6693,13 +6693,30 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiTraceAndEntryStates){
     const Graphics::GpuTaskId trace = graph.addTask(traceDesc);
     ASSERT_TRUE(trace.valid());
 
-    const Graphics::GpuTaskResourceUse surfelUses[] = {
+    const Graphics::GpuTaskResourceUse resolveUses[] = {
         { .resource = worldPosition, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = normal, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = surfelConstants, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = pool, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = cellHeads, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = irradianceHalf, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
+    };
+    Graphics::GpuTaskDesc resolveDesc;
+    resolveDesc
+        .setIdentity(Name("tests/task_graph/graph_owned_surfel_gi_resolve"))
+        .setMarkerLabel("Surfel GI Resolve")
+        .setQueue(computeRequest)
+        .setScheduling(surfelScheduling)
+        .setDependencies(&trace, 1u)
+        .setResourceUses(resolveUses, LengthOf(resolveUses))
+    ;
+    const Graphics::GpuTaskId resolve = graph.addTask(resolveDesc);
+    ASSERT_TRUE(resolve.valid());
+
+    const Graphics::GpuTaskResourceUse surfelUses[] = {
+        { .resource = worldPosition, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = normal, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = irradianceHalf, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = irradiance, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
     };
     Graphics::GpuTaskDesc surfelDesc;
@@ -6708,7 +6725,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiTraceAndEntryStates){
         .setMarkerLabel("Surfel GI")
         .setQueue(computeRequest)
         .setScheduling(surfelScheduling)
-        .setDependencies(&trace, 1u)
+        .setDependencies(&resolve, 1u)
         .setResourceUses(surfelUses, LengthOf(surfelUses))
     ;
     const Graphics::GpuTaskId surfelGi = graph.addTask(surfelDesc);
@@ -6733,7 +6750,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiTraceAndEntryStates){
     EXPECT_TRUE(analysis.hasExplicitEdge(hashBuild, spawn));
     EXPECT_TRUE(analysis.hasExplicitEdge(spawn, traceBuildArgs));
     EXPECT_TRUE(analysis.hasExplicitEdge(traceBuildArgs, trace));
-    EXPECT_TRUE(analysis.hasExplicitEdge(trace, surfelGi));
+    EXPECT_TRUE(analysis.hasExplicitEdge(trace, resolve));
+    EXPECT_TRUE(analysis.hasExplicitEdge(resolve, surfelGi));
     ASSERT_TRUE(HasInferredHazard(
         analysis,
         prefix,
@@ -6787,15 +6805,22 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiTraceAndEntryStates){
     ASSERT_TRUE(HasInferredHazard(
         analysis,
         trace,
-        surfelGi,
+        resolve,
         pool,
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
     ASSERT_TRUE(HasInferredHazard(
         analysis,
         spawn,
-        surfelGi,
+        resolve,
         cellHeads,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    ASSERT_TRUE(HasInferredHazard(
+        analysis,
+        resolve,
+        surfelGi,
+        irradianceHalf,
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
 
@@ -6813,6 +6838,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiTraceAndEntryStates){
     const Graphics::GpuSubmissionPacketId spawnPacket = compiledGraph.packetForTask(spawn);
     const Graphics::GpuSubmissionPacketId traceBuildArgsPacket = compiledGraph.packetForTask(traceBuildArgs);
     const Graphics::GpuSubmissionPacketId tracePacket = compiledGraph.packetForTask(trace);
+    const Graphics::GpuSubmissionPacketId resolvePacket = compiledGraph.packetForTask(resolve);
     const Graphics::GpuSubmissionPacketId surfelPacket = compiledGraph.packetForTask(surfelGi);
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(clearPacket.valid());
@@ -6822,6 +6848,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiTraceAndEntryStates){
     ASSERT_TRUE(spawnPacket.valid());
     ASSERT_TRUE(traceBuildArgsPacket.valid());
     ASSERT_TRUE(tracePacket.valid());
+    ASSERT_TRUE(resolvePacket.valid());
     ASSERT_TRUE(surfelPacket.valid());
     EXPECT_NE(prefixPacket, surfelPacket);
     EXPECT_EQ(clearPacket, surfelPacket);
@@ -6831,9 +6858,10 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiTraceAndEntryStates){
     EXPECT_EQ(spawnPacket, surfelPacket);
     EXPECT_EQ(traceBuildArgsPacket, surfelPacket);
     EXPECT_EQ(tracePacket, surfelPacket);
+    EXPECT_EQ(resolvePacket, surfelPacket);
     EXPECT_EQ(compiledGraph.packetCount(), 2u);
     ASSERT_NE(compiledGraph.packetTasks(surfelPacket), nullptr);
-    ASSERT_EQ(compiledGraph.packet(surfelPacket).taskCount, 8u);
+    ASSERT_EQ(compiledGraph.packet(surfelPacket).taskCount, 9u);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[0u], outputClear);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[1u], ageFree);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[2u], cellHeadClear);
@@ -6841,7 +6869,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiTraceAndEntryStates){
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[4u], spawn);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[5u], traceBuildArgs);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[6u], trace);
-    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[7u], surfelGi);
+    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[7u], resolve);
+    EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[8u], surfelGi);
     const Graphics::GpuCompiledTask* const compiledAgeFree = compiledGraph.findTask(ageFree);
     ASSERT_NE(compiledAgeFree, nullptr);
     const Graphics::GpuPacketStateSeed* const ageFreeSeeds = compiledGraph.taskPrologueStateSeeds(ageFree);
@@ -6908,21 +6937,21 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiTraceAndEntryStates){
     EXPECT_TRUE(hasTraceSeed(currentBindlessSlots));
     EXPECT_TRUE(hasTraceSeed(traceGeometry));
     EXPECT_TRUE(hasTraceSeed(poolSnapshot));
-    const Graphics::GpuCompiledTask* const compiledSurfel = compiledGraph.findTask(surfelGi);
-    ASSERT_NE(compiledSurfel, nullptr);
-    const Graphics::GpuPacketStateSeed* const surfelSeeds = compiledGraph.taskPrologueStateSeeds(surfelGi);
-    ASSERT_NE(surfelSeeds, nullptr);
-    const auto hasSurfelSeed = [&](const Graphics::GpuGraphResourceId resource){
-        for(usize seedIndex = 0u; seedIndex < compiledSurfel->prologueStateSeedCount; ++seedIndex){
+    const Graphics::GpuCompiledTask* const compiledResolve = compiledGraph.findTask(resolve);
+    ASSERT_NE(compiledResolve, nullptr);
+    const Graphics::GpuPacketStateSeed* const resolveSeeds = compiledGraph.taskPrologueStateSeeds(resolve);
+    ASSERT_NE(resolveSeeds, nullptr);
+    const auto hasResolveSeed = [&](const Graphics::GpuGraphResourceId resource){
+        for(usize seedIndex = 0u; seedIndex < compiledResolve->prologueStateSeedCount; ++seedIndex){
             if(
-                surfelSeeds[seedIndex].resource == resource
-                && surfelSeeds[seedIndex].sourcePacket == prefixPacket
+                resolveSeeds[seedIndex].resource == resource
+                && resolveSeeds[seedIndex].sourcePacket == prefixPacket
             )
                 return true;
         }
         return false;
     };
-    EXPECT_TRUE(hasSurfelSeed(irradianceHalf));
+    EXPECT_TRUE(hasResolveSeed(irradianceHalf));
 
     const Graphics::GpuCompiledBarrier* const ageFreeBarriers = compiledGraph.taskPrologueBarriers(ageFree);
     ASSERT_NE(ageFreeBarriers, nullptr);
@@ -7068,6 +7097,41 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiTraceAndEntryStates){
         Graphics::ResourceStates::IndirectArgument
     ));
 
+    const Graphics::GpuCompiledBarrier* const resolveBarriers = compiledGraph.taskPrologueBarriers(resolve);
+    ASSERT_NE(resolveBarriers, nullptr);
+    const auto hasResolveBarrier = [&](const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
+        for(usize barrierIndex = 0u; barrierIndex < compiledResolve->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = resolveBarriers[barrierIndex];
+            if(
+                barrier.type == type
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasResolveBarrier(
+        Graphics::GpuCompiledBarrierType::BufferTransition,
+        pool,
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::ShaderResource
+    ));
+    EXPECT_TRUE(hasResolveBarrier(
+        Graphics::GpuCompiledBarrierType::BufferTransition,
+        cellHeads,
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::ShaderResource
+    ));
+    EXPECT_TRUE(hasResolveBarrier(
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        irradianceHalf,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    const Graphics::GpuCompiledTask* const compiledSurfel = compiledGraph.findTask(surfelGi);
+    ASSERT_NE(compiledSurfel, nullptr);
     const Graphics::GpuCompiledBarrier* const surfelBarriers = compiledGraph.taskPrologueBarriers(surfelGi);
     ASSERT_NE(surfelBarriers, nullptr);
     const auto hasSurfelBarrier = [&](const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
@@ -7084,22 +7148,10 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiTraceAndEntryStates){
         return false;
     };
     EXPECT_TRUE(hasSurfelBarrier(
-        Graphics::GpuCompiledBarrierType::BufferTransition,
-        pool,
-        Graphics::ResourceStates::UnorderedAccess,
-        Graphics::ResourceStates::ShaderResource
-    ));
-    EXPECT_TRUE(hasSurfelBarrier(
-        Graphics::GpuCompiledBarrierType::BufferTransition,
-        cellHeads,
-        Graphics::ResourceStates::UnorderedAccess,
-        Graphics::ResourceStates::ShaderResource
-    ));
-    EXPECT_TRUE(hasSurfelBarrier(
         Graphics::GpuCompiledBarrierType::TextureTransition,
         irradianceHalf,
-        Graphics::ResourceStates::CopyDest,
-        Graphics::ResourceStates::UnorderedAccess
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::ShaderResource
     ));
     EXPECT_TRUE(hasSurfelBarrier(
         Graphics::GpuCompiledBarrierType::TextureTransition,

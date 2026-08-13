@@ -4548,6 +4548,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     m_deferredSurfelGiSpawnTask = {};
     m_deferredSurfelGiTraceBuildArgsTask = {};
     m_deferredSurfelGiTraceTask = {};
+    m_deferredSurfelGiResolveTask = {};
     asyncTiming.reset();
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
@@ -4594,12 +4595,14 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> spawnResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> traceBuildArgsResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> traceResourceUses{ scratchArena };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveResourceUses{ scratchArena };
     resourceUses.reserve(28u + traceGeometryResourceCount);
     ageFreeResourceUses.reserve(4u);
     hashBuildResourceUses.reserve(3u);
     spawnResourceUses.reserve(7u);
     traceBuildArgsResourceUses.reserve(3u);
     traceResourceUses.reserve(16u + traceGeometryResourceCount);
+    resolveResourceUses.reserve(6u);
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));
     resourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -4784,9 +4787,9 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     }
 
     // A prepared normal Surfel GI frame can split its age/free, per-frame cell-head reset, hash build, Spawn,
-    // trace-build-args, and trace. Keep unavailable resources or pipelines on the established monolithic
+    // trace-build-args, trace, and resolve. Keep unavailable resources or pipelines on the established monolithic
     // compatibility callback; otherwise the graph owns each handoff in one selected Compute packet.
-    const bool graphOwnsSurfelGiTrace =
+    const bool graphOwnsSurfelGiResolve =
         hasSurfelWork
         && shadowInstanceMaterials.valid()
         && shadowMaterialTyped.valid()
@@ -4809,15 +4812,19 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         && m_rayTracingState.m_surfelUpsamplePipeline
         && m_rayTracingState.m_surfelTraceBuildArgsPipeline
     ;
-    if(graphOwnsSurfelGiTrace){
+    if(graphOwnsSurfelGiResolve){
         resourceUses.clear();
         resourceUses.push_back(ReadUse(worldPosition));
         resourceUses.push_back(ReadUse(normal));
-        resourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
-        resourceUses.push_back(ReadUse(surfelPool, Core::ResourceStates::ShaderResource));
-        resourceUses.push_back(ReadUse(surfelCellHead, Core::ResourceStates::ShaderResource));
-        resourceUses.push_back(WriteUse(surfelIrradianceHalf, Core::ResourceStates::UnorderedAccess));
+        resourceUses.push_back(ReadUse(surfelIrradianceHalf, Core::ResourceStates::ShaderResource));
         resourceUses.push_back(WriteUse(surfelIrradiance, Core::ResourceStates::UnorderedAccess));
+
+        resolveResourceUses.push_back(ReadUse(worldPosition));
+        resolveResourceUses.push_back(ReadUse(normal));
+        resolveResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
+        resolveResourceUses.push_back(ReadUse(surfelPool, Core::ResourceStates::ShaderResource));
+        resolveResourceUses.push_back(ReadUse(surfelCellHead, Core::ResourceStates::ShaderResource));
+        resolveResourceUses.push_back(WriteUse(surfelIrradianceHalf, Core::ResourceStates::UnorderedAccess));
 
         traceResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
         traceResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
@@ -4976,7 +4983,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     surfelGiScheduling.forceSubmissionBoundary = false;
     surfelGiScheduling.allowPacketMerge = true;
     surfelGiScheduling.mergeWithPrevious = true;
-    if(graphOwnsSurfelGiTrace){
+    if(graphOwnsSurfelGiResolve){
         ageFreeResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
         ageFreeResourceUses.push_back(WriteUse(surfelPool, Core::ResourceStates::UnorderedAccess));
         ageFreeResourceUses.push_back(WriteUse(surfelCounter, Core::ResourceStates::UnorderedAccess));
@@ -5125,7 +5132,29 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI trace graph task"));
             return false;
         }
-        surfelGiDependency = m_deferredSurfelGiTraceTask;
+
+        Core::GpuTaskDesc resolveDesc;
+        resolveDesc
+            .setIdentity(Name("render.surfel_gi.resolve"))
+            .setMarkerLabel("Surfel GI Resolve")
+            .setQueue(ComputeQueueRequest())
+            .setScheduling(surfelGiScheduling)
+            .setDependencies(&m_deferredSurfelGiTraceTask, 1u)
+            .setResourceUses(resolveResourceUses.data(), resolveResourceUses.size())
+        ;
+        m_deferredSurfelGiResolveTask = m_raytracingSystem.declareSurfelGiResolveTask(
+            m_deferredLightingTaskGraph,
+            resolveDesc,
+            deferredTargets,
+            timingTicket,
+            &asyncTiming,
+            true
+        );
+        if(!m_deferredSurfelGiResolveTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI resolve graph task"));
+            return false;
+        }
+        surfelGiDependency = m_deferredSurfelGiResolveTask;
     }
 
     Core::GpuTaskDesc desc;
@@ -5136,8 +5165,8 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         .setScheduling(surfelGiScheduling)
         .setDependencies(&surfelGiDependency, 1u)
         .setExternalDependencies(
-            graphOwnsSurfelGiTrace ? nullptr : surfelGiExternalDependencies,
-            graphOwnsSurfelGiTrace ? 0u : surfelGiExternalDependencyCount
+            graphOwnsSurfelGiResolve ? nullptr : surfelGiExternalDependencies,
+            graphOwnsSurfelGiResolve ? 0u : surfelGiExternalDependencyCount
         )
         .setResourceUses(resourceUses.data(), resourceUses.size())
     ;
@@ -5147,12 +5176,13 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         deferredTargets,
         timingTicket,
         true,
-        graphOwnsSurfelGiTrace,
-        graphOwnsSurfelGiTrace,
-        graphOwnsSurfelGiTrace,
-        graphOwnsSurfelGiTrace,
-        graphOwnsSurfelGiTrace,
-        graphOwnsSurfelGiTrace ? &asyncTiming : nullptr
+        graphOwnsSurfelGiResolve,
+        graphOwnsSurfelGiResolve,
+        graphOwnsSurfelGiResolve,
+        graphOwnsSurfelGiResolve,
+        graphOwnsSurfelGiResolve,
+        graphOwnsSurfelGiResolve,
+        graphOwnsSurfelGiResolve ? &asyncTiming : nullptr
     );
     if(!m_deferredSurfelGiTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI graph task"));
@@ -5304,6 +5334,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredSurfelGiSpawnTask = {};
     m_deferredSurfelGiTraceBuildArgsTask = {};
     m_deferredSurfelGiTraceTask = {};
+    m_deferredSurfelGiResolveTask = {};
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};

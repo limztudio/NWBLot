@@ -64,13 +64,80 @@ inline constexpr u32 s_SurfelCountLogDelay = 3u;
 namespace __hidden_surfel_gi_task{
 
 
+struct SurfelGiAgeFreeGraphTask{
+    struct Payload{
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+        Core::Graphics* graphics = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
+        bool graphEntryStatesOwned = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        if(
+            !payload.raytracingSystem
+            || !payload.graphics
+            || !payload.targets
+            || !payload.timingTicket
+            || !payload.asyncTiming
+        )
+            return false;
+
+        const Core::GpuPhysicalQueueInfo* const queue = context.graph.queueInfo(context.queue);
+        if(!queue || payload.asyncTiming->has_value())
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        if(queue->queueClass == Core::CommandQueue::Compute){
+            payload.asyncTiming->emplace(
+                payload.graphics->gpuTiming(),
+                RendererGpuTimingScope::s_AsyncSurfelGi,
+                payload.graphics->getDevice(),
+                commandList
+            );
+        }
+
+        if(!payload.raytracingSystem->renderSurfelGiAgeFree(
+            commandList,
+            *payload.targets,
+            payload.graphEntryStatesOwned
+        )){
+            if(payload.asyncTiming->has_value()){
+                payload.asyncTiming->value().discardTiming();
+                payload.asyncTiming->reset();
+            }
+            return false;
+        }
+        // The timestamp endpoint follows in the remaining-GI callback, but this callback's nested marker must
+        // close before the packet recorder advances to the graph-owned cell-head clear task.
+        if(payload.asyncTiming->has_value())
+            payload.asyncTiming->value().finishMarker();
+        return true;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.asyncTiming && payload.asyncTiming->has_value()){
+            payload.asyncTiming->value().discardTiming();
+            payload.asyncTiming->reset();
+        }
+    }
+};
+
+
 struct SurfelGiGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::Graphics* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         bool graphEntryStatesOwned = false;
+        bool graphOwnsCellHeadClear = false;
     };
 
     [[nodiscard]] static bool record(
@@ -86,6 +153,31 @@ struct SurfelGiGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        if(payload.graphOwnsCellHeadClear){
+            if(
+                queue->queueClass == Core::CommandQueue::Compute
+                && (!payload.asyncTiming || !payload.asyncTiming->has_value())
+            )
+                return false;
+            if(!payload.raytracingSystem->renderSurfelGiAfterAgeFree(
+                commandList,
+                *payload.targets,
+                payload.graphEntryStatesOwned,
+                true
+            )){
+                if(payload.asyncTiming && payload.asyncTiming->has_value()){
+                    payload.asyncTiming->value().discardTiming();
+                    payload.asyncTiming->reset();
+                }
+                return false;
+            }
+            if(payload.asyncTiming && payload.asyncTiming->has_value()){
+                payload.asyncTiming->value().finishTiming(commandList);
+                payload.asyncTiming->reset();
+            }
+            return true;
+        }
+
         Optional<Core::GpuTimingMeasure> asyncTiming;
         if(queue->queueClass == Core::CommandQueue::Compute){
             asyncTiming.emplace(
@@ -108,6 +200,13 @@ struct SurfelGiGraphTask{
             asyncTiming.reset();
         }
         return true;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.asyncTiming && payload.asyncTiming->has_value()){
+            payload.asyncTiming->value().discardTiming();
+            payload.asyncTiming->reset();
+        }
     }
 
 };
@@ -955,12 +1054,35 @@ void RendererRayTracingSystem::discardSurfelResourceInitialization(){
     rayTracingState().m_surfelResourcesClearPending = false;
 }
 
+Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiAgeFreeTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    Optional<Core::GpuTimingMeasure>& asyncTiming,
+    const bool graphEntryStatesOwned
+){
+    return graph.addTask<__hidden_surfel_gi_task::SurfelGiAgeFreeGraphTask>(
+        desc,
+        __hidden_surfel_gi_task::SurfelGiAgeFreeGraphTask::Payload{
+            .raytracingSystem = this,
+            .graphics = &graphics(),
+            .targets = &targets,
+            .timingTicket = &timingTicket,
+            .asyncTiming = &asyncTiming,
+            .graphEntryStatesOwned = graphEntryStatesOwned,
+        }
+    );
+}
+
 Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    const bool graphEntryStatesOwned
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsCellHeadClear,
+    Optional<Core::GpuTimingMeasure>* const asyncTiming
 ){
     return graph.addTask<__hidden_surfel_gi_task::SurfelGiGraphTask>(
         desc,
@@ -969,7 +1091,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
             .graphics = &graphics(),
             .targets = &targets,
             .timingTicket = &timingTicket,
+            .asyncTiming = asyncTiming,
             .graphEntryStatesOwned = graphEntryStatesOwned,
+            .graphOwnsCellHeadClear = graphOwnsCellHeadClear,
         }
     );
 }
@@ -994,6 +1118,58 @@ bool RendererRayTracingSystem::renderSurfelGi(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const bool graphEntryStatesOwned
+){
+    return renderSurfelGiPhases(
+        commandList,
+        targets,
+        graphEntryStatesOwned,
+        true,
+        true,
+        false
+    );
+}
+
+
+bool RendererRayTracingSystem::renderSurfelGiAgeFree(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool graphEntryStatesOwned
+){
+    return renderSurfelGiPhases(
+        commandList,
+        targets,
+        graphEntryStatesOwned,
+        true,
+        false,
+        false
+    );
+}
+
+
+bool RendererRayTracingSystem::renderSurfelGiAfterAgeFree(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsCellHeadClear
+){
+    return renderSurfelGiPhases(
+        commandList,
+        targets,
+        graphEntryStatesOwned,
+        false,
+        true,
+        graphOwnsCellHeadClear
+    );
+}
+
+
+bool RendererRayTracingSystem::renderSurfelGiPhases(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool graphEntryStatesOwned,
+    const bool dispatchAgeFree,
+    const bool dispatchRemaining,
+    const bool graphOwnsCellHeadClear
 ){
     if(!hasSurfelWork())
         return true;
@@ -1064,8 +1240,8 @@ bool RendererRayTracingSystem::renderSurfelGi(
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelFreeListBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelTraceIndirectArgsBuffer.get(), true);
 
-    // Age-free recycles unseen surfels before hash rebuild and spawn.
-    {
+    // Age-free recycles unseen surfels before the graph-owned cell-head reset and hash rebuild.
+    if(dispatchAgeFree){
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelAgeFree, graphics().getDevice(), commandList);
         if(!graphEntryStatesOwned){
             commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
@@ -1082,8 +1258,11 @@ bool RendererRayTracingSystem::renderSurfelGi(
         commandList.dispatch(DivideUp(poolCapacity, static_cast<u32>(NWB_SURFEL_LINEAR_GROUP_SIZE)), 1u, 1u);
     }
 
+    if(!dispatchRemaining)
+        return true;
+
     // Rebuild occupancy before spawning into empty cells.
-    {
+    if(!graphOwnsCellHeadClear){
         Core::Buffer* cellHead = rayTracingState().m_surfelCellHeadBuffer.get();
         commandList.setBufferState(cellHead, Core::ResourceStates::CopyDest);
         commandList.commitBarriers();
@@ -1096,7 +1275,8 @@ bool RendererRayTracingSystem::renderSurfelGi(
             commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
             commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
         }
-        commandList.setBufferState(rayTracingState().m_surfelCellHeadBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        if(!graphOwnsCellHeadClear)
+            commandList.setBufferState(rayTracingState().m_surfelCellHeadBuffer.get(), Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
         Core::ComputeState state;
         state.setPipeline(rayTracingState().m_surfelHashBuildPipeline.get());

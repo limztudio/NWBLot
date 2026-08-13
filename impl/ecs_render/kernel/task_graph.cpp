@@ -4534,13 +4534,17 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     const usize traceGeometryResourceCount,
     const Core::GpuTaskId effectsTask,
     const Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
-    Core::GpuTimingSubmissionTicket& timingTicket
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    Optional<Core::GpuTimingMeasure>& asyncTiming
 ){
     using namespace __hidden_renderer_task_graph;
 
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
+    m_deferredSurfelGiAgeFreeTask = {};
+    m_deferredSurfelGiCellHeadClearTask = {};
+    asyncTiming.reset();
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     if(
@@ -4581,7 +4585,9 @@ bool RendererSystem::declareDeferredSurfelGiTask(
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> ageFreeResourceUses{ scratchArena };
     resourceUses.reserve(28u + traceGeometryResourceCount);
+    ageFreeResourceUses.reserve(4u);
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));
     resourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -4627,6 +4633,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         resourceUses.push_back(WriteUse(resource, state));
         return true;
     };
+    Core::GpuGraphResourceId surfelConstants;
     Core::GpuGraphResourceId surfelPool;
     Core::GpuGraphResourceId surfelCellHead;
     Core::GpuGraphResourceId surfelCounter;
@@ -4656,7 +4663,8 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             m_rayTracingState.m_surfelConstants,
             Name("render.surfel_gi.constants"),
             "Surfel Constants",
-            Core::ResourceStates::ConstantBuffer
+            Core::ResourceStates::ConstantBuffer,
+            &surfelConstants
         )
         && appendOptionalWriteBuffer(
             m_rayTracingState.m_surfelPoolBuffer,
@@ -4747,6 +4755,25 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a deferred surfel-GI dynamic resource domain"));
         return false;
     }
+
+    // A prepared normal Surfel GI frame can split exactly at its per-frame cell-head reset. Keep unavailable
+    // pipelines on the established monolithic compatibility callback; otherwise the graph owns age/free -> reset ->
+    // hash state handoff in one selected Compute packet.
+    const bool graphOwnsSurfelCellHeadClear =
+        hasSurfelWork
+        && surfelConstants.valid()
+        && surfelPool.valid()
+        && surfelCellHead.valid()
+        && surfelCounter.valid()
+        && surfelFreeList.valid()
+        && m_rayTracingState.m_surfelAgeFreePipeline
+        && m_rayTracingState.m_surfelHashBuildPipeline
+        && m_rayTracingState.m_surfelSpawnPipeline
+        && (useHwTrace ? m_rayTracingState.m_surfelTraceHwPipeline : m_rayTracingState.m_surfelTracePipeline)
+        && m_rayTracingState.m_surfelResolvePipeline
+        && m_rayTracingState.m_surfelUpsamplePipeline
+        && m_rayTracingState.m_surfelTraceBuildArgsPipeline
+    ;
 
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
@@ -4877,6 +4904,57 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     surfelGiScheduling.forceSubmissionBoundary = false;
     surfelGiScheduling.allowPacketMerge = true;
     surfelGiScheduling.mergeWithPrevious = true;
+    if(graphOwnsSurfelCellHeadClear){
+        ageFreeResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
+        ageFreeResourceUses.push_back(WriteUse(surfelPool, Core::ResourceStates::UnorderedAccess));
+        ageFreeResourceUses.push_back(WriteUse(surfelCounter, Core::ResourceStates::UnorderedAccess));
+        ageFreeResourceUses.push_back(WriteUse(surfelFreeList, Core::ResourceStates::UnorderedAccess));
+
+        Core::GpuTaskDesc ageFreeDesc;
+        ageFreeDesc
+            .setIdentity(Name("render.surfel_gi.age_free"))
+            .setMarkerLabel("Surfel GI Age Free")
+            .setQueue(ComputeQueueRequest())
+            .setScheduling(surfelGiScheduling)
+            .setDependencies(&surfelGiDependency, 1u)
+            .setExternalDependencies(surfelGiExternalDependencies, surfelGiExternalDependencyCount)
+            .setResourceUses(ageFreeResourceUses.data(), ageFreeResourceUses.size())
+        ;
+        m_deferredSurfelGiAgeFreeTask = m_raytracingSystem.declareSurfelGiAgeFreeTask(
+            m_deferredLightingTaskGraph,
+            ageFreeDesc,
+            deferredTargets,
+            timingTicket,
+            asyncTiming,
+            true
+        );
+        if(!m_deferredSurfelGiAgeFreeTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI age/free graph task"));
+            return false;
+        }
+
+        Core::GpuTaskDesc cellHeadClearDesc;
+        cellHeadClearDesc
+            .setIdentity(Name("render.surfel_gi.cell_head_clear"))
+            .setMarkerLabel("Surfel GI Cell Head Clear")
+            .setQueue(ComputeTransferQueueRequest())
+            .setScheduling(surfelGiScheduling)
+            .setDependencies(&m_deferredSurfelGiAgeFreeTask, 1u)
+        ;
+        m_deferredSurfelGiCellHeadClearTask = m_deferredLightingTaskGraph.addClearBufferTask(
+            cellHeadClearDesc,
+            Core::GpuClearBufferTaskDesc{
+                .destination = surfelCellHead,
+                .clearValue = NWB_SURFEL_CELL_INVALID,
+            }
+        );
+        if(!m_deferredSurfelGiCellHeadClearTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred surfel cell-head clear"));
+            return false;
+        }
+        surfelGiDependency = m_deferredSurfelGiCellHeadClearTask;
+    }
+
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.surfel_gi"))
@@ -4884,7 +4962,10 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         .setQueue(ComputeQueueRequest())
         .setScheduling(surfelGiScheduling)
         .setDependencies(&surfelGiDependency, 1u)
-        .setExternalDependencies(surfelGiExternalDependencies, surfelGiExternalDependencyCount)
+        .setExternalDependencies(
+            graphOwnsSurfelCellHeadClear ? nullptr : surfelGiExternalDependencies,
+            graphOwnsSurfelCellHeadClear ? 0u : surfelGiExternalDependencyCount
+        )
         .setResourceUses(resourceUses.data(), resourceUses.size())
     ;
     m_deferredSurfelGiTask = m_raytracingSystem.declareSurfelGiTask(
@@ -4892,7 +4973,9 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         desc,
         deferredTargets,
         timingTicket,
-        true
+        true,
+        graphOwnsSurfelCellHeadClear,
+        graphOwnsSurfelCellHeadClear ? &asyncTiming : nullptr
     );
     if(!m_deferredSurfelGiTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI graph task"));
@@ -4989,6 +5072,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::GpuTimingSubmissionTicket& shadowVisibilityTimingTicket,
     Core::GpuTimingSubmissionTicket& softwareCausticsTimingTicket,
     Core::GpuTimingSubmissionTicket& surfelGiTimingTicket,
+    Optional<Core::GpuTimingMeasure>& surfelGiAsyncTiming,
     Core::GpuTimingSubmissionTicket& hardwareCausticsTimingTicket,
     Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
     Optional<Core::GpuTimingMeasure>& causticResolveTiming,
@@ -5801,7 +5885,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ),
         effectsTask,
         m_deferredSurfelGiCounterReadbackCompletion,
-        surfelGiTimingTicket
+        surfelGiTimingTicket,
+        surfelGiAsyncTiming
     ))
         return;
 

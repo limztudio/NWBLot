@@ -13,13 +13,13 @@ uploads, graph-owned runtime-skinning dispatch packets, graph-owned opaque mater
 graph-owned opaque CSG receiver/cutter/context/interval streams, graph-owned transparent CSG interval-producer
 streams, graph-owned transparent AVBOIT occupancy, extinction, and accumulation material/CSG streams, and
 graph-owned AVBOIT final G-buffer state handoffs, graph-owned normal Shadow Visibility hardware/software traversal
-entry-state handoffs, graph-owned normal Software Caustics, Hardware Caustics, and Surfel GI initialization/entry-state handoffs, graph-owned CSG clip-buffer entry-state handoffs, and graph-owned current and lagged deferred bindless-selector, ray-trace material-context
+entry-state handoffs, graph-owned normal Software Caustics, Hardware Caustics, and Surfel GI initialization, descriptor-visible entry-state, and prepared-frame age/free-to-cell-head-clear handoffs, graph-owned CSG clip-buffer entry-state handoffs, and graph-owned current and lagged deferred bindless-selector, ray-trace material-context
 selector, caustic
 emission-target, surfel-frame constant, shadow material-context batch and retained hybrid hardware fallback context,
 software-only and hybrid scene-BVH pair uploads and healthy-hybrid frozen software traversal tables, software-only
 and hybrid per-mesh SW-BVH build/refit,
 opaque and healthy hybrid hardware TLAS, and opaque and hybrid hardware BLAS build transactions,
-2026-08-12.
+2026-08-13.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
 semantic dependencies, compile-time queue selection, packet construction, and inter-task barrier planning; native
@@ -122,12 +122,17 @@ can receive an unconditional final sign-off.
   and acceptance endpoint. Direct callers retain native setup and the complete direct resolve/upsample compatibility
   path.
   The normal graph also no longer repeats unchanged world/depth sampled-state setup across each wavelet pass.
-- The normal deferred Surfel GI task now consumes graph-declared descriptor-visible entry states for its sampled
-  world/normal textures, bindless/material/surfel/scene constants, frozen trace inputs and snapshots, lights, its
-  persistent pool/cell/counter/argument/free-list buffers, and half-resolution output. Its callback no longer
-  restates that shared state batch. Direct callers retain native setup by default; the output and cell-head clears,
-  per-pass UAV ordering, and the in-task UAV-to-indirect/ShaderResource transitions remain native task-local
-  ownership.
+- The normal deferred Surfel GI path now consumes graph-declared descriptor-visible entry states for its sampled
+  world/normal textures, bindless/material/surfel/scene constants, frozen trace inputs and snapshots, lights,
+  persistent pool/cell/counter/argument/free-list buffers, and half-resolution output. On a prepared frame with all
+  required GI pipelines, a mergeable `Surfel GI Age Free` task consumes surfel constants as `ConstantBuffer` and the
+  pool/counter/free-list as `UnorderedAccess`; a following graph-owned typed cell-head clear writes
+  `NWB_SURFEL_CELL_INVALID` as `CopyDest`; and the remaining GI callback consumes the compiler-lowered cell-head
+  `CopyDest`-to-`UnorderedAccess` handoff before hash rebuild. The irradiance clear, age/free task, cell-head clear,
+  and remaining GI task must share the existing semantic GI packet, preserving its effects acceptance endpoint and,
+  on Compute, its single async timing interval. The fallback/compatibility route retains the complete native
+  age/free, cell-head-clear, and remaining-GI sequence; direct callers also retain native setup, while per-pass UAV
+  ordering and later in-task UAV-to-indirect/`ShaderResource` transitions remain task-local.
 - The graph-owned Surfel GI initialization task now consumes its four persistent pool/cell/counter/free-list
   `CopyDest` states from its packet prologue before clearing them. Its callback no longer restates that entry batch;
   direct compatibility callers retain native setup by default, while clear contents and acceptance/discard ownership
@@ -362,6 +367,7 @@ can receive an unconditional final sign-off.
 | Graph-owned caustic fifth-wavelet and upsample handoff follow-up: renderer build, task-graph unit, descriptor-buffer smoke, ECS graphics, CTest, and GPU-validation hardware/forced-software caustic A/B | passed; normal Software and Hardware Caustics now retain the fixed fifth wavelet callback in the same selected caustics packet. It reads the fourth ping-pong output as `ShaderResource` and writes the fixed half-resolution upsample input as `UnorderedAccess`; the following timed tail declares that half-resolution input as `ShaderResource`, so the compiler lowers both the fifth wavelet and final wavelet-to-upsample in-packet `UnorderedAccess`-to-`ShaderResource` barriers before bridge-free recording. The tail now contains only the upsample dispatch and timing close. Renderer packet validation rejects a split, while no-producer wavelet/tail callbacks issue no dispatch and preserve the black irradiance clear. Graph tests passed 71/71, ECS graphics passed 18/18, descriptor smoke passed 96 with 11 expected topology skips, and CTest passed 3/3. The debug GPU-validation paired capture reported no failures (`.cozter/out/ab-results/bindless-parity/caustics/20260813_083102/`; max delta 47, mean 0.327890, 13.8906% changed pixels). |
 | Graph-owned caustic resolve-upsample follow-up: renderer build, task-graph unit, descriptor-buffer smoke, ECS graphics, CTest, and GPU-validation hardware/forced-software caustic A/B | passed; normal Software and Hardware Caustics now record their final upsample as its own graph callback after the fixed fifth wavelet. The compiler lowers the exact fifth-wavelet `UnorderedAccess`-to-`ShaderResource` handoff before it records, and a following resource-free callback closes the retained resolve timing interval without a native resource-state bridge. Renderer packet validation preserves one selected caustics packet; no-producer upsample emits no dispatch and the timing callback discards its pending measure, preserving the black irradiance clear. Direct callers retain the full native compatibility path. Graph tests passed 71/71, ECS graphics passed 18/18, descriptor smoke passed 96 with 11 expected topology skips, and CTest passed 3/3. The debug GPU-validation paired capture reported no failures (`.cozter/out/ab-results/bindless-parity/caustics/20260813_084216/`; max delta 47, mean 0.307923, 11.6091% changed pixels). |
 | Graph-owned Surfel GI entry-state follow-up: renderer build, task-graph unit, descriptor-buffer smoke, and CTest | passed; `nwb_ecs_render` rebuilt, graph tests passed 62/62, descriptor smoke passed 85 with 11 expected topology skips, and CTest passed 2/2. Normal deferred Surfel GI now receives descriptor-visible G-buffer, selector/context/scene/surfel constants, frozen software traversal/snapshot/light streams, persistent UAV buffers, and half-resolution output from graph declarations before its callback records. Focused compiler and real-Vulkan getter-only packet tests prove that an incompatible prefix state is lowered before the native bridge-free entry. Direct callers retain their native setup while output/cell clears and in-task UAV/indirect transitions stay local. |
+| Graph-owned Surfel GI age/free and cell-head-clear follow-up: renderer build, task-graph unit, descriptor-buffer smoke, ECS graphics, CTest, and GPU-validation Surfel A/B | passed; the prepared normal GI route orders Age Free -> typed `NWB_SURFEL_CELL_INVALID` cell-head `CopyDest` clear -> remaining GI in the existing selected Compute packet (or Graphics fallback). The unit test proves the explicit edges, prefix state seeds, same-packet ordering, age/free `CopyDest`-to-`ConstantBuffer`/`UnorderedAccess` transitions, and cell-head `CopyDest`-to-`UnorderedAccess` handoff. The real-Vulkan descriptor-buffer test records the age/free and remaining callbacks without a native bridge, captures the built-in clear, and reads back the invalid cell-head value. Graph tests passed 71/71, descriptor smoke passed 96 with 11 expected topology skips, and ECS graphics passed 18/18. The debug GPU-validation paired capture passed with no forbidden runtime or validation log (`.cozter/out/ab-results/bindless-parity/surfel-gi/20260813_093442/`; report-only max delta 13, mean 0.083822, 17.4918% changed pixels). |
 | Graph-owned CSG receiver-surface image-state follow-up: 54 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; opaque G-buffer and prepared-transparent AVBOIT declare all receiver-event-data layers and the receiver-event-count layer as `UnorderedAccess` before their native material thunks record. The normal graph no longer manually transitions that StorageImage pair; unprepared and direct compatibility paths retain their bridge while the remaining CSG image lifecycle stays explicitly out of scope. |
 | Graph-owned CSG interval-peel state follow-up: 54 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; opaque G-buffer and prepared-transparent AVBOIT now declare every cap-back-normal, interval-depth, and interval-ID peel layer as `UnorderedAccess` before their native interval dispatches. The direct first-peel state bridge is removed only for those graph callers; compatibility paths and the native combine-stage UAV barrier remain intact. |
 | Graph-owned CSG receiver-span output state follow-up: 54 task-graph, 18 ECS graphics, descriptor-buffer smoke, plus opaque and early/mid/late transparent CSG captures | passed; opaque G-buffer and prepared-transparent AVBOIT now declare every receiver-span-data layer and the receiver-span-count layer as `UnorderedAccess` before their native span dispatches. The graph removes only output setup; native event-image and span-to-combine UAV fences remain intact, as do direct compatibility paths. |
@@ -428,7 +434,7 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    The transparent AVBOIT interval producer, occupancy, extinction, and
    accumulation phases now freeze and publish their own per-write-point material/CSG streams, preserving the shared
    interval sample state across the low-resolution raster passes. Current and lagged deferred bindless selectors,
-   the ray-trace material-context selector, normal Shadow Visibility, Software Caustics, Hardware Caustics, and Surfel GI initialization/descriptor-visible entry states, caustic
+   the ray-trace material-context selector, normal Shadow Visibility, Software Caustics, Hardware Caustics, and Surfel GI initialization/descriptor-visible entry states plus the prepared-frame age/free-to-cell-head-clear-to-remaining-GI handoff, caustic
    emission-target stream, surfel-frame constants, hardware-only,
    forced-software, and healthy hybrid shadow material-context batches plus their retained immutable hardware
    fallback context, software-only and hybrid scene-BVH pairs

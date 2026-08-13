@@ -154,6 +154,12 @@ using PreparedSceneSwBvhMeshVector = Vector<
 >;
 
 
+namespace __hidden_surfel_gi_task{
+    struct SurfelGiAgeFreeGraphTask;
+    struct SurfelGiGraphTask;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -504,15 +510,24 @@ public:
     // Clear ownership commits only after the producer packet accepts.
     void finalizeSurfelResourceInitialization();
     void discardSurfelResourceInitialization();
+    [[nodiscard]] Core::GpuTaskId declareSurfelGiAgeFreeTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        Optional<Core::GpuTimingMeasure>& asyncTiming,
+        bool graphEntryStatesOwned = false
+    );
     [[nodiscard]] Core::GpuTaskId declareSurfelGiTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
         Core::GpuTimingSubmissionTicket& timingTicket,
-        bool graphEntryStatesOwned = false
+        bool graphEntryStatesOwned = false,
+        bool graphOwnsCellHeadClear = false,
+        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr
     );
-    // The shared deferred graph supplies the descriptor-visible surfel entry states. Direct compatibility callers
-    // retain native setup by leaving this false.
+    // Direct compatibility callers retain the complete native age/free, cell-head-clear, and remaining-GI sequence.
     [[nodiscard]] bool renderSurfelGi(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -544,6 +559,8 @@ public:
 
 private:
     struct SurfelGiInitializationGraphTask;
+    friend struct __hidden_surfel_gi_task::SurfelGiAgeFreeGraphTask;
+    friend struct __hidden_surfel_gi_task::SurfelGiGraphTask;
     enum class PreparedShadowMaterialContextRoute : u8{
         None,
         Hardware,
@@ -648,6 +665,25 @@ private:
     [[nodiscard]] bool initializeSurfelResources(
         Core::CommandList& commandList,
         bool graphEntryStatesOwned = false
+    );
+    [[nodiscard]] bool renderSurfelGiAgeFree(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned = false
+    );
+    [[nodiscard]] bool renderSurfelGiAfterAgeFree(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned = false,
+        bool graphOwnsCellHeadClear = false
+    );
+    [[nodiscard]] bool renderSurfelGiPhases(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool graphEntryStatesOwned,
+        bool dispatchAgeFree,
+        bool dispatchRemaining,
+        bool graphOwnsCellHeadClear
     );
     [[nodiscard]] bool prepareMeshBlasResources(MeshResources& meshResources);
     [[nodiscard]] bool buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources);

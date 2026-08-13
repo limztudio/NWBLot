@@ -264,6 +264,8 @@ void RendererSystem::invalidateResources(){
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
+    m_deferredSurfelGiAgeFreeTask = {};
+    m_deferredSurfelGiCellHeadClearTask = {};
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
@@ -534,6 +536,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
+    m_deferredSurfelGiAgeFreeTask = {};
+    m_deferredSurfelGiCellHeadClearTask = {};
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
@@ -795,6 +799,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingSubmissionTicket shadowVisibilityTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket softwareCausticsTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket surfelGiTimingTicket(m_graphics.gpuTiming());
+    // Age/free begins this interval and the remaining GI callback closes it after the graph-owned cell-head clear.
+    Optional<Core::GpuTimingMeasure> surfelGiAsyncTiming;
     Core::GpuTimingSubmissionTicket hardwareCausticsTimingTicket(m_graphics.gpuTiming());
     // A warm temporal decay starts this interval in its graph task and the selected photon producer closes it.
     Optional<Core::GpuTimingMeasure> causticPhotonTiming;
@@ -841,6 +847,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         shadowVisibilityTimingTicket,
         softwareCausticsTimingTicket,
         surfelGiTimingTicket,
+        surfelGiAsyncTiming,
         hardwareCausticsTimingTicket,
         causticPhotonTiming,
         causticResolveTiming,
@@ -876,6 +883,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             shadowVisibilityTimingTicket,
             softwareCausticsTimingTicket,
             surfelGiTimingTicket,
+            surfelGiAsyncTiming,
             hardwareCausticsTimingTicket,
             causticPhotonTiming,
             causticResolveTiming,
@@ -1291,6 +1299,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId surfelGiIrradianceClearPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredSurfelGiIrradianceClearTask
     );
+    const Core::GpuSubmissionPacketId surfelGiAgeFreePacket = m_deferredSurfelGiAgeFreeTask.valid()
+        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredSurfelGiAgeFreeTask)
+        : Core::GpuSubmissionPacketId{}
+    ;
+    const Core::GpuSubmissionPacketId surfelGiCellHeadClearPacket = m_deferredSurfelGiCellHeadClearTask.valid()
+        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredSurfelGiCellHeadClearTask)
+        : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuSubmissionPacketId surfelGiPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredSurfelGiTask
     );
@@ -1398,6 +1414,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && surfelGiIrradianceClearPacket.valid()
         && surfelGiPacket.valid()
         && surfelGiIrradianceClearPacket == surfelGiPacket
+    ;
+    // A prepared Surfel GI frame splits age/free from the remaining passes only to make its per-frame cell-head
+    // reset graph-owned. All three callbacks must still share the semantic GI packet, including one async timing
+    // interval and the existing effects acceptance endpoint. A missing pair denotes the compatibility callback.
+    const bool surfelGiCellHeadClearMergedIntoGiPacket =
+        (!m_deferredSurfelGiAgeFreeTask.valid() && !m_deferredSurfelGiCellHeadClearTask.valid())
+        || (
+            m_deferredSurfelGiAgeFreeTask.valid()
+            && m_deferredSurfelGiCellHeadClearTask.valid()
+            && surfelGiAgeFreePacket.valid()
+            && surfelGiCellHeadClearPacket.valid()
+            && surfelGiPacket.valid()
+            && surfelGiAgeFreePacket == surfelGiPacket
+            && surfelGiCellHeadClearPacket == surfelGiPacket
+        )
     ;
     // Both caustic routes retain a black output on a no-producer frame. Keep the typed clear in the selected
     // producer packet so effects timing, acceptance, and the lagged-history wait still protect the first write.
@@ -1660,6 +1691,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredSurfelGiTask.valid()
         || !m_deferredSurfelGiIrradianceClearTask.valid()
         || !surfelGiOutputClearMergedIntoGiPacket
+        || !surfelGiCellHeadClearMergedIntoGiPacket
         || !surfelGiPacket.valid()
         || !surfelGiQueue
         || (m_deferredSurfelGiSnapshotCopyTask.valid() && (

@@ -4545,6 +4545,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     m_deferredSurfelGiAgeFreeTask = {};
     m_deferredSurfelGiCellHeadClearTask = {};
     m_deferredSurfelGiHashBuildTask = {};
+    m_deferredSurfelGiSpawnTask = {};
     asyncTiming.reset();
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
@@ -4588,9 +4589,11 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> ageFreeResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hashBuildResourceUses{ scratchArena };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> spawnResourceUses{ scratchArena };
     resourceUses.reserve(28u + traceGeometryResourceCount);
     ageFreeResourceUses.reserve(4u);
     hashBuildResourceUses.reserve(3u);
+    spawnResourceUses.reserve(7u);
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));
     resourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -4759,8 +4762,8 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         return false;
     }
 
-    // A prepared normal Surfel GI frame can split its age/free, per-frame cell-head reset, and hash build. Keep
-    // unavailable pipelines on the established monolithic compatibility callback; otherwise the graph owns each
+    // A prepared normal Surfel GI frame can split its age/free, per-frame cell-head reset, hash build, and Spawn.
+    // Keep unavailable pipelines on the established monolithic compatibility callback; otherwise the graph owns each
     // handoff in one selected Compute packet.
     const bool graphOwnsSurfelCellHeadClear =
         hasSurfelWork
@@ -4980,7 +4983,36 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI hash-build graph task"));
             return false;
         }
-        surfelGiDependency = m_deferredSurfelGiHashBuildTask;
+
+        spawnResourceUses.push_back(ReadUse(worldPosition));
+        spawnResourceUses.push_back(ReadUse(normal));
+        spawnResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
+        spawnResourceUses.push_back(ReadWriteUse(surfelPool, Core::ResourceStates::UnorderedAccess));
+        spawnResourceUses.push_back(ReadWriteUse(surfelCellHead, Core::ResourceStates::UnorderedAccess));
+        spawnResourceUses.push_back(ReadWriteUse(surfelCounter, Core::ResourceStates::UnorderedAccess));
+        spawnResourceUses.push_back(ReadWriteUse(surfelFreeList, Core::ResourceStates::UnorderedAccess));
+        Core::GpuTaskDesc spawnDesc;
+        spawnDesc
+            .setIdentity(Name("render.surfel_gi.spawn"))
+            .setMarkerLabel("Surfel GI Spawn")
+            .setQueue(ComputeQueueRequest())
+            .setScheduling(surfelGiScheduling)
+            .setDependencies(&m_deferredSurfelGiHashBuildTask, 1u)
+            .setResourceUses(spawnResourceUses.data(), spawnResourceUses.size())
+        ;
+        m_deferredSurfelGiSpawnTask = m_raytracingSystem.declareSurfelGiSpawnTask(
+            m_deferredLightingTaskGraph,
+            spawnDesc,
+            deferredTargets,
+            timingTicket,
+            &asyncTiming,
+            true
+        );
+        if(!m_deferredSurfelGiSpawnTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI spawn graph task"));
+            return false;
+        }
+        surfelGiDependency = m_deferredSurfelGiSpawnTask;
     }
 
     Core::GpuTaskDesc desc;
@@ -5002,6 +5034,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         deferredTargets,
         timingTicket,
         true,
+        graphOwnsSurfelCellHeadClear,
         graphOwnsSurfelCellHeadClear,
         graphOwnsSurfelCellHeadClear,
         graphOwnsSurfelCellHeadClear ? &asyncTiming : nullptr
@@ -5153,6 +5186,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredSurfelGiAgeFreeTask = {};
     m_deferredSurfelGiCellHeadClearTask = {};
     m_deferredSurfelGiHashBuildTask = {};
+    m_deferredSurfelGiSpawnTask = {};
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};

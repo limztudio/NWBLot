@@ -2012,8 +2012,13 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         commandList.dispatch(DivideUp(targets.width, groupSize), DivideUp(targets.height, groupSize), 1u);
     }
 
-    commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.commitBarriers();
+    // The prepared graph declares the actual downstream consumer: live Lighting samples the output, while the
+    // lagged route copies it. Keep the compatibility return layout for direct callers, but let graph lowering own
+    // the precise UAV-to-SRV or UAV-to-CopySource handoff.
+    if(!graphOwnsResolve){
+        commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.commitBarriers();
+    }
 
     // The graph-owned late copy publishes its token only after Transfer/Compute/Graphics accepts. This pass only
     // consumes completed diagnostics; resource-state transitions and native copy recording live in that graph task.

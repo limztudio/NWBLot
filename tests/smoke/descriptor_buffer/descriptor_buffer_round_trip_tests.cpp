@@ -1526,6 +1526,30 @@ struct NativePacketSurfelGiUpsampleProbeTask{
 };
 
 
+// Lighting observes the final irradiance state before its thunk could restore a native compatibility layout.
+struct NativePacketSurfelGiLightingProbeTask{
+    struct Payload{
+        Texture* irradiance = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        const bool ready =
+            payload.irradiance
+            && commandList.getTextureSubresourceState(payload.irradiance, 0u, 0u) == ResourceStates::ShaderResource
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
 // CSG clip/cap/interval callbacks receive their receiver/cutter SRVs and clip/sample CBVs from graph declarations.
 // This probe intentionally only reads the command-list tracker before any renderer-native state setup can run.
 struct NativePacketCsgClipBufferEntryProbeTask{
@@ -5865,7 +5889,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
 // Surfel GI's typed output clear, age/free, per-frame cell-head clear, Hash Build, Spawn, trace-build-args, Trace,
 // and Resolve now receive their states from the graph. The test intentionally has no renderer-native state setup:
 // Hash Build observes the typed clear transition, Args observes Spawn's counter, Trace receives indirect arguments,
-// Resolve receives the compiler-lowered live-field shader-resource state, and Upsample receives Resolve's result.
+// Resolve receives the compiler-lowered live-field shader-resource state, Upsample receives Resolve's result, and
+// the following Lighting probe observes the compiler-owned final irradiance return state.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
     constexpr u32 shaderBufferCount = NativePacketSurfelGiResolveProbeTask::s_ShaderBufferCount;
@@ -6339,6 +6364,28 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     );
     ASSERT_TRUE(surfelTask.valid());
 
+    const GpuTaskResourceUse lightingUses[] = {
+        { .resource = irradianceResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
+    };
+    GpuTaskDesc lightingDesc;
+    lightingDesc
+        .setIdentity(Name("tests/descriptor_buffer/graph_owned_surfel_gi_lighting"))
+        .setMarkerLabel("Deferred Lighting")
+        .setQueue(computeQueue)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&surfelTask, 1u)
+        .setResourceUses(lightingUses, LengthOf(lightingUses))
+    ;
+    bool lightingRecorded = false;
+    const GpuTaskId lightingTask = graph.addTask<NativePacketSurfelGiLightingProbeTask>(
+        lightingDesc,
+        NativePacketSurfelGiLightingProbeTask::Payload{
+            .irradiance = uavTextures[0u].get(),
+            .recorded = &lightingRecorded,
+        }
+    );
+    ASSERT_TRUE(lightingTask.valid());
+
     const GpuPhysicalQueueInfo queue{
         .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
@@ -6363,7 +6410,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     GpuTaskGraphCompileOptions compileOptions;
     compileOptions.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierSafe;
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions));
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
     const GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefixTask);
     const GpuSubmissionPacketId clearPacket = compiledGraph.packetForTask(outputClearTask);
     const GpuSubmissionPacketId ageFreePacket = compiledGraph.packetForTask(ageFreeTask);
@@ -6374,6 +6421,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     const GpuSubmissionPacketId tracePacket = compiledGraph.packetForTask(traceTask);
     const GpuSubmissionPacketId resolvePacket = compiledGraph.packetForTask(resolveTask);
     const GpuSubmissionPacketId surfelPacket = compiledGraph.packetForTask(surfelTask);
+    const GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lightingTask);
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(clearPacket.valid());
     ASSERT_TRUE(ageFreePacket.valid());
@@ -6384,6 +6432,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     ASSERT_TRUE(tracePacket.valid());
     ASSERT_TRUE(resolvePacket.valid());
     ASSERT_TRUE(surfelPacket.valid());
+    ASSERT_TRUE(lightingPacket.valid());
     EXPECT_EQ(clearPacket, surfelPacket);
     EXPECT_EQ(ageFreePacket, surfelPacket);
     EXPECT_EQ(cellHeadClearPacket, surfelPacket);
@@ -6392,6 +6441,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     EXPECT_EQ(traceBuildArgsPacket, surfelPacket);
     EXPECT_EQ(tracePacket, surfelPacket);
     EXPECT_EQ(resolvePacket, surfelPacket);
+    EXPECT_NE(lightingPacket, surfelPacket);
     EXPECT_TRUE(analysis.hasExplicitEdge(ageFreeTask, cellHeadClearTask));
     EXPECT_TRUE(analysis.hasExplicitEdge(cellHeadClearTask, hashBuildTask));
     EXPECT_TRUE(analysis.hasExplicitEdge(hashBuildTask, spawnTask));
@@ -6399,6 +6449,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     EXPECT_TRUE(analysis.hasExplicitEdge(traceBuildArgsTask, traceTask));
     EXPECT_TRUE(analysis.hasExplicitEdge(traceTask, resolveTask));
     EXPECT_TRUE(analysis.hasExplicitEdge(resolveTask, surfelTask));
+    EXPECT_TRUE(analysis.hasExplicitEdge(surfelTask, lightingTask));
     ASSERT_NE(compiledGraph.packetTasks(surfelPacket), nullptr);
     ASSERT_EQ(compiledGraph.packet(surfelPacket).taskCount, 9u);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[0u], outputClearTask);
@@ -6578,6 +6629,25 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     EXPECT_TRUE(hasSurfelTransition(irradianceResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
     ASSERT_EQ(compiledGraph.packet(surfelPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(surfelPacket)[0u].producer, prefixPacket);
+    const GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lightingTask);
+    ASSERT_NE(compiledLighting, nullptr);
+    const GpuCompiledBarrier* const lightingBarriers = compiledGraph.taskPrologueBarriers(lightingTask);
+    ASSERT_NE(lightingBarriers, nullptr);
+    bool lightingTransitionsIrradiance = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledLighting->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = lightingBarriers[barrierIndex];
+        lightingTransitionsIrradiance = lightingTransitionsIrradiance
+            || (
+                barrier.type == GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == irradianceResource
+                && barrier.before == ResourceStates::UnorderedAccess
+                && barrier.after == ResourceStates::ShaderResource
+            )
+        ;
+    }
+    EXPECT_TRUE(lightingTransitionsIrradiance);
+    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(lightingPacket)[0u].producer, surfelPacket);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuCommandIrCapture commandIrCapture(DescriptorBufferRoundTripTest::arena());
@@ -6601,6 +6671,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     EXPECT_TRUE(traceRecorded);
     EXPECT_TRUE(resolveRecorded);
     EXPECT_TRUE(surfelRecorded);
+    EXPECT_TRUE(lightingRecorded);
     ASSERT_EQ(commandIrCapture.recordCount(), 2u);
     const GpuCommandIrBuiltinTaskRecord* const outputClearCapture = commandIrCapture.recordAt(0u);
     const GpuCommandIrBuiltinTaskRecord* const cellHeadClearCapture = commandIrCapture.recordAt(1u);

@@ -6361,7 +6361,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
 
 // Surfel GI starts after the shared graphics prefix has produced G-buffer, descriptor, traversal, and persistent
 // resource data. Age/free, the graph-owned cell-head reset, Hash Build, Spawn, trace-build-args, Trace, and Resolve
-// share one Compute packet; Upsample must inherit the compiler-owned half-irradiance result without a native bridge.
+// share one Compute packet; Upsample must inherit the compiler-owned half-irradiance result, and Lighting must own
+// the final irradiance UAV-to-SRV handoff without a native bridge.
 TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -6731,6 +6732,21 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     const Graphics::GpuTaskId surfelGi = graph.addTask(surfelDesc);
     ASSERT_TRUE(surfelGi.valid());
 
+    const Graphics::GpuTaskResourceUse lightingUses[] = {
+        { .resource = irradiance, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+    };
+    Graphics::GpuTaskDesc lightingDesc;
+    lightingDesc
+        .setIdentity(Name("tests/task_graph/graph_owned_surfel_gi_lighting"))
+        .setMarkerLabel("Deferred Lighting")
+        .setQueue(computeRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&surfelGi, 1u)
+        .setResourceUses(lightingUses, LengthOf(lightingUses))
+    ;
+    const Graphics::GpuTaskId lighting = graph.addTask(lightingDesc);
+    ASSERT_TRUE(lighting.valid());
+
     const Graphics::GpuPhysicalQueueInfo queues[] = {
         GraphicsQueue(),
         DedicatedComputeQueue(),
@@ -6752,6 +6768,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     EXPECT_TRUE(analysis.hasExplicitEdge(traceBuildArgs, trace));
     EXPECT_TRUE(analysis.hasExplicitEdge(trace, resolve));
     EXPECT_TRUE(analysis.hasExplicitEdge(resolve, surfelGi));
+    EXPECT_TRUE(analysis.hasExplicitEdge(surfelGi, lighting));
     ASSERT_TRUE(HasInferredHazard(
         analysis,
         prefix,
@@ -6823,6 +6840,13 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
         irradianceHalf,
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
+    ASSERT_TRUE(HasInferredHazard(
+        analysis,
+        surfelGi,
+        lighting,
+        irradiance,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
 
     const Graphics::GpuTaskQueueAssignment* const clearAssignment = assignments.find(outputClear);
     ASSERT_NE(clearAssignment, nullptr);
@@ -6830,6 +6854,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     const Graphics::GpuTaskQueueAssignment* const surfelAssignment = assignments.find(surfelGi);
     ASSERT_NE(surfelAssignment, nullptr);
     EXPECT_EQ(surfelAssignment->queueClass, Graphics::CommandQueue::Compute);
+    const Graphics::GpuTaskQueueAssignment* const lightingAssignment = assignments.find(lighting);
+    ASSERT_NE(lightingAssignment, nullptr);
+    EXPECT_EQ(lightingAssignment->queueClass, Graphics::CommandQueue::Compute);
     const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
     const Graphics::GpuSubmissionPacketId clearPacket = compiledGraph.packetForTask(outputClear);
     const Graphics::GpuSubmissionPacketId ageFreePacket = compiledGraph.packetForTask(ageFree);
@@ -6840,6 +6867,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     const Graphics::GpuSubmissionPacketId tracePacket = compiledGraph.packetForTask(trace);
     const Graphics::GpuSubmissionPacketId resolvePacket = compiledGraph.packetForTask(resolve);
     const Graphics::GpuSubmissionPacketId surfelPacket = compiledGraph.packetForTask(surfelGi);
+    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(clearPacket.valid());
     ASSERT_TRUE(ageFreePacket.valid());
@@ -6850,6 +6878,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     ASSERT_TRUE(tracePacket.valid());
     ASSERT_TRUE(resolvePacket.valid());
     ASSERT_TRUE(surfelPacket.valid());
+    ASSERT_TRUE(lightingPacket.valid());
     EXPECT_NE(prefixPacket, surfelPacket);
     EXPECT_EQ(clearPacket, surfelPacket);
     EXPECT_EQ(ageFreePacket, surfelPacket);
@@ -6859,7 +6888,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     EXPECT_EQ(traceBuildArgsPacket, surfelPacket);
     EXPECT_EQ(tracePacket, surfelPacket);
     EXPECT_EQ(resolvePacket, surfelPacket);
-    EXPECT_EQ(compiledGraph.packetCount(), 2u);
+    EXPECT_NE(lightingPacket, surfelPacket);
+    EXPECT_EQ(compiledGraph.packetCount(), 3u);
     ASSERT_NE(compiledGraph.packetTasks(surfelPacket), nullptr);
     ASSERT_EQ(compiledGraph.packet(surfelPacket).taskCount, 9u);
     EXPECT_EQ(compiledGraph.packetTasks(surfelPacket)[0u], outputClear);
@@ -7161,6 +7191,25 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     ));
     ASSERT_EQ(compiledGraph.packet(surfelPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(surfelPacket)[0u].producer, prefixPacket);
+    const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting);
+    ASSERT_NE(compiledLighting, nullptr);
+    const Graphics::GpuCompiledBarrier* const lightingBarriers = compiledGraph.taskPrologueBarriers(lighting);
+    ASSERT_NE(lightingBarriers, nullptr);
+    bool lightingTransitionsIrradiance = false;
+    for(usize barrierIndex = 0u; barrierIndex < compiledLighting->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = lightingBarriers[barrierIndex];
+        lightingTransitionsIrradiance = lightingTransitionsIrradiance
+            || (
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == irradiance
+                && barrier.before == Graphics::ResourceStates::UnorderedAccess
+                && barrier.after == Graphics::ResourceStates::ShaderResource
+            )
+        ;
+    }
+    EXPECT_TRUE(lightingTransitionsIrradiance);
+    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(lightingPacket)[0u].producer, surfelPacket);
 }
 
 
@@ -10505,6 +10554,33 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     }
     EXPECT_TRUE(historyCopyWaitsForPresent);
     EXPECT_EQ(compiledGraph.packet(historyCopyPacket).externalDependencyCount, 0u);
+    const Graphics::GpuCompiledTask* const compiledHistoryCopy = compiledGraph.findTask(historyCopy);
+    ASSERT_NE(compiledHistoryCopy, nullptr);
+    const Graphics::GpuCompiledBarrier* const historyCopyBarriers = compiledGraph.taskPrologueBarriers(historyCopy);
+    ASSERT_NE(historyCopyBarriers, nullptr);
+    bool historyCopyTransitionsCurrentIrradiance = false;
+    bool historyCopyTransitionsHistoryIrradiance = false;
+    for(usize index = 0u; index < compiledHistoryCopy->prologueBarrierCount; ++index){
+        const Graphics::GpuCompiledBarrier& barrier = historyCopyBarriers[index];
+        historyCopyTransitionsCurrentIrradiance = historyCopyTransitionsCurrentIrradiance
+            || (
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == currentIrradiance
+                && barrier.before == Graphics::ResourceStates::UnorderedAccess
+                && barrier.after == Graphics::ResourceStates::CopySource
+            )
+        ;
+        historyCopyTransitionsHistoryIrradiance = historyCopyTransitionsHistoryIrradiance
+            || (
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == historyIrradiance
+                && barrier.before == Graphics::ResourceStates::ShaderResource
+                && barrier.after == Graphics::ResourceStates::CopyDest
+            )
+        ;
+    }
+    EXPECT_TRUE(historyCopyTransitionsCurrentIrradiance);
+    EXPECT_TRUE(historyCopyTransitionsHistoryIrradiance);
 }
 
 

@@ -202,10 +202,24 @@ public:
         bool sceneTlasBuildGraphOwned = false,
         bool meshBlasBuildsGraphOwned = false,
         bool meshBlasGeometryBuildInputStatesGraphOwned = false,
+        bool meshSwBvhBuildsGraphOwned = false,
+        bool deferHybridSoftwareTail = false
+    );
+    // The hybrid HW-to-SW continuation stays in the accepting Shadow Preparation packet, but records after the
+    // frozen hardware build so a graph callback can eventually own that explicit handoff. Direct and unsplit
+    // callers continue through recordPreflightShadowVisibilityResources without deferring this tail.
+    [[nodiscard]] bool recordPreflightHybridSoftwareTail(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool hardwareBackendReady,
+        bool surfelFrameConstantsGraphOwned = false,
+        bool shadowMaterialContextBatchGraphOwned = false,
+        bool sceneBvhBatchGraphOwned = false,
         bool meshSwBvhBuildsGraphOwned = false
     );
     [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept;
     [[nodiscard]] bool shadowVisibilitySoftwareResourcesPreflighted()const noexcept;
+    [[nodiscard]] bool hybridShadowVisibilityResourcesPreflighted()const noexcept;
     void discardPreflightShadowVisibilityResources()noexcept;
     // These are retained handles for the current frozen trace plan. The graph imports each physical buffer once and
     // uses the shared IDs for every packet that manually stages it.

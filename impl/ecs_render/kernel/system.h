@@ -404,6 +404,9 @@ private:
     // both history acceptance and the external completion wait for the prior-frame images.
     Core::GpuTaskId m_deferredLaggedLightingHistorySlotsUploadTask;
     Core::GpuTaskId m_deferredShadowPrepareTask;
+    // Hybrid HW-to-SW preparation retains its opaque fallback inside the accepting Shadow Preparation packet, but
+    // records the software continuation as a separate packet-local callback so its bridge can be lowered next.
+    Core::GpuTaskId m_deferredShadowPrepareHybridSoftwareTailTask;
     // Prepared TLAS/BLAS builds record in Shadow Preparation, while this adjacent state-only callback publishes
     // their descriptor-visible AccelStructRead boundaries. It must remain in the same first Graphics packet.
     Core::GpuTaskId m_deferredShadowPrepareAccelStructFinalizeTask;

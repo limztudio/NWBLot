@@ -82,6 +82,12 @@ bool RendererRayTracingSystem::shadowVisibilitySoftwareResourcesPreflighted()con
     ;
 }
 
+bool RendererRayTracingSystem::hybridShadowVisibilityResourcesPreflighted()const noexcept{
+    return m_shadowVisibilityHardwareSupported
+        && m_shadowVisibilityHybridResourcesPreflighted
+    ;
+}
+
 void RendererRayTracingSystem::clearPreparedShadowMaterialContext()noexcept{
     m_preparedShadowInstanceMaterialBytes.clear();
     m_preparedShadowInstanceBytes.clear();
@@ -1552,7 +1558,8 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     const bool sceneTlasBuildGraphOwned,
     const bool meshBlasBuildsGraphOwned,
     const bool meshBlasGeometryBuildInputStatesGraphOwned,
-    const bool meshSwBvhBuildsGraphOwned
+    const bool meshSwBvhBuildsGraphOwned,
+    const bool deferHybridSoftwareTail
 ){
     outBackendReady = false;
     if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
@@ -1669,158 +1676,17 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
         }
 
         outBackendReady = m_shadowVisibilityBackendPipelinePreflighted;
-        rayTracingState().m_hybridTransparentShadowReady = false;
-        bool hybridMeshSwBvhBuildRecorded = false;
-        bool hybridSceneBvhBuildRecorded = false;
-        if(
-            outBackendReady
-            && m_shadowVisibilityHybridResourcesPreflighted
-            // Revalidate a frozen hybrid payload even when an intervening material edit removed its transparency.
-            // Otherwise the graph upload could survive without either the SW consumer or a direct HW restoration.
-            && (rayTracingState().m_sceneHasTransparentOccluder || hybridSoftwareMaterialContextGraphOwned)
-        ){
-            const bool meshSwBvhReady = meshSwBvhBuildsGraphOwned
-                // The optional hybrid SW build can consume position/index immediately after the preceding BLAS
-                // build changed them to AccelStructBuildInput. Its in-callback handoff stays native.
-                ? recordPreparedMeshSwBvhBuilds(commandList, false)
-                : buildPendingMeshSwBvh(commandList)
-            ;
-            hybridMeshSwBvhBuildRecorded = meshSwBvhBuildsGraphOwned && meshSwBvhReady;
-            if(!meshSwBvhReady){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent shadow per-mesh software BVH build failed"));
-                // This failure is deliberately non-fatal: HW opaque shadows still submit.  Drop the frozen plan so
-                // the accepted packet cannot commit a topology build that did not record.
-                if(meshSwBvhBuildsGraphOwned)
-                    clearPreparedMeshSwBvhBuilds();
-            }
-            // The direct compatibility loop historically continues gathering the scene after an unrelated mesh
-            // build miss. Preserve that best-effort behavior; only a failed frozen mesh plan is all-or-nothing
-            // because its scene gather may otherwise observe topology that never recorded.
-            const bool canRecordSceneSwBvh = !meshSwBvhBuildsGraphOwned || meshSwBvhReady;
-            // A complete healthy hybrid retains both graph-upload batches plus the exact distinct-mesh descriptor
-            // table. Record it directly instead of rebuilding CPU BVH/material data. A source-version or resource
-            // miss drops to the established direct revalidation path before deciding the optional-tail fallback.
-            const bool hybridSceneTraversalGraphOwned =
-                canRecordSceneSwBvh
-                && shadowMaterialContextBatchGraphOwned
-                && sceneBvhBatchGraphOwned
-                && m_shadowVisibilityHybridPipelinePreflighted
-            ;
-            bool forceHybridSceneTraversalFallback = false;
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
-            forceHybridSceneTraversalFallback =
-                hybridSceneTraversalGraphOwned
-                && (
-                    m_forceHybridSceneTraversalFallbackForTesting
-                    || m_forceHybridSceneTraversalFallbackEveryFrameForTesting
-                )
-            ;
-            if(forceHybridSceneTraversalFallback){
-                const bool oneShotFallback = m_forceHybridSceneTraversalFallbackForTesting;
-                m_forceHybridSceneTraversalFallbackForTesting = false;
-                if(oneShotFallback)
-                    m_expectHybridSceneTraversalRecoveryForTesting = true;
-                if(oneShotFallback || !m_reportedHybridSceneTraversalFallbackLoopForTesting){
-                    m_reportedHybridSceneTraversalFallbackLoopForTesting = true;
-                    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test forced hybrid software traversal fallback"));
-                }
-            }
-#endif
-            bool sceneSwBvhReady = !forceHybridSceneTraversalFallback && canRecordSceneSwBvh && (
-                hybridSceneTraversalGraphOwned
-                    ? recordPreparedSceneSwBvhTraversal()
-                    : buildSceneSwBvh(
-                        commandList,
-                        scratchArena,
-                        shadowMaterialContextBatchGraphOwned,
-                        sceneBvhBatchGraphOwned,
-                        meshSwBvhBuildsGraphOwned
-                    )
-            );
-            if(
-                !sceneSwBvhReady
-                && hybridSceneTraversalGraphOwned
-                && !forceHybridSceneTraversalFallback
-            ){
-                sceneSwBvhReady = buildSceneSwBvh(
-                    commandList,
-                    scratchArena,
-                    shadowMaterialContextBatchGraphOwned,
-                    sceneBvhBatchGraphOwned,
-                    meshSwBvhBuildsGraphOwned
-                );
-            }
-            hybridSceneBvhBuildRecorded = sceneBvhBatchGraphOwned && sceneSwBvhReady;
-            const bool swReady =
-                sceneSwBvhReady
-                && rayTracingState().m_swShadowMeshCount > 0u
-                && rayTracingState().m_sceneBvhInstanceCount > 0u
-                && m_shadowVisibilityHybridPipelinePreflighted
-            ;
-            if(swReady){
-                rayTracingState().m_hybridTransparentShadowReady = true;
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
-                if(m_expectHybridSceneTraversalRecoveryForTesting){
-                    m_expectHybridSceneTraversalRecoveryForTesting = false;
-                    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test hybrid software traversal recovered"));
-                }
-#endif
-            }
-            else{
-                bool reportHybridTraversalFailure = true;
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
-                if(m_forceHybridSceneTraversalFallbackEveryFrameForTesting){
-                    reportHybridTraversalFailure = !m_reportedHybridSceneTraversalFallbackLoopFailureForTesting;
-                    m_reportedHybridSceneTraversalFallbackLoopFailureForTesting = true;
-                }
-#endif
-                if(reportHybridTraversalFailure)
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow recording failed; transparent shadows absent this frame"));
-                if(hybridSoftwareMaterialContextGraphOwned){
-                    // The immutable graph triple has already recorded in this packet. Replace it with the current
-                    // hardware descriptor-slot context before accepting the opaque fallback; otherwise caustics or
-                    // HW surfels could observe stale SW node-slot data. A failed restoration still preserves opaque
-                    // shadows, but disables every material-context consumer for this frame. Prefer the immutable
-                    // HW snapshot retained before the SW context replaced it; only a stale snapshot regathers via
-                    // the established direct compatibility retry.
-                    discardHybridGraphMaterialContext();
-                    const bool restoredFrozenHardwareContext =
-                        recordPreparedHybridHardwareMaterialContextFallback(commandList);
-                    const bool restoredDirectHardwareContext =
-                        !restoredFrozenHardwareContext
-                        && buildSceneTlas(commandList, scratchArena, false);
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
-                    if(m_expectHybridHardwareFallbackDirectRetryForTesting){
-                        m_expectHybridHardwareFallbackDirectRetryForTesting = false;
-                        if(restoredDirectHardwareContext)
-                            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test hybrid hardware material fallback retried directly"));
-                    }
-#endif
-                    if(!restoredFrozenHardwareContext && !restoredDirectHardwareContext){
-                        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid hardware material-context fallback failed; caustics and surfel GI are disabled this frame"));
-                        disableHybridMaterialConsumers();
-                    }
-                }
-            }
-        }
-        // A graph-owned hybrid plan may exist only for the optional software tail.  It is eligible for the common
-        // acceptance callback exactly when its commands were emitted; all other HW-only early-outs retain their
-        // native fallback without falsely advancing the SW-BVH CPU cache.
-        if(meshSwBvhBuildsGraphOwned && !hybridMeshSwBvhBuildRecorded)
-            clearPreparedMeshSwBvhBuilds();
-        // The graph may already contain the immutable pair upload, but only a restored traversal table or successful
-        // direct revalidation may publish its static-scene cache. A mismatch is an optional-tail failure, not a
-        // reason to reject hardware opaque shadows; clear the retained pair before the common acceptance callback
-        // can observe it.
-        if(sceneBvhBatchGraphOwned && !hybridSceneBvhBuildRecorded)
-            clearPreparedSceneBvh();
-        if(
-            rayTracingState().m_surfelEnabled
-            && !surfelFrameConstantsGraphOwned
-            && !recordPreparedSurfelFrameConstants(commandList, targets)
-        )
-            return false;
-        return true;
+        if(deferHybridSoftwareTail)
+            return true;
+        return recordPreflightHybridSoftwareTail(
+            commandList,
+            targets,
+            outBackendReady,
+            surfelFrameConstantsGraphOwned,
+            shadowMaterialContextBatchGraphOwned,
+            sceneBvhBatchGraphOwned,
+            meshSwBvhBuildsGraphOwned
+        );
     }
 
     const bool meshSwBvhReady = meshSwBvhBuildsGraphOwned
@@ -1855,6 +1721,198 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     }
 
     outBackendReady = m_shadowVisibilityBackendPipelinePreflighted;
+    if(
+        rayTracingState().m_surfelEnabled
+        && !surfelFrameConstantsGraphOwned
+        && !recordPreparedSurfelFrameConstants(commandList, targets)
+    )
+        return false;
+    return true;
+}
+
+
+bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool hardwareBackendReady,
+    const bool surfelFrameConstantsGraphOwned,
+    const bool shadowMaterialContextBatchGraphOwned,
+    const bool sceneBvhBatchGraphOwned,
+    const bool meshSwBvhBuildsGraphOwned
+){
+    if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
+        return false;
+
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
+    // When a complete hybrid preflight froze the final software-compatible context, a tail miss must restore its
+    // retained hardware descriptor context before the first accepting packet closes. Keep that transaction here so
+    // the graph callback can move independently without weakening the opaque-HW fallback.
+    const bool hybridSoftwareMaterialContextGraphOwned =
+        shadowMaterialContextBatchGraphOwned
+        && m_shadowVisibilityHybridPipelinePreflighted
+        && m_preparedShadowMaterialContextReady
+        && m_preparedShadowMaterialContextRoute == PreparedShadowMaterialContextRoute::Software
+    ;
+    const auto discardHybridGraphMaterialContext = [&](){
+        clearPreparedShadowMaterialContext();
+        rayTracingState().m_hwShadowMaterialContextHashValid = false;
+        rayTracingState().m_swShadowMaterialContextHashValid = false;
+        rayTracingState().m_hybridTransparentShadowReady = false;
+        rayTracingState().m_softTransparentReady = false;
+        rayTracingState().m_softTransparentTemporalReady = false;
+    };
+    const auto disableHybridMaterialConsumers = [&](){
+        rayTracingState().m_causticRefractiveInstanceCount = 0u;
+        rayTracingState().m_surfelEnabled = false;
+        rayTracingState().m_surfelUseHwTrace = false;
+    };
+
+    rayTracingState().m_hybridTransparentShadowReady = false;
+    bool hybridMeshSwBvhBuildRecorded = false;
+    bool hybridSceneBvhBuildRecorded = false;
+    if(
+        hardwareBackendReady
+        && m_shadowVisibilityHybridResourcesPreflighted
+        // Revalidate a frozen hybrid payload even when an intervening material edit removed its transparency.
+        // Otherwise the graph upload could survive without either the SW consumer or a direct HW restoration.
+        && (rayTracingState().m_sceneHasTransparentOccluder || hybridSoftwareMaterialContextGraphOwned)
+    ){
+        const bool meshSwBvhReady = meshSwBvhBuildsGraphOwned
+            // The optional hybrid SW build can consume position/index immediately after the preceding BLAS build
+            // changed them to AccelStructBuildInput. This packet-preserving split keeps that native handoff until
+            // the next graph-owned state tranche declares it at the callback boundary.
+            ? recordPreparedMeshSwBvhBuilds(commandList, false)
+            : buildPendingMeshSwBvh(commandList)
+        ;
+        hybridMeshSwBvhBuildRecorded = meshSwBvhBuildsGraphOwned && meshSwBvhReady;
+        if(!meshSwBvhReady){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent shadow per-mesh software BVH build failed"));
+            // This failure is deliberately non-fatal: HW opaque shadows still submit. Drop the frozen plan so the
+            // accepted packet cannot commit a topology build that did not record.
+            if(meshSwBvhBuildsGraphOwned)
+                clearPreparedMeshSwBvhBuilds();
+        }
+        // The direct compatibility loop historically continues gathering the scene after an unrelated mesh build
+        // miss. Preserve that best-effort behavior; only a failed frozen mesh plan is all-or-nothing because its
+        // scene gather may otherwise observe topology that never recorded.
+        const bool canRecordSceneSwBvh = !meshSwBvhBuildsGraphOwned || meshSwBvhReady;
+        // A complete healthy hybrid retains both graph-upload batches plus the exact distinct-mesh descriptor
+        // table. Record it directly instead of rebuilding CPU BVH/material data. A source-version or resource miss
+        // drops to the established direct revalidation path before deciding the optional-tail fallback.
+        const bool hybridSceneTraversalGraphOwned =
+            canRecordSceneSwBvh
+            && shadowMaterialContextBatchGraphOwned
+            && sceneBvhBatchGraphOwned
+            && m_shadowVisibilityHybridPipelinePreflighted
+        ;
+        bool forceHybridSceneTraversalFallback = false;
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+        forceHybridSceneTraversalFallback =
+            hybridSceneTraversalGraphOwned
+            && (
+                m_forceHybridSceneTraversalFallbackForTesting
+                || m_forceHybridSceneTraversalFallbackEveryFrameForTesting
+            )
+        ;
+        if(forceHybridSceneTraversalFallback){
+            const bool oneShotFallback = m_forceHybridSceneTraversalFallbackForTesting;
+            m_forceHybridSceneTraversalFallbackForTesting = false;
+            if(oneShotFallback)
+                m_expectHybridSceneTraversalRecoveryForTesting = true;
+            if(oneShotFallback || !m_reportedHybridSceneTraversalFallbackLoopForTesting){
+                m_reportedHybridSceneTraversalFallbackLoopForTesting = true;
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test forced hybrid software traversal fallback"));
+            }
+        }
+#endif
+        bool sceneSwBvhReady = !forceHybridSceneTraversalFallback && canRecordSceneSwBvh && (
+            hybridSceneTraversalGraphOwned
+                ? recordPreparedSceneSwBvhTraversal()
+                : buildSceneSwBvh(
+                    commandList,
+                    scratchArena,
+                    shadowMaterialContextBatchGraphOwned,
+                    sceneBvhBatchGraphOwned,
+                    meshSwBvhBuildsGraphOwned
+                )
+        );
+        if(
+            !sceneSwBvhReady
+            && hybridSceneTraversalGraphOwned
+            && !forceHybridSceneTraversalFallback
+        ){
+            sceneSwBvhReady = buildSceneSwBvh(
+                commandList,
+                scratchArena,
+                shadowMaterialContextBatchGraphOwned,
+                sceneBvhBatchGraphOwned,
+                meshSwBvhBuildsGraphOwned
+            );
+        }
+        hybridSceneBvhBuildRecorded = sceneBvhBatchGraphOwned && sceneSwBvhReady;
+        const bool swReady =
+            sceneSwBvhReady
+            && rayTracingState().m_swShadowMeshCount > 0u
+            && rayTracingState().m_sceneBvhInstanceCount > 0u
+            && m_shadowVisibilityHybridPipelinePreflighted
+        ;
+        if(swReady){
+            rayTracingState().m_hybridTransparentShadowReady = true;
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+            if(m_expectHybridSceneTraversalRecoveryForTesting){
+                m_expectHybridSceneTraversalRecoveryForTesting = false;
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test hybrid software traversal recovered"));
+            }
+#endif
+        }
+        else{
+            bool reportHybridTraversalFailure = true;
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+            if(m_forceHybridSceneTraversalFallbackEveryFrameForTesting){
+                reportHybridTraversalFailure = !m_reportedHybridSceneTraversalFallbackLoopFailureForTesting;
+                m_reportedHybridSceneTraversalFallbackLoopFailureForTesting = true;
+            }
+#endif
+            if(reportHybridTraversalFailure)
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow recording failed; transparent shadows absent this frame"));
+            if(hybridSoftwareMaterialContextGraphOwned){
+                // The immutable graph triple has already recorded in this packet. Replace it with the current
+                // hardware descriptor-slot context before accepting the opaque fallback; otherwise caustics or HW
+                // surfels could observe stale SW node-slot data. A failed restoration still preserves opaque
+                // shadows, but disables every material-context consumer for this frame. Prefer the immutable HW
+                // snapshot retained before the SW context replaced it; only a stale snapshot regathers via the
+                // established direct compatibility retry.
+                discardHybridGraphMaterialContext();
+                const bool restoredFrozenHardwareContext =
+                    recordPreparedHybridHardwareMaterialContextFallback(commandList);
+                const bool restoredDirectHardwareContext =
+                    !restoredFrozenHardwareContext
+                    && buildSceneTlas(commandList, scratchArena, false);
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+                if(m_expectHybridHardwareFallbackDirectRetryForTesting){
+                    m_expectHybridHardwareFallbackDirectRetryForTesting = false;
+                    if(restoredDirectHardwareContext)
+                        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test hybrid hardware material fallback retried directly"));
+                }
+#endif
+                if(!restoredFrozenHardwareContext && !restoredDirectHardwareContext){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid hardware material-context fallback failed; caustics and surfel GI are disabled this frame"));
+                    disableHybridMaterialConsumers();
+                }
+            }
+        }
+    }
+    // A graph-owned hybrid plan may exist only for the optional software tail. It is eligible for the common
+    // acceptance callback exactly when its commands were emitted; all other HW-only early-outs retain their native
+    // fallback without falsely advancing the SW-BVH CPU cache.
+    if(meshSwBvhBuildsGraphOwned && !hybridMeshSwBvhBuildRecorded)
+        clearPreparedMeshSwBvhBuilds();
+    // The graph may already contain the immutable pair upload, but only a restored traversal table or successful
+    // direct revalidation may publish its static-scene cache. A mismatch is an optional-tail failure, not a reason
+    // to reject hardware opaque shadows; clear the retained pair before the common acceptance callback can observe
+    // it.
+    if(sceneBvhBatchGraphOwned && !hybridSceneBvhBuildRecorded)
+        clearPreparedSceneBvh();
     if(
         rayTracingState().m_surfelEnabled
         && !surfelFrameConstantsGraphOwned

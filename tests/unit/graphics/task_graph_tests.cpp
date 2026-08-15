@@ -4227,6 +4227,26 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     const Graphics::GpuTaskId shadowPrepare = graph.addTask(shadowPrepareDesc);
     ASSERT_TRUE(shadowPrepare.valid());
 
+    // The hybrid HW-to-SW continuation records real compatibility work after the hardware build, but it keeps the
+    // original accepting packet whole so the opaque fallback and its persistent state handoff stay atomic. It has no
+    // graph resource uses yet: the following tranche will lower its native BuildInput -> ShaderResource bridge.
+    Graphics::GpuTaskSchedulingHint shadowPrepareHybridTailScheduling;
+    shadowPrepareHybridTailScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    shadowPrepareHybridTailScheduling.forceSubmissionBoundary = false;
+    shadowPrepareHybridTailScheduling.allowPacketMerge = true;
+    shadowPrepareHybridTailScheduling.mergeWithPrevious = true;
+    shadowPrepareHybridTailScheduling.allowMergeAcrossConsumerFrontier = true;
+    Graphics::GpuTaskDesc shadowPrepareHybridTailDesc;
+    shadowPrepareHybridTailDesc
+        .setIdentity(Name("tests/task_graph/deferred_bindless_shadow_prepare_hybrid_tail"))
+        .setMarkerLabel("Shadow Preparation Hybrid Software Tail")
+        .setQueue(graphicsRequest)
+        .setScheduling(shadowPrepareHybridTailScheduling)
+        .setDependencies(&shadowPrepare, 1u)
+    ;
+    const Graphics::GpuTaskId shadowPrepareHybridTail = graph.addTask(shadowPrepareHybridTailDesc);
+    ASSERT_TRUE(shadowPrepareHybridTail.valid());
+
     const Graphics::GpuTaskResourceUse shadowPrepareTlasFinalizeUses[] = {
         Graphics::GpuTaskResourceUse{
             .resource = sceneTlas,
@@ -4258,8 +4278,8 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     shadowPrepareTlasFinalizeScheduling.forceSubmissionBoundary = false;
     shadowPrepareTlasFinalizeScheduling.allowPacketMerge = true;
     shadowPrepareTlasFinalizeScheduling.mergeWithPrevious = true;
-    // Shadow Preparation still directly signals retained descriptor resources to Compute. This state-only
-    // successor explicitly retains its TLAS/BLAS Read handoffs in that accepting Graphics packet.
+    // Shadow Preparation still directly signals retained descriptor resources to Compute. The finalizer follows the
+    // hybrid tail and explicitly retains its TLAS/BLAS Read handoffs in that accepting Graphics packet.
     shadowPrepareTlasFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
     Graphics::GpuTaskDesc shadowPrepareTlasFinalizeDesc;
     shadowPrepareTlasFinalizeDesc
@@ -4267,7 +4287,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         .setMarkerLabel("Shadow Preparation TLAS Finalize")
         .setQueue(graphicsRequest)
         .setScheduling(shadowPrepareTlasFinalizeScheduling)
-        .setDependencies(&shadowPrepare, 1u)
+        .setDependencies(&shadowPrepareHybridTail, 1u)
         .setResourceUses(shadowPrepareTlasFinalizeUses, LengthOf(shadowPrepareTlasFinalizeUses))
     ;
     const Graphics::GpuTaskId shadowPrepareTlasFinalize = graph.addTask(shadowPrepareTlasFinalizeDesc);
@@ -4370,7 +4390,8 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     ASSERT_EQ(compiledGraph.packetCount(), 2u);
 
     // Shadow Preparation retains direct cross-queue descriptor hazards even though Visibility explicitly depends on
-    // the finalizer. The finalizer's opt-in must keep both callbacks in the first accepting Graphics packet.
+    // the finalizer. The hybrid tail and finalizer's opt-ins must keep the complete callback chain in the first
+    // accepting Graphics packet.
     EXPECT_TRUE(HasInferredHazard(
         analysis,
         shadowPrepare,
@@ -4401,6 +4422,9 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         sceneBvhInstancesUpload
     );
     const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
+    const Graphics::GpuSubmissionPacketId shadowPrepareHybridTailPacket = compiledGraph.packetForTask(
+        shadowPrepareHybridTail
+    );
     const Graphics::GpuSubmissionPacketId shadowPrepareTlasFinalizePacket = compiledGraph.packetForTask(
         shadowPrepareTlasFinalize
     );
@@ -4415,6 +4439,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     ASSERT_TRUE(sceneBvhNodesUploadPacket.valid());
     ASSERT_TRUE(sceneBvhInstancesUploadPacket.valid());
     ASSERT_TRUE(shadowPreparePacket.valid());
+    ASSERT_TRUE(shadowPrepareHybridTailPacket.valid());
     ASSERT_TRUE(shadowPrepareTlasFinalizePacket.valid());
     ASSERT_TRUE(shadowVisibilityPacket.valid());
     EXPECT_EQ(uploadPacket, shadowPreparePacket);
@@ -4426,9 +4451,15 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     EXPECT_EQ(shadowMaterialTypedUploadPacket, shadowPreparePacket);
     EXPECT_EQ(sceneBvhNodesUploadPacket, shadowPreparePacket);
     EXPECT_EQ(sceneBvhInstancesUploadPacket, shadowPreparePacket);
+    EXPECT_EQ(shadowPrepareHybridTailPacket, shadowPreparePacket);
     EXPECT_EQ(shadowPrepareTlasFinalizePacket, shadowPreparePacket);
     EXPECT_NE(shadowPreparePacket, shadowVisibilityPacket);
-    EXPECT_EQ(compiledGraph.packet(shadowPreparePacket).taskCount, 11u);
+    EXPECT_EQ(compiledGraph.packet(shadowPreparePacket).taskCount, 12u);
+    const Graphics::GpuTaskId* const shadowPrepareTasks = compiledGraph.packetTasks(shadowPreparePacket);
+    ASSERT_NE(shadowPrepareTasks, nullptr);
+    EXPECT_EQ(shadowPrepareTasks[9u], shadowPrepare);
+    EXPECT_EQ(shadowPrepareTasks[10u], shadowPrepareHybridTail);
+    EXPECT_EQ(shadowPrepareTasks[11u], shadowPrepareTlasFinalize);
     const Graphics::GpuSubmissionPacketRange shadowPrepareRange = compiledGraph.packetRange(
         shadowPreparePacket,
         shadowPreparePacket

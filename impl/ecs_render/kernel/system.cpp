@@ -240,6 +240,7 @@ void RendererSystem::invalidateResources(){
     m_sceneBvhInstancesUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
+    m_deferredShadowPrepareHybridSoftwareTailTask = {};
     m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -254,6 +255,7 @@ void RendererSystem::invalidateResources(){
     m_graphicsPrefixSceneShadingSetupReady = false;
     m_deferredLightingTaskGraphValid = false;
     m_deferredShadowPrepareTask = {};
+    m_deferredShadowPrepareHybridSoftwareTailTask = {};
     m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_deferredShadowVisibilityOpaqueTask = {};
     m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
@@ -969,6 +971,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId shadowPreparePacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredShadowPrepareTask
     );
+    const Core::GpuSubmissionPacketId shadowPrepareHybridSoftwareTailPacket =
+        m_deferredShadowPrepareHybridSoftwareTailTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowPrepareHybridSoftwareTailTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    // The optional hybrid tail records real work, but preserves the former aggregate callback's acceptance and
+    // fallback boundary by remaining in this exact first Graphics packet.
+    const bool shadowPrepareHybridSoftwareTailMerged =
+        !m_deferredShadowPrepareHybridSoftwareTailTask.valid()
+        || (
+            shadowPreparePacket.valid()
+            && shadowPrepareHybridSoftwareTailPacket.valid()
+            && shadowPrepareHybridSoftwareTailPacket == shadowPreparePacket
+        )
+    ;
     const Core::GpuSubmissionPacketId shadowPrepareAccelStructFinalizePacket =
         m_deferredShadowPrepareAccelStructFinalizeTask.valid()
             ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowPrepareAccelStructFinalizeTask)
@@ -1858,6 +1875,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         !m_deferredLightingTaskGraphValid
         || !m_deferredShadowPrepareTask.valid()
         || !shadowPreparePacket.valid()
+        || !shadowPrepareHybridSoftwareTailMerged
         || !shadowPrepareAccelStructFinalizeMerged
         || !deferredBindlessSlotsUploadMergedIntoShadowPreparePacket
         || !rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket
@@ -2291,6 +2309,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_graphicsPrefixTask.valid()
         && m_deferredShadowPrepareTask.valid()
         && shadowPreparePacket.valid()
+        && shadowPrepareHybridSoftwareTailMerged
         && shadowPrepareAccelStructFinalizeMerged
         && graphicsPrefixPacket.valid()
         && graphicsPrefixDeferredClearBundleMerged
@@ -3479,6 +3498,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const bool shadowPreparePrefixAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredShadowPrepareTask.valid()
+            && shadowPrepareHybridSoftwareTailMerged
             && shadowPrepareAccelStructFinalizeMerged
             && m_graphicsPrefixMeshViewSetupTask.valid()
             && m_graphicsPrefixSceneShadingSetupTask.valid()

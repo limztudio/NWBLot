@@ -7286,6 +7286,15 @@ TEST(GpuTaskGraph, PlansGraphOwnedPreparedSoftwareBvhInputStates){
     ASSERT_TRUE(position.valid());
     ASSERT_TRUE(index.valid());
 
+    const Graphics::GpuGraphResourceId traceGeometryMembers[] = { position, index };
+    const Graphics::GpuGraphResourceSetId traceGeometrySet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/prepared_sw_bvh_trace_geometry"))
+            .setMarkerLabel("Prepared SW-BVH Trace Geometry")
+            .setMembers(traceGeometryMembers, LengthOf(traceGeometryMembers))
+    );
+    ASSERT_TRUE(traceGeometrySet.valid());
+
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
         Graphics::GpuQueuePreference::Graphics,
@@ -7295,15 +7304,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedPreparedSoftwareBvhInputStates){
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Graphics::GpuTaskCostHint::Large;
     scheduling.allowPacketMerge = true;
-    const Graphics::GpuTaskResourceUse prepareUses[] = {
+    const Graphics::GpuTaskResourceSetUse traceGeometrySetUses[] = {
         {
-            .resource = position,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::ShaderResource,
-            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
-        },
-        {
-            .resource = index,
+            .resourceSet = traceGeometrySet,
             .range = {},
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::ReadWrite,
@@ -7315,7 +7318,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedPreparedSoftwareBvhInputStates){
         .setMarkerLabel("Prepared Software BVH Shadow Preparation")
         .setQueue(graphicsRequest)
         .setScheduling(scheduling)
-        .setResourceUses(prepareUses, LengthOf(prepareUses))
+        .setResourceSetUses(traceGeometrySetUses, LengthOf(traceGeometrySetUses))
     ;
     const Graphics::GpuTaskId prepare = graph.addTask(prepareDesc);
     ASSERT_TRUE(prepare.valid());

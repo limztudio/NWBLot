@@ -3803,6 +3803,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedSoftwareBvhInputStatesRe
     ASSERT_TRUE(positionResource.valid());
     ASSERT_TRUE(indexResource.valid());
 
+    const GpuGraphResourceId traceGeometryMembers[] = { positionResource, indexResource };
+    const GpuGraphResourceSetId traceGeometrySet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/prepared_sw_bvh_trace_geometry"))
+            .setMarkerLabel("Prepared SW-BVH Trace Geometry")
+            .setMembers(traceGeometryMembers, LengthOf(traceGeometryMembers))
+    );
+    ASSERT_TRUE(traceGeometrySet.valid());
+
     const GpuQueueRequest graphicsQueue{
         GpuQueueCapability::Graphics,
         GpuQueuePreference::Graphics,
@@ -3850,15 +3859,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedSoftwareBvhInputStatesRe
 
     GpuTaskSchedulingHint prepareScheduling = precursorScheduling;
     prepareScheduling.mergeWithPrevious = true;
-    const GpuTaskResourceUse prepareUses[] = {
+    const GpuTaskResourceSetUse traceGeometrySetUses[] = {
         {
-            .resource = positionResource,
-            .range = {},
-            .requiredState = ResourceStates::ShaderResource,
-            .access = GpuTaskResourceAccess::ReadWrite,
-        },
-        {
-            .resource = indexResource,
+            .resourceSet = traceGeometrySet,
             .range = {},
             .requiredState = ResourceStates::ShaderResource,
             .access = GpuTaskResourceAccess::ReadWrite,
@@ -3871,7 +3874,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedSoftwareBvhInputStatesRe
         .setQueue(graphicsQueue)
         .setScheduling(prepareScheduling)
         .setDependencies(&precursorTask, 1u)
-        .setResourceUses(prepareUses, LengthOf(prepareUses))
+        .setResourceSetUses(traceGeometrySetUses, LengthOf(traceGeometrySetUses))
     ;
     bool prepareRecorded = false;
     const GpuTaskId prepareTask = graph.addTask<NativePacketPrefixTask>(

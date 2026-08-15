@@ -2708,6 +2708,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accelStructFinalizeResourceUses{ scratchArena };
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> meshBlasGeometryBuildInputResources{ scratchArena };
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hybridSoftwareTailInputResources{ scratchArena };
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> shadowPrepareTraceGeometryResources{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hybridSoftwareTailResourceUses{ scratchArena };
     resourceUses.reserve(
         19u
@@ -2722,6 +2723,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     );
     meshBlasGeometryBuildInputResources.reserve(preparedMeshBlasBuilds.size() * 2u);
     hybridSoftwareTailInputResources.reserve(preparedMeshSwBvhBuilds.size() * 2u);
+    shadowPrepareTraceGeometryResources.reserve(shadowTraceGeometryResourceCount);
     hybridSoftwareTailResourceUses.reserve(preparedMeshSwBvhBuilds.size() * 2u);
     // Shadow Preparation owns each preflight input's post-transition packet boundary. This deliberately supersedes
     // preceding immutable uploads as graph producers, so later Compute readers wait on this first Graphics packet
@@ -2856,8 +2858,33 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             return false;
         if(isMeshBlasGeometryBuildInput(resource))
             continue;
-        resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::ShaderResource));
+        shadowPrepareTraceGeometryResources.push_back(resource);
     }
+    // The frozen trace list can carry BLAS position/index resources that need AccelStructBuildInput in this task.
+    // Keep those exact members separate, but declare the remaining SRV subset as one immutable graph collection.
+    Core::GpuGraphResourceSetId shadowPrepareTraceGeometrySet;
+    if(!shadowPrepareTraceGeometryResources.empty()){
+        shadowPrepareTraceGeometrySet = m_deferredLightingTaskGraph.importResourceSet(
+            Core::GpuGraphResourceSetDesc{}
+                .setIdentity(Name("render.shadow_prepare_trace_geometry"))
+                .setMarkerLabel("Shadow Prepare Trace Geometry")
+                .setMembers(
+                    shadowPrepareTraceGeometryResources.data(),
+                    shadowPrepareTraceGeometryResources.size()
+                )
+        );
+    }
+    const bool shadowPrepareTraceGeometryStatesGraphOwned = shadowPrepareTraceGeometrySet.valid();
+    if(!shadowPrepareTraceGeometryStatesGraphOwned){
+        for(const Core::GpuGraphResourceId resource : shadowPrepareTraceGeometryResources)
+            resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::ShaderResource));
+    }
+    const Core::GpuTaskResourceSetUse shadowPrepareTraceGeometrySetUse{
+        .resourceSet = shadowPrepareTraceGeometrySet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::ReadWrite,
+    };
     for(usize resourceIndex = 0u; resourceIndex < softwareBvhBuildStateResourceCount; ++resourceIndex){
         const Core::GpuGraphResourceId resource = softwareBvhBuildStateResources[resourceIndex];
         if(!resource.valid())
@@ -2954,6 +2981,10 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         .setScheduling(scheduling)
         .setDependencies(dependencies, dependencyCount)
         .setResourceUses(resourceUses.data(), resourceUses.size())
+        .setResourceSetUses(
+            shadowPrepareTraceGeometryStatesGraphOwned ? &shadowPrepareTraceGeometrySetUse : nullptr,
+            shadowPrepareTraceGeometryStatesGraphOwned ? 1u : 0u
+        )
     ;
     m_deferredShadowPrepareTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::ShadowPrepareGraphTask>(
         desc,

@@ -4031,9 +4031,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         invalidateLaggedLightingHistorySubmission();
     }
     else if(captureLaggedLightingHistory){
-        // The deferred graph's terminal history-copy task depends on Present internally. Its declared source uses
-        // select retained producer snapshots only after those producers accepted, so this is intentionally a late
-        // record into the shared recorded graph rather than part of the initial packet prefix.
+        // The deferred graph's terminal history-copy task depends on Present internally. Its retained producer
+        // snapshots are only available after those producers accept, so this remains a late record into the shared
+        // recorded graph rather than part of the initial packet prefix; its source binding stays task-anchored.
         const Core::CommandListResourceStateHandoff* const causticHistoryCopySource = laggedAsyncLightingSchedule
             ? &m_causticIrradianceLightingStateHandoff
             : &m_causticIrradianceReturnStateHandoff
@@ -4090,9 +4090,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         else{
             Core::GpuNativePacketRecorder recorder(device);
-            const Core::GpuNativePacketRecordDesc recordDescs[] = {
-                Core::GpuNativePacketRecordDesc{
-                    .packet = deferredLaggedLightingHistoryPacket,
+            const Core::GpuTaskPacketStateBinding historyCopyStateBindings[] = {
+                Core::GpuTaskPacketStateBinding{
+                    .task = m_deferredLaggedLightingHistoryTask,
                     .externalStateSources = historyCopyStateSources,
                     .externalStateSourceCount = historyCopyStateSourceCount,
                 },
@@ -4101,9 +4101,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     m_deferredLightingTaskGraph,
                     m_deferredLightingCompiledGraph,
                     deferredLaggedLightingHistoryPacketRange,
-                    recordDescs,
-                    LengthOf(recordDescs),
-                    m_deferredLightingRecordedGraph
+                    nullptr,
+                    0u,
+                    m_deferredLightingRecordedGraph,
+                    nullptr,
+                    nullptr,
+                    historyCopyStateBindings,
+                    LengthOf(historyCopyStateBindings)
                 )
             ;
             const Core::CommandListResourceStateHandoff* const historyCopyFinalStateSeed = historyCopyRecorded

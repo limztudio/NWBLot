@@ -521,7 +521,8 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    Caustics, Surfel-GI preparation/copy/final work, AVBOIT-pre, Lighting, and Composite; it no longer builds a
    renderer-owned table keyed by compiled packet IDs. Shadow Preparation retains its narrow packet override because
    its current hybrid/direct fallback source includes dynamic BLAS/SW-BVH buffers that cannot yet be declared
-   safely, and the optional lagged-history tail remains a separate late-record migration.
+   safely. The optional lagged-history tail remains separately late-recorded after Present acceptance, but now
+   resolves its retained return snapshots through its semantic history-copy task rather than a packet override.
    The transparent AVBOIT interval producer, occupancy, extinction, and
    accumulation phases now freeze and publish their own per-write-point material/CSG streams, preserving the shared
    interval sample state across the low-resolution raster passes. Current and lagged deferred bindless selectors,

@@ -7031,6 +7031,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
     constexpr u32 shaderBufferCount = NativePacketHardwareCausticsEntryProbeTask::s_ShaderBufferCount;
     constexpr u32 constantBufferCount = NativePacketHardwareCausticsEntryProbeTask::s_ConstantBufferCount;
     constexpr u32 shaderTextureCount = NativePacketHardwareCausticsEntryProbeTask::s_ShaderTextureCount;
+    constexpr u32 meshAttributesBufferIndex = 0u;
     const auto makeStorageBuffer = [&device](){
         return device.createBuffer(
             BufferDesc()
@@ -7179,6 +7180,22 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
     ASSERT_TRUE(irradianceResource.valid());
     ASSERT_TRUE(accumulatorResource.valid());
 
+    const GpuGraphResourceSetId meshAttributesSet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/hardware_caustics_mesh_attributes"))
+            .setMarkerLabel("Hardware Caustics Mesh Attributes")
+            .setMembers(&shaderBufferResources[meshAttributesBufferIndex], 1u)
+    );
+    ASSERT_TRUE(meshAttributesSet.valid());
+    const GpuTaskResourceSetUse meshAttributesSetUses[] = {
+        {
+            .resourceSet = meshAttributesSet,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+
     const GpuQueueRequest graphicsQueue{
         GpuQueueCapability::Graphics,
         GpuQueuePreference::Graphics,
@@ -7270,9 +7287,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
     ASSERT_TRUE(accumulatorBootstrapClearTask.valid());
 
     Vector<GpuTaskResourceUse, Alloc::ScratchArena> causticsUses(resourceUseArena);
-    causticsUses.reserve(shaderBufferCount + constantBufferCount + shaderTextureCount);
-    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)
-        causticsUses.push_back({ .resource = shaderBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read });
+    causticsUses.reserve(shaderBufferCount - 1u + constantBufferCount + shaderTextureCount);
+    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex){
+        if(bufferIndex != meshAttributesBufferIndex)
+            causticsUses.push_back({ .resource = shaderBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read });
+    }
     for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex)
         causticsUses.push_back({ .resource = constantBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read });
     causticsUses.push_back({ .resource = worldPositionResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read });
@@ -7291,6 +7310,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
         .setScheduling(causticsScheduling)
         .setDependencies(&accumulatorBootstrapClearTask, 1u)
         .setResourceUses(causticsUses.data(), causticsUses.size())
+        .setResourceSetUses(meshAttributesSetUses, LengthOf(meshAttributesSetUses))
     ;
     NativePacketHardwareCausticsEntryProbeTask::Payload causticsPayload{};
     for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)

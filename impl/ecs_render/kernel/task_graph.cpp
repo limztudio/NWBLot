@@ -7037,6 +7037,15 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 .setMembers(hardwareTraceGeometryResources.data(), hardwareTraceGeometryResources.size())
         );
     }
+    Core::GpuGraphResourceSetId hardwareTraceAttributeSet;
+    if(!hardwareTraceAttributeResources.empty()){
+        hardwareTraceAttributeSet = m_deferredLightingTaskGraph.importResourceSet(
+            Core::GpuGraphResourceSetDesc{}
+                .setIdentity(Name("render.hardware_trace_attributes"))
+                .setMarkerLabel("Hardware Trace Attributes")
+                .setMembers(hardwareTraceAttributeResources.data(), hardwareTraceAttributeResources.size())
+        );
+    }
     bool softwareTraceResourcesPrepared = false;
     for(const PreparedShadowTraceGeometryBuffer& preparedBuffer : preparedTraceGeometry){
         if(preparedBuffer.roles & (
@@ -7728,7 +7737,16 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveFourthWaveletResourceUses{ hardwareCausticsScratchArena };
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveFifthWaveletResourceUses{ hardwareCausticsScratchArena };
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResolveUpsampleResourceUses{ hardwareCausticsScratchArena };
-        hardwarePhotonResourceUses.reserve(15u + hardwareTraceAttributeResources.size());
+        const bool hardwareTraceAttributeStatesGraphOwned = hardwareTraceAttributeSet.valid();
+        const Core::GpuTaskResourceSetUse hardwareTraceAttributeSetUse{
+            .resourceSet = hardwareTraceAttributeSet,
+            .range = {},
+            .requiredState = Core::ResourceStates::ShaderResource,
+            .access = Core::GpuTaskResourceAccess::Read,
+        };
+        hardwarePhotonResourceUses.reserve(15u + (
+            hardwareTraceAttributeStatesGraphOwned ? 0u : hardwareTraceAttributeResources.size()
+        ));
         hardwareGeometryResourceUses.reserve(3u);
         hardwareResolvePrepareResourceUses.reserve(4u);
         hardwareResolveWaveletResourceUses.reserve(3u);
@@ -8035,7 +8053,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid prepared hardware-caustics attribute resource"));
                 return;
             }
-            hardwarePhotonResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+            if(!hardwareTraceAttributeStatesGraphOwned)
+                hardwarePhotonResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         }
         if(m_rayTracingState.m_tlas){
             const Core::GpuGraphResourceId tlas = m_deferredLightingTaskGraph.importAccelStruct(
@@ -8218,6 +8237,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .setScheduling(hardwareCausticsScheduling)
             .setDependencies(&causticsDependency, 1u)
             .setResourceUses(hardwarePhotonResourceUses.data(), hardwarePhotonResourceUses.size())
+            .setResourceSetUses(
+                hardwareTraceAttributeStatesGraphOwned ? &hardwareTraceAttributeSetUse : nullptr,
+                hardwareTraceAttributeStatesGraphOwned ? 1u : 0u
+            )
         ;
         m_deferredCausticPhotonTask = m_raytracingSystem.declareHardwareCausticsTask(
             m_deferredLightingTaskGraph,

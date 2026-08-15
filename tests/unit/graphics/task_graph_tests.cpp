@@ -9961,6 +9961,22 @@ TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
     ASSERT_TRUE(materialContextSlots.valid());
     ASSERT_TRUE(sceneShading.valid());
 
+    const Graphics::GpuGraphResourceSetId meshAttributesSet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/hardware_caustics_mesh_attributes"))
+            .setMarkerLabel("Hardware Caustics Mesh Attributes")
+            .setMembers(&meshAttributes, 1u)
+    );
+    ASSERT_TRUE(meshAttributesSet.valid());
+    const Graphics::GpuTaskResourceSetUse meshAttributesSetUses[] = {
+        {
+            .resourceSet = meshAttributesSet,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
         Graphics::GpuQueuePreference::Graphics,
@@ -10042,7 +10058,6 @@ TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
     const Graphics::GpuTaskResourceUse causticsUses[] = {
         { .resource = worldPosition, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = depth, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
-        { .resource = meshAttributes, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = instanceMaterials, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = typedMaterials, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = instances, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
@@ -10067,6 +10082,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedHardwareCausticsEntryStates){
         .setScheduling(causticsScheduling)
         .setDependencies(&accumulatorBootstrapClearTask, 1u)
         .setResourceUses(causticsUses, LengthOf(causticsUses))
+        .setResourceSetUses(meshAttributesSetUses, LengthOf(meshAttributesSetUses))
     ;
     const Graphics::GpuTaskId caustics = graph.addTask(causticsDesc);
     ASSERT_TRUE(caustics.valid());

@@ -5752,6 +5752,21 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
     const Graphics::GpuTaskId prefix = graph.addTask(prefixDesc);
     ASSERT_TRUE(prefix.valid());
 
+    const Graphics::GpuGraphResourceSetId softwareTraceGeometrySet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/shadow_visibility_trace_geometry"))
+            .setMarkerLabel("Shadow Visibility Trace Geometry")
+            .setMembers(&softwareMeshNodes, 1u)
+    );
+    ASSERT_TRUE(softwareTraceGeometrySet.valid());
+    const Graphics::GpuTaskResourceSetUse softwareTraceGeometrySetUses[] = {
+        {
+            .resourceSet = softwareTraceGeometrySet,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
     const Graphics::GpuTaskResourceUse shadowVisibilityUses[] = {
         Graphics::GpuTaskResourceUse{
             .resource = worldPosition,
@@ -5822,12 +5837,6 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
             .access = Graphics::GpuTaskResourceAccess::Read,
         },
         Graphics::GpuTaskResourceUse{
-            .resource = softwareMeshNodes,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::ShaderResource,
-            .access = Graphics::GpuTaskResourceAccess::Read,
-        },
-        Graphics::GpuTaskResourceUse{
             .resource = sceneBvhNodes,
             .range = {},
             .requiredState = Graphics::ResourceStates::ShaderResource,
@@ -5888,6 +5897,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
         .setScheduling(shadowScheduling)
         .setDependencies(&prefix, 1u)
         .setResourceUses(shadowVisibilityUses, LengthOf(shadowVisibilityUses))
+        .setResourceSetUses(softwareTraceGeometrySetUses, LengthOf(softwareTraceGeometrySetUses))
     ;
     const Graphics::GpuTaskId shadowVisibilityTask = graph.addTask(shadowVisibilityDesc);
     ASSERT_TRUE(shadowVisibilityTask.valid());
@@ -6246,9 +6256,31 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftTransparentTraceEntryStates){
     const Graphics::GpuTaskId prefix = graph.addTask(prefixDesc);
     ASSERT_TRUE(prefix.valid());
 
+    const Graphics::GpuGraphResourceId softwareTraceGeometryMembers[] = {
+        shaderResources[0u],
+        shaderResources[1u],
+        shaderResources[2u],
+        shaderResources[3u],
+    };
+    const Graphics::GpuGraphResourceSetId softwareTraceGeometrySet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/soft_transparent_trace_geometry"))
+            .setMarkerLabel("Transparent Shadow Trace Geometry")
+            .setMembers(softwareTraceGeometryMembers, LengthOf(softwareTraceGeometryMembers))
+    );
+    ASSERT_TRUE(softwareTraceGeometrySet.valid());
+    const Graphics::GpuTaskResourceSetUse softwareTraceGeometrySetUses[] = {
+        {
+            .resourceSet = softwareTraceGeometrySet,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
     Graphics::GpuTaskResourceUse traceUses[LengthOf(shaderResources) + LengthOf(constantResources)] = {};
     usize traceUseCount = 0u;
-    for(const Graphics::GpuGraphResourceId resource : shaderResources){
+    for(usize resourceIndex = LengthOf(softwareTraceGeometryMembers); resourceIndex < LengthOf(shaderResources); ++resourceIndex){
+        const Graphics::GpuGraphResourceId resource = shaderResources[resourceIndex];
         traceUses[traceUseCount++] = {
             .resource = resource,
             .range = {},
@@ -6264,7 +6296,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftTransparentTraceEntryStates){
             .access = Graphics::GpuTaskResourceAccess::Read,
         };
     }
-    ASSERT_EQ(traceUseCount, LengthOf(traceUses));
+    ASSERT_EQ(traceUseCount + LengthOf(softwareTraceGeometryMembers), LengthOf(traceUses));
     Graphics::GpuTaskDesc traceDesc;
     traceDesc
         .setIdentity(Name("tests/task_graph/graph_owned_soft_transparent_trace"))
@@ -6272,7 +6304,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftTransparentTraceEntryStates){
         .setQueue(graphicsRequest)
         .setScheduling(boundaryScheduling)
         .setDependencies(&prefix, 1u)
-        .setResourceUses(traceUses, LengthOf(traceUses))
+        .setResourceUses(traceUses, traceUseCount)
+        .setResourceSetUses(softwareTraceGeometrySetUses, LengthOf(softwareTraceGeometrySetUses))
     ;
     const Graphics::GpuTaskId trace = graph.addTask(traceDesc);
     ASSERT_TRUE(trace.valid());

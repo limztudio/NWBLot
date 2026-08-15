@@ -4752,6 +4752,21 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
     );
     ASSERT_TRUE(prefixTask.valid());
 
+    const GpuGraphResourceSetId softwareTraceGeometrySet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/shadow_visibility_trace_geometry"))
+            .setMarkerLabel("Shadow Visibility Trace Geometry")
+            .setMembers(&softwareMeshNodesResource, 1u)
+    );
+    ASSERT_TRUE(softwareTraceGeometrySet.valid());
+    const GpuTaskResourceSetUse softwareTraceGeometrySetUses[] = {
+        {
+            .resourceSet = softwareTraceGeometrySet,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
     const GpuTaskResourceUse shadowUses[] = {
         GpuTaskResourceUse{
             .resource = worldPositionResource,
@@ -4796,12 +4811,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
             .access = GpuTaskResourceAccess::Read,
         },
         GpuTaskResourceUse{
-            .resource = softwareMeshNodesResource,
-            .range = {},
-            .requiredState = ResourceStates::ShaderResource,
-            .access = GpuTaskResourceAccess::Read,
-        },
-        GpuTaskResourceUse{
             .resource = shadowVisibilityResource,
             .range = {},
             .requiredState = ResourceStates::UnorderedAccess,
@@ -4838,6 +4847,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
         .setScheduling(shadowScheduling)
         .setDependencies(&prefixTask, 1u)
         .setResourceUses(shadowUses, LengthOf(shadowUses))
+        .setResourceSetUses(softwareTraceGeometrySetUses, LengthOf(softwareTraceGeometrySetUses))
     ;
     bool shadowRecorded = false;
     const GpuTaskId shadowTask = graph.addTask<NativePacketShadowVisibilityEntryProbeTask>(
@@ -5303,9 +5313,31 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceEntryStatesR
     );
     ASSERT_TRUE(prefixTask.valid());
 
+    constexpr u32 softwareTraceGeometryBufferCount = 4u;
+    const GpuGraphResourceId softwareTraceGeometryMembers[] = {
+        shaderBufferResources[0u],
+        shaderBufferResources[1u],
+        shaderBufferResources[2u],
+        shaderBufferResources[3u],
+    };
+    const GpuGraphResourceSetId softwareTraceGeometrySet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/soft_transparent_trace_geometry"))
+            .setMarkerLabel("Transparent Shadow Trace Geometry")
+            .setMembers(softwareTraceGeometryMembers, LengthOf(softwareTraceGeometryMembers))
+    );
+    ASSERT_TRUE(softwareTraceGeometrySet.valid());
+    const GpuTaskResourceSetUse softwareTraceGeometrySetUses[] = {
+        {
+            .resourceSet = softwareTraceGeometrySet,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
     Vector<GpuTaskResourceUse, Alloc::ScratchArena> traceUses(resourceUseArena);
-    traceUses.reserve(shaderBufferCount + constantBufferCount);
-    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)
+    traceUses.reserve(shaderBufferCount - softwareTraceGeometryBufferCount + constantBufferCount);
+    for(u32 bufferIndex = softwareTraceGeometryBufferCount; bufferIndex < shaderBufferCount; ++bufferIndex)
         traceUses.push_back({ .resource = shaderBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read });
     for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex)
         traceUses.push_back({ .resource = constantBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read });
@@ -5317,6 +5349,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceEntryStatesR
         .setScheduling(boundaryScheduling)
         .setDependencies(&prefixTask, 1u)
         .setResourceUses(traceUses.data(), traceUses.size())
+        .setResourceSetUses(softwareTraceGeometrySetUses, LengthOf(softwareTraceGeometrySetUses))
     ;
     NativePacketSoftTransparentTraceEntryProbeTask::Payload tracePayload{};
     for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)

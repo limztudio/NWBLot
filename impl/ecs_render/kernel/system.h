@@ -259,6 +259,7 @@ private:
         Core::GpuGraphResourceId materialContextSlots,
         const Core::GpuGraphResourceId* softwareTraceGeometryResources,
         usize softwareTraceGeometryResourceCount,
+        Core::GpuGraphResourceSetId softwareTraceGeometrySet,
         Core::GpuTaskId prefixTask,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming,

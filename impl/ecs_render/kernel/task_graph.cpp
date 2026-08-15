@@ -4318,6 +4318,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     const Core::GpuGraphResourceId materialContextSlots,
     const Core::GpuGraphResourceId* const softwareTraceGeometryResources,
     const usize softwareTraceGeometryResourceCount,
+    const Core::GpuGraphResourceSetId softwareTraceGeometrySet,
     const Core::GpuTaskId prefixTask,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming,
@@ -4424,7 +4425,12 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
-    resourceUses.reserve(40u);
+    const bool softwareTraceGeometryStatesGraphOwned = softwareTraceGeometrySet.valid();
+    resourceUses.reserve(40u + (
+        softwareTraceGeometryStatesGraphOwned
+            ? 0u
+            : softwareTraceGeometryResourceCount
+    ));
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));
     // Shadow visibility samples the bindless depth image, so its declared layout must match the native shader read.
@@ -4663,12 +4669,20 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     resourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource));
     if(materialContextSlots.valid())
         resourceUses.push_back(ReadUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
-    for(usize resourceIndex = 0u; resourceIndex < softwareTraceGeometryResourceCount; ++resourceIndex){
-        const Core::GpuGraphResourceId resource = softwareTraceGeometryResources[resourceIndex];
-        if(!resource.valid())
-            return false;
-        resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+    if(!softwareTraceGeometryStatesGraphOwned){
+        for(usize resourceIndex = 0u; resourceIndex < softwareTraceGeometryResourceCount; ++resourceIndex){
+            const Core::GpuGraphResourceId resource = softwareTraceGeometryResources[resourceIndex];
+            if(!resource.valid())
+                return false;
+            resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+        }
     }
+    const Core::GpuTaskResourceSetUse softwareTraceGeometrySetUse{
+        .resourceSet = softwareTraceGeometrySet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
 
     // The prepared soft path keeps the opaque first wavelet, resolve tail, transparent trace, and temporal/RGB
     // resolve as adjacent callbacks. Re-importing retains shared graph identities while making each graph-owned
@@ -4837,7 +4851,11 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         opaqueResolveResourceUses.push_back(ReadUse(depth, Core::ResourceStates::ShaderResource));
         opaqueResolveResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
 
-        transparentTraceResourceUses.reserve(20u + softwareTraceGeometryResourceCount);
+        transparentTraceResourceUses.reserve(20u + (
+            softwareTraceGeometryStatesGraphOwned
+                ? 0u
+                : softwareTraceGeometryResourceCount
+        ));
         transparentTraceResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
         transparentTraceResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
         transparentTraceResourceUses.push_back(ReadUse(depth, Core::ResourceStates::ShaderResource));
@@ -4857,8 +4875,10 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         transparentTraceResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
         transparentTraceResourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource));
         transparentTraceResourceUses.push_back(ReadUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
-        for(usize resourceIndex = 0u; resourceIndex < softwareTraceGeometryResourceCount; ++resourceIndex)
-            transparentTraceResourceUses.push_back(ReadUse(softwareTraceGeometryResources[resourceIndex], Core::ResourceStates::ShaderResource));
+        if(!softwareTraceGeometryStatesGraphOwned){
+            for(usize resourceIndex = 0u; resourceIndex < softwareTraceGeometryResourceCount; ++resourceIndex)
+                transparentTraceResourceUses.push_back(ReadUse(softwareTraceGeometryResources[resourceIndex], Core::ResourceStates::ShaderResource));
+        }
 
         graphOwnsTransparentTemporalMergeEntryStates = m_rayTracingState.m_softTransparentTemporalReady;
         const bool transparentHistoryFrontIsA = m_rayTracingState.m_softShadowHistoryFrontIsA != 0u;
@@ -4935,6 +4955,10 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             .setScheduling(opaqueScheduling)
             .setDependencies(&prefixTask, 1u)
             .setResourceUses(resourceUses.data(), resourceUses.size())
+            .setResourceSetUses(
+                softwareTraceGeometryStatesGraphOwned ? &softwareTraceGeometrySetUse : nullptr,
+                softwareTraceGeometryStatesGraphOwned ? 1u : 0u
+            )
         ;
         m_deferredShadowVisibilityOpaqueTask = m_raytracingSystem.declareShadowVisibilityOpaqueTask(
             m_deferredLightingTaskGraph,
@@ -5026,6 +5050,10 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             .setScheduling(tailScheduling)
             .setDependencies(traceDependencies, LengthOf(traceDependencies))
             .setResourceUses(transparentTraceResourceUses.data(), transparentTraceResourceUses.size())
+            .setResourceSetUses(
+                softwareTraceGeometryStatesGraphOwned ? &softwareTraceGeometrySetUse : nullptr,
+                softwareTraceGeometryStatesGraphOwned ? 1u : 0u
+            )
         ;
         m_deferredShadowVisibilityTransparentTraceTask = m_raytracingSystem.declareShadowTransparentSoftTraceTask(
             m_deferredLightingTaskGraph,
@@ -5153,6 +5181,10 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         .setScheduling(scheduling)
         .setDependencies(&prefixTask, 1u)
         .setResourceUses(resourceUses.data(), resourceUses.size())
+        .setResourceSetUses(
+            softwareTraceGeometryStatesGraphOwned ? &softwareTraceGeometrySetUse : nullptr,
+            softwareTraceGeometryStatesGraphOwned ? 1u : 0u
+        )
     ;
     m_deferredShadowVisibilityTask = m_raytracingSystem.declareShadowVisibilityTask(
         m_deferredLightingTaskGraph,
@@ -7553,6 +7585,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         materialContextSlots,
         softwareTraceGeometryResources.data(),
         softwareTraceGeometryResources.size(),
+        softwareTraceGeometrySet,
         m_graphicsPrefixTask,
         shadowVisibilityTimingTicket,
         shadowVisibilityAsyncTiming,

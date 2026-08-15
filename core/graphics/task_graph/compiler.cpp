@@ -1136,6 +1136,22 @@ bool GpuTaskGraphCompiler::compile(
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex)
         outCompiledGraph.m_queueTopology.push_back(topology.queues[queueIndex]);
 
+    // An import may name the exact physical queue that owned an exclusive texture/buffer before graph work began.
+    // This metadata is deliberately validation-only for now: an external cross-queue release/completion is not
+    // represented by the resource descriptor, so accepting one here would manufacture an unsafe Vulkan acquire.
+    for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
+        const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
+        if(!resource.initialOwnerQueue.valid())
+            continue;
+        if(
+            ResourceUsesConcurrentQueueSharing(resource.queueSharing, topology)
+            || !outCompiledGraph.queueInfo(resource.initialOwnerQueue)
+        ){
+            outCompiledGraph.reset();
+            return false;
+        }
+    }
+
     // Tasks retain one exact acceptance and synchronization point by default. An explicitly opted-in successor may
     // share its immediately preceding compatible packet, preserving task order while retaining one submission for a
     // temporary imported/native recording bridge. The separate FrontierScored policy is deliberately opt-in too:
@@ -1349,6 +1365,17 @@ bool GpuTaskGraphCompiler::compile(
             }
 
             const ResourceStates::Mask before = previousState ? previousState->state : resource.initialState;
+            if(
+                !previousState
+                && resource.initialOwnerQueue.valid()
+                && resource.initialOwnerQueue != compiledTask->queue
+            ){
+                // Same-family and cross-family external producers both require an explicit completion before a
+                // different graph packet may consume their work. Keep this strict until imported ownership can
+                // carry that release/completion pair rather than guessing at record time.
+                outCompiledGraph.reset();
+                return false;
+            }
             const bool needsUavDependency =
                 previousState
                 && before == ResourceStates::UnorderedAccess

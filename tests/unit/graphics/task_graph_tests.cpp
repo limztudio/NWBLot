@@ -2388,6 +2388,171 @@ TEST(GpuTaskGraph, RejectsUnpublishableExternalFinalStateContracts){
     EXPECT_FALSE(compiledGraph.valid());
 }
 
+
+TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    const Graphics::GpuQueueRequest graphicsQueue{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeQueue{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    const auto addFirstUse = [&](
+        Graphics::GpuTaskGraph& graph,
+        const Graphics::GpuGraphResourceId resource,
+        const Name& identity,
+        const AStringView label,
+        const Graphics::GpuQueueRequest& queue
+    ){
+        const Graphics::GpuTaskResourceUse use{
+            .resource = resource,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(queue)
+            .setResourceUses(&use, 1u)
+        ;
+        return graph.addTask(desc);
+    };
+    const auto addBuffer = [&](
+        Graphics::GpuTaskGraph& graph,
+        const Name& identity,
+        const AStringView label,
+        const Graphics::GpuPhysicalQueueId owner,
+        const Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Exclusive
+    ){
+        Graphics::GpuGraphResourceDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::Common)
+            .setInitialOwnerQueue(owner)
+            .setQueueSharing(queueSharing)
+        ;
+        return graph.importResource(desc);
+    };
+
+    {
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId resource = addBuffer(
+            graph,
+            Name("tests/task_graph/initial_owner_graphics"),
+            "Initial Owner Graphics",
+            queues[0u].id
+        );
+        ASSERT_TRUE(resource.valid());
+        EXPECT_EQ(graph.resourceAt(resource.index).initialOwnerQueue, queues[0u].id);
+        const Graphics::GpuTaskId task = addFirstUse(
+            graph,
+            resource,
+            Name("tests/task_graph/initial_owner_graphics_use"),
+            "Initial Owner Graphics Use",
+            graphicsQueue
+        );
+        ASSERT_TRUE(task.valid());
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        ASSERT_NE(compiledTask, nullptr);
+        EXPECT_EQ(compiledTask->queue, queues[0u].id);
+    }
+
+    {
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId resource = addBuffer(
+            graph,
+            Name("tests/task_graph/initial_owner_cross_queue"),
+            "Initial Owner Cross Queue",
+            queues[0u].id
+        );
+        ASSERT_TRUE(resource.valid());
+        ASSERT_TRUE(addFirstUse(
+            graph,
+            resource,
+            Name("tests/task_graph/initial_owner_compute_use"),
+            "Initial Owner Compute Use",
+            computeQueue
+        ).valid());
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(compiledGraph.valid());
+    }
+
+    {
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId resource = addBuffer(
+            graph,
+            Name("tests/task_graph/initial_owner_stale"),
+            "Initial Owner Stale",
+            Graphics::GpuPhysicalQueueId{ queues[0u].id.index, static_cast<u16>(queues[0u].id.deviceGeneration + 1u) }
+        );
+        ASSERT_TRUE(resource.valid());
+        ASSERT_TRUE(addFirstUse(
+            graph,
+            resource,
+            Name("tests/task_graph/initial_owner_stale_use"),
+            "Initial Owner Stale Use",
+            graphicsQueue
+        ).valid());
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(compiledGraph.valid());
+    }
+
+    {
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId resource = addBuffer(
+            graph,
+            Name("tests/task_graph/initial_owner_concurrent"),
+            "Initial Owner Concurrent",
+            queues[0u].id,
+            Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+        );
+        ASSERT_TRUE(resource.valid());
+        ASSERT_TRUE(addFirstUse(
+            graph,
+            resource,
+            Name("tests/task_graph/initial_owner_concurrent_use"),
+            "Initial Owner Concurrent Use",
+            graphicsQueue
+        ).valid());
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(compiledGraph.valid());
+    }
+}
+
 TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

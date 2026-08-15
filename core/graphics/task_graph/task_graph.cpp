@@ -422,6 +422,7 @@ struct ClearTextureTask{
         && resource.type == desc.type
         && resource.initialState == desc.initialState
         && resource.externalFinalState == desc.externalFinalState
+        && resource.initialOwnerQueue == desc.initialOwnerQueue
         && resource.queueSharing == desc.queueSharing;
 }
 
@@ -1378,6 +1379,7 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
         .type = resource.type,
         .initialState = resource.initialState,
         .externalFinalState = resource.externalFinalState,
+        .initialOwnerQueue = resource.initialOwnerQueue,
         .queueSharing = resource.queueSharing,
         .hasBackendResource = resource.texture != nullptr || resource.buffer != nullptr || resource.accelStruct != nullptr,
     };
@@ -1824,6 +1826,11 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
             && desc.type != GpuGraphResourceType::Texture
             && desc.type != GpuGraphResourceType::Buffer
         )
+        || (
+            desc.initialOwnerQueue.valid()
+            && desc.type != GpuGraphResourceType::Texture
+            && desc.type != GpuGraphResourceType::Buffer
+        )
         || m_resources.size() >= Limit<u32>::s_Max
     )
         return {};
@@ -1838,6 +1845,7 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
     resource.type = desc.type;
     resource.initialState = desc.initialState;
     resource.externalFinalState = desc.externalFinalState;
+    resource.initialOwnerQueue = desc.initialOwnerQueue;
     resource.queueSharing = desc.queueSharing;
     resource.markerLabelOffset = markerLabelOffset;
     resource.markerLabelSize = markerLabelSize;

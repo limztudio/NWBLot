@@ -87,6 +87,10 @@ struct GpuGraphResourceDesc{
     // graph declared for an imported texture/buffer and publishes it in the accepted packet's native state
     // snapshot. Unknown leaves the resource's final state under ordinary task ownership.
     ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
+    // Optional owner of an exclusive imported texture/buffer before its first graph use. The current generic
+    // contract accepts only an exact first-packet match; a cross-queue import still needs an explicit external
+    // release/completion representation rather than an inferred Vulkan acquire.
+    GpuPhysicalQueueId initialOwnerQueue;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
 
     constexpr GpuGraphResourceDesc& setIdentity(const Name& value){ identity = value; return *this; }
@@ -94,6 +98,7 @@ struct GpuGraphResourceDesc{
     constexpr GpuGraphResourceDesc& setType(const GpuGraphResourceType::Enum value){ type = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialState(const ResourceStates::Mask value){ initialState = value; return *this; }
     constexpr GpuGraphResourceDesc& setExternalFinalState(const ResourceStates::Mask value){ externalFinalState = value; return *this; }
+    constexpr GpuGraphResourceDesc& setInitialOwnerQueue(const GpuPhysicalQueueId value){ initialOwnerQueue = value; return *this; }
     constexpr GpuGraphResourceDesc& setQueueSharing(const ResourceQueueSharing::Mask value){ queueSharing = value; return *this; }
 };
 

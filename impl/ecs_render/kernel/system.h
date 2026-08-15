@@ -397,9 +397,11 @@ private:
     Core::GpuTaskId m_graphicsPrefixGbufferTask;
     Core::GpuTaskId m_graphicsPrefixCsgIntervalSampleTask;
     Core::GpuTaskId m_graphicsPrefixTask;
-    // Prepared soft-transparent shadow frames split opaque visibility, transparent trace, and terminal resolve, but
-    // all three tasks must compile into one packet. The terminal ID remains the output/acceptance/recovery owner.
+    // Prepared soft-transparent shadow frames split opaque production, opaque resolve, transparent trace, and
+    // terminal resolve, but all four tasks must compile into one packet. The terminal ID remains the
+    // output/acceptance/recovery owner.
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueTask;
+    Core::GpuTaskId m_deferredShadowVisibilityOpaqueResolveTask;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentTraceTask;
     Core::GpuTaskId m_deferredShadowVisibilityTask;
     Core::GpuTaskId m_deferredSoftwareCausticsTask;

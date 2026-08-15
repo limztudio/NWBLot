@@ -62,9 +62,11 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const u32 softGroupsX,
     const u32 softGroupsY,
     const bool graphEntryStatesOwned,
-    const bool dispatchOpaque,
+    const bool dispatchOpaqueGeometry,
+    const bool dispatchOpaqueResolve,
     const bool dispatchTransparentTrace,
     const bool dispatchTransparentResolve,
+    const bool graphOwnsOpaqueGeometryToResolveBoundary,
     const bool graphOwnsOpaqueToTransparentBoundary,
     const bool graphOwnsTransparentTraceToResolveBoundary,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
@@ -99,7 +101,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         heap.bindCompute(commandList, *pipeline.get());
     };
 
-    if(dispatchOpaque){
+    if(dispatchOpaqueGeometry){
         // Geometry downsample: the shared graph already declares its descriptor-visible inputs and the first geometry
         // cache UAV state. Direct compatibility callers retain the native prologue; all later soft-shadow lifecycle
         // transitions remain local to this task.
@@ -137,6 +139,9 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             commandList.dispatch(softGroupsX, softGroupsY, 1u);
         }
     }
+
+    if(!dispatchOpaqueResolve && !dispatchTransparentTrace && !dispatchTransparentResolve)
+        return;
 
     u32 slotRangeCount = 0u;
     for(u32 slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot){
@@ -194,7 +199,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         commandList.dispatch(softGroupsX, softGroupsY, 1u);
     };
 
-    if(dispatchOpaque){
+    if(dispatchOpaqueResolve){
     const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources opaqueMerge = frontIsA
         ? __hidden_rt_softshadow::ShadowReprojectMergeHeapResources{
             targets.shadowSoftHalfA.get(), targets.shadowHistA.get(), targets.shadowMomentsA.get(), targets.shadowHistB.get(), targets.shadowMomentsB.get(),
@@ -223,7 +228,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         dispatchMerge(
             opaqueMerge,
             false,
-            false,
+            graphOwnsOpaqueGeometryToResolveBoundary,
             graphOwnsOpaqueTemporalMergeEntryStates,
             graphOwnsOpaqueTemporalMergeEntryStates
         );
@@ -261,6 +266,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     opaqueDispatch.visibilityStorage = targets.bindless.shadowVisibilityStorage.slot();
     opaqueDispatch.sceneShading = targets.bindless.sceneShading.slot();
     opaqueDispatch.temporalMomentsValid = opaqueTemporalActive;
+    opaqueDispatch.graphOwnsWaveletGeometryEntryState = graphOwnsOpaqueGeometryToResolveBoundary;
     opaqueDispatch.graphOwnsUpsampleStaticEntryStates = graphEntryStatesOwned;
     opaqueDispatch.firstWaveletWritesHalfA = false;
     opaqueDispatch.fold = SoftShadowUpsampleFold::Overwrite;

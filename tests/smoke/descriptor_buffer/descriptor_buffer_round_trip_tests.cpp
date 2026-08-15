@@ -934,6 +934,36 @@ struct NativePacketSoftTransparentHandoffProbeTask{
 };
 
 
+// The adjacent opaque resolve only reads command-list state tracking. It proves the compiler supplied the current
+// geometry UAV-to-SRV transition before renderer code can issue its local soft-trace bridge.
+struct NativePacketSoftOpaqueResolveHandoffProbeTask{
+    struct Payload{
+        Texture* shadowVisibility = nullptr;
+        Texture* shadowSoftGeometry = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        const bool ready =
+            payload.shadowVisibility
+            && payload.shadowSoftGeometry
+            && commandList.getTextureSubresourceState(payload.shadowVisibility, 0u, 0u)
+                == ResourceStates::UnorderedAccess
+            && commandList.getTextureSubresourceState(payload.shadowSoftGeometry, 0u, 0u)
+                == ResourceStates::ShaderResource
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
 // The terminal transparent fold inherits both its temporal merge pair and the static resolve reads. The callback
 // does only state getters, so it cannot hide a missing graph prologue.
 struct NativePacketSoftTransparentTemporalMergeProbeTask{
@@ -3728,8 +3758,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceEntryStatesR
 }
 
 
-// The normal deferred soft-transparent route records opaque visibility, trace, and terminal resolve in one packet.
-// Prove the resolve sees the trace and static geometry/G-buffer/scene reads without a native state bridge.
+// The normal deferred soft-transparent route records opaque production, opaque resolve, transparent trace, and
+// terminal resolve in one packet. Prove both compiler-owned handoffs without a renderer-native state bridge.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRecordsWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto makeShadowTarget = [&device](){
@@ -3936,6 +3966,40 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
     GpuTaskSchedulingHint traceScheduling = opaqueScheduling;
     traceScheduling.cost = GpuTaskCostHint::Medium;
     traceScheduling.mergeWithPrevious = true;
+    const GpuTaskResourceUse opaqueResolveUses[] = {
+        {
+            .resource = shadowVisibilityResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = shadowSoftGeometryResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskDesc opaqueResolveDesc;
+    opaqueResolveDesc
+        .setIdentity(Name("tests/descriptor_buffer/soft_transparent_opaque_resolve"))
+        .setMarkerLabel("Shadow Opaque Soft Resolve")
+        .setQueue(computeQueue)
+        .setScheduling(traceScheduling)
+        .setDependencies(&opaqueTask, 1u)
+        .setResourceUses(opaqueResolveUses, LengthOf(opaqueResolveUses))
+    ;
+    bool opaqueResolveRecorded = false;
+    const GpuTaskId opaqueResolveTask = graph.addTask<NativePacketSoftOpaqueResolveHandoffProbeTask>(
+        opaqueResolveDesc,
+        NativePacketSoftOpaqueResolveHandoffProbeTask::Payload{
+            .shadowVisibility = shadowVisibility.get(),
+            .shadowSoftGeometry = shadowSoftGeometry.get(),
+            .recorded = &opaqueResolveRecorded,
+        }
+    );
+    ASSERT_TRUE(opaqueResolveTask.valid());
+
     const GpuTaskResourceUse traceUses[] = {
         {
             .resource = shadowVisibilityResource,
@@ -3956,7 +4020,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
         .setMarkerLabel("Shadow Transparent Soft Trace")
         .setQueue(computeQueue)
         .setScheduling(traceScheduling)
-        .setDependencies(&opaqueTask, 1u)
+        .setDependencies(&opaqueResolveTask, 1u)
         .setResourceUses(traceUses, LengthOf(traceUses))
     ;
     bool traceRecorded = false;
@@ -4100,6 +4164,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
     ASSERT_EQ(compiledGraph.packetCount(), 1u);
     const GpuSubmissionPacketId packet = compiledGraph.packetForTask(opaqueTask);
     ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(opaqueResolveTask), packet);
     EXPECT_EQ(compiledGraph.packetForTask(traceTask), packet);
     EXPECT_EQ(compiledGraph.packetForTask(foldTask), packet);
     const GpuCompiledTask* const compiledTrace = compiledGraph.findTask(traceTask);
@@ -4121,6 +4186,25 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
     }
     EXPECT_TRUE(hasVisibilityUav);
 
+    const GpuCompiledTask* const compiledOpaqueResolve = compiledGraph.findTask(opaqueResolveTask);
+    ASSERT_NE(compiledOpaqueResolve, nullptr);
+    const GpuCompiledBarrier* const opaqueResolveBarriers = compiledGraph.taskPrologueBarriers(opaqueResolveTask);
+    ASSERT_NE(opaqueResolveBarriers, nullptr);
+    bool hasGeometryResolveTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledOpaqueResolve->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = opaqueResolveBarriers[barrierIndex];
+        if(
+            barrier.type == GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == shadowSoftGeometryResource
+            && barrier.before == ResourceStates::UnorderedAccess
+            && barrier.after == ResourceStates::ShaderResource
+        ){
+            hasGeometryResolveTransition = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(hasGeometryResolveTransition);
+
     const GpuCompiledTask* const compiledFold = compiledGraph.findTask(foldTask);
     ASSERT_NE(compiledFold, nullptr);
     const GpuCompiledBarrier* const foldBarriers = compiledGraph.taskPrologueBarriers(foldTask);
@@ -4139,7 +4223,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
         return false;
     };
     EXPECT_TRUE(hasFoldShaderResourceTransition(transparentSoftHalfResource, ResourceStates::UnorderedAccess));
-    EXPECT_TRUE(hasFoldShaderResourceTransition(shadowSoftGeometryResource, ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasFoldShaderResourceTransition(transparentHistoryAResource, ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasFoldShaderResourceTransition(transparentMomentsAResource, ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasFoldShaderResourceTransition(previousGeometryResource, ResourceStates::Common));
@@ -4174,6 +4257,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
         &failedPacket
     )) << "failed packet " << failedPacket.index;
     EXPECT_TRUE(opaqueRecorded);
+    EXPECT_TRUE(opaqueResolveRecorded);
     EXPECT_TRUE(traceRecorded);
     EXPECT_TRUE(foldRecorded);
 

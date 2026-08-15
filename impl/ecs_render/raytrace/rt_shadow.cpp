@@ -21,9 +21,9 @@ NWB_IMPL_BEGIN
 namespace __hidden_shadow_visibility_task{
 
 
-// A prepared soft-transparent frame keeps the existing opaque producer and transparent fold in one native packet,
-// but records the opaque-to-transparent UAV dependency as two graph callbacks. The shared state is stack-owned by
-// the renderer for this graph transaction; it never survives acceptance or a retry.
+// A prepared soft-transparent frame records opaque production, opaque resolve, transparent trace, and terminal
+// fold as one native packet. The shared state is stack-owned by the renderer for this graph transaction; it never
+// survives acceptance or a retry.
 struct ShadowVisibilityOpaqueGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -111,8 +111,8 @@ struct ShadowVisibilityOpaqueGraphTask{
         if(!opaqueRecorded){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split opaque soft-shadow producer failed; retaining all-lit visibility"));
             payload.raytracingSystem->clearShadowVisibility(commandList, *payload.targets);
-            // The following terminal graph callback declares the output as UAV. Keep the command-list tracker aligned
-            // with that declared no-op handoff even when this fallback only recorded a typed clear.
+            // The following graph callbacks declare the output as UAV. Keep the command-list tracker aligned with
+            // their declared no-op handoffs even when this fallback only recorded a typed clear.
             commandList.setTextureState(
                 payload.targets->shadowVisibility.get(),
                 ECSRenderDetail::s_ShadowVisibilitySubresources,
@@ -134,6 +134,90 @@ struct ShadowVisibilityOpaqueGraphTask{
         if(payload.asyncTiming->has_value())
             payload.asyncTiming->value().finishMarker();
         payload.shadowVisibilityTiming->value().finishMarker();
+        return true;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.opaqueProduced)
+            *payload.opaqueProduced = false;
+        if(payload.asyncTiming && payload.asyncTiming->has_value()){
+            payload.asyncTiming->value().discardTiming();
+            payload.asyncTiming->reset();
+        }
+        if(payload.shadowVisibilityTiming && payload.shadowVisibilityTiming->has_value()){
+            payload.shadowVisibilityTiming->value().discardTiming();
+            payload.shadowVisibilityTiming->reset();
+        }
+    }
+};
+
+
+// The opaque producer leaves the trace and current geometry scratch in their declared states. This adjacent task
+// owns the geometry UAV-to-SRV transition before temporal merge and wavelet resolve. Timing still begins in the
+// producer and ends in the terminal transparent fold callback.
+struct ShadowVisibilityOpaqueResolveGraphTask{
+    struct Payload{
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
+        Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming = nullptr;
+        bool* opaqueProduced = nullptr;
+        const u32* opaqueFrameIndex = nullptr;
+        bool hardwareShadowSupported = false;
+        bool graphEntryStatesOwned = false;
+        bool graphOwnsOpaqueTemporalMergeEntryStates = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(
+            !payload.raytracingSystem
+            || !payload.targets
+            || !payload.timingTicket
+            || !payload.asyncTiming
+            || !payload.shadowVisibilityTiming
+            || !payload.opaqueProduced
+            || !payload.opaqueFrameIndex
+        )
+            return false;
+        if(!*payload.opaqueProduced)
+            return true;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        if(payload.raytracingSystem->renderSoftOpaqueShadowResolve(
+            commandList,
+            *payload.targets,
+            *payload.opaqueFrameIndex,
+            payload.hardwareShadowSupported,
+            payload.graphEntryStatesOwned,
+            payload.graphOwnsOpaqueTemporalMergeEntryStates
+        ))
+            return true;
+
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split opaque soft-shadow resolve failed; retaining all-lit visibility"));
+        payload.raytracingSystem->clearShadowVisibility(commandList, *payload.targets);
+        // The skipped transparent callbacks still declare this output as UAV. Keep the native state tracker aligned
+        // with their no-op graph handoff after the typed fallback clear.
+        commandList.setTextureState(
+            payload.targets->shadowVisibility.get(),
+            ECSRenderDetail::s_ShadowVisibilitySubresources,
+            Core::ResourceStates::UnorderedAccess
+        );
+        commandList.commitBarriers();
+        *payload.opaqueProduced = false;
+        if(payload.asyncTiming->has_value()){
+            payload.asyncTiming->value().discardTiming();
+            payload.asyncTiming->reset();
+        }
+        if(payload.shadowVisibilityTiming->has_value()){
+            payload.shadowVisibilityTiming->value().discardTiming();
+            payload.shadowVisibilityTiming->reset();
+        }
         return true;
     }
 
@@ -756,8 +840,10 @@ bool RendererRayTracingSystem::renderShadowVisibility(
     const bool graphEntryStatesOwned,
     const bool splitSoftTransparentFold,
     u32* const opaqueFrameIndex,
-    const bool graphOwnsOpaqueTemporalMergeEntryStates
+    const bool graphOwnsOpaqueTemporalMergeEntryStates,
+    const bool splitOpaqueSoftResolve
 ){
+    NWB_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
     if(!targets.shadowVisibility)
         return false;
     if(!rayTracingState().m_tlas || !rayTracingState().m_shadowPipeline)
@@ -850,11 +936,12 @@ bool RendererRayTracingSystem::renderShadowVisibility(
             commandList.dispatch(softGroupsX, softGroupsY, 1u);
         }
 
-        // Preserve the trace-to-resolve UAV boundary.
+        // Preserve the trace image's local UAV fence. The adjacent resolve callback only takes ownership of the
+        // independently produced geometry scratch transition.
         commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
-        // A prepared graph may expose the opaque resolve to transparent-fold UAV handoff as a distinct callback.
+        // A prepared graph may expose the opaque geometry-to-resolve handoff before the transparent-fold tail.
         dispatchSoftShadowDenoiseAndTransparentFold(
             commandList,
             targets,
@@ -863,8 +950,10 @@ bool RendererRayTracingSystem::renderShadowVisibility(
             softGroupsY,
             graphEntryStatesOwned,
             true,
+            !splitOpaqueSoftResolve,
             !splitSoftTransparentFold,
             !splitSoftTransparentFold,
+            false,
             false,
             false,
             graphOwnsOpaqueTemporalMergeEntryStates
@@ -948,6 +1037,36 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
     );
 }
 
+Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    Optional<Core::GpuTimingMeasure>* const asyncTiming,
+    Optional<Core::GpuTimingMeasure>* const shadowVisibilityTiming,
+    bool* const opaqueProduced,
+    const u32* const opaqueFrameIndex,
+    const bool hardwareShadowSupported,
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsOpaqueTemporalMergeEntryStates
+){
+    return graph.addTask<__hidden_shadow_visibility_task::ShadowVisibilityOpaqueResolveGraphTask>(
+        desc,
+        __hidden_shadow_visibility_task::ShadowVisibilityOpaqueResolveGraphTask::Payload{
+            .raytracingSystem = this,
+            .targets = &targets,
+            .timingTicket = &timingTicket,
+            .asyncTiming = asyncTiming,
+            .shadowVisibilityTiming = shadowVisibilityTiming,
+            .opaqueProduced = opaqueProduced,
+            .opaqueFrameIndex = opaqueFrameIndex,
+            .hardwareShadowSupported = hardwareShadowSupported,
+            .graphEntryStatesOwned = graphEntryStatesOwned,
+            .graphOwnsOpaqueTemporalMergeEntryStates = graphOwnsOpaqueTemporalMergeEntryStates,
+        }
+    );
+}
+
 bool RendererRayTracingSystem::renderShadowVisibilityOpaque(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
@@ -968,8 +1087,51 @@ bool RendererRayTracingSystem::renderShadowVisibilityOpaque(
         graphEntryStatesOwned,
         true,
         &outFrameIndex,
-        graphOwnsOpaqueTemporalMergeEntryStates
+        graphOwnsOpaqueTemporalMergeEntryStates,
+        true
     );
+}
+
+bool RendererRayTracingSystem::renderSoftOpaqueShadowResolve(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const u32 frameIndex,
+    const bool hardwareShadowSupported,
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsOpaqueTemporalMergeEntryStates
+){
+    if(
+        !rayTracingState().m_softShadowReady
+        || !rayTracingState().m_softTransparentReady
+        || rayTracingState().m_softShadowSlotMask == 0u
+    )
+        return false;
+    const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    const u32 groupSize = hardwareShadowSupported
+        ? static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)
+        : static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE)
+    ;
+    const u32 softGroupsX = DivideUp(softHalfWidth, groupSize);
+    const u32 softGroupsY = DivideUp(softHalfHeight, groupSize);
+    dispatchSoftShadowDenoiseAndTransparentFold(
+        commandList,
+        targets,
+        frameIndex,
+        softGroupsX,
+        softGroupsY,
+        graphEntryStatesOwned,
+        false,
+        true,
+        false,
+        false,
+        true,
+        false,
+        false,
+        graphOwnsOpaqueTemporalMergeEntryStates,
+        false
+    );
+    return true;
 }
 
 bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
@@ -997,9 +1159,13 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
         softGroupsY,
         graphEntryStatesOwned,
         false,
+        false,
         true,
         false,
+        false,
         graphOwnsOpaqueToTransparentBoundary,
+        false,
+        false,
         false
     );
     return true;
@@ -1033,7 +1199,9 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
         graphEntryStatesOwned,
         false,
         false,
+        false,
         true,
+        false,
         graphOwnsOpaqueToTransparentBoundary,
         graphOwnsTransparentTraceToResolveBoundary,
         false,
@@ -1136,8 +1304,10 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     const bool graphEntryStatesOwned,
     const bool splitSoftTransparentFold,
     u32* const opaqueFrameIndex,
-    const bool graphOwnsOpaqueTemporalMergeEntryStates
+    const bool graphOwnsOpaqueTemporalMergeEntryStates,
+    const bool splitOpaqueSoftResolve
 ){
+    NWB_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
     // Hybrid mode folds transparent software transmittance onto the hardware opaque mask.
     if(!targets.shadowVisibility)
         return false;
@@ -1293,7 +1463,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                 commandList.dispatch(softGroupsX, softGroupsY, 1u);
             }
 
-            // Preserve the trace-to-resolve UAV boundary.
+            // Preserve the trace image's local UAV fence. The adjacent resolve callback only takes ownership of
+            // the independently produced geometry scratch transition.
             commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
 
@@ -1306,8 +1477,10 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                 softGroupsY,
                 graphEntryStatesOwned,
                 true,
+                !splitOpaqueSoftResolve,
                 !splitSoftTransparentFold,
                 !splitSoftTransparentFold,
+                false,
                 false,
                 false,
                 graphOwnsOpaqueTemporalMergeEntryStates
@@ -1538,7 +1711,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
         graphEntryStatesOwned,
         true,
         &outFrameIndex,
-        graphOwnsOpaqueTemporalMergeEntryStates
+        graphOwnsOpaqueTemporalMergeEntryStates,
+        true
     );
 }
 

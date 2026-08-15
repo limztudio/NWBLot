@@ -252,6 +252,7 @@ void RendererSystem::invalidateResources(){
     m_deferredLightingTaskGraphValid = false;
     m_deferredShadowPrepareTask = {};
     m_deferredShadowVisibilityOpaqueTask = {};
+    m_deferredShadowVisibilityOpaqueResolveTask = {};
     m_deferredShadowVisibilityTransparentTraceTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
@@ -531,6 +532,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_graphicsPrefixSceneShadingSetupReady = false;
     m_deferredLightingTaskGraphValid = false;
     m_deferredShadowVisibilityOpaqueTask = {};
+    m_deferredShadowVisibilityOpaqueResolveTask = {};
     m_deferredShadowVisibilityTransparentTraceTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
@@ -1116,6 +1118,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowVisibilityOpaqueTask)
             : Core::GpuSubmissionPacketId{}
     ;
+    const Core::GpuSubmissionPacketId shadowVisibilityOpaqueResolvePacket =
+        m_deferredShadowVisibilityOpaqueResolveTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowVisibilityOpaqueResolveTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuSubmissionPacketId shadowVisibilityTransparentTracePacket =
         m_deferredShadowVisibilityTransparentTraceTask.valid()
             ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowVisibilityTransparentTraceTask)
@@ -1126,6 +1133,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || (
             shadowVisibilityOpaquePacket.valid()
             && shadowVisibilityOpaquePacket == shadowVisibilityPacket
+            && m_deferredShadowVisibilityOpaqueResolveTask.valid()
+            && shadowVisibilityOpaqueResolvePacket.valid()
+            && shadowVisibilityOpaqueResolvePacket == shadowVisibilityPacket
             && m_deferredShadowVisibilityTransparentTraceTask.valid()
             && shadowVisibilityTransparentTracePacket.valid()
             && shadowVisibilityTransparentTracePacket == shadowVisibilityPacket

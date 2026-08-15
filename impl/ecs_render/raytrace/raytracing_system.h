@@ -166,6 +166,7 @@ namespace __hidden_surfel_gi_task{
 
 namespace __hidden_shadow_visibility_task{
     struct ShadowVisibilityOpaqueGraphTask;
+    struct ShadowVisibilityOpaqueResolveGraphTask;
     struct ShadowTransparentSoftTraceGraphTask;
     struct ShadowTransparentSoftFoldGraphTask;
     struct ShadowVisibilityGraphTask;
@@ -301,7 +302,8 @@ public:
         bool graphEntryStatesOwned = false,
         bool splitSoftTransparentFold = false,
         u32* opaqueFrameIndex = nullptr,
-        bool graphOwnsOpaqueTemporalMergeEntryStates = false
+        bool graphOwnsOpaqueTemporalMergeEntryStates = false,
+        bool splitOpaqueSoftResolve = false
     );
     [[nodiscard]] Core::GpuTaskId declareShadowVisibilityTask(
         Core::GpuTaskGraph& graph,
@@ -326,6 +328,22 @@ public:
         Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming,
         bool* opaqueProduced,
         u32* opaqueFrameIndex,
+        bool graphEntryStatesOwned = false,
+        bool graphOwnsOpaqueTemporalMergeEntryStates = false
+    );
+    // The prepared opaque producer records the trace and geometry downsample first. This adjacent callback owns
+    // the compiler-lowered geometry handoff before temporal merge and wavelet resolve, while the terminal fold
+    // remains the accepted output owner.
+    [[nodiscard]] Core::GpuTaskId declareShadowVisibilityOpaqueResolveTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        Optional<Core::GpuTimingMeasure>* asyncTiming,
+        Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming,
+        bool* opaqueProduced,
+        const u32* opaqueFrameIndex,
+        bool hardwareShadowSupported,
         bool graphEntryStatesOwned = false,
         bool graphOwnsOpaqueTemporalMergeEntryStates = false
     );
@@ -391,7 +409,8 @@ public:
         bool graphEntryStatesOwned = false,
         bool splitSoftTransparentFold = false,
         u32* opaqueFrameIndex = nullptr,
-        bool graphOwnsOpaqueTemporalMergeEntryStates = false
+        bool graphOwnsOpaqueTemporalMergeEntryStates = false,
+        bool splitOpaqueSoftResolve = false
     );
     [[nodiscard]] bool prepareGpuBvhCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] Core::GpuTaskId declareSoftwareCausticsTask(
@@ -664,6 +683,7 @@ public:
 private:
     struct SurfelGiInitializationGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowVisibilityOpaqueGraphTask;
+    friend struct __hidden_shadow_visibility_task::ShadowVisibilityOpaqueResolveGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowTransparentSoftTraceGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowTransparentSoftFoldGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowVisibilityGraphTask;
@@ -888,8 +908,8 @@ private:
     // Resolve a contiguous shadow-slot range in one heap-selected dispatch.
     void dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slotStart, u32 slotCount, const SoftShadowResolveDispatch& dispatch);
     // Denoise either backend's soft trace and optionally run the transparent trace and resolve phases. The shared
-    // deferred graph supplies the first geometry-downsample entry states and the prepared trace-to-resolve handoff;
-    // later lifecycle transitions remain task-local.
+    // deferred graph supplies the first geometry-downsample entry states, the opaque geometry-to-resolve handoff,
+    // and the prepared transparent trace-to-resolve handoff; later lifecycle transitions remain task-local.
     void dispatchSoftShadowDenoiseAndTransparentFold(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -897,9 +917,11 @@ private:
         u32 softGroupsX,
         u32 softGroupsY,
         bool graphEntryStatesOwned = false,
-        bool dispatchOpaque = true,
+        bool dispatchOpaqueGeometry = true,
+        bool dispatchOpaqueResolve = true,
         bool dispatchTransparentTrace = true,
         bool dispatchTransparentResolve = true,
+        bool graphOwnsOpaqueGeometryToResolveBoundary = false,
         bool graphOwnsOpaqueToTransparentBoundary = false,
         bool graphOwnsTransparentTraceToResolveBoundary = false,
         bool graphOwnsOpaqueTemporalMergeEntryStates = false,
@@ -911,6 +933,14 @@ private:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         u32& outFrameIndex,
+        bool graphEntryStatesOwned,
+        bool graphOwnsOpaqueTemporalMergeEntryStates
+    );
+    [[nodiscard]] bool renderSoftOpaqueShadowResolve(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        u32 frameIndex,
+        bool hardwareShadowSupported,
         bool graphEntryStatesOwned,
         bool graphOwnsOpaqueTemporalMergeEntryStates
     );

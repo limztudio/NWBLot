@@ -3455,6 +3455,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     using namespace __hidden_renderer_task_graph;
 
     m_deferredShadowVisibilityOpaqueTask = {};
+    m_deferredShadowVisibilityOpaqueResolveTask = {};
     m_deferredShadowVisibilityTransparentTraceTask = {};
     m_deferredShadowVisibilityTask = {};
     if(
@@ -3790,8 +3791,9 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
 
-    // The prepared tail keeps the transparent trace and temporal/RGB resolve as adjacent callbacks. Re-importing
-    // retains shared graph identities while making the trace output's UAV-to-SRV handoff explicit.
+    // The prepared soft path keeps opaque resolve, transparent trace, and temporal/RGB resolve as adjacent
+    // callbacks. Re-importing retains shared graph identities while making both graph-owned handoffs explicit.
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaqueResolveResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentTraceResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentFoldResourceUses{ scratchArena };
     bool graphOwnsTransparentTemporalMergeEntryStates = false;
@@ -3820,6 +3822,26 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             deferredTargets.shadowSoftGeometryPrev,
             Name("render.shadow_visibility.soft_geometry_previous"),
             "Previous Shadow Soft Geometry"
+        );
+        const Core::GpuGraphResourceId opaqueHistoryA = importTexture(
+            deferredTargets.shadowHistA,
+            Name("render.shadow_visibility.history_a"),
+            "Shadow History A"
+        );
+        const Core::GpuGraphResourceId opaqueHistoryB = importTexture(
+            deferredTargets.shadowHistB,
+            Name("render.shadow_visibility.history_b"),
+            "Shadow History B"
+        );
+        const Core::GpuGraphResourceId opaqueMomentsA = importTexture(
+            deferredTargets.shadowMomentsA,
+            Name("render.shadow_visibility.moments_a"),
+            "Shadow Moments A"
+        );
+        const Core::GpuGraphResourceId opaqueMomentsB = importTexture(
+            deferredTargets.shadowMomentsB,
+            Name("render.shadow_visibility.moments_b"),
+            "Shadow Moments B"
         );
         const Core::GpuGraphResourceId transparentSoftHalf = importTexture(
             deferredTargets.transparentSoftHalf,
@@ -3877,6 +3899,10 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             || !shadowSoftHalfB.valid()
             || !shadowSoftGeometry.valid()
             || !shadowSoftGeometryPrevious.valid()
+            || !opaqueHistoryA.valid()
+            || !opaqueHistoryB.valid()
+            || !opaqueMomentsA.valid()
+            || !opaqueMomentsB.valid()
             || !transparentSoftHalf.valid()
             || !transparentHistoryA.valid()
             || !transparentHistoryB.valid()
@@ -3890,6 +3916,37 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import prepared soft-transparent shadow-fold resources"));
             return false;
+        }
+
+        opaqueResolveResourceUses.reserve(16u);
+        opaqueResolveResourceUses.push_back(WriteUse(shadowVisibility, Core::ResourceStates::UnorderedAccess));
+        // The trace result retains its native local transition, while current geometry crosses this exact graph
+        // boundary from the producer's UAV write to the merge/wavelet shader read.
+        opaqueResolveResourceUses.push_back(ReadWriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
+        opaqueResolveResourceUses.push_back(ReadWriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));
+        opaqueResolveResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
+        opaqueResolveResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
+        opaqueResolveResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
+        opaqueResolveResourceUses.push_back(ReadUse(depth, Core::ResourceStates::ShaderResource));
+        opaqueResolveResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
+        if(graphOwnsOpaqueTemporalMergeEntryStates){
+            // The frozen selector permits exact selected input/output declarations for the opaque temporal merge.
+            const Core::GpuGraphResourceId opaqueHistoryIn = opaqueHistoryFrontIsA ? opaqueHistoryA : opaqueHistoryB;
+            const Core::GpuGraphResourceId opaqueMomentsIn = opaqueHistoryFrontIsA ? opaqueMomentsA : opaqueMomentsB;
+            const Core::GpuGraphResourceId opaqueHistoryOut = opaqueHistoryFrontIsA ? opaqueHistoryB : opaqueHistoryA;
+            const Core::GpuGraphResourceId opaqueMomentsOut = opaqueHistoryFrontIsA ? opaqueMomentsB : opaqueMomentsA;
+            opaqueResolveResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious, Core::ResourceStates::ShaderResource));
+            opaqueResolveResourceUses.push_back(ReadUse(opaqueHistoryIn, Core::ResourceStates::ShaderResource));
+            opaqueResolveResourceUses.push_back(ReadUse(opaqueMomentsIn, Core::ResourceStates::ShaderResource));
+            opaqueResolveResourceUses.push_back(WriteUse(opaqueHistoryOut, Core::ResourceStates::UnorderedAccess));
+            opaqueResolveResourceUses.push_back(WriteUse(opaqueMomentsOut, Core::ResourceStates::UnorderedAccess));
+        }else{
+            // Preserve the established conservative compatibility declarations until a later frame can safely
+            // reactivate temporal history after this graph was compiled.
+            opaqueResolveResourceUses.push_back(ReadWriteUse(opaqueHistoryA, Core::ResourceStates::UnorderedAccess));
+            opaqueResolveResourceUses.push_back(ReadWriteUse(opaqueHistoryB, Core::ResourceStates::UnorderedAccess));
+            opaqueResolveResourceUses.push_back(ReadWriteUse(opaqueMomentsA, Core::ResourceStates::UnorderedAccess));
+            opaqueResolveResourceUses.push_back(ReadWriteUse(opaqueMomentsB, Core::ResourceStates::UnorderedAccess));
         }
 
         transparentTraceResourceUses.reserve(20u + softwareTraceGeometryResourceCount);
@@ -4002,7 +4059,35 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         tailScheduling.forceSubmissionBoundary = false;
         tailScheduling.allowPacketMerge = true;
         tailScheduling.mergeWithPrevious = true;
-        const Core::GpuTaskId traceDependencies[] = { m_deferredShadowVisibilityOpaqueTask };
+        const Core::GpuTaskId opaqueResolveDependencies[] = { m_deferredShadowVisibilityOpaqueTask };
+        Core::GpuTaskDesc opaqueResolveDesc;
+        opaqueResolveDesc
+            .setIdentity(Name("render.shadow_visibility.opaque_soft_resolve"))
+            .setMarkerLabel("Shadow Opaque Soft Resolve")
+            .setQueue(ComputeQueueRequest())
+            .setScheduling(tailScheduling)
+            .setDependencies(opaqueResolveDependencies, LengthOf(opaqueResolveDependencies))
+            .setResourceUses(opaqueResolveResourceUses.data(), opaqueResolveResourceUses.size())
+        ;
+        m_deferredShadowVisibilityOpaqueResolveTask = m_raytracingSystem.declareShadowVisibilityOpaqueResolveTask(
+            m_deferredLightingTaskGraph,
+            opaqueResolveDesc,
+            deferredTargets,
+            timingTicket,
+            &asyncTiming,
+            &shadowVisibilityTiming,
+            &opaqueProduced,
+            &opaqueFrameIndex,
+            hardwareShadowSupported,
+            true,
+            graphOwnsOpaqueTemporalMergeEntryStates
+        );
+        if(!m_deferredShadowVisibilityOpaqueResolveTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque soft-shadow resolve graph task"));
+            return false;
+        }
+
+        const Core::GpuTaskId traceDependencies[] = { m_deferredShadowVisibilityOpaqueResolveTask };
         Core::GpuTaskDesc traceDesc;
         traceDesc
             .setIdentity(Name("render.shadow_visibility.soft_transparent_trace"))
@@ -5682,6 +5767,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_graphicsPrefixCsgIntervalSampleTask = {};
     m_graphicsPrefixTask = {};
     m_deferredShadowVisibilityOpaqueTask = {};
+    m_deferredShadowVisibilityOpaqueResolveTask = {};
     m_deferredShadowVisibilityTransparentTraceTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};

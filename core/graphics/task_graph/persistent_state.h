@@ -126,6 +126,21 @@ public:
         return replaceResourceSubset(source, nullptr, 0u, buffers, bufferCount);
     }
 
+    [[nodiscard]] bool replaceTextureSubset(
+        const CommandListResourceStateHandoff& source,
+        const TextureHandle* textures,
+        const usize textureCount
+    ){
+        return replaceResourceSubset(source, textures, textureCount, nullptr, 0u);
+    }
+
+    [[nodiscard]] bool replaceTextureSubset(
+        const CommandListResourceStateHandoff& source,
+        const TextureHandle& texture
+    ){
+        return replaceTextureSubset(source, &texture, 1u);
+    }
+
     [[nodiscard]] bool mergeBufferSubset(
         const CommandListResourceStateHandoff& source,
         const BufferHandle* buffers,

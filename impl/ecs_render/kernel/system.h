@@ -527,7 +527,7 @@ private:
     // Compute-only shadow scratch/history retains accepted graph packet state across frames. Deferred lighting now
     // consumes the visibility result on the same Compute lane, so retain the private scratch and its typed backings.
     Core::GpuPersistentResourceStateCache m_shadowComputePersistentState;
-    Core::CommandListResourceStateHandoff m_shadowVisibilityReturnStateHandoff;
+    Core::GpuPersistentResourceStateCache m_shadowVisibilityReturnState;
     // Native TLAS/BLAS, software-BVH build storage, and normalized trace geometry change inside Shadow Preparation.
     // Retain only accepted live generations so the next frame's first graph packet seeds their real acceleration,
     // UAV, and descriptor-visible ShaderResource states.
@@ -537,7 +537,7 @@ private:
     // the optional lagged path snapshots it for the next Graphics lighting packet.
     Core::GpuPersistentResourceStateCache m_causticsComputePersistentState;
     Core::CommandListResourceStateHandoff m_causticIrradianceLightingStateHandoff;
-    Core::CommandListResourceStateHandoff m_causticIrradianceReturnStateHandoff;
+    Core::GpuPersistentResourceStateCache m_causticIrradianceReturnState;
     // Surfel GI is also entirely compute-dispatched, including its RayQuery trace variant. Its field/history stays on
     // AsyncCompute; the resolved full-resolution irradiance is either consumed there or snapshotted for optional
     // frame-lagged Graphics lighting. Retain only the accepted private Compute scratch and its typed backings.
@@ -545,7 +545,7 @@ private:
     // The counter can continue into a late Transfer readback, so retain the accepted tail state and its typed backing
     // separately. The next Surfel-GI packet imports this cache through its semantic task binding.
     Core::GpuPersistentResourceStateCache m_surfelGiCounterPersistentState;
-    Core::CommandListResourceStateHandoff m_surfelIrradianceReturnStateHandoff;
+    Core::GpuPersistentResourceStateCache m_surfelIrradianceReturnState;
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;
     bool m_preparedShadowVisibilityResourcesValid = false;

@@ -46,14 +46,14 @@ RendererSystem::RendererSystem(
     , m_materialState(arena)
     , m_rayTracingState(arena)
     , m_shadowComputePersistentState(arena)
-    , m_shadowVisibilityReturnStateHandoff(arena)
+    , m_shadowVisibilityReturnState(arena)
     , m_shadowPreparePersistentState(arena)
     , m_causticsComputePersistentState(arena)
     , m_causticIrradianceLightingStateHandoff(arena)
-    , m_causticIrradianceReturnStateHandoff(arena)
+    , m_causticIrradianceReturnState(arena)
     , m_surfelGiComputePersistentState(arena)
     , m_surfelGiCounterPersistentState(arena)
-    , m_surfelIrradianceReturnStateHandoff(arena)
+    , m_surfelIrradianceReturnState(arena)
     , m_shaderSystem(*this)
     , m_meshSystem(*this)
     , m_materialSystem(*this)
@@ -146,13 +146,13 @@ void RendererSystem::resetLaggedLightingHistoryTracking()noexcept{
 void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     // Replaced targets invalidate retained compute-local state.
     m_shadowComputePersistentState.reset();
-    m_shadowVisibilityReturnStateHandoff.reset();
+    m_shadowVisibilityReturnState.reset();
     m_causticsComputePersistentState.reset();
     m_causticIrradianceLightingStateHandoff.reset();
-    m_causticIrradianceReturnStateHandoff.reset();
+    m_causticIrradianceReturnState.reset();
     m_surfelGiComputePersistentState.reset();
     m_surfelGiCounterPersistentState.reset();
-    m_surfelIrradianceReturnStateHandoff.reset();
+    m_surfelIrradianceReturnState.reset();
 }
 
 void RendererSystem::resetInvalidatedResourceStateHandoffs()noexcept{
@@ -2411,13 +2411,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             )
         ;
     }
-    if(shadowVisibilityRunsOnCompute && m_shadowVisibilityReturnStateHandoff.valid()){
+    if(shadowVisibilityRunsOnCompute && m_shadowVisibilityReturnState.valid()){
         shadowVisibilityStateSourcesReady = shadowVisibilityStateSourcesReady
             && appendDeclaredStateSource(
                 shadowVisibilityStateSources,
                 LengthOf(shadowVisibilityStateSources),
                 shadowVisibilityStateSourceCount,
-                &m_shadowVisibilityReturnStateHandoff
+                m_shadowVisibilityReturnState.source()
             )
         ;
     }
@@ -2441,13 +2441,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 )
             ;
         }
-        if(softwareCausticsRunsOnCompute && m_causticIrradianceReturnStateHandoff.valid()){
+        if(softwareCausticsRunsOnCompute && m_causticIrradianceReturnState.valid()){
             softwareCausticsStateSourcesReady = softwareCausticsStateSourcesReady
                 && appendDeclaredStateSource(
                     softwareCausticsStateSources,
                     LengthOf(softwareCausticsStateSources),
                     softwareCausticsStateSourceCount,
-                    &m_causticIrradianceReturnStateHandoff
+                    m_causticIrradianceReturnState.source()
                 )
             ;
         }
@@ -2484,13 +2484,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             )
         ;
     }
-    if(surfelGiRunsOnCompute && m_surfelIrradianceReturnStateHandoff.valid()){
+    if(surfelGiRunsOnCompute && m_surfelIrradianceReturnState.valid()){
         surfelGiStateSourcesReady = surfelGiStateSourcesReady
             && appendDeclaredStateSource(
                 surfelGiStateSources,
                 LengthOf(surfelGiStateSources),
                 surfelGiStateSourceCount,
-                &m_surfelIrradianceReturnStateHandoff
+                m_surfelIrradianceReturnState.source()
             )
         ;
     }
@@ -3077,18 +3077,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             if(context->usesLaggedHistory)
                 context->targets->laggedLightingHistory.slotsUploaded = true;
             context->returnStatesReady = !context->runsOnCompute || context->usesLaggedHistory || (
-                renderer.m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
+                renderer.m_shadowVisibilityReturnState.replaceTextureSubset(
                     *context->finalState,
-                    context->targets->shadowVisibility.get()
+                    context->targets->shadowVisibility
                 )
                 // Bootstrap uses live caustics; active lagged mode uses the producer image directly.
-                && renderer.m_causticIrradianceReturnStateHandoff.buildTextureSubset(
+                && renderer.m_causticIrradianceReturnState.replaceTextureSubset(
                     *context->finalState,
-                    context->targets->causticIrradiance.get()
+                    context->targets->causticIrradiance
                 )
-                && renderer.m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
+                && renderer.m_surfelIrradianceReturnState.replaceTextureSubset(
                     *context->finalState,
-                    context->targets->surfelIrradiance.get()
+                    context->targets->surfelIrradiance
                 )
             );
             if(!context->returnStatesReady)
@@ -3321,9 +3321,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
             RendererSystem& renderer = *context->renderer;
             DeferredFrameTargets& targets = *context->targets;
-            context->stateReady = renderer.m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
+            context->stateReady = renderer.m_surfelIrradianceReturnState.replaceTextureSubset(
                 *context->finalState,
-                targets.surfelIrradiance.get()
+                targets.surfelIrradiance
             );
             const Core::BufferHandle surfelGiCounterBuffers[] = {
                 renderer.m_rayTracingState.m_surfelCounterBuffer,
@@ -3664,9 +3664,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             // Retain only private compute scratch; shared inputs come from next frame's prefix.
             // Retain accepted producer state for recovery after later rejection.
             const bool producerReturnStatesReady =
-                m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
+                m_shadowVisibilityReturnState.replaceTextureSubset(
                     *shadowVisibilityFinalStateSeed,
-                    deferredTargets.shadowVisibility.get()
+                    deferredTargets.shadowVisibility
                 )
             ;
             if(!producerReturnStatesReady){
@@ -3859,9 +3859,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         if(!hardwareShadowSupported && softwareCausticsRunsOnCompute){
             const bool softwareCausticsStateReady =
-                m_causticIrradianceReturnStateHandoff.buildTextureSubset(
+                m_causticIrradianceReturnState.replaceTextureSubset(
                     *causticsFinalStateSeed,
-                    deferredTargets.causticIrradiance.get()
+                    deferredTargets.causticIrradiance
                 )
             ;
             if(!softwareCausticsStateReady){
@@ -4014,7 +4014,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         // recorded graph rather than part of the initial packet prefix; its source binding stays task-anchored.
         const Core::CommandListResourceStateHandoff* const causticHistoryCopySource = laggedAsyncLightingSchedule
             ? &m_causticIrradianceLightingStateHandoff
-            : &m_causticIrradianceReturnStateHandoff
+            : m_causticIrradianceReturnState.source()
         ;
         Core::GpuExternalPacketStateSource historyCopyStateSources[3] = {};
         usize historyCopyStateSourceCount = 0u;
@@ -4023,7 +4023,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 historyCopyStateSources,
                 LengthOf(historyCopyStateSources),
                 historyCopyStateSourceCount,
-                &m_shadowVisibilityReturnStateHandoff
+                m_shadowVisibilityReturnState.source()
             )
             && appendDeclaredStateSource(
                 historyCopyStateSources,
@@ -4035,7 +4035,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 historyCopyStateSources,
                 LengthOf(historyCopyStateSources),
                 historyCopyStateSourceCount,
-                &m_surfelIrradianceReturnStateHandoff
+                m_surfelIrradianceReturnState.source()
             )
         ;
         if(!historyCopyStateSourcesReady){
@@ -4125,17 +4125,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 }
                 else{
                     const bool historyCopyReturnStatesReady =
-                        m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
+                        m_shadowVisibilityReturnState.replaceTextureSubset(
                             *historyCopyFinalStateSeed,
-                            deferredTargets.shadowVisibility.get()
+                            deferredTargets.shadowVisibility
                         )
-                        && m_causticIrradianceReturnStateHandoff.buildTextureSubset(
+                        && m_causticIrradianceReturnState.replaceTextureSubset(
                             *historyCopyFinalStateSeed,
-                            deferredTargets.causticIrradiance.get()
+                            deferredTargets.causticIrradiance
                         )
-                        && m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
+                        && m_surfelIrradianceReturnState.replaceTextureSubset(
                             *historyCopyFinalStateSeed,
-                            deferredTargets.surfelIrradiance.get()
+                            deferredTargets.surfelIrradiance
                         )
                     ;
                     if(!historyCopyReturnStatesReady){

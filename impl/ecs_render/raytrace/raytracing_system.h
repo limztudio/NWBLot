@@ -337,7 +337,8 @@ public:
         const bool* opaqueProduced,
         bool* transparentTraceProduced,
         const u32* opaqueFrameIndex,
-        bool graphEntryStatesOwned = false
+        bool graphEntryStatesOwned = false,
+        bool graphOwnsTransparentTemporalMergeEntryStates = false
     );
     [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftTraceTask(
         Core::GpuTaskGraph& graph,
@@ -892,7 +893,8 @@ private:
         bool dispatchTransparentTrace = true,
         bool dispatchTransparentResolve = true,
         bool graphOwnsOpaqueToTransparentBoundary = false,
-        bool graphOwnsTransparentTraceToResolveBoundary = false
+        bool graphOwnsTransparentTraceToResolveBoundary = false,
+        bool graphOwnsTransparentTemporalMergeEntryStates = false
     );
     // Graph-only phase helpers preserve the complete direct route above while exposing both in-packet handoffs to
     // the shared deferred graph.
@@ -921,7 +923,8 @@ private:
         u32 frameIndex,
         bool graphEntryStatesOwned,
         bool graphOwnsOpaqueToTransparentBoundary,
-        bool graphOwnsTransparentTraceToResolveBoundary
+        bool graphOwnsTransparentTraceToResolveBoundary,
+        bool graphOwnsTransparentTemporalMergeEntryStates
     );
     // Temporal merge precedes soft resolve and swaps history at frame end.
     [[nodiscard]] bool ensureShadowReprojectMergePipeline();

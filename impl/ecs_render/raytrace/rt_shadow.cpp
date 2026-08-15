@@ -215,6 +215,7 @@ struct ShadowTransparentSoftFoldGraphTask{
         bool* transparentTraceProduced = nullptr;
         const u32* opaqueFrameIndex = nullptr;
         bool graphEntryStatesOwned = false;
+        bool graphOwnsTransparentTemporalMergeEntryStates = false;
     };
 
     [[nodiscard]] static bool record(
@@ -253,7 +254,8 @@ struct ShadowTransparentSoftFoldGraphTask{
                 *payload.opaqueFrameIndex,
                 payload.graphEntryStatesOwned,
                 true,
-                true
+                true,
+                payload.graphOwnsTransparentTemporalMergeEntryStates
             ))
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split transparent soft-shadow resolve failed; preserving opaque visibility"));
         }else
@@ -998,7 +1000,8 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
     const u32 frameIndex,
     const bool graphEntryStatesOwned,
     const bool graphOwnsOpaqueToTransparentBoundary,
-    const bool graphOwnsTransparentTraceToResolveBoundary
+    const bool graphOwnsTransparentTraceToResolveBoundary,
+    const bool graphOwnsTransparentTemporalMergeEntryStates
 ){
     if(
         !rayTracingState().m_softShadowReady
@@ -1021,7 +1024,8 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
         false,
         true,
         graphOwnsOpaqueToTransparentBoundary,
-        graphOwnsTransparentTraceToResolveBoundary
+        graphOwnsTransparentTraceToResolveBoundary,
+        graphOwnsTransparentTemporalMergeEntryStates
     );
     return true;
 }
@@ -1036,7 +1040,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
     const bool* const opaqueProduced,
     bool* const transparentTraceProduced,
     const u32* const opaqueFrameIndex,
-    const bool graphEntryStatesOwned
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsTransparentTemporalMergeEntryStates
 ){
     return graph.addTask<__hidden_shadow_visibility_task::ShadowTransparentSoftFoldGraphTask>(
         desc,
@@ -1050,6 +1055,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
             .transparentTraceProduced = transparentTraceProduced,
             .opaqueFrameIndex = opaqueFrameIndex,
             .graphEntryStatesOwned = graphEntryStatesOwned,
+            .graphOwnsTransparentTemporalMergeEntryStates = graphOwnsTransparentTemporalMergeEntryStates,
         }
     );
 }

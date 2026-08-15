@@ -3756,6 +3756,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     // retains shared graph identities while making the trace output's UAV-to-SRV handoff explicit.
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentTraceResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentFoldResourceUses{ scratchArena };
+    bool graphOwnsTransparentTemporalMergeEntryStates = false;
     if(splitSoftTransparentFold){
         const Core::GpuGraphResourceId shadowCoarseTransmittance = importTexture(
             deferredTargets.shadowCoarseTransmittance,
@@ -3876,7 +3877,9 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         for(usize resourceIndex = 0u; resourceIndex < softwareTraceGeometryResourceCount; ++resourceIndex)
             transparentTraceResourceUses.push_back(ReadUse(softwareTraceGeometryResources[resourceIndex], Core::ResourceStates::ShaderResource));
 
-        transparentFoldResourceUses.reserve(16u);
+        graphOwnsTransparentTemporalMergeEntryStates = m_rayTracingState.m_softTransparentTemporalReady;
+        const bool transparentHistoryFrontIsA = m_rayTracingState.m_softShadowHistoryFrontIsA != 0u;
+        transparentFoldResourceUses.reserve(20u);
         transparentFoldResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
         transparentFoldResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
         transparentFoldResourceUses.push_back(ReadUse(depth, Core::ResourceStates::ShaderResource));
@@ -3888,10 +3891,37 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         transparentFoldResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious, Core::ResourceStates::ShaderResource));
         // The compiler owns this exact trace-to-resolve transition. The callback must not re-state this image.
         transparentFoldResourceUses.push_back(ReadUse(transparentSoftHalf, Core::ResourceStates::ShaderResource));
-        transparentFoldResourceUses.push_back(ReadWriteUse(transparentHistoryA, Core::ResourceStates::UnorderedAccess));
-        transparentFoldResourceUses.push_back(ReadWriteUse(transparentHistoryB, Core::ResourceStates::UnorderedAccess));
-        transparentFoldResourceUses.push_back(ReadWriteUse(transparentMomentsA, Core::ResourceStates::UnorderedAccess));
-        transparentFoldResourceUses.push_back(ReadWriteUse(transparentMomentsB, Core::ResourceStates::UnorderedAccess));
+        if(graphOwnsTransparentTemporalMergeEntryStates){
+            // Selection is frozen with the compiled frame: merge samples the current front pair and writes the
+            // opposite pair before the task-local wavelet reads that just-produced history.
+            const Core::GpuGraphResourceId transparentHistoryIn = transparentHistoryFrontIsA
+                ? transparentHistoryA
+                : transparentHistoryB
+            ;
+            const Core::GpuGraphResourceId transparentMomentsIn = transparentHistoryFrontIsA
+                ? transparentMomentsA
+                : transparentMomentsB
+            ;
+            const Core::GpuGraphResourceId transparentHistoryOut = transparentHistoryFrontIsA
+                ? transparentHistoryB
+                : transparentHistoryA
+            ;
+            const Core::GpuGraphResourceId transparentMomentsOut = transparentHistoryFrontIsA
+                ? transparentMomentsB
+                : transparentMomentsA
+            ;
+            transparentFoldResourceUses.push_back(ReadUse(transparentHistoryIn, Core::ResourceStates::ShaderResource));
+            transparentFoldResourceUses.push_back(ReadUse(transparentMomentsIn, Core::ResourceStates::ShaderResource));
+            transparentFoldResourceUses.push_back(WriteUse(transparentHistoryOut, Core::ResourceStates::UnorderedAccess));
+            transparentFoldResourceUses.push_back(WriteUse(transparentMomentsOut, Core::ResourceStates::UnorderedAccess));
+        }else{
+            // The non-temporal compatibility route may reactivate temporal history only in a later frame, so retain
+            // its established conservative declarations and native transition path for this packet.
+            transparentFoldResourceUses.push_back(ReadWriteUse(transparentHistoryA, Core::ResourceStates::UnorderedAccess));
+            transparentFoldResourceUses.push_back(ReadWriteUse(transparentHistoryB, Core::ResourceStates::UnorderedAccess));
+            transparentFoldResourceUses.push_back(ReadWriteUse(transparentMomentsA, Core::ResourceStates::UnorderedAccess));
+            transparentFoldResourceUses.push_back(ReadWriteUse(transparentMomentsB, Core::ResourceStates::UnorderedAccess));
+        }
         transparentFoldResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
     }
 
@@ -3981,7 +4011,8 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             &opaqueProduced,
             &transparentTraceProduced,
             &opaqueFrameIndex,
-            true
+            true,
+            graphOwnsTransparentTemporalMergeEntryStates
         );
         if(!m_deferredShadowVisibilityTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred soft-transparent shadow-fold graph task"));

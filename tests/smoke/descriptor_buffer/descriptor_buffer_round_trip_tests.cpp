@@ -934,6 +934,52 @@ struct NativePacketSoftTransparentHandoffProbeTask{
 };
 
 
+// The terminal temporal merge must inherit the selected history/moment pair as shader reads while preserving the
+// opposite pair as UAV outputs. The callback does only state getters so it cannot hide a missing graph prologue.
+struct NativePacketSoftTransparentTemporalMergeProbeTask{
+    struct Payload{
+        Texture* shadowVisibility = nullptr;
+        Texture* transparentSoftHalf = nullptr;
+        Texture* historyInput = nullptr;
+        Texture* momentsInput = nullptr;
+        Texture* historyOutput = nullptr;
+        Texture* momentsOutput = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        const bool ready =
+            payload.shadowVisibility
+            && payload.transparentSoftHalf
+            && payload.historyInput
+            && payload.momentsInput
+            && payload.historyOutput
+            && payload.momentsOutput
+            && commandList.getTextureSubresourceState(payload.shadowVisibility, 0u, 0u)
+                == ResourceStates::UnorderedAccess
+            && commandList.getTextureSubresourceState(payload.transparentSoftHalf, 0u, 0u)
+                == ResourceStates::ShaderResource
+            && commandList.getTextureSubresourceState(payload.historyInput, 0u, 0u)
+                == ResourceStates::ShaderResource
+            && commandList.getTextureSubresourceState(payload.momentsInput, 0u, 0u)
+                == ResourceStates::ShaderResource
+            && commandList.getTextureSubresourceState(payload.historyOutput, 0u, 0u)
+                == ResourceStates::UnorderedAccess
+            && commandList.getTextureSubresourceState(payload.momentsOutput, 0u, 0u)
+                == ResourceStates::UnorderedAccess
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
 // The post-G-buffer normalizer must see both raster and software-build trace geometry in graph-declared
 // ShaderResource state. It deliberately performs no native transition itself.
 struct NativePacketPostGbufferTraceGeometryProbeTask{
@@ -3627,8 +3673,16 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
     };
     auto shadowVisibility = makeShadowTarget();
     auto transparentSoftHalf = makeShadowTarget();
+    auto transparentHistoryA = makeShadowTarget();
+    auto transparentMomentsA = makeShadowTarget();
+    auto transparentHistoryB = makeShadowTarget();
+    auto transparentMomentsB = makeShadowTarget();
     ASSERT_NE(shadowVisibility.get(), nullptr);
     ASSERT_NE(transparentSoftHalf.get(), nullptr);
+    ASSERT_NE(transparentHistoryA.get(), nullptr);
+    ASSERT_NE(transparentMomentsA.get(), nullptr);
+    ASSERT_NE(transparentHistoryB.get(), nullptr);
+    ASSERT_NE(transparentMomentsB.get(), nullptr);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importTexture = [&graph](const TextureHandle& texture, const Name identity, const AStringView label){
@@ -3650,8 +3704,32 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
         Name("tests/descriptor_buffer/soft_transparent_fold_half"),
         "Transparent Shadow Soft Half"
     );
+    const GpuGraphResourceId transparentHistoryAResource = importTexture(
+        transparentHistoryA,
+        Name("tests/descriptor_buffer/soft_transparent_history_a"),
+        "Transparent Shadow History A"
+    );
+    const GpuGraphResourceId transparentMomentsAResource = importTexture(
+        transparentMomentsA,
+        Name("tests/descriptor_buffer/soft_transparent_moments_a"),
+        "Transparent Shadow Moments A"
+    );
+    const GpuGraphResourceId transparentHistoryBResource = importTexture(
+        transparentHistoryB,
+        Name("tests/descriptor_buffer/soft_transparent_history_b"),
+        "Transparent Shadow History B"
+    );
+    const GpuGraphResourceId transparentMomentsBResource = importTexture(
+        transparentMomentsB,
+        Name("tests/descriptor_buffer/soft_transparent_moments_b"),
+        "Transparent Shadow Moments B"
+    );
     ASSERT_TRUE(shadowVisibilityResource.valid());
     ASSERT_TRUE(transparentSoftHalfResource.valid());
+    ASSERT_TRUE(transparentHistoryAResource.valid());
+    ASSERT_TRUE(transparentMomentsAResource.valid());
+    ASSERT_TRUE(transparentHistoryBResource.valid());
+    ASSERT_TRUE(transparentMomentsBResource.valid());
 
     const GpuQueueRequest computeQueue{
         GpuQueueCapability::Compute,
@@ -3667,6 +3745,30 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
     const GpuTaskResourceUse opaqueUses[] = {
         {
             .resource = shadowVisibilityResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = transparentHistoryAResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = transparentMomentsAResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = transparentHistoryBResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = transparentMomentsBResource,
             .range = {},
             .requiredState = ResourceStates::UnorderedAccess,
             .access = GpuTaskResourceAccess::Write,
@@ -3761,6 +3863,30 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
             .requiredState = ResourceStates::ShaderResource,
             .access = GpuTaskResourceAccess::Read,
         },
+        {
+            .resource = transparentHistoryAResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = transparentMomentsAResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = transparentHistoryBResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = transparentMomentsBResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
     };
     GpuTaskDesc foldDesc;
     foldDesc
@@ -3772,12 +3898,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
         .setResourceUses(foldUses, LengthOf(foldUses))
     ;
     bool foldRecorded = false;
-    const GpuTaskId foldTask = graph.addTask<NativePacketSoftTransparentHandoffProbeTask>(
+    const GpuTaskId foldTask = graph.addTask<NativePacketSoftTransparentTemporalMergeProbeTask>(
         foldDesc,
-        NativePacketSoftTransparentHandoffProbeTask::Payload{
+        NativePacketSoftTransparentTemporalMergeProbeTask::Payload{
             .shadowVisibility = shadowVisibility.get(),
             .transparentSoftHalf = transparentSoftHalf.get(),
-            .transparentSoftHalfState = ResourceStates::ShaderResource,
+            .historyInput = transparentHistoryA.get(),
+            .momentsInput = transparentMomentsA.get(),
+            .historyOutput = transparentHistoryB.get(),
+            .momentsOutput = transparentMomentsB.get(),
             .recorded = &foldRecorded,
         }
     );
@@ -3814,20 +3943,22 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
     ASSERT_NE(compiledFold, nullptr);
     const GpuCompiledBarrier* const foldBarriers = compiledGraph.taskPrologueBarriers(foldTask);
     ASSERT_NE(foldBarriers, nullptr);
-    bool hasTraceToResolveTransition = false;
-    for(u32 barrierIndex = 0u; barrierIndex < compiledFold->prologueBarrierCount; ++barrierIndex){
-        const GpuCompiledBarrier& barrier = foldBarriers[barrierIndex];
-        if(
-            barrier.type == GpuCompiledBarrierType::TextureTransition
-            && barrier.resource == transparentSoftHalfResource
-            && barrier.before == ResourceStates::UnorderedAccess
-            && barrier.after == ResourceStates::ShaderResource
-        ){
-            hasTraceToResolveTransition = true;
-            break;
+    const auto hasFoldShaderResourceTransition = [&](const GpuGraphResourceId resource){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledFold->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = foldBarriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == resource
+                && barrier.before == ResourceStates::UnorderedAccess
+                && barrier.after == ResourceStates::ShaderResource
+            )
+                return true;
         }
-    }
-    EXPECT_TRUE(hasTraceToResolveTransition);
+        return false;
+    };
+    EXPECT_TRUE(hasFoldShaderResourceTransition(transparentSoftHalfResource));
+    EXPECT_TRUE(hasFoldShaderResourceTransition(transparentHistoryAResource));
+    EXPECT_TRUE(hasFoldShaderResourceTransition(transparentMomentsAResource));
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);

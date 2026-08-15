@@ -5105,8 +5105,40 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
         Graphics::ResourceStates::Common,
         queueSharing
     );
+    const Graphics::GpuGraphResourceId transparentHistoryA = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/soft_transparent_history_a"),
+        "Transparent Shadow History A",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId transparentMomentsA = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/soft_transparent_moments_a"),
+        "Transparent Shadow Moments A",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId transparentHistoryB = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/soft_transparent_history_b"),
+        "Transparent Shadow History B",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId transparentMomentsB = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/soft_transparent_moments_b"),
+        "Transparent Shadow Moments B",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
     ASSERT_TRUE(shadowVisibility.valid());
     ASSERT_TRUE(transparentSoftHalf.valid());
+    ASSERT_TRUE(transparentHistoryA.valid());
+    ASSERT_TRUE(transparentMomentsA.valid());
+    ASSERT_TRUE(transparentHistoryB.valid());
+    ASSERT_TRUE(transparentMomentsB.valid());
 
     const Graphics::GpuQueueRequest computeRequest{
         Graphics::GpuQueueCapability::Compute,
@@ -5128,6 +5160,30 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     const Graphics::GpuTaskResourceUse opaqueUses[] = {
         {
             .resource = shadowVisibility,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = transparentHistoryA,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = transparentMomentsA,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = transparentHistoryB,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = transparentMomentsB,
             .range = {},
             .requiredState = Graphics::ResourceStates::UnorderedAccess,
             .access = Graphics::GpuTaskResourceAccess::Write,
@@ -5185,6 +5241,30 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
             .range = {},
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = transparentHistoryA,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = transparentMomentsA,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = transparentHistoryB,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = transparentMomentsB,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
         },
     };
     Graphics::GpuTaskDesc foldDesc;
@@ -5298,20 +5378,22 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     ASSERT_NE(compiledFold, nullptr);
     const Graphics::GpuCompiledBarrier* const foldBarriers = compiledGraph.taskPrologueBarriers(fold);
     ASSERT_NE(foldBarriers, nullptr);
-    bool hasTraceToResolveTransition = false;
-    for(u32 barrierIndex = 0u; barrierIndex < compiledFold->prologueBarrierCount; ++barrierIndex){
-        const Graphics::GpuCompiledBarrier& barrier = foldBarriers[barrierIndex];
-        if(
-            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
-            && barrier.resource == transparentSoftHalf
-            && barrier.before == Graphics::ResourceStates::UnorderedAccess
-            && barrier.after == Graphics::ResourceStates::ShaderResource
-        ){
-            hasTraceToResolveTransition = true;
-            break;
+    const auto hasFoldShaderResourceTransition = [&](const Graphics::GpuGraphResourceId resource){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledFold->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = foldBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == resource
+                && barrier.before == Graphics::ResourceStates::UnorderedAccess
+                && barrier.after == Graphics::ResourceStates::ShaderResource
+            )
+                return true;
         }
-    }
-    EXPECT_TRUE(hasTraceToResolveTransition);
+        return false;
+    };
+    EXPECT_TRUE(hasFoldShaderResourceTransition(transparentSoftHalf));
+    EXPECT_TRUE(hasFoldShaderResourceTransition(transparentHistoryA));
+    EXPECT_TRUE(hasFoldShaderResourceTransition(transparentMomentsA));
 
     const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting);
     ASSERT_NE(compiledLighting, nullptr);

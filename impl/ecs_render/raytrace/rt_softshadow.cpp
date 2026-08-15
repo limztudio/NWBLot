@@ -66,7 +66,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const bool dispatchTransparentTrace,
     const bool dispatchTransparentResolve,
     const bool graphOwnsOpaqueToTransparentBoundary,
-    const bool graphOwnsTransparentTraceToResolveBoundary
+    const bool graphOwnsTransparentTraceToResolveBoundary,
+    const bool graphOwnsTransparentTemporalMergeEntryStates
 ){
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
@@ -148,17 +149,19 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const bool opaqueTemporalActive = rayTracingState().m_softShadowTemporalReady;
     const u32 historyValid = softShadowTemporalHistoryUsable() ? 1u : 0u;
 
-    const auto dispatchMerge = [&](const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources& resources, const bool graphOwnsSoftTraceInputState){
+    const auto dispatchMerge = [&](const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources& resources, const bool graphOwnsSoftTraceInputState, const bool graphOwnsMergeEntryStates){
         NWB_ASSERT(resources.softTrace && resources.historyIn && resources.momentsIn && resources.historyOut && resources.momentsOut);
         if(!graphOwnsSoftTraceInputState)
             commandList.setTextureState(resources.softTrace, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(resources.historyIn, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(resources.momentsIn, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.shadowSoftGeometryPrev.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(resources.historyOut, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(resources.momentsOut, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        if(!graphOwnsMergeEntryStates){
+            commandList.setTextureState(resources.historyIn, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(resources.momentsIn, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(targets.shadowSoftGeometryPrev.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(resources.historyOut, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+            commandList.setTextureState(resources.momentsOut, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        }
         commandList.setEnableUavBarriersForTexture(resources.historyOut, true);
         commandList.setEnableUavBarriersForTexture(resources.momentsOut, true);
         commandList.commitBarriers();
@@ -211,7 +214,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             graphics().getDevice(),
             commandList
         );
-        dispatchMerge(opaqueMerge, false);
+        dispatchMerge(opaqueMerge, false, false);
     }
 
     // Feed the first wavelet directly from this frame's trace or temporal merge. PREPARE was only a half-res copy into
@@ -333,7 +336,11 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 graphics().getDevice(),
                 commandList
             );
-            dispatchMerge(transparentMerge, graphOwnsTransparentTraceToResolveBoundary);
+            dispatchMerge(
+                transparentMerge,
+                graphOwnsTransparentTraceToResolveBoundary,
+                graphOwnsTransparentTemporalMergeEntryStates
+            );
         }
 
         Core::Texture* const transparentWaveletInput = transparentTemporalActive

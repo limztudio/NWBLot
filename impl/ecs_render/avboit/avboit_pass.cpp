@@ -362,7 +362,9 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     const bool removedIntervalOutputImageStatesGraphOwned,
     const bool csgClipBufferStatesGraphOwned,
     const bool materialFrameStatesGraphOwned,
-    const bool materialGeometryStatesGraphOwned
+    const bool materialGeometryStatesGraphOwned,
+    const bool deferIntervalCombine,
+    Optional<Core::GpuTimingMeasure>* const deferredIntervalTiming
 ){
     if(
         !targets.framebuffer
@@ -377,8 +379,21 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     NWB_ASSERT(!intervalPeelTargetStatesGraphOwned || intervalTargetsGraphOwned);
     NWB_ASSERT(!receiverSpanOutputImageStatesGraphOwned || intervalTargetsGraphOwned);
     NWB_ASSERT(!removedIntervalOutputImageStatesGraphOwned || intervalTargetsGraphOwned);
+    NWB_ASSERT(!deferIntervalCombine || (intervalTargetsGraphOwned && deferredIntervalTiming));
 
-    Core::GpuTimingMeasure timing(
+    // The prepared graph's Combine callback completes this interval in the same ordered Graphics packet. Direct
+    // callers retain the local RAII scope, and a malformed split request safely falls back to the aggregate route.
+    const bool splitIntervalCombine = deferIntervalCombine && deferredIntervalTiming;
+    Optional<Core::GpuTimingMeasure> localIntervalTiming;
+    Optional<Core::GpuTimingMeasure>* const intervalTiming = splitIntervalCombine
+        ? deferredIntervalTiming
+        : &localIntervalTiming
+    ;
+    if(splitIntervalCombine && intervalTiming->has_value()){
+        intervalTiming->value().discardTiming();
+        intervalTiming->reset();
+    }
+    intervalTiming->emplace(
         graphics().gpuTiming(),
         RendererGpuTimingScope::s_TransparentCsgIntervals,
         graphics().getDevice(),
@@ -405,8 +420,16 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     const bool receiverSurfaceDrawResourcesReady =
         m_renderer.materialSystem().materialPassDrawResourcesReady(receiverSurfaceDrawItems)
     ;
-    if(!drawBuffersReady || !csgResourcesReady || !receiverSurfaceDrawResourcesReady)
+    if(!drawBuffersReady || !csgResourcesReady || !receiverSurfaceDrawResourcesReady){
+        if(splitIntervalCombine){
+            // No Combine callback will emit the endpoint when its producer skipped. Preserve the legacy short
+            // interval instead of retaining an unfinished timestamp reservation across the packet.
+            intervalTiming->value().finishMarker();
+            intervalTiming->value().finishTiming(commandList);
+            intervalTiming->reset();
+        }
         return;
+    }
 
     Core::ViewportState viewportState;
     viewportState
@@ -446,12 +469,19 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         csgFrameData,
         intervalTargetsGraphOwned && receiverSpanOutputImageStatesGraphOwned
     );
-    m_renderer.csgSystem().dispatchCsgIntervalCombine(
-        commandList,
-        targets,
-        csgFrameData,
-        intervalTargetsGraphOwned && removedIntervalOutputImageStatesGraphOwned
-    );
+    if(!splitIntervalCombine){
+        m_renderer.csgSystem().dispatchCsgIntervalCombine(
+            commandList,
+            targets,
+            csgFrameData,
+            intervalTargetsGraphOwned && removedIntervalOutputImageStatesGraphOwned
+        );
+    }
+    else{
+        // The task marker surrounding this callback must close before the following Combine graph task begins its
+        // own marker. The timestamp endpoint remains open until that callback records.
+        intervalTiming->value().finishMarker();
+    }
 }
 
 void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
@@ -469,7 +499,9 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     const bool preparedTransparentCsgRemovedIntervalOutputImageStatesGraphOwned,
     const bool preparedTransparentCsgClipBufferStatesGraphOwned,
     const bool preparedTransparentCsgMaterialFrameStatesGraphOwned,
-    const bool preparedTransparentCsgMaterialGeometryStatesGraphOwned
+    const bool preparedTransparentCsgMaterialGeometryStatesGraphOwned,
+    const bool deferPreparedTransparentCsgIntervalCombine,
+    Optional<Core::GpuTimingMeasure>* const deferredPreparedTransparentCsgIntervalTiming
 ){
     if(preparedTransparentCsgReceiverSurfaceDrawItems || preparedTransparentCsgFrameData){
         NWB_ASSERT(preparedTransparentCsgReceiverSurfaceDrawItems);
@@ -489,7 +521,9 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
                 preparedTransparentCsgRemovedIntervalOutputImageStatesGraphOwned,
                 preparedTransparentCsgClipBufferStatesGraphOwned,
                 preparedTransparentCsgMaterialFrameStatesGraphOwned,
-                preparedTransparentCsgMaterialGeometryStatesGraphOwned
+                preparedTransparentCsgMaterialGeometryStatesGraphOwned,
+                deferPreparedTransparentCsgIntervalCombine,
+                deferredPreparedTransparentCsgIntervalTiming
             );
         }
     }

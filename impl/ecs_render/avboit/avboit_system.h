@@ -57,7 +57,13 @@ public:
         // The graph can also retain the source-buffer SRVs selected by this frozen stream. Direct and unprepared
         // work retains the material draw thunk's native geometry setup.
         bool preparedTransparentCsgMaterialFrameStatesGraphOwned = false,
-        bool preparedTransparentCsgMaterialGeometryStatesGraphOwned = false
+        bool preparedTransparentCsgMaterialGeometryStatesGraphOwned = false,
+        // The prepared AVBOIT graph can split the final CSG interval-combine dispatch into its own callback. Direct
+        // and aggregate compatibility paths leave this false and retain the native in-thunk combine.
+        bool deferPreparedTransparentCsgIntervalCombine = false,
+        // A split callback preserves the existing aggregate interval timing range across its ordered packet cells.
+        // Direct and aggregate compatibility callers leave this null and keep the local timing scope.
+        Optional<Core::GpuTimingMeasure>* deferredPreparedTransparentCsgIntervalTiming = nullptr
     );
     void renderAvboitOccupancyPass(
         Core::CommandList& commandList,
@@ -174,7 +180,9 @@ private:
         bool removedIntervalOutputImageStatesGraphOwned,
         bool csgClipBufferStatesGraphOwned,
         bool materialFrameStatesGraphOwned,
-        bool materialGeometryStatesGraphOwned
+        bool materialGeometryStatesGraphOwned,
+        bool deferIntervalCombine,
+        Optional<Core::GpuTimingMeasure>* deferredIntervalTiming
     );
 };
 

@@ -292,6 +292,7 @@ void RendererSystem::invalidateResources(){
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitClearTask = {};
     m_deferredAvboitPreTask = {};
+    m_deferredAvboitCsgIntervalCombineTask = {};
     m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
     m_deferredAvboitExtinctionStreamTask = {};
@@ -577,6 +578,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitClearTask = {};
     m_deferredAvboitPreTask = {};
+    m_deferredAvboitCsgIntervalCombineTask = {};
     m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
     m_deferredAvboitExtinctionStreamTask = {};
@@ -858,6 +860,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Optional<Core::GpuTimingMeasure> causticResolveTiming;
     const bool clearAvboitTargets = hasTransparentRenderers || m_avboitState.m_targetsNeedClear;
     Core::GpuTimingSubmissionTicket avboitPreTimingTicket(m_graphics.gpuTiming());
+    // Prepared transparent CSG begins this interval in AVBOIT Pre and closes it in its graph-owned Combine callback.
+    Optional<Core::GpuTimingMeasure> transparentCsgIntervalsTiming;
     Core::GpuTimingSubmissionTicket avboitDepthWarpTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket avboitExtinctionTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket avboitIntegrationTimingTicket(m_graphics.gpuTiming());
@@ -890,6 +894,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &asyncPrefixTimingSpansOnePacket,
         asyncFinalTiming,
         avboitPreTimingTicket,
+        transparentCsgIntervalsTiming,
         avboitDepthWarpTimingTicket,
         avboitExtinctionTimingTicket,
         avboitIntegrationTimingTicket,
@@ -933,6 +938,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             &asyncPrefixTimingSpansOnePacket,
             asyncFinalTiming,
             avboitPreTimingTicket,
+            transparentCsgIntervalsTiming,
             avboitDepthWarpTimingTicket,
             avboitExtinctionTimingTicket,
             avboitIntegrationTimingTicket,
@@ -1287,6 +1293,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId avboitPrePacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitPreTask
     );
+    const Core::GpuSubmissionPacketId avboitCsgIntervalCombinePacket =
+        m_deferredAvboitCsgIntervalCombineTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitCsgIntervalCombineTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuSubmissionPacketId avboitClearPacket = m_deferredAvboitClearTask.valid()
         ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitClearTask)
         : avboitPrePacket
@@ -1302,6 +1313,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const bool avboitPrePacketContainsOccupancy = avboitPrePacket.valid()
         && avboitOccupancyPacket.valid()
         && avboitPrePacket == avboitOccupancyPacket
+    ;
+    // The transparent Combine callback consumes the frozen CSG stream before phase-local occupancy uploads replace
+    // it. It shares AVBOIT Pre's timing and external state source, so a split is rejected before recording.
+    const bool avboitPrePacketContainsCsgIntervalCombine =
+        !m_deferredAvboitCsgIntervalCombineTask.valid()
+        || (
+            avboitPrePacket.valid()
+            && avboitCsgIntervalCombinePacket.valid()
+            && avboitPrePacket == avboitCsgIntervalCombinePacket
+        )
     ;
     const Core::GpuPhysicalQueueInfo* const avboitPreQueue = avboitPrePacket.valid()
         ? m_deferredLightingCompiledGraph.queueInfo(m_deferredLightingCompiledGraph.packet(avboitPrePacket).queue)
@@ -1919,6 +1940,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredAvboitOccupancyTask.valid()
         || !avboitPrePacket.valid()
         || !avboitPrePacketContainsClear
+        || !avboitPrePacketContainsCsgIntervalCombine
         || !avboitPrePacketContainsOccupancy
         || !avboitExtinctionPacketContainsStreams
         || !avboitAccumulationPacketContainsStreams
@@ -2114,6 +2136,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(causticResolveTiming){
             causticResolveTiming->discardTiming();
             causticResolveTiming.reset();
+        }
+        if(transparentCsgIntervalsTiming){
+            transparentCsgIntervalsTiming->discardTiming();
+            transparentCsgIntervalsTiming.reset();
         }
         frameTimingTransaction.discard();
         discardTimingTickets();
@@ -2561,6 +2587,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredAvboitOccupancyTask.valid()
         && avboitPrePacket.valid()
         && avboitPrePacketContainsClear
+        && avboitPrePacketContainsCsgIntervalCombine
         && avboitPrePacketContainsOccupancy
         && avboitExtinctionPacketContainsStreams
         && avboitAccumulationPacketContainsStreams
@@ -2844,6 +2871,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredAvboitOccupancyTask.valid()
             && avboitPrePacket.valid()
             && avboitPrePacketContainsClear
+            && avboitPrePacketContainsCsgIntervalCombine
             && avboitPrePacketContainsOccupancy
             && avboitExtinctionPacketContainsStreams
             && avboitAccumulationPacketContainsStreams

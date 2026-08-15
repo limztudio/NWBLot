@@ -267,14 +267,20 @@ can receive an unconditional final sign-off.
   declares the two event reads and two span writes, and the following interval-combine callback declares the four
   removed-interval output ranges before it records. Those producers no longer stage their initial StorageImage
   states natively. The graph owns the two receiver-surface-to-span, two span-to-combine, three peel-to-combine, and
-  four combine-to-opaque-material/cap handoffs. Prepared-transparent AVBOIT and direct compatibility callers retain
-  their aggregate input and post-combine UAV fences. Transparent AVBOIT
+  four combine-to-opaque-material/cap handoffs. Prepared-transparent AVBOIT retains its aggregate
+  receiver-surface-to-span bridge, then records a mergeable interval-combine callback that owns its five exact
+  peel/span `UnorderedAccess` inputs and four removed-output writes before phase-local occupancy uploads may
+  replace the frozen CSG stream. The compiler lowers both the pre-to-combine and combine-to-occupancy UAV
+  handoffs in the established AVBOIT-pre packet; its first frozen upload starts that semantic packet so it cannot
+  coalesce with the separately timed and accepted Hardware Caustics packet on Graphics-only topology. Direct,
+  unprepared, and empty-work compatibility callers retain their aggregate combine fences. Transparent AVBOIT
   sampling, wider CSG target lifecycle, and direct compatibility clear remain deliberately outside this bounded task.
   The transparent CSG interval producer now does the same within AVBOIT-pre:
   it freezes its fresh mesh-view work region, receiver-surface draw ordering, material instance/typed data, and CSG
-  receiver/cutter/context/sample payloads during graph declaration. Its serial Graphics upload chain merges into
-  the established AVBOIT-pre packet, which consumes the graph-owned bytes before later AVBOIT phases overwrite
-  their shared buffers. Its prepared path also uses the same graph-owned paired rect clear before native interval
+  receiver/cutter/context/sample payloads during graph declaration. Its first serial Graphics upload starts the
+  established AVBOIT-pre packet and the remaining uploads merge into it, so that packet consumes the graph-owned
+  bytes before later AVBOIT phases overwrite their shared buffers. Its prepared path also uses the same graph-owned
+  paired rect clear before native interval
   production, while an unprepared compatibility path retains the direct helper. The subsequent transparent
   occupancy phase now freezes its own material instance/typed stream and, when it contains CSG draws, its
   receiver/cutter/clip-context stream. Its serial Graphics uploads run
@@ -309,7 +315,8 @@ can receive an unconditional final sign-off.
   occupancy, extinction, and accumulation callbacks, those exact graph declarations now also own the CSG
   receiver/cutter `ShaderResource` and clip-context/interval-sample `ConstantBuffer` entry states. The native
   helper remains for direct, unprepared, or empty gathered-work paths; prepared-transparent AVBOIT retains its
-  aggregate receiver-surface-to-span and span-to-combine bridges.
+  aggregate receiver-surface-to-span bridge while its following span/peel-to-combine and combine-to-occupancy
+  handoffs are graph-owned.
 - The compiler derives stable packet recording-frontier depths from packet dependencies. The native recorder may
   record an explicitly opted-in frontier concurrently with isolated per-packet state scratch and native command
   buffers; submission, timing, and failure reporting remain in stable compiler order. Command-IR capture and
@@ -450,6 +457,7 @@ can receive an unconditional final sign-off.
 | Graph-owned opaque CSG interval-combine handoff follow-up: renderer build, task-graph unit, descriptor-buffer smoke, ECS graphics, CTest, and Vulkan/X11 opaque captures | passed; at that stage opaque G-buffer ended after receiver-span build, and a mergeable Combine callback declared the five peel/span `UnorderedAccess` reads and four removed-output writes before the Sample callback consumed those outputs. The common compiler path proved 5/9/4 barriers in one Graphics packet, while a forced FrontierSafe split proved all five Combine state seeds and same-UAV fences. A real Vulkan getter-only packet test recorded both callbacks without native bridges. Prepared-transparent AVBOIT and direct compatibility callers retained their aggregate combine fences. `nwb_ecs_render` rebuilt; graph tests passed 74/74, descriptor smoke passed 99 with 11 expected topology skips, ECS graphics passed 18/18, CTest passed 3/3, and opaque plus compute-emulation CSG captures passed 2/2. |
 | Graph-owned opaque CSG receiver-span handoff follow-up: renderer build, task-graph unit, descriptor-buffer smoke, ECS graphics, CTest, and Vulkan/X11 opaque captures | passed; opaque G-buffer now ends after receiver-surface raster work, and a mergeable Span callback declares receiver-event data/count `UnorderedAccess` reads plus receiver-span data/count writes before Combine consumes the span outputs. The common compiler path proves 5/4/9/4 barriers across G-buffer, Span, Combine, and Sample in one Graphics packet; a forced FrontierSafe split proves the two Span seeds, the three G-buffer plus two Span Combine seeds, and all resulting same-UAV fences. A real Vulkan getter-only packet test observes event slices 0/31 and span slices 0/15 without native bridges. Prepared-transparent AVBOIT and direct compatibility callers retain their aggregate receiver-surface-to-span and span-to-combine fences. `nwb_ecs_render` rebuilt; graph tests passed 74/74, descriptor smoke passed 99 with 11 expected topology skips, ECS graphics passed 18/18, CTest passed 3/3, and opaque plus compute-emulation CSG captures passed 2/2. |
 | Graph-owned prepared TLAS state-finalize handoff: renderer build, FrontierSafe graph unit, descriptor-buffer smoke, ECS graphics, CTest, and transparent-multi capture | passed; frozen Shadow Preparation now declares both the typed TLAS and its backing buffer `Common` to `AccelStructWrite`, records the build without a native bridge, then uses an adjacent state-only finalizer for `AccelStructWrite` to `AccelStructRead`. A successor-only FrontierSafe opt-in retains that finalizer in the same accepting first Graphics packet despite direct Compute consumers, preserving packet acceptance and cross-frame backing-state atomicity. Direct and hybrid retry paths retain their native write-to-read bridge. The compiler unit and real Vulkan getter-only smoke prove both typed aliases at both boundaries. `nwb_ecs_render` rebuilt; graph tests passed 75/75, descriptor smoke passed 100 with 11 expected topology skips, ECS graphics passed 18/18, focused CTest passed 3/3, and the hardware transparent-multi capture passed. |
+| Graph-owned prepared transparent AVBOIT interval-combine handoff: renderer build, graph unit, descriptor-buffer smoke, ECS graphics, and CSG capture matrix | passed; prepared transparent AVBOIT now records its existing receiver-surface/span producer followed by a mergeable Combine callback. The graph lowers the five exact peel/span `UnorderedAccess` input fences and four removed-output writes before phase-local occupancy uploads, while direct, unprepared, and empty-work callers retain native aggregate bridges. The frozen interval timer spans both callbacks and is discarded on either readiness mismatch; the first AVBOIT upload begins a distinct semantic packet so Hardware Caustics and AVBOIT retain independent timing/acceptance submissions on Graphics-only topology. The compiler unit proves the common 5/9/1/5 barriers plus forced-split source seeds, and the real Vulkan getter-only probe records every Combine alias without a native bridge. `nwb_ecs_render` rebuilt; graph tests passed 77/77, descriptor smoke passed 100 with 11 expected topology skips, ECS graphics passed 18/18, and the clean CSG capture matrix passed 14/14. |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a

@@ -110,6 +110,23 @@ struct GpuGraphResourceDesc{
     constexpr GpuGraphResourceDesc& setQueueSharing(const ResourceQueueSharing::Mask value){ queueSharing = value; return *this; }
 };
 
+// Resource sets retain graph resource IDs, not backend pointers. Their member list is copied into graph-owned
+// storage, which makes dynamic enumerable bindless declarations immutable before compilation and native recording.
+struct GpuGraphResourceSetDesc{
+    Name identity = NAME_NONE;
+    AStringView markerLabel;
+    const GpuGraphResourceId* members = nullptr;
+    usize memberCount = 0u;
+
+    constexpr GpuGraphResourceSetDesc& setIdentity(const Name& value){ identity = value; return *this; }
+    constexpr GpuGraphResourceSetDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
+    constexpr GpuGraphResourceSetDesc& setMembers(const GpuGraphResourceId* values, const usize count){
+        members = values;
+        memberCount = count;
+        return *this;
+    }
+};
+
 // Pipeline metadata is graph-owned so optional command capture can refer to stable graph IDs instead of backend
 // pointers. Typed import overloads retain the matching engine pipeline handle; importPipeline is metadata-only for
 // analysis/tooling paths that do not record a native pipeline bind yet.
@@ -146,6 +163,8 @@ struct GpuTaskDesc{
     usize externalStateSourceCount = 0u;
     const GpuTaskResourceUse* resourceUses = nullptr;
     usize resourceUseCount = 0u;
+    const GpuTaskResourceSetUse* resourceSetUses = nullptr;
+    usize resourceSetUseCount = 0u;
 
     constexpr GpuTaskDesc& setIdentity(const Name& value){ identity = value; return *this; }
     constexpr GpuTaskDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
@@ -165,6 +184,11 @@ struct GpuTaskDesc{
     constexpr GpuTaskDesc& setResourceUses(const GpuTaskResourceUse* values, const usize count){
         resourceUses = values;
         resourceUseCount = count;
+        return *this;
+    }
+    constexpr GpuTaskDesc& setResourceSetUses(const GpuTaskResourceSetUse* values, const usize count){
+        resourceSetUses = values;
+        resourceSetUseCount = count;
         return *this;
     }
 };

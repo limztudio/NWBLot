@@ -132,7 +132,9 @@ inline constexpr Name s_TaskGraphScratchArena("tests/graphics/task_graph_scratch
     const Graphics::GpuTaskId* const dependencies = nullptr,
     const usize dependencyCount = 0u,
     const Graphics::GpuTaskResourceUse* const resourceUses = nullptr,
-    const usize resourceUseCount = 0u
+    const usize resourceUseCount = 0u,
+    const Graphics::GpuTaskResourceSetUse* const resourceSetUses = nullptr,
+    const usize resourceSetUseCount = 0u
 ){
     Graphics::GpuTaskDesc desc;
     desc
@@ -140,6 +142,7 @@ inline constexpr Name s_TaskGraphScratchArena("tests/graphics/task_graph_scratch
         .setMarkerLabel(label)
         .setDependencies(dependencies, dependencyCount)
         .setResourceUses(resourceUses, resourceUseCount)
+        .setResourceSetUses(resourceSetUses, resourceSetUseCount)
     ;
     return graph.addTask(desc);
 }
@@ -1700,6 +1703,136 @@ TEST(GpuTaskGraph, RejectsEmptyLabelsAndStaleResourceAndExternalHandles){
     EXPECT_FALSE(Analyze(graph, externalAnalysis));
     EXPECT_EQ(externalAnalysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidExternalCompletionDependency);
     EXPECT_EQ(externalAnalysis.diagnostic().task, externalTask);
+}
+
+TEST(GpuTaskGraph, ExpandsImmutableResourceSetsIntoConcreteHazards){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId textureA = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/resource_set_texture_a"),
+        "Resource Set Texture A"
+    );
+    const Graphics::GpuGraphResourceId textureB = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/resource_set_texture_b"),
+        "Resource Set Texture B"
+    );
+    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/resource_set_buffer"),
+        "Resource Set Buffer"
+    );
+    ASSERT_TRUE(textureA.valid());
+    ASSERT_TRUE(textureB.valid());
+    ASSERT_TRUE(buffer.valid());
+
+    const Graphics::GpuGraphResourceId members[] = { textureA, textureB, buffer };
+    const Graphics::GpuGraphResourceSetDesc resourceSetDesc = Graphics::GpuGraphResourceSetDesc{}
+        .setIdentity(Name("tests/task_graph/visible_resources"))
+        .setMarkerLabel("Visible Resources")
+        .setMembers(members, LengthOf(members))
+    ;
+    const Graphics::GpuGraphResourceSetId resourceSet = graph.importResourceSet(resourceSetDesc);
+    ASSERT_TRUE(resourceSet.valid());
+    EXPECT_EQ(graph.resourceSetCount(), 1u);
+    EXPECT_EQ(graph.importResourceSet(resourceSetDesc), resourceSet);
+
+    const Graphics::GpuTaskGraphResourceSetView resourceSetView = graph.resourceSetAt(resourceSet.index);
+    ASSERT_EQ(resourceSetView.id, resourceSet);
+    ASSERT_EQ(resourceSetView.memberCount, LengthOf(members));
+    for(usize memberIndex = 0u; memberIndex < LengthOf(members); ++memberIndex)
+        EXPECT_EQ(resourceSetView.members[memberIndex], members[memberIndex]);
+
+    const Graphics::GpuGraphResourceId duplicateMembers[] = { textureA, textureA };
+    EXPECT_FALSE(graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/duplicate_resources"))
+            .setMarkerLabel("Duplicate Resources")
+            .setMembers(duplicateMembers, LengthOf(duplicateMembers))
+    ).valid());
+
+    const Graphics::GpuTaskResourceSetUse writeSetUse{
+        .resourceSet = resourceSet,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::UnorderedAccess,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    const Graphics::GpuTaskResourceSetUse readSetUse{
+        .resourceSet = resourceSet,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::ShaderResource,
+        .access = Graphics::GpuTaskResourceAccess::Read,
+    };
+    const Graphics::GpuTaskId writer = AddTask(
+        graph,
+        Name("tests/task_graph/resource_set_writer"),
+        "Resource Set Writer",
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        &writeSetUse,
+        1u
+    );
+    const Graphics::GpuTaskId reader = AddTask(
+        graph,
+        Name("tests/task_graph/resource_set_reader"),
+        "Resource Set Reader",
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        &readSetUse,
+        1u
+    );
+    ASSERT_TRUE(writer.valid());
+    ASSERT_TRUE(reader.valid());
+
+    const Graphics::GpuTaskGraphTaskView writerView = graph.taskAt(writer.index);
+    ASSERT_EQ(writerView.resourceUseCount, LengthOf(members));
+    for(usize memberIndex = 0u; memberIndex < LengthOf(members); ++memberIndex){
+        EXPECT_EQ(writerView.resourceUses[memberIndex].resource, members[memberIndex]);
+        EXPECT_EQ(writerView.resourceUses[memberIndex].requiredState, Graphics::ResourceStates::UnorderedAccess);
+        EXPECT_EQ(writerView.resourceUses[memberIndex].access, Graphics::GpuTaskResourceAccess::Write);
+    }
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    ASSERT_EQ(analysis.edges().size(), 1u);
+    const Graphics::GpuTaskDependencyEdge* const edge = FindEdge(analysis, writer, reader);
+    ASSERT_NE(edge, nullptr);
+    EXPECT_EQ(edge->hazard, Graphics::GpuTaskHazardType::ReadAfterWrite);
+    ASSERT_EQ(analysis.inferredEdges().size(), LengthOf(members));
+    for(const Graphics::GpuGraphResourceId member : members){
+        EXPECT_TRUE(HasInferredHazard(
+            analysis,
+            writer,
+            reader,
+            member,
+            Graphics::GpuTaskHazardType::ReadAfterWrite
+        ));
+    }
+
+    graph.reset();
+    EXPECT_FALSE(graph.validResourceSet(resourceSet));
+    const Graphics::GpuTaskResourceSetUse staleSetUse{
+        .resourceSet = resourceSet,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::ShaderResource,
+        .access = Graphics::GpuTaskResourceAccess::Read,
+    };
+    EXPECT_FALSE(AddTask(
+        graph,
+        Name("tests/task_graph/stale_resource_set"),
+        "Stale Resource Set",
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        &staleSetUse,
+        1u
+    ).valid());
 }
 
 TEST(GpuTaskGraph, RejectsMalformedBufferRangesAndDetectsTextureOverlap){

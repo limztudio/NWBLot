@@ -128,6 +128,20 @@ inline constexpr bool operator==(const GpuGraphResourceId& lhs, const GpuGraphRe
 }
 inline constexpr bool operator!=(const GpuGraphResourceId& lhs, const GpuGraphResourceId& rhs)noexcept{ return !(lhs == rhs); }
 
+// A resource set is a graph-owned immutable collection of imported resources. Task declarations may apply one
+// uniform access contract to every member; the graph freezes that declaration into ordinary per-resource uses before
+// compiler analysis, so sets never become an opaque runtime synchronization domain.
+struct GpuGraphResourceSetId{
+    u32 index = Limit<u32>::s_Max;
+    u64 generation = 0u;
+
+    [[nodiscard]] constexpr bool valid()const{ return index != Limit<u32>::s_Max && generation != 0u; }
+};
+inline constexpr bool operator==(const GpuGraphResourceSetId& lhs, const GpuGraphResourceSetId& rhs)noexcept{
+    return lhs.index == rhs.index && lhs.generation == rhs.generation;
+}
+inline constexpr bool operator!=(const GpuGraphResourceSetId& lhs, const GpuGraphResourceSetId& rhs)noexcept{ return !(lhs == rhs); }
+
 // Upload bytes belong to one graph generation just like task/resource handles. The blob is CPU-side ownership
 // only: native recording copies it through the existing per-command-buffer staging allocator, after which normal
 // upload-chunk retirement remains responsible for GPU lifetime.
@@ -226,6 +240,17 @@ struct GpuTaskResourceUse{
     // The consumer supplies an equivalent externally synchronized state source, so a matching concurrent read may
     // omit a graph-internal producer seed and its submission dependency. The compiler accepts this only for a
     // same-state Read-to-Read handoff on compatible concurrent queues.
+    bool hasIndependentStateSource = false;
+};
+
+// The range/state/access contract applies to every member of `resourceSet`. Sets deliberately do not retain an
+// independent pseudo-resource: GpuTaskGraph expands them in declaration order into concrete GpuTaskResourceUse
+// records, preserving the normal exact-resource hazard and barrier machinery.
+struct GpuTaskResourceSetUse{
+    GpuGraphResourceSetId resourceSet;
+    GpuTaskResourceRange range;
+    ResourceStates::Mask requiredState = ResourceStates::Unknown;
+    GpuTaskResourceAccess::Enum access = GpuTaskResourceAccess::Read;
     bool hasIndependentStateSource = false;
 };
 

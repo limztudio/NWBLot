@@ -63,6 +63,14 @@ struct GpuTaskGraphResourceView{
     bool hasBackendResource = false;
 };
 
+struct GpuTaskGraphResourceSetView{
+    GpuGraphResourceSetId id;
+    Name identity = NAME_NONE;
+    AStringView markerLabel;
+    const GpuGraphResourceId* members = nullptr;
+    usize memberCount = 0u;
+};
+
 struct GpuTaskGraphPipelineView{
     GpuGraphPipelineId id;
     Name identity = NAME_NONE;
@@ -125,6 +133,14 @@ private:
         TextureHandle texture;
         BufferHandle buffer;
         RayTracingAccelStructHandle accelStruct;
+    };
+
+    struct GpuGraphResourceSetNode{
+        Name identity = NAME_NONE;
+        u32 markerLabelOffset = 0u;
+        u32 markerLabelSize = 0u;
+        u32 memberOffset = 0u;
+        u32 memberCount = 0u;
     };
 
     struct GpuGraphPipelineNode{
@@ -247,6 +263,9 @@ public:
         const GpuGraphResourceDesc& desc
     );
     [[nodiscard]] GpuGraphResourceId importHazardDomain(const GpuGraphResourceDesc& desc);
+    // Stores an immutable dynamic resource collection. Task resource-set declarations expand to the set's concrete
+    // members at task creation, so compilation and recording keep their existing resource-level contracts.
+    [[nodiscard]] GpuGraphResourceSetId importResourceSet(const GpuGraphResourceSetDesc& desc);
     // Pipeline IDs are graph-local side-table entries.  Metadata-only entries support analysis/capture setup;
     // typed imports retain a stable engine handle until native recording or later IR replay resolves it.
     [[nodiscard]] GpuGraphPipelineId importPipeline(const GpuGraphPipelineDesc& desc);
@@ -273,16 +292,19 @@ public:
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
     [[nodiscard]] bool validTask(const GpuTaskId& id)const noexcept;
     [[nodiscard]] bool validResource(const GpuGraphResourceId& id)const noexcept;
+    [[nodiscard]] bool validResourceSet(const GpuGraphResourceSetId& id)const noexcept;
     [[nodiscard]] bool validUploadBlob(const GpuUploadBlobId& id)const noexcept;
     [[nodiscard]] bool validPipeline(const GpuGraphPipelineId& id)const noexcept;
     [[nodiscard]] bool validExternalCompletion(const GpuExternalCompletionId& id)const noexcept;
     [[nodiscard]] usize taskCount()const noexcept{ return m_tasks.size(); }
     [[nodiscard]] usize resourceCount()const noexcept{ return m_resources.size(); }
+    [[nodiscard]] usize resourceSetCount()const noexcept{ return m_resourceSets.size(); }
     [[nodiscard]] usize uploadBlobCount()const noexcept{ return m_uploadBlobs.size(); }
     [[nodiscard]] usize pipelineCount()const noexcept{ return m_pipelines.size(); }
     [[nodiscard]] usize externalCompletionCount()const noexcept{ return m_externalCompletions.size(); }
     [[nodiscard]] GpuTaskGraphTaskView taskAt(usize index)const;
     [[nodiscard]] GpuTaskGraphResourceView resourceAt(usize index)const;
+    [[nodiscard]] GpuTaskGraphResourceSetView resourceSetAt(usize index)const;
     [[nodiscard]] GpuTaskGraphPipelineView pipelineAt(usize index)const;
     [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const;
     [[nodiscard]] Texture* textureForResource(const GpuGraphResourceId& resource)const noexcept;
@@ -357,6 +379,7 @@ private:
         GpuTaskPayloadDestroyThunk destroyPayload
     );
     [[nodiscard]] GpuGraphResourceId appendResource(const GpuGraphResourceDesc& desc);
+    [[nodiscard]] GpuGraphResourceSetId appendResourceSet(const GpuGraphResourceSetDesc& desc);
     [[nodiscard]] GpuGraphPipelineId appendPipeline(const GpuGraphPipelineDesc& desc);
     [[nodiscard]] GpuExternalCompletionId appendExternalCompletion(const GpuExternalCompletionDesc& desc);
     [[nodiscard]] const GpuUploadBlobNode* findUploadBlob(const GpuUploadBlobId& blob)const noexcept;
@@ -373,6 +396,8 @@ private:
     GraphicsVector<GpuTaskExternalStateSource> m_externalStateSources;
     GraphicsVector<GpuTaskResourceUse> m_resourceUses;
     GraphicsVector<GpuGraphResourceNode> m_resources;
+    GraphicsVector<GpuGraphResourceSetNode> m_resourceSets;
+    GraphicsVector<GpuGraphResourceId> m_resourceSetMembers;
     GraphicsVector<GpuGraphPipelineNode> m_pipelines;
     GraphicsVector<GpuExternalCompletionNode> m_externalCompletions;
     GraphicsVector<GpuUploadBlobNode> m_uploadBlobs;

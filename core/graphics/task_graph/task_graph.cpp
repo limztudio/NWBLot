@@ -571,6 +571,8 @@ GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
     , m_externalStateSources(arena)
     , m_resourceUses(arena)
     , m_resources(arena)
+    , m_resourceSets(arena)
+    , m_resourceSetMembers(arena)
     , m_pipelines(arena)
     , m_externalCompletions(arena)
     , m_uploadBlobs(arena)
@@ -594,6 +596,8 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
     if(
         desc.resourceUses
         || desc.resourceUseCount != 0u
+        || desc.resourceSetUses
+        || desc.resourceSetUseCount != 0u
         || !copyDesc.regions
         || copyDesc.regionCount == 0u
         || copyDesc.regionCount > Limit<u32>::s_Max
@@ -691,6 +695,8 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
     if(
         desc.resourceUses
         || desc.resourceUseCount != 0u
+        || desc.resourceSetUses
+        || desc.resourceSetUseCount != 0u
         || !copyDesc.regions
         || copyDesc.regionCount == 0u
         || copyDesc.regionCount > Limit<u32>::s_Max
@@ -808,6 +814,8 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
     if(
         desc.resourceUses
         || desc.resourceUseCount != 0u
+        || desc.resourceSetUses
+        || desc.resourceSetUseCount != 0u
         || !validUploadBlob(uploadDesc.source)
         || !validResource(uploadDesc.destination)
         || uploadDesc.finalState == ResourceStates::Unknown
@@ -880,6 +888,8 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
     if(
         desc.resourceUses
         || desc.resourceUseCount != 0u
+        || desc.resourceSetUses
+        || desc.resourceSetUseCount != 0u
         || !validUploadBlob(uploadDesc.source)
         || !validResource(uploadDesc.destination)
         || uploadDesc.finalState == ResourceStates::Unknown
@@ -954,6 +964,8 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
     if(
         desc.resourceUses
         || desc.resourceUseCount != 0u
+        || desc.resourceSetUses
+        || desc.resourceSetUseCount != 0u
         || !validResource(clearDesc.destination)
         || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
     )
@@ -1002,6 +1014,8 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
     if(
         desc.resourceUses
         || desc.resourceUseCount != 0u
+        || desc.resourceSetUses
+        || desc.resourceSetUseCount != 0u
         || !validResource(clearDesc.destination)
         || clearDesc.valueType >= GpuClearTextureTaskValueType::kCount
         || (
@@ -1184,6 +1198,30 @@ GpuGraphResourceId GpuTaskGraph::importHazardDomain(const GpuGraphResourceDesc& 
     return importResource(desc);
 }
 
+GpuGraphResourceSetId GpuTaskGraph::importResourceSet(const GpuGraphResourceSetDesc& desc){
+    if(
+        !desc.identity
+        || desc.markerLabel.empty()
+        || (desc.memberCount != 0u && !desc.members)
+    )
+        return {};
+
+    for(usize resourceSetIndex = 0u; resourceSetIndex < m_resourceSets.size(); ++resourceSetIndex){
+        const GpuTaskGraphResourceSetView existing = resourceSetAt(resourceSetIndex);
+        if(existing.identity != desc.identity)
+            continue;
+        if(existing.memberCount != desc.memberCount)
+            return {};
+        for(usize memberIndex = 0u; memberIndex < desc.memberCount; ++memberIndex){
+            if(existing.members[memberIndex] != desc.members[memberIndex])
+                return {};
+        }
+        return existing.id;
+    }
+
+    return appendResourceSet(desc);
+}
+
 GpuGraphPipelineId GpuTaskGraph::importPipeline(const GpuGraphPipelineDesc& desc){
     if(!desc.identity || desc.markerLabel.empty() || desc.type >= GpuGraphPipelineType::kCount)
         return {};
@@ -1316,6 +1354,8 @@ void GpuTaskGraph::reset(){
     m_externalStateSources.clear();
     m_resourceUses.clear();
     m_resources.clear();
+    m_resourceSets.clear();
+    m_resourceSetMembers.clear();
     m_pipelines.clear();
     m_externalCompletions.clear();
     m_uploadBlobs.clear();
@@ -1329,6 +1369,10 @@ bool GpuTaskGraph::validTask(const GpuTaskId& id)const noexcept{
 
 bool GpuTaskGraph::validResource(const GpuGraphResourceId& id)const noexcept{
     return id.valid() && id.generation == m_generation && id.index < m_resources.size();
+}
+
+bool GpuTaskGraph::validResourceSet(const GpuGraphResourceSetId& id)const noexcept{
+    return id.valid() && id.generation == m_generation && id.index < m_resourceSets.size();
 }
 
 bool GpuTaskGraph::validUploadBlob(const GpuUploadBlobId& id)const noexcept{
@@ -1389,6 +1433,18 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
         .initialOwnerStateSource = resource.initialOwnerStateSource,
         .queueSharing = resource.queueSharing,
         .hasBackendResource = resource.texture != nullptr || resource.buffer != nullptr || resource.accelStruct != nullptr,
+    };
+}
+
+GpuTaskGraphResourceSetView GpuTaskGraph::resourceSetAt(const usize index)const{
+    NWB_ASSERT(index < m_resourceSets.size());
+    const GpuGraphResourceSetNode& resourceSet = m_resourceSets[index];
+    return GpuTaskGraphResourceSetView{
+        .id = GpuGraphResourceSetId{ static_cast<u32>(index), m_generation },
+        .identity = resourceSet.identity,
+        .markerLabel = markerLabel(resourceSet.markerLabelOffset, resourceSet.markerLabelSize),
+        .members = resourceSet.memberCount > 0u ? m_resourceSetMembers.data() + resourceSet.memberOffset : nullptr,
+        .memberCount = resourceSet.memberCount,
     };
 }
 
@@ -1771,17 +1827,36 @@ GpuTaskId GpuTaskGraph::appendTask(
         || desc.dependencyCount > Limit<u32>::s_Max - m_dependencies.size()
         || desc.externalDependencyCount > Limit<u32>::s_Max - m_externalDependencies.size()
         || desc.externalStateSourceCount > Limit<u32>::s_Max - m_externalStateSources.size()
-        || desc.resourceUseCount > Limit<u32>::s_Max - m_resourceUses.size()
+        || desc.resourceUseCount > Limit<u32>::s_Max
+        || desc.resourceSetUseCount > Limit<u32>::s_Max
         || (desc.dependencyCount > 0u && !desc.dependencies)
         || (desc.externalDependencyCount > 0u && !desc.externalDependencies)
         || (desc.externalStateSourceCount > 0u && !desc.externalStateSources)
         || (desc.resourceUseCount > 0u && !desc.resourceUses)
+        || (desc.resourceSetUseCount > 0u && !desc.resourceSetUses)
     )
         return {};
 
     for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
         if(!desc.externalStateSources[sourceIndex].states)
             return {};
+    }
+
+    // Resource sets are immutable graph data. Expand them now rather than introducing an opaque aggregate into
+    // hazard analysis or barrier lowering; every later stage sees the same concrete member uses as an explicit
+    // declaration would have supplied.
+    usize expandedResourceUseCount = desc.resourceUseCount;
+    const usize remainingResourceUseCapacity = static_cast<usize>(Limit<u32>::s_Max) - m_resourceUses.size();
+    if(expandedResourceUseCount > remainingResourceUseCapacity)
+        return {};
+    for(usize resourceSetUseIndex = 0u; resourceSetUseIndex < desc.resourceSetUseCount; ++resourceSetUseIndex){
+        const GpuTaskResourceSetUse& resourceSetUse = desc.resourceSetUses[resourceSetUseIndex];
+        if(!validResourceSet(resourceSetUse.resourceSet))
+            return {};
+        const GpuGraphResourceSetNode& resourceSet = m_resourceSets[resourceSetUse.resourceSet.index];
+        if(resourceSet.memberCount > remainingResourceUseCapacity - expandedResourceUseCount)
+            return {};
+        expandedResourceUseCount += resourceSet.memberCount;
     }
 
     u32 markerLabelOffset = 0u;
@@ -1802,7 +1877,7 @@ GpuTaskId GpuTaskGraph::appendTask(
     task.externalStateSourceOffset = static_cast<u32>(m_externalStateSources.size());
     task.externalStateSourceCount = static_cast<u32>(desc.externalStateSourceCount);
     task.resourceUseOffset = static_cast<u32>(m_resourceUses.size());
-    task.resourceUseCount = static_cast<u32>(desc.resourceUseCount);
+    task.resourceUseCount = static_cast<u32>(expandedResourceUseCount);
     task.payload = payload;
     task.recordPayload = recordPayload;
     task.acceptPayload = acceptPayload;
@@ -1817,6 +1892,19 @@ GpuTaskId GpuTaskGraph::appendTask(
         m_externalStateSources.push_back(desc.externalStateSources[sourceIndex]);
     for(usize useIndex = 0u; useIndex < desc.resourceUseCount; ++useIndex)
         m_resourceUses.push_back(desc.resourceUses[useIndex]);
+    for(usize resourceSetUseIndex = 0u; resourceSetUseIndex < desc.resourceSetUseCount; ++resourceSetUseIndex){
+        const GpuTaskResourceSetUse& resourceSetUse = desc.resourceSetUses[resourceSetUseIndex];
+        const GpuGraphResourceSetNode& resourceSet = m_resourceSets[resourceSetUse.resourceSet.index];
+        for(usize memberIndex = 0u; memberIndex < resourceSet.memberCount; ++memberIndex){
+            m_resourceUses.push_back(GpuTaskResourceUse{
+                .resource = m_resourceSetMembers[resourceSet.memberOffset + memberIndex],
+                .range = resourceSetUse.range,
+                .requiredState = resourceSetUse.requiredState,
+                .access = resourceSetUse.access,
+                .hasIndependentStateSource = resourceSetUse.hasIndependentStateSource,
+            });
+        }
+    }
 
     const u32 index = static_cast<u32>(m_tasks.size());
     m_tasks.push_back(Move(task));
@@ -1880,6 +1968,45 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
     const u32 index = static_cast<u32>(m_resources.size());
     m_resources.push_back(Move(resource));
     return GpuGraphResourceId{ index, m_generation };
+}
+
+GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetDesc& desc){
+    if(
+        !desc.identity
+        || desc.markerLabel.empty()
+        || (desc.memberCount != 0u && !desc.members)
+        || desc.memberCount > static_cast<usize>(Limit<u32>::s_Max) - m_resourceSetMembers.size()
+        || m_resourceSets.size() >= Limit<u32>::s_Max
+    )
+        return {};
+
+    for(usize memberIndex = 0u; memberIndex < desc.memberCount; ++memberIndex){
+        const GpuGraphResourceId member = desc.members[memberIndex];
+        if(!validResource(member))
+            return {};
+        for(usize previousMemberIndex = 0u; previousMemberIndex < memberIndex; ++previousMemberIndex){
+            if(desc.members[previousMemberIndex] == member)
+                return {};
+        }
+    }
+
+    u32 markerLabelOffset = 0u;
+    u32 markerLabelSize = 0u;
+    if(!appendMarkerLabel(desc.markerLabel, markerLabelOffset, markerLabelSize))
+        return {};
+
+    GpuGraphResourceSetNode resourceSet;
+    resourceSet.identity = desc.identity;
+    resourceSet.markerLabelOffset = markerLabelOffset;
+    resourceSet.markerLabelSize = markerLabelSize;
+    resourceSet.memberOffset = static_cast<u32>(m_resourceSetMembers.size());
+    resourceSet.memberCount = static_cast<u32>(desc.memberCount);
+    for(usize memberIndex = 0u; memberIndex < desc.memberCount; ++memberIndex)
+        m_resourceSetMembers.push_back(desc.members[memberIndex]);
+
+    const u32 index = static_cast<u32>(m_resourceSets.size());
+    m_resourceSets.push_back(Move(resourceSet));
+    return GpuGraphResourceSetId{ index, m_generation };
 }
 
 GpuGraphPipelineId GpuTaskGraph::appendPipeline(const GpuGraphPipelineDesc& desc){

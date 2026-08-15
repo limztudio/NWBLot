@@ -3496,6 +3496,140 @@ TEST(GpuTaskGraph, FrontierSafePacketizationSplitsBeforeCrossQueueConsumer){
 }
 
 
+TEST(GpuTaskGraph, FrontierScoredPacketizationMergesCheapImmediateSuccessor){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+
+    Graphics::GpuTaskSchedulingHint producerScheduling;
+    producerScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    Graphics::GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/task_graph/frontier_scored_producer"))
+        .setMarkerLabel("Frontier Scored Producer")
+        .setQueue(graphicsRequest)
+        .setScheduling(producerScheduling)
+    ;
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    ASSERT_TRUE(producer.valid());
+
+    Graphics::GpuTaskSchedulingHint successorScheduling;
+    successorScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    Graphics::GpuTaskDesc successorDesc;
+    successorDesc
+        .setIdentity(Name("tests/task_graph/frontier_scored_successor"))
+        .setMarkerLabel("Frontier Scored Successor")
+        .setQueue(graphicsRequest)
+        .setScheduling(successorScheduling)
+        .setDependencies(&producer, 1u)
+    ;
+    const Graphics::GpuTaskId successor = graph.addTask(successorDesc);
+    ASSERT_TRUE(successor.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphCompileOptions options;
+    options.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierScored;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId successorPacket = compiledGraph.packetForTask(successor);
+    ASSERT_TRUE(producerPacket.valid());
+    EXPECT_EQ(producerPacket, successorPacket);
+    EXPECT_EQ(compiledGraph.packet(producerPacket).taskCount, 2u);
+}
+
+
+TEST(GpuTaskGraph, FrontierScoredPacketizationPreservesCrossQueueConsumerFrontier){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+
+    Graphics::GpuTaskSchedulingHint producerScheduling;
+    producerScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    Graphics::GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/task_graph/frontier_scored_frontier_producer"))
+        .setMarkerLabel("Frontier Scored Frontier Producer")
+        .setQueue(graphicsRequest)
+        .setScheduling(producerScheduling)
+    ;
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    ASSERT_TRUE(producer.valid());
+
+    Graphics::GpuTaskSchedulingHint successorScheduling;
+    successorScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    Graphics::GpuTaskDesc successorDesc;
+    successorDesc
+        .setIdentity(Name("tests/task_graph/frontier_scored_frontier_successor"))
+        .setMarkerLabel("Frontier Scored Frontier Successor")
+        .setQueue(graphicsRequest)
+        .setScheduling(successorScheduling)
+        .setDependencies(&producer, 1u)
+    ;
+    const Graphics::GpuTaskId successor = graph.addTask(successorDesc);
+    ASSERT_TRUE(successor.valid());
+
+    Graphics::GpuTaskDesc consumerDesc;
+    consumerDesc
+        .setIdentity(Name("tests/task_graph/frontier_scored_compute_consumer"))
+        .setMarkerLabel("Frontier Scored Compute Consumer")
+        .setQueue(computeRequest)
+        .setDependencies(&producer, 1u)
+    ;
+    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    ASSERT_TRUE(consumer.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphCompileOptions options;
+    options.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierScored;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId successorPacket = compiledGraph.packetForTask(successor);
+    const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumer);
+    ASSERT_TRUE(producerPacket.valid());
+    EXPECT_NE(producerPacket, successorPacket);
+    EXPECT_NE(producerPacket, consumerPacket);
+    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(consumerPacket)[0u].producer, producerPacket);
+}
+
+
 TEST(GpuTaskGraph, FrontierSafeConsumerFrontierOverrideRequiresExplicitImmediateDependency){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

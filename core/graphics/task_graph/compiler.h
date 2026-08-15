@@ -86,6 +86,10 @@ namespace GpuTaskGraphPacketizationPolicy{
     enum Enum : u8{
         ExplicitMerge,
         FrontierSafe,
+        // Opt-in compiler scoring merges a cheap immediate same-queue successor only when the preceding packet has
+        // no cross-queue consumer frontier. Existing renderer paths retain ExplicitMerge until each packet boundary
+        // has its own acceptance/timing proof.
+        FrontierScored,
 
         kCount,
     };

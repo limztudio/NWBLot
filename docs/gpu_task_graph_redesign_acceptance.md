@@ -527,11 +527,13 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    or submission. The graph
    therefore does not yet authoritatively own all frame work and state retirement.
 
-3. **Packet scheduling and recording completion (partially addressed).** Current merging is limited to compatible
-   immediate predecessors. The compiler-derived native ready-frontier recorder is implemented for explicit opt-in
-   packets, with isolated per-packet state scratch and independent native command buffers/pools; all other packets,
-   command-IR capture, and legacy external-state overrides retain serial recording. Frontier splitting/scoring and
-   reusable per-worker graph command-arena leases are still not implemented.
+3. **Packet scheduling and recording completion (partially addressed).** Explicit merging remains the renderer
+   default. A separate opt-in `FrontierScored` compiler policy can coalesce a cheap directly dependent same-queue
+   successor only after confirming that the preceding packet has no cross-queue consumer frontier; existing
+   `FrontierSafe` splitting and explicit consumer-frontier overrides remain intact. The compiler-derived native
+   ready-frontier recorder is implemented for explicit opt-in packets, with isolated per-packet state scratch and
+   independent native command buffers/pools; all other packets, command-IR capture, and legacy external-state
+   overrides retain serial recording. Reusable per-worker graph command-arena leases are still not implemented.
 
 4. **Generic recovery and invalidation proof.** The accepted-token transaction is sound for the exercised paths,
    stale imported completion tokens have graph and native-submission rejection coverage, and recording/transaction

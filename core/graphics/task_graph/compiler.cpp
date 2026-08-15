@@ -1117,9 +1117,12 @@ bool GpuTaskGraphCompiler::compile(
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex)
         outCompiledGraph.m_queueTopology.push_back(topology.queues[queueIndex]);
 
-    // Tasks retain one exact acceptance and synchronization point by default.  An explicitly opted-in successor may
+    // Tasks retain one exact acceptance and synchronization point by default. An explicitly opted-in successor may
     // share its immediately preceding compatible packet, preserving task order while retaining one submission for a
-    // temporary imported/native recording bridge.
+    // temporary imported/native recording bridge. The separate FrontierScored policy is deliberately opt-in too:
+    // it only absorbs a cheap immediate successor after proving that the preceding packet has no cross-queue signal
+    // frontier. This keeps current renderer packet boundaries stable while the generic compiler can reduce safe
+    // one-task submission overhead for new callers.
     for(const GpuTaskId taskID : outAnalysis.topologicalOrder()){
         const GpuTaskQueueAssignment* const assignment = outAssignments.find(taskID);
         if(!assignment || !assignment->queue.valid()){
@@ -1129,8 +1132,12 @@ bool GpuTaskGraphCompiler::compile(
 
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
         GpuSubmissionPacketId packetID;
+        const bool scoredMergeRequested =
+            options.packetizationPolicy == GpuTaskGraphPacketizationPolicy::FrontierScored
+            && !task.scheduling.mergeWithPrevious
+        ;
         const bool mergeRequested =
-            task.scheduling.mergeWithPrevious
+            (task.scheduling.mergeWithPrevious || scoredMergeRequested)
             && task.scheduling.allowPacketMerge
             && !task.scheduling.forceSubmissionBoundary
             && !task.scheduling.joinsAcceptedQueueFrontier
@@ -1152,6 +1159,25 @@ bool GpuTaskGraphCompiler::compile(
                     && !preceding.scheduling.joinsAcceptedQueueFrontier
                 ;
             }
+            if(precedingPacketAllowsMerge && scoredMergeRequested){
+                // A score is useful only for an actual immediate serial chain. Never use packet coalescing to
+                // manufacture an order between unrelated work, and keep Medium/Large work independently
+                // accept/recoverable unless its owner deliberately asks for an explicit merge.
+                const GpuTaskId precedingTask = outCompiledGraph.m_packetTasks[
+                    precedingPacket.taskOffset + precedingPacket.taskCount - 1u
+                ];
+                bool directlyDependsOnPrecedingTask = false;
+                for(const GpuTaskDependencyEdge& edge : outAnalysis.edges()){
+                    if(edge.producer == precedingTask && edge.consumer == taskID){
+                        directlyDependsOnPrecedingTask = true;
+                        break;
+                    }
+                }
+                precedingPacketAllowsMerge = directlyDependsOnPrecedingTask
+                    && task.scheduling.cost <= GpuTaskCostHint::Small
+                    && !task.scheduling.allowMergeAcrossConsumerFrontier
+                ;
+            }
             if(precedingPacketAllowsMerge && task.scheduling.allowMergeAcrossConsumerFrontier){
                 // This narrow opt-in is only valid for an explicit immediate successor. It must not let an
                 // unrelated same-queue task quietly absorb an already-signallable cross-queue frontier.
@@ -1171,7 +1197,10 @@ bool GpuTaskGraphCompiler::compile(
             }
             if(
                 precedingPacketAllowsMerge
-                && options.packetizationPolicy == GpuTaskGraphPacketizationPolicy::FrontierSafe
+                && (
+                    options.packetizationPolicy == GpuTaskGraphPacketizationPolicy::FrontierSafe
+                    || options.packetizationPolicy == GpuTaskGraphPacketizationPolicy::FrontierScored
+                )
                 && !task.scheduling.allowMergeAcrossConsumerFrontier
             ){
                 for(u32 precedingTaskIndex = 0u;

@@ -535,7 +535,7 @@ private:
     // Software caustics retain their temporal scratch on the dedicated Compute lane. Hardware dispatch-rays caustics
     // use the Graphics hardware-caustics packet; normal deferred lighting consumes either resolved irradiance on Compute, while
     // the optional lagged path snapshots it for the next Graphics lighting packet.
-    Core::CommandListResourceStateHandoff m_causticsComputePersistentStateHandoff;
+    Core::GpuPersistentResourceStateCache m_causticsComputePersistentState;
     Core::CommandListResourceStateHandoff m_causticIrradianceLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_causticIrradianceReturnStateHandoff;
     // Surfel GI is also entirely compute-dispatched, including its RayQuery trace variant. Its field/history stays on

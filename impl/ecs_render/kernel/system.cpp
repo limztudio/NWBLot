@@ -48,7 +48,7 @@ RendererSystem::RendererSystem(
     , m_shadowComputePersistentState(arena)
     , m_shadowVisibilityReturnStateHandoff(arena)
     , m_shadowPreparePersistentState(arena)
-    , m_causticsComputePersistentStateHandoff(arena)
+    , m_causticsComputePersistentState(arena)
     , m_causticIrradianceLightingStateHandoff(arena)
     , m_causticIrradianceReturnStateHandoff(arena)
     , m_surfelGiComputePersistentState(arena)
@@ -147,7 +147,7 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     // Replaced targets invalidate retained compute-local state.
     m_shadowComputePersistentState.reset();
     m_shadowVisibilityReturnStateHandoff.reset();
-    m_causticsComputePersistentStateHandoff.reset();
+    m_causticsComputePersistentState.reset();
     m_causticIrradianceLightingStateHandoff.reset();
     m_causticIrradianceReturnStateHandoff.reset();
     m_surfelGiComputePersistentState.reset();
@@ -2431,13 +2431,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         graphicsPrefixFinalStateSeed
     );
     if(!hardwareShadowSupported){
-        if(softwareCausticsRunsOnCompute && m_causticsComputePersistentStateHandoff.valid()){
+        if(softwareCausticsRunsOnCompute && m_causticsComputePersistentState.valid()){
             softwareCausticsStateSourcesReady = softwareCausticsStateSourcesReady
                 && appendDeclaredStateSource(
                     softwareCausticsStateSources,
                     LengthOf(softwareCausticsStateSources),
                     softwareCausticsStateSourceCount,
-                    &m_causticsComputePersistentStateHandoff
+                    m_causticsComputePersistentState.source()
                 )
             ;
         }
@@ -3875,13 +3875,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 return;
             }
 
-            Core::Texture* const causticsComputeScratchTextures[] = {
-                deferredTargets.causticAccumulator.get(),
-                deferredTargets.causticHistory.get(),
-                deferredTargets.causticResolveHalf.get(),
-                deferredTargets.causticResolveGeometry.get(),
+            const Core::TextureHandle causticsComputeScratchTextures[] = {
+                deferredTargets.causticAccumulator,
+                deferredTargets.causticHistory,
+                deferredTargets.causticResolveHalf,
+                deferredTargets.causticResolveGeometry,
             };
-            if(!m_causticsComputePersistentStateHandoff.buildResourceSubset(
+            if(!m_causticsComputePersistentState.replaceResourceSubset(
                 *causticsFinalStateSeed,
                 causticsComputeScratchTextures,
                 LengthOf(causticsComputeScratchTextures),

@@ -4647,6 +4647,19 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     ASSERT_TRUE(swBvhSortKeys.valid());
     ASSERT_TRUE(swBvhSortPayload.valid());
     ASSERT_TRUE(swBvhVisitCounter.valid());
+    const Graphics::GpuGraphResourceId softwareBvhBuildStateMembers[] = {
+        swBvhParent,
+        swBvhSortKeys,
+        swBvhSortPayload,
+        swBvhVisitCounter,
+    };
+    const Graphics::GpuGraphResourceSetId softwareBvhBuildStateSet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/shadow_prepare_software_bvh_build_state"))
+            .setMarkerLabel("Shadow Prepare Software BVH Build State")
+            .setMembers(softwareBvhBuildStateMembers, LengthOf(softwareBvhBuildStateMembers))
+    );
+    ASSERT_TRUE(softwareBvhBuildStateSet.valid());
     ASSERT_TRUE(sceneTlas.valid());
     ASSERT_TRUE(sceneTlasBacking.valid());
     ASSERT_TRUE(meshBlasA.valid());
@@ -4881,6 +4894,15 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     const Graphics::GpuTaskId sceneBvhInstancesUpload = graph.addTask(sceneBvhInstancesUploadDesc);
     ASSERT_TRUE(sceneBvhInstancesUpload.valid());
 
+    const Graphics::GpuTaskResourceSetUse softwareBvhBuildStateSetUses[] = {
+        Graphics::GpuTaskResourceSetUse{
+            .resourceSet = softwareBvhBuildStateSet,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+
     const Graphics::GpuTaskResourceUse shadowPrepareUses[] = {
         Graphics::GpuTaskResourceUse{
             .resource = currentBindlessSlots,
@@ -4935,32 +4957,6 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             .range = {},
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Write,
-        },
-        // SW mesh build parent links and shared scratch remain native UAVs after Shadow Preparation. They are
-        // state-only graph inputs so an accepted packet can seed a later build/refit without normalizing them to SRV.
-        Graphics::GpuTaskResourceUse{
-            .resource = swBvhParent,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::UnorderedAccess,
-            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
-        },
-        Graphics::GpuTaskResourceUse{
-            .resource = swBvhSortKeys,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::UnorderedAccess,
-            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
-        },
-        Graphics::GpuTaskResourceUse{
-            .resource = swBvhSortPayload,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::UnorderedAccess,
-            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
-        },
-        Graphics::GpuTaskResourceUse{
-            .resource = swBvhVisitCounter,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::UnorderedAccess,
-            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
         },
         // The frozen native TLAS recorder consumes the graph-owned build state. Its adjacent state-only finalizer
         // below publishes the descriptor-visible Read handoff before the Compute consumer can begin.
@@ -5024,6 +5020,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         .setScheduling(shadowPrepareScheduling)
         .setDependencies(&sceneBvhInstancesUpload, 1u)
         .setResourceUses(shadowPrepareUses, LengthOf(shadowPrepareUses))
+        .setResourceSetUses(softwareBvhBuildStateSetUses, LengthOf(softwareBvhBuildStateSetUses))
     ;
     const Graphics::GpuTaskId shadowPrepare = graph.addTask(shadowPrepareDesc);
     ASSERT_TRUE(shadowPrepare.valid());

@@ -4010,6 +4010,183 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedSoftwareBvhInputStatesRe
 }
 
 
+// Shadow Preparation keeps parent links and shared sort/counter scratch as UAV state for a later SW-BVH build.
+// Its graph declaration must expand that exact frozen set before the native callback records, without a local
+// transition bridge.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowPrepareSoftwareBvhBuildStateSetRecordsWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const auto makeBuildStateBuffer = [&device]{
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setCanHaveUAVs(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const BufferHandle parent = makeBuildStateBuffer();
+    const BufferHandle sortScratch = makeBuildStateBuffer();
+    ASSERT_NE(parent.get(), nullptr);
+    ASSERT_NE(sortScratch.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importBuildState = [&graph](const BufferHandle& buffer, const Name identity, const AStringView label){
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Buffer)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const GpuGraphResourceId parentResource = importBuildState(
+        parent,
+        Name("tests/descriptor_buffer/shadow_prepare_sw_bvh_parent"),
+        "Shadow Prepare Software BVH Parent"
+    );
+    const GpuGraphResourceId sortScratchResource = importBuildState(
+        sortScratch,
+        Name("tests/descriptor_buffer/shadow_prepare_sw_bvh_sort_scratch"),
+        "Shadow Prepare Software BVH Sort Scratch"
+    );
+    ASSERT_TRUE(parentResource.valid());
+    ASSERT_TRUE(sortScratchResource.valid());
+
+    const GpuGraphResourceId buildStateMembers[] = { parentResource, sortScratchResource };
+    const GpuGraphResourceSetId buildStateSet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/shadow_prepare_software_bvh_build_state"))
+            .setMarkerLabel("Shadow Prepare Software BVH Build State")
+            .setMembers(buildStateMembers, LengthOf(buildStateMembers))
+    );
+    ASSERT_TRUE(buildStateSet.valid());
+    const GpuTaskResourceSetUse buildStateSetUses[] = {
+        {
+            .resourceSet = buildStateSet,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Medium;
+    scheduling.allowPacketMerge = true;
+    GpuTaskDesc shadowPrepareDesc;
+    shadowPrepareDesc
+        .setIdentity(Name("tests/descriptor_buffer/shadow_prepare_software_bvh_build_state"))
+        .setMarkerLabel("Shadow Prepare Software BVH Build State")
+        .setQueue(graphicsQueue)
+        .setScheduling(scheduling)
+        .setResourceSetUses(buildStateSetUses, LengthOf(buildStateSetUses))
+    ;
+    bool recorded = false;
+    const GpuTaskId shadowPrepareTask = graph.addTask<NativePacketPrefixTask>(
+        shadowPrepareDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = parent.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .additionalBuffer = sortScratch.get(),
+            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
+            .recorded = &recorded,
+        }
+    );
+    ASSERT_TRUE(shadowPrepareTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/shadow_prepare_sw_bvh_build_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(shadowPrepareTask);
+    ASSERT_TRUE(packet.valid());
+    const GpuCompiledTask* const compiledTask = compiledGraph.findTask(shadowPrepareTask);
+    ASSERT_NE(compiledTask, nullptr);
+    const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(shadowPrepareTask);
+    ASSERT_NE(barriers, nullptr);
+    const auto hasUavTransition = [&](const GpuGraphResourceId resource){
+        for(usize barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == ResourceStates::Common
+                && barrier.after == ResourceStates::UnorderedAccess
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasUavTransition(parentResource));
+    EXPECT_TRUE(hasUavTransition(sortScratchResource));
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(recorded);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    ASSERT_NE(finalState, nullptr);
+    auto stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getBufferState(parent.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(stateProbe->getBufferState(sortScratch.get()), ResourceStates::UnorderedAccess);
+    stateProbe->close();
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(packet).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Prepared BLAS work with no software-BVH tail in the aggregate Shadow Preparation callback has its frozen
 // position/index inputs observe graph-owned AccelStructBuildInput before recording, and the graph-owned
 // normalizer publishes ShaderResource afterward without either callback issuing a native state change.

@@ -2705,6 +2705,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
+    Vector<Core::GpuTaskResourceSetUse, Core::Alloc::ScratchArena> resourceSetUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accelStructFinalizeResourceUses{ scratchArena };
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> meshBlasGeometryBuildInputResources{ scratchArena };
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hybridSoftwareTailInputResources{ scratchArena };
@@ -2721,6 +2722,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         (sceneTlasBuildGraphOwned ? 2u : 0u)
         + preparedMeshBlasBuilds.size() * 2u
     );
+    resourceSetUses.reserve(2u);
     meshBlasGeometryBuildInputResources.reserve(preparedMeshBlasBuilds.size() * 2u);
     hybridSoftwareTailInputResources.reserve(preparedMeshSwBvhBuilds.size() * 2u);
     shadowPrepareTraceGeometryResources.reserve(shadowTraceGeometryResourceCount);
@@ -2885,14 +2887,40 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         .requiredState = Core::ResourceStates::ShaderResource,
         .access = Core::GpuTaskResourceAccess::ReadWrite,
     };
+    if(shadowPrepareTraceGeometryStatesGraphOwned)
+        resourceSetUses.push_back(shadowPrepareTraceGeometrySetUse);
     for(usize resourceIndex = 0u; resourceIndex < softwareBvhBuildStateResourceCount; ++resourceIndex){
-        const Core::GpuGraphResourceId resource = softwareBvhBuildStateResources[resourceIndex];
-        if(!resource.valid())
+        if(!softwareBvhBuildStateResources[resourceIndex].valid())
             return false;
-        // Parent links and global build scratch retain their native UAV close state. They are state-only graph
-        // resources: later traversal keeps its narrower node/geometry declarations.
-        resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::UnorderedAccess));
     }
+    Core::GpuGraphResourceSetId softwareBvhBuildStateSet;
+    if(softwareBvhBuildStateResourceCount != 0u){
+        softwareBvhBuildStateSet = m_deferredLightingTaskGraph.importResourceSet(
+            Core::GpuGraphResourceSetDesc{}
+                .setIdentity(Name("render.shadow_prepare.software_bvh_build_state"))
+                .setMarkerLabel("Shadow Prepare Software BVH Build State")
+                .setMembers(softwareBvhBuildStateResources, softwareBvhBuildStateResourceCount)
+        );
+    }
+    const bool softwareBvhBuildStateStatesGraphOwned = softwareBvhBuildStateSet.valid();
+    if(!softwareBvhBuildStateStatesGraphOwned){
+        for(usize resourceIndex = 0u; resourceIndex < softwareBvhBuildStateResourceCount; ++resourceIndex){
+            // Parent links and global build scratch retain their native UAV close state. They are state-only graph
+            // resources: later traversal keeps its narrower node/geometry declarations.
+            resourceUses.push_back(ReadWriteUse(
+                softwareBvhBuildStateResources[resourceIndex],
+                Core::ResourceStates::UnorderedAccess
+            ));
+        }
+    }
+    const Core::GpuTaskResourceSetUse softwareBvhBuildStateSetUse{
+        .resourceSet = softwareBvhBuildStateSet,
+        .range = {},
+        .requiredState = Core::ResourceStates::UnorderedAccess,
+        .access = Core::GpuTaskResourceAccess::ReadWrite,
+    };
+    if(softwareBvhBuildStateStatesGraphOwned)
+        resourceSetUses.push_back(softwareBvhBuildStateSetUse);
 
     Core::GpuGraphResourceId sceneTlas;
     Core::GpuGraphResourceId sceneTlasBacking;
@@ -2981,10 +3009,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         .setScheduling(scheduling)
         .setDependencies(dependencies, dependencyCount)
         .setResourceUses(resourceUses.data(), resourceUses.size())
-        .setResourceSetUses(
-            shadowPrepareTraceGeometryStatesGraphOwned ? &shadowPrepareTraceGeometrySetUse : nullptr,
-            shadowPrepareTraceGeometryStatesGraphOwned ? 1u : 0u
-        )
+        .setResourceSetUses(resourceSetUses.data(), resourceSetUses.size())
     ;
     m_deferredShadowPrepareTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::ShadowPrepareGraphTask>(
         desc,

@@ -151,8 +151,9 @@ struct ShadowPrepareGraphTask{
         )
             return false;
 
-        // The declared ShaderResource uses export every selected BLAS/SW-BVH input's exact graph-visible boundary
-        // state before the following Prefix packet is seeded. Route-local build work remains inside this callback.
+        // These declarations, and the adjacent hybrid-tail ShaderResource reads when present, export every selected
+        // BLAS/SW-BVH input's exact graph-visible boundary state before the following Prefix packet is seeded.
+        // Route-local build work remains inside this callback.
         return true;
     }
 
@@ -199,6 +200,7 @@ struct ShadowPrepareHybridSoftwareTailGraphTask{
         bool shadowMaterialContextBatchGraphOwned = false;
         bool sceneBvhBatchGraphOwned = false;
         bool meshSwBvhBuildsGraphOwned = false;
+        bool meshSwBvhInputStatesGraphOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -220,7 +222,8 @@ struct ShadowPrepareHybridSoftwareTailGraphTask{
             payload.surfelFrameConstantsGraphOwned,
             payload.shadowMaterialContextBatchGraphOwned,
             payload.sceneBvhBatchGraphOwned,
-            payload.meshSwBvhBuildsGraphOwned
+            payload.meshSwBvhBuildsGraphOwned,
+            payload.meshSwBvhInputStatesGraphOwned
         );
     }
 
@@ -2642,19 +2645,31 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     // untouched.
     const bool hybridSoftwareTailGraphOwned =
         m_raytracingSystem.hybridShadowVisibilityResourcesPreflighted();
-    // A hybrid aggregate callback immediately reuses shared BLAS position/index streams for software-BVH
-    // construction. Leave that in-callback AccelStructBuildInput -> ShaderResource bridge native. A prepared
-    // hardware route with no software tail has no such later producer, so its frozen geometry can enter graph-owned.
+    // A fully frozen hybrid packet has a separate software-tail callback, so the graph can now lower its exact
+    // BLAS AccelStructBuildInput -> SW-BVH ShaderResource handoff at that boundary. Keep the direct/retry fallback
+    // native unless both frozen plans and every required shared trace-geometry import are available.
+    const bool hybridSoftwareTailInputStatesCandidate =
+        hybridSoftwareTailGraphOwned
+        && meshBlasBuildsGraphOwned
+        && meshSwBvhBuildsGraphOwned
+    ;
+    // A prepared hardware route with no software tail has no later consumer, so its frozen geometry can enter
+    // graph-owned directly as before. The hybrid candidate below extends that only to its verified tail boundary.
     bool meshBlasGeometryBuildInputStatesGraphOwned =
         meshBlasBuildsGraphOwned
-        && !softwareTraceResourcesPrepared
-        && !meshSwBvhBuildsGraphOwned
+        && (
+            hybridSoftwareTailInputStatesCandidate
+            || (!softwareTraceResourcesPrepared && !meshSwBvhBuildsGraphOwned)
+        )
     ;
+    bool meshSwBvhInputStatesGraphOwned = hybridSoftwareTailInputStatesCandidate;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accelStructFinalizeResourceUses{ scratchArena };
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> meshBlasGeometryBuildInputResources{ scratchArena };
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hybridSoftwareTailInputResources{ scratchArena };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hybridSoftwareTailResourceUses{ scratchArena };
     resourceUses.reserve(
         19u
         + shadowTraceGeometryResourceCount
@@ -2667,6 +2682,8 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         + preparedMeshBlasBuilds.size() * 2u
     );
     meshBlasGeometryBuildInputResources.reserve(preparedMeshBlasBuilds.size() * 2u);
+    hybridSoftwareTailInputResources.reserve(preparedMeshSwBvhBuilds.size() * 2u);
+    hybridSoftwareTailResourceUses.reserve(preparedMeshSwBvhBuilds.size() * 2u);
     // Shadow Preparation owns each preflight input's post-transition packet boundary. This deliberately supersedes
     // preceding immutable uploads as graph producers, so later Compute readers wait on this first Graphics packet
     // rather than forcing FrontierSafe packetization to split an upload away from its accepting consumer.
@@ -2697,28 +2714,47 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         }
         return false;
     };
+    const auto appendTraceGeometryResource = [&](
+        Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& resources,
+        const Core::BufferHandle& buffer
+    ){
+        const Core::GpuGraphResourceId resource = m_deferredLightingTaskGraph.findImportedBuffer(buffer);
+        if(!resource.valid() || !isShadowTraceGeometryResource(resource))
+            return false;
+        for(const Core::GpuGraphResourceId existing : resources){
+            if(existing == resource)
+                return true;
+        }
+        resources.push_back(resource);
+        return true;
+    };
     if(meshBlasGeometryBuildInputStatesGraphOwned){
-        const auto appendMeshBlasGeometryBuildInput = [&](const Core::BufferHandle& buffer){
-            const Core::GpuGraphResourceId resource = m_deferredLightingTaskGraph.findImportedBuffer(buffer);
-            if(!resource.valid() || !isShadowTraceGeometryResource(resource))
-                return false;
-            for(const Core::GpuGraphResourceId existing : meshBlasGeometryBuildInputResources){
-                if(existing == resource)
-                    return true;
-            }
-            meshBlasGeometryBuildInputResources.push_back(resource);
-            return true;
-        };
         for(const PreparedMeshBlasBuild& build : preparedMeshBlasBuilds){
             if(
-                !appendMeshBlasGeometryBuildInput(build.positionBuffer)
-                || !appendMeshBlasGeometryBuildInput(build.triangleIndexBuffer)
+                !appendTraceGeometryResource(meshBlasGeometryBuildInputResources, build.positionBuffer)
+                || !appendTraceGeometryResource(meshBlasGeometryBuildInputResources, build.triangleIndexBuffer)
             ){
-                // Do not reject an otherwise valid tail-free packet merely because a future preflight change omitted
-                // one frozen stream from the graph-owned trace set. The prepared recorder retains its direct
-                // bridge in that compatibility case, exactly as it does for hybrid callbacks.
+                // Do not reject an otherwise valid packet merely because a future preflight change omitted one
+                // frozen stream from the graph-owned trace set. Retain the complete native BLAS/SW bridge instead.
                 meshBlasGeometryBuildInputStatesGraphOwned = false;
+                meshSwBvhInputStatesGraphOwned = false;
                 meshBlasGeometryBuildInputResources.clear();
+                break;
+            }
+        }
+    }
+    if(meshSwBvhInputStatesGraphOwned){
+        for(const PreparedMeshSwBvhBuild& build : preparedMeshSwBvhBuilds){
+            if(
+                !appendTraceGeometryResource(hybridSoftwareTailInputResources, build.positionBuffer)
+                || !appendTraceGeometryResource(hybridSoftwareTailInputResources, build.triangleIndexBuffer)
+            ){
+                // The prepared SW recorder accepts one all-or-native input-state policy. If any frozen input cannot
+                // be declared at the tail boundary, preserve the established native bridge for both callbacks.
+                meshBlasGeometryBuildInputStatesGraphOwned = false;
+                meshSwBvhInputStatesGraphOwned = false;
+                meshBlasGeometryBuildInputResources.clear();
+                hybridSoftwareTailInputResources.clear();
                 break;
             }
         }
@@ -2758,8 +2794,8 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             ;
             if(blas.valid() && backing.valid()){
                 // The graph owns typed/backing Write states here and the accepting successor publishes both Read
-                // aliases. A prepared BLAS route with no software tail also owns its exact position/index entry;
-                // hybrid and direct compatibility routes retain that shared geometry bridge natively.
+                // aliases. A prepared no-tail route and a fully verified hybrid tail own the matching geometry
+                // boundary; direct and incomplete compatibility routes retain their native bridge.
                 resourceUses.push_back(ReadWriteUse(blas, Core::ResourceStates::AccelStructWrite));
                 resourceUses.push_back(WriteUse(backing, Core::ResourceStates::AccelStructWrite));
                 accelStructFinalizeResourceUses.push_back(ReadUse(blas, Core::ResourceStates::AccelStructRead));
@@ -2770,6 +2806,10 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     if(meshBlasGeometryBuildInputStatesGraphOwned){
         for(const Core::GpuGraphResourceId resource : meshBlasGeometryBuildInputResources)
             resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::AccelStructBuildInput));
+    }
+    if(meshSwBvhInputStatesGraphOwned){
+        for(const Core::GpuGraphResourceId resource : hybridSoftwareTailInputResources)
+            hybridSoftwareTailResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
     for(usize resourceIndex = 0u; resourceIndex < shadowTraceGeometryResourceCount; ++resourceIndex){
         const Core::GpuGraphResourceId resource = shadowTraceGeometryResources[resourceIndex];
@@ -2917,6 +2957,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .setQueue(GraphicsQueueRequest())
             .setScheduling(hybridSoftwareTailScheduling)
             .setDependencies(&m_deferredShadowPrepareTask, 1u)
+            .setResourceUses(hybridSoftwareTailResourceUses.data(), hybridSoftwareTailResourceUses.size())
         ;
         m_deferredShadowPrepareHybridSoftwareTailTask = m_deferredLightingTaskGraph.addTask<
             ECSRenderDetail::ShadowPrepareHybridSoftwareTailGraphTask
@@ -2931,6 +2972,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
                 .shadowMaterialContextBatchGraphOwned = shadowMaterialContextBatchGraphOwned,
                 .sceneBvhBatchGraphOwned = sceneBvhBatchGraphOwned,
                 .meshSwBvhBuildsGraphOwned = meshSwBvhBuildsGraphOwned,
+                .meshSwBvhInputStatesGraphOwned = meshSwBvhInputStatesGraphOwned,
             }
         );
         if(!m_deferredShadowPrepareHybridSoftwareTailTask.valid()){

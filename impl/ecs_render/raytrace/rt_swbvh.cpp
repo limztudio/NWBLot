@@ -388,8 +388,9 @@ template<typename RayTracingState>
     if(build.performRefit)
         buildFlags |= Core::RayTracingAccelStructBuildFlags::PerformUpdate;
 
-    // Hybrid callbacks immediately hand these shared streams to the software-BVH builder, so that bridge remains
-    // native. The frozen no-software-tail graph route established this input state in its packet prologue already.
+    // Direct/retry and incomplete hybrid callbacks immediately hand these shared streams to the software-BVH
+    // builder, so they retain the native bridge. Verified frozen graph routes establish this input state in their
+    // packet prologue instead.
     if(!meshBlasGeometryBuildInputStatesGraphOwned){
         commandList.setBufferState(build.positionBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
         commandList.setBufferState(build.triangleIndexBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
@@ -827,9 +828,9 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuilds(
     }
 
     for(const PreparedMeshSwBvhBuild& build : m_preparedMeshSwBvhBuilds){
-        // The pure software prepared route declares these frozen heap inputs as ShaderResource on Shadow
-        // Preparation itself. Hybrid work can immediately follow a hardware BLAS build in this same callback, so it
-        // must retain the native AccelStructBuildInput -> ShaderResource bridge there; direct callers do as well.
+        // Pure software preparation declares these frozen heap inputs on Shadow Preparation itself. A fully frozen
+        // hybrid packet declares them on its immediately following software-tail callback. Direct/retry and
+        // incomplete-plan callers retain the native AccelStructBuildInput -> ShaderResource bridge.
         if(!meshSwBvhInputStatesGraphOwned){
             commandList.setBufferState(build.positionBuffer.get(), Core::ResourceStates::ShaderResource);
             commandList.setBufferState(build.triangleIndexBuffer.get(), Core::ResourceStates::ShaderResource);

@@ -1738,7 +1738,8 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
     const bool surfelFrameConstantsGraphOwned,
     const bool shadowMaterialContextBatchGraphOwned,
     const bool sceneBvhBatchGraphOwned,
-    const bool meshSwBvhBuildsGraphOwned
+    const bool meshSwBvhBuildsGraphOwned,
+    const bool meshSwBvhInputStatesGraphOwned
 ){
     if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
         return false;
@@ -1778,10 +1779,11 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
         && (rayTracingState().m_sceneHasTransparentOccluder || hybridSoftwareMaterialContextGraphOwned)
     ){
         const bool meshSwBvhReady = meshSwBvhBuildsGraphOwned
-            // The optional hybrid SW build can consume position/index immediately after the preceding BLAS build
-            // changed them to AccelStructBuildInput. This packet-preserving split keeps that native handoff until
-            // the next graph-owned state tranche declares it at the callback boundary.
-            ? recordPreparedMeshSwBvhBuilds(commandList, false)
+            // A fully frozen and import-verified hybrid packet declares every prepared SW input as ShaderResource
+            // on this tail. Its preceding Shadow Preparation callback supplied build inputs for the frozen BLAS
+            // plan, so the packet runtime lowers their exact AccelStructBuildInput -> ShaderResource handoff before
+            // this recorder runs. Direct, retry, and incomplete-plan paths retain the native bridge.
+            ? recordPreparedMeshSwBvhBuilds(commandList, meshSwBvhInputStatesGraphOwned)
             : buildPendingMeshSwBvh(commandList)
         ;
         hybridMeshSwBvhBuildRecorded = meshSwBvhBuildsGraphOwned && meshSwBvhReady;

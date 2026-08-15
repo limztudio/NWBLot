@@ -206,8 +206,9 @@ public:
         bool deferHybridSoftwareTail = false
     );
     // The hybrid HW-to-SW continuation stays in the accepting Shadow Preparation packet, but records after the
-    // frozen hardware build so a graph callback can eventually own that explicit handoff. Direct and unsplit
-    // callers continue through recordPreflightShadowVisibilityResources without deferring this tail.
+    // frozen hardware build so its verified BLAS-input -> SW-BVH-input handoff can be graph-owned at the callback
+    // boundary. Direct and unsplit callers continue through recordPreflightShadowVisibilityResources without
+    // deferring this tail.
     [[nodiscard]] bool recordPreflightHybridSoftwareTail(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -215,7 +216,8 @@ public:
         bool surfelFrameConstantsGraphOwned = false,
         bool shadowMaterialContextBatchGraphOwned = false,
         bool sceneBvhBatchGraphOwned = false,
-        bool meshSwBvhBuildsGraphOwned = false
+        bool meshSwBvhBuildsGraphOwned = false,
+        bool meshSwBvhInputStatesGraphOwned = false
     );
     [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept;
     [[nodiscard]] bool shadowVisibilitySoftwareResourcesPreflighted()const noexcept;

@@ -3178,8 +3178,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
 
 
 // Pure software Shadow Preparation can begin after a forced-emulation frame inherits an accepted hardware build-input
-// seed. Its frozen SW-BVH recorder only observes the graph-established position/index ShaderResource state; it must
-// not need to issue a duplicate native transition before dispatching the build/refit kernels.
+// seed. The same two-callback state shape is used by a fully frozen hybrid BLAS -> software-tail handoff. Its frozen
+// SW-BVH recorder only observes the graph-established position/index ShaderResource state; it must not need to issue
+// a duplicate native transition before dispatching the build/refit kernels.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedSoftwareBvhInputStatesRecordWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
     if(!device.queryFeatureSupport(Feature::RayTracingAccelStruct))

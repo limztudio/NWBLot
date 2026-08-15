@@ -3833,6 +3833,20 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         Graphics::ResourceStates::Common,
         Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
     );
+    const Graphics::GpuGraphResourceId meshBlasAPosition = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/mesh_blas_a_position"),
+        "Mesh BLAS A Position",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId meshBlasAIndex = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/mesh_blas_a_index"),
+        "Mesh BLAS A Index",
+        Graphics::ResourceStates::ShaderResource,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
     const Graphics::GpuGraphResourceId meshBlasB = AddAccelStructMetadata(
         graph,
         Name("tests/task_graph/mesh_blas_b"),
@@ -3864,6 +3878,8 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     ASSERT_TRUE(sceneTlasBacking.valid());
     ASSERT_TRUE(meshBlasA.valid());
     ASSERT_TRUE(meshBlasABacking.valid());
+    ASSERT_TRUE(meshBlasAPosition.valid());
+    ASSERT_TRUE(meshBlasAIndex.valid());
     ASSERT_TRUE(meshBlasB.valid());
     ASSERT_TRUE(meshBlasBBacking.valid());
 
@@ -4187,8 +4203,20 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             .requiredState = Graphics::ResourceStates::AccelStructWrite,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
-        // The frozen BLAS build records with graph-owned typed/backing Write aliases. Its shared geometry-input
-        // bridge remains native until the hardware and software builders are independently task-boundaried.
+        // The frozen BLAS build records with graph-owned typed/backing Write aliases. Its frozen shared geometry
+        // inputs enter as build inputs here; the adjacent hybrid tail lowers them to SRV before SW-BVH work records.
+        Graphics::GpuTaskResourceUse{
+            .resource = meshBlasAPosition,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::AccelStructBuildInput,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = meshBlasAIndex,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::AccelStructBuildInput,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
         Graphics::GpuTaskResourceUse{
             .resource = meshBlasA,
             .range = {},
@@ -4228,14 +4256,28 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     ASSERT_TRUE(shadowPrepare.valid());
 
     // The hybrid HW-to-SW continuation records real compatibility work after the hardware build, but it keeps the
-    // original accepting packet whole so the opaque fallback and its persistent state handoff stay atomic. It has no
-    // graph resource uses yet: the following tranche will lower its native BuildInput -> ShaderResource bridge.
+    // original accepting packet whole so the opaque fallback and its persistent state handoff stay atomic. Its
+    // frozen BLAS inputs become graph-owned ShaderResource reads at this callback boundary.
     Graphics::GpuTaskSchedulingHint shadowPrepareHybridTailScheduling;
     shadowPrepareHybridTailScheduling.cost = Graphics::GpuTaskCostHint::Large;
     shadowPrepareHybridTailScheduling.forceSubmissionBoundary = false;
     shadowPrepareHybridTailScheduling.allowPacketMerge = true;
     shadowPrepareHybridTailScheduling.mergeWithPrevious = true;
     shadowPrepareHybridTailScheduling.allowMergeAcrossConsumerFrontier = true;
+    const Graphics::GpuTaskResourceUse shadowPrepareHybridTailUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = meshBlasAPosition,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = meshBlasAIndex,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
     Graphics::GpuTaskDesc shadowPrepareHybridTailDesc;
     shadowPrepareHybridTailDesc
         .setIdentity(Name("tests/task_graph/deferred_bindless_shadow_prepare_hybrid_tail"))
@@ -4243,6 +4285,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         .setQueue(graphicsRequest)
         .setScheduling(shadowPrepareHybridTailScheduling)
         .setDependencies(&shadowPrepare, 1u)
+        .setResourceUses(shadowPrepareHybridTailUses, LengthOf(shadowPrepareHybridTailUses))
     ;
     const Graphics::GpuTaskId shadowPrepareHybridTail = graph.addTask(shadowPrepareHybridTailDesc);
     ASSERT_TRUE(shadowPrepareHybridTail.valid());
@@ -4399,6 +4442,20 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         currentBindlessSlots,
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        shadowPrepare,
+        shadowPrepareHybridTail,
+        meshBlasAPosition,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        shadowPrepare,
+        shadowPrepareHybridTail,
+        meshBlasAIndex,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
 
     const Graphics::GpuSubmissionPacketId uploadPacket = compiledGraph.packetForTask(upload);
     const Graphics::GpuSubmissionPacketId materialContextUploadPacket = compiledGraph.packetForTask(materialContextUpload);
@@ -4467,10 +4524,14 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     ASSERT_TRUE(shadowPrepareRange.valid());
     EXPECT_EQ(shadowPrepareRange.packetCount, 1u);
     const Graphics::GpuCompiledTask* const compiledShadowPrepare = compiledGraph.findTask(shadowPrepare);
+    const Graphics::GpuCompiledTask* const compiledShadowPrepareHybridTail = compiledGraph.findTask(
+        shadowPrepareHybridTail
+    );
     const Graphics::GpuCompiledTask* const compiledShadowPrepareTlasFinalize = compiledGraph.findTask(
         shadowPrepareTlasFinalize
     );
     ASSERT_NE(compiledShadowPrepare, nullptr);
+    ASSERT_NE(compiledShadowPrepareHybridTail, nullptr);
     ASSERT_NE(compiledShadowPrepareTlasFinalize, nullptr);
     const Graphics::GpuCompiledBarrier* const shadowPrepareBarriers = compiledGraph.taskPrologueBarriers(shadowPrepare);
     ASSERT_NE(shadowPrepareBarriers, nullptr);
@@ -4492,6 +4553,8 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     bool transitionsMeshBlasA = false;
     bool transitionsMeshBlasABacking = false;
     bool transitionsMeshBlasBBacking = false;
+    bool transitionsMeshBlasAPosition = false;
+    bool transitionsMeshBlasAIndex = false;
     for(usize index = 0u; index < compiledShadowPrepare->prologueBarrierCount; ++index){
         const Graphics::GpuCompiledBarrier& barrier = shadowPrepareBarriers[index];
         if(
@@ -4547,6 +4610,23 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             transitionsMeshBlasA = transitionsMeshBlasA || barrier.resource == meshBlasA;
         if(
             barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+            && barrier.after == Graphics::ResourceStates::AccelStructBuildInput
+        ){
+            transitionsMeshBlasAPosition = transitionsMeshBlasAPosition
+                || (
+                    barrier.resource == meshBlasAPosition
+                    && barrier.before == Graphics::ResourceStates::Common
+                )
+            ;
+            transitionsMeshBlasAIndex = transitionsMeshBlasAIndex
+                || (
+                    barrier.resource == meshBlasAIndex
+                    && barrier.before == Graphics::ResourceStates::ShaderResource
+                )
+            ;
+        }
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
             && barrier.before == Graphics::ResourceStates::Common
             && barrier.after == Graphics::ResourceStates::AccelStructRead
         ){
@@ -4571,6 +4651,30 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     EXPECT_TRUE(transitionsMeshBlasA);
     EXPECT_TRUE(transitionsMeshBlasABacking);
     EXPECT_TRUE(transitionsMeshBlasBBacking);
+    EXPECT_TRUE(transitionsMeshBlasAPosition);
+    EXPECT_TRUE(transitionsMeshBlasAIndex);
+    const Graphics::GpuCompiledBarrier* const shadowPrepareHybridTailBarriers =
+        compiledGraph.taskPrologueBarriers(shadowPrepareHybridTail)
+    ;
+    ASSERT_NE(shadowPrepareHybridTailBarriers, nullptr);
+    const auto hasShadowPrepareHybridTailInputBarrier = [&](const Graphics::GpuGraphResourceId resource){
+        for(usize barrierIndex = 0u;
+            barrierIndex < compiledShadowPrepareHybridTail->prologueBarrierCount;
+            ++barrierIndex
+        ){
+            const Graphics::GpuCompiledBarrier& barrier = shadowPrepareHybridTailBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == Graphics::ResourceStates::AccelStructBuildInput
+                && barrier.after == Graphics::ResourceStates::ShaderResource
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasShadowPrepareHybridTailInputBarrier(meshBlasAPosition));
+    EXPECT_TRUE(hasShadowPrepareHybridTailInputBarrier(meshBlasAIndex));
     const Graphics::GpuCompiledBarrier* const shadowPrepareTlasFinalizeBarriers =
         compiledGraph.taskPrologueBarriers(shadowPrepareTlasFinalize)
     ;

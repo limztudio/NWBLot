@@ -381,9 +381,11 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     NWB_ASSERT(!removedIntervalOutputImageStatesGraphOwned || intervalTargetsGraphOwned);
     NWB_ASSERT(!deferIntervalCombine || (intervalTargetsGraphOwned && deferredIntervalTiming));
 
-    // The prepared graph's Combine callback completes this interval in the same ordered Graphics packet. Direct
-    // callers retain the local RAII scope, and a malformed split request safely falls back to the aggregate route.
+    // The prepared graph's Span/Combine callbacks complete this interval in the same ordered Graphics packet.
+    // Direct callers retain the local RAII scope, and malformed split requests safely fall back to the aggregate
+    // route.
     const bool splitIntervalCombine = deferIntervalCombine && deferredIntervalTiming;
+    const bool splitReceiverSpanBuild = splitIntervalCombine;
     Optional<Core::GpuTimingMeasure> localIntervalTiming;
     Optional<Core::GpuTimingMeasure>* const intervalTiming = splitIntervalCombine
         ? deferredIntervalTiming
@@ -463,12 +465,14 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         receiverSurfaceDrawItems
     );
 
-    m_renderer.csgSystem().dispatchCsgReceiverSpanBuild(
-        commandList,
-        targets,
-        csgFrameData,
-        intervalTargetsGraphOwned && receiverSpanOutputImageStatesGraphOwned
-    );
+    if(!splitReceiverSpanBuild){
+        m_renderer.csgSystem().dispatchCsgReceiverSpanBuild(
+            commandList,
+            targets,
+            csgFrameData,
+            intervalTargetsGraphOwned && receiverSpanOutputImageStatesGraphOwned
+        );
+    }
     if(!splitIntervalCombine){
         m_renderer.csgSystem().dispatchCsgIntervalCombine(
             commandList,
@@ -482,6 +486,9 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         // own marker. The timestamp endpoint remains open until that callback records.
         intervalTiming->value().finishMarker();
     }
+    // A deferred span callback receives graph-lowered prologue barriers before it records. The receiver-surface
+    // raster pass must therefore be closed even when the native span dispatch moved out of this callback.
+    commandList.endRenderPass();
 }
 
 void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(

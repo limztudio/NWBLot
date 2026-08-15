@@ -86,6 +86,7 @@ namespace ECSRenderDetail{
     struct SceneShadingSetupGraphTask;
     struct CsgReceiverSpanBuildGraphTask;
     struct CsgIntervalCombineGraphTask;
+    struct AvboitCsgReceiverSpanGraphTask;
     struct AvboitCsgIntervalCombineGraphTask;
     struct CsgIntervalSampleGraphTask;
     struct DeferredClearTimingRecordState{
@@ -114,6 +115,7 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend struct ECSRenderDetail::GbufferGraphTask;
     friend struct ECSRenderDetail::CsgReceiverSpanBuildGraphTask;
     friend struct ECSRenderDetail::CsgIntervalCombineGraphTask;
+    friend struct ECSRenderDetail::AvboitCsgReceiverSpanGraphTask;
     friend struct ECSRenderDetail::AvboitCsgIntervalCombineGraphTask;
     friend struct ECSRenderDetail::CsgIntervalSampleGraphTask;
 
@@ -470,8 +472,9 @@ private:
     // The normal graph path keeps this CopyDest clear in AVBOIT Pre's timed Graphics packet.
     Core::GpuTaskId m_deferredAvboitClearTask;
     Core::GpuTaskId m_deferredAvboitPreTask;
-    // Prepared transparent CSG split: its final interval-combine callback retains the same AVBOIT-pre packet so
-    // phase-local occupancy uploads cannot overwrite the frozen CSG stream before combine records.
+    // Prepared transparent CSG split: receiver-span and interval-combine retain the AVBOIT-pre packet so phase-
+    // local occupancy uploads cannot overwrite the frozen CSG stream before those callbacks record.
+    Core::GpuTaskId m_deferredAvboitCsgReceiverSpanTask;
     Core::GpuTaskId m_deferredAvboitCsgIntervalCombineTask;
     Core::GpuTaskId m_deferredAvboitOccupancyTask;
     Core::GpuTaskId m_deferredAvboitDepthWarpTask;

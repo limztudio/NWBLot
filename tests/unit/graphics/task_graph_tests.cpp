@@ -14473,10 +14473,10 @@ TEST(GpuTaskGraph, PlansCsgGbufferSpanBuildCombineAndSampleUavDependenciesAcross
 }
 
 
-// Prepared transparent CSG keeps receiver-surface -> span native inside Pre, then exposes the five exact peel/span
-// aliases to its graph-owned Combine callback before AVBOIT's phase-local uploads and target clear. Occupancy still
-// receives the four removed-interval handoffs even though the unrelated coverage clear sits between the callbacks.
-TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToOccupancySampleUavDependencies){
+// Prepared transparent CSG now lowers receiver-surface events through a dedicated Span callback before Combine.
+// Keep the exact Pre -> Span -> Combine -> Clear -> Occupancy same-UAV chain in one Graphics packet when
+// FrontierSafe permits it, while retaining the independent Clear -> Occupancy coverage handoff.
+TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerSpanBuildCombineToOccupancyUavDependencies){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId capBackNormal = AddTextureMetadata(
@@ -14493,6 +14493,16 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToOccupancySampleUavDependencie
         graph,
         Name("tests/task_graph/avboit_csg_interval_id"),
         "AVBOIT CSG Interval Id"
+    );
+    const Graphics::GpuGraphResourceId receiverEventData = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_csg_receiver_event_data"),
+        "AVBOIT CSG Receiver Event Data"
+    );
+    const Graphics::GpuGraphResourceId receiverEventCount = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_csg_receiver_event_count"),
+        "AVBOIT CSG Receiver Event Count"
     );
     const Graphics::GpuGraphResourceId receiverSpanData = AddTextureMetadata(
         graph,
@@ -14532,6 +14542,8 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToOccupancySampleUavDependencie
     ASSERT_TRUE(capBackNormal.valid());
     ASSERT_TRUE(intervalDepth.valid());
     ASSERT_TRUE(intervalId.valid());
+    ASSERT_TRUE(receiverEventData.valid());
+    ASSERT_TRUE(receiverEventCount.valid());
     ASSERT_TRUE(receiverSpanData.valid());
     ASSERT_TRUE(receiverSpanCount.valid());
     ASSERT_TRUE(removedIntervalDepth.valid());
@@ -14541,6 +14553,8 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToOccupancySampleUavDependencie
     ASSERT_TRUE(coverage.valid());
 
     const Graphics::TextureSubresourceSet peelRange(0u, 1u, 0u, 4u);
+    const Graphics::TextureSubresourceSet receiverEventRange(0u, 1u, 0u, 32u);
+    const Graphics::TextureSubresourceSet receiverEventCountRange(0u, 1u, 0u, 1u);
     const Graphics::TextureSubresourceSet receiverSpanRange(0u, 1u, 0u, 16u);
     const Graphics::TextureSubresourceSet receiverSpanCountRange(0u, 1u, 0u, 1u);
     const Graphics::TextureSubresourceSet removedIntervalRange(0u, 1u, 0u, 16u);
@@ -14563,6 +14577,32 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToOccupancySampleUavDependencie
             .range = Graphics::GpuTaskResourceRange{ .textureSubresources = peelRange },
             .requiredState = Graphics::ResourceStates::UnorderedAccess,
             .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverEventData,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverEventRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverEventCount,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverEventCountRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    const Graphics::GpuTaskResourceUse spanBuildUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverEventData,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverEventRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverEventCount,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverEventCountRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
         },
         Graphics::GpuTaskResourceUse{
             .resource = receiverSpanData,
@@ -14694,6 +14734,21 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToOccupancySampleUavDependencie
     const Graphics::GpuTaskId pre = graph.addTask(preDesc);
     ASSERT_TRUE(pre.valid());
 
+    Graphics::GpuTaskSchedulingHint spanBuildScheduling = preScheduling;
+    spanBuildScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    spanBuildScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskDesc spanBuildDesc;
+    spanBuildDesc
+        .setIdentity(Name("tests/task_graph/avboit_transparent_csg_receiver_span"))
+        .setMarkerLabel("Transparent CSG Receiver Span")
+        .setQueue(graphicsRequest)
+        .setScheduling(spanBuildScheduling)
+        .setDependencies(&pre, 1u)
+        .setResourceUses(spanBuildUses, LengthOf(spanBuildUses))
+    ;
+    const Graphics::GpuTaskId spanBuild = graph.addTask(spanBuildDesc);
+    ASSERT_TRUE(spanBuild.valid());
+
     Graphics::GpuTaskSchedulingHint combineScheduling = preScheduling;
     combineScheduling.cost = Graphics::GpuTaskCostHint::Medium;
     combineScheduling.mergeWithPrevious = true;
@@ -14703,7 +14758,7 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToOccupancySampleUavDependencie
         .setMarkerLabel("Transparent CSG Interval Combine")
         .setQueue(graphicsRequest)
         .setScheduling(combineScheduling)
-        .setDependencies(&pre, 1u)
+        .setDependencies(&spanBuild, 1u)
         .setResourceUses(combineUses, LengthOf(combineUses))
     ;
     const Graphics::GpuTaskId combine = graph.addTask(combineDesc);
@@ -14754,6 +14809,26 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToOccupancySampleUavDependencie
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    ASSERT_NE(FindEdge(analysis, pre, spanBuild), nullptr);
+    ASSERT_NE(FindEdge(analysis, pre, combine), nullptr);
+    ASSERT_NE(FindEdge(analysis, spanBuild, combine), nullptr);
+    ASSERT_NE(FindEdge(analysis, combine, clear), nullptr);
+    ASSERT_NE(FindEdge(analysis, combine, occupancy), nullptr);
+    ASSERT_NE(FindEdge(analysis, clear, occupancy), nullptr);
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        pre,
+        spanBuild,
+        receiverEventData,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        pre,
+        spanBuild,
+        receiverEventCount,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
     EXPECT_TRUE(HasInferredHazard(
         analysis,
         pre,
@@ -14777,14 +14852,14 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToOccupancySampleUavDependencie
     ));
     EXPECT_TRUE(HasInferredHazard(
         analysis,
-        pre,
+        spanBuild,
         combine,
         receiverSpanData,
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
     EXPECT_TRUE(HasInferredHazard(
         analysis,
-        pre,
+        spanBuild,
         combine,
         receiverSpanCount,
         Graphics::GpuTaskHazardType::ReadAfterWrite
@@ -14817,46 +14892,62 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToOccupancySampleUavDependencie
         removedIntervalCount,
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        clear,
+        occupancy,
+        coverage,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
 
     ASSERT_EQ(compiledGraph.packetCount(), 1u);
     const Graphics::GpuSubmissionPacketId prePacket = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId spanBuildPacket = compiledGraph.packetForTask(spanBuild);
     const Graphics::GpuSubmissionPacketId combinePacket = compiledGraph.packetForTask(combine);
     const Graphics::GpuSubmissionPacketId clearPacket = compiledGraph.packetForTask(clear);
     const Graphics::GpuSubmissionPacketId occupancyPacket = compiledGraph.packetForTask(occupancy);
     ASSERT_TRUE(prePacket.valid());
+    EXPECT_EQ(spanBuildPacket, prePacket);
     EXPECT_EQ(combinePacket, prePacket);
     EXPECT_EQ(clearPacket, prePacket);
     EXPECT_EQ(occupancyPacket, prePacket);
     const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(prePacket);
-    ASSERT_EQ(packet.taskCount, 4u);
+    ASSERT_EQ(packet.taskCount, 5u);
     ASSERT_NE(compiledGraph.packetTasks(prePacket), nullptr);
     EXPECT_EQ(compiledGraph.packetTasks(prePacket)[0u], pre);
-    EXPECT_EQ(compiledGraph.packetTasks(prePacket)[1u], combine);
-    EXPECT_EQ(compiledGraph.packetTasks(prePacket)[2u], clear);
-    EXPECT_EQ(compiledGraph.packetTasks(prePacket)[3u], occupancy);
+    EXPECT_EQ(compiledGraph.packetTasks(prePacket)[1u], spanBuild);
+    EXPECT_EQ(compiledGraph.packetTasks(prePacket)[2u], combine);
+    EXPECT_EQ(compiledGraph.packetTasks(prePacket)[3u], clear);
+    EXPECT_EQ(compiledGraph.packetTasks(prePacket)[4u], occupancy);
     EXPECT_EQ(packet.dependencyCount, 0u);
 
     const Graphics::GpuCompiledTask* const compiledPre = compiledGraph.findTask(pre);
+    const Graphics::GpuCompiledTask* const compiledSpanBuild = compiledGraph.findTask(spanBuild);
     const Graphics::GpuCompiledTask* const compiledCombine = compiledGraph.findTask(combine);
     const Graphics::GpuCompiledTask* const compiledClear = compiledGraph.findTask(clear);
     const Graphics::GpuCompiledTask* const compiledOccupancy = compiledGraph.findTask(occupancy);
     ASSERT_NE(compiledPre, nullptr);
+    ASSERT_NE(compiledSpanBuild, nullptr);
     ASSERT_NE(compiledCombine, nullptr);
     ASSERT_NE(compiledClear, nullptr);
     ASSERT_NE(compiledOccupancy, nullptr);
     EXPECT_EQ(compiledPre->prologueStateSeedCount, 0u);
+    EXPECT_EQ(compiledSpanBuild->prologueStateSeedCount, 0u);
     EXPECT_EQ(compiledCombine->prologueStateSeedCount, 0u);
     EXPECT_EQ(compiledClear->prologueStateSeedCount, 0u);
     EXPECT_EQ(compiledOccupancy->prologueStateSeedCount, 0u);
     EXPECT_EQ(compiledPre->prologueBarrierCount, 5u);
+    EXPECT_EQ(compiledSpanBuild->prologueBarrierCount, 4u);
     EXPECT_EQ(compiledCombine->prologueBarrierCount, 9u);
     EXPECT_EQ(compiledClear->prologueBarrierCount, 1u);
     EXPECT_EQ(compiledOccupancy->prologueBarrierCount, 5u);
     const Graphics::GpuCompiledBarrier* const preBarriers = compiledGraph.taskPrologueBarriers(pre);
+    const Graphics::GpuCompiledBarrier* const spanBuildBarriers = compiledGraph.taskPrologueBarriers(spanBuild);
     const Graphics::GpuCompiledBarrier* const combineBarriers = compiledGraph.taskPrologueBarriers(combine);
     const Graphics::GpuCompiledBarrier* const clearBarriers = compiledGraph.taskPrologueBarriers(clear);
     const Graphics::GpuCompiledBarrier* const occupancyBarriers = compiledGraph.taskPrologueBarriers(occupancy);
     ASSERT_NE(preBarriers, nullptr);
+    ASSERT_NE(spanBuildBarriers, nullptr);
     ASSERT_NE(combineBarriers, nullptr);
     ASSERT_NE(clearBarriers, nullptr);
     ASSERT_NE(occupancyBarriers, nullptr);
@@ -14901,10 +14992,29 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToOccupancySampleUavDependencie
     EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, capBackNormal, peelRange));
     EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, intervalDepth, peelRange));
     EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, intervalId, peelRange));
-    EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, receiverSpanData, receiverSpanRange));
+    EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, receiverEventData, receiverEventRange));
     EXPECT_TRUE(hasTextureTransition(
         preBarriers,
         compiledPre->prologueBarrierCount,
+        receiverEventCount,
+        receiverEventCountRange
+    ));
+    EXPECT_TRUE(hasUav(spanBuildBarriers, compiledSpanBuild->prologueBarrierCount, receiverEventData, receiverEventRange));
+    EXPECT_TRUE(hasUav(
+        spanBuildBarriers,
+        compiledSpanBuild->prologueBarrierCount,
+        receiverEventCount,
+        receiverEventCountRange
+    ));
+    EXPECT_TRUE(hasTextureTransition(
+        spanBuildBarriers,
+        compiledSpanBuild->prologueBarrierCount,
+        receiverSpanData,
+        receiverSpanRange
+    ));
+    EXPECT_TRUE(hasTextureTransition(
+        spanBuildBarriers,
+        compiledSpanBuild->prologueBarrierCount,
         receiverSpanCount,
         receiverSpanCountRange
     ));
@@ -14976,9 +15086,9 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToOccupancySampleUavDependencie
 
 
 // The renderer keeps the prepared transparent chain co-located for its shared AVBOIT timing ticket, but the
-// compiler must still retain exact state seeds if an independently-declared equivalent chain crosses packet
-// frontiers. In particular, Occupancy waits on both the unrelated Clear and Combine's removed-interval outputs.
-TEST(GpuTaskGraph, SeedsSplitAvboitCsgIntervalCombineAndOccupancyUavDependencies){
+// compiler must still retain exact state seeds if an independently-declared Pre -> Span -> Combine chain crosses
+// packet frontiers. In particular, Occupancy waits on both the unrelated Clear and Combine's removed-interval outputs.
+TEST(GpuTaskGraph, SeedsSplitAvboitCsgReceiverSpanBuildCombineAndOccupancyUavDependencies){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId capBackNormal = AddTextureMetadata(
@@ -14995,6 +15105,16 @@ TEST(GpuTaskGraph, SeedsSplitAvboitCsgIntervalCombineAndOccupancyUavDependencies
         graph,
         Name("tests/task_graph/avboit_csg_split_interval_id"),
         "AVBOIT CSG Split Interval Id"
+    );
+    const Graphics::GpuGraphResourceId receiverEventData = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_csg_split_receiver_event_data"),
+        "AVBOIT CSG Split Receiver Event Data"
+    );
+    const Graphics::GpuGraphResourceId receiverEventCount = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_csg_split_receiver_event_count"),
+        "AVBOIT CSG Split Receiver Event Count"
     );
     const Graphics::GpuGraphResourceId receiverSpanData = AddTextureMetadata(
         graph,
@@ -15034,6 +15154,8 @@ TEST(GpuTaskGraph, SeedsSplitAvboitCsgIntervalCombineAndOccupancyUavDependencies
     ASSERT_TRUE(capBackNormal.valid());
     ASSERT_TRUE(intervalDepth.valid());
     ASSERT_TRUE(intervalId.valid());
+    ASSERT_TRUE(receiverEventData.valid());
+    ASSERT_TRUE(receiverEventCount.valid());
     ASSERT_TRUE(receiverSpanData.valid());
     ASSERT_TRUE(receiverSpanCount.valid());
     ASSERT_TRUE(removedIntervalDepth.valid());
@@ -15043,6 +15165,8 @@ TEST(GpuTaskGraph, SeedsSplitAvboitCsgIntervalCombineAndOccupancyUavDependencies
     ASSERT_TRUE(coverage.valid());
 
     const Graphics::TextureSubresourceSet peelRange(0u, 1u, 0u, 4u);
+    const Graphics::TextureSubresourceSet receiverEventRange(0u, 1u, 0u, 32u);
+    const Graphics::TextureSubresourceSet receiverEventCountRange(0u, 1u, 0u, 1u);
     const Graphics::TextureSubresourceSet receiverSpanRange(0u, 1u, 0u, 16u);
     const Graphics::TextureSubresourceSet receiverSpanCountRange(0u, 1u, 0u, 1u);
     const Graphics::TextureSubresourceSet removedIntervalRange(0u, 1u, 0u, 16u);
@@ -15063,6 +15187,12 @@ TEST(GpuTaskGraph, SeedsSplitAvboitCsgIntervalCombineAndOccupancyUavDependencies
         textureUse(capBackNormal, peelRange, Graphics::GpuTaskResourceAccess::ReadWrite),
         textureUse(intervalDepth, peelRange, Graphics::GpuTaskResourceAccess::ReadWrite),
         textureUse(intervalId, peelRange, Graphics::GpuTaskResourceAccess::ReadWrite),
+        textureUse(receiverEventData, receiverEventRange, Graphics::GpuTaskResourceAccess::ReadWrite),
+        textureUse(receiverEventCount, receiverEventCountRange, Graphics::GpuTaskResourceAccess::ReadWrite),
+    };
+    const Graphics::GpuTaskResourceUse spanBuildUses[] = {
+        textureUse(receiverEventData, receiverEventRange, Graphics::GpuTaskResourceAccess::Read),
+        textureUse(receiverEventCount, receiverEventCountRange, Graphics::GpuTaskResourceAccess::Read),
         textureUse(receiverSpanData, receiverSpanRange, Graphics::GpuTaskResourceAccess::Write),
         textureUse(receiverSpanCount, receiverSpanCountRange, Graphics::GpuTaskResourceAccess::Write),
     };
@@ -15133,10 +15263,19 @@ TEST(GpuTaskGraph, SeedsSplitAvboitCsgIntervalCombineAndOccupancyUavDependencies
         LengthOf(preUses)
     );
     ASSERT_TRUE(pre.valid());
+    const Graphics::GpuTaskId spanBuild = addTask(
+        Name("tests/task_graph/avboit_csg_split_receiver_span"),
+        "Transparent CSG Receiver Span",
+        &pre,
+        1u,
+        spanBuildUses,
+        LengthOf(spanBuildUses)
+    );
+    ASSERT_TRUE(spanBuild.valid());
     const Graphics::GpuTaskId combine = addTask(
         Name("tests/task_graph/avboit_csg_split_combine"),
         "Transparent CSG Interval Combine",
-        &pre,
+        &spanBuild,
         1u,
         combineUses,
         LengthOf(combineUses)
@@ -15172,19 +15311,114 @@ TEST(GpuTaskGraph, SeedsSplitAvboitCsgIntervalCombineAndOccupancyUavDependencies
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
-    ASSERT_EQ(compiledGraph.packetCount(), 4u);
+    ASSERT_NE(FindEdge(analysis, pre, spanBuild), nullptr);
+    ASSERT_NE(FindEdge(analysis, pre, combine), nullptr);
+    ASSERT_NE(FindEdge(analysis, spanBuild, combine), nullptr);
+    ASSERT_NE(FindEdge(analysis, combine, clear), nullptr);
+    ASSERT_NE(FindEdge(analysis, combine, occupancy), nullptr);
+    ASSERT_NE(FindEdge(analysis, clear, occupancy), nullptr);
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        pre,
+        spanBuild,
+        receiverEventData,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        pre,
+        spanBuild,
+        receiverEventCount,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        pre,
+        combine,
+        capBackNormal,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        pre,
+        combine,
+        intervalDepth,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        pre,
+        combine,
+        intervalId,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        spanBuild,
+        combine,
+        receiverSpanData,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        spanBuild,
+        combine,
+        receiverSpanCount,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        combine,
+        occupancy,
+        removedIntervalDepth,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        combine,
+        occupancy,
+        removedIntervalCapNormal,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        combine,
+        occupancy,
+        removedIntervalData,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        combine,
+        occupancy,
+        removedIntervalCount,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        clear,
+        occupancy,
+        coverage,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    ASSERT_EQ(compiledGraph.packetCount(), 5u);
     const Graphics::GpuSubmissionPacketId prePacket = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId spanBuildPacket = compiledGraph.packetForTask(spanBuild);
     const Graphics::GpuSubmissionPacketId combinePacket = compiledGraph.packetForTask(combine);
     const Graphics::GpuSubmissionPacketId clearPacket = compiledGraph.packetForTask(clear);
     const Graphics::GpuSubmissionPacketId occupancyPacket = compiledGraph.packetForTask(occupancy);
     ASSERT_TRUE(prePacket.valid());
+    ASSERT_TRUE(spanBuildPacket.valid());
     ASSERT_TRUE(combinePacket.valid());
     ASSERT_TRUE(clearPacket.valid());
     ASSERT_TRUE(occupancyPacket.valid());
+    EXPECT_NE(prePacket, spanBuildPacket);
     EXPECT_NE(prePacket, combinePacket);
+    EXPECT_NE(spanBuildPacket, combinePacket);
     EXPECT_NE(combinePacket, clearPacket);
     EXPECT_NE(clearPacket, occupancyPacket);
     EXPECT_EQ(compiledGraph.packet(prePacket).taskCount, 1u);
+    EXPECT_EQ(compiledGraph.packet(spanBuildPacket).taskCount, 1u);
     EXPECT_EQ(compiledGraph.packet(combinePacket).taskCount, 1u);
     EXPECT_EQ(compiledGraph.packet(clearPacket).taskCount, 1u);
     EXPECT_EQ(compiledGraph.packet(occupancyPacket).taskCount, 1u);
@@ -15198,35 +15432,78 @@ TEST(GpuTaskGraph, SeedsSplitAvboitCsgIntervalCombineAndOccupancyUavDependencies
         }
         return false;
     };
+    EXPECT_TRUE(packetWaitsFor(spanBuildPacket, prePacket));
     EXPECT_TRUE(packetWaitsFor(combinePacket, prePacket));
+    EXPECT_TRUE(packetWaitsFor(combinePacket, spanBuildPacket));
     EXPECT_TRUE(packetWaitsFor(clearPacket, combinePacket));
     EXPECT_TRUE(packetWaitsFor(occupancyPacket, combinePacket));
     EXPECT_TRUE(packetWaitsFor(occupancyPacket, clearPacket));
 
     const Graphics::GpuCompiledTask* const compiledPre = compiledGraph.findTask(pre);
+    const Graphics::GpuCompiledTask* const compiledSpanBuild = compiledGraph.findTask(spanBuild);
     const Graphics::GpuCompiledTask* const compiledCombine = compiledGraph.findTask(combine);
     const Graphics::GpuCompiledTask* const compiledClear = compiledGraph.findTask(clear);
     const Graphics::GpuCompiledTask* const compiledOccupancy = compiledGraph.findTask(occupancy);
     ASSERT_NE(compiledPre, nullptr);
+    ASSERT_NE(compiledSpanBuild, nullptr);
     ASSERT_NE(compiledCombine, nullptr);
     ASSERT_NE(compiledClear, nullptr);
     ASSERT_NE(compiledOccupancy, nullptr);
     EXPECT_EQ(compiledPre->prologueStateSeedCount, 0u);
     EXPECT_EQ(compiledPre->prologueBarrierCount, 5u);
+    EXPECT_EQ(compiledSpanBuild->prologueStateSeedCount, 2u);
+    EXPECT_EQ(compiledSpanBuild->prologueBarrierCount, 4u);
     EXPECT_EQ(compiledCombine->prologueStateSeedCount, 5u);
     EXPECT_EQ(compiledCombine->prologueBarrierCount, 9u);
     EXPECT_EQ(compiledClear->prologueStateSeedCount, 0u);
     EXPECT_EQ(compiledClear->prologueBarrierCount, 1u);
     EXPECT_EQ(compiledOccupancy->prologueStateSeedCount, 5u);
     EXPECT_EQ(compiledOccupancy->prologueBarrierCount, 5u);
+    const Graphics::GpuPacketStateSeed* const spanBuildSeeds = compiledGraph.taskPrologueStateSeeds(spanBuild);
     const Graphics::GpuPacketStateSeed* const combineSeeds = compiledGraph.taskPrologueStateSeeds(combine);
     const Graphics::GpuPacketStateSeed* const occupancySeeds = compiledGraph.taskPrologueStateSeeds(occupancy);
+    const Graphics::GpuCompiledBarrier* const preBarriers = compiledGraph.taskPrologueBarriers(pre);
+    const Graphics::GpuCompiledBarrier* const spanBuildBarriers = compiledGraph.taskPrologueBarriers(spanBuild);
     const Graphics::GpuCompiledBarrier* const combineBarriers = compiledGraph.taskPrologueBarriers(combine);
+    const Graphics::GpuCompiledBarrier* const clearBarriers = compiledGraph.taskPrologueBarriers(clear);
     const Graphics::GpuCompiledBarrier* const occupancyBarriers = compiledGraph.taskPrologueBarriers(occupancy);
+    ASSERT_NE(spanBuildSeeds, nullptr);
     ASSERT_NE(combineSeeds, nullptr);
     ASSERT_NE(occupancySeeds, nullptr);
+    ASSERT_NE(preBarriers, nullptr);
+    ASSERT_NE(spanBuildBarriers, nullptr);
     ASSERT_NE(combineBarriers, nullptr);
+    ASSERT_NE(clearBarriers, nullptr);
     ASSERT_NE(occupancyBarriers, nullptr);
+    const auto hasTextureTransition = [](
+        const Graphics::GpuCompiledBarrier* const barriers,
+        const u32 count,
+        const Graphics::GpuGraphResourceId resource,
+        const Graphics::TextureSubresourceSet& range
+    ){
+        for(u32 barrierIndex = 0u; barrierIndex < count; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == resource
+                && barrier.range.textureSubresources == range
+                && barrier.before == Graphics::ResourceStates::Common
+                && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, capBackNormal, peelRange));
+    EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, intervalDepth, peelRange));
+    EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, intervalId, peelRange));
+    EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, receiverEventData, receiverEventRange));
+    EXPECT_TRUE(hasTextureTransition(
+        preBarriers,
+        compiledPre->prologueBarrierCount,
+        receiverEventCount,
+        receiverEventCountRange
+    ));
     const auto hasStateSeed = [](
         const Graphics::GpuPacketStateSeed* const seeds,
         const u32 count,
@@ -15264,6 +15541,39 @@ TEST(GpuTaskGraph, SeedsSplitAvboitCsgIntervalCombineAndOccupancyUavDependencies
         }
         return false;
     };
+    EXPECT_TRUE(hasStateSeed(
+        spanBuildSeeds,
+        compiledSpanBuild->prologueStateSeedCount,
+        receiverEventData,
+        receiverEventRange,
+        prePacket
+    ));
+    EXPECT_TRUE(hasUav(spanBuildBarriers, compiledSpanBuild->prologueBarrierCount, receiverEventData, receiverEventRange));
+    EXPECT_TRUE(hasUav(
+        spanBuildBarriers,
+        compiledSpanBuild->prologueBarrierCount,
+        receiverEventCount,
+        receiverEventCountRange
+    ));
+    EXPECT_TRUE(hasTextureTransition(
+        spanBuildBarriers,
+        compiledSpanBuild->prologueBarrierCount,
+        receiverSpanData,
+        receiverSpanRange
+    ));
+    EXPECT_TRUE(hasTextureTransition(
+        spanBuildBarriers,
+        compiledSpanBuild->prologueBarrierCount,
+        receiverSpanCount,
+        receiverSpanCountRange
+    ));
+    EXPECT_TRUE(hasStateSeed(
+        spanBuildSeeds,
+        compiledSpanBuild->prologueStateSeedCount,
+        receiverEventCount,
+        receiverEventCountRange,
+        prePacket
+    ));
     EXPECT_TRUE(hasStateSeed(combineSeeds, compiledCombine->prologueStateSeedCount, capBackNormal, peelRange, prePacket));
     EXPECT_TRUE(hasStateSeed(combineSeeds, compiledCombine->prologueStateSeedCount, intervalDepth, peelRange, prePacket));
     EXPECT_TRUE(hasStateSeed(combineSeeds, compiledCombine->prologueStateSeedCount, intervalId, peelRange, prePacket));
@@ -15272,14 +15582,14 @@ TEST(GpuTaskGraph, SeedsSplitAvboitCsgIntervalCombineAndOccupancyUavDependencies
         compiledCombine->prologueStateSeedCount,
         receiverSpanData,
         receiverSpanRange,
-        prePacket
+        spanBuildPacket
     ));
     EXPECT_TRUE(hasStateSeed(
         combineSeeds,
         compiledCombine->prologueStateSeedCount,
         receiverSpanCount,
         receiverSpanCountRange,
-        prePacket
+        spanBuildPacket
     ));
     EXPECT_TRUE(hasUav(combineBarriers, compiledCombine->prologueBarrierCount, capBackNormal, peelRange));
     EXPECT_TRUE(hasUav(combineBarriers, compiledCombine->prologueBarrierCount, intervalDepth, peelRange));
@@ -15290,6 +15600,30 @@ TEST(GpuTaskGraph, SeedsSplitAvboitCsgIntervalCombineAndOccupancyUavDependencies
         compiledCombine->prologueBarrierCount,
         receiverSpanCount,
         receiverSpanCountRange
+    ));
+    EXPECT_TRUE(hasTextureTransition(
+        combineBarriers,
+        compiledCombine->prologueBarrierCount,
+        removedIntervalDepth,
+        removedIntervalRange
+    ));
+    EXPECT_TRUE(hasTextureTransition(
+        combineBarriers,
+        compiledCombine->prologueBarrierCount,
+        removedIntervalCapNormal,
+        removedIntervalRange
+    ));
+    EXPECT_TRUE(hasTextureTransition(
+        combineBarriers,
+        compiledCombine->prologueBarrierCount,
+        removedIntervalData,
+        removedIntervalRange
+    ));
+    EXPECT_TRUE(hasTextureTransition(
+        combineBarriers,
+        compiledCombine->prologueBarrierCount,
+        removedIntervalCount,
+        removedIntervalCountRange
     ));
     EXPECT_TRUE(hasStateSeed(
         occupancySeeds,
@@ -15339,6 +15673,22 @@ TEST(GpuTaskGraph, SeedsSplitAvboitCsgIntervalCombineAndOccupancyUavDependencies
         removedIntervalCount,
         removedIntervalCountRange
     ));
+    ASSERT_EQ(clearBarriers[0u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(clearBarriers[0u].resource, coverage);
+    EXPECT_EQ(clearBarriers[0u].before, Graphics::ResourceStates::Common);
+    EXPECT_EQ(clearBarriers[0u].after, Graphics::ResourceStates::CopyDest);
+    bool coverageTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledOccupancy->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = occupancyBarriers[barrierIndex];
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+            && barrier.resource == coverage
+            && barrier.before == Graphics::ResourceStates::CopyDest
+            && barrier.after == Graphics::ResourceStates::UnorderedAccess
+        )
+            coverageTransition = true;
+    }
+    EXPECT_TRUE(coverageTransition);
 }
 
 

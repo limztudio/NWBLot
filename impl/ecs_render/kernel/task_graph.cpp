@@ -540,9 +540,95 @@ struct TransparentCsgIntervalGraphSnapshot{
 };
 
 
-// Prepared transparent CSG leaves receiver-surface -> span within the existing AVBOIT interval callback, then
-// exposes the five span/peel inputs and four removed-interval outputs at this graph callback boundary. The later
-// phase-local occupancy uploads depend on this task so they cannot overwrite its frozen CSG buffers first.
+// Prepared transparent CSG exposes receiver-surface -> span before the following interval-combine callback. The
+// later phase-local occupancy uploads depend on Combine so they cannot overwrite its frozen CSG buffers first.
+struct AvboitCsgReceiverSpanGraphTask{
+    struct Payload{
+        RendererSystem* renderer = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        Optional<Core::GpuTimingMeasure>* transparentCsgIntervalsTiming = nullptr;
+        TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
+        bool csgFrameBuffersUploaded = false;
+        bool receiverSpanInputImageStatesGraphOwned = false;
+        bool receiverSpanOutputImageStatesGraphOwned = false;
+
+        explicit Payload(Core::Alloc::GlobalArena& arena)
+            : transparentCsgSnapshot(arena)
+        {}
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(
+            !payload.renderer
+            || !payload.targets
+            || !payload.timingTicket
+            || !payload.transparentCsgIntervalsTiming
+            || !payload.transparentCsgSnapshot.captured
+        )
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        if(!payload.transparentCsgIntervalsTiming->has_value()){
+            commandList.endRenderPass();
+            return true;
+        }
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+        MaterialPassDrawItems receiverSurfaceDrawItems{ scratchArena };
+        CsgFrameGpuData csgFrameData{ scratchArena };
+        payload.transparentCsgSnapshot.materialize(receiverSurfaceDrawItems, csgFrameData);
+        RendererSystem& renderer = *payload.renderer;
+        const bool drawBuffersReady = renderer.m_materialSystem.materialPassDrawBuffersReady(
+            payload.transparentCsgSnapshot.instanceCount,
+            payload.transparentCsgSnapshot.materialTypedByteCount
+        );
+        const bool csgResourcesReady = renderer.m_csgSystem.csgFrameBuffersReady(csgFrameData);
+        const bool receiverSurfaceDrawResourcesReady = renderer.m_materialSystem.materialPassDrawResourcesReady(
+            receiverSurfaceDrawItems
+        );
+        const bool spanReady =
+            payload.csgFrameBuffersUploaded
+            && payload.targets->framebuffer
+            && !receiverSurfaceDrawItems.empty()
+            && csgFrameData.hasWork()
+            && drawBuffersReady
+            && csgResourcesReady
+            && receiverSurfaceDrawResourcesReady
+        ;
+        if(spanReady){
+            renderer.m_csgSystem.dispatchCsgReceiverSpanBuild(
+                commandList,
+                *payload.targets,
+                csgFrameData,
+                payload.receiverSpanOutputImageStatesGraphOwned,
+                payload.receiverSpanInputImageStatesGraphOwned
+            );
+        }
+        else{
+            // Pre and Span use the same frozen readiness snapshot. A defensive mismatch must not leave a timestamp
+            // reservation open or let Combine consume an unbuilt span image.
+            payload.transparentCsgIntervalsTiming->value().discardTiming();
+            payload.transparentCsgIntervalsTiming->reset();
+        }
+        commandList.endRenderPass();
+        return true;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.transparentCsgIntervalsTiming && payload.transparentCsgIntervalsTiming->has_value()){
+            payload.transparentCsgIntervalsTiming->value().discardTiming();
+            payload.transparentCsgIntervalsTiming->reset();
+        }
+    }
+};
+
+
+// Interval combine consumes the five graph-visible span/peel inputs and writes the four removed-interval outputs.
 struct AvboitCsgIntervalCombineGraphTask{
     struct Payload{
         RendererSystem* renderer = nullptr;
@@ -6410,6 +6496,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitClearTask = {};
     m_deferredAvboitPreTask = {};
+    m_deferredAvboitCsgReceiverSpanTask = {};
     m_deferredAvboitCsgIntervalCombineTask = {};
     m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
@@ -7966,6 +8053,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     }
 
     AvboitPreGraphTask::Payload avboitPrePayload{ m_arena };
+    ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload avboitCsgReceiverSpanPayload{ m_arena };
     ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload avboitCsgIntervalCombinePayload{ m_arena };
     avboitPrePayload.avboitSystem = &m_avboitSystem;
     avboitPrePayload.targets = &deferredTargets;
@@ -8274,6 +8362,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 transparentCsgInstanceData.size(),
                 transparentCsgMaterialTypedBytes.size()
             );
+            avboitCsgReceiverSpanPayload.transparentCsgSnapshot.capture(
+                transparentCsgDrawItems.csgReceiverSurface,
+                transparentCsgFrameData,
+                transparentCsgInstanceData.size(),
+                transparentCsgMaterialTypedBytes.size()
+            );
+            avboitCsgReceiverSpanPayload.csgFrameBuffersUploaded = true;
             avboitCsgIntervalCombinePayload.transparentCsgSnapshot.capture(
                 transparentCsgDrawItems.csgReceiverSurface,
                 transparentCsgFrameData,
@@ -8334,9 +8429,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         avboitPrePayload.transparentCsgIntervalTargetsGraphOwned = true;
         avboitPrePayload.transparentCsgIntervalPeelTargetStatesGraphOwned = true;
         avboitPrePayload.transparentCsgReceiverSurfaceImageStatesGraphOwned = true;
-        avboitPrePayload.transparentCsgReceiverSpanOutputImageStatesGraphOwned = true;
-        // Receiver-surface through span stays in this callback. The following Combine callback owns the five-input
-        // and four-output graph states, while direct and aggregate compatibility calls retain native fences.
+        // The following Span/Combine callbacks own their exact UAV handoffs, while direct and aggregate
+        // compatibility calls retain native fences.
         avboitPrePayload.deferTransparentCsgIntervalCombine = true;
         avboitPrePayload.transparentCsgClipBufferStatesGraphOwned = true;
         avboitPrePayload.transparentCsgMaterialFrameStatesGraphOwned = true;
@@ -8350,7 +8444,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     // declared here, before its native work records, rather than on the later occupancy task.
     Core::Alloc::ScratchArena avboitIntervalResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitIntervalResourceUses{ avboitIntervalResourceScratch };
-    avboitIntervalResourceUses.reserve(18u);
+    avboitIntervalResourceUses.reserve(16u);
     if(avboitPrePayload.transparentCsgStreamsUploaded){
         avboitIntervalResourceUses.push_back(ReadUse(depth));
         avboitIntervalResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
@@ -8379,16 +8473,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             csgReceiverEventCountSubresources,
             Core::ResourceStates::UnorderedAccess
         ));
-        avboitIntervalResourceUses.push_back(WriteTextureUse(
-            csgReceiverSpanData,
-            csgReceiverSpanDataSubresources,
-            Core::ResourceStates::UnorderedAccess
-        ));
-        avboitIntervalResourceUses.push_back(WriteTextureUse(
-            csgReceiverSpanCount,
-            csgReceiverSpanCountSubresources,
-            Core::ResourceStates::UnorderedAccess
-        ));
     }
     for(const Core::GpuTaskResourceUse& use : transparentCsgMaterialGeometryUses)
         avboitIntervalResourceUses.push_back(use);
@@ -8410,17 +8494,64 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .setDependencies(&transparentCsgUploadTask, 1u)
         .setResourceUses(avboitIntervalResourceUses.data(), avboitIntervalResourceUses.size())
     ;
-    const bool avboitCsgIntervalCombineGraphOwned =
+    const bool avboitCsgReceiverSpanGraphOwned =
         avboitPrePayload.transparentCsgStreamsUploaded
         && avboitPrePayload.transparentCsgSnapshot.captured
         && avboitPrePayload.deferTransparentCsgIntervalCombine
+        && avboitCsgReceiverSpanPayload.transparentCsgSnapshot.captured
+        && avboitCsgReceiverSpanPayload.csgFrameBuffersUploaded
+    ;
+    const bool avboitCsgIntervalCombineGraphOwned =
+        avboitCsgReceiverSpanGraphOwned
         && avboitCsgIntervalCombinePayload.transparentCsgSnapshot.captured
         && avboitCsgIntervalCombinePayload.csgFrameBuffersUploaded
     ;
+    Core::Alloc::ScratchArena avboitIntervalSpanResourceScratch(RendererArenaScope::s_TaskGraphArena);
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitIntervalSpanResourceUses{
+        avboitIntervalSpanResourceScratch
+    };
     Core::Alloc::ScratchArena avboitIntervalCombineResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitIntervalCombineResourceUses{
         avboitIntervalCombineResourceScratch
     };
+    if(avboitCsgReceiverSpanGraphOwned){
+        avboitIntervalSpanResourceUses.reserve(6u);
+        avboitIntervalSpanResourceUses.push_back(ReadTextureUse(
+            csgReceiverEventData,
+            csgReceiverEventDataSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
+        avboitIntervalSpanResourceUses.push_back(ReadTextureUse(
+            csgReceiverEventCount,
+            csgReceiverEventCountSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
+        avboitIntervalSpanResourceUses.push_back(ReadUse(
+            csgClipContextSlots,
+            Core::ResourceStates::ConstantBuffer
+        ));
+        avboitIntervalSpanResourceUses.push_back(ReadUse(
+            currentBindlessSlots,
+            Core::ResourceStates::ConstantBuffer,
+            true
+        ));
+        avboitIntervalSpanResourceUses.push_back(WriteTextureUse(
+            csgReceiverSpanData,
+            csgReceiverSpanDataSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
+        avboitIntervalSpanResourceUses.push_back(WriteTextureUse(
+            csgReceiverSpanCount,
+            csgReceiverSpanCountSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
+        avboitCsgReceiverSpanPayload.renderer = this;
+        avboitCsgReceiverSpanPayload.targets = &deferredTargets;
+        avboitCsgReceiverSpanPayload.timingTicket = &avboitPreTimingTicket;
+        avboitCsgReceiverSpanPayload.transparentCsgIntervalsTiming = &transparentCsgIntervalsTiming;
+        avboitCsgReceiverSpanPayload.receiverSpanInputImageStatesGraphOwned = true;
+        avboitCsgReceiverSpanPayload.receiverSpanOutputImageStatesGraphOwned = true;
+    }
     if(avboitCsgIntervalCombineGraphOwned){
         avboitIntervalCombineResourceUses.reserve(11u);
         avboitIntervalCombineResourceUses.push_back(ReadTextureUse(
@@ -8495,6 +8626,36 @@ void RendererSystem::buildDeferredLightingTaskGraph(
 
     Core::GpuTaskId avboitIntervalCompletionTask = m_deferredAvboitPreTask;
     bool avboitIntervalOutputsGraphOwned = false;
+    if(avboitCsgReceiverSpanGraphOwned){
+        Core::GpuTaskSchedulingHint avboitIntervalSpanScheduling;
+        avboitIntervalSpanScheduling.cost = Core::GpuTaskCostHint::Medium;
+        avboitIntervalSpanScheduling.forceSubmissionBoundary = false;
+        avboitIntervalSpanScheduling.allowPacketMerge = true;
+        avboitIntervalSpanScheduling.mergeWithPrevious = true;
+        Core::GpuTaskDesc avboitIntervalSpanDesc;
+        avboitIntervalSpanDesc
+            .setIdentity(Name("render.avboit.transparent_csg.receiver_span"))
+            .setMarkerLabel("Transparent CSG Receiver Span")
+            .setQueue(GraphicsQueueRequest())
+            .setScheduling(avboitIntervalSpanScheduling)
+            .setDependencies(&m_deferredAvboitPreTask, 1u)
+            .setResourceUses(
+                avboitIntervalSpanResourceUses.data(),
+                avboitIntervalSpanResourceUses.size()
+            )
+        ;
+        m_deferredAvboitCsgReceiverSpanTask = m_deferredLightingTaskGraph.addTask<
+            ECSRenderDetail::AvboitCsgReceiverSpanGraphTask
+        >(
+            avboitIntervalSpanDesc,
+            Move(avboitCsgReceiverSpanPayload)
+        );
+        if(!m_deferredAvboitCsgReceiverSpanTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG receiver-span graph task"));
+            return;
+        }
+        avboitIntervalCompletionTask = m_deferredAvboitCsgReceiverSpanTask;
+    }
     if(avboitCsgIntervalCombineGraphOwned){
         Core::GpuTaskSchedulingHint avboitIntervalCombineScheduling;
         avboitIntervalCombineScheduling.cost = Core::GpuTaskCostHint::Medium;
@@ -8507,7 +8668,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .setMarkerLabel("Transparent CSG Interval Combine")
             .setQueue(GraphicsQueueRequest())
             .setScheduling(avboitIntervalCombineScheduling)
-            .setDependencies(&m_deferredAvboitPreTask, 1u)
+            .setDependencies(&avboitIntervalCompletionTask, 1u)
             .setResourceUses(
                 avboitIntervalCombineResourceUses.data(),
                 avboitIntervalCombineResourceUses.size()

@@ -292,6 +292,7 @@ void RendererSystem::invalidateResources(){
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitClearTask = {};
     m_deferredAvboitPreTask = {};
+    m_deferredAvboitCsgReceiverSpanTask = {};
     m_deferredAvboitCsgIntervalCombineTask = {};
     m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
@@ -578,6 +579,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitClearTask = {};
     m_deferredAvboitPreTask = {};
+    m_deferredAvboitCsgReceiverSpanTask = {};
     m_deferredAvboitCsgIntervalCombineTask = {};
     m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
@@ -1293,6 +1295,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId avboitPrePacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitPreTask
     );
+    const Core::GpuSubmissionPacketId avboitCsgReceiverSpanPacket =
+        m_deferredAvboitCsgReceiverSpanTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitCsgReceiverSpanTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuSubmissionPacketId avboitCsgIntervalCombinePacket =
         m_deferredAvboitCsgIntervalCombineTask.valid()
             ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitCsgIntervalCombineTask)
@@ -1314,8 +1321,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && avboitOccupancyPacket.valid()
         && avboitPrePacket == avboitOccupancyPacket
     ;
-    // The transparent Combine callback consumes the frozen CSG stream before phase-local occupancy uploads replace
-    // it. It shares AVBOIT Pre's timing and external state source, so a split is rejected before recording.
+    // The transparent Span/Combine callbacks consume the frozen CSG stream before phase-local occupancy uploads
+    // replace it. They share AVBOIT Pre's timing and external state source, so a split is rejected before recording.
+    const bool avboitPrePacketContainsCsgReceiverSpan =
+        !m_deferredAvboitCsgReceiverSpanTask.valid()
+        || (
+            avboitPrePacket.valid()
+            && avboitCsgReceiverSpanPacket.valid()
+            && avboitPrePacket == avboitCsgReceiverSpanPacket
+        )
+    ;
     const bool avboitPrePacketContainsCsgIntervalCombine =
         !m_deferredAvboitCsgIntervalCombineTask.valid()
         || (
@@ -1940,6 +1955,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredAvboitOccupancyTask.valid()
         || !avboitPrePacket.valid()
         || !avboitPrePacketContainsClear
+        || !avboitPrePacketContainsCsgReceiverSpan
         || !avboitPrePacketContainsCsgIntervalCombine
         || !avboitPrePacketContainsOccupancy
         || !avboitExtinctionPacketContainsStreams
@@ -2587,6 +2603,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredAvboitOccupancyTask.valid()
         && avboitPrePacket.valid()
         && avboitPrePacketContainsClear
+        && avboitPrePacketContainsCsgReceiverSpan
         && avboitPrePacketContainsCsgIntervalCombine
         && avboitPrePacketContainsOccupancy
         && avboitExtinctionPacketContainsStreams
@@ -2871,6 +2888,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredAvboitOccupancyTask.valid()
             && avboitPrePacket.valid()
             && avboitPrePacketContainsClear
+            && avboitPrePacketContainsCsgReceiverSpan
             && avboitPrePacketContainsCsgIntervalCombine
             && avboitPrePacketContainsOccupancy
             && avboitExtinctionPacketContainsStreams

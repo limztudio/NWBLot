@@ -8866,9 +8866,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialGeometryEntryStatesReuse
 }
 
 
-// Prepared transparent CSG Pre writes five peel/span StorageImage aliases, then a separate Combine callback writes
-// four removed-interval aliases before phase-local occupancy uploads and the AVBOIT clear. Both callbacks must see
-// graph-lowered UAV state without reissuing native setup; check the first and last slices on a real Vulkan packet.
+// Prepared transparent CSG Pre writes peel and receiver-event StorageImage aliases, then graph-owned Span builds
+// receiver spans before Combine writes four removed-interval aliases. Span, Combine, Clear, and Occupancy must all
+// see graph-lowered state without reissuing native setup; check the first and last slices on a real Vulkan packet.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSampleStateRecordsWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto coverage = device.createBuffer(
@@ -8894,6 +8894,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
     auto capBackNormal = makeStorageArray(4u);
     auto intervalDepth = makeStorageArray(4u);
     auto intervalId = makeStorageArray(4u);
+    auto receiverEventData = makeStorageArray(32u);
+    auto receiverEventCount = makeStorageArray(1u);
     auto receiverSpanData = makeStorageArray(16u);
     auto receiverSpanCount = makeStorageArray(1u);
     auto removedIntervalDepth = makeStorageArray(16u);
@@ -8903,6 +8905,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
     ASSERT_NE(capBackNormal.get(), nullptr);
     ASSERT_NE(intervalDepth.get(), nullptr);
     ASSERT_NE(intervalId.get(), nullptr);
+    ASSERT_NE(receiverEventData.get(), nullptr);
+    ASSERT_NE(receiverEventCount.get(), nullptr);
     ASSERT_NE(receiverSpanData.get(), nullptr);
     ASSERT_NE(receiverSpanCount.get(), nullptr);
     ASSERT_NE(removedIntervalDepth.get(), nullptr);
@@ -8937,6 +8941,20 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
         GpuGraphResourceDesc{}
             .setIdentity(Name("tests/descriptor_buffer/avboit_csg_interval_id"))
             .setMarkerLabel("AVBOIT CSG Interval Id")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId receiverEventDataResource = graph.importTexture(
+        receiverEventData,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_csg_receiver_event_data"))
+            .setMarkerLabel("AVBOIT CSG Receiver Event Data")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId receiverEventCountResource = graph.importTexture(
+        receiverEventCount,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_csg_receiver_event_count"))
+            .setMarkerLabel("AVBOIT CSG Receiver Event Count")
             .setType(GpuGraphResourceType::Texture)
     );
     const GpuGraphResourceId receiverSpanDataResource = graph.importTexture(
@@ -8985,6 +9003,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
     ASSERT_TRUE(capBackNormalResource.valid());
     ASSERT_TRUE(intervalDepthResource.valid());
     ASSERT_TRUE(intervalIdResource.valid());
+    ASSERT_TRUE(receiverEventDataResource.valid());
+    ASSERT_TRUE(receiverEventCountResource.valid());
     ASSERT_TRUE(receiverSpanDataResource.valid());
     ASSERT_TRUE(receiverSpanCountResource.valid());
     ASSERT_TRUE(removedIntervalDepthResource.valid());
@@ -8993,6 +9013,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
     ASSERT_TRUE(removedIntervalCountResource.valid());
 
     const TextureSubresourceSet peelRange(0u, 1u, 0u, 4u);
+    const TextureSubresourceSet receiverEventRange(0u, 1u, 0u, 32u);
+    const TextureSubresourceSet receiverEventCountRange(0u, 1u, 0u, 1u);
     const TextureSubresourceSet receiverSpanRange(0u, 1u, 0u, 16u);
     const TextureSubresourceSet receiverSpanCountRange(0u, 1u, 0u, 1u);
     const TextureSubresourceSet removedIntervalRange(0u, 1u, 0u, 16u);
@@ -9015,6 +9037,32 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
             .range = GpuTaskResourceRange{ .textureSubresources = peelRange },
             .requiredState = ResourceStates::UnorderedAccess,
             .access = GpuTaskResourceAccess::ReadWrite,
+        },
+        GpuTaskResourceUse{
+            .resource = receiverEventDataResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = receiverEventRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+        GpuTaskResourceUse{
+            .resource = receiverEventCountResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = receiverEventCountRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    const GpuTaskResourceUse spanUses[] = {
+        GpuTaskResourceUse{
+            .resource = receiverEventDataResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = receiverEventRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = receiverEventCountResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = receiverEventCountRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
         },
         GpuTaskResourceUse{
             .resource = receiverSpanDataResource,
@@ -9154,6 +9202,31 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
     );
     ASSERT_TRUE(preTask.valid());
 
+    GpuTaskSchedulingHint spanScheduling = preScheduling;
+    spanScheduling.cost = GpuTaskCostHint::Medium;
+    spanScheduling.mergeWithPrevious = true;
+    GpuTaskDesc spanDesc;
+    spanDesc
+        .setIdentity(Name("tests/descriptor_buffer/avboit_csg_receiver_span"))
+        .setMarkerLabel("Transparent CSG Receiver Span")
+        .setQueue(graphicsQueue)
+        .setScheduling(spanScheduling)
+        .setDependencies(&preTask, 1u)
+        .setResourceUses(spanUses, LengthOf(spanUses))
+    ;
+    bool spanRecorded = false;
+    const GpuTaskId spanTask = graph.addTask<NativePacketCsgReceiverSpanProbeTask>(
+        spanDesc,
+        NativePacketCsgReceiverSpanProbeTask::Payload{
+            .receiverEventData = receiverEventData.get(),
+            .receiverEventCount = receiverEventCount.get(),
+            .receiverSpanData = receiverSpanData.get(),
+            .receiverSpanCount = receiverSpanCount.get(),
+            .recorded = &spanRecorded,
+        }
+    );
+    ASSERT_TRUE(spanTask.valid());
+
     GpuTaskSchedulingHint combineScheduling = preScheduling;
     combineScheduling.cost = GpuTaskCostHint::Medium;
     combineScheduling.mergeWithPrevious = true;
@@ -9163,7 +9236,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
         .setMarkerLabel("Transparent CSG Interval Combine")
         .setQueue(graphicsQueue)
         .setScheduling(combineScheduling)
-        .setDependencies(&preTask, 1u)
+        .setDependencies(&spanTask, 1u)
         .setResourceUses(combineUses, LengthOf(combineUses))
     ;
     bool combineRecorded = false;
@@ -9262,38 +9335,66 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
     ASSERT_EQ(compiledGraph.packetCount(), 1u);
     const GpuSubmissionPacketId packet = compiledGraph.packetForTask(preTask);
     ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(spanTask), packet);
     EXPECT_EQ(compiledGraph.packetForTask(combineTask), packet);
     EXPECT_EQ(compiledGraph.packetForTask(clearTask), packet);
     EXPECT_EQ(compiledGraph.packetForTask(occupancyTask), packet);
     const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
-    ASSERT_EQ(packetPlan.taskCount, 4u);
+    ASSERT_EQ(packetPlan.taskCount, 5u);
     ASSERT_NE(compiledGraph.packetTasks(packet), nullptr);
     EXPECT_EQ(compiledGraph.packetTasks(packet)[0u], preTask);
-    EXPECT_EQ(compiledGraph.packetTasks(packet)[1u], combineTask);
-    EXPECT_EQ(compiledGraph.packetTasks(packet)[2u], clearTask);
-    EXPECT_EQ(compiledGraph.packetTasks(packet)[3u], occupancyTask);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[1u], spanTask);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[2u], combineTask);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[3u], clearTask);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[4u], occupancyTask);
 
     const GpuCompiledTask* const compiledPre = compiledGraph.findTask(preTask);
+    const GpuCompiledTask* const compiledSpan = compiledGraph.findTask(spanTask);
     const GpuCompiledTask* const compiledCombine = compiledGraph.findTask(combineTask);
     const GpuCompiledTask* const compiledClear = compiledGraph.findTask(clearTask);
     const GpuCompiledTask* const compiledOccupancy = compiledGraph.findTask(occupancyTask);
     ASSERT_NE(compiledPre, nullptr);
+    ASSERT_NE(compiledSpan, nullptr);
     ASSERT_NE(compiledCombine, nullptr);
     ASSERT_NE(compiledClear, nullptr);
     ASSERT_NE(compiledOccupancy, nullptr);
     ASSERT_EQ(compiledPre->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledSpan->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledCombine->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledClear->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledOccupancy->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledPre->prologueBarrierCount, 5u);
+    ASSERT_EQ(compiledSpan->prologueBarrierCount, 4u);
     ASSERT_EQ(compiledCombine->prologueBarrierCount, 9u);
     ASSERT_EQ(compiledClear->prologueBarrierCount, 1u);
     ASSERT_EQ(compiledOccupancy->prologueBarrierCount, 5u);
+    const GpuCompiledBarrier* const preBarriers = compiledGraph.taskPrologueBarriers(preTask);
+    const GpuCompiledBarrier* const spanBarriers = compiledGraph.taskPrologueBarriers(spanTask);
+    const GpuCompiledBarrier* const combineBarriers = compiledGraph.taskPrologueBarriers(combineTask);
+    const GpuCompiledBarrier* const clearBarriers = compiledGraph.taskPrologueBarriers(clearTask);
     const GpuCompiledBarrier* const occupancyBarriers = compiledGraph.taskPrologueBarriers(occupancyTask);
+    ASSERT_NE(preBarriers, nullptr);
+    ASSERT_NE(spanBarriers, nullptr);
+    ASSERT_NE(combineBarriers, nullptr);
+    ASSERT_NE(clearBarriers, nullptr);
     ASSERT_NE(occupancyBarriers, nullptr);
-    const auto hasOccupancyUav = [&](const GpuGraphResourceId resource, const TextureSubresourceSet& range){
-        for(u32 barrierIndex = 0u; barrierIndex < compiledOccupancy->prologueBarrierCount; ++barrierIndex){
-            const GpuCompiledBarrier& barrier = occupancyBarriers[barrierIndex];
+    const auto hasTextureTransition = [](const GpuCompiledBarrier* barriers, const u32 barrierCount, const GpuGraphResourceId resource, const TextureSubresourceSet& range, const ResourceStates::Mask before, const ResourceStates::Mask after){
+        for(u32 barrierIndex = 0u; barrierIndex < barrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == resource
+                && barrier.range.textureSubresources == range
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    const auto hasTextureUav = [](const GpuCompiledBarrier* barriers, const u32 barrierCount, const GpuGraphResourceId resource, const TextureSubresourceSet& range){
+        for(u32 barrierIndex = 0u; barrierIndex < barrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
                 barrier.type == GpuCompiledBarrierType::TextureUav
                 && barrier.resource == resource
@@ -9305,6 +9406,36 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
         }
         return false;
     };
+    EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, capBackNormalResource, peelRange, ResourceStates::Common, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, intervalDepthResource, peelRange, ResourceStates::Common, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, intervalIdResource, peelRange, ResourceStates::Common, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, receiverEventDataResource, receiverEventRange, ResourceStates::Common, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, receiverEventCountResource, receiverEventCountRange, ResourceStates::Common, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTextureUav(spanBarriers, compiledSpan->prologueBarrierCount, receiverEventDataResource, receiverEventRange));
+    EXPECT_TRUE(hasTextureUav(spanBarriers, compiledSpan->prologueBarrierCount, receiverEventCountResource, receiverEventCountRange));
+    EXPECT_TRUE(hasTextureTransition(spanBarriers, compiledSpan->prologueBarrierCount, receiverSpanDataResource, receiverSpanRange, ResourceStates::Common, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTextureTransition(spanBarriers, compiledSpan->prologueBarrierCount, receiverSpanCountResource, receiverSpanCountRange, ResourceStates::Common, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTextureUav(combineBarriers, compiledCombine->prologueBarrierCount, capBackNormalResource, peelRange));
+    EXPECT_TRUE(hasTextureUav(combineBarriers, compiledCombine->prologueBarrierCount, intervalDepthResource, peelRange));
+    EXPECT_TRUE(hasTextureUav(combineBarriers, compiledCombine->prologueBarrierCount, intervalIdResource, peelRange));
+    EXPECT_TRUE(hasTextureUav(combineBarriers, compiledCombine->prologueBarrierCount, receiverSpanDataResource, receiverSpanRange));
+    EXPECT_TRUE(hasTextureUav(combineBarriers, compiledCombine->prologueBarrierCount, receiverSpanCountResource, receiverSpanCountRange));
+    EXPECT_TRUE(hasTextureTransition(combineBarriers, compiledCombine->prologueBarrierCount, removedIntervalDepthResource, removedIntervalRange, ResourceStates::Common, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTextureTransition(combineBarriers, compiledCombine->prologueBarrierCount, removedIntervalCapNormalResource, removedIntervalRange, ResourceStates::Common, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTextureTransition(combineBarriers, compiledCombine->prologueBarrierCount, removedIntervalDataResource, removedIntervalRange, ResourceStates::Common, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTextureTransition(combineBarriers, compiledCombine->prologueBarrierCount, removedIntervalCountResource, removedIntervalCountRange, ResourceStates::Common, ResourceStates::UnorderedAccess));
+    bool coverageClearTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledClear->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = clearBarriers[barrierIndex];
+        if(
+            barrier.type == GpuCompiledBarrierType::BufferTransition
+            && barrier.resource == coverageResource
+            && barrier.before == ResourceStates::Common
+            && barrier.after == ResourceStates::CopyDest
+        )
+            coverageClearTransition = true;
+    }
+    EXPECT_TRUE(coverageClearTransition);
     bool coverageTransition = false;
     for(u32 barrierIndex = 0u; barrierIndex < compiledOccupancy->prologueBarrierCount; ++barrierIndex){
         const GpuCompiledBarrier& barrier = occupancyBarriers[barrierIndex];
@@ -9316,10 +9447,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
         )
             coverageTransition = true;
     }
-    EXPECT_TRUE(hasOccupancyUav(removedIntervalDepthResource, removedIntervalRange));
-    EXPECT_TRUE(hasOccupancyUav(removedIntervalCapNormalResource, removedIntervalRange));
-    EXPECT_TRUE(hasOccupancyUav(removedIntervalDataResource, removedIntervalRange));
-    EXPECT_TRUE(hasOccupancyUav(removedIntervalCountResource, removedIntervalCountRange));
+    EXPECT_TRUE(hasTextureUav(occupancyBarriers, compiledOccupancy->prologueBarrierCount, removedIntervalDepthResource, removedIntervalRange));
+    EXPECT_TRUE(hasTextureUav(occupancyBarriers, compiledOccupancy->prologueBarrierCount, removedIntervalCapNormalResource, removedIntervalRange));
+    EXPECT_TRUE(hasTextureUav(occupancyBarriers, compiledOccupancy->prologueBarrierCount, removedIntervalDataResource, removedIntervalRange));
+    EXPECT_TRUE(hasTextureUav(occupancyBarriers, compiledOccupancy->prologueBarrierCount, removedIntervalCountResource, removedIntervalCountRange));
     EXPECT_TRUE(coverageTransition);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
@@ -9335,6 +9466,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
         &failedPacket
     );
     EXPECT_TRUE(preAttempted);
+    EXPECT_TRUE(spanRecorded);
     EXPECT_TRUE(combineRecorded);
     EXPECT_TRUE(clearRecorded);
     EXPECT_TRUE(occupancyRecorded);

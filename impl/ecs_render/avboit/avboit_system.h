@@ -58,8 +58,8 @@ public:
         // work retains the material draw thunk's native geometry setup.
         bool preparedTransparentCsgMaterialFrameStatesGraphOwned = false,
         bool preparedTransparentCsgMaterialGeometryStatesGraphOwned = false,
-        // The prepared AVBOIT graph can split the final CSG interval-combine dispatch into its own callback. Direct
-        // and aggregate compatibility paths leave this false and retain the native in-thunk combine.
+        // The prepared AVBOIT graph can split receiver-span and the final interval-combine dispatch into ordered
+        // callbacks. Direct and aggregate compatibility paths leave this false and retain the native in-thunk tail.
         bool deferPreparedTransparentCsgIntervalCombine = false,
         // A split callback preserves the existing aggregate interval timing range across its ordered packet cells.
         // Direct and aggregate compatibility callers leave this null and keep the local timing scope.

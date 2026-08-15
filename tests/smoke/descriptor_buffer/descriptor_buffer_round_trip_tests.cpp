@@ -3481,6 +3481,20 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
     ASSERT_TRUE(blasResource.valid());
     ASSERT_TRUE(blasBackingResource.valid());
 
+    const GpuGraphResourceId finalizeMembers[] = {
+        tlasResource,
+        tlasBackingResource,
+        blasResource,
+        blasBackingResource,
+    };
+    const GpuGraphResourceSetId finalizeSet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/prepared_accel_struct_finalize_resources"))
+            .setMarkerLabel("Prepared Accel-Struct Finalize Resources")
+            .setMembers(finalizeMembers, LengthOf(finalizeMembers))
+    );
+    ASSERT_TRUE(finalizeSet.valid());
+
     const GpuQueueRequest graphicsQueue{
         GpuQueueCapability::Graphics,
         GpuQueuePreference::Graphics,
@@ -3544,27 +3558,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
     finalizeScheduling.allowPacketMerge = true;
     finalizeScheduling.mergeWithPrevious = true;
     finalizeScheduling.allowMergeAcrossConsumerFrontier = true;
-    const GpuTaskResourceUse finalizeUses[] = {
-        GpuTaskResourceUse{
-            .resource = tlasResource,
-            .range = {},
-            .requiredState = ResourceStates::AccelStructRead,
-            .access = GpuTaskResourceAccess::Read,
-        },
-        GpuTaskResourceUse{
-            .resource = tlasBackingResource,
-            .range = {},
-            .requiredState = ResourceStates::AccelStructRead,
-            .access = GpuTaskResourceAccess::Read,
-        },
-        GpuTaskResourceUse{
-            .resource = blasResource,
-            .range = {},
-            .requiredState = ResourceStates::AccelStructRead,
-            .access = GpuTaskResourceAccess::Read,
-        },
-        GpuTaskResourceUse{
-            .resource = blasBackingResource,
+    const GpuTaskResourceSetUse finalizeSetUses[] = {
+        GpuTaskResourceSetUse{
+            .resourceSet = finalizeSet,
             .range = {},
             .requiredState = ResourceStates::AccelStructRead,
             .access = GpuTaskResourceAccess::Read,
@@ -3577,7 +3573,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
         .setQueue(graphicsQueue)
         .setScheduling(finalizeScheduling)
         .setDependencies(&buildTask, 1u)
-        .setResourceUses(finalizeUses, LengthOf(finalizeUses))
+        .setResourceSetUses(finalizeSetUses, LengthOf(finalizeSetUses))
     ;
     bool finalizeRecorded = false;
     const GpuTaskId finalizeTask = graph.addTask<NativePacketPrefixTask>(

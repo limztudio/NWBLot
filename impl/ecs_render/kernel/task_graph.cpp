@@ -3110,6 +3110,26 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen acceleration-structure build has no final-state graph resources"));
             return false;
         }
+        Core::GpuGraphResourceSetId accelStructFinalizeSet;
+        if(!accelStructFinalizeResourceUses.empty()){
+            Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> accelStructFinalizeResources{ scratchArena };
+            accelStructFinalizeResources.reserve(accelStructFinalizeResourceUses.size());
+            for(const Core::GpuTaskResourceUse& use : accelStructFinalizeResourceUses)
+                accelStructFinalizeResources.push_back(use.resource);
+            accelStructFinalizeSet = m_deferredLightingTaskGraph.importResourceSet(
+                Core::GpuGraphResourceSetDesc{}
+                    .setIdentity(Name("render.shadow_prepare.accel_struct_finalize_resources"))
+                    .setMarkerLabel("Shadow Prepare Accel-Struct Finalize Resources")
+                    .setMembers(accelStructFinalizeResources.data(), accelStructFinalizeResources.size())
+            );
+        }
+        const bool accelStructFinalizeSetGraphOwned = accelStructFinalizeSet.valid();
+        const Core::GpuTaskResourceSetUse accelStructFinalizeSetUse{
+            .resourceSet = accelStructFinalizeSet,
+            .range = {},
+            .requiredState = Core::ResourceStates::AccelStructRead,
+            .access = Core::GpuTaskResourceAccess::Read,
+        };
         Core::GpuTaskSchedulingHint accelStructFinalizeScheduling;
         accelStructFinalizeScheduling.cost = Core::GpuTaskCostHint::Tiny;
         accelStructFinalizeScheduling.forceSubmissionBoundary = false;
@@ -3125,7 +3145,16 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .setQueue(GraphicsQueueRequest())
             .setScheduling(accelStructFinalizeScheduling)
             .setDependencies(&shadowPrepareFinalizeDependency, 1u)
-            .setResourceUses(accelStructFinalizeResourceUses.data(), accelStructFinalizeResourceUses.size())
+            // The immutable typed-and-backing final-state collection expands to the same compiler inputs. Retain
+            // the individual declarations if a future compatibility route cannot form a complete unique set.
+            .setResourceUses(
+                accelStructFinalizeSetGraphOwned ? nullptr : accelStructFinalizeResourceUses.data(),
+                accelStructFinalizeSetGraphOwned ? 0u : accelStructFinalizeResourceUses.size()
+            )
+            .setResourceSetUses(
+                accelStructFinalizeSetGraphOwned ? &accelStructFinalizeSetUse : nullptr,
+                accelStructFinalizeSetGraphOwned ? 1u : 0u
+            )
         ;
         m_deferredShadowPrepareAccelStructFinalizeTask = m_deferredLightingTaskGraph.addTask<
             ECSRenderDetail::ShadowPrepareAccelStructFinalizeGraphTask

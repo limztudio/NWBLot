@@ -4679,6 +4679,19 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             .setMembers(hybridSoftwareTailInputMembers, LengthOf(hybridSoftwareTailInputMembers))
     );
     ASSERT_TRUE(hybridSoftwareTailInputSet.valid());
+    const Graphics::GpuGraphResourceId accelStructFinalizeMembers[] = {
+        sceneTlas,
+        sceneTlasBacking,
+        meshBlasA,
+        meshBlasABacking,
+    };
+    const Graphics::GpuGraphResourceSetId accelStructFinalizeSet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/shadow_prepare_accel_struct_finalize_resources"))
+            .setMarkerLabel("Shadow Prepare Accel-Struct Finalize Resources")
+            .setMembers(accelStructFinalizeMembers, LengthOf(accelStructFinalizeMembers))
+    );
+    ASSERT_TRUE(accelStructFinalizeSet.valid());
 
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
@@ -5065,27 +5078,9 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     const Graphics::GpuTaskId shadowPrepareHybridTail = graph.addTask(shadowPrepareHybridTailDesc);
     ASSERT_TRUE(shadowPrepareHybridTail.valid());
 
-    const Graphics::GpuTaskResourceUse shadowPrepareTlasFinalizeUses[] = {
-        Graphics::GpuTaskResourceUse{
-            .resource = sceneTlas,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::AccelStructRead,
-            .access = Graphics::GpuTaskResourceAccess::Read,
-        },
-        Graphics::GpuTaskResourceUse{
-            .resource = sceneTlasBacking,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::AccelStructRead,
-            .access = Graphics::GpuTaskResourceAccess::Read,
-        },
-        Graphics::GpuTaskResourceUse{
-            .resource = meshBlasA,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::AccelStructRead,
-            .access = Graphics::GpuTaskResourceAccess::Read,
-        },
-        Graphics::GpuTaskResourceUse{
-            .resource = meshBlasABacking,
+    const Graphics::GpuTaskResourceSetUse accelStructFinalizeSetUses[] = {
+        Graphics::GpuTaskResourceSetUse{
+            .resourceSet = accelStructFinalizeSet,
             .range = {},
             .requiredState = Graphics::ResourceStates::AccelStructRead,
             .access = Graphics::GpuTaskResourceAccess::Read,
@@ -5106,7 +5101,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         .setQueue(graphicsRequest)
         .setScheduling(shadowPrepareTlasFinalizeScheduling)
         .setDependencies(&shadowPrepareHybridTail, 1u)
-        .setResourceUses(shadowPrepareTlasFinalizeUses, LengthOf(shadowPrepareTlasFinalizeUses))
+        .setResourceSetUses(accelStructFinalizeSetUses, LengthOf(accelStructFinalizeSetUses))
     ;
     const Graphics::GpuTaskId shadowPrepareTlasFinalize = graph.addTask(shadowPrepareTlasFinalizeDesc);
     ASSERT_TRUE(shadowPrepareTlasFinalize.valid());

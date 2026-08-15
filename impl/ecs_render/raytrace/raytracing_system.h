@@ -840,7 +840,10 @@ private:
     );
     void clearPreparedSceneTlasBuild()noexcept;
     [[nodiscard]] bool capturePreparedMeshBlasBuilds();
-    [[nodiscard]] bool recordPreparedMeshBlasBuilds(Core::CommandList& commandList);
+    [[nodiscard]] bool recordPreparedMeshBlasBuilds(
+        Core::CommandList& commandList,
+        bool meshBlasAccelStructStatesGraphOwned
+    );
     void clearPreparedMeshBlasBuilds()noexcept;
     [[nodiscard]] bool capturePreparedMeshSwBvhBuilds();
     [[nodiscard]] bool recordPreparedMeshSwBvhBuilds(Core::CommandList& commandList);

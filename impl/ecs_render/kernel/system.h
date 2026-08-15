@@ -403,9 +403,9 @@ private:
     // both history acceptance and the external completion wait for the prior-frame images.
     Core::GpuTaskId m_deferredLaggedLightingHistorySlotsUploadTask;
     Core::GpuTaskId m_deferredShadowPrepareTask;
-    // The TLAS build records in Shadow Preparation, while this adjacent state-only callback publishes its
-    // descriptor-visible AccelStructRead boundary. It must remain in the same first Graphics packet.
-    Core::GpuTaskId m_deferredShadowPrepareTlasFinalizeTask;
+    // Prepared TLAS/BLAS builds record in Shadow Preparation, while this adjacent state-only callback publishes
+    // their descriptor-visible AccelStructRead boundaries. It must remain in the same first Graphics packet.
+    Core::GpuTaskId m_deferredShadowPrepareAccelStructFinalizeTask;
     Core::GpuTaskId m_graphicsPrefixMeshViewSetupTask;
     Core::GpuTaskId m_graphicsPrefixSceneShadingSetupTask;
     // The timer begins inside this first built-in clear and ends inside the terminal opaque-color clear below.

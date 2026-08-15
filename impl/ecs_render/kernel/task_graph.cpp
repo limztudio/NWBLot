@@ -934,10 +934,10 @@ struct GbufferGraphTask{
 };
 
 
-// Prepared TLAS recording stays in Shadow Preparation so its frozen-plan fallback and acceptance semantics remain
-// unchanged. This state-only successor publishes its actual AccelStructWrite -> AccelStructRead boundary through
-// graph lowering before any later prefix or Compute consumer can observe the backing storage.
-struct ShadowPrepareTlasFinalizeGraphTask{
+// Prepared acceleration-structure recording stays in Shadow Preparation so frozen-plan fallback and acceptance
+// semantics remain unchanged. This state-only successor publishes the actual AccelStructWrite -> AccelStructRead
+// boundaries through graph lowering before any later Prefix or Compute consumer can observe the backing storage.
+struct ShadowPrepareAccelStructFinalizeGraphTask{
     struct Payload{};
 
     [[nodiscard]] static bool record(
@@ -2099,7 +2099,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     using namespace __hidden_renderer_task_graph;
 
     m_deferredShadowPrepareTask = {};
-    m_deferredShadowPrepareTlasFinalizeTask = {};
+    m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};
@@ -2588,12 +2588,17 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> sceneTlasFinalizeResourceUses{ scratchArena };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accelStructFinalizeResourceUses{ scratchArena };
     resourceUses.reserve(
         19u
         + shadowTraceGeometryResourceCount
         + softwareBvhBuildStateResourceCount
         + meshState().m_meshes.size() * 2u
+        + preparedMeshBlasBuilds.size() * 2u
+    );
+    accelStructFinalizeResourceUses.reserve(
+        (sceneTlasBuildGraphOwned ? 2u : 0u)
+        + preparedMeshBlasBuilds.size() * 2u
     );
     // Shadow Preparation owns each preflight input's post-transition packet boundary. This deliberately supersedes
     // preceding immutable uploads as graph producers, so later Compute readers wait on this first Graphics packet
@@ -2616,6 +2621,44 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         resourceUses.push_back(WriteUse(sceneBvhNodes, Core::ResourceStates::ShaderResource));
     if(sceneBvhInstances.valid())
         resourceUses.push_back(WriteUse(sceneBvhInstances, Core::ResourceStates::ShaderResource));
+
+    bool resourcesImported = true;
+    const auto isPreparedMeshBlasBuild = [&](const Name meshName){
+        if(!meshBlasBuildsGraphOwned)
+            return false;
+        for(const PreparedMeshBlasBuild& build : preparedMeshBlasBuilds){
+            if(build.meshName == meshName)
+                return true;
+        }
+        return false;
+    };
+    if(meshBlasBuildsGraphOwned){
+        for(const PreparedMeshBlasBuild& build : preparedMeshBlasBuilds){
+            const Name blasIdentity = DeriveName(build.meshName, AStringView(":blas"));
+            const Name backingIdentity = DeriveName(build.meshName, AStringView(":blas_backing"));
+            const Core::GpuGraphResourceId blas = m_deferredLightingTaskGraph.importAccelStruct(
+                build.blas,
+                AccelStructResourceDesc(blasIdentity, "Prepared Mesh BLAS")
+            );
+            const Core::GpuGraphResourceId backing = importBuffer(
+                build.blasBackingBuffer,
+                backingIdentity,
+                "Prepared Mesh BLAS Backing"
+            );
+            resourcesImported = resourcesImported
+                && blas.valid()
+                && backing.valid()
+            ;
+            if(blas.valid() && backing.valid()){
+                // Frozen BLAS recording retains its shared position/index build-input bridge, while the graph owns
+                // the typed/backing Write states here and the accepting successor publishes both Read aliases.
+                resourceUses.push_back(ReadWriteUse(blas, Core::ResourceStates::AccelStructWrite));
+                resourceUses.push_back(WriteUse(backing, Core::ResourceStates::AccelStructWrite));
+                accelStructFinalizeResourceUses.push_back(ReadUse(blas, Core::ResourceStates::AccelStructRead));
+                accelStructFinalizeResourceUses.push_back(ReadUse(backing, Core::ResourceStates::AccelStructRead));
+            }
+        }
+    }
     for(usize resourceIndex = 0u; resourceIndex < shadowTraceGeometryResourceCount; ++resourceIndex){
         const Core::GpuGraphResourceId resource = shadowTraceGeometryResources[resourceIndex];
         if(!resource.valid())
@@ -2631,7 +2674,6 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::UnorderedAccess));
     }
 
-    bool resourcesImported = true;
     Core::GpuGraphResourceId sceneTlas;
     Core::GpuGraphResourceId sceneTlasBacking;
     if(m_rayTracingState.m_tlas){
@@ -2651,8 +2693,8 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
                 // the state-only successor below lowers the final Read handoff on the same backing storage.
                 resourceUses.push_back(ReadWriteUse(sceneTlas, Core::ResourceStates::AccelStructWrite));
                 resourceUses.push_back(WriteUse(sceneTlasBacking, Core::ResourceStates::AccelStructWrite));
-                sceneTlasFinalizeResourceUses.push_back(ReadUse(sceneTlas, Core::ResourceStates::AccelStructRead));
-                sceneTlasFinalizeResourceUses.push_back(ReadUse(sceneTlasBacking, Core::ResourceStates::AccelStructRead));
+                accelStructFinalizeResourceUses.push_back(ReadUse(sceneTlas, Core::ResourceStates::AccelStructRead));
+                accelStructFinalizeResourceUses.push_back(ReadUse(sceneTlasBacking, Core::ResourceStates::AccelStructRead));
             }
             else{
                 // Direct compatibility builders still publish their native Write -> Read sequence inside Shadow
@@ -2664,6 +2706,10 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     }
     for(auto meshIt = meshState().m_meshes.begin(); meshIt != meshState().m_meshes.end(); ++meshIt){
         const MeshResources& mesh = meshIt.value();
+        // A frozen plan owns its retained handles even if a record-time replacement later sends it through the
+        // native compatibility fallback. Do not collide a replacement with the frozen graph identity here.
+        if(isPreparedMeshBlasBuild(mesh.meshName))
+            continue;
         if(!mesh.blas)
             continue;
 
@@ -2738,36 +2784,44 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation task"));
         return false;
     }
-    if(sceneTlasBuildGraphOwned){
-        if(!sceneTlas.valid() || !sceneTlasBacking.valid() || sceneTlasFinalizeResourceUses.size() != 2u){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build has no final-state graph resources"));
+    const bool accelStructBuildStatesGraphOwned = sceneTlasBuildGraphOwned || meshBlasBuildsGraphOwned;
+    if(accelStructBuildStatesGraphOwned){
+        const usize expectedFinalizeResourceUseCount =
+            (sceneTlasBuildGraphOwned ? 2u : 0u)
+            + preparedMeshBlasBuilds.size() * 2u
+        ;
+        if(
+            (sceneTlasBuildGraphOwned && (!sceneTlas.valid() || !sceneTlasBacking.valid()))
+            || accelStructFinalizeResourceUses.size() != expectedFinalizeResourceUseCount
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen acceleration-structure build has no final-state graph resources"));
             return false;
         }
-        Core::GpuTaskSchedulingHint tlasFinalizeScheduling;
-        tlasFinalizeScheduling.cost = Core::GpuTaskCostHint::Tiny;
-        tlasFinalizeScheduling.forceSubmissionBoundary = false;
-        tlasFinalizeScheduling.allowPacketMerge = true;
-        tlasFinalizeScheduling.mergeWithPrevious = true;
-        // Shadow Preparation has direct later Compute consumers. Keep this Read finalizer in the same accepting
-        // packet so they wait on the completed build and its descriptor-visible backing state together.
-        tlasFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
-        Core::GpuTaskDesc tlasFinalizeDesc;
-        tlasFinalizeDesc
-            .setIdentity(Name("render.shadow_prepare.tlas_finalize"))
-            .setMarkerLabel("Shadow Preparation TLAS Finalize")
+        Core::GpuTaskSchedulingHint accelStructFinalizeScheduling;
+        accelStructFinalizeScheduling.cost = Core::GpuTaskCostHint::Tiny;
+        accelStructFinalizeScheduling.forceSubmissionBoundary = false;
+        accelStructFinalizeScheduling.allowPacketMerge = true;
+        accelStructFinalizeScheduling.mergeWithPrevious = true;
+        // Shadow Preparation has direct later Compute consumers. Keep these Read finalizers in the same accepting
+        // packet so those consumers wait on every completed build and descriptor-visible backing state together.
+        accelStructFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
+        Core::GpuTaskDesc accelStructFinalizeDesc;
+        accelStructFinalizeDesc
+            .setIdentity(Name("render.shadow_prepare.accel_struct_finalize"))
+            .setMarkerLabel("Shadow Preparation Accel-Struct Finalize")
             .setQueue(GraphicsQueueRequest())
-            .setScheduling(tlasFinalizeScheduling)
+            .setScheduling(accelStructFinalizeScheduling)
             .setDependencies(&m_deferredShadowPrepareTask, 1u)
-            .setResourceUses(sceneTlasFinalizeResourceUses.data(), sceneTlasFinalizeResourceUses.size())
+            .setResourceUses(accelStructFinalizeResourceUses.data(), accelStructFinalizeResourceUses.size())
         ;
-        m_deferredShadowPrepareTlasFinalizeTask = m_deferredLightingTaskGraph.addTask<
-            ECSRenderDetail::ShadowPrepareTlasFinalizeGraphTask
+        m_deferredShadowPrepareAccelStructFinalizeTask = m_deferredLightingTaskGraph.addTask<
+            ECSRenderDetail::ShadowPrepareAccelStructFinalizeGraphTask
         >(
-            tlasFinalizeDesc,
-            ECSRenderDetail::ShadowPrepareTlasFinalizeGraphTask::Payload{}
+            accelStructFinalizeDesc,
+            ECSRenderDetail::ShadowPrepareAccelStructFinalizeGraphTask::Payload{}
         );
-        if(!m_deferredShadowPrepareTlasFinalizeTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare scene TLAS final-state task"));
+        if(!m_deferredShadowPrepareAccelStructFinalizeTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare acceleration-structure final-state task"));
             return false;
         }
     }
@@ -6449,7 +6503,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_sceneBvhInstancesUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
-    m_deferredShadowPrepareTlasFinalizeTask = {};
+    m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearFirstTask = {};
@@ -7113,8 +7167,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation packet"));
         return;
     }
-    const Core::GpuTaskId shadowPrepareHandoffTask = m_deferredShadowPrepareTlasFinalizeTask.valid()
-        ? m_deferredShadowPrepareTlasFinalizeTask
+    const Core::GpuTaskId shadowPrepareHandoffTask = m_deferredShadowPrepareAccelStructFinalizeTask.valid()
+        ? m_deferredShadowPrepareAccelStructFinalizeTask
         : m_deferredShadowPrepareTask
     ;
     const bool currentBindlessSlotsGraphOwned = m_deferredBindlessSlotsUploadTask.valid();

@@ -4187,20 +4187,21 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             .requiredState = Graphics::ResourceStates::AccelStructWrite,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
-        // One frozen BLAS build and one state-only retained BLAS backing both enter Shadow Preparation. This keeps
-        // opaque and hybrid/native routes seeded without adding a separate packet.
+        // The frozen BLAS build records with graph-owned typed/backing Write aliases. Its shared geometry-input
+        // bridge remains native until the hardware and software builders are independently task-boundaried.
         Graphics::GpuTaskResourceUse{
             .resource = meshBlasA,
             .range = {},
-            .requiredState = Graphics::ResourceStates::AccelStructRead,
+            .requiredState = Graphics::ResourceStates::AccelStructWrite,
             .access = Graphics::GpuTaskResourceAccess::ReadWrite,
         },
         Graphics::GpuTaskResourceUse{
             .resource = meshBlasABacking,
             .range = {},
-            .requiredState = Graphics::ResourceStates::AccelStructRead,
+            .requiredState = Graphics::ResourceStates::AccelStructWrite,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
+        // A state-only retained BLAS continues to seed direct/native compatibility routes without adding a packet.
         Graphics::GpuTaskResourceUse{
             .resource = meshBlasB,
             .range = {},
@@ -4239,6 +4240,18 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             .requiredState = Graphics::ResourceStates::AccelStructRead,
             .access = Graphics::GpuTaskResourceAccess::Read,
         },
+        Graphics::GpuTaskResourceUse{
+            .resource = meshBlasA,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::AccelStructRead,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = meshBlasABacking,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::AccelStructRead,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
     };
     Graphics::GpuTaskSchedulingHint shadowPrepareTlasFinalizeScheduling;
     shadowPrepareTlasFinalizeScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
@@ -4246,7 +4259,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     shadowPrepareTlasFinalizeScheduling.allowPacketMerge = true;
     shadowPrepareTlasFinalizeScheduling.mergeWithPrevious = true;
     // Shadow Preparation still directly signals retained descriptor resources to Compute. This state-only
-    // successor explicitly retains its TLAS Read handoff in that accepting Graphics packet.
+    // successor explicitly retains its TLAS/BLAS Read handoffs in that accepting Graphics packet.
     shadowPrepareTlasFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
     Graphics::GpuTaskDesc shadowPrepareTlasFinalizeDesc;
     shadowPrepareTlasFinalizeDesc
@@ -4445,6 +4458,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     bool transitionsSwBvhVisitCounter = false;
     bool transitionsSceneTlas = false;
     bool transitionsSceneTlasBacking = false;
+    bool transitionsMeshBlasA = false;
     bool transitionsMeshBlasABacking = false;
     bool transitionsMeshBlasBBacking = false;
     for(usize index = 0u; index < compiledShadowPrepare->prologueBarrierCount; ++index){
@@ -4490,14 +4504,21 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
             && barrier.before == Graphics::ResourceStates::Common
             && barrier.after == Graphics::ResourceStates::AccelStructWrite
-        )
+        ){
             transitionsSceneTlasBacking = transitionsSceneTlasBacking || barrier.resource == sceneTlasBacking;
+            transitionsMeshBlasABacking = transitionsMeshBlasABacking || barrier.resource == meshBlasABacking;
+        }
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::AccelStructTransition
+            && barrier.before == Graphics::ResourceStates::Common
+            && barrier.after == Graphics::ResourceStates::AccelStructWrite
+        )
+            transitionsMeshBlasA = transitionsMeshBlasA || barrier.resource == meshBlasA;
         if(
             barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
             && barrier.before == Graphics::ResourceStates::Common
             && barrier.after == Graphics::ResourceStates::AccelStructRead
         ){
-            transitionsMeshBlasABacking = transitionsMeshBlasABacking || barrier.resource == meshBlasABacking;
             transitionsMeshBlasBBacking = transitionsMeshBlasBBacking || barrier.resource == meshBlasBBacking;
         }
     }
@@ -4516,6 +4537,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     EXPECT_TRUE(transitionsSwBvhVisitCounter);
     EXPECT_TRUE(transitionsSceneTlas);
     EXPECT_TRUE(transitionsSceneTlasBacking);
+    EXPECT_TRUE(transitionsMeshBlasA);
     EXPECT_TRUE(transitionsMeshBlasABacking);
     EXPECT_TRUE(transitionsMeshBlasBBacking);
     const Graphics::GpuCompiledBarrier* const shadowPrepareTlasFinalizeBarriers =
@@ -4548,6 +4570,14 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     EXPECT_TRUE(hasShadowPrepareTlasFinalizeBarrier(
         Graphics::GpuCompiledBarrierType::BufferTransition,
         sceneTlasBacking
+    ));
+    EXPECT_TRUE(hasShadowPrepareTlasFinalizeBarrier(
+        Graphics::GpuCompiledBarrierType::AccelStructTransition,
+        meshBlasA
+    ));
+    EXPECT_TRUE(hasShadowPrepareTlasFinalizeBarrier(
+        Graphics::GpuCompiledBarrierType::BufferTransition,
+        meshBlasABacking
     ));
     ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(shadowVisibilityPacket)[0u].producer, shadowPreparePacket);

@@ -240,7 +240,7 @@ void RendererSystem::invalidateResources(){
     m_sceneBvhInstancesUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
-    m_deferredShadowPrepareTlasFinalizeTask = {};
+    m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearFirstTask = {};
@@ -254,7 +254,7 @@ void RendererSystem::invalidateResources(){
     m_graphicsPrefixSceneShadingSetupReady = false;
     m_deferredLightingTaskGraphValid = false;
     m_deferredShadowPrepareTask = {};
-    m_deferredShadowPrepareTlasFinalizeTask = {};
+    m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_deferredShadowVisibilityOpaqueTask = {};
     m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
     m_deferredShadowVisibilityOpaqueResolveTask = {};
@@ -969,20 +969,20 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId shadowPreparePacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredShadowPrepareTask
     );
-    const Core::GpuSubmissionPacketId shadowPrepareTlasFinalizePacket =
-        m_deferredShadowPrepareTlasFinalizeTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowPrepareTlasFinalizeTask)
+    const Core::GpuSubmissionPacketId shadowPrepareAccelStructFinalizePacket =
+        m_deferredShadowPrepareAccelStructFinalizeTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowPrepareAccelStructFinalizeTask)
             : Core::GpuSubmissionPacketId{}
     ;
     // The state-only finalizer is part of the accepting Shadow Preparation contract. It may be a separate graph
-    // callback, but its AS/backing transition must remain in the same first Graphics submission as the frozen
+    // callback, but every frozen AS/backing transition must remain in the same first Graphics submission as its
     // build so CPU cache publication and the retained packet-state handoff stay atomic.
-    const bool shadowPrepareTlasFinalizeMerged =
-        !m_deferredShadowPrepareTlasFinalizeTask.valid()
+    const bool shadowPrepareAccelStructFinalizeMerged =
+        !m_deferredShadowPrepareAccelStructFinalizeTask.valid()
         || (
             shadowPreparePacket.valid()
-            && shadowPrepareTlasFinalizePacket.valid()
-            && shadowPrepareTlasFinalizePacket == shadowPreparePacket
+            && shadowPrepareAccelStructFinalizePacket.valid()
+            && shadowPrepareAccelStructFinalizePacket == shadowPreparePacket
         )
     ;
     const Core::GpuSubmissionPacketId deferredBindlessSlotsUploadPacket =
@@ -1858,7 +1858,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         !m_deferredLightingTaskGraphValid
         || !m_deferredShadowPrepareTask.valid()
         || !shadowPreparePacket.valid()
-        || !shadowPrepareTlasFinalizeMerged
+        || !shadowPrepareAccelStructFinalizeMerged
         || !deferredBindlessSlotsUploadMergedIntoShadowPreparePacket
         || !rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket
         || !causticEmissionTargetsUploadMergedIntoShadowPreparePacket
@@ -2221,7 +2221,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
     for(auto meshIt = meshState().m_meshes.begin(); meshIt != meshState().m_meshes.end(); ++meshIt){
         const MeshResources& mesh = meshIt.value();
+        // A frozen BLAS plan can fall back to the native current-mesh build when runtime geometry changes between
+        // preflight and recording. That bridge leaves its position/index streams in AccelStructBuildInput, even
+        // after a static first-build clears blasBuildPending. Retain every live pair, not only the frozen inputs,
+        // so a later descriptor import never seeds Common over that accepted native state.
         if(mesh.blas){
+            appendShadowPrepareStateBuffer(mesh.positionBuffer);
+            appendShadowPrepareStateBuffer(mesh.triangleIndexBuffer);
             appendShadowPrepareStateBuffer(mesh.blas->getBackingBufferHandle());
             shadowPrepareStateCandidateRequired = true;
         }
@@ -2285,7 +2291,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_graphicsPrefixTask.valid()
         && m_deferredShadowPrepareTask.valid()
         && shadowPreparePacket.valid()
-        && shadowPrepareTlasFinalizeMerged
+        && shadowPrepareAccelStructFinalizeMerged
         && graphicsPrefixPacket.valid()
         && graphicsPrefixDeferredClearBundleMerged
         && deferredRecorder.recordPacketRangeInReadyFrontiers(
@@ -3473,7 +3479,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const bool shadowPreparePrefixAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredShadowPrepareTask.valid()
-            && shadowPrepareTlasFinalizeMerged
+            && shadowPrepareAccelStructFinalizeMerged
             && m_graphicsPrefixMeshViewSetupTask.valid()
             && m_graphicsPrefixSceneShadingSetupTask.valid()
             && m_graphicsPrefixDeferredClearFirstTask.valid()

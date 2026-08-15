@@ -1595,7 +1595,7 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
         // loop rather than rejecting the whole packet. Opaque-only frozen plans remain all-or-nothing.
         const bool hybridHardwareFallback = rayTracingState().m_sceneHasTransparentOccluder;
         bool meshBlasReady = meshBlasBuildsGraphOwned
-            ? recordPreparedMeshBlasBuilds(commandList)
+            ? recordPreparedMeshBlasBuilds(commandList, true)
             : buildPendingMeshBlas(commandList)
         ;
         if(!meshBlasReady && meshBlasBuildsGraphOwned && hybridHardwareFallback){

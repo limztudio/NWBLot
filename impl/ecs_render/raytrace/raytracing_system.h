@@ -834,7 +834,10 @@ private:
         const Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena>& instances,
         const Vector<Core::RayTracingAccelStructHandle, Core::Alloc::ScratchArena>& instanceBlases
     );
-    [[nodiscard]] bool recordPreparedSceneTlasBuild(Core::CommandList& commandList);
+    [[nodiscard]] bool recordPreparedSceneTlasBuild(
+        Core::CommandList& commandList,
+        bool sceneTlasBuildStatesGraphOwned
+    );
     void clearPreparedSceneTlasBuild()noexcept;
     [[nodiscard]] bool capturePreparedMeshBlasBuilds();
     [[nodiscard]] bool recordPreparedMeshBlasBuilds(Core::CommandList& commandList);

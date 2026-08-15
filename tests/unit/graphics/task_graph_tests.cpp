@@ -3410,6 +3410,140 @@ TEST(GpuTaskGraph, FrontierSafePacketizationSplitsBeforeCrossQueueConsumer){
 }
 
 
+TEST(GpuTaskGraph, FrontierSafeConsumerFrontierOverrideRequiresExplicitImmediateDependency){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    const Graphics::GpuGraphResourceId orderedHandoff = AddHazardDomain(
+        graph,
+        Name("tests/task_graph/frontier_override_ordered_handoff"),
+        "Frontier Override Ordered Handoff"
+    );
+    ASSERT_TRUE(orderedHandoff.valid());
+
+    Graphics::GpuTaskSchedulingHint firstScheduling;
+    firstScheduling.allowPacketMerge = true;
+    Graphics::GpuTaskDesc firstDesc;
+    firstDesc
+        .setIdentity(Name("tests/task_graph/frontier_override_first"))
+        .setMarkerLabel("Frontier Override First")
+        .setQueue(graphicsRequest)
+        .setScheduling(firstScheduling)
+    ;
+    const Graphics::GpuTaskId first = graph.addTask(firstDesc);
+    ASSERT_TRUE(first.valid());
+
+    Graphics::GpuTaskSchedulingHint immediateFinalizeScheduling;
+    immediateFinalizeScheduling.allowPacketMerge = true;
+    immediateFinalizeScheduling.mergeWithPrevious = true;
+    immediateFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
+    Graphics::GpuTaskResourceUse immediateFinalizeUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = orderedHandoff,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc immediateFinalizeDesc;
+    immediateFinalizeDesc
+        .setIdentity(Name("tests/task_graph/frontier_override_immediate_finalize"))
+        .setMarkerLabel("Frontier Override Immediate Finalize")
+        .setQueue(graphicsRequest)
+        .setScheduling(immediateFinalizeScheduling)
+        .setDependencies(&first, 1u)
+        .setResourceUses(immediateFinalizeUses, LengthOf(immediateFinalizeUses))
+    ;
+    const Graphics::GpuTaskId immediateFinalize = graph.addTask(immediateFinalizeDesc);
+    ASSERT_TRUE(immediateFinalize.valid());
+
+    // The inferred producer edge fixes this task after the finalizer, but its only explicit dependency remains
+    // the first task. It must not inherit the finalizer's consumer-frontier override.
+    Graphics::GpuTaskSchedulingHint unrelatedScheduling;
+    unrelatedScheduling.allowPacketMerge = true;
+    unrelatedScheduling.mergeWithPrevious = true;
+    unrelatedScheduling.allowMergeAcrossConsumerFrontier = true;
+    const Graphics::GpuTaskResourceUse unrelatedUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = orderedHandoff,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskDesc unrelatedDesc;
+    unrelatedDesc
+        .setIdentity(Name("tests/task_graph/frontier_override_unrelated_successor"))
+        .setMarkerLabel("Frontier Override Unrelated Successor")
+        .setQueue(graphicsRequest)
+        .setScheduling(unrelatedScheduling)
+        .setDependencies(&first, 1u)
+        .setResourceUses(unrelatedUses, LengthOf(unrelatedUses))
+    ;
+    const Graphics::GpuTaskId unrelatedSuccessor = graph.addTask(unrelatedDesc);
+    ASSERT_TRUE(unrelatedSuccessor.valid());
+
+    // Keep the direct cross-queue edge from the first task, while sequencing the consumer after the attempted
+    // unrelated merge so packet order cannot accidentally make this test pass.
+    const Graphics::GpuTaskId consumerDependencies[] = { first, unrelatedSuccessor };
+    Graphics::GpuTaskDesc consumerDesc;
+    consumerDesc
+        .setIdentity(Name("tests/task_graph/frontier_override_compute_consumer"))
+        .setMarkerLabel("Frontier Override Compute Consumer")
+        .setQueue(computeRequest)
+        .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
+    ;
+    const Graphics::GpuTaskId computeConsumer = graph.addTask(consumerDesc);
+    ASSERT_TRUE(computeConsumer.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId immediateFinalizePacket = compiledGraph.packetForTask(immediateFinalize);
+    const Graphics::GpuSubmissionPacketId unrelatedPacket = compiledGraph.packetForTask(unrelatedSuccessor);
+    const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(computeConsumer);
+    ASSERT_TRUE(firstPacket.valid());
+    EXPECT_EQ(firstPacket, immediateFinalizePacket);
+    EXPECT_NE(firstPacket, unrelatedPacket);
+    EXPECT_NE(unrelatedPacket, consumerPacket);
+    EXPECT_EQ(compiledGraph.packet(firstPacket).taskCount, 2u);
+    EXPECT_EQ(compiledGraph.packet(unrelatedPacket).taskCount, 1u);
+    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 2u);
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        immediateFinalize,
+        unrelatedSuccessor,
+        orderedHandoff,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+}
+
+
 TEST(GpuTaskGraph, FrontierSafePacketizationKeepsMergeWhenLaterTaskOwnsCrossQueueConsumer){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -3953,18 +4087,18 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             .requiredState = Graphics::ResourceStates::UnorderedAccess,
             .access = Graphics::GpuTaskResourceAccess::ReadWrite,
         },
-        // Shadow Preparation is the accepting producer for the native TLAS build. The recorder publishes its
-        // explicit AccelStructWrite -> AccelStructRead transition before this graph-visible final state.
+        // The frozen native TLAS recorder consumes the graph-owned build state. Its adjacent state-only finalizer
+        // below publishes the descriptor-visible Read handoff before the Compute consumer can begin.
         Graphics::GpuTaskResourceUse{
             .resource = sceneTlas,
             .range = {},
-            .requiredState = Graphics::ResourceStates::AccelStructRead,
+            .requiredState = Graphics::ResourceStates::AccelStructWrite,
             .access = Graphics::GpuTaskResourceAccess::ReadWrite,
         },
         Graphics::GpuTaskResourceUse{
             .resource = sceneTlasBacking,
             .range = {},
-            .requiredState = Graphics::ResourceStates::AccelStructRead,
+            .requiredState = Graphics::ResourceStates::AccelStructWrite,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
         // One frozen BLAS build and one state-only retained BLAS backing both enter Shadow Preparation. This keeps
@@ -4005,6 +4139,40 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     ;
     const Graphics::GpuTaskId shadowPrepare = graph.addTask(shadowPrepareDesc);
     ASSERT_TRUE(shadowPrepare.valid());
+
+    const Graphics::GpuTaskResourceUse shadowPrepareTlasFinalizeUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = sceneTlas,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::AccelStructRead,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = sceneTlasBacking,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::AccelStructRead,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskSchedulingHint shadowPrepareTlasFinalizeScheduling;
+    shadowPrepareTlasFinalizeScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    shadowPrepareTlasFinalizeScheduling.forceSubmissionBoundary = false;
+    shadowPrepareTlasFinalizeScheduling.allowPacketMerge = true;
+    shadowPrepareTlasFinalizeScheduling.mergeWithPrevious = true;
+    // Shadow Preparation still directly signals retained descriptor resources to Compute. This state-only
+    // successor explicitly retains its TLAS Read handoff in that accepting Graphics packet.
+    shadowPrepareTlasFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
+    Graphics::GpuTaskDesc shadowPrepareTlasFinalizeDesc;
+    shadowPrepareTlasFinalizeDesc
+        .setIdentity(Name("tests/task_graph/deferred_bindless_shadow_prepare_tlas_finalize"))
+        .setMarkerLabel("Shadow Preparation TLAS Finalize")
+        .setQueue(graphicsRequest)
+        .setScheduling(shadowPrepareTlasFinalizeScheduling)
+        .setDependencies(&shadowPrepare, 1u)
+        .setResourceUses(shadowPrepareTlasFinalizeUses, LengthOf(shadowPrepareTlasFinalizeUses))
+    ;
+    const Graphics::GpuTaskId shadowPrepareTlasFinalize = graph.addTask(shadowPrepareTlasFinalizeDesc);
+    ASSERT_TRUE(shadowPrepareTlasFinalize.valid());
 
     const Graphics::GpuTaskResourceUse shadowVisibilityUses[] = {
         Graphics::GpuTaskResourceUse{
@@ -4080,7 +4248,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         .setMarkerLabel("Shadow Visibility")
         .setQueue(computeRequest)
         .setScheduling(boundaryScheduling)
-        .setDependencies(&shadowPrepare, 1u)
+        .setDependencies(&shadowPrepareTlasFinalize, 1u)
         .setResourceUses(shadowVisibilityUses, LengthOf(shadowVisibilityUses))
     ;
     const Graphics::GpuTaskId shadowVisibility = graph.addTask(shadowVisibilityDesc);
@@ -4101,6 +4269,16 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
     ASSERT_EQ(compiledGraph.packetCount(), 2u);
+
+    // Shadow Preparation retains direct cross-queue descriptor hazards even though Visibility explicitly depends on
+    // the finalizer. The finalizer's opt-in must keep both callbacks in the first accepting Graphics packet.
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        shadowPrepare,
+        shadowVisibility,
+        currentBindlessSlots,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
 
     const Graphics::GpuSubmissionPacketId uploadPacket = compiledGraph.packetForTask(upload);
     const Graphics::GpuSubmissionPacketId materialContextUploadPacket = compiledGraph.packetForTask(materialContextUpload);
@@ -4124,6 +4302,9 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         sceneBvhInstancesUpload
     );
     const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
+    const Graphics::GpuSubmissionPacketId shadowPrepareTlasFinalizePacket = compiledGraph.packetForTask(
+        shadowPrepareTlasFinalize
+    );
     const Graphics::GpuSubmissionPacketId shadowVisibilityPacket = compiledGraph.packetForTask(shadowVisibility);
     ASSERT_TRUE(uploadPacket.valid());
     ASSERT_TRUE(materialContextUploadPacket.valid());
@@ -4135,6 +4316,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     ASSERT_TRUE(sceneBvhNodesUploadPacket.valid());
     ASSERT_TRUE(sceneBvhInstancesUploadPacket.valid());
     ASSERT_TRUE(shadowPreparePacket.valid());
+    ASSERT_TRUE(shadowPrepareTlasFinalizePacket.valid());
     ASSERT_TRUE(shadowVisibilityPacket.valid());
     EXPECT_EQ(uploadPacket, shadowPreparePacket);
     EXPECT_EQ(materialContextUploadPacket, shadowPreparePacket);
@@ -4145,8 +4327,9 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     EXPECT_EQ(shadowMaterialTypedUploadPacket, shadowPreparePacket);
     EXPECT_EQ(sceneBvhNodesUploadPacket, shadowPreparePacket);
     EXPECT_EQ(sceneBvhInstancesUploadPacket, shadowPreparePacket);
+    EXPECT_EQ(shadowPrepareTlasFinalizePacket, shadowPreparePacket);
     EXPECT_NE(shadowPreparePacket, shadowVisibilityPacket);
-    EXPECT_EQ(compiledGraph.packet(shadowPreparePacket).taskCount, 10u);
+    EXPECT_EQ(compiledGraph.packet(shadowPreparePacket).taskCount, 11u);
     const Graphics::GpuSubmissionPacketRange shadowPrepareRange = compiledGraph.packetRange(
         shadowPreparePacket,
         shadowPreparePacket
@@ -4154,7 +4337,11 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     ASSERT_TRUE(shadowPrepareRange.valid());
     EXPECT_EQ(shadowPrepareRange.packetCount, 1u);
     const Graphics::GpuCompiledTask* const compiledShadowPrepare = compiledGraph.findTask(shadowPrepare);
+    const Graphics::GpuCompiledTask* const compiledShadowPrepareTlasFinalize = compiledGraph.findTask(
+        shadowPrepareTlasFinalize
+    );
     ASSERT_NE(compiledShadowPrepare, nullptr);
+    ASSERT_NE(compiledShadowPrepareTlasFinalize, nullptr);
     const Graphics::GpuCompiledBarrier* const shadowPrepareBarriers = compiledGraph.taskPrologueBarriers(shadowPrepare);
     ASSERT_NE(shadowPrepareBarriers, nullptr);
     bool transitionsCurrentBindlessSlots = false;
@@ -4170,6 +4357,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     bool transitionsSwBvhSortKeys = false;
     bool transitionsSwBvhSortPayload = false;
     bool transitionsSwBvhVisitCounter = false;
+    bool transitionsSceneTlas = false;
     bool transitionsSceneTlasBacking = false;
     bool transitionsMeshBlasABacking = false;
     bool transitionsMeshBlasBBacking = false;
@@ -4207,9 +4395,15 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             transitionsSwBvhVisitCounter = transitionsSwBvhVisitCounter || barrier.resource == swBvhVisitCounter;
         }
         if(
+            barrier.type == Graphics::GpuCompiledBarrierType::AccelStructTransition
+            && barrier.before == Graphics::ResourceStates::Common
+            && barrier.after == Graphics::ResourceStates::AccelStructWrite
+        )
+            transitionsSceneTlas = transitionsSceneTlas || barrier.resource == sceneTlas;
+        if(
             barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
             && barrier.before == Graphics::ResourceStates::Common
-            && barrier.after == Graphics::ResourceStates::AccelStructRead
+            && barrier.after == Graphics::ResourceStates::AccelStructWrite
         )
             transitionsSceneTlasBacking = transitionsSceneTlasBacking || barrier.resource == sceneTlasBacking;
         if(
@@ -4234,9 +4428,41 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     EXPECT_TRUE(transitionsSwBvhSortKeys);
     EXPECT_TRUE(transitionsSwBvhSortPayload);
     EXPECT_TRUE(transitionsSwBvhVisitCounter);
+    EXPECT_TRUE(transitionsSceneTlas);
     EXPECT_TRUE(transitionsSceneTlasBacking);
     EXPECT_TRUE(transitionsMeshBlasABacking);
     EXPECT_TRUE(transitionsMeshBlasBBacking);
+    const Graphics::GpuCompiledBarrier* const shadowPrepareTlasFinalizeBarriers =
+        compiledGraph.taskPrologueBarriers(shadowPrepareTlasFinalize)
+    ;
+    ASSERT_NE(shadowPrepareTlasFinalizeBarriers, nullptr);
+    const auto hasShadowPrepareTlasFinalizeBarrier = [&](
+        const Graphics::GpuCompiledBarrierType::Enum type,
+        const Graphics::GpuGraphResourceId resource
+    ){
+        for(usize barrierIndex = 0u;
+            barrierIndex < compiledShadowPrepareTlasFinalize->prologueBarrierCount;
+            ++barrierIndex
+        ){
+            const Graphics::GpuCompiledBarrier& barrier = shadowPrepareTlasFinalizeBarriers[barrierIndex];
+            if(
+                barrier.type == type
+                && barrier.resource == resource
+                && barrier.before == Graphics::ResourceStates::AccelStructWrite
+                && barrier.after == Graphics::ResourceStates::AccelStructRead
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasShadowPrepareTlasFinalizeBarrier(
+        Graphics::GpuCompiledBarrierType::AccelStructTransition,
+        sceneTlas
+    ));
+    EXPECT_TRUE(hasShadowPrepareTlasFinalizeBarrier(
+        Graphics::GpuCompiledBarrierType::BufferTransition,
+        sceneTlasBacking
+    ));
     ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(shadowVisibilityPacket)[0u].producer, shadowPreparePacket);
 }

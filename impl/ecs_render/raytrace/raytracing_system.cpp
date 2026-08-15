@@ -887,7 +887,10 @@ bool RendererRayTracingSystem::capturePreparedSceneTlasBuild(
     return true;
 }
 
-bool RendererRayTracingSystem::recordPreparedSceneTlasBuild(Core::CommandList& commandList){
+bool RendererRayTracingSystem::recordPreparedSceneTlasBuild(
+    Core::CommandList& commandList,
+    const bool sceneTlasBuildStatesGraphOwned
+){
     const auto& state = rayTracingState();
     if(
         !m_preparedSceneTlasReady
@@ -914,18 +917,22 @@ bool RendererRayTracingSystem::recordPreparedSceneTlasBuild(Core::CommandList& c
         }
     }
 
-    // Vulkan's TLAS recorder issues the build directly. Publish the actual write/read sequence explicitly so this
-    // graph task's declared AccelStructRead final state remains a truthful cross-packet and cross-frame handoff.
-    commandList.setAccelStructState(m_preparedSceneTlas.get(), Core::ResourceStates::AccelStructWrite);
-    commandList.commitBarriers();
+    // Normal graph preparation declares Write before this callback and the adjacent state-only finalizer publishes
+    // Read afterwards. Direct and compatibility callers retain the historical native Write -> Read bridge.
+    if(!sceneTlasBuildStatesGraphOwned){
+        commandList.setAccelStructState(m_preparedSceneTlas.get(), Core::ResourceStates::AccelStructWrite);
+        commandList.commitBarriers();
+    }
     commandList.buildTopLevelAccelStruct(
         m_preparedSceneTlas.get(),
         m_preparedSceneTlasInstances.data(),
         m_preparedSceneTlasInstances.size(),
         Core::RayTracingAccelStructBuildFlags::PreferFastTrace
     );
-    commandList.setAccelStructState(m_preparedSceneTlas.get(), Core::ResourceStates::AccelStructRead);
-    commandList.commitBarriers();
+    if(!sceneTlasBuildStatesGraphOwned){
+        commandList.setAccelStructState(m_preparedSceneTlas.get(), Core::ResourceStates::AccelStructRead);
+        commandList.commitBarriers();
+    }
     rayTracingState().m_tlasDeviceAddress = m_preparedSceneTlas->getDeviceAddress();
     return true;
 }
@@ -1621,8 +1628,12 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
             && m_shadowVisibilityHybridPipelinePreflighted
         ;
         bool sceneTlasReady = sceneTlasBuildGraphOwned
-            ? recordPreparedSceneTlasBuild(commandList)
-            : buildSceneTlas(commandList, scratchArena, shadowMaterialContextBatchGraphOwned)
+            ? recordPreparedSceneTlasBuild(commandList, true)
+            : buildSceneTlas(
+                commandList,
+                scratchArena,
+                shadowMaterialContextBatchGraphOwned
+            )
         ;
         if(!sceneTlasReady && hybridSceneTlasFallback){
             clearPreparedSceneTlasBuild();

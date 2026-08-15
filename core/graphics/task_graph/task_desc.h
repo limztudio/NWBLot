@@ -47,6 +47,10 @@ struct GpuTaskSchedulingHint{
     // Merging remains opt-in while imported recording bridges are retired incrementally.  When set, this task may
     // share the immediately preceding compatible packet instead of creating a new queue submission.
     bool mergeWithPrevious = false;
+    // A state-only immediate successor with an explicit dependency on the preceding task may keep an accepting
+    // packet whole even when that task has direct cross-queue consumers. Those consumers then wait for the complete
+    // merged packet, including the successor's final state. This never changes queue routing and remains opt-in.
+    bool allowMergeAcrossConsumerFrontier = false;
     // A late recovery/finalization packet must wait for the latest accepted work on every other physical queue.
     // The compiler preserves it as a separate packet and the submitter derives those waits from the graph-owned
     // submission transaction; callers do not assemble a queue-class token ladder.

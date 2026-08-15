@@ -240,6 +240,7 @@ void RendererSystem::invalidateResources(){
     m_sceneBvhInstancesUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
+    m_deferredShadowPrepareTlasFinalizeTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearFirstTask = {};
@@ -253,6 +254,7 @@ void RendererSystem::invalidateResources(){
     m_graphicsPrefixSceneShadingSetupReady = false;
     m_deferredLightingTaskGraphValid = false;
     m_deferredShadowPrepareTask = {};
+    m_deferredShadowPrepareTlasFinalizeTask = {};
     m_deferredShadowVisibilityOpaqueTask = {};
     m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
     m_deferredShadowVisibilityOpaqueResolveTask = {};
@@ -959,6 +961,22 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId shadowPreparePacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredShadowPrepareTask
     );
+    const Core::GpuSubmissionPacketId shadowPrepareTlasFinalizePacket =
+        m_deferredShadowPrepareTlasFinalizeTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowPrepareTlasFinalizeTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    // The state-only finalizer is part of the accepting Shadow Preparation contract. It may be a separate graph
+    // callback, but its AS/backing transition must remain in the same first Graphics submission as the frozen
+    // build so CPU cache publication and the retained packet-state handoff stay atomic.
+    const bool shadowPrepareTlasFinalizeMerged =
+        !m_deferredShadowPrepareTlasFinalizeTask.valid()
+        || (
+            shadowPreparePacket.valid()
+            && shadowPrepareTlasFinalizePacket.valid()
+            && shadowPrepareTlasFinalizePacket == shadowPreparePacket
+        )
+    ;
     const Core::GpuSubmissionPacketId deferredBindlessSlotsUploadPacket =
         m_deferredBindlessSlotsUploadTask.valid()
             ? m_deferredLightingCompiledGraph.packetForTask(m_deferredBindlessSlotsUploadTask)
@@ -1804,6 +1822,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         !m_deferredLightingTaskGraphValid
         || !m_deferredShadowPrepareTask.valid()
         || !shadowPreparePacket.valid()
+        || !shadowPrepareTlasFinalizeMerged
         || !deferredBindlessSlotsUploadMergedIntoShadowPreparePacket
         || !rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket
         || !causticEmissionTargetsUploadMergedIntoShadowPreparePacket
@@ -2224,6 +2243,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_graphicsPrefixTask.valid()
         && m_deferredShadowPrepareTask.valid()
         && shadowPreparePacket.valid()
+        && shadowPrepareTlasFinalizeMerged
         && graphicsPrefixPacket.valid()
         && graphicsPrefixDeferredClearBundleMerged
         && deferredRecorder.recordPacketRangeInReadyFrontiers(
@@ -3407,6 +3427,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const bool shadowPreparePrefixAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredShadowPrepareTask.valid()
+            && shadowPrepareTlasFinalizeMerged
             && m_graphicsPrefixMeshViewSetupTask.valid()
             && m_graphicsPrefixSceneShadingSetupTask.valid()
             && m_graphicsPrefixDeferredClearFirstTask.valid()

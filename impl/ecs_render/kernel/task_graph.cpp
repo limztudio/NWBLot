@@ -753,6 +753,25 @@ struct GbufferGraphTask{
 };
 
 
+// Prepared TLAS recording stays in Shadow Preparation so its frozen-plan fallback and acceptance semantics remain
+// unchanged. This state-only successor publishes its actual AccelStructWrite -> AccelStructRead boundary through
+// graph lowering before any later prefix or Compute consumer can observe the backing storage.
+struct ShadowPrepareTlasFinalizeGraphTask{
+    struct Payload{};
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(payload);
+        static_cast<void>(commandList);
+        static_cast<void>(context);
+        return true;
+    }
+};
+
+
 // Receiver-span build consumes the StorageImage event aliases emitted by the receiver-surface raster pass and
 // publishes span aliases for interval combine. The opaque graph exposes those two exact same-UAV boundaries while
 // aggregate native and transparent compatibility callers retain their local fences.
@@ -1888,6 +1907,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     using namespace __hidden_renderer_task_graph;
 
     m_deferredShadowPrepareTask = {};
+    m_deferredShadowPrepareTlasFinalizeTask = {};
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};
@@ -2376,6 +2396,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> sceneTlasFinalizeResourceUses{ scratchArena };
     resourceUses.reserve(
         19u
         + shadowTraceGeometryResourceCount
@@ -2419,22 +2440,34 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     }
 
     bool resourcesImported = true;
+    Core::GpuGraphResourceId sceneTlas;
+    Core::GpuGraphResourceId sceneTlasBacking;
     if(m_rayTracingState.m_tlas){
-        const Core::GpuGraphResourceId tlas = m_deferredLightingTaskGraph.importAccelStruct(
+        sceneTlas = m_deferredLightingTaskGraph.importAccelStruct(
             m_rayTracingState.m_tlas,
             AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
         );
-        const Core::GpuGraphResourceId tlasBacking = importBuffer(
+        sceneTlasBacking = importBuffer(
             m_rayTracingState.m_tlas->getBackingBufferHandle(),
             Name("render.deferred_effects.tlas_backing"),
             "Scene TLAS Backing"
         );
-        resourcesImported = resourcesImported && tlas.valid() && tlasBacking.valid();
-        if(tlas.valid() && tlasBacking.valid()){
-            // The native TLAS builder explicitly transitions Write -> Read inside Shadow Preparation. Keep this
-            // graph-visible final read state as the accepting packet's cross-queue and cross-frame handoff.
-            resourceUses.push_back(ReadWriteUse(tlas, Core::ResourceStates::AccelStructRead));
-            resourceUses.push_back(WriteUse(tlasBacking, Core::ResourceStates::AccelStructRead));
+        resourcesImported = resourcesImported && sceneTlas.valid() && sceneTlasBacking.valid();
+        if(sceneTlas.valid() && sceneTlasBacking.valid()){
+            if(sceneTlasBuildGraphOwned){
+                // The frozen native recorder only builds. The graph lowers its required Write entry state here and
+                // the state-only successor below lowers the final Read handoff on the same backing storage.
+                resourceUses.push_back(ReadWriteUse(sceneTlas, Core::ResourceStates::AccelStructWrite));
+                resourceUses.push_back(WriteUse(sceneTlasBacking, Core::ResourceStates::AccelStructWrite));
+                sceneTlasFinalizeResourceUses.push_back(ReadUse(sceneTlas, Core::ResourceStates::AccelStructRead));
+                sceneTlasFinalizeResourceUses.push_back(ReadUse(sceneTlasBacking, Core::ResourceStates::AccelStructRead));
+            }
+            else{
+                // Direct compatibility builders still publish their native Write -> Read sequence inside Shadow
+                // Preparation. Keep the graph-visible final handoff unchanged for those routes.
+                resourceUses.push_back(ReadWriteUse(sceneTlas, Core::ResourceStates::AccelStructRead));
+                resourceUses.push_back(WriteUse(sceneTlasBacking, Core::ResourceStates::AccelStructRead));
+            }
         }
     }
     for(auto meshIt = meshState().m_meshes.begin(); meshIt != meshState().m_meshes.end(); ++meshIt){
@@ -2512,6 +2545,39 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     if(!m_deferredShadowPrepareTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation task"));
         return false;
+    }
+    if(sceneTlasBuildGraphOwned){
+        if(!sceneTlas.valid() || !sceneTlasBacking.valid() || sceneTlasFinalizeResourceUses.size() != 2u){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build has no final-state graph resources"));
+            return false;
+        }
+        Core::GpuTaskSchedulingHint tlasFinalizeScheduling;
+        tlasFinalizeScheduling.cost = Core::GpuTaskCostHint::Tiny;
+        tlasFinalizeScheduling.forceSubmissionBoundary = false;
+        tlasFinalizeScheduling.allowPacketMerge = true;
+        tlasFinalizeScheduling.mergeWithPrevious = true;
+        // Shadow Preparation has direct later Compute consumers. Keep this Read finalizer in the same accepting
+        // packet so they wait on the completed build and its descriptor-visible backing state together.
+        tlasFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
+        Core::GpuTaskDesc tlasFinalizeDesc;
+        tlasFinalizeDesc
+            .setIdentity(Name("render.shadow_prepare.tlas_finalize"))
+            .setMarkerLabel("Shadow Preparation TLAS Finalize")
+            .setQueue(GraphicsQueueRequest())
+            .setScheduling(tlasFinalizeScheduling)
+            .setDependencies(&m_deferredShadowPrepareTask, 1u)
+            .setResourceUses(sceneTlasFinalizeResourceUses.data(), sceneTlasFinalizeResourceUses.size())
+        ;
+        m_deferredShadowPrepareTlasFinalizeTask = m_deferredLightingTaskGraph.addTask<
+            ECSRenderDetail::ShadowPrepareTlasFinalizeGraphTask
+        >(
+            tlasFinalizeDesc,
+            ECSRenderDetail::ShadowPrepareTlasFinalizeGraphTask::Payload{}
+        );
+        if(!m_deferredShadowPrepareTlasFinalizeTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare scene TLAS final-state task"));
+            return false;
+        }
     }
     return true;
 }
@@ -6190,6 +6256,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_sceneBvhInstancesUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
+    m_deferredShadowPrepareTlasFinalizeTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearFirstTask = {};
@@ -6851,11 +6918,15 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation packet"));
         return;
     }
+    const Core::GpuTaskId shadowPrepareHandoffTask = m_deferredShadowPrepareTlasFinalizeTask.valid()
+        ? m_deferredShadowPrepareTlasFinalizeTask
+        : m_deferredShadowPrepareTask
+    ;
     const bool currentBindlessSlotsGraphOwned = m_deferredBindlessSlotsUploadTask.valid();
 
     if(!declareDeferredGraphicsPrefixTasks(
         deferredTargets,
-        m_deferredShadowPrepareTask,
+        shadowPrepareHandoffTask,
         csgFrameState,
         hasOpaqueCsgFrameWork,
         meshViewAspectRatio,

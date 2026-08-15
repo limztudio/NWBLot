@@ -1152,9 +1152,27 @@ bool GpuTaskGraphCompiler::compile(
                     && !preceding.scheduling.joinsAcceptedQueueFrontier
                 ;
             }
+            if(precedingPacketAllowsMerge && task.scheduling.allowMergeAcrossConsumerFrontier){
+                // This narrow opt-in is only valid for an explicit immediate successor. It must not let an
+                // unrelated same-queue task quietly absorb an already-signallable cross-queue frontier.
+                const GpuTaskId precedingTask = outCompiledGraph.m_packetTasks[
+                    precedingPacket.taskOffset + precedingPacket.taskCount - 1u
+                ];
+                bool explicitlyDependsOnPrecedingTask = false;
+                for(usize dependencyIndex = 0u;
+                    dependencyIndex < task.dependencyCount;
+                    ++dependencyIndex
+                ){
+                    explicitlyDependsOnPrecedingTask = explicitlyDependsOnPrecedingTask
+                        || task.dependencies[dependencyIndex] == precedingTask
+                    ;
+                }
+                precedingPacketAllowsMerge = explicitlyDependsOnPrecedingTask;
+            }
             if(
                 precedingPacketAllowsMerge
                 && options.packetizationPolicy == GpuTaskGraphPacketizationPolicy::FrontierSafe
+                && !task.scheduling.allowMergeAcrossConsumerFrontier
             ){
                 for(u32 precedingTaskIndex = 0u;
                     precedingPacketAllowsMerge && precedingTaskIndex < precedingPacket.taskCount;

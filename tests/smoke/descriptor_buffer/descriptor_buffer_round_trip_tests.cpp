@@ -2794,6 +2794,261 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
 }
 
 
+// Prepared TLAS recording owns no native entry or exit transition on the normal graph path. These two getter-only
+// callbacks use a real Vulkan acceleration structure and its aliased backing buffer, proving the compiler lowers
+// both typed resource declarations from build-write to descriptor-visible read in one accepting Graphics packet.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedTlasStateFinalizeRecordsWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    if(!device.queryFeatureSupport(Feature::RayTracingAccelStruct))
+        GTEST_SKIP() << "Ray tracing acceleration structures are not enabled on this device.";
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/prepared_tlas_state_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+    RayTracingAccelStructDesc tlasDesc(descArena);
+    tlasDesc
+        .setTopLevelMaxInstances(1u)
+        .setDebugName(Name{"tests/descriptor_buffer/prepared_tlas_state"})
+    ;
+    auto tlas = device.createAccelStruct(tlasDesc);
+    ASSERT_NE(tlas.get(), nullptr);
+    const BufferHandle tlasBacking = tlas->getBackingBufferHandle();
+    ASSERT_NE(tlasBacking.get(), nullptr);
+    ASSERT_EQ(tlas->getBackingBuffer(), tlasBacking.get());
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId tlasResource = graph.importAccelStruct(
+        tlas,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/prepared_tlas_state"))
+            .setMarkerLabel("Prepared TLAS")
+            .setType(GpuGraphResourceType::AccelStruct)
+            .setInitialState(ResourceStates::Common)
+    );
+    const GpuGraphResourceId tlasBackingResource = graph.importBuffer(
+        tlasBacking,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/prepared_tlas_backing_state"))
+            .setMarkerLabel("Prepared TLAS Backing")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(tlasResource.valid());
+    ASSERT_TRUE(tlasBackingResource.valid());
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint buildScheduling;
+    buildScheduling.cost = GpuTaskCostHint::Medium;
+    buildScheduling.forceSubmissionBoundary = false;
+    buildScheduling.allowPacketMerge = true;
+    const GpuTaskResourceUse buildUses[] = {
+        GpuTaskResourceUse{
+            .resource = tlasResource,
+            .range = {},
+            .requiredState = ResourceStates::AccelStructWrite,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+        GpuTaskResourceUse{
+            .resource = tlasBackingResource,
+            .range = {},
+            .requiredState = ResourceStates::AccelStructWrite,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    GpuTaskDesc buildDesc;
+    buildDesc
+        .setIdentity(Name("tests/descriptor_buffer/prepared_tlas_build"))
+        .setMarkerLabel("Prepared TLAS Build")
+        .setQueue(graphicsQueue)
+        .setScheduling(buildScheduling)
+        .setResourceUses(buildUses, LengthOf(buildUses))
+    ;
+    bool buildRecorded = false;
+    const GpuTaskId buildTask = graph.addTask<NativePacketPrefixTask>(
+        buildDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = tlasBacking.get(),
+            .expectedState = ResourceStates::AccelStructWrite,
+            .recorded = &buildRecorded,
+        }
+    );
+    ASSERT_TRUE(buildTask.valid());
+
+    GpuTaskSchedulingHint finalizeScheduling;
+    finalizeScheduling.cost = GpuTaskCostHint::Tiny;
+    finalizeScheduling.forceSubmissionBoundary = false;
+    finalizeScheduling.allowPacketMerge = true;
+    finalizeScheduling.mergeWithPrevious = true;
+    finalizeScheduling.allowMergeAcrossConsumerFrontier = true;
+    const GpuTaskResourceUse finalizeUses[] = {
+        GpuTaskResourceUse{
+            .resource = tlasResource,
+            .range = {},
+            .requiredState = ResourceStates::AccelStructRead,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = tlasBackingResource,
+            .range = {},
+            .requiredState = ResourceStates::AccelStructRead,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskDesc finalizeDesc;
+    finalizeDesc
+        .setIdentity(Name("tests/descriptor_buffer/prepared_tlas_finalize"))
+        .setMarkerLabel("Prepared TLAS Finalize")
+        .setQueue(graphicsQueue)
+        .setScheduling(finalizeScheduling)
+        .setDependencies(&buildTask, 1u)
+        .setResourceUses(finalizeUses, LengthOf(finalizeUses))
+    ;
+    bool finalizeRecorded = false;
+    const GpuTaskId finalizeTask = graph.addTask<NativePacketPrefixTask>(
+        finalizeDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = tlasBacking.get(),
+            .expectedState = ResourceStates::AccelStructRead,
+            .recorded = &finalizeRecorded,
+        }
+    );
+    ASSERT_TRUE(finalizeTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/prepared_tlas_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(buildTask);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(finalizeTask), packet);
+    ASSERT_EQ(compiledGraph.packet(packet).taskCount, 2u);
+
+    const GpuCompiledTask* const compiledBuild = compiledGraph.findTask(buildTask);
+    const GpuCompiledTask* const compiledFinalize = compiledGraph.findTask(finalizeTask);
+    ASSERT_NE(compiledBuild, nullptr);
+    ASSERT_NE(compiledFinalize, nullptr);
+    const auto hasTransition = [&](
+        const GpuTaskId task,
+        const GpuCompiledTask& compiledTask,
+        const GpuCompiledBarrierType::Enum type,
+        const GpuGraphResourceId resource,
+        const ResourceStates::Mask before,
+        const ResourceStates::Mask after
+    ){
+        const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        if(compiledTask.prologueBarrierCount != 0u && !barriers)
+            return false;
+        for(usize barrierIndex = 0u; barrierIndex < compiledTask.prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == type
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTransition(
+        buildTask,
+        *compiledBuild,
+        GpuCompiledBarrierType::AccelStructTransition,
+        tlasResource,
+        ResourceStates::Common,
+        ResourceStates::AccelStructWrite
+    ));
+    EXPECT_TRUE(hasTransition(
+        buildTask,
+        *compiledBuild,
+        GpuCompiledBarrierType::BufferTransition,
+        tlasBackingResource,
+        ResourceStates::Common,
+        ResourceStates::AccelStructWrite
+    ));
+    EXPECT_TRUE(hasTransition(
+        finalizeTask,
+        *compiledFinalize,
+        GpuCompiledBarrierType::AccelStructTransition,
+        tlasResource,
+        ResourceStates::AccelStructWrite,
+        ResourceStates::AccelStructRead
+    ));
+    EXPECT_TRUE(hasTransition(
+        finalizeTask,
+        *compiledFinalize,
+        GpuCompiledBarrierType::BufferTransition,
+        tlasBackingResource,
+        ResourceStates::AccelStructWrite,
+        ResourceStates::AccelStructRead
+    ));
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(buildRecorded);
+    EXPECT_TRUE(finalizeRecorded);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    ASSERT_NE(finalState, nullptr);
+
+    auto stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getBufferState(tlasBacking.get()), ResourceStates::AccelStructRead);
+    stateProbe->close();
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(packet).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // The AVBOIT occupancy material pass obtains depth and coverage through global descriptors. Its graph task must
 // therefore see the clear's CopyDest -> UAV transition before it records, without a renderer thunk reissuing it;
 // the following unsplit tail still owns the required UAV -> UAV ordering barrier.

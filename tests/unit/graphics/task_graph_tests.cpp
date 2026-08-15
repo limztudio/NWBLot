@@ -7954,6 +7954,27 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
     const Graphics::GpuTaskId accumulatorBootstrapClearTask = graph.addTask(accumulatorBootstrapClearDesc);
     ASSERT_TRUE(accumulatorBootstrapClearTask.valid());
 
+    const Graphics::GpuGraphResourceId softwareTraceGeometryMembers[] = {
+        softwareMeshNodes,
+        softwareMeshPositions,
+        softwareMeshIndices,
+        softwareMeshAttributes,
+    };
+    const Graphics::GpuGraphResourceSetId softwareTraceGeometrySet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/software_caustics_trace_geometry"))
+            .setMarkerLabel("Software Caustics Trace Geometry")
+            .setMembers(softwareTraceGeometryMembers, LengthOf(softwareTraceGeometryMembers))
+    );
+    ASSERT_TRUE(softwareTraceGeometrySet.valid());
+    const Graphics::GpuTaskResourceSetUse softwareTraceGeometrySetUses[] = {
+        {
+            .resourceSet = softwareTraceGeometrySet,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
     const Graphics::GpuTaskResourceUse softwareCausticsUses[] = {
         { .resource = worldPosition, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = depth, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
@@ -7966,10 +7987,6 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
         { .resource = shadowInstanceMaterials, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = shadowMaterialTyped, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = shadowInstances, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
-        { .resource = softwareMeshNodes, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
-        { .resource = softwareMeshPositions, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
-        { .resource = softwareMeshIndices, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
-        { .resource = softwareMeshAttributes, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = sceneShading, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = lights, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = causticAccumulator, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
@@ -7990,6 +8007,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftwareCausticsEntryStates){
         .setScheduling(causticsScheduling)
         .setDependencies(&accumulatorBootstrapClearTask, 1u)
         .setResourceUses(softwareCausticsUses, LengthOf(softwareCausticsUses))
+        .setResourceSetUses(softwareTraceGeometrySetUses, LengthOf(softwareTraceGeometrySetUses))
     ;
     const Graphics::GpuTaskId softwareCausticsTask = graph.addTask(softwareCausticsDesc);
     ASSERT_TRUE(softwareCausticsTask.valid());

@@ -5183,6 +5183,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     const Core::GpuGraphResourceId materialContextSlots,
     const Core::GpuGraphResourceId* const softwareTraceGeometryResources,
     const usize softwareTraceGeometryResourceCount,
+    const Core::GpuGraphResourceSetId softwareTraceGeometrySet,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
     Optional<Core::GpuTimingMeasure>& causticResolveTiming
@@ -5277,7 +5278,12 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveFourthWaveletResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveFifthWaveletResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveUpsampleResourceUses{ scratchArena };
-    photonResourceUses.reserve(20u + softwareTraceGeometryResourceCount);
+    const bool softwareTraceGeometryStatesGraphOwned = softwareTraceGeometrySet.valid();
+    photonResourceUses.reserve(20u + (
+        softwareTraceGeometryStatesGraphOwned
+            ? 0u
+            : softwareTraceGeometryResourceCount
+    ));
     geometryResourceUses.reserve(3u);
     resolvePrepareResourceUses.reserve(4u);
     resolveWaveletResourceUses.reserve(3u);
@@ -5576,12 +5582,20 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     photonResourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource));
     if(materialContextSlots.valid())
         photonResourceUses.push_back(ReadUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
-    for(usize resourceIndex = 0u; resourceIndex < softwareTraceGeometryResourceCount; ++resourceIndex){
-        const Core::GpuGraphResourceId resource = softwareTraceGeometryResources[resourceIndex];
-        if(!resource.valid())
-            return false;
-        photonResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+    if(!softwareTraceGeometryStatesGraphOwned){
+        for(usize resourceIndex = 0u; resourceIndex < softwareTraceGeometryResourceCount; ++resourceIndex){
+            const Core::GpuGraphResourceId resource = softwareTraceGeometryResources[resourceIndex];
+            if(!resource.valid())
+                return false;
+            photonResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+        }
     }
+    const Core::GpuTaskResourceSetUse softwareTraceGeometrySetUse{
+        .resourceSet = softwareTraceGeometrySet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
 
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
@@ -5738,6 +5752,10 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         .setScheduling(causticsScheduling)
         .setDependencies(&causticsDependency, 1u)
         .setResourceUses(photonResourceUses.data(), photonResourceUses.size())
+        .setResourceSetUses(
+            softwareTraceGeometryStatesGraphOwned ? &softwareTraceGeometrySetUse : nullptr,
+            softwareTraceGeometryStatesGraphOwned ? 1u : 0u
+        )
     ;
     m_deferredCausticPhotonTask = m_raytracingSystem.declareSoftwareCausticsTask(
         m_deferredLightingTaskGraph,
@@ -6950,6 +6968,15 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ))
             softwareTraceGeometryResources.push_back(resource);
     }
+    Core::GpuGraphResourceSetId softwareTraceGeometrySet;
+    if(!softwareTraceGeometryResources.empty()){
+        softwareTraceGeometrySet = m_deferredLightingTaskGraph.importResourceSet(
+            Core::GpuGraphResourceSetDesc{}
+                .setIdentity(Name("render.software_trace_geometry"))
+                .setMarkerLabel("Software Trace Geometry")
+                .setMembers(softwareTraceGeometryResources.data(), softwareTraceGeometryResources.size())
+        );
+    }
     bool softwareTraceResourcesPrepared = false;
     for(const PreparedShadowTraceGeometryBuffer& preparedBuffer : preparedTraceGeometry){
         if(preparedBuffer.roles & (
@@ -7549,6 +7576,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         materialContextSlots,
         softwareTraceGeometryResources.data(),
         softwareTraceGeometryResources.size(),
+        softwareTraceGeometrySet,
         softwareCausticsTimingTicket,
         causticPhotonTiming,
         causticResolveTiming

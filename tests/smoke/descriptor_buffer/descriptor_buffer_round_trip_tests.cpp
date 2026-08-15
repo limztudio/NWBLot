@@ -6761,6 +6761,27 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftwareCausticsEntryStatesRecor
     );
     ASSERT_TRUE(accumulatorBootstrapClearTask.valid());
 
+    const GpuGraphResourceId softwareTraceGeometryMembers[] = {
+        shaderBufferResources[1u],
+        shaderBufferResources[2u],
+        shaderBufferResources[3u],
+        shaderBufferResources[4u],
+    };
+    const GpuGraphResourceSetId softwareTraceGeometrySet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/software_caustics_trace_geometry"))
+            .setMarkerLabel("Software Caustics Trace Geometry")
+            .setMembers(softwareTraceGeometryMembers, LengthOf(softwareTraceGeometryMembers))
+    );
+    ASSERT_TRUE(softwareTraceGeometrySet.valid());
+    const GpuTaskResourceSetUse softwareTraceGeometrySetUses[] = {
+        {
+            .resourceSet = softwareTraceGeometrySet,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
     const GpuTaskResourceUse causticsUses[] = {
         { .resource = worldPositionResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
         { .resource = depthResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
@@ -6769,10 +6790,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftwareCausticsEntryStatesRecor
         { .resource = constantBufferResources[2u], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read },
         { .resource = constantBufferResources[3u], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read },
         { .resource = shaderBufferResources[0u], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
-        { .resource = shaderBufferResources[1u], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
-        { .resource = shaderBufferResources[2u], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
-        { .resource = shaderBufferResources[3u], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
-        { .resource = shaderBufferResources[4u], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
         { .resource = shaderBufferResources[5u], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
         { .resource = shaderBufferResources[6u], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
         { .resource = shaderBufferResources[7u], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
@@ -6797,6 +6814,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftwareCausticsEntryStatesRecor
         .setScheduling(causticsScheduling)
         .setDependencies(&accumulatorBootstrapClearTask, 1u)
         .setResourceUses(causticsUses, LengthOf(causticsUses))
+        .setResourceSetUses(softwareTraceGeometrySetUses, LengthOf(softwareTraceGeometrySetUses))
     ;
     NativePacketSoftwareCausticsEntryProbeTask::Payload causticsPayload{};
     for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)

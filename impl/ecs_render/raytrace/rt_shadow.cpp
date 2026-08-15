@@ -37,6 +37,7 @@ struct ShadowVisibilityOpaqueGraphTask{
         u32* opaqueFrameIndex = nullptr;
         bool hardwareShadowSupported = false;
         bool graphEntryStatesOwned = false;
+        bool graphOwnsOpaqueTemporalMergeEntryStates = false;
     };
 
     [[nodiscard]] static bool record(
@@ -95,13 +96,15 @@ struct ShadowVisibilityOpaqueGraphTask{
                     commandList,
                     *payload.targets,
                     *payload.opaqueFrameIndex,
-                    payload.graphEntryStatesOwned
+                    payload.graphEntryStatesOwned,
+                    payload.graphOwnsOpaqueTemporalMergeEntryStates
                 )
                 : payload.raytracingSystem->renderGpuBvhShadowVisibilityOpaque(
                     commandList,
                     *payload.targets,
                     *payload.opaqueFrameIndex,
-                    payload.graphEntryStatesOwned
+                    payload.graphEntryStatesOwned,
+                    payload.graphOwnsOpaqueTemporalMergeEntryStates
                 )
             ;
         }
@@ -752,7 +755,8 @@ bool RendererRayTracingSystem::renderShadowVisibility(
     DeferredFrameTargets& targets,
     const bool graphEntryStatesOwned,
     const bool splitSoftTransparentFold,
-    u32* const opaqueFrameIndex
+    u32* const opaqueFrameIndex,
+    const bool graphOwnsOpaqueTemporalMergeEntryStates
 ){
     if(!targets.shadowVisibility)
         return false;
@@ -860,7 +864,10 @@ bool RendererRayTracingSystem::renderShadowVisibility(
             graphEntryStatesOwned,
             true,
             !splitSoftTransparentFold,
-            !splitSoftTransparentFold
+            !splitSoftTransparentFold,
+            false,
+            false,
+            graphOwnsOpaqueTemporalMergeEntryStates
         );
         if(splitSoftTransparentFold){
             NWB_ASSERT(opaqueFrameIndex);
@@ -919,7 +926,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
     Optional<Core::GpuTimingMeasure>* const shadowVisibilityTiming,
     bool* const opaqueProduced,
     u32* const opaqueFrameIndex,
-    const bool graphEntryStatesOwned
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsOpaqueTemporalMergeEntryStates
 ){
     return graph.addTask<__hidden_shadow_visibility_task::ShadowVisibilityOpaqueGraphTask>(
         desc,
@@ -935,6 +943,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
             .opaqueFrameIndex = opaqueFrameIndex,
             .hardwareShadowSupported = hardwareShadowSupported,
             .graphEntryStatesOwned = graphEntryStatesOwned,
+            .graphOwnsOpaqueTemporalMergeEntryStates = graphOwnsOpaqueTemporalMergeEntryStates,
         }
     );
 }
@@ -943,7 +952,8 @@ bool RendererRayTracingSystem::renderShadowVisibilityOpaque(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     u32& outFrameIndex,
-    const bool graphEntryStatesOwned
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsOpaqueTemporalMergeEntryStates
 ){
     outFrameIndex = 0u;
     if(
@@ -957,7 +967,8 @@ bool RendererRayTracingSystem::renderShadowVisibilityOpaque(
         targets,
         graphEntryStatesOwned,
         true,
-        &outFrameIndex
+        &outFrameIndex,
+        graphOwnsOpaqueTemporalMergeEntryStates
     );
 }
 
@@ -1025,6 +1036,7 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
         true,
         graphOwnsOpaqueToTransparentBoundary,
         graphOwnsTransparentTraceToResolveBoundary,
+        false,
         graphOwnsTransparentTemporalMergeEntryStates
     );
     return true;
@@ -1123,7 +1135,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     const bool multiplyOntoOpaque,
     const bool graphEntryStatesOwned,
     const bool splitSoftTransparentFold,
-    u32* const opaqueFrameIndex
+    u32* const opaqueFrameIndex,
+    const bool graphOwnsOpaqueTemporalMergeEntryStates
 ){
     // Hybrid mode folds transparent software transmittance onto the hardware opaque mask.
     if(!targets.shadowVisibility)
@@ -1294,7 +1307,10 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                 graphEntryStatesOwned,
                 true,
                 !splitSoftTransparentFold,
-                !splitSoftTransparentFold
+                !splitSoftTransparentFold,
+                false,
+                false,
+                graphOwnsOpaqueTemporalMergeEntryStates
             );
             if(splitSoftTransparentFold){
                 NWB_ASSERT(opaqueFrameIndex);
@@ -1505,7 +1521,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     u32& outFrameIndex,
-    const bool graphEntryStatesOwned
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsOpaqueTemporalMergeEntryStates
 ){
     outFrameIndex = 0u;
     if(
@@ -1520,7 +1537,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
         false,
         graphEntryStatesOwned,
         true,
-        &outFrameIndex
+        &outFrameIndex,
+        graphOwnsOpaqueTemporalMergeEntryStates
     );
 }
 

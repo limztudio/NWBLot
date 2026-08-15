@@ -3520,6 +3520,13 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     }
 #endif
     const bool splitSoftTransparentFold = preparedSoftTransparentFoldCandidate && graphOwnedSoftTransparentFoldEnabled;
+    // The opaque temporal merge runs before the transparent tail and shares its history selector. Freeze its exact
+    // input/output pair while the compiled packet owns the prepared temporal route.
+    const bool graphOwnsOpaqueTemporalMergeEntryStates =
+        splitSoftTransparentFold
+        && m_rayTracingState.m_softShadowTemporalReady
+    ;
+    const bool opaqueHistoryFrontIsA = m_rayTracingState.m_softShadowHistoryFrontIsA != 0u;
 
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
@@ -3558,6 +3565,21 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         if(!resource.valid())
             return false;
         resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::UnorderedAccess));
+        return true;
+    };
+    const auto appendOptionalOpaqueTemporalHistoryTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label, const bool isInput){
+        if(!texture)
+            return true;
+        const Core::GpuGraphResourceId resource = importTexture(texture, identity, label);
+        if(!resource.valid())
+            return false;
+        if(graphOwnsOpaqueTemporalMergeEntryStates)
+            resourceUses.push_back(isInput
+                ? ReadUse(resource, Core::ResourceStates::ShaderResource)
+                : WriteUse(resource, Core::ResourceStates::UnorderedAccess)
+            );
+        else
+            resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::UnorderedAccess));
         return true;
     };
     const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
@@ -3613,25 +3635,29 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             Name("render.shadow_visibility.soft_geometry_previous"),
             "Previous Shadow Soft Geometry"
         )
-        && appendOptionalReadWriteTexture(
+        && appendOptionalOpaqueTemporalHistoryTexture(
             deferredTargets.shadowHistA,
             Name("render.shadow_visibility.history_a"),
-            "Shadow History A"
+            "Shadow History A",
+            opaqueHistoryFrontIsA
         )
-        && appendOptionalReadWriteTexture(
+        && appendOptionalOpaqueTemporalHistoryTexture(
             deferredTargets.shadowHistB,
             Name("render.shadow_visibility.history_b"),
-            "Shadow History B"
+            "Shadow History B",
+            !opaqueHistoryFrontIsA
         )
-        && appendOptionalReadWriteTexture(
+        && appendOptionalOpaqueTemporalHistoryTexture(
             deferredTargets.shadowMomentsA,
             Name("render.shadow_visibility.moments_a"),
-            "Shadow Moments A"
+            "Shadow Moments A",
+            opaqueHistoryFrontIsA
         )
-        && appendOptionalReadWriteTexture(
+        && appendOptionalOpaqueTemporalHistoryTexture(
             deferredTargets.shadowMomentsB,
             Name("render.shadow_visibility.moments_b"),
-            "Shadow Moments B"
+            "Shadow Moments B",
+            !opaqueHistoryFrontIsA
         )
         && appendOptionalReadWriteTexture(
             deferredTargets.transparentSoftHalf,
@@ -3951,7 +3977,8 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             &shadowVisibilityTiming,
             &opaqueProduced,
             &opaqueFrameIndex,
-            true
+            true,
+            graphOwnsOpaqueTemporalMergeEntryStates
         );
         if(!m_deferredShadowVisibilityOpaqueTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque shadow-visibility graph task"));

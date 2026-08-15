@@ -980,6 +980,44 @@ struct NativePacketSoftTransparentTemporalMergeProbeTask{
 };
 
 
+// The opaque temporal merge has the same selected history/moment contract before it starts its local geometry
+// handoff. This callback only reads state tracking, so it cannot mask a missing graph-owned temporal prologue.
+struct NativePacketSoftOpaqueTemporalMergeProbeTask{
+    struct Payload{
+        Texture* historyInput = nullptr;
+        Texture* momentsInput = nullptr;
+        Texture* historyOutput = nullptr;
+        Texture* momentsOutput = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        const bool ready =
+            payload.historyInput
+            && payload.momentsInput
+            && payload.historyOutput
+            && payload.momentsOutput
+            && commandList.getTextureSubresourceState(payload.historyInput, 0u, 0u)
+                == ResourceStates::ShaderResource
+            && commandList.getTextureSubresourceState(payload.momentsInput, 0u, 0u)
+                == ResourceStates::ShaderResource
+            && commandList.getTextureSubresourceState(payload.historyOutput, 0u, 0u)
+                == ResourceStates::UnorderedAccess
+            && commandList.getTextureSubresourceState(payload.momentsOutput, 0u, 0u)
+                == ResourceStates::UnorderedAccess
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
 // The post-G-buffer normalizer must see both raster and software-build trace geometry in graph-declared
 // ShaderResource state. It deliberately performs no native transition itself.
 struct NativePacketPostGbufferTraceGeometryProbeTask{
@@ -3992,6 +4030,193 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
         scratchArena
     ));
     EXPECT_TRUE(transaction.packetToken(packet).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// The opaque soft merge freezes its own A/B selector in the graph. Its history/moment entry state is independent of
+// the geometry downsample-to-merge handoff that remains inside the renderer callback.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueSoftTemporalMergeEntryStatesRecordWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const auto makeShadowTarget = [&device](){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setFormat(Format::RGBA8_UNORM)
+                .setInUAV(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    auto historyA = makeShadowTarget();
+    auto momentsA = makeShadowTarget();
+    auto historyB = makeShadowTarget();
+    auto momentsB = makeShadowTarget();
+    ASSERT_NE(historyA.get(), nullptr);
+    ASSERT_NE(momentsA.get(), nullptr);
+    ASSERT_NE(historyB.get(), nullptr);
+    ASSERT_NE(momentsB.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importTexture = [&graph](const TextureHandle& texture, const Name identity, const AStringView label){
+        return graph.importTexture(
+            texture,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Texture)
+        );
+    };
+    const GpuGraphResourceId historyAResource = importTexture(
+        historyA,
+        Name("tests/descriptor_buffer/opaque_soft_history_a"),
+        "Opaque Soft History A"
+    );
+    const GpuGraphResourceId momentsAResource = importTexture(
+        momentsA,
+        Name("tests/descriptor_buffer/opaque_soft_moments_a"),
+        "Opaque Soft Moments A"
+    );
+    const GpuGraphResourceId historyBResource = importTexture(
+        historyB,
+        Name("tests/descriptor_buffer/opaque_soft_history_b"),
+        "Opaque Soft History B"
+    );
+    const GpuGraphResourceId momentsBResource = importTexture(
+        momentsB,
+        Name("tests/descriptor_buffer/opaque_soft_moments_b"),
+        "Opaque Soft Moments B"
+    );
+    ASSERT_TRUE(historyAResource.valid());
+    ASSERT_TRUE(momentsAResource.valid());
+    ASSERT_TRUE(historyBResource.valid());
+    ASSERT_TRUE(momentsBResource.valid());
+
+    const GpuQueueRequest computeQueue{
+        GpuQueueCapability::Compute,
+        GpuQueuePreference::Compute,
+        true,
+        false,
+    };
+    const GpuTaskResourceUse mergeUses[] = {
+        {
+            .resource = historyBResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = momentsBResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = historyAResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = momentsAResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    GpuTaskDesc mergeDesc;
+    mergeDesc
+        .setIdentity(Name("tests/descriptor_buffer/graph_owned_opaque_soft_temporal_merge"))
+        .setMarkerLabel("Opaque Soft Temporal Merge")
+        .setQueue(computeQueue)
+        .setResourceUses(mergeUses, LengthOf(mergeUses))
+    ;
+    bool mergeRecorded = false;
+    const GpuTaskId mergeTask = graph.addTask<NativePacketSoftOpaqueTemporalMergeProbeTask>(
+        mergeDesc,
+        NativePacketSoftOpaqueTemporalMergeProbeTask::Payload{
+            .historyInput = historyB.get(),
+            .momentsInput = momentsB.get(),
+            .historyOutput = historyA.get(),
+            .momentsOutput = momentsA.get(),
+            .recorded = &mergeRecorded,
+        }
+    );
+    ASSERT_TRUE(mergeTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/opaque_soft_temporal_merge_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuCompiledTask* const compiledMerge = compiledGraph.findTask(mergeTask);
+    ASSERT_NE(compiledMerge, nullptr);
+    const GpuCompiledBarrier* const mergeBarriers = compiledGraph.taskPrologueBarriers(mergeTask);
+    ASSERT_NE(mergeBarriers, nullptr);
+    const auto hasMergeInputTransition = [&](const GpuGraphResourceId resource){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledMerge->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = mergeBarriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == resource
+                && barrier.before == ResourceStates::Common
+                && barrier.after == ResourceStates::ShaderResource
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasMergeInputTransition(historyBResource));
+    EXPECT_TRUE(hasMergeInputTransition(momentsBResource));
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(mergeRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(compiledGraph.packetForTask(mergeTask)).valid());
     EXPECT_TRUE(device.waitForIdle());
 }
 

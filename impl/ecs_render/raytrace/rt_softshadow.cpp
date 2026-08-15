@@ -67,6 +67,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const bool dispatchTransparentResolve,
     const bool graphOwnsOpaqueToTransparentBoundary,
     const bool graphOwnsTransparentTraceToResolveBoundary,
+    const bool graphOwnsOpaqueTemporalMergeEntryStates,
     const bool graphOwnsTransparentTemporalMergeEntryStates
 ){
     NWB_ASSERT(targets.bindless.valid());
@@ -149,18 +150,20 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const bool opaqueTemporalActive = rayTracingState().m_softShadowTemporalReady;
     const u32 historyValid = softShadowTemporalHistoryUsable() ? 1u : 0u;
 
-    const auto dispatchMerge = [&](const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources& resources, const bool graphOwnsSoftTraceInputState, const bool graphOwnsMergeEntryStates){
+    const auto dispatchMerge = [&](const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources& resources, const bool graphOwnsSoftTraceInputState, const bool graphOwnsMergeSpatialEntryStates, const bool graphOwnsMergeTemporalEntryStates){
         NWB_ASSERT(resources.softTrace && resources.historyIn && resources.momentsIn && resources.historyOut && resources.momentsOut);
         if(!graphOwnsSoftTraceInputState)
             commandList.setTextureState(resources.softTrace, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
-        if(!graphOwnsMergeEntryStates){
+        if(!graphOwnsMergeTemporalEntryStates){
             commandList.setTextureState(resources.historyIn, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
             commandList.setTextureState(resources.momentsIn, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(resources.historyOut, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+            commandList.setTextureState(resources.momentsOut, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        }
+        if(!graphOwnsMergeSpatialEntryStates){
             commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
             commandList.setTextureState(targets.shadowSoftGeometryPrev.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
             commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-            commandList.setTextureState(resources.historyOut, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-            commandList.setTextureState(resources.momentsOut, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         }
         commandList.setEnableUavBarriersForTexture(resources.historyOut, true);
         commandList.setEnableUavBarriersForTexture(resources.momentsOut, true);
@@ -214,7 +217,9 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             graphics().getDevice(),
             commandList
         );
-        dispatchMerge(opaqueMerge, false, false);
+        // The graph can own the selected history/moment entry batch, but the geometry downsample above still needs
+        // this callback's local UAV-to-SRV transition before the opaque merge samples it.
+        dispatchMerge(opaqueMerge, false, false, graphOwnsOpaqueTemporalMergeEntryStates);
     }
 
     // Feed the first wavelet directly from this frame's trace or temporal merge. PREPARE was only a half-res copy into
@@ -339,6 +344,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             dispatchMerge(
                 transparentMerge,
                 graphOwnsTransparentTraceToResolveBoundary,
+                graphOwnsTransparentTemporalMergeEntryStates,
                 graphOwnsTransparentTemporalMergeEntryStates
             );
         }

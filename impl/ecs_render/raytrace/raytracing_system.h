@@ -300,7 +300,8 @@ public:
         DeferredFrameTargets& targets,
         bool graphEntryStatesOwned = false,
         bool splitSoftTransparentFold = false,
-        u32* opaqueFrameIndex = nullptr
+        u32* opaqueFrameIndex = nullptr,
+        bool graphOwnsOpaqueTemporalMergeEntryStates = false
     );
     [[nodiscard]] Core::GpuTaskId declareShadowVisibilityTask(
         Core::GpuTaskGraph& graph,
@@ -325,7 +326,8 @@ public:
         Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming,
         bool* opaqueProduced,
         u32* opaqueFrameIndex,
-        bool graphEntryStatesOwned = false
+        bool graphEntryStatesOwned = false,
+        bool graphOwnsOpaqueTemporalMergeEntryStates = false
     );
     [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftFoldTask(
         Core::GpuTaskGraph& graph,
@@ -388,7 +390,8 @@ public:
         bool multiplyOntoOpaque = false,
         bool graphEntryStatesOwned = false,
         bool splitSoftTransparentFold = false,
-        u32* opaqueFrameIndex = nullptr
+        u32* opaqueFrameIndex = nullptr,
+        bool graphOwnsOpaqueTemporalMergeEntryStates = false
     );
     [[nodiscard]] bool prepareGpuBvhCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] Core::GpuTaskId declareSoftwareCausticsTask(
@@ -894,6 +897,7 @@ private:
         bool dispatchTransparentResolve = true,
         bool graphOwnsOpaqueToTransparentBoundary = false,
         bool graphOwnsTransparentTraceToResolveBoundary = false,
+        bool graphOwnsOpaqueTemporalMergeEntryStates = false,
         bool graphOwnsTransparentTemporalMergeEntryStates = false
     );
     // Graph-only phase helpers preserve the complete direct route above while exposing both in-packet handoffs to
@@ -902,13 +906,15 @@ private:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         u32& outFrameIndex,
-        bool graphEntryStatesOwned
+        bool graphEntryStatesOwned,
+        bool graphOwnsOpaqueTemporalMergeEntryStates
     );
     [[nodiscard]] bool renderGpuBvhShadowVisibilityOpaque(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         u32& outFrameIndex,
-        bool graphEntryStatesOwned
+        bool graphEntryStatesOwned,
+        bool graphOwnsOpaqueTemporalMergeEntryStates
     );
     [[nodiscard]] bool renderSoftTransparentShadowTrace(
         Core::CommandList& commandList,

@@ -5416,6 +5416,118 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
 }
 
 
+// The opaque temporal merge freezes the opposite selector from the terminal transparent merge. Its history/moment
+// inputs must enter the opaque callback as SRVs while the next pair remains writable by that callback.
+TEST(GpuTaskGraph, GraphOwnsOpaqueSoftTemporalMergeHistoryStates){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId historyA = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/opaque_soft_history_a"),
+        "Opaque Soft History A",
+        Graphics::ResourceStates::UnorderedAccess
+    );
+    const Graphics::GpuGraphResourceId momentsA = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/opaque_soft_moments_a"),
+        "Opaque Soft Moments A",
+        Graphics::ResourceStates::UnorderedAccess
+    );
+    const Graphics::GpuGraphResourceId historyB = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/opaque_soft_history_b"),
+        "Opaque Soft History B",
+        Graphics::ResourceStates::UnorderedAccess
+    );
+    const Graphics::GpuGraphResourceId momentsB = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/opaque_soft_moments_b"),
+        "Opaque Soft Moments B",
+        Graphics::ResourceStates::UnorderedAccess
+    );
+    ASSERT_TRUE(historyA.valid());
+    ASSERT_TRUE(momentsA.valid());
+    ASSERT_TRUE(historyB.valid());
+    ASSERT_TRUE(momentsB.valid());
+
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    const Graphics::GpuTaskResourceUse opaqueMergeUses[] = {
+        {
+            .resource = historyB,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = momentsB,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = historyA,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = momentsA,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc opaqueMergeDesc;
+    opaqueMergeDesc
+        .setIdentity(Name("tests/task_graph/opaque_soft_temporal_merge"))
+        .setMarkerLabel("Opaque Soft Temporal Merge")
+        .setQueue(computeRequest)
+        .setResourceUses(opaqueMergeUses, LengthOf(opaqueMergeUses))
+    ;
+    const Graphics::GpuTaskId opaqueMerge = graph.addTask(opaqueMergeDesc);
+    ASSERT_TRUE(opaqueMerge.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+
+    const Graphics::GpuCompiledTask* const compiledMerge = compiledGraph.findTask(opaqueMerge);
+    ASSERT_NE(compiledMerge, nullptr);
+    const Graphics::GpuCompiledBarrier* const mergeBarriers = compiledGraph.taskPrologueBarriers(opaqueMerge);
+    ASSERT_NE(mergeBarriers, nullptr);
+    const auto hasMergeInputTransition = [&](const Graphics::GpuGraphResourceId resource){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledMerge->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = mergeBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == resource
+                && barrier.before == Graphics::ResourceStates::UnorderedAccess
+                && barrier.after == Graphics::ResourceStates::ShaderResource
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasMergeInputTransition(historyB));
+    EXPECT_TRUE(hasMergeInputTransition(momentsB));
+}
+
+
 // Shadow Preparation, G-buffer, and the post-G-buffer normalizer share their frozen trace geometry through one
 // graph. The normalizer must restore both raster VertexBuffer and SW-BVH UAV producers to ShaderResource before the
 // shadow callback records; it no longer relies on a native route-specific state bridge.

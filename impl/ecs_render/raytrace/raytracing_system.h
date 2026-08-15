@@ -201,6 +201,7 @@ public:
         bool sceneBvhBatchGraphOwned = false,
         bool sceneTlasBuildGraphOwned = false,
         bool meshBlasBuildsGraphOwned = false,
+        bool meshBlasGeometryBuildInputStatesGraphOwned = false,
         bool meshSwBvhBuildsGraphOwned = false
     );
     [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept;
@@ -842,7 +843,8 @@ private:
     [[nodiscard]] bool capturePreparedMeshBlasBuilds();
     [[nodiscard]] bool recordPreparedMeshBlasBuilds(
         Core::CommandList& commandList,
-        bool meshBlasAccelStructStatesGraphOwned
+        bool meshBlasAccelStructStatesGraphOwned,
+        bool meshBlasGeometryBuildInputStatesGraphOwned
     );
     void clearPreparedMeshBlasBuilds()noexcept;
     [[nodiscard]] bool capturePreparedMeshSwBvhBuilds();

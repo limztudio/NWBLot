@@ -105,6 +105,7 @@ struct ShadowPrepareGraphTask{
         bool sceneBvhBatchGraphOwned = false;
         bool sceneTlasBuildGraphOwned = false;
         bool meshBlasBuildsGraphOwned = false;
+        bool meshBlasGeometryBuildInputStatesGraphOwned = false;
         bool meshSwBvhBuildsGraphOwned = false;
     };
 
@@ -133,6 +134,7 @@ struct ShadowPrepareGraphTask{
                 payload.sceneBvhBatchGraphOwned,
                 payload.sceneTlasBuildGraphOwned,
                 payload.meshBlasBuildsGraphOwned,
+                payload.meshBlasGeometryBuildInputStatesGraphOwned,
                 payload.meshSwBvhBuildsGraphOwned
             )
         ;
@@ -2094,6 +2096,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     const usize shadowTraceGeometryResourceCount,
     const Core::GpuGraphResourceId* const softwareBvhBuildStateResources,
     const usize softwareBvhBuildStateResourceCount,
+    const bool softwareTraceResourcesPrepared,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace __hidden_renderer_task_graph;
@@ -2585,21 +2588,31 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build plan has no operations"));
         return false;
     }
+    // A hybrid aggregate callback immediately reuses shared BLAS position/index streams for software-BVH
+    // construction. Leave that in-callback AccelStructBuildInput -> ShaderResource bridge native. A prepared
+    // hardware route with no software tail has no such later producer, so its frozen geometry can enter graph-owned.
+    bool meshBlasGeometryBuildInputStatesGraphOwned =
+        meshBlasBuildsGraphOwned
+        && !softwareTraceResourcesPrepared
+        && !meshSwBvhBuildsGraphOwned
+    ;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accelStructFinalizeResourceUses{ scratchArena };
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> meshBlasGeometryBuildInputResources{ scratchArena };
     resourceUses.reserve(
         19u
         + shadowTraceGeometryResourceCount
         + softwareBvhBuildStateResourceCount
         + meshState().m_meshes.size() * 2u
-        + preparedMeshBlasBuilds.size() * 2u
+        + preparedMeshBlasBuilds.size() * 4u
     );
     accelStructFinalizeResourceUses.reserve(
         (sceneTlasBuildGraphOwned ? 2u : 0u)
         + preparedMeshBlasBuilds.size() * 2u
     );
+    meshBlasGeometryBuildInputResources.reserve(preparedMeshBlasBuilds.size() * 2u);
     // Shadow Preparation owns each preflight input's post-transition packet boundary. This deliberately supersedes
     // preceding immutable uploads as graph producers, so later Compute readers wait on this first Graphics packet
     // rather than forcing FrontierSafe packetization to split an upload away from its accepting consumer.
@@ -2623,6 +2636,46 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         resourceUses.push_back(WriteUse(sceneBvhInstances, Core::ResourceStates::ShaderResource));
 
     bool resourcesImported = true;
+    const auto isShadowTraceGeometryResource = [&](const Core::GpuGraphResourceId resource){
+        for(usize resourceIndex = 0u; resourceIndex < shadowTraceGeometryResourceCount; ++resourceIndex){
+            if(shadowTraceGeometryResources[resourceIndex] == resource)
+                return true;
+        }
+        return false;
+    };
+    if(meshBlasGeometryBuildInputStatesGraphOwned){
+        const auto appendMeshBlasGeometryBuildInput = [&](const Core::BufferHandle& buffer){
+            const Core::GpuGraphResourceId resource = m_deferredLightingTaskGraph.findImportedBuffer(buffer);
+            if(!resource.valid() || !isShadowTraceGeometryResource(resource))
+                return false;
+            for(const Core::GpuGraphResourceId existing : meshBlasGeometryBuildInputResources){
+                if(existing == resource)
+                    return true;
+            }
+            meshBlasGeometryBuildInputResources.push_back(resource);
+            return true;
+        };
+        for(const PreparedMeshBlasBuild& build : preparedMeshBlasBuilds){
+            if(
+                !appendMeshBlasGeometryBuildInput(build.positionBuffer)
+                || !appendMeshBlasGeometryBuildInput(build.triangleIndexBuffer)
+            ){
+                // Do not reject an otherwise valid tail-free packet merely because a future preflight change omitted
+                // one frozen stream from the graph-owned trace set. The prepared recorder retains its direct
+                // bridge in that compatibility case, exactly as it does for hybrid callbacks.
+                meshBlasGeometryBuildInputStatesGraphOwned = false;
+                meshBlasGeometryBuildInputResources.clear();
+                break;
+            }
+        }
+    }
+    const auto isMeshBlasGeometryBuildInput = [&](const Core::GpuGraphResourceId resource){
+        for(const Core::GpuGraphResourceId buildInput : meshBlasGeometryBuildInputResources){
+            if(buildInput == resource)
+                return true;
+        }
+        return false;
+    };
     const auto isPreparedMeshBlasBuild = [&](const Name meshName){
         if(!meshBlasBuildsGraphOwned)
             return false;
@@ -2650,8 +2703,9 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
                 && backing.valid()
             ;
             if(blas.valid() && backing.valid()){
-                // Frozen BLAS recording retains its shared position/index build-input bridge, while the graph owns
-                // the typed/backing Write states here and the accepting successor publishes both Read aliases.
+                // The graph owns typed/backing Write states here and the accepting successor publishes both Read
+                // aliases. A prepared BLAS route with no software tail also owns its exact position/index entry;
+                // hybrid and direct compatibility routes retain that shared geometry bridge natively.
                 resourceUses.push_back(ReadWriteUse(blas, Core::ResourceStates::AccelStructWrite));
                 resourceUses.push_back(WriteUse(backing, Core::ResourceStates::AccelStructWrite));
                 accelStructFinalizeResourceUses.push_back(ReadUse(blas, Core::ResourceStates::AccelStructRead));
@@ -2659,10 +2713,16 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             }
         }
     }
+    if(meshBlasGeometryBuildInputStatesGraphOwned){
+        for(const Core::GpuGraphResourceId resource : meshBlasGeometryBuildInputResources)
+            resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::AccelStructBuildInput));
+    }
     for(usize resourceIndex = 0u; resourceIndex < shadowTraceGeometryResourceCount; ++resourceIndex){
         const Core::GpuGraphResourceId resource = shadowTraceGeometryResources[resourceIndex];
         if(!resource.valid())
             return false;
+        if(isMeshBlasGeometryBuildInput(resource))
+            continue;
         resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::ShaderResource));
     }
     for(usize resourceIndex = 0u; resourceIndex < softwareBvhBuildStateResourceCount; ++resourceIndex){
@@ -2777,6 +2837,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .sceneBvhBatchGraphOwned = sceneBvhBatchGraphOwned,
             .sceneTlasBuildGraphOwned = sceneTlasBuildGraphOwned,
             .meshBlasBuildsGraphOwned = meshBlasBuildsGraphOwned,
+            .meshBlasGeometryBuildInputStatesGraphOwned = meshBlasGeometryBuildInputStatesGraphOwned,
             .meshSwBvhBuildsGraphOwned = meshSwBvhBuildsGraphOwned,
         }
     );
@@ -7162,6 +7223,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         traceGeometryResources.size(),
         softwareBvhBuildStateResources.data(),
         softwareBvhBuildStateResources.size(),
+        softwareTraceResourcesPrepared,
         shadowPrepareTimingTicket
     )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation packet"));

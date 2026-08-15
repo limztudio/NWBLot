@@ -352,7 +352,8 @@ template<typename RayTracingState>
 [[nodiscard]] bool RecordPreparedMeshBlasBuild(
     Core::CommandList& commandList,
     const PreparedMeshBlasBuild& build,
-    const bool meshBlasAccelStructStatesGraphOwned
+    const bool meshBlasAccelStructStatesGraphOwned,
+    const bool meshBlasGeometryBuildInputStatesGraphOwned
 ){
     if(
         !build.positionBuffer
@@ -387,11 +388,12 @@ template<typename RayTracingState>
     if(build.performRefit)
         buildFlags |= Core::RayTracingAccelStructBuildFlags::PerformUpdate;
 
-    // Position/index state stays native: the same buffers may immediately feed the optional software-BVH builder
-    // in this aggregate callback. The normal graph path owns only the typed BLAS/backing Write -> Read handoff;
-    // direct and compatibility callers retain that historical bridge as well.
-    commandList.setBufferState(build.positionBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
-    commandList.setBufferState(build.triangleIndexBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
+    // Hybrid callbacks immediately hand these shared streams to the software-BVH builder, so that bridge remains
+    // native. The frozen no-software-tail graph route established this input state in its packet prologue already.
+    if(!meshBlasGeometryBuildInputStatesGraphOwned){
+        commandList.setBufferState(build.positionBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
+        commandList.setBufferState(build.triangleIndexBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
+    }
     if(!meshBlasAccelStructStatesGraphOwned)
         commandList.setAccelStructState(build.blas.get(), Core::ResourceStates::AccelStructWrite);
     commandList.commitBarriers();
@@ -495,7 +497,8 @@ bool RendererRayTracingSystem::capturePreparedMeshBlasBuilds(){
 
 bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(
     Core::CommandList& commandList,
-    const bool meshBlasAccelStructStatesGraphOwned
+    const bool meshBlasAccelStructStatesGraphOwned,
+    const bool meshBlasGeometryBuildInputStatesGraphOwned
 ){
     if(!m_preparedMeshBlasBuildsReady || m_preparedMeshBlasBuilds.empty())
         return false;
@@ -517,7 +520,8 @@ bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(
         if(!__hidden_rt_swbvh::RecordPreparedMeshBlasBuild(
             commandList,
             build,
-            meshBlasAccelStructStatesGraphOwned
+            meshBlasAccelStructStatesGraphOwned,
+            meshBlasGeometryBuildInputStatesGraphOwned
         )){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen BLAS build for mesh '{}'")
                 , StringConvert(build.meshName.c_str())
@@ -2075,7 +2079,7 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
     PreparedMeshBlasBuild build;
     if(
         !__hidden_rt_swbvh::ResolvePreparedMeshBlasBuild(meshResources, build)
-        || !__hidden_rt_swbvh::RecordPreparedMeshBlasBuild(commandList, build, false)
+        || !__hidden_rt_swbvh::RecordPreparedMeshBlasBuild(commandList, build, false, false)
     )
         return false;
 

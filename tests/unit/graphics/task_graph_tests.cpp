@@ -6412,6 +6412,165 @@ TEST(GpuTaskGraph, PlansGraphOwnedPreparedSoftwareBvhInputStates){
 }
 
 
+// Prepared BLAS work with no following software-BVH consumer in Shadow Preparation has its position/index inputs
+// enter as graph-owned build inputs, and the normalizer later restores their trace SRV state for
+// the next Prefix/visibility consumers. Hybrid routes deliberately retain their native intra-callback bridge.
+TEST(GpuTaskGraph, PlansGraphOwnedPreparedTailFreeBlasInputStates){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    constexpr Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Graphics;
+    const Graphics::GpuGraphResourceId position = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/prepared_tail_free_blas_position"),
+        "Prepared Tail-Free BLAS Position",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId index = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/prepared_tail_free_blas_index"),
+        "Prepared Tail-Free BLAS Index",
+        Graphics::ResourceStates::ShaderResource,
+        queueSharing
+    );
+    ASSERT_TRUE(position.valid());
+    ASSERT_TRUE(index.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint prepareScheduling;
+    prepareScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    prepareScheduling.allowPacketMerge = true;
+    const Graphics::GpuTaskResourceUse prepareUses[] = {
+        {
+            .resource = position,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::AccelStructBuildInput,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        {
+            .resource = index,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::AccelStructBuildInput,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    Graphics::GpuTaskDesc prepareDesc;
+    prepareDesc
+        .setIdentity(Name("tests/task_graph/prepared_tail_free_blas_shadow_prepare"))
+        .setMarkerLabel("Prepared Tail-Free BLAS Shadow Preparation")
+        .setQueue(graphicsRequest)
+        .setScheduling(prepareScheduling)
+        .setResourceUses(prepareUses, LengthOf(prepareUses))
+    ;
+    const Graphics::GpuTaskId prepare = graph.addTask(prepareDesc);
+    ASSERT_TRUE(prepare.valid());
+
+    Graphics::GpuTaskSchedulingHint normalizeScheduling = prepareScheduling;
+    normalizeScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    normalizeScheduling.mergeWithPrevious = true;
+    const Graphics::GpuTaskResourceUse normalizeUses[] = {
+        {
+            .resource = position,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        {
+            .resource = index,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    Graphics::GpuTaskDesc normalizeDesc;
+    normalizeDesc
+        .setIdentity(Name("tests/task_graph/prepared_tail_free_blas_normalize"))
+        .setMarkerLabel("Prepared Tail-Free BLAS Normalize")
+        .setQueue(graphicsRequest)
+        .setScheduling(normalizeScheduling)
+        .setDependencies(&prepare, 1u)
+        .setResourceUses(normalizeUses, LengthOf(normalizeUses))
+    ;
+    const Graphics::GpuTaskId normalize = graph.addTask(normalizeDesc);
+    ASSERT_TRUE(normalize.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(prepare);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(normalize), packet);
+    EXPECT_EQ(compiledGraph.packet(packet).taskCount, 2u);
+
+    const Graphics::GpuCompiledTask* const compiledPrepare = compiledGraph.findTask(prepare);
+    const Graphics::GpuCompiledTask* const compiledNormalize = compiledGraph.findTask(normalize);
+    ASSERT_NE(compiledPrepare, nullptr);
+    ASSERT_NE(compiledNormalize, nullptr);
+    const auto hasTransition = [&](
+        const Graphics::GpuTaskId task,
+        const Graphics::GpuCompiledTask& compiledTask,
+        const Graphics::GpuGraphResourceId resource,
+        const Graphics::ResourceStates::Mask before,
+        const Graphics::ResourceStates::Mask after
+    ){
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        if(compiledTask.prologueBarrierCount != 0u && !barriers)
+            return false;
+        for(usize barrierIndex = 0u; barrierIndex < compiledTask.prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTransition(
+        prepare,
+        *compiledPrepare,
+        position,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::AccelStructBuildInput
+    ));
+    EXPECT_TRUE(hasTransition(
+        prepare,
+        *compiledPrepare,
+        index,
+        Graphics::ResourceStates::ShaderResource,
+        Graphics::ResourceStates::AccelStructBuildInput
+    ));
+    EXPECT_TRUE(hasTransition(
+        normalize,
+        *compiledNormalize,
+        position,
+        Graphics::ResourceStates::AccelStructBuildInput,
+        Graphics::ResourceStates::ShaderResource
+    ));
+    EXPECT_TRUE(hasTransition(
+        normalize,
+        *compiledNormalize,
+        index,
+        Graphics::ResourceStates::AccelStructBuildInput,
+        Graphics::ResourceStates::ShaderResource
+    ));
+}
+
+
 // Shadow Preparation, G-buffer, and the post-G-buffer normalizer share their frozen trace geometry through one
 // graph. The normalizer must restore both raster VertexBuffer and SW-BVH UAV producers to ShaderResource before the
 // shadow callback records; it no longer relies on a native route-specific state bridge.

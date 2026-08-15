@@ -200,6 +200,7 @@ private:
         usize shadowTraceGeometryResourceCount,
         const Core::GpuGraphResourceId* softwareBvhBuildStateResources,
         usize softwareBvhBuildStateResourceCount,
+        bool softwareTraceResourcesPrepared,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] bool declareDeferredGraphicsPrefixTasks(

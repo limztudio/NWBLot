@@ -3427,6 +3427,257 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedSoftwareBvhInputStatesRe
 }
 
 
+// Prepared BLAS work with no software-BVH tail in the aggregate Shadow Preparation callback has its frozen
+// position/index inputs observe graph-owned AccelStructBuildInput before recording, and the graph-owned
+// normalizer publishes ShaderResource afterward without either callback issuing a native state change.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedTailFreeBlasInputStatesRecordWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    if(!device.queryFeatureSupport(Feature::RayTracingAccelStruct))
+        GTEST_SKIP() << "AccelStructBuildInput state: ray tracing acceleration structures are not enabled on this device.";
+
+    const auto makeInputBuffer = [&device]{
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setIsAccelStructBuildInput(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const BufferHandle position = makeInputBuffer();
+    const BufferHandle index = makeInputBuffer();
+    ASSERT_NE(position.get(), nullptr);
+    ASSERT_NE(index.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importInput = [&graph](const BufferHandle& buffer, const Name identity, const AStringView label){
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Buffer)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const GpuGraphResourceId positionResource = importInput(
+        position,
+        Name("tests/descriptor_buffer/prepared_tail_free_blas_position"),
+        "Prepared Tail-Free BLAS Position"
+    );
+    const GpuGraphResourceId indexResource = importInput(
+        index,
+        Name("tests/descriptor_buffer/prepared_tail_free_blas_index"),
+        "Prepared Tail-Free BLAS Index"
+    );
+    ASSERT_TRUE(positionResource.valid());
+    ASSERT_TRUE(indexResource.valid());
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint prepareScheduling;
+    prepareScheduling.cost = GpuTaskCostHint::Medium;
+    prepareScheduling.forceSubmissionBoundary = false;
+    prepareScheduling.allowPacketMerge = true;
+    const GpuTaskResourceUse prepareUses[] = {
+        {
+            .resource = positionResource,
+            .range = {},
+            .requiredState = ResourceStates::AccelStructBuildInput,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+        {
+            .resource = indexResource,
+            .range = {},
+            .requiredState = ResourceStates::AccelStructBuildInput,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    GpuTaskDesc prepareDesc;
+    prepareDesc
+        .setIdentity(Name("tests/descriptor_buffer/prepared_tail_free_blas_shadow_prepare"))
+        .setMarkerLabel("Prepared Tail-Free BLAS Shadow Preparation")
+        .setQueue(graphicsQueue)
+        .setScheduling(prepareScheduling)
+        .setResourceUses(prepareUses, LengthOf(prepareUses))
+    ;
+    bool prepareRecorded = false;
+    const GpuTaskId prepareTask = graph.addTask<NativePacketPrefixTask>(
+        prepareDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = position.get(),
+            .expectedState = ResourceStates::AccelStructBuildInput,
+            .additionalBuffer = index.get(),
+            .expectedAdditionalBufferState = ResourceStates::AccelStructBuildInput,
+            .recorded = &prepareRecorded,
+        }
+    );
+    ASSERT_TRUE(prepareTask.valid());
+
+    GpuTaskSchedulingHint normalizeScheduling = prepareScheduling;
+    normalizeScheduling.cost = GpuTaskCostHint::Tiny;
+    normalizeScheduling.mergeWithPrevious = true;
+    const GpuTaskResourceUse normalizeUses[] = {
+        {
+            .resource = positionResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+        {
+            .resource = indexResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    GpuTaskDesc normalizeDesc;
+    normalizeDesc
+        .setIdentity(Name("tests/descriptor_buffer/prepared_tail_free_blas_normalize"))
+        .setMarkerLabel("Prepared Tail-Free BLAS Normalize")
+        .setQueue(graphicsQueue)
+        .setScheduling(normalizeScheduling)
+        .setDependencies(&prepareTask, 1u)
+        .setResourceUses(normalizeUses, LengthOf(normalizeUses))
+    ;
+    bool normalizeRecorded = false;
+    const GpuTaskId normalizeTask = graph.addTask<NativePacketPrefixTask>(
+        normalizeDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = position.get(),
+            .expectedState = ResourceStates::ShaderResource,
+            .additionalBuffer = index.get(),
+            .expectedAdditionalBufferState = ResourceStates::ShaderResource,
+            .recorded = &normalizeRecorded,
+        }
+    );
+    ASSERT_TRUE(normalizeTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/prepared_tail_free_blas_input_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(prepareTask);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(normalizeTask), packet);
+    ASSERT_EQ(compiledGraph.packet(packet).taskCount, 2u);
+
+    const GpuCompiledTask* const compiledPrepare = compiledGraph.findTask(prepareTask);
+    const GpuCompiledTask* const compiledNormalize = compiledGraph.findTask(normalizeTask);
+    ASSERT_NE(compiledPrepare, nullptr);
+    ASSERT_NE(compiledNormalize, nullptr);
+    const auto hasTransition = [&](const GpuTaskId task, const GpuCompiledTask& compiledTask, const GpuGraphResourceId resource, const ResourceStates::Mask before, const ResourceStates::Mask after){
+        const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        if(compiledTask.prologueBarrierCount != 0u && !barriers)
+            return false;
+        for(usize barrierIndex = 0u; barrierIndex < compiledTask.prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTransition(
+        prepareTask,
+        *compiledPrepare,
+        positionResource,
+        ResourceStates::Common,
+        ResourceStates::AccelStructBuildInput
+    ));
+    EXPECT_TRUE(hasTransition(
+        prepareTask,
+        *compiledPrepare,
+        indexResource,
+        ResourceStates::Common,
+        ResourceStates::AccelStructBuildInput
+    ));
+    EXPECT_TRUE(hasTransition(
+        normalizeTask,
+        *compiledNormalize,
+        positionResource,
+        ResourceStates::AccelStructBuildInput,
+        ResourceStates::ShaderResource
+    ));
+    EXPECT_TRUE(hasTransition(
+        normalizeTask,
+        *compiledNormalize,
+        indexResource,
+        ResourceStates::AccelStructBuildInput,
+        ResourceStates::ShaderResource
+    ));
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(prepareRecorded);
+    EXPECT_TRUE(normalizeRecorded);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    ASSERT_NE(finalState, nullptr);
+
+    auto stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getBufferState(position.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(stateProbe->getBufferState(index.get()), ResourceStates::ShaderResource);
+    stateProbe->close();
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(packet).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // The AVBOIT occupancy material pass obtains depth and coverage through global descriptors. Its graph task must
 // therefore see the clear's CopyDest -> UAV transition before it records, without a renderer thunk reissuing it;
 // the following unsplit tail still owns the required UAV -> UAV ordering barrier.

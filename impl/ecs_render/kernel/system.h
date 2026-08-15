@@ -166,6 +166,9 @@ public:
     void forceHybridSceneTraversalFallbackForTesting()noexcept;
     void forceHybridSceneTraversalFallbackEveryFrameForTesting()noexcept;
     void forceHybridHardwareFallbackSnapshotStaleForTesting()noexcept;
+    // Target-scene A/B seam. Production always uses the graph-owned fold; benchmark arms explicitly select the
+    // graph split or the retained monolithic compatibility callback before the first frame is declared.
+    void setGraphOwnedSoftTransparentShadowFoldEnabledForTesting(bool enabled)noexcept;
 #endif
 
 private:
@@ -510,6 +513,11 @@ private:
     bool m_preparedHasTransparentRenderers = false;
     bool m_preparedShadowVisibilityResourcesValid = false;
     bool m_preparedShadowVisibilityReady = false;
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+    bool m_graphOwnedSoftTransparentShadowFoldEnabledForTesting = true;
+    bool m_graphOwnedSoftTransparentShadowFoldBenchmarkForTesting = false;
+    bool m_reportedGraphOwnedSoftTransparentShadowFoldBenchmarkForTesting = false;
+#endif
     bool m_frameLaggedAsyncLightingEnabled = false;
     LaggedLightingReport m_laggedLightingReport = LaggedLightingReport::Unreported;
     u64 m_laggedLightingReportGeneration = 0u;

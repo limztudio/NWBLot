@@ -343,7 +343,21 @@ public:
             NWB_TEXT("StressTestSmokeProject failed to create all scene entities")
         );
 
-#if defined(NWB_HYBRID_SHADOW_BOUNDARY_FALLBACK_BENCHMARK) && (!defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES))
+#if defined(NWB_SOFT_TRANSPARENT_SHADOW_FOLD_BENCHMARK) && (!defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES))
+        auto* const rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>();
+        NWB_FATAL_ASSERT_MSG(rendererSystem, NWB_TEXT("StressTestSmokeProject renderer system disappeared"));
+#if defined(NWB_SOFT_TRANSPARENT_SHADOW_FOLD_MONOLITHIC_BENCHMARK)
+        rendererSystem->setGraphOwnedSoftTransparentShadowFoldEnabledForTesting(false);
+        NWB_LOGGER_ESSENTIAL_INFO(
+            NWB_TEXT("StressTestSmokeProject: enabled retained monolithic soft-transparent shadow-fold benchmark")
+        );
+#else
+        rendererSystem->setGraphOwnedSoftTransparentShadowFoldEnabledForTesting(true);
+        NWB_LOGGER_ESSENTIAL_INFO(
+            NWB_TEXT("StressTestSmokeProject: enabled graph-owned soft-transparent shadow-fold benchmark")
+        );
+#endif
+#elif defined(NWB_HYBRID_SHADOW_BOUNDARY_FALLBACK_BENCHMARK) && (!defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES))
         auto* const rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>();
         NWB_FATAL_ASSERT_MSG(rendererSystem, NWB_TEXT("StressTestSmokeProject renderer system disappeared"));
         rendererSystem->forceHybridSceneTraversalFallbackEveryFrameForTesting();
@@ -436,7 +450,9 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 
 const tchar* NWB::QueryProjectWindowTitle(){
-#if defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)
+#if defined(NWB_SOFT_TRANSPARENT_SHADOW_FOLD_BENCHMARK)
+    return NWB_TEXT("NWB Soft Transparent Shadow Fold Benchmark");
+#elif defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)
     return NWB_TEXT("NWB Hybrid Shadow Boundary Benchmark");
 #elif defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
     return NWB_TEXT("NWB Async Shadow M4 Benchmark");

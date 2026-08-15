@@ -90,6 +90,12 @@ void RendererSystem::forceHybridSceneTraversalFallbackEveryFrameForTesting()noex
 void RendererSystem::forceHybridHardwareFallbackSnapshotStaleForTesting()noexcept{
     m_raytracingSystem.forceHybridHardwareFallbackSnapshotStaleForTesting();
 }
+
+void RendererSystem::setGraphOwnedSoftTransparentShadowFoldEnabledForTesting(const bool enabled)noexcept{
+    m_graphOwnedSoftTransparentShadowFoldEnabledForTesting = enabled;
+    m_graphOwnedSoftTransparentShadowFoldBenchmarkForTesting = true;
+    m_reportedGraphOwnedSoftTransparentShadowFoldBenchmarkForTesting = false;
+}
 #endif
 
 

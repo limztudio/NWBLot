@@ -3474,7 +3474,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     opaqueFrameIndex = 0u;
     // Only the fully prepared soft-transparent route can expose this boundary. Direct, adaptive/hybrid, and
     // resource-degraded paths retain the established monolithic Shadow Visibility callback.
-    const bool splitSoftTransparentFold =
+    const bool preparedSoftTransparentFoldCandidate =
         m_rayTracingState.m_softShadowReady
         && m_rayTracingState.m_softShadowSlotMask != 0u
         && m_raytracingSystem.softTransparentShadowReady()
@@ -3500,6 +3500,23 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         && materialContextSlots.valid()
         && softwareTraceGeometryResourceCount != 0u
     ;
+    bool graphOwnedSoftTransparentFoldEnabled = true;
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+    graphOwnedSoftTransparentFoldEnabled = m_graphOwnedSoftTransparentShadowFoldEnabledForTesting;
+    if(
+        preparedSoftTransparentFoldCandidate
+        && m_graphOwnedSoftTransparentShadowFoldBenchmarkForTesting
+        && !m_reportedGraphOwnedSoftTransparentShadowFoldBenchmarkForTesting
+    ){
+        NWB_LOGGER_ESSENTIAL_INFO(
+            graphOwnedSoftTransparentFoldEnabled
+                ? NWB_TEXT("RendererSystem: graph-owned soft-transparent shadow-fold benchmark path active")
+                : NWB_TEXT("RendererSystem: retained monolithic soft-transparent shadow-fold benchmark path active")
+        );
+        m_reportedGraphOwnedSoftTransparentShadowFoldBenchmarkForTesting = true;
+    }
+#endif
+    const bool splitSoftTransparentFold = preparedSoftTransparentFoldCandidate && graphOwnedSoftTransparentFoldEnabled;
 
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));

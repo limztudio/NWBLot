@@ -893,6 +893,40 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         )
         add_dependencies(nwb_hybrid_shadow_boundary_fallback_benchmark nwb_skinning_culling_benchmark_assets)
 
+        # Target-hardware A/B pair for the graph-owned opaque-to-transparent soft-shadow fold. Both arms run the
+        # same fixed-yaw stress scene: the graph arm exposes the new merged task boundary, while the monolithic arm
+        # retains the established callback as a performance baseline without changing visible shadow semantics.
+        nwb_declare_executable(nwb_soft_transparent_shadow_fold_graph_benchmark)
+        target_sources(nwb_soft_transparent_shadow_fold_graph_benchmark PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+        )
+        target_compile_definitions(nwb_soft_transparent_shadow_fold_graph_benchmark PRIVATE
+            NWB_SOFT_TRANSPARENT_SHADOW_FOLD_BENCHMARK=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_soft_transparent_shadow_fold_graph_benchmark
+            "${_nwb_skinning_culling_runtime_root}"
+            nwb_ecs_model
+            nwb_ecs_mesh_skinning
+        )
+        add_dependencies(nwb_soft_transparent_shadow_fold_graph_benchmark nwb_skinning_culling_benchmark_assets)
+
+        nwb_declare_executable(nwb_soft_transparent_shadow_fold_monolithic_benchmark)
+        target_sources(nwb_soft_transparent_shadow_fold_monolithic_benchmark PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+        )
+        target_compile_definitions(nwb_soft_transparent_shadow_fold_monolithic_benchmark PRIVATE
+            NWB_SOFT_TRANSPARENT_SHADOW_FOLD_BENCHMARK=1
+            NWB_SOFT_TRANSPARENT_SHADOW_FOLD_MONOLITHIC_BENCHMARK=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_soft_transparent_shadow_fold_monolithic_benchmark
+            "${_nwb_skinning_culling_runtime_root}"
+            nwb_ecs_model
+            nwb_ecs_mesh_skinning
+        )
+        add_dependencies(nwb_soft_transparent_shadow_fold_monolithic_benchmark nwb_skinning_culling_benchmark_assets)
+
         nwb_add_window_capture_smoke(
             nwb_hybrid_shadow_boundary_fallback_capture_smoke
             hybrid_shadow_boundary_fallback_capture.bmp

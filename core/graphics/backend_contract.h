@@ -265,7 +265,6 @@ concept CommandListApi = requires(
 
     commandList.buildOpacityMicromap(opacityMicromap, opacityMicromapDesc);
     commandList.buildBottomLevelAccelStruct(accelStruct, geometries, usize{}, RayTracingAccelStructBuildFlags::None);
-    commandList.compactBottomLevelAccelStructs();
     commandList.buildTopLevelAccelStruct(accelStruct, instances, usize{}, RayTracingAccelStructBuildFlags::None);
     commandList.executeMultiIndirectClusterOperation(clusterOperationDesc);
     commandList.buildTopLevelAccelStructFromBuffer(accelStruct, buffer, u64{}, usize{}, RayTracingAccelStructBuildFlags::None);
@@ -353,7 +352,6 @@ concept RayTracingOpacityMicromapApi = DescribedResourceApi<T, RayTracingOpacity
 
 template<typename T>
 concept RayTracingAccelStructApi = DescribedResourceApi<T, RayTracingAccelStructDesc> && requires(const T& accelStruct){
-    { accelStruct.isCompacted() }->SameAs<bool>;
     { accelStruct.getDeviceAddress() }->SameAs<u64>;
 };
 

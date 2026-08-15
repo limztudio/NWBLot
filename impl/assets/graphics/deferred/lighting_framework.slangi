@@ -47,18 +47,17 @@ bool nwbDeferredPresentationIsHdr10(){
     return g_NwbDeferredLightingPushConstants.presentationMode == NWB_DEFERRED_PRESENTATION_HDR10;
 }
 
-// scene/lighting.slangi is also shared by tracing shaders which do not carry deferred push constants. Scope the
-// HDR decision to this include site so those shaders retain their established SDR-material behavior.
-#define NWB_SCENE_PRESENTATION_IS_HDR10 nwbDeferredPresentationIsHdr10()
+// BXDFs own their tone-map policy, but both deferred and AVBOIT harnesses expose this narrow presentation query.
+bool nwbBxdfPresentationIsHdr10(){
+    return nwbDeferredPresentationIsHdr10();
+}
 
 #define NWB_SCENE_SHADOW_VISIBILITY_RESOURCE NwbHeapSampledImage2DArray(g_NwbDeferredBindlessResources.lightingSlots.x)
 #define NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.y)
 // Brings common/math (nwbSafeNormalize, frame helpers), scene/buffer (g_NwbSceneLights, nwbSceneLightCount,
-// g_NwbSceneCameraPosition, nwbSceneResolveLight) and the engine's default BRDF lobe (nwbSceneShadeLight) +
-// whole-surface model (nwbSceneApplyLighting). A project BXDF may use or ignore the default model.
+// g_NwbSceneCameraPosition, nwbSceneResolveLight), and the engine-owned transport accessors. Project BXDFs own
+// their BRDF, light-loop, and tone-map policy.
 #include "../scene/lighting.slangi"
-
-#undef NWB_SCENE_PRESENTATION_IS_HDR10
 #undef NWB_SCENE_SHADOW_VISIBILITY_RESOURCE
 #undef NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE
 
@@ -115,15 +114,6 @@ NwbBxdfSurface nwbBxdfLoadSurface(const int2 pixel){
     surface.indirectIrradiance = nwbBxdfResolvedIndirect(pixel, surface.normal);
     return surface;
 }
-
-// Default Reinhard tonemap the engine model uses; a project BXDF may reuse or replace it.
-half3 nwbBxdfTonemap(half3 color){
-    return nwbSceneTonemap(color);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 #endif
 

@@ -21,7 +21,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, u32 que
     : RefCounter<GraphicsResource>(context.threadPool)
     , m_referencedResources(context.objectArena)
     , m_referencedStagingBuffers(context.objectArena)
-    , m_referencedAccelStructHandles(context.objectArena)
+    , m_referencedDescriptorHeaps(context.objectArena)
     , m_context(context)
 {
     auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
@@ -65,11 +65,12 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
 }
 
 void TrackedCommandBuffer::clearTrackedReferences(){
-    for(const auto handle : m_referencedAccelStructHandles){
-        if(handle != VK_NULL_HANDLE)
-            vkDestroyAccelerationStructureKHR(m_context.device, handle, m_context.allocationCallbacks);
+    for(GpuDescriptorHeap* heap : m_referencedDescriptorHeaps){
+        if(heap)
+            heap->discardCommandBufferUse(*this);
     }
-    m_referencedAccelStructHandles.clear();
+    m_referencedDescriptorHeaps.clear();
+
     m_referencedResources.clear();
     m_referencedStagingBuffers.clear();
 }
@@ -406,8 +407,14 @@ u64 Queue::submit(
         return m_lastSubmittedID;
     }
 
-    for(auto& tracked : trackedBuffers)
+    const QueueSubmissionToken submissionToken{ m_queueID, submissionID };
+    for(auto& tracked : trackedBuffers){
+        for(GpuDescriptorHeap* heap : tracked->m_referencedDescriptorHeaps){
+            if(heap)
+                heap->submitCommandBufferUse(*tracked, submissionToken);
+        }
         m_commandBuffersInFlight.push_back(Move(tracked));
+    }
     if(outSubmissionAccepted)
         *outSubmissionAccepted = true;
 

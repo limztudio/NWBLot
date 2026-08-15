@@ -145,6 +145,21 @@ TEST(Ecs, ComponentStorageAndView){
     EXPECT_EQ(viewCount, 1u);
 }
 
+TEST(Ecs, EntityFacadeRehydratesEntityId){
+    TestWorld testWorld;
+
+    const auto entityId = testWorld.world.createEntity().id();
+    auto entity = testWorld.world.entity(entityId);
+    auto& position = entity.addComponent<PositionComponent>();
+    position.x = 17;
+
+    EXPECT_TRUE(entity.hasComponent<PositionComponent>());
+    EXPECT_EQ(entity.getComponent<PositionComponent>().x, 17);
+
+    entity.removeComponent<PositionComponent>();
+    EXPECT_FALSE(entity.hasComponent<PositionComponent>());
+}
+
 TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
     TestWorld testWorld;
 
@@ -157,6 +172,18 @@ TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
         }
     );
     testWorld.world.view<PositionComponent, VelocityComponent>().each(
+        [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&){
+            ++multiViewCount;
+        }
+    );
+    testWorld.world.view<PositionComponent>().parallelEach(
+        testWorld.threadPool,
+        [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&){
+            ++singleViewCount;
+        }
+    );
+    testWorld.world.view<PositionComponent, VelocityComponent>().parallelEach(
+        testWorld.threadPool,
         [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&){
             ++multiViewCount;
         }
@@ -346,7 +373,6 @@ TEST(Ecs, ParallelEachVisitsSingleAndMultiComponentViews){
     Atomic<u32> positionVisits{ 0u };
     world.view<PositionComponent>().parallelEach(
         threadPool,
-        32u,
         [&positionVisits](NWB::Core::ECS::EntityID, PositionComponent& position){
             position.y = position.x + 1;
             positionVisits.fetch_add(1u, MemoryOrder::relaxed);

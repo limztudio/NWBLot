@@ -200,6 +200,18 @@ TEST(Math, VectorNamedScalarFunctions){
     EXPECT_FALSE(SignBit(VectorGetY(signedZeroTanH)));
 }
 
+TEST(Math, VectorIntegerAddKeepsPackedLaneArithmetic){
+    const SIMDVector sum = VectorAddInt(
+        VectorSetInt(Limit<u32>::s_Max, 4u, 0xFFFFFFFEu, 19u),
+        VectorSetInt(1u, 7u, 3u, Limit<u32>::s_Max)
+    );
+
+    EXPECT_EQ(VectorGetIntX(sum), 0u);
+    EXPECT_EQ(VectorGetIntY(sum), 11u);
+    EXPECT_EQ(VectorGetIntZ(sum), 1u);
+    EXPECT_EQ(VectorGetIntW(sum), 18u);
+}
+
 TEST(Math, VectorMergeAndComponentReductions){
     const SIMDVector merged = VectorMergeX(
         VectorSet(1.0f, 10.0f, 10.0f, 10.0f),

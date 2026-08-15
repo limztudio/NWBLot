@@ -31,15 +31,34 @@ using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::DestroySmokeRenderWorld;
 
+using TextureSmokeMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
+using TextureSmokeMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_GroundPlaneMeshPath = "project/meshes/shadow_plane";
-static constexpr AStringView s_TexturedSphereMeshPath = "project/meshes/caustic_sphere";
-static constexpr AStringView s_WhiteGroundMaterialPath = "project/smoke/texture/materials/white_ground";
+static constexpr TextureSmokeMeshRef s_GroundPlaneMesh = []() constexpr{
+    TextureSmokeMeshRef result;
+    result.virtualPath = Name("project/meshes/shadow_plane");
+    return result;
+}();
+static constexpr TextureSmokeMeshRef s_TexturedSphereMesh = []() constexpr{
+    TextureSmokeMeshRef result;
+    result.virtualPath = Name("project/meshes/caustic_sphere");
+    return result;
+}();
+static constexpr TextureSmokeMaterialRef s_WhiteGroundMaterial = []() constexpr{
+    TextureSmokeMaterialRef result;
+    result.virtualPath = Name("project/smoke/texture/materials/white_ground");
+    return result;
+}();
 static constexpr AStringView s_WhiteGroundMaterialInterface = "project/shaders/smoke_surface";
-static constexpr AStringView s_TextureMaterialPath = "project/smoke/texture/materials/pattern";
+static constexpr TextureSmokeMaterialRef s_TextureMaterial = []() constexpr{
+    TextureSmokeMaterialRef result;
+    result.virtualPath = Name("project/smoke/texture/materials/pattern");
+    return result;
+}();
 static constexpr AStringView s_TextureMaterialInterface = "project/shaders/texture_smoke_surface";
 static constexpr AStringView s_TextureRuntimeTintParameter = "texture_runtime.color_tint";
 static constexpr f32 s_CameraHeight = 3.1f;
@@ -102,8 +121,8 @@ public:
         m_whiteGround = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_GroundPlaneMeshPath,
-            s_WhiteGroundMaterialPath,
+            s_GroundPlaneMesh,
+            s_WhiteGroundMaterial,
             s_WhiteGroundMaterialInterface,
             Float4(1.0f, 1.0f, 1.0f, 1.0f),
             Float4(0.0f, 0.0f, 0.0f, 0.0f),
@@ -114,8 +133,8 @@ public:
         m_texturedSphere = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_TexturedSphereMeshPath,
-            s_TextureMaterialPath,
+            s_TexturedSphereMesh,
+            s_TextureMaterial,
             s_TextureMaterialInterface,
             Float4(1.0f, 1.0f, 1.0f, 1.0f),
             Float4(0.0f, 1.16f, 0.15f, 0.0f),

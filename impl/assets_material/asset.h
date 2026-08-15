@@ -105,8 +105,6 @@ namespace MaterialResourceSource{
     enum Enum : u32{
         None = 0u,
         Asset = 1u,
-        // Keep the previous spelling source-compatible. Its serialized ordinal remains the generic asset source.
-        ProjectAsset = Asset,
     };
 };
 

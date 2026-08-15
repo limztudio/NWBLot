@@ -13,6 +13,7 @@
 #include "smoke_environment.h"
 
 #include <core/assets/ref.h>
+#include <core/ecs/entity.h>
 #include <core/ecs/world.h>
 #include <core/graphics/module.h>
 #include <core/telemetry/frame_graph_registry.h>
@@ -35,6 +36,10 @@ namespace Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using SmokeMaterialRef = Core::Assets::AssetRef<Impl::Material>;
+using SmokeMeshRef = Core::Assets::AssetRef<Impl::Mesh>;
+
+
 struct SmokeTintedEntitySetup{
     Core::ECS::EntityID entity;
     Name materialInterface;
@@ -43,14 +48,11 @@ struct SmokeTintedEntitySetup{
 [[nodiscard]] inline SmokeTintedEntitySetup CreateSmokeTintedEntity(
     Core::ECS::World& world,
     Core::Alloc::GlobalArena& arena,
-    const AStringView materialPath,
+    const SmokeMaterialRef& material,
     const AStringView materialInterfacePath,
     const Float4& position,
     const Float4& scale
 ){
-    Core::Assets::AssetRef<Impl::Material> material;
-    material.virtualPath = Name(materialPath);
-
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
     transform.position = position;
@@ -82,26 +84,24 @@ struct SmokeTintedEntitySetup{
 [[nodiscard]] inline Core::ECS::EntityID CreateTintedStaticMeshEntity(
     Core::ECS::World& world,
     Core::Alloc::GlobalArena& arena,
-    const AStringView meshPath,
-    const AStringView materialPath,
+    const SmokeMeshRef& mesh,
+    const SmokeMaterialRef& material,
     const AStringView materialInterfacePath,
     const Float4& colorTint,
     const Float4& position,
     const Float4& scale,
     const AStringView tintParameterPath = "runtime.color_tint"
 ){
-    Core::Assets::AssetRef<Impl::Mesh> mesh;
-    mesh.virtualPath = Name(meshPath);
     const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(
         world,
         arena,
-        materialPath,
+        material,
         materialInterfacePath,
         position,
         scale
     );
 
-    auto& meshComponent = world.addComponent<Impl::MeshComponent>(setup.entity);
+    auto& meshComponent = world.entity(setup.entity).addComponent<Impl::MeshComponent>();
     meshComponent.mesh = mesh;
 
     if(!ApplySmokeMaterialTint(world, setup, colorTint, tintParameterPath))

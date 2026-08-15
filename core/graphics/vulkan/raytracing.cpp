@@ -638,19 +638,11 @@ bool FillBlasGeometryForSizeQuery(
     return true;
 }
 
-VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(
-    RayTracingAccelStructBuildFlags::Mask buildFlags,
-    AccelStructCompactionMode::Enum compactionMode
-){
+VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags){
     VkBuildAccelerationStructureFlagsKHR flags = 0;
 
     if(buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)
         flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
-    if(
-        compactionMode == AccelStructCompactionMode::Allowed
-        && (buildFlags & RayTracingAccelStructBuildFlags::AllowCompaction)
-    )
-        flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR;
     if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastTrace)
         flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
     if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastBuild)
@@ -784,11 +776,6 @@ AccelStruct::AccelStruct(const VulkanContext& context)
     , m_context(context)
 {}
 AccelStruct::~AccelStruct(){
-    if(m_compactionQueryPool != VK_NULL_HANDLE){
-        vkDestroyQueryPool(m_context.device, m_compactionQueryPool, m_context.allocationCallbacks);
-        m_compactionQueryPool = VK_NULL_HANDLE;
-    }
-
     if(m_accelStruct){
         vkDestroyAccelerationStructureKHR(m_context.device, m_accelStruct, m_context.allocationCallbacks);
         m_accelStruct = VK_NULL_HANDLE;
@@ -871,10 +858,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 
         auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
         buildInfo.type = asType;
-        buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(
-            desc.buildFlags,
-            VulkanDetail::AccelStructCompactionMode::Disabled
-        );
+        buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(desc.buildFlags);
         buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
         buildInfo.geometryCount = 1;
         buildInfo.pGeometries = &geometry;
@@ -917,10 +901,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 
         auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
         buildInfo.type = asType;
-        buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(
-            desc.buildFlags,
-            VulkanDetail::AccelStructCompactionMode::Allowed
-        );
+        buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(desc.buildFlags);
         buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
         buildInfo.geometryCount = static_cast<u32>(blasScratch.geometries.size());
         buildInfo.pGeometries = blasScratch.geometries.data();
@@ -1599,10 +1580,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
 
     auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-    buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(
-        buildFlags,
-        VulkanDetail::AccelStructCompactionMode::Disabled
-    );
+    buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(buildFlags);
     buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
     buildInfo.dstAccelerationStructure = as.m_accelStruct;
     buildInfo.geometryCount = 1;
@@ -1814,10 +1792,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
 
     auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
     buildInfo.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-    buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(
-        buildFlags,
-        VulkanDetail::AccelStructCompactionMode::Allowed
-    );
+    buildInfo.flags = VulkanDetail::ConvertAccelStructBuildFlags(buildFlags);
     buildInfo.mode = performUpdate
         ? VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR
         : VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR
@@ -1899,154 +1874,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         }
     }
 
-    if(buildFlags & RayTracingAccelStructBuildFlags::AllowCompaction){
-        m_pendingCompactions.emplace_back(
-            as,
-            Handle<AccelStruct>::deleter_type(&m_context.objectArena)
-        );
-    }
-
     retainResource(accelStructResource);
-}
-
-void CommandList::compactBottomLevelAccelStructs(){
-    if(!validateNonTransferCommand(NWB_TEXT("compact bottom-level acceleration structures")))
-        return;
-    VkResult res = VK_SUCCESS;
-
-    if(!m_context.extensions.KHR_acceleration_structure)
-        return;
-
-    if(m_pendingCompactions.empty())
-        return;
-
-    bool recordedCompactionCopy = false;
-
-    for(auto& as : m_pendingCompactions){
-        if(as->m_compactionQueryPool == VK_NULL_HANDLE || as->m_compacted)
-            continue;
-
-        u64 compactedSize = 0;
-        res = vkGetQueryPoolResults(
-            m_context.device,
-            as->m_compactionQueryPool,
-            as->m_compactionQueryIndex,
-            1,
-            sizeof(u64),
-            &compactedSize,
-            sizeof(u64),
-            VK_QUERY_RESULT_64_BIT
-        );
-
-        if(res == VK_NOT_READY)
-            continue;
-        if(res != VK_SUCCESS){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to read BLAS compaction query result: {}"), ResultToString(res));
-            continue;
-        }
-        if(compactedSize == 0)
-            continue;
-
-        BufferDesc compactBufferDesc;
-        compactBufferDesc.byteSize = compactedSize;
-        compactBufferDesc.isAccelStructStorage = true;
-        compactBufferDesc.debugName = as->m_desc.debugName;
-        // Preserve queue sharing while a compacted BLAS remains TLAS-reachable.
-        compactBufferDesc.queueSharing = as->m_desc.queueSharing;
-
-        BufferHandle compactBuffer = m_device.createBuffer(compactBufferDesc);
-        if(!compactBuffer)
-            continue;
-
-        auto createInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureCreateInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR);
-        createInfo.buffer = compactBuffer->m_buffer;
-        createInfo.size = compactedSize;
-        createInfo.type = as->m_desc.isTopLevel
-            ? VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR
-            : VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR
-        ;
-
-        VkAccelerationStructureKHR newAS = VK_NULL_HANDLE;
-        res = vkCreateAccelerationStructureKHR(m_context.device, &createInfo, m_context.allocationCallbacks, &newAS);
-        if(res != VK_SUCCESS)
-            continue;
-
-        auto copyInfo = VulkanDetail::MakeVkStruct<VkCopyAccelerationStructureInfoKHR>(VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR);
-        copyInfo.src  = as->m_accelStruct; // original (still the copy source)
-        copyInfo.dst  = newAS;
-        copyInfo.mode = VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR;
-        vkCmdCopyAccelerationStructureKHR(m_currentCmdBuf->m_cmdBuf, &copyInfo);
-        recordedCompactionCopy = true;
-
-        m_currentCmdBuf->m_referencedAccelStructHandles.push_back(as->m_accelStruct);
-        m_currentCmdBuf->m_referencedStagingBuffers.push_back(as->m_buffer);
-        retainResource(as.get());
-
-        as->m_accelStruct = newAS;
-        as->m_buffer = Move(compactBuffer);
-
-        auto addrInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
-        addrInfo.accelerationStructure = as->m_accelStruct;
-        as->m_deviceAddress = vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addrInfo);
-
-        vkDestroyQueryPool(m_context.device, as->m_compactionQueryPool, m_context.allocationCallbacks);
-        as->m_compactionQueryPool  = VK_NULL_HANDLE;
-        as->m_compactionQueryIndex = 0;
-        as->m_compacted = true;
-    }
-
-    if(recordedCompactionCopy){
-        auto barrier = VulkanDetail::MakeVkStruct<VkMemoryBarrier2>(VK_STRUCTURE_TYPE_MEMORY_BARRIER_2);
-        barrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
-        barrier.srcAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
-        barrier.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
-        barrier.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
-
-        auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
-        depInfo.memoryBarrierCount = 1;
-        depInfo.pMemoryBarriers = &barrier;
-        executePipelineBarrier(depInfo);
-    }
-
-    for(auto& as : m_pendingCompactions){
-        if(as->m_compactionQueryPool != VK_NULL_HANDLE || as->m_compacted)
-            continue;
-
-        auto queryPoolInfo = VulkanDetail::MakeVkStruct<VkQueryPoolCreateInfo>(VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO);
-        queryPoolInfo.queryType  = VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR;
-        queryPoolInfo.queryCount = s_SingleQueryCount;
-
-        VkQueryPool queryPool = VK_NULL_HANDLE;
-        res = vkCreateQueryPool(m_context.device, &queryPoolInfo, m_context.allocationCallbacks, &queryPool);
-        if(res != VK_SUCCESS){
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create BLAS compaction query pool: {}"), ResultToString(res));
-            continue;
-        }
-
-        vkCmdResetQueryPool(m_currentCmdBuf->m_cmdBuf, queryPool, s_TimerQueryBeginIndex, s_SingleQueryCount);
-
-        vkCmdWriteAccelerationStructuresPropertiesKHR(
-            m_currentCmdBuf->m_cmdBuf,
-            s_SingleQueryCount,
-            &as->m_accelStruct,
-            VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR,
-            queryPool,
-            s_TimerQueryBeginIndex
-        );
-
-        as->m_compactionQueryPool  = queryPool;
-        as->m_compactionQueryIndex = 0;
-    }
-
-    {
-        usize dst = 0;
-        for(usize i = 0; i < m_pendingCompactions.size(); ++i)
-            if(!m_pendingCompactions[i]->m_compacted){
-                m_pendingCompactions[dst] = Move(m_pendingCompactions[i]);
-                ++dst;
-            }
-        m_pendingCompactions.resize(dst);
-    }
 }
 
 void CommandList::buildTopLevelAccelStructFromBuffer(

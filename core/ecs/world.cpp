@@ -37,6 +37,11 @@ Entity World::createEntity(){
 }
 
 
+Entity World::entity(const EntityID entityId){
+    return Entity(*this, entityId);
+}
+
+
 void World::destroyEntity(EntityID entityId){
     if(!m_entityManager.alive(entityId))
         return;

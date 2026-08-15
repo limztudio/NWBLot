@@ -30,13 +30,15 @@
 // Transparent fragments bypass opaque-G-buffer shadow/caustic sampling and omit conflicting local bindings.
 #define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
 #define NWB_SCENE_GI_SAMPLING_DISABLED
-// Match the opaque deferred path: HDR10 keeps linear radiance until the final PQ presentation pass, while SDR
-// retains the material-facing tone-map behavior. AVBOIT coverage itself remains independent and bounded below.
-#define NWB_SCENE_PRESENTATION_IS_HDR10 nwbAvboitPresentationIsHdr10()
 
 // AVBOIT draw push constants expose the same material context as rasterization.
 #include "../scene/lighting.slangi"
-#undef NWB_SCENE_PRESENTATION_IS_HDR10
+
+// Project BXDFs own their tone-map policy and use this shared presentation query in either shading harness.
+bool nwbBxdfPresentationIsHdr10(){
+    return nwbAvboitPresentationIsHdr10();
+}
+
 #include "../mesh/gbuffer_io.slangi"
 
 #include "material_context_authoring.slangi"

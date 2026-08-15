@@ -504,21 +504,27 @@ def maybe_configure(args, settings: LaunchSettings, required_defines: Dict[str, 
     run_checked(command, settings.root, env, args.dry_run)
 
 
-def build_target(args, settings: LaunchSettings, target: str, env: Dict[str, str]) -> None:
+def build_targets(args, settings: LaunchSettings, targets: Sequence[str], env: Dict[str, str]) -> None:
     if args.skip_build:
         return
+    if not targets:
+        raise ValueError("at least one CMake target is required")
 
     command = list(settings.cmake) + [
         "--build",
         str(settings.build_dir),
         "--target",
-        target,
+        *targets,
         "--config",
         settings.config,
     ]
     if args.jobs:
         command += ["--parallel", str(args.jobs)]
     run_checked(command, settings.root, env, args.dry_run)
+
+
+def build_target(args, settings: LaunchSettings, target: str, env: Dict[str, str]) -> None:
+    build_targets(args, settings, (target,), env)
 
 
 def build_profile_targets(args, settings: LaunchSettings, env: Dict[str, str]) -> None:
@@ -559,7 +565,11 @@ def resolve_executable_path(
 def resolve_working_directory(settings: LaunchSettings, override: Optional[Path], default_directory: Path) -> Path:
     if override is None:
         return default_directory
-    return override if override.is_absolute() else settings.root / override
+    return resolve_path(settings.root, override)
+
+
+def resolve_path(root: Path, path: Path) -> Path:
+    return path if path.is_absolute() else root / path
 
 
 def build_environment(_args) -> Dict[str, str]:

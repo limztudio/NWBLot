@@ -1489,6 +1489,10 @@ void CommandList::bindDescriptorBufferHeap(
     if(!m_context.descriptorBufferManager || !m_context.descriptorBufferManager->isEnabled())
         return;
 
+    // Register before reading heap blocks so a concurrent free cannot recycle a descriptor while this command buffer
+    // is about to bind it. The accepted queue submission later converts this recording use into a timeline token.
+    heap.trackCommandBufferUse(*m_currentCmdBuf);
+
     const DescriptorBufferSegment& resourceBlock = heap.getResourceBufferBlock();
     const DescriptorBufferSegment& samplerBlock = heap.getSamplerBufferBlock();
     const DescriptorBufferSegment accelStructBlock = heap.getAccelStructBufferBlock(accelStructHandle);

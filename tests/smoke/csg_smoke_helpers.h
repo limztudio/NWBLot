@@ -8,6 +8,7 @@
 #ifndef NWB_TESTS_SMOKE_CSG_SMOKE_HELPERS_H
 #define NWB_TESTS_SMOKE_CSG_SMOKE_HELPERS_H
 
+#include <core/ecs/entity.h>
 #include <core/ecs/world.h>
 #include <global/math/frame.h>
 #include <impl/ecs_csg/components.h>
@@ -50,7 +51,7 @@ inline ReceiverComponentT& AddCsgMeshReceiver(
     const bool affectOpaquePass,
     const bool affectTransparentPass
 ){
-    auto& receiver = world.addComponent<ReceiverComponentT>(entity);
+    auto& receiver = world.entity(entity).addComponent<ReceiverComponentT>();
     receiver.receiverGroup = receiverGroup;
     receiver.affectOpaquePass = affectOpaquePass;
     receiver.affectTransparentPass = affectTransparentPass;

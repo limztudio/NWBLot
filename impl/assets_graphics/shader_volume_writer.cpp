@@ -389,7 +389,7 @@ bool AppendPreparedShadersToManifest(
                 scratchArena
             ))
                 return false;
-            const CookString sourceChecksumHex = FormatHex64(cookArena, sourceChecksum);
+            const CookString sourceChecksumHex = FormatHex64A(cookArena, sourceChecksum);
 
             const __hidden_shader_volume_writer::VariantCachePaths cachePaths = __hidden_shader_volume_writer::BuildVariantCachePaths(
                 cacheDirectory,

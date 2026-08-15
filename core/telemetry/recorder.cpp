@@ -23,6 +23,21 @@ namespace __hidden_telemetry_recorder{
     return DurationInNS<u64>(TimerNow());
 }
 
+[[nodiscard]] static EventHeader MakeEventHeader(
+    const EventKind::Enum kind,
+    const u64 frameIndex,
+    const usize payloadBytes,
+    const u32 streamId
+)noexcept{
+    EventHeader header;
+    header.kind = kind;
+    header.streamId = streamId;
+    header.frameIndex = frameIndex;
+    header.timestampNanoseconds = TimestampNanoseconds();
+    header.payloadBytes = payloadBytes;
+    return header;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -88,14 +103,11 @@ bool Recorder::recordBinary(
     if(!enabledUnlocked(kind))
         return false;
 
-    EventHeader header;
-    header.kind = kind;
-    header.streamId = streamId;
-    header.frameIndex = frameIndex;
-    header.timestampNanoseconds = __hidden_telemetry_recorder::TimestampNanoseconds();
-    header.payloadBytes = payloadBytes;
-
-    return appendUnlocked(header, payload, payloadBytes);
+    return appendUnlocked(
+        __hidden_telemetry_recorder::MakeEventHeader(kind, frameIndex, payloadBytes, streamId),
+        payload,
+        payloadBytes
+    );
 }
 
 bool Recorder::recordPayload(
@@ -108,14 +120,10 @@ bool Recorder::recordPayload(
     if(!enabledUnlocked(kind))
         return false;
 
-    EventHeader header;
-    header.kind = kind;
-    header.streamId = streamId;
-    header.frameIndex = frameIndex;
-    header.timestampNanoseconds = __hidden_telemetry_recorder::TimestampNanoseconds();
-    header.payloadBytes = payload.size();
-
-    return appendPayloadUnlocked(header, Move(payload));
+    return appendPayloadUnlocked(
+        __hidden_telemetry_recorder::MakeEventHeader(kind, frameIndex, payload.size(), streamId),
+        Move(payload)
+    );
 }
 
 bool Recorder::append(const EventHeader& header, const void* payload, const usize payloadBytes){

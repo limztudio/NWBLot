@@ -17,7 +17,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import List, Sequence, Tuple
+from typing import List, Sequence
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -43,10 +43,6 @@ class FrameLaggedPaths:
     runtime_directory: Path
 
 
-def resolve_path(root: Path, path: Path) -> Path:
-    return path if path.is_absolute() else root / path
-
-
 def resolve_paths(args: argparse.Namespace, settings) -> FrameLaggedPaths:
     executable = ROOT_LAUNCHER.resolve_executable_path(
         settings,
@@ -56,7 +52,7 @@ def resolve_paths(args: argparse.Namespace, settings) -> FrameLaggedPaths:
         args.dry_run,
     )
     runtime_directory = (
-        resolve_path(settings.root, args.runtime_dir)
+        ROOT_LAUNCHER.resolve_path(settings.root, args.runtime_dir)
         if args.runtime_dir is not None
         else settings.build_dir / RUNTIME_DIRECTORY / settings.config
     )
@@ -77,7 +73,7 @@ def runner_command(args: argparse.Namespace, paths: FrameLaggedPaths) -> List[ob
     if args.no_logserver:
         command.append("--no-logserver")
     elif args.logserver_executable is not None:
-        command += ["--logserver-executable", resolve_path(REPO, args.logserver_executable)]
+        command += ["--logserver-executable", ROOT_LAUNCHER.resolve_path(REPO, args.logserver_executable)]
     command += list(args.runner_args)
     return command
 
@@ -88,14 +84,6 @@ def run_runner(args: argparse.Namespace, paths: FrameLaggedPaths) -> int:
     if args.dry_run:
         return 0
     return subprocess.run([str(part) for part in command], cwd=REPO).returncode
-
-
-def split_runner_args(argv: Sequence[str]) -> Tuple[List[str], List[str]]:
-    values = list(argv)
-    if "--" not in values:
-        return values, []
-    separator = values.index("--")
-    return values[:separator], values[separator + 1 :]
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -124,7 +112,7 @@ def make_parser() -> argparse.ArgumentParser:
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
-    launcher_args, runner_args = split_runner_args(argv)
+    launcher_args, runner_args = ROOT_LAUNCHER.split_application_args(argv)
     args = make_parser().parse_args(launcher_args)
     args.runner_args = runner_args
     return args

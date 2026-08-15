@@ -194,18 +194,18 @@ void ModelSystem::clearRuntimeObjectsWithoutModel(){
 
     for(const Core::ECS::EntityID entity : m_scratchEntities){
         clearModelRuntime(entity);
-        m_world.removeComponent<ModelRuntimeComponent>(entity);
+        m_world.entity(entity).removeComponent<ModelRuntimeComponent>();
     }
 }
 
 void ModelSystem::ensureModelRuntime(const Core::ECS::EntityID entity, const ModelComponent& component){
     if(!component.model.valid()){
         clearModelRuntime(entity);
-        m_world.removeComponent<ModelRuntimeComponent>(entity);
+        m_world.entity(entity).removeComponent<ModelRuntimeComponent>();
         return;
     }
 
-    auto& runtime = m_world.addComponent<ModelRuntimeComponent>(entity);
+    auto& runtime = m_world.entity(entity).addComponent<ModelRuntimeComponent>();
     if(runtime.model == component.model.name())
         return;
 
@@ -286,7 +286,7 @@ bool ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const Mod
     __hidden_model_system::TagObject(
         entity,
         owner,
-        m_world.getComponent<ModelRuntimeComponent>(owner).model,
+        m_world.entity(owner).getComponent<ModelRuntimeComponent>().model,
         object.name,
         object.transform,
         ModelObjectKind::Skeleton
@@ -315,7 +315,7 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
     __hidden_model_system::TagObject(
         entity,
         owner,
-        m_world.getComponent<ModelRuntimeComponent>(owner).model,
+        m_world.entity(owner).getComponent<ModelRuntimeComponent>().model,
         object.name,
         object.transform,
         ModelObjectKind::StaticMesh
@@ -394,7 +394,7 @@ bool ModelSystem::spawnSkinnedMeshObject(const Core::ECS::EntityID owner, const 
     __hidden_model_system::TagObject(
         entity,
         owner,
-        m_world.getComponent<ModelRuntimeComponent>(owner).model,
+        m_world.entity(owner).getComponent<ModelRuntimeComponent>().model,
         object.name,
         object.transform,
         ModelObjectKind::SkinnedMesh

@@ -2,19 +2,91 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Smoke-test project-local deferred lighting BXDF, selected by smoke materials to satisfy the per-material BXDF
-// requirement. Pulled into the cook-generated deferred lighting
-// dispatch module (which #defines NWB_DEFERRED_BXDF_FUNCTION to this model's entry name). The deferred lighting
-// framework (NwbBxdfSurface, the scene light list, the shadow accessor, the engine BRDF helpers) is in scope.
-half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
-    return nwbSceneApplyLighting(
-        surface.baseColor,
-        surface.normal,
-        float4(0.0, 0.0, 0.0, 1.0),
-        surface.worldPosition,
-        pixel,
-        surface.indirectIrradiance
+// Smoke-test-owned deferred lighting BXDF. The engine provides scene-light and visibility/caustic transport, while
+// this project asset owns its BRDF, light loop, and tone-map policy for both deferred and AVBOIT dispatches.
+half3 nwbSmokeLambertTonemap(half3 color){
+    return color / (color + half3(0.65h));
+}
+
+half3 nwbSmokeLambertShadeLight(
+    NwbSceneLight light,
+    half3 baseColor,
+    float3 normalVector,
+    float3 tangentVector,
+    float3 bitangentVector,
+    float3 viewVector,
+    half ndotv,
+    float3 worldPosition
+){
+    float3 lightVector;
+    half3 lightRadiance;
+    nwbSceneResolveLight(light, worldPosition, lightVector, lightRadiance);
+    if(all(lightRadiance <= half3(0.0h)))
+        return half3(0.0h);
+
+    const float3 halfVector = nwbSafeNormalize(lightVector + viewVector, lightVector);
+    const half ndotl = half(max(dot(normalVector, lightVector), 0.0));
+    const half keyDiffuse = ndotl * ndotl;
+    const half rim = half(pow(max(1.0 - float(ndotv), 0.0), 3.0));
+    const half halfDotNormal = half(max(dot(normalVector, halfVector), 0.0));
+    const float halfDotNormalF = float(halfDotNormal);
+    const half specular = half(
+        pow(halfDotNormalF, 72.0) * 0.85
+        + pow(halfDotNormalF, 18.0) * 0.18
     );
+    const half viewSpecular = half(pow(float(ndotv), 22.0) * 0.28);
+    const half tangentLobe = half(pow(max(abs(dot(tangentVector, halfVector)), 0.0), 18.0));
+    const half bitangentLobe = half(pow(max(abs(dot(bitangentVector, halfVector)), 0.0), 18.0));
+    const half backLight = half(max(dot(-normalVector, lightVector), 0.0));
+
+    const half3 specularTint = lerp(half3(0.78h), half3(1.0h, 0.9h, 0.68h), half(0.65));
+    const half3 diffuse = baseColor * lightRadiance * (half(0.02) + half(0.98) * keyDiffuse);
+    const half3 specularColor = lightRadiance * specularTint * (specular * (half(0.08) + half(0.92) * ndotl) + viewSpecular);
+    const half3 rimColor = lerp(half3(0.12h, 0.26h, 0.52h), lightRadiance, half(0.25)) * (rim * (half(0.04) + half(0.96) * ndotl));
+    const half3 frameCue = half(0.16) * (
+        half3(1.0h, 0.35h, 0.2h) * half(tangentLobe)
+        + half3(0.2h, 0.7h, 1.0h) * half(bitangentLobe)
+    );
+    const half3 backLightCue = half3(0.012h, 0.02h, 0.04h) * half(backLight);
+
+    return diffuse + specularColor + rimColor + frameCue + backLightCue;
+}
+
+half3 nwbSmokeLambertShadeSurface(NwbBxdfSurface surface, int2 pixel){
+    const float3 normalVector = nwbSafeNormalize(surface.normal, float3(0.0, 0.0, 1.0));
+    const float3 tangentVector = nwbFrameOrthonormalTangent(float3(0.0, 0.0, 0.0), normalVector);
+    const float3 bitangentVector = nwbSafeNormalize(
+        cross(normalVector, tangentVector),
+        cross(normalVector, nwbFrameFallbackTangent(normalVector))
+    );
+    const float3 viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - surface.worldPosition, float3(0.0, 0.0, 1.0));
+    const half ndotv = half(max(dot(normalVector, viewVector), 0.0));
+
+    half3 litColor = surface.baseColor * surface.indirectIrradiance;
+    const uint lightCount = nwbSceneLightCount();
+    for(uint i = 0u; i < lightCount; ++i){
+        const half3 transmittance = nwbBxdfLightTransmittance(pixel, i);
+        litColor += transmittance * nwbSmokeLambertShadeLight(
+            g_NwbSceneLights[i],
+            surface.baseColor,
+            normalVector,
+            tangentVector,
+            bitangentVector,
+            viewVector,
+            ndotv,
+            surface.worldPosition
+        );
+    }
+
+    litColor += nwbBxdfCausticIrradiance(pixel) * surface.baseColor;
+    return nwbBxdfPresentationIsHdr10()
+        ? max(litColor, half3(0.0h))
+        : nwbSmokeLambertTonemap(litColor)
+    ;
+}
+
+half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
+    return nwbSmokeLambertShadeSurface(surface, pixel);
 }
 
 

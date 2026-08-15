@@ -107,28 +107,17 @@ bool RendererMaterialSystem::prepareMaterialPassResourceBindings(const MaterialP
 }
 
 bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems){
-    if(drawItems.empty())
-        return true;
-    if(!m_renderer.meshSystem().createMeshFrameHeapHandles())
-        return false;
-
-    bool ready = true;
-    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem&, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
-        if(!ready)
-            return;
-        if(!pipelineResources.meshletPipeline){
-            ready = false;
-            return;
-        }
-        if(!m_renderer.meshSystem().meshGeometryHeapHandlesReady(mesh)){
-            ready = false;
-            return;
-        }
-    });
-    return ready;
+    return prepareMaterialPassResourceBindingsImpl(drawItems, false);
 }
 
 bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems){
+    return prepareMaterialPassResourceBindingsImpl(drawItems, true);
+}
+
+bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(
+    const MaterialPassDrawItemVector& drawItems,
+    const bool computeEmulation
+){
     if(drawItems.empty())
         return true;
     if(!m_renderer.meshSystem().createMeshFrameHeapHandles())
@@ -138,20 +127,21 @@ bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const Ma
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem&, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
         if(!ready)
             return;
-        if(!pipelineResources.computePipeline || !pipelineResources.emulationPipeline){
-            ready = false;
-            return;
-        }
-        if(
-            !m_renderer.meshSystem().meshGeometryHeapHandlesReady(mesh)
-            || !mesh.emulationVertexBuffer
-            || !mesh.emulationVertexHeapHandle.valid()
-            || mesh.emulationVertexHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-        ){
-            ready = false;
+
+        if(!computeEmulation){
+            ready = pipelineResources.meshletPipeline
+                && m_renderer.meshSystem().meshGeometryHeapHandlesReady(mesh)
+            ;
             return;
         }
 
+        ready = pipelineResources.computePipeline
+            && pipelineResources.emulationPipeline
+            && m_renderer.meshSystem().meshGeometryHeapHandlesReady(mesh)
+            && mesh.emulationVertexBuffer
+            && mesh.emulationVertexHeapHandle.valid()
+            && mesh.emulationVertexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        ;
     });
     return ready;
 }

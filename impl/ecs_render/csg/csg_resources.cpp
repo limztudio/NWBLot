@@ -45,6 +45,11 @@ struct CsgResolvedClipCutter{
     bool workBoundsValid = false;
 };
 
+struct CsgCutterTransforms{
+    SIMDMatrix shapeToWorld;
+    SIMDMatrix worldToShape;
+};
+
 [[nodiscard]] static SIMDVector ComputeWorldToShapeScaleBound(const SIMDMatrix& worldToShape){
     const SIMDVector row0 = VectorSetW(worldToShape.v[0], 0.0f);
     const SIMDVector row1 = VectorSetW(worldToShape.v[1], 0.0f);
@@ -126,6 +131,38 @@ static void CopyCsgCutterInlineParameters(
     }
 
     return AabbTests::Transform(*localToWorld, localMinBounds, localMaxBounds, outMinBounds, outMaxBounds);
+}
+
+struct CsgReceiverLocalSpace{
+    SIMDVector localMinBounds = VectorZero();
+    SIMDVector localMaxBounds = VectorZero();
+    SIMDMatrix localToWorld = MatrixIdentity();
+    bool boundsCanCull = false;
+    bool hasLocalToWorld = false;
+
+    [[nodiscard]] const SIMDMatrix* localToWorldPtr()const{
+        return hasLocalToWorld ? &localToWorld : nullptr;
+    }
+};
+
+[[nodiscard]] static CsgReceiverLocalSpace BuildCsgReceiverLocalSpace(
+    const bool boundsCanCull,
+    const SIMDVector localMinBounds,
+    const SIMDVector localMaxBounds,
+    const SIMDMatrix* localToWorld
+){
+    CsgReceiverLocalSpace localSpace;
+    localSpace.boundsCanCull = boundsCanCull;
+    if(boundsCanCull){
+        localSpace.localMinBounds = localMinBounds;
+        localSpace.localMaxBounds = localMaxBounds;
+    }
+
+    if(localToWorld){
+        localSpace.localToWorld = *localToWorld;
+        localSpace.hasLocalToWorld = true;
+    }
+    return localSpace;
 }
 
 static void ExpandCsgFrameWorkRegionForWorldBounds(
@@ -318,7 +355,7 @@ static void BuildResolvedClipCutterGpuData(
 }
 
 
-template<typename CutterHandler>
+template<typename CutterTransformLoader, typename CutterHandler>
 [[nodiscard]] static bool ForEachReceiverClipCutter(
     const CsgShapeRegistry& shapeRegistry,
     const CsgFrameReceiverLookup& receiverLookup,
@@ -327,6 +364,7 @@ template<typename CutterHandler>
     const SIMDVector receiverLocalMaxBounds,
     const bool receiverBoundsCanCull,
     const SIMDMatrix* receiverLocalToWorld,
+    CutterTransformLoader&& loadCutterTransforms,
     CutterHandler&& handler
 ){
     bool resolved = true;
@@ -336,14 +374,13 @@ template<typename CutterHandler>
             if(!resolved)
                 return;
 
-            const SIMDMatrix cutterShapeToWorld = LoadFloat(cutter.shapeToWorld);
-            const SIMDMatrix cutterWorldToShape = LoadFloat(cutter.worldToShape);
+            const CsgCutterTransforms cutterTransforms = loadCutterTransforms(cutter);
             CsgResolvedClipCutter resolvedCutter;
             const CsgClipCutterResolveResult::Enum resolveResult = ResolveReceiverClipCutter(
                 shapeRegistry,
                 cutter,
-                cutterShapeToWorld,
-                cutterWorldToShape,
+                cutterTransforms.shapeToWorld,
+                cutterTransforms.worldToShape,
                 receiverLocalMinBounds,
                 receiverLocalMaxBounds,
                 receiverBoundsCanCull,
@@ -362,9 +399,10 @@ template<typename CutterHandler>
 }
 
 
-[[nodiscard]] static bool AcquireCsgStorageBufferHeapHandle(
+[[nodiscard]] static bool AcquireCsgBufferHeapHandle(
     Core::Device& device,
     Core::Buffer& buffer,
+    const Core::GpuDescriptorClass::Enum descriptorClass,
     Core::GpuDescriptorHandle& outHandle
 ){
     outHandle = Core::GpuDescriptorHandle::invalid();
@@ -372,8 +410,21 @@ template<typename CutterHandler>
     if(!heap.isInitialized())
         return false;
 
-    const Core::GpuDescriptorHandle acquired = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!acquired.valid() || !heap.write(acquired, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, &buffer))){
+    NWB_ASSERT(
+        descriptorClass == Core::GpuDescriptorClass::StorageBuffer
+        || descriptorClass == Core::GpuDescriptorClass::UniformBuffer
+    );
+    if(
+        descriptorClass != Core::GpuDescriptorClass::StorageBuffer
+        && descriptorClass != Core::GpuDescriptorClass::UniformBuffer
+    )
+        return false;
+    const Core::DescriptorWriteItem descriptorWrite = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
+        ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
+        : Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, &buffer)
+    ;
+    const Core::GpuDescriptorHandle acquired = heap.allocate(descriptorClass);
+    if(!acquired.valid() || !heap.write(acquired, descriptorWrite)){
         if(acquired.valid())
             heap.free(acquired);
         return false;
@@ -390,7 +441,7 @@ template<typename CutterHandler>
     Core::GpuDescriptorHandle& inOutHandle
 ){
     Core::GpuDescriptorHandle acquired;
-    if(!AcquireCsgStorageBufferHeapHandle(device, buffer, acquired)){
+    if(!AcquireCsgBufferHeapHandle(device, buffer, Core::GpuDescriptorClass::StorageBuffer, acquired)){
         // The backing buffer was replaced for capacity growth, so the existing descriptor must not survive as a
         // seemingly valid handle to retired storage. Leave the context explicitly unregistered for a later retry.
         Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
@@ -409,45 +460,15 @@ template<typename CutterHandler>
 }
 
 
-[[nodiscard]] static bool EnsureCsgStorageBufferHeapHandle(
+[[nodiscard]] static bool EnsureCsgBufferHeapHandle(
     Core::Device& device,
     Core::Buffer& buffer,
+    const Core::GpuDescriptorClass::Enum descriptorClass,
     Core::GpuDescriptorHandle& inOutHandle
 ){
     if(inOutHandle.valid())
-        return inOutHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
-    return ReplaceCsgStorageBufferHeapHandle(device, buffer, inOutHandle);
-}
-
-[[nodiscard]] static bool AcquireCsgUniformBufferHeapHandle(
-    Core::Device& device,
-    Core::Buffer& buffer,
-    Core::GpuDescriptorHandle& outHandle
-){
-    outHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
-        return false;
-
-    const Core::GpuDescriptorHandle acquired = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
-    if(!acquired.valid() || !heap.write(acquired, Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer))){
-        if(acquired.valid())
-            heap.free(acquired);
-        return false;
-    }
-
-    outHandle = acquired;
-    return true;
-}
-
-[[nodiscard]] static bool EnsureCsgUniformBufferHeapHandle(
-    Core::Device& device,
-    Core::Buffer& buffer,
-    Core::GpuDescriptorHandle& inOutHandle
-){
-    if(inOutHandle.valid())
-        return inOutHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer;
-    return AcquireCsgUniformBufferHeapHandle(device, buffer, inOutHandle);
+        return inOutHandle.descriptorClass() == descriptorClass;
+    return AcquireCsgBufferHeapHandle(device, buffer, descriptorClass, inOutHandle);
 }
 
 
@@ -572,24 +593,28 @@ bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount,
         }
     }
     if(
-        !__hidden_csg_resources::EnsureCsgStorageBufferHeapHandle(
+        !__hidden_csg_resources::EnsureCsgBufferHeapHandle(
             graphics().getDevice(),
             *csgState().m_receiverRangeBuffer.get(),
+            Core::GpuDescriptorClass::StorageBuffer,
             csgState().m_receiverRangeBufferHeapHandle
         )
-        || !__hidden_csg_resources::EnsureCsgStorageBufferHeapHandle(
+        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(
             graphics().getDevice(),
             *csgState().m_cutterBuffer.get(),
+            Core::GpuDescriptorClass::StorageBuffer,
             csgState().m_cutterBufferHeapHandle
         )
-        || !__hidden_csg_resources::EnsureCsgUniformBufferHeapHandle(
+        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(
             graphics().getDevice(),
             *csgState().m_clipContextSlotsBuffer.get(),
+            Core::GpuDescriptorClass::UniformBuffer,
             csgState().m_clipContextSlotsHeapHandle
         )
-        || !__hidden_csg_resources::EnsureCsgUniformBufferHeapHandle(
+        || !__hidden_csg_resources::EnsureCsgBufferHeapHandle(
             graphics().getDevice(),
             *csgState().m_intervalSampleStateBuffer.get(),
+            Core::GpuDescriptorClass::UniformBuffer,
             csgState().m_intervalSampleStateHeapHandle
         )
     ){
@@ -738,7 +763,6 @@ bool RendererCsgSystem::resolveCsgReceiverClipDrawInfo(
     const bool receiverBoundsCanCull = CsgReceiverBoundsCanCull(receiverBounds);
     const SIMDVector receiverLocalMinBounds = receiverBoundsCanCull ? LoadFloatInt(receiverBounds.minBounds) : VectorZero();
     const SIMDVector receiverLocalMaxBounds = receiverBoundsCanCull ? LoadFloatInt(receiverBounds.maxBounds) : VectorZero();
-
     SIMDMatrix receiverLocalToWorld;
     const SIMDMatrix* receiverLocalToWorldPtr = nullptr;
     if(transform){
@@ -750,15 +774,29 @@ bool RendererCsgSystem::resolveCsgReceiverClipDrawInfo(
         );
         receiverLocalToWorldPtr = &receiverLocalToWorld;
     }
+    const __hidden_csg_resources::CsgReceiverLocalSpace receiverLocalSpace =
+        __hidden_csg_resources::BuildCsgReceiverLocalSpace(
+            receiverBoundsCanCull,
+            receiverLocalMinBounds,
+            receiverLocalMaxBounds,
+            receiverLocalToWorldPtr
+        )
+    ;
 
     return __hidden_csg_resources::ForEachReceiverClipCutter(
         csgShapeRegistry(),
         receiverLookup,
         receiverDrawState,
-        receiverLocalMinBounds,
-        receiverLocalMaxBounds,
-        receiverBoundsCanCull,
-        receiverLocalToWorldPtr,
+        receiverLocalSpace.localMinBounds,
+        receiverLocalSpace.localMaxBounds,
+        receiverLocalSpace.boundsCanCull,
+        receiverLocalSpace.localToWorldPtr(),
+        [](const CsgCutterComponent& cutter){
+            return __hidden_csg_resources::CsgCutterTransforms{
+                LoadFloat(cutter.shapeToWorld),
+                LoadFloat(cutter.worldToShape)
+            };
+        },
         [&](const __hidden_csg_resources::CsgResolvedClipCutter& resolvedCutter){
             if(resolvedCutter.shapeType.desc.shaderModule){
                 if(!outInfo.evaluatorVariant)
@@ -794,7 +832,6 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
     const bool receiverBoundsCanCull = CsgReceiverBoundsCanCull(receiverBounds);
     const SIMDVector receiverLocalMinBounds = receiverBoundsCanCull ? LoadFloatInt(receiverBounds.minBounds) : VectorZero();
     const SIMDVector receiverLocalMaxBounds = receiverBoundsCanCull ? LoadFloatInt(receiverBounds.maxBounds) : VectorZero();
-
     SIMDMatrix receiverLocalToWorld;
     const SIMDMatrix* receiverLocalToWorldPtr = nullptr;
     if(transform){
@@ -806,9 +843,17 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
         );
         receiverLocalToWorldPtr = &receiverLocalToWorld;
     }
+    const __hidden_csg_resources::CsgReceiverLocalSpace receiverLocalSpace =
+        __hidden_csg_resources::BuildCsgReceiverLocalSpace(
+            receiverBoundsCanCull,
+            receiverLocalMinBounds,
+            receiverLocalMaxBounds,
+            receiverLocalToWorldPtr
+        )
+    ;
 
     SIMDMatrix worldToReceiver;
-    if(!__hidden_csg_resources::BuildCsgReceiverWorldToLocal(receiverLocalToWorldPtr, worldToReceiver))
+    if(!__hidden_csg_resources::BuildCsgReceiverWorldToLocal(receiverLocalSpace.localToWorldPtr(), worldToReceiver))
         return false;
 
     bool meshViewReady = false;
@@ -831,10 +876,16 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
         csgShapeRegistry(),
         receiverLookup,
         receiverDrawState,
-        receiverLocalMinBounds,
-        receiverLocalMaxBounds,
-        receiverBoundsCanCull,
-        receiverLocalToWorldPtr,
+        receiverLocalSpace.localMinBounds,
+        receiverLocalSpace.localMaxBounds,
+        receiverLocalSpace.boundsCanCull,
+        receiverLocalSpace.localToWorldPtr(),
+        [](const CsgCutterComponent& cutter){
+            return __hidden_csg_resources::CsgCutterTransforms{
+                LoadFloat(cutter.shapeToWorld),
+                LoadFloat(cutter.worldToShape)
+            };
+        },
         [&](const __hidden_csg_resources::CsgResolvedClipCutter& resolvedCutter){
             CsgCutterGpuData cutterGpuData;
             if(csgFrameData.cutters.size() >= static_cast<usize>(Limit<u32>::s_Max)){

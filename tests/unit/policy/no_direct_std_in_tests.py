@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from return_value_handling import blank_non_code
+from return_value_handling import blank_non_code, line_number
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -15,10 +15,6 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 SOURCE_SUFFIXES = frozenset((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ixx"))
 DIRECT_STD = re.compile(r"\bstd\s*::")
-
-
-def line_number(source: str, position: int) -> int:
-    return source.count("\n", 0, position) + 1
 
 
 def find_direct_std_references(source: str) -> list[int]:

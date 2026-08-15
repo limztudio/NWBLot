@@ -202,6 +202,10 @@ public:
         MeshResources*& outMesh,
         MaterialPipelineResources*& outPipelineResources
     );
+    [[nodiscard]] bool prepareMaterialPassResourceBindingsImpl(
+        const MaterialPassDrawItemVector& drawItems,
+        bool computeEmulation
+    );
     template<typename DrawItemHandler>
     void forEachMaterialPassDrawItemResources(const MaterialPassDrawItemVector& drawItems, DrawItemHandler&& handler){
         for(const MaterialPassDrawItem& drawItem : drawItems){

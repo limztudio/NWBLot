@@ -1516,6 +1516,22 @@ NWB_INLINE SIMDVector SIMDCALL VectorAdd(SIMDVector v0, SIMDVector v1)noexcept{
 #endif
 }
 
+// Adds raw unsigned 32-bit lane representations with modulo arithmetic.
+NWB_INLINE SIMDVector SIMDCALL VectorAddInt(SIMDVector v0, SIMDVector v1)noexcept{
+#if defined(NWB_HAS_SCALAR)
+    return VectorSetInt(
+        VectorGetIntX(v0) + VectorGetIntX(v1),
+        VectorGetIntY(v0) + VectorGetIntY(v1),
+        VectorGetIntZ(v0) + VectorGetIntZ(v1),
+        VectorGetIntW(v0) + VectorGetIntW(v1)
+    );
+#elif defined(NWB_HAS_NEON)
+    return vreinterpretq_f32_u32(vaddq_u32(vreinterpretq_u32_f32(v0), vreinterpretq_u32_f32(v1)));
+#else
+    return _mm_castsi128_ps(_mm_add_epi32(_mm_castps_si128(v0), _mm_castps_si128(v1)));
+#endif
+}
+
 NWB_INLINE SIMDVector SIMDCALL VectorSubtract(SIMDVector v0, SIMDVector v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSet(VectorGetX(v0) - VectorGetX(v1), VectorGetY(v0) - VectorGetY(v1), VectorGetZ(v0) - VectorGetZ(v1), VectorGetW(v0) - VectorGetW(v1));

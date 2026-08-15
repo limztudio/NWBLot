@@ -40,3 +40,31 @@ add_test(
         "${CMAKE_CURRENT_LIST_DIR}/no_direct_std_in_interop_boundaries.py"
         --self-test
 )
+add_test(
+    NAME nwb_no_core_implementation_dependencies
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_core_implementation_dependencies.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_core_implementation_dependencies_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_core_implementation_dependencies.py"
+        --self-test
+)
+add_test(
+    NAME nwb_no_engine_default_bxdf
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_engine_default_bxdf.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_engine_default_bxdf_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_engine_default_bxdf.py"
+        --self-test
+)

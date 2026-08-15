@@ -40,6 +40,12 @@ struct ViewTupleAccess{
         return &Get<I>(pools)->m_dense;
     }
 
+    static EntityID entityAt(const ViewEntityVector* entities, const usize denseIndex){
+        NWB_ASSERT(entities);
+        NWB_ASSERT(denseIndex < entities->size());
+        return (*entities)[denseIndex];
+    }
+
     template<usize I, typename... Ts>
     static bool findDenseIndex(const Tuple<ComponentPool<Ts>*...>& pools, usize anchorPoolIndex, usize anchorDenseIndex, EntityID entityId, u32& outDenseIndex){
         if(I == anchorPoolIndex){
@@ -130,9 +136,7 @@ struct ViewIterator{
     }
 
     EntityID entityAt(usize denseIndex)const{
-        NWB_ASSERT(anchorEntities);
-        NWB_ASSERT(denseIndex < anchorEntities->size());
-        return (*anchorEntities)[denseIndex];
+        return ViewTupleAccess::entityAt(anchorEntities, denseIndex);
     }
 
     ValueTuple operator*()const{
@@ -201,81 +205,49 @@ public:
         if(!m_valid)
             return;
 
-        if constexpr(sizeof...(Ts) == 1u){
-            for(usize i = 0; i < m_count; ++i){
-                const EntityID entityId = entityAt(i);
-                auto& component = ECSDetail::ViewTupleAccess::componentAtDense<0>(m_pools, static_cast<u32>(i));
-                func(entityId, component);
-            }
-            return;
-        }
-
-        for(usize i = 0; i < m_count; ++i){
-            EntityID entityId = entityAt(i);
-            tryApplyFunc(func, entityId, i);
-        }
+        for(usize i = 0; i < m_count; ++i)
+            applyFunc(func, i);
     }
 
     template<typename Func>
     void parallelEach(Alloc::ThreadPool& pool, Func&& func)const{
-        if(!m_valid)
-            return;
-
-        if constexpr(sizeof...(Ts) == 1u){
-            pool.parallelFor(
-                static_cast<usize>(0),
-                m_count,
-                [this, &func](usize i){
-                    const EntityID entityId = entityAt(i);
-                    auto& component = ECSDetail::ViewTupleAccess::componentAtDense<0>(m_pools, static_cast<u32>(i));
-                    func(entityId, component);
-                }
-            );
-            return;
-        }
-
-        pool.parallelFor(
-            static_cast<usize>(0),
-            m_count,
-            [this, &func](usize i){
-                EntityID entityId = entityAt(i);
-                tryApplyFunc(func, entityId, i);
-            }
-        );
+        parallelEachImpl(func, [this, &pool](const auto& apply){
+            pool.parallelFor(static_cast<usize>(0), m_count, apply);
+        });
     }
 
     template<typename Func>
     void parallelEach(Alloc::ThreadPool& pool, usize grainSize, Func&& func)const{
-        if(!m_valid)
-            return;
-
-        if constexpr(sizeof...(Ts) == 1u){
-            pool.parallelFor(
-                static_cast<usize>(0),
-                m_count,
-                grainSize,
-                [this, &func](usize i){
-                    const EntityID entityId = entityAt(i);
-                    auto& component = ECSDetail::ViewTupleAccess::componentAtDense<0>(m_pools, static_cast<u32>(i));
-                    func(entityId, component);
-                }
-            );
-            return;
-        }
-
-        pool.parallelFor(
-            static_cast<usize>(0),
-            m_count,
-            grainSize,
-            [this, &func](usize i){
-                EntityID entityId = entityAt(i);
-                tryApplyFunc(func, entityId, i);
-            }
-        );
+        parallelEachImpl(func, [this, &pool, grainSize](const auto& apply){
+            pool.parallelFor(static_cast<usize>(0), m_count, grainSize, apply);
+        });
     }
 
 
 private:
+    template<typename Func>
+    void applyFunc(Func& func, const usize denseIndex)const{
+        const EntityID entityId = entityAt(denseIndex);
+        if constexpr(sizeof...(Ts) == 1u){
+            auto& component = ECSDetail::ViewTupleAccess::componentAtDense<0>(m_pools, static_cast<u32>(denseIndex));
+            func(entityId, component);
+        }
+        else{
+            tryApplyFunc(func, entityId, denseIndex);
+        }
+    }
+
+    template<typename Func, typename DispatchT>
+    void parallelEachImpl(Func&& func, DispatchT&& dispatch)const{
+        if(!m_valid)
+            return;
+
+        dispatch([this, &func](const usize denseIndex){
+            applyFunc(func, denseIndex);
+        });
+    }
+
+
     void initializeAnchor(){
         m_valid = true;
         m_anchorEntities = nullptr;
@@ -312,9 +284,7 @@ private:
     }
 
     EntityID entityAt(usize denseIndex)const{
-        NWB_ASSERT(m_anchorEntities);
-        NWB_ASSERT(denseIndex < m_anchorEntities->size());
-        return (*m_anchorEntities)[denseIndex];
+        return ECSDetail::ViewTupleAccess::entityAt(m_anchorEntities, denseIndex);
     }
 
     template<usize I = 0, typename Func, typename... Args>

@@ -2253,6 +2253,141 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
     );
 }
 
+
+TEST(GpuTaskGraph, ExportsRequiredImportedResourceFinalStates){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuGraphResourceDesc textureDesc;
+    textureDesc
+        .setIdentity(Name("tests/task_graph/external_final_texture"))
+        .setMarkerLabel("External Final Texture")
+        .setType(Graphics::GpuGraphResourceType::Texture)
+        .setInitialState(Graphics::ResourceStates::Common)
+        .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
+    ;
+    const Graphics::GpuGraphResourceId texture = graph.importResource(textureDesc);
+    ASSERT_TRUE(texture.valid());
+
+    Graphics::GpuGraphResourceDesc bufferDesc;
+    bufferDesc
+        .setIdentity(Name("tests/task_graph/external_final_buffer"))
+        .setMarkerLabel("External Final Buffer")
+        .setType(Graphics::GpuGraphResourceType::Buffer)
+        .setInitialState(Graphics::ResourceStates::Common)
+        .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
+    ;
+    const Graphics::GpuGraphResourceId buffer = graph.importResource(bufferDesc);
+    ASSERT_TRUE(buffer.valid());
+    EXPECT_EQ(graph.resourceAt(texture.index).externalFinalState, Graphics::ResourceStates::ShaderResource);
+    EXPECT_EQ(graph.resourceAt(buffer.index).externalFinalState, Graphics::ResourceStates::ShaderResource);
+
+    const Graphics::GpuTaskResourceUse uses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = texture,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = buffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskId task = AddTask(
+        graph,
+        Name("tests/task_graph/external_final_writer"),
+        "External Final Writer",
+        nullptr,
+        0u,
+        uses,
+        LengthOf(uses)
+    );
+    ASSERT_TRUE(task.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+    ASSERT_NE(compiledTask, nullptr);
+    ASSERT_EQ(compiledTask->epilogueBarrierCount, 2u);
+    const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskEpilogueBarriers(task);
+    ASSERT_NE(barriers, nullptr);
+    bool exportedTexture = false;
+    bool exportedBuffer = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledTask->epilogueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+        exportedTexture = exportedTexture || (
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureStateExport
+            && barrier.resource == texture
+            && barrier.before == Graphics::ResourceStates::CopyDest
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+            && barrier.sourceQueue == compiledTask->queue
+            && barrier.destinationQueue == compiledTask->queue
+        );
+        exportedBuffer = exportedBuffer || (
+            barrier.type == Graphics::GpuCompiledBarrierType::BufferStateExport
+            && barrier.resource == buffer
+            && barrier.before == Graphics::ResourceStates::UnorderedAccess
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+            && barrier.sourceQueue == compiledTask->queue
+            && barrier.destinationQueue == compiledTask->queue
+        );
+    }
+    EXPECT_TRUE(exportedTexture);
+    EXPECT_TRUE(exportedBuffer);
+}
+
+
+TEST(GpuTaskGraph, RejectsUnpublishableExternalFinalStateContracts){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuGraphResourceDesc unsupportedDesc;
+    unsupportedDesc
+        .setIdentity(Name("tests/task_graph/external_final_accel_struct"))
+        .setMarkerLabel("External Final Accel Struct")
+        .setType(Graphics::GpuGraphResourceType::AccelStruct)
+        .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
+    ;
+    EXPECT_FALSE(graph.importResource(unsupportedDesc).valid());
+
+    Graphics::GpuGraphResourceDesc untouchedDesc;
+    untouchedDesc
+        .setIdentity(Name("tests/task_graph/external_final_untouched"))
+        .setMarkerLabel("External Final Untouched")
+        .setType(Graphics::GpuGraphResourceType::Buffer)
+        .setInitialState(Graphics::ResourceStates::Common)
+        .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
+    ;
+    EXPECT_TRUE(graph.importResource(untouchedDesc).valid());
+    ASSERT_TRUE(AddTask(
+        graph,
+        Name("tests/task_graph/external_final_unrelated"),
+        "External Final Unrelated"
+    ).valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    EXPECT_FALSE(compiledGraph.valid());
+}
+
 TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

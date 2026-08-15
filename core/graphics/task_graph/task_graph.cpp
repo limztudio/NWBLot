@@ -421,6 +421,7 @@ struct ClearTextureTask{
     return resource.identity == desc.identity
         && resource.type == desc.type
         && resource.initialState == desc.initialState
+        && resource.externalFinalState == desc.externalFinalState
         && resource.queueSharing == desc.queueSharing;
 }
 
@@ -1376,6 +1377,7 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
         .markerLabel = markerLabel(resource.markerLabelOffset, resource.markerLabelSize),
         .type = resource.type,
         .initialState = resource.initialState,
+        .externalFinalState = resource.externalFinalState,
         .queueSharing = resource.queueSharing,
         .hasBackendResource = resource.texture != nullptr || resource.buffer != nullptr || resource.accelStruct != nullptr,
     };
@@ -1507,6 +1509,29 @@ bool GpuTaskGraph::applyCompiledBarrier(
         if(resource.type != GpuGraphResourceType::Buffer || !resource.buffer)
             return false;
         commandList.setBufferState(resource.buffer.get(), barrier.after);
+        return true;
+    case GpuCompiledBarrierType::TextureStateExport:
+        if(resource.type != GpuGraphResourceType::Texture || !resource.texture)
+            return false;
+        // A task thunk may transition internally after its declared entry use. Reapply the compiler-required
+        // final state against the native tracker, then retain it even when no Vulkan transition was needed so
+        // packet close publishes a complete external handoff.
+        commandList.setTextureState(
+            resource.texture.get(),
+            barrier.range.textureSubresources,
+            barrier.after
+        );
+        commandList.beginTrackingTextureState(
+            resource.texture.get(),
+            barrier.range.textureSubresources,
+            barrier.after
+        );
+        return true;
+    case GpuCompiledBarrierType::BufferStateExport:
+        if(resource.type != GpuGraphResourceType::Buffer || !resource.buffer)
+            return false;
+        commandList.setBufferState(resource.buffer.get(), barrier.after);
+        commandList.beginTrackingBufferState(resource.buffer.get(), barrier.after);
         return true;
     case GpuCompiledBarrierType::AccelStructTransition:
     case GpuCompiledBarrierType::AccelStructUav:
@@ -1794,6 +1819,11 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
         !desc.identity
         || desc.markerLabel.empty()
         || desc.type >= GpuGraphResourceType::kCount
+        || (
+            desc.externalFinalState != ResourceStates::Unknown
+            && desc.type != GpuGraphResourceType::Texture
+            && desc.type != GpuGraphResourceType::Buffer
+        )
         || m_resources.size() >= Limit<u32>::s_Max
     )
         return {};
@@ -1807,6 +1837,7 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
     resource.identity = desc.identity;
     resource.type = desc.type;
     resource.initialState = desc.initialState;
+    resource.externalFinalState = desc.externalFinalState;
     resource.queueSharing = desc.queueSharing;
     resource.markerLabelOffset = markerLabelOffset;
     resource.markerLabelSize = markerLabelSize;

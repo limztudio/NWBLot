@@ -53,6 +53,7 @@ struct GpuTaskGraphResourceView{
     AStringView markerLabel;
     GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
     ResourceStates::Mask initialState = ResourceStates::Unknown;
+    ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     bool hasBackendResource = false;
 };
@@ -108,6 +109,7 @@ private:
         Name identity = NAME_NONE;
         GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
         ResourceStates::Mask initialState = ResourceStates::Unknown;
+        ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
         ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;

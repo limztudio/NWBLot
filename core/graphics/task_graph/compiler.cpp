@@ -414,6 +414,19 @@ struct PendingCompiledEpilogueBarrier{
     }
 }
 
+[[nodiscard]] static GpuCompiledBarrierType::Enum StateExportBarrierType(
+    const GpuGraphResourceType::Enum resourceType
+)noexcept{
+    switch(resourceType){
+    case GpuGraphResourceType::Texture:
+        return GpuCompiledBarrierType::TextureStateExport;
+    case GpuGraphResourceType::Buffer:
+        return GpuCompiledBarrierType::BufferStateExport;
+    default:
+        return GpuCompiledBarrierType::kCount;
+    }
+}
+
 [[nodiscard]] static GpuCompiledBarrierType::Enum OwnershipReleaseBarrierType(
     const GpuGraphResourceType::Enum resourceType
 )noexcept{
@@ -1471,6 +1484,66 @@ bool GpuTaskGraphCompiler::compile(
         compiledTask->prologueBarrierCount = static_cast<u32>(outCompiledGraph.m_prologueBarriers.size())
             - compiledTask->prologueBarrierOffset
         ;
+    }
+
+    // Imported texture/buffer metadata can require a graph-owned terminal state for code that resumes outside this
+    // compiled graph. Emit one explicit export for every declared range with no later overlapping graph use. The
+    // runtime lowers an export through the native state tracker and retains it even when it was already in the
+    // required state, so the accepted packet snapshot is authoritative without a renderer-side final-state bridge.
+    for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
+        const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
+        if(resource.externalFinalState == ResourceStates::Unknown)
+            continue;
+
+        const GpuCompiledBarrierType::Enum exportType = StateExportBarrierType(resource.type);
+        if(exportType >= GpuCompiledBarrierType::kCount){
+            outCompiledGraph.reset();
+            return false;
+        }
+
+        bool hasTerminalDeclaredRange = false;
+        for(usize stateIndex = 0u; stateIndex < trackedResourceStates.size(); ++stateIndex){
+            const TrackedCompiledResourceState& state = trackedResourceStates[stateIndex];
+            if(state.resource != resource.id)
+                continue;
+
+            bool hasLaterOverlappingUse = false;
+            for(usize laterStateIndex = stateIndex + 1u;
+                laterStateIndex < trackedResourceStates.size();
+                ++laterStateIndex
+            ){
+                const TrackedCompiledResourceState& later = trackedResourceStates[laterStateIndex];
+                if(
+                    later.resource == resource.id
+                    && RangesOverlap(resource, state.range, later.range)
+                ){
+                    hasLaterOverlappingUse = true;
+                    break;
+                }
+            }
+            if(hasLaterOverlappingUse)
+                continue;
+
+            pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
+                .task = state.task,
+                .barrier = GpuCompiledBarrier{
+                    .type = exportType,
+                    .resource = state.resource,
+                    .range = state.range,
+                    .before = state.state,
+                    .after = resource.externalFinalState,
+                    .sourceQueue = state.queue,
+                    .destinationQueue = state.queue,
+                },
+            });
+            hasTerminalDeclaredRange = true;
+        }
+        if(!hasTerminalDeclaredRange){
+            // A final-state requirement cannot be published from an untouched or state-unknown resource. Reject
+            // compilation rather than leaving a direct renderer bridge to guess whether the requirement held.
+            outCompiledGraph.reset();
+            return false;
+        }
     }
 
     // Consumers are visited after their producer, so ownership releases are discovered late. Group them only after

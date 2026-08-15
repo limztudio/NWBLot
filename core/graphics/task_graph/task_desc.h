@@ -83,12 +83,17 @@ struct GpuGraphResourceDesc{
     // Compiler-generated packet-boundary transitions begin from this state. Unknown remains valid only while a
     // transitional CommandListResourceStateHandoff supplies the authoritative imported state at recording time.
     ResourceStates::Mask initialState = ResourceStates::Unknown;
+    // Optional required state when graph work completes. The compiler applies this to every terminal range the
+    // graph declared for an imported texture/buffer and publishes it in the accepted packet's native state
+    // snapshot. Unknown leaves the resource's final state under ordinary task ownership.
+    ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
 
     constexpr GpuGraphResourceDesc& setIdentity(const Name& value){ identity = value; return *this; }
     constexpr GpuGraphResourceDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
     constexpr GpuGraphResourceDesc& setType(const GpuGraphResourceType::Enum value){ type = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialState(const ResourceStates::Mask value){ initialState = value; return *this; }
+    constexpr GpuGraphResourceDesc& setExternalFinalState(const ResourceStates::Mask value){ externalFinalState = value; return *this; }
     constexpr GpuGraphResourceDesc& setQueueSharing(const ResourceQueueSharing::Mask value){ queueSharing = value; return *this; }
 };
 

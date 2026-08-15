@@ -2097,6 +2097,35 @@ struct NativePacketCaptureRetryTask{
 };
 
 
+// The probe observes a graph-owned entry state, then can deliberately perform a task-local transition. That lets
+// the smoke test prove the terminal export reasserts its contract after native task-local state work.
+struct NativePacketExternalFinalTextureProbeTask{
+    struct Payload{
+        Texture* texture = nullptr;
+        ResourceStates::Mask* observedState = nullptr;
+        ResourceStates::Mask localFinalState = ResourceStates::Unknown;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.texture)
+            return false;
+        if(payload.observedState)
+            *payload.observedState = commandList.getTextureSubresourceState(payload.texture, 0u, 0u);
+        if(payload.localFinalState != ResourceStates::Unknown)
+            commandList.setTextureState(payload.texture, s_AllSubresources, payload.localFinalState);
+        if(payload.recorded)
+            *payload.recorded = true;
+        return true;
+    }
+};
+
+
 // The graph runtime lives longer than one native device in the renderer.  Before the owner tears a device down it
 // must release packet-owned command lists and completion tokens; after recreation, compiler output and recording
 // state must bind only to the new physical-queue generation.  Exercise that complete lifetime with a real Vulkan
@@ -2281,6 +2310,131 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
     ));
     EXPECT_NE(replacementToken.deviceGeneration, retiredToken.deviceGeneration);
     ASSERT_TRUE(secondDevice.waitForIdle());
+}
+
+
+// The compiler establishes ShaderResource for the task, while its local compatibility transition changes that state
+// to CopyDest. The imported final-state contract must restore ShaderResource in the accepted packet snapshot.
+TEST_F(DescriptorBufferRoundTripTest, ImportedFinalStateExportReassertsStateAfterTaskLocalTransition){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const TextureHandle texture = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(texture.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId resource = graph.importTexture(
+        texture,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/external_final_texture"))
+            .setMarkerLabel("External Final Texture")
+            .setType(GpuGraphResourceType::Texture)
+            .setInitialState(ResourceStates::Common)
+            .setExternalFinalState(ResourceStates::ShaderResource)
+    );
+    ASSERT_TRUE(resource.valid());
+
+    const GpuTaskResourceUse uses[] = {
+        GpuTaskResourceUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskDesc taskDesc;
+    taskDesc
+        .setIdentity(Name("tests/descriptor_buffer/external_final_texture_probe"))
+        .setMarkerLabel("External Final Texture Probe")
+        .setQueue(graphicsQueue)
+        .setResourceUses(uses, LengthOf(uses))
+    ;
+    ResourceStates::Mask observedEntryState = ResourceStates::Unknown;
+    bool taskRecorded = false;
+    const GpuTaskId task = graph.addTask<NativePacketExternalFinalTextureProbeTask>(
+        taskDesc,
+        NativePacketExternalFinalTextureProbeTask::Payload{
+            .texture = texture.get(),
+            .observedState = &observedEntryState,
+            .localFinalState = ResourceStates::CopyDest,
+            .recorded = &taskRecorded,
+        }
+    );
+    ASSERT_TRUE(task.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/external_final_texture_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+    const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+    ASSERT_NE(compiledTask, nullptr);
+    ASSERT_EQ(compiledTask->prologueBarrierCount, 1u);
+    const GpuCompiledBarrier* const prologue = compiledGraph.taskPrologueBarriers(task);
+    ASSERT_NE(prologue, nullptr);
+    EXPECT_EQ(prologue[0u].type, GpuCompiledBarrierType::TextureTransition);
+    EXPECT_EQ(prologue[0u].before, ResourceStates::Common);
+    EXPECT_EQ(prologue[0u].after, ResourceStates::ShaderResource);
+    ASSERT_EQ(compiledTask->epilogueBarrierCount, 1u);
+    const GpuCompiledBarrier* const epilogue = compiledGraph.taskEpilogueBarriers(task);
+    ASSERT_NE(epilogue, nullptr);
+    EXPECT_EQ(epilogue[0u].type, GpuCompiledBarrierType::TextureStateExport);
+    EXPECT_EQ(epilogue[0u].resource, resource);
+    EXPECT_EQ(epilogue[0u].before, ResourceStates::ShaderResource);
+    EXPECT_EQ(epilogue[0u].after, ResourceStates::ShaderResource);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = packet },
+        recordedGraph
+    ));
+    EXPECT_TRUE(taskRecorded);
+    EXPECT_EQ(observedEntryState, ResourceStates::ShaderResource);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    ASSERT_NE(finalState, nullptr);
+    // The task-local CopyDest transition is retained by the native tracker, so this proves the epilogue restored
+    // the graph contract before the packet snapshot was captured.
+    EXPECT_FALSE(finalState->empty());
+    auto stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getTextureSubresourceState(texture.get(), 0u, 0u), ResourceStates::ShaderResource);
+    stateProbe->close();
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        packet,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(packet).valid());
+    EXPECT_TRUE(device.waitForIdle());
 }
 
 

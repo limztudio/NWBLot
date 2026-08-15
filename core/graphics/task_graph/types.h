@@ -259,6 +259,10 @@ namespace GpuCompiledBarrierType{
         TextureOwnershipAcquire,
         BufferOwnershipRelease,
         BufferOwnershipAcquire,
+        // A terminal imported-resource requirement. Lowering performs a real transition when needed, then always
+        // retains the requested state in the packet snapshot for the external consumer.
+        TextureStateExport,
+        BufferStateExport,
 
         kCount,
     };

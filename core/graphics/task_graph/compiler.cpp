@@ -1137,15 +1137,24 @@ bool GpuTaskGraphCompiler::compile(
         outCompiledGraph.m_queueTopology.push_back(topology.queues[queueIndex]);
 
     // An import may name the exact physical queue that owned an exclusive texture/buffer before graph work began.
-    // This metadata is deliberately validation-only for now: an external cross-queue release/completion is not
-    // represented by the resource descriptor, so accepting one here would manufacture an unsafe Vulkan acquire.
+    // A different first packet must also name a fixed release destination, an imported completion, and a native
+    // state handoff source. That keeps the compiler from manufacturing an acquire or cross-queue wait on its own.
     for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
         const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
         if(!resource.initialOwnerQueue.valid())
             continue;
+        const bool hasInitialOwnerHandoff = resource.initialOwnerReleaseDestinationQueue.valid();
         if(
             ResourceUsesConcurrentQueueSharing(resource.queueSharing, topology)
             || !outCompiledGraph.queueInfo(resource.initialOwnerQueue)
+            || (
+                hasInitialOwnerHandoff
+                && (
+                    !outCompiledGraph.queueInfo(resource.initialOwnerReleaseDestinationQueue)
+                    || !graph.validExternalCompletion(resource.initialOwnerCompletion)
+                    || !resource.initialOwnerStateSource
+                )
+            )
         ){
             outCompiledGraph.reset();
             return false;
@@ -1297,8 +1306,10 @@ bool GpuTaskGraphCompiler::compile(
     // the release destination into CommandList::open where the paired Vulkan acquire is emitted before the consumer.
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena> trackedResourceStates(scratchArena);
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena> pendingEpilogueBarriers(scratchArena);
+    Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialOwnershipDependencies(scratchArena);
     trackedResourceStates.reserve(graph.taskCount());
     pendingEpilogueBarriers.reserve(graph.taskCount());
+    initialOwnershipDependencies.reserve(graph.taskCount());
     for(const GpuTaskId taskID : outAnalysis.topologicalOrder()){
         GpuCompiledTask* compiledTask = nullptr;
         for(GpuCompiledTask& candidate : outCompiledGraph.m_tasks){
@@ -1367,14 +1378,49 @@ bool GpuTaskGraphCompiler::compile(
             const ResourceStates::Mask before = previousState ? previousState->state : resource.initialState;
             if(
                 !previousState
-                && resource.initialOwnerQueue.valid()
-                && resource.initialOwnerQueue != compiledTask->queue
+                && resource.initialOwnerReleaseDestinationQueue.valid()
+                && resource.initialOwnerReleaseDestinationQueue != compiledTask->queue
             ){
-                // Same-family and cross-family external producers both require an explicit completion before a
-                // different graph packet may consume their work. Keep this strict until imported ownership can
-                // carry that release/completion pair rather than guessing at record time.
+                // A producer that already released ownership has relinquished it even when the source happens to
+                // be this task's broad queue class. Its fixed release destination remains authoritative.
                 outCompiledGraph.reset();
                 return false;
+            }
+            if(!previousState && resource.initialOwnerQueue.valid() && resource.initialOwnerQueue != compiledTask->queue){
+                if(
+                    !resource.initialOwnerReleaseDestinationQueue.valid()
+                    || resource.initialOwnerReleaseDestinationQueue != compiledTask->queue
+                    || !resource.initialOwnerCompletion.valid()
+                    || !resource.initialOwnerStateSource
+                ){
+                    // Owner-only imports retain the original exact-queue restriction. A different first consumer
+                    // needs all three explicit pieces of an external handoff: fixed destination, completion, and
+                    // exported native state source.
+                    outCompiledGraph.reset();
+                    return false;
+                }
+                const GpuCompiledBarrierType::Enum acquireType = OwnershipAcquireBarrierType(resource.type);
+                if(acquireType >= GpuCompiledBarrierType::kCount){
+                    outCompiledGraph.reset();
+                    return false;
+                }
+                // The recorder imports the descriptor-owned state snapshot before prologue lowering. That emits
+                // the native paired acquire (if families differ); this immutable marker also proves the snapshot
+                // and the external completion belong to this first range consumer.
+                outCompiledGraph.m_prologueBarriers.push_back(GpuCompiledBarrier{
+                    .type = acquireType,
+                    .resource = use.resource,
+                    .range = use.range,
+                    .before = before,
+                    .after = before,
+                    .sourceQueue = resource.initialOwnerQueue,
+                    .destinationQueue = compiledTask->queue,
+                    .isInitialOwnerHandoff = true,
+                });
+                initialOwnershipDependencies.push_back(GpuTaskExternalDependencyEdge{
+                    .completion = resource.initialOwnerCompletion,
+                    .consumer = taskID,
+                });
             }
             const bool needsUavDependency =
                 previousState
@@ -1650,10 +1696,7 @@ bool GpuTaskGraphCompiler::compile(
                 }
             }
 
-            for(const GpuTaskExternalDependencyEdge& edge : outAnalysis.externalDependencies()){
-                if(edge.consumer != consumerTask)
-                    continue;
-
+            const auto appendExternalDependency = [&](const GpuTaskExternalDependencyEdge& edge){
                 bool alreadyAdded = false;
                 for(u32 dependencyIndex = 0u; dependencyIndex < consumerPacket.externalDependencyCount; ++dependencyIndex){
                     if(outCompiledGraph.m_packetExternalDependencies[
@@ -1664,10 +1707,18 @@ bool GpuTaskGraphCompiler::compile(
                     }
                 }
                 if(alreadyAdded)
-                    continue;
+                    return;
 
                 outCompiledGraph.m_packetExternalDependencies.push_back(edge.completion);
                 ++consumerPacket.externalDependencyCount;
+            };
+            for(const GpuTaskExternalDependencyEdge& edge : outAnalysis.externalDependencies()){
+                if(edge.consumer == consumerTask)
+                    appendExternalDependency(edge);
+            }
+            for(const GpuTaskExternalDependencyEdge& edge : initialOwnershipDependencies){
+                if(edge.consumer == consumerTask)
+                    appendExternalDependency(edge);
             }
         }
     }

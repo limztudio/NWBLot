@@ -2540,6 +2540,180 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerMatchesFirstPacketQueu
 }
 
 
+// A source outside the graph may release an exclusive buffer to a fixed first graph packet. The graph owns the
+// completion wait and imports the producer's handoff before lowering its first declared transition; the adapter
+// gate is intentional because a real queue-family acquire needs a dedicated Compute family.
+TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquiresCrossQueue){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Initial-owner handoff: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Initial-owner handoff: adapter has no dedicated compute-only queue family.";
+
+    const GpuPhysicalQueueId graphicsQueue = BackendQueueId(device, CommandQueue::Graphics);
+    const GpuPhysicalQueueId computeQueue = BackendQueueId(device, CommandQueue::Compute);
+    ASSERT_TRUE(graphicsQueue.valid());
+    ASSERT_TRUE(computeQueue.valid());
+    ASSERT_NE(graphicsQueue, computeQueue);
+
+    const BufferHandle buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+
+    CommandListParameters computeParams;
+    computeParams.setRenderLane(RenderLane::AsyncCompute);
+    CommandListResourceStateHandoff computeState(asyncScope.arena());
+    const CommandListHandle computeProducer = device.createCommandList(computeParams);
+    ASSERT_NE(computeProducer.get(), nullptr);
+    computeProducer->open();
+    computeProducer->setBufferState(buffer.get(), ResourceStates::UnorderedAccess);
+    computeProducer->releaseBufferOwnership(buffer.get(), graphicsQueue);
+    computeProducer->close(&computeState);
+    ASSERT_TRUE(computeState.valid());
+    CommandList* const producerLists[] = { computeProducer.get() };
+    const QueueSubmissionToken producerToken = device.executeCommandLists(
+        producerLists,
+        LengthOf(producerLists),
+        computeQueue,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(producerToken.valid());
+    ASSERT_TRUE(producerToken.matchesPhysicalQueue(computeQueue.index, computeQueue.deviceGeneration));
+
+    GpuTaskGraph graph(asyncScope.arena());
+    const GpuExternalCompletionId completion = graph.importExternalCompletion(
+        GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/initial_owner_compute_completion"))
+            .setMarkerLabel("Initial Owner Compute Completion")
+    );
+    ASSERT_TRUE(completion.valid());
+    const GpuGraphResourceId resource = graph.importBuffer(
+        buffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/initial_owner_compute_buffer"))
+            .setMarkerLabel("Initial Owner Compute Buffer")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::UnorderedAccess)
+            .setInitialOwnerQueue(computeQueue)
+            .setInitialOwnerReleaseDestinationQueue(graphicsQueue)
+            .setInitialOwnerCompletion(completion)
+            .setInitialOwnerStateSource(&computeState)
+    );
+    ASSERT_TRUE(resource.valid());
+
+    const GpuTaskResourceUse uses[] = {
+        GpuTaskResourceUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskDesc taskDesc;
+    taskDesc
+        .setIdentity(Name("tests/descriptor_buffer/initial_owner_compute_use"))
+        .setMarkerLabel("Initial Owner Compute Use")
+        .setQueue(graphicsRequest)
+        .setResourceUses(uses, LengthOf(uses))
+    ;
+    bool taskRecorded = false;
+    const GpuTaskId task = graph.addTask<NativePacketPrefixTask>(
+        taskDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = buffer.get(),
+            .expectedState = ResourceStates::ShaderResource,
+            .recorded = &taskRecorded,
+        }
+    );
+    ASSERT_TRUE(task.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    GpuTaskGraphAnalysis analysis(asyncScope.arena());
+    GpuTaskGraphQueueAssignments assignments(asyncScope.arena());
+    GpuCompiledGraph compiledGraph(asyncScope.arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/initial_owner_handoff_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+    ASSERT_NE(compiledTask, nullptr);
+    EXPECT_EQ(compiledTask->queue, graphicsQueue);
+    const GpuSubmissionPacketId packet = compiledTask->packet;
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packet(packet).externalDependencyCount, 1u);
+    const GpuExternalCompletionId* const externalDependencies = compiledGraph.packetExternalDependencies(packet);
+    ASSERT_NE(externalDependencies, nullptr);
+    EXPECT_EQ(externalDependencies[0u], completion);
+
+    GpuRecordedGraph recordedGraph(asyncScope.arena());
+    GpuGraphSubmissionTransaction transaction(asyncScope.arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = packet },
+        recordedGraph
+    ));
+    EXPECT_TRUE(taskRecorded);
+
+    const GpuTaskGraphExternalCompletionToken externalTokens[] = {
+        GpuTaskGraphExternalCompletionToken{
+            .completion = completion,
+            .token = producerToken,
+        },
+    };
+    const GpuTaskGraphSubmitter submitter(device);
+    QueueSubmissionToken wrongPhysicalToken = producerToken;
+    wrongPhysicalToken.physicalQueueIndex = graphicsQueue.index;
+    const GpuTaskGraphExternalCompletionToken wrongExternalTokens[] = {
+        GpuTaskGraphExternalCompletionToken{
+            .completion = completion,
+            .token = wrongPhysicalToken,
+        },
+    };
+    EXPECT_FALSE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        packet,
+        wrongExternalTokens,
+        LengthOf(wrongExternalTokens),
+        transaction,
+        scratchArena
+    ));
+    EXPECT_FALSE(transaction.packetToken(packet).valid());
+    transaction.reset(compiledGraph);
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        packet,
+        externalTokens,
+        LengthOf(externalTokens),
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken consumerToken = transaction.packetToken(packet);
+    EXPECT_TRUE(consumerToken.valid());
+    EXPECT_TRUE(consumerToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 struct NativePacketRangeAcceptanceObserver{
     u32 acceptedCount = 0u;
     GpuSubmissionPacketId lastPacket;

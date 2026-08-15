@@ -423,6 +423,9 @@ struct ClearTextureTask{
         && resource.initialState == desc.initialState
         && resource.externalFinalState == desc.externalFinalState
         && resource.initialOwnerQueue == desc.initialOwnerQueue
+        && resource.initialOwnerReleaseDestinationQueue == desc.initialOwnerReleaseDestinationQueue
+        && resource.initialOwnerCompletion == desc.initialOwnerCompletion
+        && resource.initialOwnerStateSource == desc.initialOwnerStateSource
         && resource.queueSharing == desc.queueSharing;
 }
 
@@ -1380,6 +1383,9 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
         .initialState = resource.initialState,
         .externalFinalState = resource.externalFinalState,
         .initialOwnerQueue = resource.initialOwnerQueue,
+        .initialOwnerReleaseDestinationQueue = resource.initialOwnerReleaseDestinationQueue,
+        .initialOwnerCompletion = resource.initialOwnerCompletion,
+        .initialOwnerStateSource = resource.initialOwnerStateSource,
         .queueSharing = resource.queueSharing,
         .hasBackendResource = resource.texture != nullptr || resource.buffer != nullptr || resource.accelStruct != nullptr,
     };
@@ -1817,6 +1823,11 @@ GpuTaskId GpuTaskGraph::appendTask(
 }
 
 GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc){
+    const bool hasInitialOwnerHandoff =
+        desc.initialOwnerReleaseDestinationQueue.valid()
+        || desc.initialOwnerCompletion.valid()
+        || desc.initialOwnerStateSource != nullptr
+    ;
     if(
         !desc.identity
         || desc.markerLabel.empty()
@@ -1830,6 +1841,18 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
             desc.initialOwnerQueue.valid()
             && desc.type != GpuGraphResourceType::Texture
             && desc.type != GpuGraphResourceType::Buffer
+        )
+        || (
+            hasInitialOwnerHandoff
+            && (
+                !desc.initialOwnerQueue.valid()
+                || !desc.initialOwnerReleaseDestinationQueue.valid()
+                || desc.initialOwnerReleaseDestinationQueue == desc.initialOwnerQueue
+                || !desc.initialOwnerCompletion.valid()
+                || !validExternalCompletion(desc.initialOwnerCompletion)
+                || !desc.initialOwnerStateSource
+                || desc.initialState == ResourceStates::Unknown
+            )
         )
         || m_resources.size() >= Limit<u32>::s_Max
     )
@@ -1846,6 +1869,9 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
     resource.initialState = desc.initialState;
     resource.externalFinalState = desc.externalFinalState;
     resource.initialOwnerQueue = desc.initialOwnerQueue;
+    resource.initialOwnerReleaseDestinationQueue = desc.initialOwnerReleaseDestinationQueue;
+    resource.initialOwnerCompletion = desc.initialOwnerCompletion;
+    resource.initialOwnerStateSource = desc.initialOwnerStateSource;
     resource.queueSharing = desc.queueSharing;
     resource.markerLabelOffset = markerLabelOffset;
     resource.markerLabelSize = markerLabelSize;

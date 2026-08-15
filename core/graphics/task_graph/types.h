@@ -276,6 +276,9 @@ struct GpuCompiledBarrier{
     ResourceStates::Mask after = ResourceStates::Unknown;
     GpuPhysicalQueueId sourceQueue;
     GpuPhysicalQueueId destinationQueue;
+    // Only the first use of an imported external ownership handoff consumes the descriptor-owned state source.
+    // Later graph-internal ownership acquires use their producer packet snapshot instead.
+    bool isInitialOwnerHandoff = false;
 };
 
 // A packet-state seed names the prior packet that owns the authoritative native state snapshot for one declared

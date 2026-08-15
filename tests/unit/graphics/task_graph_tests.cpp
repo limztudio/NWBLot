@@ -2553,6 +2553,150 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
     }
 }
 
+TEST(GpuTaskGraph, CompilesExplicitInitialExclusiveOwnershipHandoff){
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    const Graphics::GpuQueueRequest graphicsQueue{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeQueue{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    const auto addFirstUse = [](
+        Graphics::GpuTaskGraph& graph,
+        const Graphics::GpuGraphResourceId resource,
+        const Name& identity,
+        const AStringView label,
+        const Graphics::GpuQueueRequest& queue
+    ){
+        const Graphics::GpuTaskResourceUse use{
+            .resource = resource,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(queue)
+            .setResourceUses(&use, 1u)
+        ;
+        return graph.addTask(desc);
+    };
+
+    {
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
+            Graphics::GpuExternalCompletionDesc{}
+                .setIdentity(Name("tests/task_graph/initial_owner_completion"))
+                .setMarkerLabel("Initial Owner Completion")
+        );
+        ASSERT_TRUE(completion.valid());
+        Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
+        const Graphics::GpuGraphResourceId resource = graph.importResource(
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/initial_owner_handoff"))
+                .setMarkerLabel("Initial Owner Handoff")
+                .setType(Graphics::GpuGraphResourceType::Buffer)
+                .setInitialState(Graphics::ResourceStates::Common)
+                .setInitialOwnerQueue(queues[0u].id)
+                .setInitialOwnerReleaseDestinationQueue(queues[1u].id)
+                .setInitialOwnerCompletion(completion)
+                .setInitialOwnerStateSource(&stateSource)
+        );
+        ASSERT_TRUE(resource.valid());
+        const Graphics::GpuTaskGraphResourceView view = graph.resourceAt(resource.index);
+        EXPECT_EQ(view.initialOwnerQueue, queues[0u].id);
+        EXPECT_EQ(view.initialOwnerReleaseDestinationQueue, queues[1u].id);
+        EXPECT_EQ(view.initialOwnerCompletion, completion);
+        EXPECT_EQ(view.initialOwnerStateSource, &stateSource);
+        const Graphics::GpuTaskId task = addFirstUse(
+            graph,
+            resource,
+            Name("tests/task_graph/initial_owner_handoff_use"),
+            "Initial Owner Handoff Use",
+            computeQueue
+        );
+        ASSERT_TRUE(task.valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        ASSERT_NE(compiledTask, nullptr);
+        EXPECT_EQ(compiledTask->queue, queues[1u].id);
+
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        ASSERT_NE(barriers, nullptr);
+        ASSERT_EQ(compiledTask->prologueBarrierCount, 2u);
+        EXPECT_EQ(barriers[0u].type, Graphics::GpuCompiledBarrierType::BufferOwnershipAcquire);
+        EXPECT_EQ(barriers[0u].resource, resource);
+        EXPECT_EQ(barriers[0u].sourceQueue, queues[0u].id);
+        EXPECT_EQ(barriers[0u].destinationQueue, queues[1u].id);
+        EXPECT_TRUE(barriers[0u].isInitialOwnerHandoff);
+        EXPECT_EQ(barriers[1u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
+
+        const Graphics::GpuSubmissionPacketId packet = compiledTask->packet;
+        ASSERT_TRUE(packet.valid());
+        EXPECT_EQ(compiledGraph.packet(packet).externalDependencyCount, 1u);
+        const Graphics::GpuExternalCompletionId* const externalDependencies = compiledGraph.packetExternalDependencies(packet);
+        ASSERT_NE(externalDependencies, nullptr);
+        EXPECT_EQ(externalDependencies[0u], completion);
+    }
+
+    {
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
+            Graphics::GpuExternalCompletionDesc{}
+                .setIdentity(Name("tests/task_graph/initial_owner_wrong_destination_completion"))
+                .setMarkerLabel("Initial Owner Wrong Destination Completion")
+        );
+        ASSERT_TRUE(completion.valid());
+        Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
+        const Graphics::GpuGraphResourceId resource = graph.importResource(
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/initial_owner_wrong_destination"))
+                .setMarkerLabel("Initial Owner Wrong Destination")
+                .setType(Graphics::GpuGraphResourceType::Buffer)
+                .setInitialState(Graphics::ResourceStates::Common)
+                .setInitialOwnerQueue(queues[0u].id)
+                .setInitialOwnerReleaseDestinationQueue(queues[1u].id)
+                .setInitialOwnerCompletion(completion)
+                .setInitialOwnerStateSource(&stateSource)
+        );
+        ASSERT_TRUE(resource.valid());
+        ASSERT_TRUE(addFirstUse(
+            graph,
+            resource,
+            Name("tests/task_graph/initial_owner_wrong_destination_use"),
+            "Initial Owner Wrong Destination Use",
+            graphicsQueue
+        ).valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(compiledGraph.valid());
+    }
+}
+
 TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -11771,6 +11915,7 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
     EXPECT_EQ(exclusiveAcquire[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire);
     EXPECT_EQ(exclusiveAcquire[0u].sourceQueue, compiledExclusiveGraphics->queue);
     EXPECT_EQ(exclusiveAcquire[0u].destinationQueue, compiledExclusiveCompute->queue);
+    EXPECT_FALSE(exclusiveAcquire[0u].isInitialOwnerHandoff);
     EXPECT_EQ(exclusiveRelease[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipRelease);
     EXPECT_EQ(exclusiveRelease[0u].sourceQueue, compiledExclusiveGraphics->queue);
     EXPECT_EQ(exclusiveRelease[0u].destinationQueue, compiledExclusiveCompute->queue);
@@ -11880,6 +12025,7 @@ TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
     EXPECT_EQ(acquire[0u].resource, pair.texture);
     EXPECT_EQ(acquire[0u].sourceQueue, compiledProducer->queue);
     EXPECT_EQ(acquire[0u].destinationQueue, compiledConsumer->queue);
+    EXPECT_FALSE(acquire[0u].isInitialOwnerHandoff);
     EXPECT_EQ(stateSeed[0u].resource, pair.texture);
     EXPECT_EQ(stateSeed[0u].sourcePacket, compiledProducer->packet);
     ASSERT_EQ(compiledGraph.packet(compiledConsumer->packet).dependencyCount, 1u);

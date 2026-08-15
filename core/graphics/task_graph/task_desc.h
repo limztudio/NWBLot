@@ -87,10 +87,15 @@ struct GpuGraphResourceDesc{
     // graph declared for an imported texture/buffer and publishes it in the accepted packet's native state
     // snapshot. Unknown leaves the resource's final state under ordinary task ownership.
     ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
-    // Optional owner of an exclusive imported texture/buffer before its first graph use. The current generic
-    // contract accepts only an exact first-packet match; a cross-queue import still needs an explicit external
-    // release/completion representation rather than an inferred Vulkan acquire.
+    // Optional owner of an exclusive imported texture/buffer before its first graph use. An exact first-packet
+    // match needs no extra synchronization because submission order on one physical queue is sufficient.
     GpuPhysicalQueueId initialOwnerQueue;
+    // A different first packet is permitted only when an already-recorded external producer released ownership to
+    // this exact physical queue, exported the state snapshot below, and supplies the completion node imported into
+    // this graph before the resource. The compiler then attaches that completion to the first consumer packet.
+    GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
+    GpuExternalCompletionId initialOwnerCompletion;
+    const CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
 
     constexpr GpuGraphResourceDesc& setIdentity(const Name& value){ identity = value; return *this; }
@@ -99,6 +104,9 @@ struct GpuGraphResourceDesc{
     constexpr GpuGraphResourceDesc& setInitialState(const ResourceStates::Mask value){ initialState = value; return *this; }
     constexpr GpuGraphResourceDesc& setExternalFinalState(const ResourceStates::Mask value){ externalFinalState = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerQueue(const GpuPhysicalQueueId value){ initialOwnerQueue = value; return *this; }
+    constexpr GpuGraphResourceDesc& setInitialOwnerReleaseDestinationQueue(const GpuPhysicalQueueId value){ initialOwnerReleaseDestinationQueue = value; return *this; }
+    constexpr GpuGraphResourceDesc& setInitialOwnerCompletion(const GpuExternalCompletionId value){ initialOwnerCompletion = value; return *this; }
+    constexpr GpuGraphResourceDesc& setInitialOwnerStateSource(const CommandListResourceStateHandoff* const value){ initialOwnerStateSource = value; return *this; }
     constexpr GpuGraphResourceDesc& setQueueSharing(const ResourceQueueSharing::Mask value){ queueSharing = value; return *this; }
 };
 

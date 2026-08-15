@@ -55,6 +55,9 @@ struct GpuTaskGraphResourceView{
     ResourceStates::Mask initialState = ResourceStates::Unknown;
     ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
     GpuPhysicalQueueId initialOwnerQueue;
+    GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
+    GpuExternalCompletionId initialOwnerCompletion;
+    const CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     bool hasBackendResource = false;
 };
@@ -112,6 +115,9 @@ private:
         ResourceStates::Mask initialState = ResourceStates::Unknown;
         ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
         GpuPhysicalQueueId initialOwnerQueue;
+        GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
+        GpuExternalCompletionId initialOwnerCompletion;
+        const CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
         ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;

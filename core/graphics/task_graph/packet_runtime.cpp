@@ -55,6 +55,53 @@ inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph
     return true;
 }
 
+// Ordinary external completions may originate on any current-device queue. A completion paired with an imported
+// ownership acquire is narrower: it must prove the exact physical source queue that released the resource, or the
+// consumer could wait an unrelated timeline and race the Vulkan acquire.
+[[nodiscard]] bool ValidateInitialOwnershipCompletion(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId& packetID,
+    const GpuExternalCompletionId& completion,
+    const QueueSubmissionToken& token
+){
+    const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
+    const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
+    if(packet.taskCount != 0u && !tasks)
+        return false;
+
+    for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
+        const GpuCompiledTask* const compiledTask = compiledGraph.findTask(tasks[taskIndex]);
+        const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(tasks[taskIndex]);
+        if(!compiledTask || (compiledTask->prologueBarrierCount != 0u && !barriers))
+            return false;
+        for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(!barrier.isInitialOwnerHandoff)
+                continue;
+            if(
+                barrier.type != GpuCompiledBarrierType::TextureOwnershipAcquire
+                && barrier.type != GpuCompiledBarrierType::BufferOwnershipAcquire
+            )
+                return false;
+
+            const GpuTaskGraphResourceView resource = graph.resourceAt(barrier.resource.index);
+            if(resource.initialOwnerCompletion != completion)
+                continue;
+            const GpuPhysicalQueueInfo* const sourceQueue = compiledGraph.queueInfo(barrier.sourceQueue);
+            if(
+                !sourceQueue
+                || resource.initialOwnerQueue != barrier.sourceQueue
+                || resource.initialOwnerReleaseDestinationQueue != barrier.destinationQueue
+                || token.queue != sourceQueue->queueClass
+                || !token.matchesPhysicalQueue(barrier.sourceQueue.index, barrier.sourceQueue.deviceGeneration)
+            )
+                return false;
+        }
+    }
+    return true;
+}
+
 
 } // namespace __hidden_gpu_packet_runtime
 
@@ -200,6 +247,28 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         return scratch.stateMergeScratch.copyFrom(scratch.initialStateSeed);
     };
 
+    const auto appendMergedExternalSource = [&]{
+        if(!scratch.stateMergeScratch.valid())
+            return true;
+
+        if(!scratch.externalBaseStateSeed.valid()){
+            if(
+                !scratch.externalBaseStateSeed.copyFrom(scratch.stateMergeScratch)
+                || !scratch.externalMergedStateSeed.copyFrom(scratch.stateMergeScratch)
+            )
+                return false;
+            return true;
+        }
+
+        const CommandListResourceStateHandoff* const branches[] = {
+            &scratch.externalMergedStateSeed,
+            &scratch.stateMergeScratch,
+        };
+        if(!scratch.initialStateSeed.buildFanIn(scratch.externalBaseStateSeed, branches, LengthOf(branches)))
+            return false;
+        return scratch.externalMergedStateSeed.copyFrom(scratch.initialStateSeed);
+    };
+
     const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
     const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
     if(!tasks || packet.taskCount == 0u)
@@ -264,26 +333,79 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             }
         }
 
-        if(!scratch.stateMergeScratch.valid())
-            return true;
+        return appendMergedExternalSource();
+    };
 
-        if(!scratch.externalBaseStateSeed.valid()){
-            if(
-                !scratch.externalBaseStateSeed.copyFrom(scratch.stateMergeScratch)
-                || !scratch.externalMergedStateSeed.copyFrom(scratch.stateMergeScratch)
-            )
+    const auto appendInitialOwnerStateSource = [&](const GpuCompiledBarrier& barrier){
+        const GpuTaskGraphResourceView resource = graph.resourceAt(barrier.resource.index);
+        const CommandListResourceStateHandoff* const sourceStates = resource.initialOwnerStateSource;
+        if(
+            !sourceStates
+            || !sourceStates->valid()
+            || resource.initialOwnerQueue != barrier.sourceQueue
+            || resource.initialOwnerReleaseDestinationQueue != barrier.destinationQueue
+        )
+            return false;
+
+        scratch.stateMergeScratch.reset();
+        scratch.stateSubsetScratch.reset();
+        switch(resource.type){
+        case GpuGraphResourceType::Texture:{
+            Texture* const texture = graph.textureForResource(barrier.resource);
+            if(!texture || !scratch.stateSubsetScratch.buildTextureRangeSubset(
+                *sourceStates,
+                texture,
+                barrier.range.textureSubresources
+            ))
                 return false;
-            return true;
+            break;
+        }
+        case GpuGraphResourceType::Buffer:{
+            Buffer* const buffer = graph.bufferForResource(barrier.resource);
+            if(!buffer)
+                return false;
+            Buffer* const buffers[] = { buffer };
+            if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))
+                return false;
+            break;
+        }
+        default:
+            return false;
         }
 
-        const CommandListResourceStateHandoff* const branches[] = {
-            &scratch.externalMergedStateSeed,
-            &scratch.stateMergeScratch,
-        };
-        if(!scratch.initialStateSeed.buildFanIn(scratch.externalBaseStateSeed, branches, LengthOf(branches)))
+        // Unlike an optional task state source, an imported ownership handoff must name every first-use range. A
+        // missing state would leave the acquire marker without the native source layout/owner it is required to
+        // import, so reject recording instead of falling back to descriptor creation state.
+        if(scratch.stateSubsetScratch.empty() || !appendSourceSubset())
             return false;
-        return scratch.externalMergedStateSeed.copyFrom(scratch.initialStateSeed);
+        return appendMergedExternalSource();
     };
+
+    // Resource-owned external handoffs are resolved from compiler markers rather than a renderer packet override.
+    // They are imported before ordinary task sources so the native command list opens with the released ownership
+    // and emits the paired Vulkan acquire before any graph prologue transition records.
+    for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
+        const GpuCompiledTask* const compiledTask = compiledGraph.findTask(tasks[taskIndex]);
+        const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(tasks[taskIndex]);
+        if(!compiledTask || (compiledTask->prologueBarrierCount != 0u && !barriers))
+            return false;
+        for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                !barrier.isInitialOwnerHandoff
+                || (
+                    barrier.type != GpuCompiledBarrierType::TextureOwnershipAcquire
+                    && barrier.type != GpuCompiledBarrierType::BufferOwnershipAcquire
+                )
+            )
+                continue;
+            const GpuTaskGraphResourceView resource = graph.resourceAt(barrier.resource.index);
+            if(!resource.initialOwnerCompletion.valid())
+                continue;
+            if(!appendInitialOwnerStateSource(barrier))
+                return false;
+        }
+    }
 
     // Declaration-owned sources are attached to the task that needs their imported state.  That preserves the
     // source/resource relationship across packet coalescing and lets ordinary record traversal avoid renderer-owned
@@ -1045,7 +1167,16 @@ bool GpuTaskGraphSubmitter::submitPacket(
         for(usize tokenIndex = 0u; tokenIndex < externalCompletionTokenCount; ++tokenIndex){
             const GpuTaskGraphExternalCompletionToken& binding = externalCompletionTokens[tokenIndex];
             if(binding.completion == completion){
-                if(!binding.validFor(compiledGraph)){
+                if(
+                    !binding.validFor(compiledGraph)
+                    || !__hidden_gpu_packet_runtime::ValidateInitialOwnershipCompletion(
+                        graph,
+                        compiledGraph,
+                        packetID,
+                        completion,
+                        binding.token
+                    )
+                ){
                     transaction.rejectPacket(graph, compiledGraph, packetID);
                     return false;
                 }

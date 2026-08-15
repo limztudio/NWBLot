@@ -9966,9 +9966,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     bool accumulationStreamsUploaded = false;
     bool accumulationCsgStreamsUploaded = false;
     Core::Alloc::ScratchArena accumulationMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationMaterialGeometryUses{
-        accumulationMaterialGeometryScratch
-    };
+    Core::GpuGraphResourceSetId accumulationMaterialGeometrySet;
     {
         Core::Alloc::ScratchArena accumulationUploadScratch(RendererArenaScope::s_TaskGraphArena);
         MaterialPassDrawItemPartitions accumulationDrawItems{ accumulationUploadScratch };
@@ -10021,13 +10019,15 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 &accumulationDrawItems.regular,
                 &accumulationDrawItems.csg,
             };
-            avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryUses(
+            avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryResourceSet(
                 m_meshSystem,
                 m_deferredLightingTaskGraph,
                 accumulationMaterialGeometryDrawSets,
                 LengthOf(accumulationMaterialGeometryDrawSets),
                 accumulationMaterialGeometryScratch,
-                accumulationMaterialGeometryUses
+                Name("render.avboit.accumulation.material_geometry"),
+                "AVBOIT Accumulation Material Geometry",
+                accumulationMaterialGeometrySet
             );
             if(!avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT accumulation material geometry states"));
@@ -10317,8 +10317,12 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             }
         }
     }
-    for(const Core::GpuTaskResourceUse& use : accumulationMaterialGeometryUses)
-        accumulationResourceUses.push_back(use);
+    const Core::GpuTaskResourceSetUse accumulationMaterialGeometrySetUse{
+        .resourceSet = accumulationMaterialGeometrySet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
     accumulationResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     accumulationResourceUses.push_back(ReadUse(avboitMaterialDomain));
     accumulationResourceUses.push_back(ReadUse(avboitCsgDomain));
@@ -10336,6 +10340,12 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .setScheduling(avboitAccumulationScheduling)
         .setDependencies(&accumulationUploadTask, 1u)
         .setResourceUses(accumulationResourceUses.data(), accumulationResourceUses.size())
+        .setResourceSetUses(
+            avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
+                ? &accumulationMaterialGeometrySetUse
+                : nullptr,
+            avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned ? 1u : 0u
+        )
     ;
     m_deferredAvboitAccumulationTask = m_deferredLightingTaskGraph.addTask<AvboitAccumulationGraphTask>(
         accumulationDesc,

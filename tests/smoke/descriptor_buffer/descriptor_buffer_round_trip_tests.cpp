@@ -11040,6 +11040,252 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitExtinctionMaterialGeometry
 }
 
 
+// AVBOIT Accumulation consumes the transparent CSG interval aliases after the extinction/integration sequence. Its
+// exact selected mesh buffers must reach ShaderResource through the immutable graph set before the native callback.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationMaterialGeometryStateRecordsWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto materialGeometry = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    const auto makeStorageArray = [&device](const u32 arraySize){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setArraySize(arraySize)
+                .setDimension(TextureDimension::Texture2DArray)
+                .setFormat(Format::RGBA32_UINT)
+                .setInUAV(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    auto removedIntervalDepth = makeStorageArray(16u);
+    auto removedIntervalCapNormal = makeStorageArray(16u);
+    auto removedIntervalData = makeStorageArray(16u);
+    auto removedIntervalCount = makeStorageArray(1u);
+    ASSERT_NE(materialGeometry.get(), nullptr);
+    ASSERT_NE(removedIntervalDepth.get(), nullptr);
+    ASSERT_NE(removedIntervalCapNormal.get(), nullptr);
+    ASSERT_NE(removedIntervalData.get(), nullptr);
+    ASSERT_NE(removedIntervalCount.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId materialGeometryResource = graph.importBuffer(
+        materialGeometry,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_accumulation_material_geometry"))
+            .setMarkerLabel("AVBOIT Accumulation Material Geometry")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId removedIntervalDepthResource = graph.importTexture(
+        removedIntervalDepth,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_accumulation_removed_interval_depth"))
+            .setMarkerLabel("AVBOIT Accumulation Removed Interval Depth")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId removedIntervalCapNormalResource = graph.importTexture(
+        removedIntervalCapNormal,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_accumulation_removed_interval_cap_normal"))
+            .setMarkerLabel("AVBOIT Accumulation Removed Interval Cap Normal")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId removedIntervalDataResource = graph.importTexture(
+        removedIntervalData,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_accumulation_removed_interval_data"))
+            .setMarkerLabel("AVBOIT Accumulation Removed Interval Data")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId removedIntervalCountResource = graph.importTexture(
+        removedIntervalCount,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_accumulation_removed_interval_count"))
+            .setMarkerLabel("AVBOIT Accumulation Removed Interval Count")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(materialGeometryResource.valid());
+    ASSERT_TRUE(removedIntervalDepthResource.valid());
+    ASSERT_TRUE(removedIntervalCapNormalResource.valid());
+    ASSERT_TRUE(removedIntervalDataResource.valid());
+    ASSERT_TRUE(removedIntervalCountResource.valid());
+
+    const TextureSubresourceSet removedIntervalRange(0u, 1u, 0u, 16u);
+    const TextureSubresourceSet removedIntervalCountRange(0u, 1u, 0u, 1u);
+    const GpuTaskResourceUse accumulationUses[] = {
+        GpuTaskResourceUse{
+            .resource = removedIntervalDepthResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalCapNormalResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalDataResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalCountResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalCountRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    const GpuGraphResourceSetId materialGeometrySet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_accumulation_material_geometry_set"))
+            .setMarkerLabel("AVBOIT Accumulation Material Geometry")
+            .setMembers(&materialGeometryResource, 1u)
+    );
+    ASSERT_TRUE(materialGeometrySet.valid());
+    const GpuTaskResourceSetUse materialGeometrySetUses[] = {
+        GpuTaskResourceSetUse{
+            .resourceSet = materialGeometrySet,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint accumulationScheduling;
+    accumulationScheduling.cost = GpuTaskCostHint::Large;
+    accumulationScheduling.forceSubmissionBoundary = false;
+    accumulationScheduling.allowPacketMerge = true;
+    GpuTaskDesc accumulationDesc;
+    accumulationDesc
+        .setIdentity(Name("tests/descriptor_buffer/avboit_accumulation_csg_sample"))
+        .setMarkerLabel("AVBOIT Accumulation")
+        .setQueue(graphicsQueue)
+        .setScheduling(accumulationScheduling)
+        .setResourceUses(accumulationUses, LengthOf(accumulationUses))
+        .setResourceSetUses(materialGeometrySetUses, LengthOf(materialGeometrySetUses))
+    ;
+    bool accumulationRecorded = false;
+    const GpuTaskId accumulationTask = graph.addTask<NativePacketCsgIntervalSampleProbeTask>(
+        accumulationDesc,
+        NativePacketCsgIntervalSampleProbeTask::Payload{
+            .materialGeometry = materialGeometry.get(),
+            .removedIntervalDepth = removedIntervalDepth.get(),
+            .removedIntervalCapNormal = removedIntervalCapNormal.get(),
+            .removedIntervalData = removedIntervalData.get(),
+            .removedIntervalCount = removedIntervalCount.get(),
+            .recorded = &accumulationRecorded,
+        }
+    );
+    ASSERT_TRUE(accumulationTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/avboit_accumulation_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(accumulationTask);
+    ASSERT_TRUE(packet.valid());
+    const GpuCompiledTask* const compiledAccumulation = compiledGraph.findTask(accumulationTask);
+    ASSERT_NE(compiledAccumulation, nullptr);
+    ASSERT_EQ(compiledAccumulation->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledAccumulation->prologueBarrierCount, 5u);
+    const GpuCompiledBarrier* const accumulationBarriers = compiledGraph.taskPrologueBarriers(accumulationTask);
+    ASSERT_NE(accumulationBarriers, nullptr);
+    bool materialGeometryTransition = false;
+    const auto hasTextureTransition = [](const GpuGraphResourceId resource, const TextureSubresourceSet& range, const GpuCompiledBarrier* barriers, const u32 barrierCount){
+        for(u32 barrierIndex = 0u; barrierIndex < barrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == resource
+                && barrier.range.textureSubresources == range
+                && barrier.before == ResourceStates::Common
+                && barrier.after == ResourceStates::UnorderedAccess
+            )
+                return true;
+        }
+        return false;
+    };
+    for(u32 barrierIndex = 0u; barrierIndex < compiledAccumulation->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = accumulationBarriers[barrierIndex];
+        if(
+            barrier.type == GpuCompiledBarrierType::BufferTransition
+            && barrier.resource == materialGeometryResource
+            && barrier.before == ResourceStates::Common
+            && barrier.after == ResourceStates::ShaderResource
+        )
+            materialGeometryTransition = true;
+    }
+    EXPECT_TRUE(hasTextureTransition(removedIntervalDepthResource, removedIntervalRange, accumulationBarriers, compiledAccumulation->prologueBarrierCount));
+    EXPECT_TRUE(hasTextureTransition(removedIntervalCapNormalResource, removedIntervalRange, accumulationBarriers, compiledAccumulation->prologueBarrierCount));
+    EXPECT_TRUE(hasTextureTransition(removedIntervalDataResource, removedIntervalRange, accumulationBarriers, compiledAccumulation->prologueBarrierCount));
+    EXPECT_TRUE(hasTextureTransition(removedIntervalCountResource, removedIntervalCountRange, accumulationBarriers, compiledAccumulation->prologueBarrierCount));
+    EXPECT_TRUE(materialGeometryTransition);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(accumulationRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(packet).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Opaque CSG now lowers G-buffer event production, receiver-span build, interval combine, and material/cap sampling
 // as graph tasks. Record the whole same-UAV chain on a real Graphics packet so Span, Combine, and Sample cannot rely
 // on a native state bridge.

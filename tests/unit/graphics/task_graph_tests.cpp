@@ -17300,10 +17300,16 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToAccumulationSampleAcrossInteg
         Name("tests/task_graph/avboit_accumulation_removed_interval_count"),
         "AVBOIT Accumulation Removed Interval Count"
     );
+    const Graphics::GpuGraphResourceId accumulationMaterialGeometry = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/avboit_accumulation_material_geometry"),
+        "AVBOIT Accumulation Material Geometry"
+    );
     ASSERT_TRUE(removedIntervalDepth.valid());
     ASSERT_TRUE(removedIntervalCapNormal.valid());
     ASSERT_TRUE(removedIntervalData.valid());
     ASSERT_TRUE(removedIntervalCount.valid());
+    ASSERT_TRUE(accumulationMaterialGeometry.valid());
 
     const Graphics::TextureSubresourceSet removedIntervalRange(0u, 1u, 0u, 16u);
     const Graphics::TextureSubresourceSet removedIntervalCountRange(0u, 1u, 0u, 1u);
@@ -17356,6 +17362,21 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToAccumulationSampleAcrossInteg
             .resource = removedIntervalCount,
             .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalCountRange },
             .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuGraphResourceSetId accumulationMaterialGeometrySet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/avboit_accumulation_material_geometry_set"))
+            .setMarkerLabel("AVBOIT Accumulation Material Geometry")
+            .setMembers(&accumulationMaterialGeometry, 1u)
+    );
+    ASSERT_TRUE(accumulationMaterialGeometrySet.valid());
+    const Graphics::GpuTaskResourceSetUse accumulationMaterialGeometrySetUses[] = {
+        Graphics::GpuTaskResourceSetUse{
+            .resourceSet = accumulationMaterialGeometrySet,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Read,
         },
     };
@@ -17428,6 +17449,7 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToAccumulationSampleAcrossInteg
         .setScheduling(boundaryScheduling)
         .setDependencies(&integration, 1u)
         .setResourceUses(accumulationUses, LengthOf(accumulationUses))
+        .setResourceSetUses(accumulationMaterialGeometrySetUses, LengthOf(accumulationMaterialGeometrySetUses))
     ;
     const Graphics::GpuTaskId accumulation = graph.addTask(accumulationDesc);
     ASSERT_TRUE(accumulation.valid());
@@ -17510,7 +17532,7 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToAccumulationSampleAcrossInteg
     ASSERT_EQ(compiledIntervals->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledIntervals->prologueBarrierCount, 4u);
     ASSERT_EQ(compiledAccumulation->prologueStateSeedCount, 4u);
-    ASSERT_EQ(compiledAccumulation->prologueBarrierCount, 4u);
+    ASSERT_EQ(compiledAccumulation->prologueBarrierCount, 5u);
     const Graphics::GpuPacketStateSeed* const accumulationSeeds = compiledGraph.taskPrologueStateSeeds(accumulation);
     const Graphics::GpuCompiledBarrier* const accumulationBarriers = compiledGraph.taskPrologueBarriers(accumulation);
     ASSERT_NE(accumulationSeeds, nullptr);
@@ -17541,10 +17563,22 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToAccumulationSampleAcrossInteg
     EXPECT_TRUE(hasAccumulationStateSeed(removedIntervalCapNormal));
     EXPECT_TRUE(hasAccumulationStateSeed(removedIntervalData));
     EXPECT_TRUE(hasAccumulationStateSeed(removedIntervalCount));
+    bool accumulationMaterialGeometryTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledAccumulation->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = accumulationBarriers[barrierIndex];
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+            && barrier.resource == accumulationMaterialGeometry
+            && barrier.before == Graphics::ResourceStates::Common
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+        )
+            accumulationMaterialGeometryTransition = true;
+    }
     EXPECT_TRUE(hasAccumulationUav(removedIntervalDepth, removedIntervalRange));
     EXPECT_TRUE(hasAccumulationUav(removedIntervalCapNormal, removedIntervalRange));
     EXPECT_TRUE(hasAccumulationUav(removedIntervalData, removedIntervalRange));
     EXPECT_TRUE(hasAccumulationUav(removedIntervalCount, removedIntervalCountRange));
+    EXPECT_TRUE(accumulationMaterialGeometryTransition);
 }
 
 

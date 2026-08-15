@@ -10100,8 +10100,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
             .setCanHaveRawViews(true)
             .setInitialState(ResourceStates::Common)
     );
+    auto occupancyMaterialGeometry = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
     ASSERT_NE(coverage.get(), nullptr);
     ASSERT_NE(materialGeometry.get(), nullptr);
+    ASSERT_NE(occupancyMaterialGeometry.get(), nullptr);
     const auto makeStorageArray = [&device](const u32 arraySize){
         return device.createTexture(
             TextureDesc()
@@ -10150,6 +10157,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
         GpuGraphResourceDesc{}
             .setIdentity(Name("tests/descriptor_buffer/avboit_csg_material_geometry"))
             .setMarkerLabel("Transparent CSG Material Geometry")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId occupancyMaterialGeometryResource = graph.importBuffer(
+        occupancyMaterialGeometry,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_occupancy_material_geometry"))
+            .setMarkerLabel("AVBOIT Occupancy Material Geometry")
             .setType(GpuGraphResourceType::Buffer)
     );
     const GpuGraphResourceId capBackNormalResource = graph.importTexture(
@@ -10242,6 +10256,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
     ASSERT_TRUE(removedIntervalDataResource.valid());
     ASSERT_TRUE(removedIntervalCountResource.valid());
     ASSERT_TRUE(materialGeometryResource.valid());
+    ASSERT_TRUE(occupancyMaterialGeometryResource.valid());
 
     const TextureSubresourceSet peelRange(0u, 1u, 0u, 4u);
     const TextureSubresourceSet receiverEventRange(0u, 1u, 0u, 32u);
@@ -10419,6 +10434,21 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
             .access = GpuTaskResourceAccess::Read,
         },
     };
+    const GpuGraphResourceSetId occupancyMaterialGeometrySet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_occupancy_material_geometry_set"))
+            .setMarkerLabel("AVBOIT Occupancy Material Geometry")
+            .setMembers(&occupancyMaterialGeometryResource, 1u)
+    );
+    ASSERT_TRUE(occupancyMaterialGeometrySet.valid());
+    const GpuTaskResourceSetUse occupancyMaterialGeometrySetUses[] = {
+        GpuTaskResourceSetUse{
+            .resourceSet = occupancyMaterialGeometrySet,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
     const GpuQueueRequest graphicsQueue{
         GpuQueueCapability::Graphics,
         GpuQueuePreference::Graphics,
@@ -10541,12 +10571,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
         .setScheduling(occupancyScheduling)
         .setDependencies(&clearTask, 1u)
         .setResourceUses(occupancyUses, LengthOf(occupancyUses))
+        .setResourceSetUses(occupancyMaterialGeometrySetUses, LengthOf(occupancyMaterialGeometrySetUses))
     ;
     bool occupancyRecorded = false;
     const GpuTaskId occupancyTask = graph.addTask<NativePacketCsgIntervalSampleProbeTask>(
         occupancyDesc,
         NativePacketCsgIntervalSampleProbeTask::Payload{
             .coverage = coverage.get(),
+            .materialGeometry = occupancyMaterialGeometry.get(),
             .removedIntervalDepth = removedIntervalDepth.get(),
             .removedIntervalCapNormal = removedIntervalCapNormal.get(),
             .removedIntervalData = removedIntervalData.get(),
@@ -10613,7 +10645,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
     ASSERT_EQ(compiledSpan->prologueBarrierCount, 4u);
     ASSERT_EQ(compiledCombine->prologueBarrierCount, 9u);
     ASSERT_EQ(compiledClear->prologueBarrierCount, 1u);
-    ASSERT_EQ(compiledOccupancy->prologueBarrierCount, 5u);
+    ASSERT_EQ(compiledOccupancy->prologueBarrierCount, 6u);
     const GpuCompiledBarrier* const preBarriers = compiledGraph.taskPrologueBarriers(preTask);
     const GpuCompiledBarrier* const spanBarriers = compiledGraph.taskPrologueBarriers(spanTask);
     const GpuCompiledBarrier* const combineBarriers = compiledGraph.taskPrologueBarriers(combineTask);
@@ -10705,11 +10737,23 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
         )
             coverageTransition = true;
     }
+    bool occupancyMaterialGeometryTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledOccupancy->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = occupancyBarriers[barrierIndex];
+        if(
+            barrier.type == GpuCompiledBarrierType::BufferTransition
+            && barrier.resource == occupancyMaterialGeometryResource
+            && barrier.before == ResourceStates::Common
+            && barrier.after == ResourceStates::ShaderResource
+        )
+            occupancyMaterialGeometryTransition = true;
+    }
     EXPECT_TRUE(hasTextureUav(occupancyBarriers, compiledOccupancy->prologueBarrierCount, removedIntervalDepthResource, removedIntervalRange));
     EXPECT_TRUE(hasTextureUav(occupancyBarriers, compiledOccupancy->prologueBarrierCount, removedIntervalCapNormalResource, removedIntervalRange));
     EXPECT_TRUE(hasTextureUav(occupancyBarriers, compiledOccupancy->prologueBarrierCount, removedIntervalDataResource, removedIntervalRange));
     EXPECT_TRUE(hasTextureUav(occupancyBarriers, compiledOccupancy->prologueBarrierCount, removedIntervalCountResource, removedIntervalCountRange));
     EXPECT_TRUE(coverageTransition);
+    EXPECT_TRUE(occupancyMaterialGeometryTransition);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);

@@ -15777,6 +15777,11 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerSpanBuildCombineToOccupancyUavD
         Name("tests/task_graph/avboit_csg_material_geometry"),
         "Transparent CSG Material Geometry"
     );
+    const Graphics::GpuGraphResourceId occupancyMaterialGeometry = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/avboit_occupancy_material_geometry"),
+        "AVBOIT Occupancy Material Geometry"
+    );
     ASSERT_TRUE(capBackNormal.valid());
     ASSERT_TRUE(intervalDepth.valid());
     ASSERT_TRUE(intervalId.valid());
@@ -15790,6 +15795,7 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerSpanBuildCombineToOccupancyUavD
     ASSERT_TRUE(removedIntervalCount.valid());
     ASSERT_TRUE(coverage.valid());
     ASSERT_TRUE(materialGeometry.valid());
+    ASSERT_TRUE(occupancyMaterialGeometry.valid());
 
     const Graphics::TextureSubresourceSet peelRange(0u, 1u, 0u, 4u);
     const Graphics::TextureSubresourceSet receiverEventRange(0u, 1u, 0u, 32u);
@@ -15967,6 +15973,21 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerSpanBuildCombineToOccupancyUavD
             .access = Graphics::GpuTaskResourceAccess::Read,
         },
     };
+    const Graphics::GpuGraphResourceSetId occupancyMaterialGeometrySet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/avboit_occupancy_material_geometry_set"))
+            .setMarkerLabel("AVBOIT Occupancy Material Geometry")
+            .setMembers(&occupancyMaterialGeometry, 1u)
+    );
+    ASSERT_TRUE(occupancyMaterialGeometrySet.valid());
+    const Graphics::GpuTaskResourceSetUse occupancyMaterialGeometrySetUses[] = {
+        Graphics::GpuTaskResourceSetUse{
+            .resourceSet = occupancyMaterialGeometrySet,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
         Graphics::GpuQueuePreference::Graphics,
@@ -16049,6 +16070,7 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerSpanBuildCombineToOccupancyUavD
         .setScheduling(occupancyScheduling)
         .setDependencies(&clear, 1u)
         .setResourceUses(occupancyUses, LengthOf(occupancyUses))
+        .setResourceSetUses(occupancyMaterialGeometrySetUses, LengthOf(occupancyMaterialGeometrySetUses))
     ;
     const Graphics::GpuTaskId occupancy = graph.addTask(occupancyDesc);
     ASSERT_TRUE(occupancy.valid());
@@ -16195,7 +16217,7 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerSpanBuildCombineToOccupancyUavD
     EXPECT_EQ(compiledSpanBuild->prologueBarrierCount, 4u);
     EXPECT_EQ(compiledCombine->prologueBarrierCount, 9u);
     EXPECT_EQ(compiledClear->prologueBarrierCount, 1u);
-    EXPECT_EQ(compiledOccupancy->prologueBarrierCount, 5u);
+    EXPECT_EQ(compiledOccupancy->prologueBarrierCount, 6u);
     const Graphics::GpuCompiledBarrier* const preBarriers = compiledGraph.taskPrologueBarriers(pre);
     const Graphics::GpuCompiledBarrier* const spanBuildBarriers = compiledGraph.taskPrologueBarriers(spanBuild);
     const Graphics::GpuCompiledBarrier* const combineBarriers = compiledGraph.taskPrologueBarriers(combine);
@@ -16348,7 +16370,19 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerSpanBuildCombineToOccupancyUavD
         )
             coverageTransition = true;
     }
+    bool occupancyMaterialGeometryTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledOccupancy->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = occupancyBarriers[barrierIndex];
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+            && barrier.resource == occupancyMaterialGeometry
+            && barrier.before == Graphics::ResourceStates::Common
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+        )
+            occupancyMaterialGeometryTransition = true;
+    }
     EXPECT_TRUE(coverageTransition);
+    EXPECT_TRUE(occupancyMaterialGeometryTransition);
 }
 
 

@@ -9022,9 +9022,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::GpuTaskId occupancyUploadTask = avboitIntervalCompletionTask;
     bool occupancyCsgStreamsUploaded = false;
     Core::Alloc::ScratchArena occupancyMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> occupancyMaterialGeometryUses{
-        occupancyMaterialGeometryScratch
-    };
+    Core::GpuGraphResourceSetId occupancyMaterialGeometrySet;
     if(hasTransparentRenderers){
         Core::Alloc::ScratchArena occupancyUploadScratch(RendererArenaScope::s_TaskGraphArena);
         MaterialPassDrawItemPartitions occupancyDrawItems{ occupancyUploadScratch };
@@ -9077,13 +9075,15 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 &occupancyDrawItems.regular,
                 &occupancyDrawItems.csg,
             };
-            avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryUses(
+            avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryResourceSet(
                 m_meshSystem,
                 m_deferredLightingTaskGraph,
                 occupancyMaterialGeometryDrawSets,
                 LengthOf(occupancyMaterialGeometryDrawSets),
                 occupancyMaterialGeometryScratch,
-                occupancyMaterialGeometryUses
+                Name("render.avboit.occupancy.material_geometry"),
+                "AVBOIT Occupancy Material Geometry",
+                occupancyMaterialGeometrySet
             );
             if(!avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT occupancy material geometry states"));
@@ -9419,8 +9419,12 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Core::ResourceStates::UnorderedAccess
         ));
     }
-    for(const Core::GpuTaskResourceUse& use : occupancyMaterialGeometryUses)
-        avboitPreResourceUses.push_back(use);
+    const Core::GpuTaskResourceSetUse occupancyMaterialGeometrySetUse{
+        .resourceSet = occupancyMaterialGeometrySet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
     avboitPreResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer, true));
     avboitPreResourceUses.push_back(ReadUse(avboitMaterialDomain));
     avboitPreResourceUses.push_back(ReadUse(avboitCsgDomain, Core::ResourceStates::ShaderResource));
@@ -9438,6 +9442,12 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .setScheduling(avboitOccupancyScheduling)
         .setDependencies(&avboitClearTask, 1u)
         .setResourceUses(avboitPreResourceUses.data(), avboitPreResourceUses.size())
+        .setResourceSetUses(
+            avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
+                ? &occupancyMaterialGeometrySetUse
+                : nullptr,
+            avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned ? 1u : 0u
+        )
     ;
     m_deferredAvboitOccupancyTask = m_deferredLightingTaskGraph.addTask<AvboitOccupancyGraphTask>(
         avboitOccupancyDesc,

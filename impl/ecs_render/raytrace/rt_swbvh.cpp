@@ -759,7 +759,10 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
     return true;
 }
 
-bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuilds(Core::CommandList& commandList){
+bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuilds(
+    Core::CommandList& commandList,
+    const bool meshSwBvhInputStatesGraphOwned
+){
     if(!m_preparedMeshSwBvhBuildsReady || m_preparedMeshSwBvhBuilds.empty())
         return false;
 
@@ -820,9 +823,14 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuilds(Core::CommandList& 
     }
 
     for(const PreparedMeshSwBvhBuild& build : m_preparedMeshSwBvhBuilds){
-        commandList.setBufferState(build.positionBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(build.triangleIndexBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.commitBarriers();
+        // The pure software prepared route declares these frozen heap inputs as ShaderResource on Shadow
+        // Preparation itself. Hybrid work can immediately follow a hardware BLAS build in this same callback, so it
+        // must retain the native AccelStructBuildInput -> ShaderResource bridge there; direct callers do as well.
+        if(!meshSwBvhInputStatesGraphOwned){
+            commandList.setBufferState(build.positionBuffer.get(), Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(build.triangleIndexBuffer.get(), Core::ResourceStates::ShaderResource);
+            commandList.commitBarriers();
+        }
 
         Core::BufferHandle nodeBuffer = build.nodeBuffer;
         Core::BufferHandle parentBuffer = build.parentBuffer;

@@ -1918,6 +1918,18 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     const u32 coarseGroupsX = DivideUp(coarseWidth, groupSize);
     const u32 coarseGroupsY = DivideUp(coarseHeight, groupSize);
 
+    const auto logSoftwareShadowTraversal = [&]{
+        if(rayTracingState().m_swShadowDispatchLogged)
+            return;
+
+        rayTracingState().m_swShadowDispatchLogged = true;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched software shadow traversal ({}x{}, {} instances)")
+            , static_cast<u64>(targets.width)
+            , static_cast<u64>(targets.height)
+            , static_cast<u64>(rayTracingState().m_sceneBvhInstanceCount)
+        );
+    };
+
     // Skip the fallback after a soft transparent fold.
     bool softTransparentRan = false;
 
@@ -2017,6 +2029,9 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                 NWB_ASSERT(opaqueFrameIndex);
                 if(opaqueFrameIndex)
                     *opaqueFrameIndex = frameIndex;
+                // The graph-owned transparent tail records in a later callback, so preserve the normal route's
+                // one-shot traversal diagnostic before this opaque producer returns.
+                logSoftwareShadowTraversal();
                 return true;
             }
             softTransparentRan = rayTracingState().m_softTransparentReady;
@@ -2207,14 +2222,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         commandList.dispatch(coarseGroupsX, coarseGroupsY, 1u);
     }
 
-    if(!rayTracingState().m_swShadowDispatchLogged){
-        rayTracingState().m_swShadowDispatchLogged = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched software shadow traversal ({}x{}, {} instances)")
-            , static_cast<u64>(targets.width)
-            , static_cast<u64>(targets.height)
-            , static_cast<u64>(rayTracingState().m_sceneBvhInstanceCount)
-        );
-    }
+    logSoftwareShadowTraversal();
     return true;
 }
 

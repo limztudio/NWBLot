@@ -1675,7 +1675,9 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
             && (rayTracingState().m_sceneHasTransparentOccluder || hybridSoftwareMaterialContextGraphOwned)
         ){
             const bool meshSwBvhReady = meshSwBvhBuildsGraphOwned
-                ? recordPreparedMeshSwBvhBuilds(commandList)
+                // The optional hybrid SW build can consume position/index immediately after the preceding BLAS
+                // build changed them to AccelStructBuildInput. Its in-callback handoff stays native.
+                ? recordPreparedMeshSwBvhBuilds(commandList, false)
                 : buildPendingMeshSwBvh(commandList)
             ;
             hybridMeshSwBvhBuildRecorded = meshSwBvhBuildsGraphOwned && meshSwBvhReady;
@@ -1817,7 +1819,9 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     }
 
     const bool meshSwBvhReady = meshSwBvhBuildsGraphOwned
-        ? recordPreparedMeshSwBvhBuilds(commandList)
+        // Pure software Shadow Preparation has no preceding hardware BLAS producer. Its frozen position/index
+        // inputs are already declared as ShaderResource by this graph task before the callback records.
+        ? recordPreparedMeshSwBvhBuilds(commandList, meshSwBvhBuildsGraphOwned)
         : buildPendingMeshSwBvh(commandList)
     ;
     if(!meshSwBvhReady){

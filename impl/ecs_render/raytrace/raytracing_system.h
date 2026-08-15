@@ -846,7 +846,10 @@ private:
     );
     void clearPreparedMeshBlasBuilds()noexcept;
     [[nodiscard]] bool capturePreparedMeshSwBvhBuilds();
-    [[nodiscard]] bool recordPreparedMeshSwBvhBuilds(Core::CommandList& commandList);
+    [[nodiscard]] bool recordPreparedMeshSwBvhBuilds(
+        Core::CommandList& commandList,
+        bool meshSwBvhInputStatesGraphOwned
+    );
     [[nodiscard]] bool preparedMeshSwBvhBuildProducesTopology(const MeshResources& mesh)const noexcept;
     void clearPreparedMeshSwBvhBuilds()noexcept;
     [[nodiscard]] bool prepareSurfelResources(DeferredFrameTargets& targets);

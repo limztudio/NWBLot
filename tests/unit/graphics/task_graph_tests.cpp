@@ -6321,6 +6321,97 @@ TEST(GpuTaskGraph, GraphOwnsOpaqueSoftTemporalMergeHistoryStates){
 }
 
 
+// Pure-software Shadow Preparation can enter after an accepted prior hardware/direct frame left a frozen mesh input
+// in AccelStructBuildInput. Its prepared SW-BVH recorder is getter-only for position/index in that route, so the
+// graph must lower both a fresh Common seed and an accepted build-input seed to ShaderResource before it records.
+TEST(GpuTaskGraph, PlansGraphOwnedPreparedSoftwareBvhInputStates){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    constexpr Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Graphics;
+    const Graphics::GpuGraphResourceId position = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/prepared_sw_bvh_position"),
+        "Prepared SW-BVH Position",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId index = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/prepared_sw_bvh_index"),
+        "Prepared SW-BVH Index",
+        Graphics::ResourceStates::AccelStructBuildInput,
+        queueSharing
+    );
+    ASSERT_TRUE(position.valid());
+    ASSERT_TRUE(index.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Graphics::GpuTaskCostHint::Large;
+    scheduling.allowPacketMerge = true;
+    const Graphics::GpuTaskResourceUse prepareUses[] = {
+        {
+            .resource = position,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        {
+            .resource = index,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    Graphics::GpuTaskDesc prepareDesc;
+    prepareDesc
+        .setIdentity(Name("tests/task_graph/prepared_sw_bvh_shadow_prepare"))
+        .setMarkerLabel("Prepared Software BVH Shadow Preparation")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+        .setResourceUses(prepareUses, LengthOf(prepareUses))
+    ;
+    const Graphics::GpuTaskId prepare = graph.addTask(prepareDesc);
+    ASSERT_TRUE(prepare.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+
+    const Graphics::GpuCompiledTask* const compiledPrepare = compiledGraph.findTask(prepare);
+    ASSERT_NE(compiledPrepare, nullptr);
+    const Graphics::GpuCompiledBarrier* const prepareBarriers = compiledGraph.taskPrologueBarriers(prepare);
+    ASSERT_NE(prepareBarriers, nullptr);
+    const auto hasInputTransition = [&](const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before){
+        for(usize barrierIndex = 0u; barrierIndex < compiledPrepare->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = prepareBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == Graphics::ResourceStates::ShaderResource
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasInputTransition(position, Graphics::ResourceStates::Common));
+    EXPECT_TRUE(hasInputTransition(index, Graphics::ResourceStates::AccelStructBuildInput));
+}
+
+
 // Shadow Preparation, G-buffer, and the post-G-buffer normalizer share their frozen trace geometry through one
 // graph. The normalizer must restore both raster VertexBuffer and SW-BVH UAV producers to ShaderResource before the
 // shadow callback records; it no longer relies on a native route-specific state bridge.

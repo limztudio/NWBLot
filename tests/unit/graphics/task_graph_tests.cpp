@@ -13052,12 +13052,37 @@ TEST(GpuTaskGraph, PlansGraphOwnedMaterialGeometryEntryStates){
 }
 
 
-// The opaque CSG graph ends interval combine before its material/cap StorageImage loads. Keep the two tasks in one
-// Graphics packet when FrontierSafe permits it, but require the compiler to lower the four same-UAV RAW fences at
-// that intra-packet boundary instead of relying on a renderer-owned state call inside either draw thunk.
-TEST(GpuTaskGraph, PlansMergedCsgIntervalCombineToOpaqueSampleUavDependencies){
+// The opaque CSG graph now exposes peel/span production, interval combine, and material/cap sampling as three
+// Graphics callbacks. Keep them in one packet when FrontierSafe permits it, but require the compiler to lower both
+// native same-UAV boundaries instead of relying on renderer-owned state calls inside either thunk.
+TEST(GpuTaskGraph, PlansMergedCsgIntervalProducerCombineAndOpaqueSampleUavDependencies){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId capBackNormal = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/csg_combine_cap_back_normal"),
+        "CSG Combine Cap Back Normal"
+    );
+    const Graphics::GpuGraphResourceId intervalDepth = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/csg_combine_interval_depth"),
+        "CSG Combine Interval Depth"
+    );
+    const Graphics::GpuGraphResourceId intervalId = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/csg_combine_interval_id"),
+        "CSG Combine Interval Id"
+    );
+    const Graphics::GpuGraphResourceId receiverSpanData = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/csg_combine_receiver_span_data"),
+        "CSG Combine Receiver Span Data"
+    );
+    const Graphics::GpuGraphResourceId receiverSpanCount = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/csg_combine_receiver_span_count"),
+        "CSG Combine Receiver Span Count"
+    );
     const Graphics::GpuGraphResourceId removedIntervalDepth = AddTextureMetadata(
         graph,
         Name("tests/task_graph/csg_sample_removed_interval_depth"),
@@ -13078,14 +13103,84 @@ TEST(GpuTaskGraph, PlansMergedCsgIntervalCombineToOpaqueSampleUavDependencies){
         Name("tests/task_graph/csg_sample_removed_interval_count"),
         "CSG Sample Removed Interval Count"
     );
+    ASSERT_TRUE(capBackNormal.valid());
+    ASSERT_TRUE(intervalDepth.valid());
+    ASSERT_TRUE(intervalId.valid());
+    ASSERT_TRUE(receiverSpanData.valid());
+    ASSERT_TRUE(receiverSpanCount.valid());
     ASSERT_TRUE(removedIntervalDepth.valid());
     ASSERT_TRUE(removedIntervalCapNormal.valid());
     ASSERT_TRUE(removedIntervalData.valid());
     ASSERT_TRUE(removedIntervalCount.valid());
 
+    const Graphics::TextureSubresourceSet peelRange(0u, 1u, 0u, 4u);
+    const Graphics::TextureSubresourceSet receiverSpanRange(0u, 1u, 0u, 16u);
+    const Graphics::TextureSubresourceSet receiverSpanCountRange(0u, 1u, 0u, 1u);
     const Graphics::TextureSubresourceSet removedIntervalRange(0u, 1u, 0u, 16u);
     const Graphics::TextureSubresourceSet removedIntervalCountRange(0u, 1u, 0u, 1u);
+    const Graphics::GpuTaskResourceUse producerUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = capBackNormal,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = intervalDepth,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = intervalId,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverSpanData,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverSpanRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverSpanCount,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverSpanCountRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
     const Graphics::GpuTaskResourceUse combineUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = capBackNormal,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = intervalDepth,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = intervalId,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverSpanData,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverSpanRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverSpanCount,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverSpanCountRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
         Graphics::GpuTaskResourceUse{
             .resource = removedIntervalDepth,
             .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
@@ -13143,16 +13238,33 @@ TEST(GpuTaskGraph, PlansMergedCsgIntervalCombineToOpaqueSampleUavDependencies){
         false,
         false,
     };
+    Graphics::GpuTaskSchedulingHint producerScheduling;
+    producerScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    producerScheduling.forceSubmissionBoundary = false;
+    producerScheduling.allowPacketMerge = true;
+    Graphics::GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/task_graph/csg_interval_producer"))
+        .setMarkerLabel("CSG Interval Producer")
+        .setQueue(graphicsRequest)
+        .setScheduling(producerScheduling)
+        .setResourceUses(producerUses, LengthOf(producerUses))
+    ;
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    ASSERT_TRUE(producer.valid());
+
     Graphics::GpuTaskSchedulingHint combineScheduling;
     combineScheduling.cost = Graphics::GpuTaskCostHint::Medium;
     combineScheduling.forceSubmissionBoundary = false;
     combineScheduling.allowPacketMerge = true;
+    combineScheduling.mergeWithPrevious = true;
     Graphics::GpuTaskDesc combineDesc;
     combineDesc
         .setIdentity(Name("tests/task_graph/csg_interval_combine"))
         .setMarkerLabel("CSG Interval Combine")
         .setQueue(graphicsRequest)
         .setScheduling(combineScheduling)
+        .setDependencies(&producer, 1u)
         .setResourceUses(combineUses, LengthOf(combineUses))
     ;
     const Graphics::GpuTaskId combine = graph.addTask(combineDesc);
@@ -13186,7 +13298,43 @@ TEST(GpuTaskGraph, PlansMergedCsgIntervalCombineToOpaqueSampleUavDependencies){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    ASSERT_NE(FindEdge(analysis, producer, combine), nullptr);
     ASSERT_NE(FindEdge(analysis, combine, sample), nullptr);
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        producer,
+        combine,
+        capBackNormal,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        producer,
+        combine,
+        intervalDepth,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        producer,
+        combine,
+        intervalId,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        producer,
+        combine,
+        receiverSpanData,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        producer,
+        combine,
+        receiverSpanCount,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
     EXPECT_TRUE(HasInferredHazard(
         analysis,
         combine,
@@ -13217,29 +13365,53 @@ TEST(GpuTaskGraph, PlansMergedCsgIntervalCombineToOpaqueSampleUavDependencies){
     ));
 
     ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
     const Graphics::GpuSubmissionPacketId combinePacket = compiledGraph.packetForTask(combine);
     const Graphics::GpuSubmissionPacketId samplePacket = compiledGraph.packetForTask(sample);
+    ASSERT_TRUE(producerPacket.valid());
     ASSERT_TRUE(combinePacket.valid());
+    ASSERT_EQ(combinePacket, producerPacket);
     ASSERT_EQ(samplePacket, combinePacket);
     const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(combinePacket);
-    ASSERT_EQ(packet.taskCount, 2u);
+    ASSERT_EQ(packet.taskCount, 3u);
     ASSERT_NE(compiledGraph.packetTasks(combinePacket), nullptr);
-    EXPECT_EQ(compiledGraph.packetTasks(combinePacket)[0u], combine);
-    EXPECT_EQ(compiledGraph.packetTasks(combinePacket)[1u], sample);
+    EXPECT_EQ(compiledGraph.packetTasks(combinePacket)[0u], producer);
+    EXPECT_EQ(compiledGraph.packetTasks(combinePacket)[1u], combine);
+    EXPECT_EQ(compiledGraph.packetTasks(combinePacket)[2u], sample);
     EXPECT_EQ(packet.dependencyCount, 0u);
 
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
     const Graphics::GpuCompiledTask* const compiledCombine = compiledGraph.findTask(combine);
     const Graphics::GpuCompiledTask* const compiledSample = compiledGraph.findTask(sample);
+    ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledCombine, nullptr);
     ASSERT_NE(compiledSample, nullptr);
+    ASSERT_EQ(compiledProducer->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledCombine->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledSample->prologueStateSeedCount, 0u);
-    ASSERT_EQ(compiledCombine->prologueBarrierCount, 4u);
+    ASSERT_EQ(compiledProducer->prologueBarrierCount, 5u);
+    ASSERT_EQ(compiledCombine->prologueBarrierCount, 9u);
     ASSERT_EQ(compiledSample->prologueBarrierCount, 4u);
+    const Graphics::GpuCompiledBarrier* const producerBarriers = compiledGraph.taskPrologueBarriers(producer);
     const Graphics::GpuCompiledBarrier* const combineBarriers = compiledGraph.taskPrologueBarriers(combine);
     const Graphics::GpuCompiledBarrier* const sampleBarriers = compiledGraph.taskPrologueBarriers(sample);
+    ASSERT_NE(producerBarriers, nullptr);
     ASSERT_NE(combineBarriers, nullptr);
     ASSERT_NE(sampleBarriers, nullptr);
+    const auto hasProducerTransition = [&](const Graphics::GpuGraphResourceId resource, const Graphics::TextureSubresourceSet& range){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledProducer->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = producerBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == resource
+                && barrier.range.textureSubresources == range
+                && barrier.before == Graphics::ResourceStates::Common
+                && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            )
+                return true;
+        }
+        return false;
+    };
     const auto hasCombineTransition = [&](const Graphics::GpuGraphResourceId resource, const Graphics::TextureSubresourceSet& range){
         for(u32 barrierIndex = 0u; barrierIndex < compiledCombine->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = combineBarriers[barrierIndex];
@@ -13248,6 +13420,20 @@ TEST(GpuTaskGraph, PlansMergedCsgIntervalCombineToOpaqueSampleUavDependencies){
                 && barrier.resource == resource
                 && barrier.range.textureSubresources == range
                 && barrier.before == Graphics::ResourceStates::Common
+                && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            )
+                return true;
+        }
+        return false;
+    };
+    const auto hasCombineUav = [&](const Graphics::GpuGraphResourceId resource, const Graphics::TextureSubresourceSet& range){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledCombine->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = combineBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureUav
+                && barrier.resource == resource
+                && barrier.range.textureSubresources == range
+                && barrier.before == Graphics::ResourceStates::UnorderedAccess
                 && barrier.after == Graphics::ResourceStates::UnorderedAccess
             )
                 return true;
@@ -13268,6 +13454,16 @@ TEST(GpuTaskGraph, PlansMergedCsgIntervalCombineToOpaqueSampleUavDependencies){
         }
         return false;
     };
+    EXPECT_TRUE(hasProducerTransition(capBackNormal, peelRange));
+    EXPECT_TRUE(hasProducerTransition(intervalDepth, peelRange));
+    EXPECT_TRUE(hasProducerTransition(intervalId, peelRange));
+    EXPECT_TRUE(hasProducerTransition(receiverSpanData, receiverSpanRange));
+    EXPECT_TRUE(hasProducerTransition(receiverSpanCount, receiverSpanCountRange));
+    EXPECT_TRUE(hasCombineUav(capBackNormal, peelRange));
+    EXPECT_TRUE(hasCombineUav(intervalDepth, peelRange));
+    EXPECT_TRUE(hasCombineUav(intervalId, peelRange));
+    EXPECT_TRUE(hasCombineUav(receiverSpanData, receiverSpanRange));
+    EXPECT_TRUE(hasCombineUav(receiverSpanCount, receiverSpanCountRange));
     EXPECT_TRUE(hasCombineTransition(removedIntervalDepth, removedIntervalRange));
     EXPECT_TRUE(hasCombineTransition(removedIntervalCapNormal, removedIntervalRange));
     EXPECT_TRUE(hasCombineTransition(removedIntervalData, removedIntervalRange));
@@ -13276,6 +13472,258 @@ TEST(GpuTaskGraph, PlansMergedCsgIntervalCombineToOpaqueSampleUavDependencies){
     EXPECT_TRUE(hasSampleUav(removedIntervalCapNormal, removedIntervalRange));
     EXPECT_TRUE(hasSampleUav(removedIntervalData, removedIntervalRange));
     EXPECT_TRUE(hasSampleUav(removedIntervalCount, removedIntervalCountRange));
+}
+
+
+// The normal opaque route keeps producer, combine, and sample in one Graphics packet.  If packetization must split
+// at the new producer -> combine boundary, the Combine callback still cannot restore its five StorageImage input
+// states natively: it needs state seeds from the Producer packet and same-UAV fences in its own prologue.
+TEST(GpuTaskGraph, PlansCsgIntervalProducerToCombineUavDependenciesAcrossForcedPacketSplit){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId capBackNormal = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/csg_combine_split_cap_back_normal"),
+        "CSG Combine Split Cap Back Normal"
+    );
+    const Graphics::GpuGraphResourceId intervalDepth = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/csg_combine_split_interval_depth"),
+        "CSG Combine Split Interval Depth"
+    );
+    const Graphics::GpuGraphResourceId intervalId = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/csg_combine_split_interval_id"),
+        "CSG Combine Split Interval Id"
+    );
+    const Graphics::GpuGraphResourceId receiverSpanData = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/csg_combine_split_receiver_span_data"),
+        "CSG Combine Split Receiver Span Data"
+    );
+    const Graphics::GpuGraphResourceId receiverSpanCount = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/csg_combine_split_receiver_span_count"),
+        "CSG Combine Split Receiver Span Count"
+    );
+    ASSERT_TRUE(capBackNormal.valid());
+    ASSERT_TRUE(intervalDepth.valid());
+    ASSERT_TRUE(intervalId.valid());
+    ASSERT_TRUE(receiverSpanData.valid());
+    ASSERT_TRUE(receiverSpanCount.valid());
+
+    const Graphics::TextureSubresourceSet peelRange(0u, 1u, 0u, 4u);
+    const Graphics::TextureSubresourceSet receiverSpanRange(0u, 1u, 0u, 16u);
+    const Graphics::TextureSubresourceSet receiverSpanCountRange(0u, 1u, 0u, 1u);
+    const Graphics::GpuTaskResourceUse producerUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = capBackNormal,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = intervalDepth,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = intervalId,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverSpanData,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverSpanRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverSpanCount,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverSpanCountRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskResourceUse combineUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = capBackNormal,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = intervalDepth,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = intervalId,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverSpanData,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverSpanRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = receiverSpanCount,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverSpanCountRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint boundaryScheduling;
+    boundaryScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    boundaryScheduling.forceSubmissionBoundary = true;
+    boundaryScheduling.allowPacketMerge = false;
+    Graphics::GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/task_graph/csg_interval_split_producer"))
+        .setMarkerLabel("CSG Interval Producer")
+        .setQueue(graphicsRequest)
+        .setScheduling(boundaryScheduling)
+        .setResourceUses(producerUses, LengthOf(producerUses))
+    ;
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    ASSERT_TRUE(producer.valid());
+
+    Graphics::GpuTaskDesc combineDesc;
+    combineDesc
+        .setIdentity(Name("tests/task_graph/csg_interval_split_combine"))
+        .setMarkerLabel("CSG Interval Combine")
+        .setQueue(graphicsRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&producer, 1u)
+        .setResourceUses(combineUses, LengthOf(combineUses))
+    ;
+    const Graphics::GpuTaskId combine = graph.addTask(combineDesc);
+    ASSERT_TRUE(combine.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    ASSERT_NE(FindEdge(analysis, producer, combine), nullptr);
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        producer,
+        combine,
+        capBackNormal,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        producer,
+        combine,
+        intervalDepth,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        producer,
+        combine,
+        intervalId,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        producer,
+        combine,
+        receiverSpanData,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        producer,
+        combine,
+        receiverSpanCount,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId combinePacket = compiledGraph.packetForTask(combine);
+    ASSERT_TRUE(producerPacket.valid());
+    ASSERT_TRUE(combinePacket.valid());
+    EXPECT_NE(producerPacket, combinePacket);
+    EXPECT_EQ(compiledGraph.packet(producerPacket).taskCount, 1u);
+    EXPECT_EQ(compiledGraph.packet(combinePacket).taskCount, 1u);
+    ASSERT_EQ(compiledGraph.packet(combinePacket).dependencyCount, 1u);
+    const Graphics::GpuPacketDependency* const combineDependencies = compiledGraph.packetDependencies(combinePacket);
+    ASSERT_NE(combineDependencies, nullptr);
+    EXPECT_EQ(combineDependencies[0u].producer, producerPacket);
+
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+    const Graphics::GpuCompiledTask* const compiledCombine = compiledGraph.findTask(combine);
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledCombine, nullptr);
+    ASSERT_EQ(compiledProducer->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledProducer->prologueBarrierCount, 5u);
+    ASSERT_EQ(compiledCombine->prologueStateSeedCount, 5u);
+    ASSERT_EQ(compiledCombine->prologueBarrierCount, 5u);
+    const Graphics::GpuPacketStateSeed* const combineSeeds = compiledGraph.taskPrologueStateSeeds(combine);
+    const Graphics::GpuCompiledBarrier* const combineBarriers = compiledGraph.taskPrologueBarriers(combine);
+    ASSERT_NE(combineSeeds, nullptr);
+    ASSERT_NE(combineBarriers, nullptr);
+    const auto hasCombineStateSeed = [&](
+        const Graphics::GpuGraphResourceId resource,
+        const Graphics::TextureSubresourceSet& range
+    ){
+        for(u32 seedIndex = 0u; seedIndex < compiledCombine->prologueStateSeedCount; ++seedIndex){
+            const Graphics::GpuPacketStateSeed& seed = combineSeeds[seedIndex];
+            if(
+                seed.resource == resource
+                && seed.range.textureSubresources == range
+                && seed.sourcePacket == producerPacket
+            )
+                return true;
+        }
+        return false;
+    };
+    const auto hasCombineUav = [&](const Graphics::GpuGraphResourceId resource, const Graphics::TextureSubresourceSet& range){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledCombine->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = combineBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureUav
+                && barrier.resource == resource
+                && barrier.range.textureSubresources == range
+                && barrier.before == Graphics::ResourceStates::UnorderedAccess
+                && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasCombineStateSeed(capBackNormal, peelRange));
+    EXPECT_TRUE(hasCombineStateSeed(intervalDepth, peelRange));
+    EXPECT_TRUE(hasCombineStateSeed(intervalId, peelRange));
+    EXPECT_TRUE(hasCombineStateSeed(receiverSpanData, receiverSpanRange));
+    EXPECT_TRUE(hasCombineStateSeed(receiverSpanCount, receiverSpanCountRange));
+    EXPECT_TRUE(hasCombineUav(capBackNormal, peelRange));
+    EXPECT_TRUE(hasCombineUav(intervalDepth, peelRange));
+    EXPECT_TRUE(hasCombineUav(intervalId, peelRange));
+    EXPECT_TRUE(hasCombineUav(receiverSpanData, receiverSpanRange));
+    EXPECT_TRUE(hasCombineUav(receiverSpanCount, receiverSpanCountRange));
 }
 
 

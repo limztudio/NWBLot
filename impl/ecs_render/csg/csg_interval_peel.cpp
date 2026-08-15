@@ -50,15 +50,18 @@ static void SetCsgReceiverSpanStorageStates(
 static void SetCsgIntervalCombineStorageStates(
     Core::CommandList& commandList,
     const DeferredFrameTargets& targets,
-    const bool removedIntervalOutputImageStatesGraphOwned
+    const bool removedIntervalOutputImageStatesGraphOwned,
+    const bool intervalCombineInputImageStatesGraphOwned
 ){
-    // The combine pass loads these prior-stage values through StorageImage aliases, so retain their GENERAL-layout
-    // same-state UAV transitions as the peel/span-write -> combine-read fence within this aggregate native task.
-    commandList.setTextureState(targets.csgCapBackNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgIntervalId.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgReceiverSpanData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgReceiverSpanCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    // The combine pass loads these prior-stage values through StorageImage aliases. The opaque graph's separate
+    // combine callback declares those exact same-UAV fences; aggregate native and AVBOIT callers retain them here.
+    if(!intervalCombineInputImageStatesGraphOwned){
+        commandList.setTextureState(targets.csgCapBackNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.csgIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.csgIntervalId.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.csgReceiverSpanData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.csgReceiverSpanCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+    }
     if(!removedIntervalOutputImageStatesGraphOwned){
         commandList.setTextureState(targets.csgRemovedIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.csgRemovedIntervalCapNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
@@ -286,7 +289,8 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
-    const bool removedIntervalOutputImageStatesGraphOwned
+    const bool removedIntervalOutputImageStatesGraphOwned,
+    const bool intervalCombineInputImageStatesGraphOwned
 ){
     if(!csgFrameData.hasWork())
         return;
@@ -299,7 +303,8 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
     __hidden_csg_interval_peel::SetCsgIntervalCombineStorageStates(
         commandList,
         targets,
-        removedIntervalOutputImageStatesGraphOwned
+        removedIntervalOutputImageStatesGraphOwned,
+        intervalCombineInputImageStatesGraphOwned
     );
     commandList.commitBarriers();
 

@@ -756,8 +756,67 @@ struct NativePacketPrefixTask{
 };
 
 
-// AVBOIT CSG occupancy reads four StorageImage aliases produced by the interval-combine task. This probe performs
-// no native state work: it only observes the packet runtime's graph-lowered state before the equivalent thunk runs.
+// The opaque CSG interval-combine task consumes five producer StorageImage aliases and publishes four more. This
+// probe performs no native state work: it only observes the packet runtime's graph-lowered states before the
+// equivalent thunk runs.
+struct NativePacketCsgIntervalCombineProbeTask{
+    struct Payload{
+        Texture* capBackNormal = nullptr;
+        Texture* intervalDepth = nullptr;
+        Texture* intervalId = nullptr;
+        Texture* receiverSpanData = nullptr;
+        Texture* receiverSpanCount = nullptr;
+        Texture* removedIntervalDepth = nullptr;
+        Texture* removedIntervalCapNormal = nullptr;
+        Texture* removedIntervalData = nullptr;
+        Texture* removedIntervalCount = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(
+            !payload.capBackNormal
+            || !payload.intervalDepth
+            || !payload.intervalId
+            || !payload.receiverSpanData
+            || !payload.receiverSpanCount
+            || !payload.removedIntervalDepth
+            || !payload.removedIntervalCapNormal
+            || !payload.removedIntervalData
+            || !payload.removedIntervalCount
+        )
+            return false;
+        const auto hasUavRange = [&commandList](Texture* texture, const u32 finalArraySlice){
+            return commandList.getTextureSubresourceState(texture, 0u, 0u) == ResourceStates::UnorderedAccess
+                && commandList.getTextureSubresourceState(texture, finalArraySlice, 0u) == ResourceStates::UnorderedAccess
+            ;
+        };
+        const bool ready =
+            hasUavRange(payload.capBackNormal, 3u)
+            && hasUavRange(payload.intervalDepth, 3u)
+            && hasUavRange(payload.intervalId, 3u)
+            && hasUavRange(payload.receiverSpanData, 15u)
+            && hasUavRange(payload.receiverSpanCount, 0u)
+            && hasUavRange(payload.removedIntervalDepth, 15u)
+            && hasUavRange(payload.removedIntervalCapNormal, 15u)
+            && hasUavRange(payload.removedIntervalData, 15u)
+            && hasUavRange(payload.removedIntervalCount, 0u)
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
+// AVBOIT and opaque CSG sampling read four StorageImage aliases produced by the interval-combine task. This probe
+// performs no native state work: it only observes the packet runtime's graph-lowered state before the equivalent
+// thunk runs. Coverage is optional because opaque sampling has no coverage-buffer dependency.
 struct NativePacketCsgIntervalSampleProbeTask{
     struct Payload{
         Buffer* coverage = nullptr;
@@ -775,8 +834,7 @@ struct NativePacketCsgIntervalSampleProbeTask{
     ){
         static_cast<void>(context);
         if(
-            !payload.coverage
-            || !payload.removedIntervalDepth
+            !payload.removedIntervalDepth
             || !payload.removedIntervalCapNormal
             || !payload.removedIntervalData
             || !payload.removedIntervalCount
@@ -788,7 +846,7 @@ struct NativePacketCsgIntervalSampleProbeTask{
             ;
         };
         const bool ready =
-            commandList.getBufferState(payload.coverage) == ResourceStates::UnorderedAccess
+            (!payload.coverage || commandList.getBufferState(payload.coverage) == ResourceStates::UnorderedAccess)
             && hasUavRange(payload.removedIntervalDepth, 15u)
             && hasUavRange(payload.removedIntervalCapNormal, 15u)
             && hasUavRange(payload.removedIntervalData, 15u)
@@ -8825,6 +8883,401 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
     EXPECT_TRUE(intervalsAttempted);
     EXPECT_TRUE(clearRecorded);
     EXPECT_TRUE(occupancyRecorded);
+    ASSERT_TRUE(packetRecorded) << "failed packet " << failedPacket.index;
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(packet).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Opaque CSG now lowers peel/span production, interval combine, and material/cap sampling as graph tasks. Record the
+// whole same-UAV chain on a real Graphics packet so neither Combine nor Sample can rely on a native state bridge.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgIntervalCombineAndSampleStatesRecordWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const auto makeStorageArray = [&device](const u32 arraySize){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setArraySize(arraySize)
+                .setDimension(TextureDimension::Texture2DArray)
+                .setFormat(Format::RGBA32_UINT)
+                .setInUAV(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    auto capBackNormal = makeStorageArray(4u);
+    auto intervalDepth = makeStorageArray(4u);
+    auto intervalId = makeStorageArray(4u);
+    auto receiverSpanData = makeStorageArray(16u);
+    auto receiverSpanCount = makeStorageArray(1u);
+    auto removedIntervalDepth = makeStorageArray(16u);
+    auto removedIntervalCapNormal = makeStorageArray(16u);
+    auto removedIntervalData = makeStorageArray(16u);
+    auto removedIntervalCount = makeStorageArray(1u);
+    ASSERT_NE(capBackNormal.get(), nullptr);
+    ASSERT_NE(intervalDepth.get(), nullptr);
+    ASSERT_NE(intervalId.get(), nullptr);
+    ASSERT_NE(receiverSpanData.get(), nullptr);
+    ASSERT_NE(receiverSpanCount.get(), nullptr);
+    ASSERT_NE(removedIntervalDepth.get(), nullptr);
+    ASSERT_NE(removedIntervalCapNormal.get(), nullptr);
+    ASSERT_NE(removedIntervalData.get(), nullptr);
+    ASSERT_NE(removedIntervalCount.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId capBackNormalResource = graph.importTexture(
+        capBackNormal,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/opaque_csg_combine_cap_back_normal"))
+            .setMarkerLabel("Opaque CSG Combine Cap Back Normal")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId intervalDepthResource = graph.importTexture(
+        intervalDepth,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/opaque_csg_combine_interval_depth"))
+            .setMarkerLabel("Opaque CSG Combine Interval Depth")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId intervalIdResource = graph.importTexture(
+        intervalId,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/opaque_csg_combine_interval_id"))
+            .setMarkerLabel("Opaque CSG Combine Interval Id")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId receiverSpanDataResource = graph.importTexture(
+        receiverSpanData,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/opaque_csg_combine_receiver_span_data"))
+            .setMarkerLabel("Opaque CSG Combine Receiver Span Data")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId receiverSpanCountResource = graph.importTexture(
+        receiverSpanCount,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/opaque_csg_combine_receiver_span_count"))
+            .setMarkerLabel("Opaque CSG Combine Receiver Span Count")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId removedIntervalDepthResource = graph.importTexture(
+        removedIntervalDepth,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/opaque_csg_combine_removed_interval_depth"))
+            .setMarkerLabel("Opaque CSG Combine Removed Interval Depth")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId removedIntervalCapNormalResource = graph.importTexture(
+        removedIntervalCapNormal,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/opaque_csg_combine_removed_interval_cap_normal"))
+            .setMarkerLabel("Opaque CSG Combine Removed Interval Cap Normal")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId removedIntervalDataResource = graph.importTexture(
+        removedIntervalData,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/opaque_csg_combine_removed_interval_data"))
+            .setMarkerLabel("Opaque CSG Combine Removed Interval Data")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId removedIntervalCountResource = graph.importTexture(
+        removedIntervalCount,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/opaque_csg_combine_removed_interval_count"))
+            .setMarkerLabel("Opaque CSG Combine Removed Interval Count")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(capBackNormalResource.valid());
+    ASSERT_TRUE(intervalDepthResource.valid());
+    ASSERT_TRUE(intervalIdResource.valid());
+    ASSERT_TRUE(receiverSpanDataResource.valid());
+    ASSERT_TRUE(receiverSpanCountResource.valid());
+    ASSERT_TRUE(removedIntervalDepthResource.valid());
+    ASSERT_TRUE(removedIntervalCapNormalResource.valid());
+    ASSERT_TRUE(removedIntervalDataResource.valid());
+    ASSERT_TRUE(removedIntervalCountResource.valid());
+
+    const TextureSubresourceSet peelRange(0u, 1u, 0u, 4u);
+    const TextureSubresourceSet receiverSpanRange(0u, 1u, 0u, 16u);
+    const TextureSubresourceSet receiverSpanCountRange(0u, 1u, 0u, 1u);
+    const TextureSubresourceSet removedIntervalRange(0u, 1u, 0u, 16u);
+    const TextureSubresourceSet removedIntervalCountRange(0u, 1u, 0u, 1u);
+    const GpuTaskResourceUse producerUses[] = {
+        GpuTaskResourceUse{
+            .resource = capBackNormalResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = intervalDepthResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = intervalIdResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = receiverSpanDataResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = receiverSpanRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = receiverSpanCountResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = receiverSpanCountRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    const GpuTaskResourceUse combineUses[] = {
+        GpuTaskResourceUse{
+            .resource = capBackNormalResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = intervalDepthResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = intervalIdResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = peelRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = receiverSpanDataResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = receiverSpanRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = receiverSpanCountResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = receiverSpanCountRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalDepthResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalCapNormalResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalDataResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalCountResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalCountRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    const GpuTaskResourceUse sampleUses[] = {
+        GpuTaskResourceUse{
+            .resource = removedIntervalDepthResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalCapNormalResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalDataResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalCountResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalCountRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint producerScheduling;
+    producerScheduling.cost = GpuTaskCostHint::Medium;
+    producerScheduling.forceSubmissionBoundary = false;
+    producerScheduling.allowPacketMerge = true;
+    GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/descriptor_buffer/opaque_csg_interval_producer"))
+        .setMarkerLabel("Opaque CSG Interval Producer")
+        .setQueue(graphicsQueue)
+        .setScheduling(producerScheduling)
+        .setResourceUses(producerUses, LengthOf(producerUses))
+    ;
+    bool producerShouldRecord = true;
+    bool producerAttempted = false;
+    const GpuTaskId producerTask = graph.addTask<NativePacketCaptureRetryTask>(
+        producerDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &producerShouldRecord,
+            .attempted = &producerAttempted,
+        }
+    );
+    ASSERT_TRUE(producerTask.valid());
+
+    GpuTaskSchedulingHint combineScheduling = producerScheduling;
+    combineScheduling.mergeWithPrevious = true;
+    GpuTaskDesc combineDesc;
+    combineDesc
+        .setIdentity(Name("tests/descriptor_buffer/opaque_csg_interval_combine"))
+        .setMarkerLabel("Opaque CSG Interval Combine")
+        .setQueue(graphicsQueue)
+        .setScheduling(combineScheduling)
+        .setDependencies(&producerTask, 1u)
+        .setResourceUses(combineUses, LengthOf(combineUses))
+    ;
+    bool combineRecorded = false;
+    const GpuTaskId combineTask = graph.addTask<NativePacketCsgIntervalCombineProbeTask>(
+        combineDesc,
+        NativePacketCsgIntervalCombineProbeTask::Payload{
+            .capBackNormal = capBackNormal.get(),
+            .intervalDepth = intervalDepth.get(),
+            .intervalId = intervalId.get(),
+            .receiverSpanData = receiverSpanData.get(),
+            .receiverSpanCount = receiverSpanCount.get(),
+            .removedIntervalDepth = removedIntervalDepth.get(),
+            .removedIntervalCapNormal = removedIntervalCapNormal.get(),
+            .removedIntervalData = removedIntervalData.get(),
+            .removedIntervalCount = removedIntervalCount.get(),
+            .recorded = &combineRecorded,
+        }
+    );
+    ASSERT_TRUE(combineTask.valid());
+
+    GpuTaskSchedulingHint sampleScheduling = combineScheduling;
+    GpuTaskDesc sampleDesc;
+    sampleDesc
+        .setIdentity(Name("tests/descriptor_buffer/opaque_csg_interval_sample"))
+        .setMarkerLabel("Opaque CSG Interval Sample")
+        .setQueue(graphicsQueue)
+        .setScheduling(sampleScheduling)
+        .setDependencies(&combineTask, 1u)
+        .setResourceUses(sampleUses, LengthOf(sampleUses))
+    ;
+    bool sampleRecorded = false;
+    const GpuTaskId sampleTask = graph.addTask<NativePacketCsgIntervalSampleProbeTask>(
+        sampleDesc,
+        NativePacketCsgIntervalSampleProbeTask::Payload{
+            .removedIntervalDepth = removedIntervalDepth.get(),
+            .removedIntervalCapNormal = removedIntervalCapNormal.get(),
+            .removedIntervalData = removedIntervalData.get(),
+            .removedIntervalCount = removedIntervalCount.get(),
+            .recorded = &sampleRecorded,
+        }
+    );
+    ASSERT_TRUE(sampleTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/opaque_csg_combine_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    GpuTaskGraphCompileOptions compileOptions;
+    compileOptions.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(producerTask);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(combineTask), packet);
+    EXPECT_EQ(compiledGraph.packetForTask(sampleTask), packet);
+    const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
+    ASSERT_EQ(packetPlan.taskCount, 3u);
+    ASSERT_NE(compiledGraph.packetTasks(packet), nullptr);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[0u], producerTask);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[1u], combineTask);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[2u], sampleTask);
+
+    const GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producerTask);
+    const GpuCompiledTask* const compiledCombine = compiledGraph.findTask(combineTask);
+    const GpuCompiledTask* const compiledSample = compiledGraph.findTask(sampleTask);
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledCombine, nullptr);
+    ASSERT_NE(compiledSample, nullptr);
+    EXPECT_EQ(compiledProducer->prologueStateSeedCount, 0u);
+    EXPECT_EQ(compiledCombine->prologueStateSeedCount, 0u);
+    EXPECT_EQ(compiledSample->prologueStateSeedCount, 0u);
+    EXPECT_EQ(compiledProducer->prologueBarrierCount, 5u);
+    EXPECT_EQ(compiledCombine->prologueBarrierCount, 9u);
+    EXPECT_EQ(compiledSample->prologueBarrierCount, 4u);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    const bool packetRecorded = recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    );
+    EXPECT_TRUE(producerAttempted);
+    EXPECT_TRUE(combineRecorded);
+    EXPECT_TRUE(sampleRecorded);
     ASSERT_TRUE(packetRecorded) << "failed packet " << failedPacket.index;
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());

@@ -74,6 +74,7 @@ namespace ECSRenderDetail{
         SceneShadingSetup,
         DeferredClear,
         Gbuffer,
+        CsgIntervalCombine,
         CsgIntervalSample,
         Normalize,
         kCount,
@@ -82,6 +83,7 @@ namespace ECSRenderDetail{
     struct MeshViewSetupGraphTask;
     struct MeshViewUploadCommitGraphTask;
     struct SceneShadingSetupGraphTask;
+    struct CsgIntervalCombineGraphTask;
     struct CsgIntervalSampleGraphTask;
     struct DeferredClearTimingRecordState{
         Core::Graphics* graphics = nullptr;
@@ -107,6 +109,7 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend struct ECSRenderDetail::MeshViewUploadCommitGraphTask;
     friend struct ECSRenderDetail::SceneShadingSetupGraphTask;
     friend struct ECSRenderDetail::GbufferGraphTask;
+    friend struct ECSRenderDetail::CsgIntervalCombineGraphTask;
     friend struct ECSRenderDetail::CsgIntervalSampleGraphTask;
 
 private:
@@ -399,6 +402,7 @@ private:
     Core::GpuTaskId m_graphicsPrefixDeferredClearFirstTask;
     Core::GpuTaskId m_graphicsPrefixDeferredClearTask;
     Core::GpuTaskId m_graphicsPrefixGbufferTask;
+    Core::GpuTaskId m_graphicsPrefixCsgIntervalCombineTask;
     Core::GpuTaskId m_graphicsPrefixCsgIntervalSampleTask;
     Core::GpuTaskId m_graphicsPrefixTask;
     // Prepared soft-transparent shadow frames split opaque production, first wavelet, resolve tail, transparent

@@ -59,7 +59,8 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
-        bool removedIntervalOutputImageStatesGraphOwned = false
+        bool removedIntervalOutputImageStatesGraphOwned = false,
+        bool intervalCombineInputImageStatesGraphOwned = false
     );
     void renderCsgIntervalCaps(
         Core::CommandList& commandList,

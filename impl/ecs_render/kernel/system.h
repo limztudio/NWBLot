@@ -239,6 +239,7 @@ private:
         Core::GpuGraphResourceId materialContextSlots,
         const Core::GpuGraphResourceId* shadowTraceGeometryResources,
         usize shadowTraceGeometryResourceCount,
+        Core::GpuGraphResourceSetId shadowTraceGeometrySet,
         Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
         Optional<Core::GpuTimingMeasure>& deferredClearTiming,

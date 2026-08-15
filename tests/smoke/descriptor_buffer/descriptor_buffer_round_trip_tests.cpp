@@ -5035,6 +5035,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPostGbufferTraceGeometryStatesRe
     ASSERT_TRUE(rasterGeometryResource.valid());
     ASSERT_TRUE(softwareBvhResource.valid());
 
+    const GpuGraphResourceId traceGeometryMembers[] = { rasterGeometryResource, softwareBvhResource };
+    const GpuGraphResourceSetId traceGeometrySet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/post_gbuffer_trace_geometry"))
+            .setMarkerLabel("Post-G-Buffer Trace Geometry")
+            .setMembers(traceGeometryMembers, LengthOf(traceGeometryMembers))
+    );
+    ASSERT_TRUE(traceGeometrySet.valid());
+
     const GpuQueueRequest graphicsQueue{
         GpuQueueCapability::Graphics,
         GpuQueuePreference::Graphics,
@@ -5079,15 +5088,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPostGbufferTraceGeometryStatesRe
 
     GpuTaskSchedulingHint normalizeScheduling = gbufferScheduling;
     normalizeScheduling.mergeWithPrevious = true;
-    const GpuTaskResourceUse normalizeUses[] = {
+    const GpuTaskResourceSetUse traceGeometrySetUses[] = {
         {
-            .resource = rasterGeometryResource,
-            .range = {},
-            .requiredState = ResourceStates::ShaderResource,
-            .access = GpuTaskResourceAccess::ReadWrite,
-        },
-        {
-            .resource = softwareBvhResource,
+            .resourceSet = traceGeometrySet,
             .range = {},
             .requiredState = ResourceStates::ShaderResource,
             .access = GpuTaskResourceAccess::ReadWrite,
@@ -5100,7 +5103,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPostGbufferTraceGeometryStatesRe
         .setQueue(graphicsQueue)
         .setScheduling(normalizeScheduling)
         .setDependencies(&gbufferTask, 1u)
-        .setResourceUses(normalizeUses, LengthOf(normalizeUses))
+        .setResourceSetUses(traceGeometrySetUses, LengthOf(traceGeometrySetUses))
     ;
     bool normalizeRecorded = false;
     const GpuTaskId normalizeTask = graph.addTask<NativePacketPostGbufferTraceGeometryProbeTask>(

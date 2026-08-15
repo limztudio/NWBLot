@@ -7536,6 +7536,15 @@ TEST(GpuTaskGraph, PlansGraphOwnedPostGbufferTraceGeometryStates){
     ASSERT_TRUE(rasterGeometry.valid());
     ASSERT_TRUE(softwareBvh.valid());
 
+    const Graphics::GpuGraphResourceId traceGeometryMembers[] = { rasterGeometry, softwareBvh };
+    const Graphics::GpuGraphResourceSetId traceGeometrySet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/post_gbuffer_trace_geometry"))
+            .setMarkerLabel("Post-G-Buffer Trace Geometry")
+            .setMembers(traceGeometryMembers, LengthOf(traceGeometryMembers))
+    );
+    ASSERT_TRUE(traceGeometrySet.valid());
+
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
         Graphics::GpuQueuePreference::Graphics,
@@ -7599,15 +7608,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedPostGbufferTraceGeometryStates){
     const Graphics::GpuTaskId gbuffer = graph.addTask(gbufferDesc);
     ASSERT_TRUE(gbuffer.valid());
 
-    const Graphics::GpuTaskResourceUse normalizeUses[] = {
+    const Graphics::GpuTaskResourceSetUse traceGeometrySetUses[] = {
         {
-            .resource = rasterGeometry,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::ShaderResource,
-            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
-        },
-        {
-            .resource = softwareBvh,
+            .resourceSet = traceGeometrySet,
             .range = {},
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::ReadWrite,
@@ -7620,7 +7623,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedPostGbufferTraceGeometryStates){
         .setQueue(graphicsRequest)
         .setScheduling(gbufferScheduling)
         .setDependencies(&gbuffer, 1u)
-        .setResourceUses(normalizeUses, LengthOf(normalizeUses))
+        .setResourceSetUses(traceGeometrySetUses, LengthOf(traceGeometrySetUses))
     ;
     const Graphics::GpuTaskId normalize = graph.addTask(normalizeDesc);
     ASSERT_TRUE(normalize.valid());

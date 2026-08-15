@@ -3101,6 +3101,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     const Core::GpuGraphResourceId materialContextSlots,
     const Core::GpuGraphResourceId* const shadowTraceGeometryResources,
     const usize shadowTraceGeometryResourceCount,
+    const Core::GpuGraphResourceSetId shadowTraceGeometrySet,
     Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
     Optional<Core::GpuTimingMeasure>& deferredClearTiming,
@@ -3122,6 +3123,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     m_graphicsPrefixTask = {};
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
+
+    const bool shadowTraceGeometryStatesGraphOwned = shadowTraceGeometrySet.valid();
 
     if(
         !deferredTargets.valid()
@@ -4257,7 +4260,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
     Core::Alloc::ScratchArena normalizeScratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> normalizeResourceUses{ normalizeScratchArena };
-    normalizeResourceUses.reserve(8u + shadowTraceGeometryResourceCount);
+    normalizeResourceUses.reserve(8u + (shadowTraceGeometryStatesGraphOwned ? 0u : shadowTraceGeometryResourceCount));
     normalizeResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
     normalizeResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
     normalizeResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
@@ -4272,8 +4275,15 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             return false;
         // This task actually restores the state after G-buffer, so it owns an outgoing Prefix state seed instead of
         // looking like an optional same-state reader.
-        normalizeResourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::ShaderResource));
+        if(!shadowTraceGeometryStatesGraphOwned)
+            normalizeResourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::ShaderResource));
     }
+    const Core::GpuTaskResourceSetUse shadowTraceGeometrySetUse{
+        .resourceSet = shadowTraceGeometrySet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::ReadWrite,
+    };
     Core::GpuTaskSchedulingHint normalizeScheduling;
     normalizeScheduling.cost = Core::GpuTaskCostHint::Tiny;
     normalizeScheduling.forceSubmissionBoundary = false;
@@ -4287,6 +4297,10 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         .setScheduling(normalizeScheduling)
         .setDependencies(&gbufferCompletionTask, 1u)
         .setResourceUses(normalizeResourceUses.data(), normalizeResourceUses.size())
+        .setResourceSetUses(
+            shadowTraceGeometryStatesGraphOwned ? &shadowTraceGeometrySetUse : nullptr,
+            shadowTraceGeometryStatesGraphOwned ? 1u : 0u
+        )
     ;
     m_graphicsPrefixTask = m_deferredLightingTaskGraph.addTask<PostGbufferNormalizeGraphTask>(
         normalizeDesc,
@@ -7019,6 +7033,15 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ))
             softwareTraceGeometryResources.push_back(resource);
     }
+    Core::GpuGraphResourceSetId shadowTraceGeometrySet;
+    if(!traceGeometryResources.empty()){
+        shadowTraceGeometrySet = m_deferredLightingTaskGraph.importResourceSet(
+            Core::GpuGraphResourceSetDesc{}
+                .setIdentity(Name("render.post_gbuffer_trace_geometry"))
+                .setMarkerLabel("Post-G-Buffer Trace Geometry")
+                .setMembers(traceGeometryResources.data(), traceGeometryResources.size())
+        );
+    }
     Core::GpuGraphResourceSetId softwareTraceGeometrySet;
     if(!softwareTraceGeometryResources.empty()){
         softwareTraceGeometrySet = m_deferredLightingTaskGraph.importResourceSet(
@@ -7563,6 +7586,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         materialContextSlots,
         traceGeometryResources.data(),
         traceGeometryResources.size(),
+        shadowTraceGeometrySet,
         frameTimingTransaction,
         asyncPrefixTiming,
         deferredClearTiming,

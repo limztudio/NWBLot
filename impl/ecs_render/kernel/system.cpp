@@ -245,6 +245,7 @@ void RendererSystem::invalidateResources(){
     m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixGbufferTask = {};
+    m_graphicsPrefixCsgReceiverSpanTask = {};
     m_graphicsPrefixCsgIntervalCombineTask = {};
     m_graphicsPrefixCsgIntervalSampleTask = {};
     m_graphicsPrefixTask = {};
@@ -530,6 +531,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixGbufferTask = {};
+    m_graphicsPrefixCsgReceiverSpanTask = {};
     m_graphicsPrefixCsgIntervalCombineTask = {};
     m_graphicsPrefixCsgIntervalSampleTask = {};
     m_graphicsPrefixTask = {};
@@ -793,6 +795,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingSubmissionTicket graphicsPrefixSceneShadingSetupTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket graphicsPrefixDeferredClearTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket graphicsPrefixGbufferTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket graphicsPrefixCsgReceiverSpanTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket graphicsPrefixCsgIntervalCombineTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket graphicsPrefixCsgIntervalSampleTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket graphicsPrefixNormalizeTimingTicket(m_graphics.gpuTiming());
@@ -804,6 +807,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &graphicsPrefixSceneShadingSetupTimingTicket,
         &graphicsPrefixDeferredClearTimingTicket,
         &graphicsPrefixGbufferTimingTicket,
+        &graphicsPrefixCsgReceiverSpanTimingTicket,
         &graphicsPrefixCsgIntervalCombineTimingTicket,
         &graphicsPrefixCsgIntervalSampleTimingTicket,
         &graphicsPrefixNormalizeTimingTicket,
@@ -813,6 +817,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &graphicsPrefixSceneShadingSetupTimingTicket,
         &graphicsPrefixDeferredClearTimingTicket,
         &graphicsPrefixGbufferTimingTicket,
+        &graphicsPrefixCsgReceiverSpanTimingTicket,
         &graphicsPrefixCsgIntervalCombineTimingTicket,
         &graphicsPrefixCsgIntervalSampleTimingTicket,
         &graphicsPrefixNormalizeTimingTicket,
@@ -1085,6 +1090,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixGbufferTask);
     // The optional CSG callbacks alias the G-buffer packet on ordinary frames. Each retains an independent semantic
     // timing anchor when a FrontierSafe boundary splits the Graphics prefix.
+    const Core::GpuSubmissionPacketId graphicsPrefixCsgReceiverSpanPacket =
+        m_graphicsPrefixCsgReceiverSpanTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixCsgReceiverSpanTask)
+            : graphicsPrefixGbufferPacket
+    ;
     const Core::GpuSubmissionPacketId graphicsPrefixCsgIntervalCombinePacket =
         m_graphicsPrefixCsgIntervalCombineTask.valid()
             ? m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixCsgIntervalCombineTask)
@@ -1100,6 +1110,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         graphicsPrefixSceneShadingSetupPacket,
         graphicsPrefixDeferredClearPacket,
         graphicsPrefixGbufferPacket,
+        graphicsPrefixCsgReceiverSpanPacket,
         graphicsPrefixCsgIntervalCombinePacket,
         graphicsPrefixCsgIntervalSamplePacket,
         graphicsPrefixPacket,
@@ -1807,7 +1818,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_graphicsPrefixDeferredClearTask.valid()
         || !m_graphicsPrefixGbufferTask.valid()
         || (hasOpaqueCsgFrameWork && (
-            !m_graphicsPrefixCsgIntervalCombineTask.valid()
+            !m_graphicsPrefixCsgReceiverSpanTask.valid()
+            || !m_graphicsPrefixCsgIntervalCombineTask.valid()
             || !m_graphicsPrefixCsgIntervalSampleTask.valid()
         ))
         || !m_graphicsPrefixTask.valid()
@@ -1816,6 +1828,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !graphicsPrefixDeferredClearFirstPacket.valid()
         || !graphicsPrefixDeferredClearPacket.valid()
         || !graphicsPrefixGbufferPacket.valid()
+        || !graphicsPrefixCsgReceiverSpanPacket.valid()
         || !graphicsPrefixCsgIntervalCombinePacket.valid()
         || !graphicsPrefixCsgIntervalSamplePacket.valid()
         || !graphicsPrefixPacket.valid()
@@ -2204,7 +2217,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_graphicsPrefixDeferredClearTask.valid()
         && m_graphicsPrefixGbufferTask.valid()
         && (!hasOpaqueCsgFrameWork || (
-            m_graphicsPrefixCsgIntervalCombineTask.valid()
+            m_graphicsPrefixCsgReceiverSpanTask.valid()
+            && m_graphicsPrefixCsgIntervalCombineTask.valid()
             && m_graphicsPrefixCsgIntervalSampleTask.valid()
         ))
         && m_graphicsPrefixTask.valid()
@@ -2498,7 +2512,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_graphicsPrefixDeferredClearTask.valid()
         && m_graphicsPrefixGbufferTask.valid()
         && (!hasOpaqueCsgFrameWork || (
-            m_graphicsPrefixCsgIntervalCombineTask.valid()
+            m_graphicsPrefixCsgReceiverSpanTask.valid()
+            && m_graphicsPrefixCsgIntervalCombineTask.valid()
             && m_graphicsPrefixCsgIntervalSampleTask.valid()
         ))
         && m_graphicsPrefixTask.valid()
@@ -3398,7 +3413,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_graphicsPrefixDeferredClearTask.valid()
             && m_graphicsPrefixGbufferTask.valid()
             && (!hasOpaqueCsgFrameWork || (
-                m_graphicsPrefixCsgIntervalCombineTask.valid()
+                m_graphicsPrefixCsgReceiverSpanTask.valid()
+                && m_graphicsPrefixCsgIntervalCombineTask.valid()
                 && m_graphicsPrefixCsgIntervalSampleTask.valid()
             ))
             && m_graphicsPrefixTask.valid()

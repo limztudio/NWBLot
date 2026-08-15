@@ -74,6 +74,7 @@ namespace ECSRenderDetail{
         SceneShadingSetup,
         DeferredClear,
         Gbuffer,
+        CsgReceiverSpanBuild,
         CsgIntervalCombine,
         CsgIntervalSample,
         Normalize,
@@ -83,6 +84,7 @@ namespace ECSRenderDetail{
     struct MeshViewSetupGraphTask;
     struct MeshViewUploadCommitGraphTask;
     struct SceneShadingSetupGraphTask;
+    struct CsgReceiverSpanBuildGraphTask;
     struct CsgIntervalCombineGraphTask;
     struct CsgIntervalSampleGraphTask;
     struct DeferredClearTimingRecordState{
@@ -109,6 +111,7 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend struct ECSRenderDetail::MeshViewUploadCommitGraphTask;
     friend struct ECSRenderDetail::SceneShadingSetupGraphTask;
     friend struct ECSRenderDetail::GbufferGraphTask;
+    friend struct ECSRenderDetail::CsgReceiverSpanBuildGraphTask;
     friend struct ECSRenderDetail::CsgIntervalCombineGraphTask;
     friend struct ECSRenderDetail::CsgIntervalSampleGraphTask;
 
@@ -402,6 +405,7 @@ private:
     Core::GpuTaskId m_graphicsPrefixDeferredClearFirstTask;
     Core::GpuTaskId m_graphicsPrefixDeferredClearTask;
     Core::GpuTaskId m_graphicsPrefixGbufferTask;
+    Core::GpuTaskId m_graphicsPrefixCsgReceiverSpanTask;
     Core::GpuTaskId m_graphicsPrefixCsgIntervalCombineTask;
     Core::GpuTaskId m_graphicsPrefixCsgIntervalSampleTask;
     Core::GpuTaskId m_graphicsPrefixTask;

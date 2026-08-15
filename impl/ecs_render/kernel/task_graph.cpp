@@ -610,7 +610,6 @@ struct GbufferGraphTask{
         bool csgFrameBuffersUploaded = false;
         bool csgIntervalPeelTargetStatesGraphOwned = false;
         bool csgReceiverSurfaceImageStatesGraphOwned = false;
-        bool csgReceiverSpanOutputImageStatesGraphOwned = false;
         bool csgClipBufferStatesGraphOwned = false;
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
@@ -747,13 +746,98 @@ struct GbufferGraphTask{
                     opaqueDrawItems.csgReceiverSurface
                 );
             }
-            if(csgSampleStateReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)
-                renderer.m_csgSystem.dispatchCsgReceiverSpanBuild(
-                    commandList,
-                    deferredTargets,
-                    csgFrameData,
-                    payload.csgReceiverSpanOutputImageStatesGraphOwned
-                );
+        }
+        commandList.endRenderPass();
+        return true;
+    }
+};
+
+
+// Receiver-span build consumes the StorageImage event aliases emitted by the receiver-surface raster pass and
+// publishes span aliases for interval combine. The opaque graph exposes those two exact same-UAV boundaries while
+// aggregate native and transparent compatibility callers retain their local fences.
+struct CsgReceiverSpanBuildGraphTask{
+    struct Payload{
+        RendererSystem* renderer = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
+        const bool* meshViewSetupReady = nullptr;
+        const bool* sceneShadingSetupReady = nullptr;
+        OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
+        bool materialDrawBuffersUploaded = false;
+        bool csgFrameBuffersUploaded = false;
+        bool receiverSpanInputImageStatesGraphOwned = false;
+        bool receiverSpanOutputImageStatesGraphOwned = false;
+
+        explicit Payload(Core::Alloc::GlobalArena& arena)
+            : opaqueDrawSnapshot(arena)
+        {}
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(
+            !payload.renderer
+            || !payload.targets
+            || !payload.timingTicket
+            || !*payload.timingTicket
+            || !payload.meshViewSetupReady
+            || !payload.sceneShadingSetupReady
+            || !payload.opaqueDrawSnapshot.captured
+        )
+            return false;
+
+        RendererSystem& renderer = *payload.renderer;
+        DeferredFrameTargets& deferredTargets = *payload.targets;
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+
+        MaterialPassDrawItemPartitions opaqueDrawItems{ scratchArena };
+        CsgFrameGpuData csgFrameData{ scratchArena };
+        const bool frameSetupReady =
+            *payload.meshViewSetupReady
+            && payload.sceneShadingSetupReady
+            && *payload.sceneShadingSetupReady
+        ;
+        if(frameSetupReady)
+            payload.opaqueDrawSnapshot.materialize(opaqueDrawItems, csgFrameData);
+
+        const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
+        const bool deferredResourcesReady =
+            hasDeferredDrawItems
+            && payload.materialDrawBuffersUploaded
+            && renderer.m_materialSystem.materialPassDrawBuffersReady(
+                payload.opaqueDrawSnapshot.instanceCount,
+                payload.opaqueDrawSnapshot.materialTypedByteCount
+            )
+        ;
+        const bool csgResourcesReady =
+            deferredResourcesReady
+            && (
+                !csgFrameData.hasWork()
+                || (
+                    payload.csgFrameBuffersUploaded
+                    && renderer.m_csgSystem.csgFrameBuffersReady(csgFrameData)
+                )
+            )
+        ;
+        const bool csgReceiverSurfaceDrawResourcesReady =
+            csgResourcesReady
+            && (opaqueDrawItems.csgReceiverSurface.empty()
+                || renderer.m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
+        ;
+        if(csgResourcesReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady){
+            renderer.m_csgSystem.dispatchCsgReceiverSpanBuild(
+                commandList,
+                deferredTargets,
+                csgFrameData,
+                payload.receiverSpanOutputImageStatesGraphOwned,
+                payload.receiverSpanInputImageStatesGraphOwned
+            );
         }
         commandList.endRenderPass();
         return true;
@@ -2483,6 +2567,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixGbufferTask = {};
+    m_graphicsPrefixCsgReceiverSpanTask = {};
     m_graphicsPrefixCsgIntervalCombineTask = {};
     m_graphicsPrefixCsgIntervalSampleTask = {};
     m_graphicsPrefixTask = {};
@@ -3182,6 +3267,26 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         instanceData.size(),
         materialTypedBytes.size()
     );
+    ECSRenderDetail::CsgReceiverSpanBuildGraphTask::Payload csgReceiverSpanPayload{ m_arena };
+    if(hasOpaqueCsgFrameWork){
+        csgReceiverSpanPayload.renderer = this;
+        csgReceiverSpanPayload.targets = &deferredTargets;
+        // The graph owns the receiver-surface producer fence. Normal prefix compilation merges this callback with
+        // G-buffer, while a FrontierSafe boundary retains its own submission-local timing ticket.
+        csgReceiverSpanPayload.timingTicket = timingTicketSlot(PrefixTimingSlot::CsgReceiverSpanBuild);
+        csgReceiverSpanPayload.meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady;
+        csgReceiverSpanPayload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
+        csgReceiverSpanPayload.materialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
+        csgReceiverSpanPayload.csgFrameBuffersUploaded = gbufferPayload.csgFrameBuffersUploaded;
+        csgReceiverSpanPayload.receiverSpanInputImageStatesGraphOwned = true;
+        csgReceiverSpanPayload.receiverSpanOutputImageStatesGraphOwned = true;
+        csgReceiverSpanPayload.opaqueDrawSnapshot.capture(
+            opaqueDrawItems,
+            csgFrameData,
+            instanceData.size(),
+            materialTypedBytes.size()
+        );
+    }
     ECSRenderDetail::CsgIntervalCombineGraphTask::Payload csgIntervalCombinePayload{ m_arena };
     if(hasOpaqueCsgFrameWork){
         csgIntervalCombinePayload.renderer = this;
@@ -3223,12 +3328,11 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             materialTypedBytes.size()
         );
     }
-    // The G-buffer produces peel/event/span images, combine consumes the five prior-stage aliases and publishes the
-    // removed-interval images, then sample consumes those outputs. Their native thunks consume graph-owned
-    // StorageImage state without staging the initial target transitions.
+    // The G-buffer produces peel/event images, span build consumes its event aliases and publishes spans, Combine
+    // consumes the five prior-stage aliases and publishes removed-interval images, then Sample consumes those
+    // outputs. Their native thunks consume graph-owned StorageImage state without staging target transitions.
     gbufferPayload.csgIntervalPeelTargetStatesGraphOwned = hasOpaqueCsgFrameWork;
     gbufferPayload.csgReceiverSurfaceImageStatesGraphOwned = hasOpaqueCsgFrameWork;
-    gbufferPayload.csgReceiverSpanOutputImageStatesGraphOwned = hasOpaqueCsgFrameWork;
     // Match the actual graph declarations above; semantic CSG work may have no gathered GPU frame data.
     gbufferPayload.csgClipBufferStatesGraphOwned = hasCsgFrameGpuWork;
 
@@ -3276,6 +3380,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
     Core::Alloc::ScratchArena gbufferResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferResourceUses{ gbufferResourceScratch };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgReceiverSpanResourceUses{ gbufferResourceScratch };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgIntervalCombineResourceUses{ gbufferResourceScratch };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferMaterialGeometryUses{ gbufferResourceScratch };
     const MaterialPassDrawItems* const gbufferMaterialGeometryDrawSets[] = {
@@ -3298,7 +3403,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     ;
     if(gbufferUsesMaterialGeometry && !gbufferPayload.materialGeometryStatesGraphOwned)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque material geometry states"));
-    gbufferResourceUses.reserve((hasOpaqueDrawItems ? 7u : 5u) + (hasCsgFrameGpuWork ? 5u : 0u) + (hasOpaqueCsgFrameWork ? 7u : 0u));
+    gbufferResourceUses.reserve((hasOpaqueDrawItems ? 7u : 5u) + (hasCsgFrameGpuWork ? 5u : 0u) + (hasOpaqueCsgFrameWork ? 5u : 0u));
     gbufferResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
     if(hasOpaqueDrawItems){
         gbufferResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
@@ -3313,6 +3418,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         gbufferResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     }
     if(hasOpaqueCsgFrameWork){
+        csgReceiverSpanResourceUses.reserve(4u + (hasCsgFrameGpuWork ? 2u : 0u));
         csgIntervalCombineResourceUses.reserve(9u + (hasCsgFrameGpuWork ? 2u : 0u));
         gbufferResourceUses.push_back(
             ReadWriteTextureUse(csgCapBackNormal, csgPeelSubresources, Core::ResourceStates::UnorderedAccess)
@@ -3333,12 +3439,26 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             csgReceiverEventCountSubresources,
             Core::ResourceStates::UnorderedAccess
         ));
-        gbufferResourceUses.push_back(ReadWriteTextureUse(
+        csgReceiverSpanResourceUses.push_back(ReadTextureUse(
+            csgReceiverEventData,
+            csgReceiverEventDataSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
+        csgReceiverSpanResourceUses.push_back(ReadTextureUse(
+            csgReceiverEventCount,
+            csgReceiverEventCountSubresources,
+            Core::ResourceStates::UnorderedAccess
+        ));
+        if(hasCsgFrameGpuWork){
+            csgReceiverSpanResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
+            csgReceiverSpanResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+        }
+        csgReceiverSpanResourceUses.push_back(WriteTextureUse(
             csgReceiverSpanData,
             csgReceiverSpanDataSubresources,
             Core::ResourceStates::UnorderedAccess
         ));
-        gbufferResourceUses.push_back(ReadWriteTextureUse(
+        csgReceiverSpanResourceUses.push_back(WriteTextureUse(
             csgReceiverSpanCount,
             csgReceiverSpanCountSubresources,
             Core::ResourceStates::UnorderedAccess
@@ -3424,6 +3544,31 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
     Core::GpuTaskId gbufferCompletionTask = m_graphicsPrefixGbufferTask;
     if(hasOpaqueCsgFrameWork){
+        Core::GpuTaskSchedulingHint csgReceiverSpanScheduling;
+        csgReceiverSpanScheduling.cost = Core::GpuTaskCostHint::Medium;
+        csgReceiverSpanScheduling.forceSubmissionBoundary = false;
+        csgReceiverSpanScheduling.allowPacketMerge = true;
+        csgReceiverSpanScheduling.mergeWithPrevious = true;
+        Core::GpuTaskDesc csgReceiverSpanDesc;
+        csgReceiverSpanDesc
+            .setIdentity(Name("render.graphics_prefix.csg_receiver_span"))
+            .setMarkerLabel("Opaque CSG Receiver Span")
+            .setQueue(GraphicsQueueRequest())
+            .setScheduling(csgReceiverSpanScheduling)
+            .setDependencies(&m_graphicsPrefixGbufferTask, 1u)
+            .setResourceUses(csgReceiverSpanResourceUses.data(), csgReceiverSpanResourceUses.size())
+        ;
+        m_graphicsPrefixCsgReceiverSpanTask = m_deferredLightingTaskGraph.addTask<
+            ECSRenderDetail::CsgReceiverSpanBuildGraphTask
+        >(
+            csgReceiverSpanDesc,
+            Move(csgReceiverSpanPayload)
+        );
+        if(!m_graphicsPrefixCsgReceiverSpanTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG receiver-span task"));
+            return false;
+        }
+
         Core::GpuTaskSchedulingHint csgIntervalCombineScheduling;
         csgIntervalCombineScheduling.cost = Core::GpuTaskCostHint::Medium;
         csgIntervalCombineScheduling.forceSubmissionBoundary = false;
@@ -3435,7 +3580,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             .setMarkerLabel("Opaque CSG Interval Combine")
             .setQueue(GraphicsQueueRequest())
             .setScheduling(csgIntervalCombineScheduling)
-            .setDependencies(&m_graphicsPrefixGbufferTask, 1u)
+            .setDependencies(&m_graphicsPrefixCsgReceiverSpanTask, 1u)
             .setResourceUses(csgIntervalCombineResourceUses.data(), csgIntervalCombineResourceUses.size())
         ;
         m_graphicsPrefixCsgIntervalCombineTask = m_deferredLightingTaskGraph.addTask<
@@ -6050,6 +6195,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixGbufferTask = {};
+    m_graphicsPrefixCsgReceiverSpanTask = {};
     m_graphicsPrefixCsgIntervalCombineTask = {};
     m_graphicsPrefixCsgIntervalSampleTask = {};
     m_graphicsPrefixTask = {};

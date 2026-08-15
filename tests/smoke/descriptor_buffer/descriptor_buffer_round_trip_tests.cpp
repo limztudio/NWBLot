@@ -756,6 +756,49 @@ struct NativePacketPrefixTask{
 };
 
 
+// The opaque CSG receiver-span task consumes receiver-surface event StorageImage aliases and publishes span
+// aliases for interval combine. This getter-only probe observes the graph-lowered entry states before the native
+// span dispatcher can perform any compatibility transition.
+struct NativePacketCsgReceiverSpanProbeTask{
+    struct Payload{
+        Texture* receiverEventData = nullptr;
+        Texture* receiverEventCount = nullptr;
+        Texture* receiverSpanData = nullptr;
+        Texture* receiverSpanCount = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(
+            !payload.receiverEventData
+            || !payload.receiverEventCount
+            || !payload.receiverSpanData
+            || !payload.receiverSpanCount
+        )
+            return false;
+        const auto hasUavRange = [&commandList](Texture* texture, const u32 finalArraySlice){
+            return commandList.getTextureSubresourceState(texture, 0u, 0u) == ResourceStates::UnorderedAccess
+                && commandList.getTextureSubresourceState(texture, finalArraySlice, 0u) == ResourceStates::UnorderedAccess
+            ;
+        };
+        const bool ready =
+            hasUavRange(payload.receiverEventData, 31u)
+            && hasUavRange(payload.receiverEventCount, 0u)
+            && hasUavRange(payload.receiverSpanData, 15u)
+            && hasUavRange(payload.receiverSpanCount, 0u)
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
 // The opaque CSG interval-combine task consumes five producer StorageImage aliases and publishes four more. This
 // probe performs no native state work: it only observes the packet runtime's graph-lowered states before the
 // equivalent thunk runs.
@@ -8905,9 +8948,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
 }
 
 
-// Opaque CSG now lowers peel/span production, interval combine, and material/cap sampling as graph tasks. Record the
-// whole same-UAV chain on a real Graphics packet so neither Combine nor Sample can rely on a native state bridge.
-TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgIntervalCombineAndSampleStatesRecordWithoutNativeBridge){
+// Opaque CSG now lowers G-buffer event production, receiver-span build, interval combine, and material/cap sampling
+// as graph tasks. Record the whole same-UAV chain on a real Graphics packet so Span, Combine, and Sample cannot rely
+// on a native state bridge.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverSpanCombineAndSampleStatesRecordWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto makeStorageArray = [&device](const u32 arraySize){
         return device.createTexture(
@@ -8924,6 +8968,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgIntervalCombineAndSampl
     auto capBackNormal = makeStorageArray(4u);
     auto intervalDepth = makeStorageArray(4u);
     auto intervalId = makeStorageArray(4u);
+    auto receiverEventData = makeStorageArray(32u);
+    auto receiverEventCount = makeStorageArray(1u);
     auto receiverSpanData = makeStorageArray(16u);
     auto receiverSpanCount = makeStorageArray(1u);
     auto removedIntervalDepth = makeStorageArray(16u);
@@ -8933,6 +8979,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgIntervalCombineAndSampl
     ASSERT_NE(capBackNormal.get(), nullptr);
     ASSERT_NE(intervalDepth.get(), nullptr);
     ASSERT_NE(intervalId.get(), nullptr);
+    ASSERT_NE(receiverEventData.get(), nullptr);
+    ASSERT_NE(receiverEventCount.get(), nullptr);
     ASSERT_NE(receiverSpanData.get(), nullptr);
     ASSERT_NE(receiverSpanCount.get(), nullptr);
     ASSERT_NE(removedIntervalDepth.get(), nullptr);
@@ -8960,6 +9008,20 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgIntervalCombineAndSampl
         GpuGraphResourceDesc{}
             .setIdentity(Name("tests/descriptor_buffer/opaque_csg_combine_interval_id"))
             .setMarkerLabel("Opaque CSG Combine Interval Id")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId receiverEventDataResource = graph.importTexture(
+        receiverEventData,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/opaque_csg_span_receiver_event_data"))
+            .setMarkerLabel("Opaque CSG Span Receiver Event Data")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId receiverEventCountResource = graph.importTexture(
+        receiverEventCount,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/opaque_csg_span_receiver_event_count"))
+            .setMarkerLabel("Opaque CSG Span Receiver Event Count")
             .setType(GpuGraphResourceType::Texture)
     );
     const GpuGraphResourceId receiverSpanDataResource = graph.importTexture(
@@ -9007,6 +9069,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgIntervalCombineAndSampl
     ASSERT_TRUE(capBackNormalResource.valid());
     ASSERT_TRUE(intervalDepthResource.valid());
     ASSERT_TRUE(intervalIdResource.valid());
+    ASSERT_TRUE(receiverEventDataResource.valid());
+    ASSERT_TRUE(receiverEventCountResource.valid());
     ASSERT_TRUE(receiverSpanDataResource.valid());
     ASSERT_TRUE(receiverSpanCountResource.valid());
     ASSERT_TRUE(removedIntervalDepthResource.valid());
@@ -9015,6 +9079,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgIntervalCombineAndSampl
     ASSERT_TRUE(removedIntervalCountResource.valid());
 
     const TextureSubresourceSet peelRange(0u, 1u, 0u, 4u);
+    const TextureSubresourceSet receiverEventRange(0u, 1u, 0u, 32u);
+    const TextureSubresourceSet receiverEventCountRange(0u, 1u, 0u, 1u);
     const TextureSubresourceSet receiverSpanRange(0u, 1u, 0u, 16u);
     const TextureSubresourceSet receiverSpanCountRange(0u, 1u, 0u, 1u);
     const TextureSubresourceSet removedIntervalRange(0u, 1u, 0u, 16u);
@@ -9037,6 +9103,32 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgIntervalCombineAndSampl
             .range = GpuTaskResourceRange{ .textureSubresources = peelRange },
             .requiredState = ResourceStates::UnorderedAccess,
             .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = receiverEventDataResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = receiverEventRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = receiverEventCountResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = receiverEventCountRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    const GpuTaskResourceUse spanUses[] = {
+        GpuTaskResourceUse{
+            .resource = receiverEventDataResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = receiverEventRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = receiverEventCountResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = receiverEventCountRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
         },
         GpuTaskResourceUse{
             .resource = receiverSpanDataResource,
@@ -9162,6 +9254,30 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgIntervalCombineAndSampl
     );
     ASSERT_TRUE(producerTask.valid());
 
+    GpuTaskSchedulingHint spanScheduling = producerScheduling;
+    spanScheduling.mergeWithPrevious = true;
+    GpuTaskDesc spanDesc;
+    spanDesc
+        .setIdentity(Name("tests/descriptor_buffer/opaque_csg_receiver_span"))
+        .setMarkerLabel("Opaque CSG Receiver Span")
+        .setQueue(graphicsQueue)
+        .setScheduling(spanScheduling)
+        .setDependencies(&producerTask, 1u)
+        .setResourceUses(spanUses, LengthOf(spanUses))
+    ;
+    bool spanRecorded = false;
+    const GpuTaskId spanTask = graph.addTask<NativePacketCsgReceiverSpanProbeTask>(
+        spanDesc,
+        NativePacketCsgReceiverSpanProbeTask::Payload{
+            .receiverEventData = receiverEventData.get(),
+            .receiverEventCount = receiverEventCount.get(),
+            .receiverSpanData = receiverSpanData.get(),
+            .receiverSpanCount = receiverSpanCount.get(),
+            .recorded = &spanRecorded,
+        }
+    );
+    ASSERT_TRUE(spanTask.valid());
+
     GpuTaskSchedulingHint combineScheduling = producerScheduling;
     combineScheduling.mergeWithPrevious = true;
     GpuTaskDesc combineDesc;
@@ -9170,7 +9286,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgIntervalCombineAndSampl
         .setMarkerLabel("Opaque CSG Interval Combine")
         .setQueue(graphicsQueue)
         .setScheduling(combineScheduling)
-        .setDependencies(&producerTask, 1u)
+        .setDependencies(&spanTask, 1u)
         .setResourceUses(combineUses, LengthOf(combineUses))
     ;
     bool combineRecorded = false;
@@ -9241,25 +9357,31 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgIntervalCombineAndSampl
     ASSERT_EQ(compiledGraph.packetCount(), 1u);
     const GpuSubmissionPacketId packet = compiledGraph.packetForTask(producerTask);
     ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(spanTask), packet);
     EXPECT_EQ(compiledGraph.packetForTask(combineTask), packet);
     EXPECT_EQ(compiledGraph.packetForTask(sampleTask), packet);
     const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
-    ASSERT_EQ(packetPlan.taskCount, 3u);
+    ASSERT_EQ(packetPlan.taskCount, 4u);
     ASSERT_NE(compiledGraph.packetTasks(packet), nullptr);
     EXPECT_EQ(compiledGraph.packetTasks(packet)[0u], producerTask);
-    EXPECT_EQ(compiledGraph.packetTasks(packet)[1u], combineTask);
-    EXPECT_EQ(compiledGraph.packetTasks(packet)[2u], sampleTask);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[1u], spanTask);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[2u], combineTask);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[3u], sampleTask);
 
     const GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producerTask);
+    const GpuCompiledTask* const compiledSpan = compiledGraph.findTask(spanTask);
     const GpuCompiledTask* const compiledCombine = compiledGraph.findTask(combineTask);
     const GpuCompiledTask* const compiledSample = compiledGraph.findTask(sampleTask);
     ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledSpan, nullptr);
     ASSERT_NE(compiledCombine, nullptr);
     ASSERT_NE(compiledSample, nullptr);
     EXPECT_EQ(compiledProducer->prologueStateSeedCount, 0u);
+    EXPECT_EQ(compiledSpan->prologueStateSeedCount, 0u);
     EXPECT_EQ(compiledCombine->prologueStateSeedCount, 0u);
     EXPECT_EQ(compiledSample->prologueStateSeedCount, 0u);
     EXPECT_EQ(compiledProducer->prologueBarrierCount, 5u);
+    EXPECT_EQ(compiledSpan->prologueBarrierCount, 4u);
     EXPECT_EQ(compiledCombine->prologueBarrierCount, 9u);
     EXPECT_EQ(compiledSample->prologueBarrierCount, 4u);
 
@@ -9276,6 +9398,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgIntervalCombineAndSampl
         &failedPacket
     );
     EXPECT_TRUE(producerAttempted);
+    EXPECT_TRUE(spanRecorded);
     EXPECT_TRUE(combineRecorded);
     EXPECT_TRUE(sampleRecorded);
     ASSERT_TRUE(packetRecorded) << "failed packet " << failedPacket.index;

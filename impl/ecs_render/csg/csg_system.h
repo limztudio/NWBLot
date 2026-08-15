@@ -53,7 +53,8 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
-        bool receiverSpanOutputImageStatesGraphOwned = false
+        bool receiverSpanOutputImageStatesGraphOwned = false,
+        bool receiverSpanInputImageStatesGraphOwned = false
     );
     void dispatchCsgIntervalCombine(
         Core::CommandList& commandList,

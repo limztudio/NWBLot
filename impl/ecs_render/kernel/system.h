@@ -542,8 +542,9 @@ private:
     // AsyncCompute; the resolved full-resolution irradiance is either consumed there or snapshotted for optional
     // frame-lagged Graphics lighting.
     Core::CommandListResourceStateHandoff m_surfelGiComputePersistentStateHandoff;
-    // The counter can continue into a late Transfer readback, so retain that exact tail state separately.
-    Core::CommandListResourceStateHandoff m_surfelGiCounterPersistentStateHandoff;
+    // The counter can continue into a late Transfer readback, so retain the accepted tail state and its typed backing
+    // separately. The next Surfel-GI packet imports this cache through its semantic task binding.
+    Core::GpuPersistentResourceStateCache m_surfelGiCounterPersistentState;
     Core::CommandListResourceStateHandoff m_surfelIrradianceReturnStateHandoff;
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;

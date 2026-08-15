@@ -52,7 +52,7 @@ RendererSystem::RendererSystem(
     , m_causticIrradianceLightingStateHandoff(arena)
     , m_causticIrradianceReturnStateHandoff(arena)
     , m_surfelGiComputePersistentStateHandoff(arena)
-    , m_surfelGiCounterPersistentStateHandoff(arena)
+    , m_surfelGiCounterPersistentState(arena)
     , m_surfelIrradianceReturnStateHandoff(arena)
     , m_shaderSystem(*this)
     , m_meshSystem(*this)
@@ -151,7 +151,7 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     m_causticIrradianceLightingStateHandoff.reset();
     m_causticIrradianceReturnStateHandoff.reset();
     m_surfelGiComputePersistentStateHandoff.reset();
-    m_surfelGiCounterPersistentStateHandoff.reset();
+    m_surfelGiCounterPersistentState.reset();
     m_surfelIrradianceReturnStateHandoff.reset();
 }
 
@@ -2474,13 +2474,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             )
         ;
     }
-    if(m_surfelGiCounterPersistentStateHandoff.valid()){
+    if(m_surfelGiCounterPersistentState.valid()){
         surfelGiStateSourcesReady = surfelGiStateSourcesReady
             && appendDeclaredStateSource(
                 surfelGiStateSources,
                 LengthOf(surfelGiStateSources),
                 surfelGiStateSourceCount,
-                &m_surfelGiCounterPersistentStateHandoff
+                m_surfelGiCounterPersistentState.source()
             )
         ;
     }
@@ -3325,14 +3325,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 *context->finalState,
                 targets.surfelIrradiance.get()
             );
-            Core::Buffer* const surfelGiCounterBuffers[] = {
-                renderer.m_rayTracingState.m_surfelCounterBuffer.get(),
+            const Core::BufferHandle surfelGiCounterBuffers[] = {
+                renderer.m_rayTracingState.m_surfelCounterBuffer,
             };
             context->stateReady = context->stateReady
-                && renderer.m_surfelGiCounterPersistentStateHandoff.buildResourceSubset(
+                && renderer.m_surfelGiCounterPersistentState.replaceBufferSubset(
                     *context->finalState,
-                    nullptr,
-                    0u,
                     surfelGiCounterBuffers,
                     LengthOf(surfelGiCounterBuffers)
                 )
@@ -3939,15 +3937,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 ? m_deferredLightingRecordedGraph.packetFinalStateSeed(surfelGiCounterReadbackPacket)
                 : nullptr
             ;
-            Core::CommandListResourceStateHandoff readbackCounterFinalState(m_arena);
-            Core::Buffer* const readbackCounterBuffers[] = {
-                m_rayTracingState.m_surfelCounterBuffer.get(),
+            // The tail is recorded before it is submitted. Keep its filtered final-state candidate private until the
+            // Transfer packet accepts so a rejected readback cannot replace the last accepted Surfel-GI counter state.
+            Core::GpuPersistentResourceStateCache::Candidate readbackCounterStateCandidate(m_arena);
+            const Core::BufferHandle readbackCounterBuffers[] = {
+                m_rayTracingState.m_surfelCounterBuffer,
             };
             const bool readbackFinalStateReady = readbackFinalStateSeed
-                && readbackCounterFinalState.buildResourceSubset(
+                && m_surfelGiCounterPersistentState.buildFilteredBufferSubset(
+                    readbackCounterStateCandidate,
                     *readbackFinalStateSeed,
-                    nullptr,
-                    0u,
                     readbackCounterBuffers,
                     LengthOf(readbackCounterBuffers)
                 )
@@ -3983,7 +3982,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback submission was rejected"));
                 }
                 else{
-                    if(!m_surfelGiCounterPersistentStateHandoff.copyFrom(readbackCounterFinalState)){
+                    if(!m_surfelGiCounterPersistentState.commit(readbackCounterStateCandidate)){
                         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: accepted surfel counter-readback tail lost its retained state"));
                         failFrameRenderRecovery();
                         return;

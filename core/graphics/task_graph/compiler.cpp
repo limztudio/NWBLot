@@ -1113,7 +1113,26 @@ bool GpuTaskGraphCompiler::compile(
     using namespace __hidden_gpu_task_graph_compiler;
 
     outCompiledGraph.reset();
-    if(!analyze(graph, outAnalysis, scratchArena) || !assignQueues(graph, outAnalysis, topology, outAssignments))
+    if(!analyze(graph, outAnalysis, scratchArena))
+        return false;
+
+    if(!options.allowMetadataOnlyTasks){
+        for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
+            const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
+            if(task.hasPayload && task.hasRecordPayload)
+                continue;
+
+            outAssignments.reset();
+            outAnalysis.m_diagnostic.status = GpuTaskGraphAnalysisStatus::MissingTaskRecordPayload;
+            outAnalysis.m_diagnostic.task = task.id;
+            outAnalysis.m_diagnostic.relatedTask = {};
+            outAnalysis.m_diagnostic.resource = {};
+            outAnalysis.m_valid = false;
+            return false;
+        }
+    }
+
+    if(!assignQueues(graph, outAnalysis, topology, outAssignments))
         return false;
 
     if(

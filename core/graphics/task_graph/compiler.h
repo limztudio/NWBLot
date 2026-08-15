@@ -25,6 +25,7 @@ namespace GpuTaskGraphAnalysisStatus{
         NotAnalyzed,
         Success,
         InvalidTask,
+        MissingTaskRecordPayload,
         InvalidResource,
         InvalidTaskDependency,
         InvalidExternalCompletionDependency,
@@ -97,6 +98,9 @@ namespace GpuTaskGraphPacketizationPolicy{
 
 struct GpuTaskGraphCompileOptions{
     GpuTaskGraphPacketizationPolicy::Enum packetizationPolicy = GpuTaskGraphPacketizationPolicy::ExplicitMerge;
+    // Native packet recording requires every task to retain a payload and record thunk. Tooling-only callers that
+    // compile metadata graphs may opt out explicitly; executable graph paths must retain the default.
+    bool allowMetadataOnlyTasks = false;
 };
 
 

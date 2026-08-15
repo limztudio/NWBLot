@@ -25,6 +25,15 @@ namespace __hidden_gpu_packet_runtime{
 
 inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph/packet_recording_frontier");
 
+#if defined(NWB_DEBUG)
+[[nodiscard]] bool HasQueueCapabilities(
+    const GpuQueueCapability::Mask available,
+    const GpuQueueCapability::Mask required
+)noexcept{
+    return (static_cast<u8>(available) & static_cast<u8>(required)) == static_cast<u8>(required);
+}
+#endif
+
 
 [[nodiscard]] bool ValidateTaskPacketStateBindings(
     const GpuTaskGraph& graph,
@@ -654,8 +663,35 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         if(recorded)
             commandList->commitBarriers();
         commandList->beginMarker(taskView.markerLabel);
+#if defined(NWB_DEBUG)
+        commandList->beginTaskCapabilityTracking();
+#endif
         if(recorded)
             recorded = graph.recordTask(task, *commandList, context);
+#if defined(NWB_DEBUG)
+        const GpuQueueCapability::Mask usedCapabilities = commandList->endTaskCapabilityTracking();
+        if(
+            recorded
+            && (
+                !__hidden_gpu_packet_runtime::HasQueueCapabilities(
+                    taskView.queue.requiredCapabilities,
+                    usedCapabilities
+                )
+                || !__hidden_gpu_packet_runtime::HasQueueCapabilities(queue->capabilities, usedCapabilities)
+            )
+        ){
+            NWB_LOGGER_CRITICAL_WARNING(
+                NWB_TEXT("Gpu task graph: rejecting task '{}' because capability mask {} is outside declared mask {} on assigned queue {}:{} (mask {})"),
+                StringConvert(taskView.markerLabel),
+                static_cast<u32>(usedCapabilities),
+                static_cast<u32>(taskView.queue.requiredCapabilities),
+                static_cast<u32>(queue->queueClass),
+                queue->id.index,
+                static_cast<u32>(queue->capabilities)
+            );
+            recorded = false;
+        }
+#endif
         commandList->endMarker();
         const GpuCompiledBarrier* const epilogueBarriers = compiledGraph.taskEpilogueBarriers(task);
         if(compiledTask->epilogueBarrierCount > 0u && !epilogueBarriers)

@@ -512,6 +512,9 @@ bool CommandList::tryWriteBuffer(Buffer* bufferResource, const void* data, usize
     region.dstOffset = destOffsetBytes;
     region.size = dataSize;
 
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Transfer);
+#endif
     vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, buffer.m_buffer, 1, &region);
 
     retainResource(bufferResource);
@@ -537,6 +540,9 @@ void CommandList::clearBufferUInt(Buffer* bufferResource, u32 clearValue){
 #endif
 
     setBufferState(bufferResource, ResourceStates::CopyDest);
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Transfer);
+#endif
     vkCmdFillBuffer(m_currentCmdBuf->m_cmdBuf, buffer.m_buffer, 0, VK_WHOLE_SIZE, clearValue);
     retainResource(bufferResource);
 }
@@ -576,6 +582,9 @@ void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* 
     region.dstOffset = destOffsetBytes;
     region.size = dataSizeBytes;
 
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Transfer);
+#endif
     vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, src.m_buffer, dest.m_buffer, 1, &region);
 
     retainResource(srcResource);
@@ -621,6 +630,9 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
     region.srcOffset = srcOffsetBytes;
     region.dstOffset = destOffsetBytes;
     region.size = dataSizeBytes;
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Transfer);
+#endif
     vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, src.m_buffer, dest.m_buffer, 1u, &region);
 
     retainResource(srcResource);

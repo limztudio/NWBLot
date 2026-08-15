@@ -1507,6 +1507,9 @@ Object ShaderTable::getNativeHandle(ObjectType objectType){
 void CommandList::setRayTracingState(const RayTracingState& state){
     if(!validateNonTransferCommand(NWB_TEXT("set ray-tracing state")))
         return;
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Compute);
+#endif
 
     endActiveRenderPass();
     commitBarriers();
@@ -2160,6 +2163,9 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
 void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     if(!validateNonTransferCommand(NWB_TEXT("dispatch rays")))
         return;
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Compute);
+#endif
     if(!m_context.extensions.KHR_ray_tracing_pipeline)
         return;
 

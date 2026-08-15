@@ -45,6 +45,7 @@ struct GpuTaskGraphTaskView{
     const GpuTaskResourceUse* resourceUses = nullptr;
     usize resourceUseCount = 0u;
     bool hasPayload = false;
+    bool hasRecordPayload = false;
 };
 
 struct GpuTaskGraphResourceView{

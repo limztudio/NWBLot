@@ -190,7 +190,11 @@ inline constexpr Name s_TaskGraphScratchArena("tests/graphics/task_graph_scratch
 ){
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     const Graphics::GpuTaskGraphCompiler compiler;
-    return compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, options);
+    Graphics::GpuTaskGraphCompileOptions metadataOptions = options;
+    // Unit packetization fixtures intentionally use metadata-only task nodes to isolate compiler structure from
+    // backend recording. Native production compilation keeps the stricter default and is exercised below.
+    metadataOptions.allowMetadataOnlyTasks = true;
+    return compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions);
 }
 
 [[nodiscard]] constexpr Graphics::GpuQueueCapability::Mask QueueCapabilities(
@@ -546,6 +550,56 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     EXPECT_EQ(destructionCount, 1u);
     EXPECT_FALSE(graph.validTask(task));
     EXPECT_FALSE(graph.validResource(resource));
+}
+
+TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    u32 destructionCount = 0u;
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/non_recordable"))
+        .setMarkerLabel("Non-recordable Task")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+    ;
+    const Graphics::GpuTaskId task = graph.addTask<PayloadDestroyTask>(
+        desc,
+        PayloadDestroyTask::Payload{ &destructionCount }
+    );
+    ASSERT_TRUE(task.valid());
+    EXPECT_TRUE(graph.taskAt(task.index).hasPayload);
+    EXPECT_FALSE(graph.taskAt(task.index).hasRecordPayload);
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
+    const Graphics::GpuTaskGraphCompiler compiler;
+
+    EXPECT_FALSE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::MissingTaskRecordPayload);
+    EXPECT_EQ(analysis.diagnostic().task, task);
+    EXPECT_FALSE(analysis.valid());
+    EXPECT_FALSE(assignments.valid());
+    EXPECT_FALSE(compiledGraph.valid());
+
+    Graphics::GpuTaskGraphCompileOptions metadataOptions;
+    metadataOptions.allowMetadataOnlyTasks = true;
+    EXPECT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions));
+    EXPECT_TRUE(analysis.valid());
+    EXPECT_TRUE(assignments.valid());
+    EXPECT_TRUE(compiledGraph.validFor(graph));
 }
 
 TEST(GpuTaskGraph, OwnsUploadBlobsAndInvalidatesThemOnReset){

@@ -1369,6 +1369,7 @@ GpuTaskGraphTaskView GpuTaskGraph::taskAt(const usize index)const{
         .resourceUses = task.resourceUseCount > 0u ? m_resourceUses.data() + task.resourceUseOffset : nullptr,
         .resourceUseCount = task.resourceUseCount,
         .hasPayload = task.payload != nullptr,
+        .hasRecordPayload = task.recordPayload != nullptr,
     };
 }
 

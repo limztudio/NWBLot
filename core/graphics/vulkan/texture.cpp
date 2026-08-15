@@ -1488,6 +1488,9 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
         return;
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear depth/stencil texture"), NWB_TEXT("texture is null"), textureResource))
         return;
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Transfer);
+#endif
 
     Texture& texture = *textureResource;
     if(!__hidden_vulkan_texture::ValidateTextureDepthStencilClearAspects(
@@ -1661,6 +1664,9 @@ void CommandList::clearDepthStencilTextureBox(
         return;
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear depth/stencil texture box"), NWB_TEXT("texture is null"), textureResource))
         return;
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Transfer);
+#endif
 
     Texture& texture = *textureResource;
     const TextureDesc& desc = texture.m_desc;
@@ -1888,6 +1894,9 @@ void CommandList::clearTextureBoxInt(Texture* textureResource, TextureSubresourc
 void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSlice, Texture* srcResource, const TextureSlice& srcSlice){
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("copy texture"), NWB_TEXT("resource is invalid"), destResource, srcResource))
         return;
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Transfer);
+#endif
 
     Texture& dest = *destResource;
     Texture& src = *srcResource;
@@ -1928,6 +1937,9 @@ void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSli
 void CommandList::copyTexture(StagingTexture* dest, const TextureSlice& destSlice, Texture* src, const TextureSlice& srcSlice){
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("copy texture to staging texture"), NWB_TEXT("resource is invalid"), dest, src))
         return;
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Transfer);
+#endif
 
     VkBufferImageCopy region{};
     if(!prepareStagingTextureCopy(
@@ -1952,6 +1964,9 @@ void CommandList::copyTexture(StagingTexture* dest, const TextureSlice& destSlic
 void CommandList::copyTexture(Texture* dest, const TextureSlice& destSlice, StagingTexture* src, const TextureSlice& srcSlice){
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("copy staging texture to texture"), NWB_TEXT("resource is invalid"), dest, src))
         return;
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Transfer);
+#endif
 
     VkBufferImageCopy region{};
     if(!prepareStagingTextureCopy(
@@ -1983,6 +1998,9 @@ bool CommandList::tryWriteTexture(
 ){
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("write texture"), NWB_TEXT("destination texture is null"), destResource))
         return false;
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Transfer);
+#endif
 
     Texture& dest = *destResource;
     const TextureDesc& texDesc = dest.m_desc;
@@ -2062,6 +2080,9 @@ void CommandList::writeTexture(Texture* destResource, u32 arraySlice, u32 mipLev
 void CommandList::resolveTexture(Texture* destResource, const TextureSubresourceSet& dstSubresources, Texture* srcResource, const TextureSubresourceSet& srcSubresources){
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("resolve texture"), NWB_TEXT("resource is invalid"), destResource, srcResource))
         return;
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Transfer);
+#endif
 
     Texture& dest = *destResource;
     Texture& src = *srcResource;
@@ -2162,6 +2183,9 @@ void CommandList::clearColorTexture(
 ){
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear texture"), NWB_TEXT("texture is null"), textureResource))
         return;
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Transfer);
+#endif
 #if !defined(NWB_DEBUG)
     static_cast<void>(valueName);
 #endif
@@ -2215,6 +2239,9 @@ void CommandList::clearColorTextureBox(
         return;
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear texture box"), NWB_TEXT("texture is null"), textureResource))
         return;
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Transfer);
+#endif
 #if !defined(NWB_DEBUG)
     static_cast<void>(valueName);
 #endif

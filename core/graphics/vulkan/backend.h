@@ -2194,6 +2194,13 @@ public:
     void beginMarker(const AStringView name);
     void endMarker();
 
+#if defined(NWB_DEBUG)
+    // Task-graph recording opens one scope around each record thunk. Command methods report the capabilities they
+    // actually consume so the packet recorder can reject a declaration that is incompatible with that task.
+    void beginTaskCapabilityTracking();
+    [[nodiscard]] GpuQueueCapability::Mask endTaskCapabilityTracking();
+#endif
+
     void setEnableUavBarriersForTexture(Texture* texture, bool enableBarriers);
     void setEnableUavBarriersForBuffer(Buffer* buffer, bool enableBarriers);
     void beginTrackingTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits);
@@ -2222,6 +2229,9 @@ private:
     void endActiveRenderPass();
     void executePipelineBarrier(const VkDependencyInfo& depInfo);
     [[nodiscard]] bool validateNonTransferCommand(const tchar* operationName)const;
+#if defined(NWB_DEBUG)
+    void recordTaskCapability(GpuQueueCapability::Mask capability)noexcept;
+#endif
     bool validateIndirectBuffer(Buffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const;
     bool prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, const tchar* operationLabel, const tchar* commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode, Buffer*& outIndirectBuffer)const;
     void clearColorTexture(Texture* textureResource, TextureSubresourceSet subresources, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
@@ -2259,6 +2269,10 @@ private:
     bool m_renderPassActive = false;
     bool m_descriptorBuffersBound = false;
     Framebuffer* m_renderPassFramebuffer = nullptr;
+#if defined(NWB_DEBUG)
+    GpuQueueCapability::Mask m_taskCapabilitiesUsed = GpuQueueCapability::None;
+    bool m_taskCapabilityTracking = false;
+#endif
 
     GraphicsState m_currentGraphicsState;
     ComputeState m_currentComputeState;

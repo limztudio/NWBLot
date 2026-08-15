@@ -162,6 +162,10 @@ void CommandList::clearState(){
     m_renderPassActive = false;
     m_descriptorBuffersBound = false;
     m_renderPassFramebuffer = nullptr;
+#if defined(NWB_DEBUG)
+    m_taskCapabilitiesUsed = GpuQueueCapability::None;
+    m_taskCapabilityTracking = false;
+#endif
 
     m_pendingImageBarriers.clear();
     m_pendingBufferBarriers.clear();
@@ -186,6 +190,28 @@ bool CommandList::validateNonTransferCommand(const tchar* const operationName)co
     NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: graphics, compute, and ray-tracing commands are invalid on a dedicated transfer command list"));
     return false;
 }
+
+#if defined(NWB_DEBUG)
+void CommandList::beginTaskCapabilityTracking(){
+    NWB_ASSERT(!m_taskCapabilityTracking);
+    m_taskCapabilitiesUsed = GpuQueueCapability::None;
+    m_taskCapabilityTracking = true;
+}
+
+GpuQueueCapability::Mask CommandList::endTaskCapabilityTracking(){
+    NWB_ASSERT(m_taskCapabilityTracking);
+    m_taskCapabilityTracking = false;
+    return m_taskCapabilitiesUsed;
+}
+
+void CommandList::recordTaskCapability(const GpuQueueCapability::Mask capability)noexcept{
+    if(!m_taskCapabilityTracking)
+        return;
+    m_taskCapabilitiesUsed = static_cast<GpuQueueCapability::Mask>(
+        static_cast<u8>(m_taskCapabilitiesUsed) | static_cast<u8>(capability)
+    );
+}
+#endif
 
 bool CommandList::validateIndirectBuffer(Buffer* bufferResource, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const{
 #if defined(NWB_DEBUG)

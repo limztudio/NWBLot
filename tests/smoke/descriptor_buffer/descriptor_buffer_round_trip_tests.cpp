@@ -2098,6 +2098,35 @@ struct NativePacketCaptureRetryTask{
 };
 
 
+// The native recorder validates the capability declaration after the thunk has recorded its command stream. This
+// deliberately records a real dispatch from a Transfer-declared task so the test proves the packet is rejected
+// before any native submission can accept it.
+struct NativePacketComputeCapabilityMismatchTask{
+    struct Payload{
+        ComputePipeline* pipeline = nullptr;
+        bool* attempted = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.pipeline)
+            return false;
+        if(payload.attempted)
+            *payload.attempted = true;
+
+        ComputeState state;
+        state.pipeline = payload.pipeline;
+        commandList.setComputeState(state);
+        commandList.dispatch(1u, 1u, 1u);
+        return true;
+    }
+};
+
+
 // The probe observes a graph-owned entry state, then can deliberately perform a task-local transition. That lets
 // the smoke test prove the terminal export reasserts its contract after native task-local state work.
 struct NativePacketExternalFinalTextureProbeTask{
@@ -2125,6 +2154,81 @@ struct NativePacketExternalFinalTextureProbeTask{
         return true;
     }
 };
+
+
+TEST_F(DescriptorBufferRoundTripTest, NativePacketRecorderRejectsCommandsOutsideTaskCapabilities){
+#if !defined(NWB_DEBUG)
+    GTEST_SKIP() << "task command-capability validation is debug-only";
+#else
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    ShaderDesc shaderDesc(DescriptorBufferRoundTripTest::arena());
+    shaderDesc
+        .setShaderType(ShaderType::Compute)
+        .setDebugName(Name{"tests/descriptor_buffer/task_capability_mismatch"})
+    ;
+    auto shader = device.createShader(
+        shaderDesc,
+        s_DescriptorHeapRetirementComputeSpirv,
+        sizeof(s_DescriptorHeapRetirementComputeSpirv)
+    );
+    ASSERT_TRUE(shader);
+
+    ComputePipelineDesc pipelineDesc;
+    pipelineDesc.setComputeShader(shader);
+    auto pipeline = device.createComputePipeline(pipelineDesc);
+    ASSERT_TRUE(pipeline);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    bool attempted = false;
+    GpuTaskDesc taskDesc;
+    taskDesc
+        .setIdentity(Name("tests/descriptor_buffer/task_capability_mismatch"))
+        .setMarkerLabel("Task Capability Mismatch")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Transfer,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+    ;
+    const GpuTaskId task = graph.addTask<NativePacketComputeCapabilityMismatchTask>(
+        taskDesc,
+        NativePacketComputeCapabilityMismatchTask::Payload{
+            .pipeline = pipeline.get(),
+            .attempted = &attempted,
+        }
+    );
+    ASSERT_TRUE(task.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/task_capability_mismatch_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+    const GpuPhysicalQueueInfo* const assignedQueue = compiledGraph.queueInfo(compiledGraph.packet(packet).queue);
+    ASSERT_NE(assignedQueue, nullptr);
+    EXPECT_EQ(assignedQueue->queueClass, CommandQueue::Graphics);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    EXPECT_FALSE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = packet },
+        recordedGraph
+    ));
+    EXPECT_TRUE(attempted);
+    EXPECT_EQ(recordedGraph.find(packet), nullptr);
+#endif
+}
 
 
 // The graph runtime lives longer than one native device in the renderer.  Before the owner tears a device down it

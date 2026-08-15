@@ -6030,6 +6030,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     const Core::GpuGraphResourceId materialContextSlots,
     const Core::GpuGraphResourceId* const traceGeometryResources,
     const usize traceGeometryResourceCount,
+    const Core::GpuGraphResourceSetId traceGeometrySet,
     const Core::GpuTaskId effectsTask,
     const Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
     Core::GpuTimingSubmissionTicket& timingTicket,
@@ -6066,6 +6067,13 @@ bool RendererSystem::declareDeferredSurfelGiTask(
 
     const bool useHwTrace = m_rayTracingState.m_surfelUseHwTrace;
     const bool hasSurfelWork = m_raytracingSystem.hasSurfelWork();
+    const bool traceGeometryStatesGraphOwned = traceGeometrySet.valid();
+    const Core::GpuTaskResourceSetUse traceGeometrySetUse{
+        .resourceSet = traceGeometrySet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
 
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
@@ -6094,12 +6102,12 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> traceBuildArgsResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> traceResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveResourceUses{ scratchArena };
-    resourceUses.reserve(28u + traceGeometryResourceCount);
+    resourceUses.reserve(28u + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
     ageFreeResourceUses.reserve(4u);
     hashBuildResourceUses.reserve(3u);
     spawnResourceUses.reserve(7u);
     traceBuildArgsResourceUses.reserve(3u);
-    traceResourceUses.reserve(16u + traceGeometryResourceCount);
+    traceResourceUses.reserve(16u + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
     resolveResourceUses.reserve(6u);
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));
@@ -6115,7 +6123,8 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         const Core::GpuGraphResourceId resource = traceGeometryResources[resourceIndex];
         if(!resource.valid())
             return false;
-        resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+        if(!traceGeometryStatesGraphOwned)
+            resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
 
     const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state, Core::GpuGraphResourceId* const outResource = nullptr){
@@ -6337,8 +6346,10 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         traceResourceUses.push_back(ReadUse(surfelPoolSnapshot, Core::ResourceStates::ShaderResource));
         traceResourceUses.push_back(ReadUse(surfelCellHeadSnapshot, Core::ResourceStates::ShaderResource));
         traceResourceUses.push_back(ReadUse(surfelTraceIndirectArgs, Core::ResourceStates::IndirectArgument));
-        for(usize resourceIndex = 0u; resourceIndex < traceGeometryResourceCount; ++resourceIndex)
-            traceResourceUses.push_back(ReadUse(traceGeometryResources[resourceIndex], Core::ResourceStates::ShaderResource));
+        if(!traceGeometryStatesGraphOwned){
+            for(usize resourceIndex = 0u; resourceIndex < traceGeometryResourceCount; ++resourceIndex)
+                traceResourceUses.push_back(ReadUse(traceGeometryResources[resourceIndex], Core::ResourceStates::ShaderResource));
+        }
         if(useHwTrace){
             traceResourceUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
             traceResourceUses.push_back(ReadUse(tlasBackingBuffer, Core::ResourceStates::AccelStructRead));
@@ -6617,6 +6628,10 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             .setScheduling(surfelGiScheduling)
             .setDependencies(&m_deferredSurfelGiTraceBuildArgsTask, 1u)
             .setResourceUses(traceResourceUses.data(), traceResourceUses.size())
+            .setResourceSetUses(
+                traceGeometryStatesGraphOwned ? &traceGeometrySetUse : nullptr,
+                traceGeometryStatesGraphOwned ? 1u : 0u
+            )
         ;
         m_deferredSurfelGiTraceTask = m_raytracingSystem.declareSurfelGiTraceTask(
             m_deferredLightingTaskGraph,
@@ -6667,6 +6682,10 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             graphOwnsSurfelGiResolve ? 0u : surfelGiExternalDependencyCount
         )
         .setResourceUses(resourceUses.data(), resourceUses.size())
+        .setResourceSetUses(
+            !graphOwnsSurfelGiResolve && traceGeometryStatesGraphOwned ? &traceGeometrySetUse : nullptr,
+            !graphOwnsSurfelGiResolve && traceGeometryStatesGraphOwned ? 1u : 0u
+        )
     ;
     m_deferredSurfelGiTask = m_raytracingSystem.declareSurfelGiTask(
         m_deferredLightingTaskGraph,
@@ -7007,6 +7026,15 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 .setIdentity(Name("render.software_trace_geometry"))
                 .setMarkerLabel("Software Trace Geometry")
                 .setMembers(softwareTraceGeometryResources.data(), softwareTraceGeometryResources.size())
+        );
+    }
+    Core::GpuGraphResourceSetId hardwareTraceGeometrySet;
+    if(!hardwareTraceGeometryResources.empty()){
+        hardwareTraceGeometrySet = m_deferredLightingTaskGraph.importResourceSet(
+            Core::GpuGraphResourceSetDesc{}
+                .setIdentity(Name("render.hardware_trace_geometry"))
+                .setMarkerLabel("Hardware Trace Geometry")
+                .setMembers(hardwareTraceGeometryResources.data(), hardwareTraceGeometryResources.size())
         );
     }
     bool softwareTraceResourcesPrepared = false;
@@ -7639,6 +7667,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             m_rayTracingState.m_surfelUseHwTrace
                 ? hardwareTraceGeometryResources.size()
                 : softwareTraceGeometryResources.size()
+        ),
+        (
+            m_rayTracingState.m_surfelUseHwTrace
+                ? hardwareTraceGeometrySet
+                : softwareTraceGeometrySet
         ),
         effectsTask,
         m_deferredSurfelGiCounterReadbackCompletion,

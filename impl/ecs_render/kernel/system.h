@@ -298,6 +298,7 @@ private:
         Core::GpuGraphResourceId materialContextSlots,
         const Core::GpuGraphResourceId* traceGeometryResources,
         usize traceGeometryResourceCount,
+        Core::GpuGraphResourceSetId traceGeometrySet,
         Core::GpuTaskId effectsTask,
         Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
         Core::GpuTimingSubmissionTicket& timingTicket,

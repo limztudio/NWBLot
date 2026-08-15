@@ -8952,6 +8952,22 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
     ASSERT_TRUE(traceArgs.valid());
     ASSERT_TRUE(freeList.valid());
 
+    const Graphics::GpuGraphResourceSetId traceGeometrySet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/surfel_gi_trace_geometry"))
+            .setMarkerLabel("Surfel GI Trace Geometry")
+            .setMembers(&traceGeometry, 1u)
+    );
+    ASSERT_TRUE(traceGeometrySet.valid());
+    const Graphics::GpuTaskResourceSetUse traceGeometrySetUses[] = {
+        {
+            .resourceSet = traceGeometrySet,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
         Graphics::GpuQueuePreference::Graphics,
@@ -9121,7 +9137,6 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
         { .resource = materialContextSlots, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = surfelConstants, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = sceneShading, .range = {}, .requiredState = Graphics::ResourceStates::ConstantBuffer, .access = Graphics::GpuTaskResourceAccess::Read },
-        { .resource = traceGeometry, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = poolSnapshot, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = cellHeadSnapshot, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         { .resource = lights, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
@@ -9136,6 +9151,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
         .setScheduling(surfelScheduling)
         .setDependencies(&traceBuildArgs, 1u)
         .setResourceUses(traceUses, LengthOf(traceUses))
+        .setResourceSetUses(traceGeometrySetUses, LengthOf(traceGeometrySetUses))
     ;
     const Graphics::GpuTaskId trace = graph.addTask(traceDesc);
     ASSERT_TRUE(trace.valid());

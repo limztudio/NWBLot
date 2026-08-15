@@ -8779,6 +8779,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     constexpr u32 shaderTextureCount = NativePacketSurfelGiResolveProbeTask::s_ShaderTextureCount;
     constexpr u32 uavBufferCount = NativePacketSurfelGiResolveProbeTask::s_UavBufferCount;
     constexpr u32 uavTextureCount = NativePacketSurfelGiResolveProbeTask::s_UavTextureCount;
+    constexpr u32 traceGeometryBufferIndex = 5u;
     const auto makeStorageBuffer = [&device](){
         return device.createBuffer(
             BufferDesc()
@@ -8941,6 +8942,22 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     ASSERT_TRUE(normalResource.valid());
     ASSERT_TRUE(irradianceResource.valid());
     ASSERT_TRUE(irradianceHalfResource.valid());
+
+    const GpuGraphResourceSetId traceGeometrySet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/surfel_gi_trace_geometry"))
+            .setMarkerLabel("Surfel GI Trace Geometry")
+            .setMembers(&shaderBufferResources[traceGeometryBufferIndex], 1u)
+    );
+    ASSERT_TRUE(traceGeometrySet.valid());
+    const GpuTaskResourceSetUse traceGeometrySetUses[] = {
+        {
+            .resourceSet = traceGeometrySet,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
 
     const GpuQueueRequest graphicsQueue{
         GpuQueueCapability::Graphics,
@@ -9154,9 +9171,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     ASSERT_TRUE(traceBuildArgsTask.valid());
 
     Vector<GpuTaskResourceUse, Alloc::ScratchArena> traceUses(resourceUseArena);
-    traceUses.reserve(shaderBufferCount + constantBufferCount + 2u);
-    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)
-        traceUses.push_back({ .resource = shaderBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read });
+    traceUses.reserve(shaderBufferCount - 1u + constantBufferCount + 2u);
+    for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex){
+        if(bufferIndex != traceGeometryBufferIndex)
+            traceUses.push_back({ .resource = shaderBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read });
+    }
     for(u32 bufferIndex = 0u; bufferIndex < constantBufferCount; ++bufferIndex)
         traceUses.push_back({ .resource = constantBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read });
     traceUses.push_back({ .resource = uavBufferResources[NativePacketSurfelGiResolveProbeTask::s_PoolBufferIndex], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite });
@@ -9169,6 +9188,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
         .setScheduling(surfelScheduling)
         .setDependencies(&traceBuildArgsTask, 1u)
         .setResourceUses(traceUses.data(), traceUses.size())
+        .setResourceSetUses(traceGeometrySetUses, LengthOf(traceGeometrySetUses))
     ;
     NativePacketSurfelGiTraceProbeTask::Payload tracePayload{};
     for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex)

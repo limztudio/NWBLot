@@ -4668,6 +4668,17 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     ASSERT_TRUE(meshBlasAIndex.valid());
     ASSERT_TRUE(meshBlasB.valid());
     ASSERT_TRUE(meshBlasBBacking.valid());
+    const Graphics::GpuGraphResourceId hybridSoftwareTailInputMembers[] = {
+        meshBlasAPosition,
+        meshBlasAIndex,
+    };
+    const Graphics::GpuGraphResourceSetId hybridSoftwareTailInputSet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/shadow_prepare_hybrid_software_tail_inputs"))
+            .setMarkerLabel("Shadow Prepare Hybrid Software Tail Inputs")
+            .setMembers(hybridSoftwareTailInputMembers, LengthOf(hybridSoftwareTailInputMembers))
+    );
+    ASSERT_TRUE(hybridSoftwareTailInputSet.valid());
 
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
@@ -5034,15 +5045,9 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     shadowPrepareHybridTailScheduling.allowPacketMerge = true;
     shadowPrepareHybridTailScheduling.mergeWithPrevious = true;
     shadowPrepareHybridTailScheduling.allowMergeAcrossConsumerFrontier = true;
-    const Graphics::GpuTaskResourceUse shadowPrepareHybridTailUses[] = {
-        Graphics::GpuTaskResourceUse{
-            .resource = meshBlasAPosition,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::ShaderResource,
-            .access = Graphics::GpuTaskResourceAccess::Read,
-        },
-        Graphics::GpuTaskResourceUse{
-            .resource = meshBlasAIndex,
+    const Graphics::GpuTaskResourceSetUse hybridSoftwareTailInputSetUses[] = {
+        Graphics::GpuTaskResourceSetUse{
+            .resourceSet = hybridSoftwareTailInputSet,
             .range = {},
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Read,
@@ -5055,7 +5060,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         .setQueue(graphicsRequest)
         .setScheduling(shadowPrepareHybridTailScheduling)
         .setDependencies(&shadowPrepare, 1u)
-        .setResourceUses(shadowPrepareHybridTailUses, LengthOf(shadowPrepareHybridTailUses))
+        .setResourceSetUses(hybridSoftwareTailInputSetUses, LengthOf(hybridSoftwareTailInputSetUses))
     ;
     const Graphics::GpuTaskId shadowPrepareHybridTail = graph.addTask(shadowPrepareHybridTailDesc);
     ASSERT_TRUE(shadowPrepareHybridTail.valid());

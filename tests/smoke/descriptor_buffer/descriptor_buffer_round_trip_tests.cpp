@@ -4010,6 +4010,259 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedSoftwareBvhInputStatesRe
 }
 
 
+// The frozen hybrid compatibility tail consumes position/index geometry only after the hardware BLAS recorder has
+// established its build-input state. Its exact immutable Read set must lower the ShaderResource handoff before the
+// native software callback records, without reintroducing a record-time transition bridge.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHybridSoftwareTailInputSetRecordsWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    if(!device.queryFeatureSupport(Feature::RayTracingAccelStruct))
+        GTEST_SKIP() << "AccelStructBuildInput seed: ray tracing acceleration structures are not enabled on this device.";
+
+    const auto makeInputBuffer = [&device]{
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setIsAccelStructBuildInput(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const BufferHandle position = makeInputBuffer();
+    const BufferHandle index = makeInputBuffer();
+    ASSERT_NE(position.get(), nullptr);
+    ASSERT_NE(index.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importInput = [&graph](const BufferHandle& buffer, const Name identity, const AStringView label){
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Buffer)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const GpuGraphResourceId positionResource = importInput(
+        position,
+        Name("tests/descriptor_buffer/shadow_prepare_hybrid_tail_position"),
+        "Shadow Prepare Hybrid Tail Position"
+    );
+    const GpuGraphResourceId indexResource = importInput(
+        index,
+        Name("tests/descriptor_buffer/shadow_prepare_hybrid_tail_index"),
+        "Shadow Prepare Hybrid Tail Index"
+    );
+    ASSERT_TRUE(positionResource.valid());
+    ASSERT_TRUE(indexResource.valid());
+
+    const GpuGraphResourceId hybridTailInputMembers[] = { positionResource, indexResource };
+    const GpuGraphResourceSetId hybridTailInputSet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/shadow_prepare_hybrid_tail_inputs"))
+            .setMarkerLabel("Shadow Prepare Hybrid Software Tail Inputs")
+            .setMembers(hybridTailInputMembers, LengthOf(hybridTailInputMembers))
+    );
+    ASSERT_TRUE(hybridTailInputSet.valid());
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint precursorScheduling;
+    precursorScheduling.cost = GpuTaskCostHint::Medium;
+    precursorScheduling.forceSubmissionBoundary = false;
+    precursorScheduling.allowPacketMerge = true;
+    const GpuTaskResourceUse precursorUses[] = {
+        {
+            .resource = positionResource,
+            .range = {},
+            .requiredState = ResourceStates::AccelStructBuildInput,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+        {
+            .resource = indexResource,
+            .range = {},
+            .requiredState = ResourceStates::AccelStructBuildInput,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    GpuTaskDesc precursorDesc;
+    precursorDesc
+        .setIdentity(Name("tests/descriptor_buffer/shadow_prepare_hybrid_tail_precursor"))
+        .setMarkerLabel("Shadow Prepare Hybrid Tail Build-Input Precursor")
+        .setQueue(graphicsQueue)
+        .setScheduling(precursorScheduling)
+        .setResourceUses(precursorUses, LengthOf(precursorUses))
+    ;
+    bool precursorRecorded = false;
+    const GpuTaskId precursorTask = graph.addTask<NativePacketPrefixTask>(
+        precursorDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = position.get(),
+            .expectedState = ResourceStates::AccelStructBuildInput,
+            .additionalBuffer = index.get(),
+            .expectedAdditionalBufferState = ResourceStates::AccelStructBuildInput,
+            .recorded = &precursorRecorded,
+        }
+    );
+    ASSERT_TRUE(precursorTask.valid());
+
+    GpuTaskSchedulingHint hybridTailScheduling = precursorScheduling;
+    hybridTailScheduling.mergeWithPrevious = true;
+    const GpuTaskResourceSetUse hybridTailInputSetUses[] = {
+        {
+            .resourceSet = hybridTailInputSet,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskDesc hybridTailDesc;
+    hybridTailDesc
+        .setIdentity(Name("tests/descriptor_buffer/shadow_prepare_hybrid_tail"))
+        .setMarkerLabel("Shadow Prepare Hybrid Software Tail")
+        .setQueue(graphicsQueue)
+        .setScheduling(hybridTailScheduling)
+        .setDependencies(&precursorTask, 1u)
+        .setResourceSetUses(hybridTailInputSetUses, LengthOf(hybridTailInputSetUses))
+    ;
+    bool hybridTailRecorded = false;
+    const GpuTaskId hybridTailTask = graph.addTask<NativePacketPrefixTask>(
+        hybridTailDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = position.get(),
+            .expectedState = ResourceStates::ShaderResource,
+            .additionalBuffer = index.get(),
+            .expectedAdditionalBufferState = ResourceStates::ShaderResource,
+            .recorded = &hybridTailRecorded,
+        }
+    );
+    ASSERT_TRUE(hybridTailTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/shadow_prepare_hybrid_tail_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(precursorTask);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(hybridTailTask), packet);
+    ASSERT_EQ(compiledGraph.packet(packet).taskCount, 2u);
+
+    const GpuCompiledTask* const compiledPrecursor = compiledGraph.findTask(precursorTask);
+    const GpuCompiledTask* const compiledHybridTail = compiledGraph.findTask(hybridTailTask);
+    ASSERT_NE(compiledPrecursor, nullptr);
+    ASSERT_NE(compiledHybridTail, nullptr);
+    const auto hasTransition = [&](const GpuTaskId task, const GpuCompiledTask& compiledTask, const GpuGraphResourceId resource, const ResourceStates::Mask before, const ResourceStates::Mask after){
+        const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        if(compiledTask.prologueBarrierCount != 0u && !barriers)
+            return false;
+        for(usize barrierIndex = 0u; barrierIndex < compiledTask.prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTransition(
+        precursorTask,
+        *compiledPrecursor,
+        positionResource,
+        ResourceStates::Common,
+        ResourceStates::AccelStructBuildInput
+    ));
+    EXPECT_TRUE(hasTransition(
+        precursorTask,
+        *compiledPrecursor,
+        indexResource,
+        ResourceStates::Common,
+        ResourceStates::AccelStructBuildInput
+    ));
+    EXPECT_TRUE(hasTransition(
+        hybridTailTask,
+        *compiledHybridTail,
+        positionResource,
+        ResourceStates::AccelStructBuildInput,
+        ResourceStates::ShaderResource
+    ));
+    EXPECT_TRUE(hasTransition(
+        hybridTailTask,
+        *compiledHybridTail,
+        indexResource,
+        ResourceStates::AccelStructBuildInput,
+        ResourceStates::ShaderResource
+    ));
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(precursorRecorded);
+    EXPECT_TRUE(hybridTailRecorded);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    ASSERT_NE(finalState, nullptr);
+
+    auto stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getBufferState(position.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(stateProbe->getBufferState(index.get()), ResourceStates::ShaderResource);
+    stateProbe->close();
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(packet).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Shadow Preparation keeps parent links and shared sort/counter scratch as UAV state for a later SW-BVH build.
 // Its graph declaration must expand that exact frozen set before the native callback records, without a local
 // transition bridge.

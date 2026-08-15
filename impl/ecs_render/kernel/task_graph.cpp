@@ -2850,10 +2850,26 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         for(const Core::GpuGraphResourceId resource : meshBlasGeometryBuildInputResources)
             resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::AccelStructBuildInput));
     }
-    if(meshSwBvhInputStatesGraphOwned){
+    Core::GpuGraphResourceSetId hybridSoftwareTailInputSet;
+    if(meshSwBvhInputStatesGraphOwned && !hybridSoftwareTailInputResources.empty()){
+        hybridSoftwareTailInputSet = m_deferredLightingTaskGraph.importResourceSet(
+            Core::GpuGraphResourceSetDesc{}
+                .setIdentity(Name("render.shadow_prepare.hybrid_software_tail_inputs"))
+                .setMarkerLabel("Shadow Prepare Hybrid Software Tail Inputs")
+                .setMembers(hybridSoftwareTailInputResources.data(), hybridSoftwareTailInputResources.size())
+        );
+    }
+    const bool hybridSoftwareTailInputSetGraphOwned = hybridSoftwareTailInputSet.valid();
+    if(meshSwBvhInputStatesGraphOwned && !hybridSoftwareTailInputSetGraphOwned){
         for(const Core::GpuGraphResourceId resource : hybridSoftwareTailInputResources)
             hybridSoftwareTailResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
+    const Core::GpuTaskResourceSetUse hybridSoftwareTailInputSetUse{
+        .resourceSet = hybridSoftwareTailInputSet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
     for(usize resourceIndex = 0u; resourceIndex < shadowTraceGeometryResourceCount; ++resourceIndex){
         const Core::GpuGraphResourceId resource = shadowTraceGeometryResources[resourceIndex];
         if(!resource.valid())
@@ -3053,6 +3069,10 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .setScheduling(hybridSoftwareTailScheduling)
             .setDependencies(&m_deferredShadowPrepareTask, 1u)
             .setResourceUses(hybridSoftwareTailResourceUses.data(), hybridSoftwareTailResourceUses.size())
+            .setResourceSetUses(
+                hybridSoftwareTailInputSetGraphOwned ? &hybridSoftwareTailInputSetUse : nullptr,
+                hybridSoftwareTailInputSetGraphOwned ? 1u : 0u
+            )
         ;
         m_deferredShadowPrepareHybridSoftwareTailTask = m_deferredLightingTaskGraph.addTask<
             ECSRenderDetail::ShadowPrepareHybridSoftwareTailGraphTask

@@ -981,13 +981,16 @@ struct NativePacketSoftTransparentTemporalMergeProbeTask{
 
 
 // The opaque temporal merge has the same selected history/moment contract before it starts its local geometry
-// handoff. This callback only reads state tracking, so it cannot mask a missing graph-owned temporal prologue.
+// handoff. Its stable previous-geometry and world-position reads share that graph-owned prologue. This callback
+// only reads state tracking, so it cannot mask a missing graph-owned entry transition.
 struct NativePacketSoftOpaqueTemporalMergeProbeTask{
     struct Payload{
         Texture* historyInput = nullptr;
         Texture* momentsInput = nullptr;
         Texture* historyOutput = nullptr;
         Texture* momentsOutput = nullptr;
+        Texture* previousGeometry = nullptr;
+        Texture* worldPosition = nullptr;
         bool* recorded = nullptr;
     };
 
@@ -1002,6 +1005,8 @@ struct NativePacketSoftOpaqueTemporalMergeProbeTask{
             && payload.momentsInput
             && payload.historyOutput
             && payload.momentsOutput
+            && payload.previousGeometry
+            && payload.worldPosition
             && commandList.getTextureSubresourceState(payload.historyInput, 0u, 0u)
                 == ResourceStates::ShaderResource
             && commandList.getTextureSubresourceState(payload.momentsInput, 0u, 0u)
@@ -1010,6 +1015,10 @@ struct NativePacketSoftOpaqueTemporalMergeProbeTask{
                 == ResourceStates::UnorderedAccess
             && commandList.getTextureSubresourceState(payload.momentsOutput, 0u, 0u)
                 == ResourceStates::UnorderedAccess
+            && commandList.getTextureSubresourceState(payload.previousGeometry, 0u, 0u)
+                == ResourceStates::ShaderResource
+            && commandList.getTextureSubresourceState(payload.worldPosition, 0u, 0u)
+                == ResourceStates::ShaderResource
         ;
         if(payload.recorded)
             *payload.recorded = ready;
@@ -4034,8 +4043,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
 }
 
 
-// The opaque soft merge freezes its own A/B selector in the graph. Its history/moment entry state is independent of
-// the geometry downsample-to-merge handoff that remains inside the renderer callback.
+// The opaque soft merge freezes its own A/B selector in the graph. Its history/moment and stable-read entry states
+// are independent of the geometry downsample-to-merge handoff that remains inside the renderer callback.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueSoftTemporalMergeEntryStatesRecordWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto makeShadowTarget = [&device](){
@@ -4052,10 +4061,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueSoftTemporalMergeEntryStat
     auto momentsA = makeShadowTarget();
     auto historyB = makeShadowTarget();
     auto momentsB = makeShadowTarget();
+    auto previousGeometry = makeShadowTarget();
+    auto worldPosition = makeShadowTarget();
     ASSERT_NE(historyA.get(), nullptr);
     ASSERT_NE(momentsA.get(), nullptr);
     ASSERT_NE(historyB.get(), nullptr);
     ASSERT_NE(momentsB.get(), nullptr);
+    ASSERT_NE(previousGeometry.get(), nullptr);
+    ASSERT_NE(worldPosition.get(), nullptr);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importTexture = [&graph](const TextureHandle& texture, const Name identity, const AStringView label){
@@ -4087,10 +4100,22 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueSoftTemporalMergeEntryStat
         Name("tests/descriptor_buffer/opaque_soft_moments_b"),
         "Opaque Soft Moments B"
     );
+    const GpuGraphResourceId previousGeometryResource = importTexture(
+        previousGeometry,
+        Name("tests/descriptor_buffer/opaque_soft_geometry_previous"),
+        "Previous Opaque Soft Geometry"
+    );
+    const GpuGraphResourceId worldPositionResource = importTexture(
+        worldPosition,
+        Name("tests/descriptor_buffer/opaque_soft_world_position"),
+        "Opaque Soft World Position"
+    );
     ASSERT_TRUE(historyAResource.valid());
     ASSERT_TRUE(momentsAResource.valid());
     ASSERT_TRUE(historyBResource.valid());
     ASSERT_TRUE(momentsBResource.valid());
+    ASSERT_TRUE(previousGeometryResource.valid());
+    ASSERT_TRUE(worldPositionResource.valid());
 
     const GpuQueueRequest computeQueue{
         GpuQueueCapability::Compute,
@@ -4107,6 +4132,18 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueSoftTemporalMergeEntryStat
         },
         {
             .resource = momentsBResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = previousGeometryResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = worldPositionResource,
             .range = {},
             .requiredState = ResourceStates::ShaderResource,
             .access = GpuTaskResourceAccess::Read,
@@ -4139,6 +4176,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueSoftTemporalMergeEntryStat
             .momentsInput = momentsB.get(),
             .historyOutput = historyA.get(),
             .momentsOutput = momentsA.get(),
+            .previousGeometry = previousGeometry.get(),
+            .worldPosition = worldPosition.get(),
             .recorded = &mergeRecorded,
         }
     );
@@ -4186,6 +4225,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueSoftTemporalMergeEntryStat
     };
     EXPECT_TRUE(hasMergeInputTransition(historyBResource));
     EXPECT_TRUE(hasMergeInputTransition(momentsBResource));
+    EXPECT_TRUE(hasMergeInputTransition(previousGeometryResource));
+    EXPECT_TRUE(hasMergeInputTransition(worldPositionResource));
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);

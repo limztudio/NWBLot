@@ -3582,6 +3582,18 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::UnorderedAccess));
         return true;
     };
+    const auto appendOptionalOpaqueTemporalStaticReadTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
+        if(!texture)
+            return true;
+        const Core::GpuGraphResourceId resource = importTexture(texture, identity, label);
+        if(!resource.valid())
+            return false;
+        resourceUses.push_back(graphOwnsOpaqueTemporalMergeEntryStates
+            ? ReadUse(resource, Core::ResourceStates::ShaderResource)
+            : ReadWriteUse(resource, Core::ResourceStates::UnorderedAccess)
+        );
+        return true;
+    };
     const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
         if(!buffer)
             return true;
@@ -3630,7 +3642,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             Name("render.shadow_visibility.soft_geometry"),
             "Shadow Soft Geometry"
         )
-        && appendOptionalReadWriteTexture(
+        && appendOptionalOpaqueTemporalStaticReadTexture(
             deferredTargets.shadowSoftGeometryPrev,
             Name("render.shadow_visibility.soft_geometry_previous"),
             "Previous Shadow Soft Geometry"

@@ -5416,8 +5416,9 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
 }
 
 
-// The opaque temporal merge freezes the opposite selector from the terminal transparent merge. Its history/moment
-// inputs must enter the opaque callback as SRVs while the next pair remains writable by that callback.
+// The opaque temporal merge freezes the opposite selector from the terminal transparent merge. Its history/moment,
+// stable previous-geometry, and world-position inputs must enter the opaque callback as SRVs while the next pair
+// remains writable by that callback.
 TEST(GpuTaskGraph, GraphOwnsOpaqueSoftTemporalMergeHistoryStates){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -5445,10 +5446,24 @@ TEST(GpuTaskGraph, GraphOwnsOpaqueSoftTemporalMergeHistoryStates){
         "Opaque Soft Moments B",
         Graphics::ResourceStates::UnorderedAccess
     );
+    const Graphics::GpuGraphResourceId previousGeometry = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/opaque_soft_geometry_previous"),
+        "Previous Opaque Soft Geometry",
+        Graphics::ResourceStates::UnorderedAccess
+    );
+    const Graphics::GpuGraphResourceId worldPosition = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/opaque_soft_world_position"),
+        "Opaque Soft World Position",
+        Graphics::ResourceStates::UnorderedAccess
+    );
     ASSERT_TRUE(historyA.valid());
     ASSERT_TRUE(momentsA.valid());
     ASSERT_TRUE(historyB.valid());
     ASSERT_TRUE(momentsB.valid());
+    ASSERT_TRUE(previousGeometry.valid());
+    ASSERT_TRUE(worldPosition.valid());
 
     const Graphics::GpuQueueRequest computeRequest{
         Graphics::GpuQueueCapability::Compute,
@@ -5465,6 +5480,18 @@ TEST(GpuTaskGraph, GraphOwnsOpaqueSoftTemporalMergeHistoryStates){
         },
         {
             .resource = momentsB,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = previousGeometry,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = worldPosition,
             .range = {},
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Read,
@@ -5525,6 +5552,8 @@ TEST(GpuTaskGraph, GraphOwnsOpaqueSoftTemporalMergeHistoryStates){
     };
     EXPECT_TRUE(hasMergeInputTransition(historyB));
     EXPECT_TRUE(hasMergeInputTransition(momentsB));
+    EXPECT_TRUE(hasMergeInputTransition(previousGeometry));
+    EXPECT_TRUE(hasMergeInputTransition(worldPosition));
 }
 
 

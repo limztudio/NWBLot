@@ -45,7 +45,7 @@ RendererSystem::RendererSystem(
     , m_meshState(arena)
     , m_materialState(arena)
     , m_rayTracingState(arena)
-    , m_shadowComputePersistentStateHandoff(arena)
+    , m_shadowComputePersistentState(arena)
     , m_shadowVisibilityReturnStateHandoff(arena)
     , m_shadowPreparePersistentState(arena)
     , m_causticsComputePersistentStateHandoff(arena)
@@ -145,7 +145,7 @@ void RendererSystem::resetLaggedLightingHistoryTracking()noexcept{
 
 void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     // Replaced targets invalidate retained compute-local state.
-    m_shadowComputePersistentStateHandoff.reset();
+    m_shadowComputePersistentState.reset();
     m_shadowVisibilityReturnStateHandoff.reset();
     m_causticsComputePersistentStateHandoff.reset();
     m_causticIrradianceLightingStateHandoff.reset();
@@ -2401,13 +2401,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         shadowVisibilityStateSourceCount,
         graphicsPrefixFinalStateSeed
     );
-    if(shadowVisibilityRunsOnCompute && m_shadowComputePersistentStateHandoff.valid()){
+    if(shadowVisibilityRunsOnCompute && m_shadowComputePersistentState.valid()){
         shadowVisibilityStateSourcesReady = shadowVisibilityStateSourcesReady
             && appendDeclaredStateSource(
                 shadowVisibilityStateSources,
                 LengthOf(shadowVisibilityStateSources),
                 shadowVisibilityStateSourceCount,
-                &m_shadowComputePersistentStateHandoff
+                m_shadowComputePersistentState.source()
             )
         ;
     }
@@ -3680,30 +3680,30 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 failFrameRenderRecovery();
                 return;
             }
-            Core::Texture* const shadowComputeScratchTextures[] = {
-                deferredTargets.shadowCoarseTransmittance.get(),
-                deferredTargets.shadowSoftHalfA.get(),
-                deferredTargets.shadowSoftHalfB.get(),
-                deferredTargets.shadowSoftGeometry.get(),
-                deferredTargets.shadowSoftGeometryPrev.get(),
-                deferredTargets.shadowHistA.get(),
-                deferredTargets.shadowHistB.get(),
-                deferredTargets.shadowMomentsA.get(),
-                deferredTargets.shadowMomentsB.get(),
-                deferredTargets.transparentSoftHalf.get(),
-                deferredTargets.transparentHistA.get(),
-                deferredTargets.transparentHistB.get(),
-                deferredTargets.transparentMomentsA.get(),
-                deferredTargets.transparentMomentsB.get(),
+            const Core::TextureHandle shadowComputeScratchTextures[] = {
+                deferredTargets.shadowCoarseTransmittance,
+                deferredTargets.shadowSoftHalfA,
+                deferredTargets.shadowSoftHalfB,
+                deferredTargets.shadowSoftGeometry,
+                deferredTargets.shadowSoftGeometryPrev,
+                deferredTargets.shadowHistA,
+                deferredTargets.shadowHistB,
+                deferredTargets.shadowMomentsA,
+                deferredTargets.shadowMomentsB,
+                deferredTargets.transparentSoftHalf,
+                deferredTargets.transparentHistA,
+                deferredTargets.transparentHistB,
+                deferredTargets.transparentMomentsA,
+                deferredTargets.transparentMomentsB,
             };
-            Core::Buffer* const shadowComputeScratchBuffers[] = {
-                m_rayTracingState.m_swShadowEdgeStatsBuffer.get(),
-                m_rayTracingState.m_swShadowEdgeStatsReadback.get(),
-                m_rayTracingState.m_swShadowEdgeCounterBuffer.get(),
-                m_rayTracingState.m_swShadowEdgeListBuffer.get(),
-                m_rayTracingState.m_swShadowIndirectArgsBuffer.get(),
+            const Core::BufferHandle shadowComputeScratchBuffers[] = {
+                m_rayTracingState.m_swShadowEdgeStatsBuffer,
+                m_rayTracingState.m_swShadowEdgeStatsReadback,
+                m_rayTracingState.m_swShadowEdgeCounterBuffer,
+                m_rayTracingState.m_swShadowEdgeListBuffer,
+                m_rayTracingState.m_swShadowIndirectArgsBuffer,
             };
-            if(!m_shadowComputePersistentStateHandoff.buildResourceSubset(
+            if(!m_shadowComputePersistentState.replaceResourceSubset(
                 *shadowVisibilityFinalStateSeed,
                 shadowComputeScratchTextures,
                 LengthOf(shadowComputeScratchTextures),

@@ -525,8 +525,8 @@ private:
     RendererRayTracingState m_rayTracingState;
     CsgFrameState m_preparedCsgFrameState;
     // Compute-only shadow scratch/history retains accepted graph packet state across frames. Deferred lighting now
-    // consumes the visibility result on the same Compute lane, so the result snapshot remains Compute-local.
-    Core::CommandListResourceStateHandoff m_shadowComputePersistentStateHandoff;
+    // consumes the visibility result on the same Compute lane, so retain the private scratch and its typed backings.
+    Core::GpuPersistentResourceStateCache m_shadowComputePersistentState;
     Core::CommandListResourceStateHandoff m_shadowVisibilityReturnStateHandoff;
     // Native TLAS/BLAS, software-BVH build storage, and normalized trace geometry change inside Shadow Preparation.
     // Retain only accepted live generations so the next frame's first graph packet seeds their real acceleration,

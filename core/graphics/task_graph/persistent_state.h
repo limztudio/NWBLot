@@ -24,6 +24,37 @@ NWB_CORE_BEGIN
 // renderer-specific packet or state-tracker policy escapes into this utility.
 class GpuPersistentResourceStateCache final : NoCopy{
 public:
+    // A pre-submission candidate built from a recorded packet's final state. It retains its own typed backings until
+    // the containing packet is accepted, at which point the cache atomically adopts it through commit().
+    class Candidate final : NoCopy{
+        friend class GpuPersistentResourceStateCache;
+
+    public:
+        explicit Candidate(GraphicsArena& arena)
+            : m_states(arena)
+            , m_textures(arena)
+            , m_buffers(arena)
+        {}
+
+
+    public:
+        [[nodiscard]] bool valid()const noexcept{ return m_states.valid(); }
+        [[nodiscard]] bool empty()const noexcept{ return !m_states.valid() || m_states.empty(); }
+        [[nodiscard]] const CommandListResourceStateHandoff* source()const noexcept{
+            return m_states.valid() ? &m_states : nullptr;
+        }
+
+
+    private:
+        void reset()noexcept;
+
+
+    private:
+        CommandListResourceStateHandoff m_states;
+        GraphicsVector<TextureHandle> m_textures;
+        GraphicsVector<BufferHandle> m_buffers;
+    };
+
     explicit GpuPersistentResourceStateCache(GraphicsArena& arena)
         : m_arena(arena)
         , m_states(arena)
@@ -63,6 +94,30 @@ public:
         usize bufferCount
     );
 
+    // Builds an acceptance-only candidate from the retained base state and `source`. The caller must call commit()
+    // only after the packet that produced `source` is accepted; a rejected packet leaves this cache untouched.
+    [[nodiscard]] bool buildMergedResourceSubset(
+        Candidate& outCandidate,
+        const CommandListResourceStateHandoff& source,
+        const TextureHandle* textures,
+        usize textureCount,
+        const BufferHandle* buffers,
+        usize bufferCount
+    )const;
+
+    // Produces a typed, filtered source for recording without altering the accepted cache. This preserves the last
+    // accepted state when the newly recorded packet is later rejected.
+    [[nodiscard]] bool buildFilteredResourceSubset(
+        Candidate& outCandidate,
+        const CommandListResourceStateHandoff& source,
+        const TextureHandle* textures,
+        usize textureCount,
+        const BufferHandle* buffers,
+        usize bufferCount
+    )const;
+
+    [[nodiscard]] bool commit(Candidate& candidate);
+
     [[nodiscard]] bool replaceBufferSubset(
         const CommandListResourceStateHandoff& source,
         const BufferHandle* buffers,
@@ -79,23 +134,34 @@ public:
         return mergeResourceSubset(source, nullptr, 0u, buffers, bufferCount);
     }
 
+    [[nodiscard]] bool buildMergedBufferSubset(
+        Candidate& outCandidate,
+        const CommandListResourceStateHandoff& source,
+        const BufferHandle* buffers,
+        const usize bufferCount
+    )const{
+        return buildMergedResourceSubset(outCandidate, source, nullptr, 0u, buffers, bufferCount);
+    }
+
+    [[nodiscard]] bool buildFilteredBufferSubset(
+        Candidate& outCandidate,
+        const CommandListResourceStateHandoff& source,
+        const BufferHandle* buffers,
+        const usize bufferCount
+    )const{
+        return buildFilteredResourceSubset(outCandidate, source, nullptr, 0u, buffers, bufferCount);
+    }
+
 
 private:
     [[nodiscard]] bool buildFilteredCandidate(
-        CommandListResourceStateHandoff& outStates,
-        GraphicsVector<TextureHandle>& outTextures,
-        GraphicsVector<BufferHandle>& outBuffers,
+        Candidate& outCandidate,
         const CommandListResourceStateHandoff& source,
         const TextureHandle* textures,
         usize textureCount,
         const BufferHandle* buffers,
         usize bufferCount
     )const;
-    [[nodiscard]] bool commitCandidate(
-        const CommandListResourceStateHandoff& states,
-        GraphicsVector<TextureHandle>& textures,
-        GraphicsVector<BufferHandle>& buffers
-    );
 
 
 private:

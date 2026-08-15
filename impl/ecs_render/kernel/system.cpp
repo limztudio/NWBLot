@@ -47,8 +47,7 @@ RendererSystem::RendererSystem(
     , m_rayTracingState(arena)
     , m_shadowComputePersistentStateHandoff(arena)
     , m_shadowVisibilityReturnStateHandoff(arena)
-    , m_shadowPreparePersistentStateHandoff(arena)
-    , m_shadowPreparePersistentStateBuffers(arena)
+    , m_shadowPreparePersistentState(arena)
     , m_causticsComputePersistentStateHandoff(arena)
     , m_causticIrradianceLightingStateHandoff(arena)
     , m_causticIrradianceReturnStateHandoff(arena)
@@ -159,8 +158,7 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
 void RendererSystem::resetInvalidatedResourceStateHandoffs()noexcept{
     // The shadow-preparation packet owns its serial export; only retained cross-frame state is reset here.
     resetTargetGenerationStateHandoffs();
-    m_shadowPreparePersistentStateHandoff.reset();
-    m_shadowPreparePersistentStateBuffers.clear();
+    m_shadowPreparePersistentState.reset();
 }
 
 void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
@@ -2227,7 +2225,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuNativePacketRecorder deferredRecorder(device);
     Core::Alloc::ScratchArena shadowPrepareStateScratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::BufferHandle, Core::Alloc::ScratchArena> shadowPrepareLiveStateBuffers{ shadowPrepareStateScratchArena };
-    Vector<Core::Buffer*, Core::Alloc::ScratchArena> shadowPrepareLiveStatePointers{ shadowPrepareStateScratchArena };
     const auto appendShadowPrepareStateBuffer = [&](const Core::BufferHandle& buffer){
         if(!buffer)
             return;
@@ -2236,7 +2233,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 return;
         }
         shadowPrepareLiveStateBuffers.push_back(buffer);
-        shadowPrepareLiveStatePointers.push_back(buffer.get());
     };
     if(m_rayTracingState.m_tlas)
         appendShadowPrepareStateBuffer(m_rayTracingState.m_tlas->getBackingBufferHandle());
@@ -2280,31 +2276,30 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     appendShadowPrepareStateBuffer(m_rayTracingState.m_bvhSortPayloadBuffer);
     appendShadowPrepareStateBuffer(m_rayTracingState.m_bvhVisitCounterBuffer);
 
-    // The handoff stores raw RHI pointers. Filter it into a local source for every current AS/software-BVH and
-    // trace-geometry state buffer before recording, but do not publish that filtered set yet: a rejected packet
-    // must leave the prior accepted seed untouched. The local strong handles remain alive through the accepted
-    // packet callback below.
-    Core::CommandListResourceStateHandoff shadowPrepareFilteredPriorState(m_arena);
-    bool shadowPrepareFilteredPriorStateReady = false;
-    if(m_shadowPreparePersistentStateHandoff.valid()){
-        shadowPrepareFilteredPriorStateReady = shadowPrepareFilteredPriorState.buildResourceSubset(
-                m_shadowPreparePersistentStateHandoff,
-                nullptr,
-                0u,
-                shadowPrepareLiveStatePointers.data(),
-                shadowPrepareLiveStatePointers.size()
+    // Filter the prior accepted cache into a typed recording source, but do not alter the cache yet: a rejected
+    // Shadow Preparation packet must leave both its state and resource lifetimes exactly as the last acceptance.
+    Core::GpuPersistentResourceStateCache::Candidate shadowPreparePriorStateCandidate(m_arena);
+    bool shadowPreparePriorStateReady = true;
+    if(m_shadowPreparePersistentState.valid()){
+        const Core::CommandListResourceStateHandoff* const previousStates = m_shadowPreparePersistentState.source();
+        shadowPreparePriorStateReady = previousStates
+            && m_shadowPreparePersistentState.buildFilteredBufferSubset(
+                shadowPreparePriorStateCandidate,
+                *previousStates,
+                shadowPrepareLiveStateBuffers.data(),
+                shadowPrepareLiveStateBuffers.size()
             )
         ;
     }
 
     Core::GpuExternalPacketStateSource shadowPrepareStateSources[1] = {};
     usize shadowPrepareStateSourceCount = 0u;
-    if(shadowPrepareFilteredPriorStateReady){
+    if(shadowPreparePriorStateReady && shadowPreparePriorStateCandidate.valid()){
         if(!appendDeclaredStateSource(
             shadowPrepareStateSources,
             LengthOf(shadowPrepareStateSources),
             shadowPrepareStateSourceCount,
-            &shadowPrepareFilteredPriorState
+            shadowPreparePriorStateCandidate.source()
         )){
             shadowPrepareStateSourceCount = 0u;
         }
@@ -2363,37 +2358,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? m_deferredLightingRecordedGraph.packetFinalStateSeed(graphicsPrefixPacket)
         : nullptr
     ;
-    // Build the sparse AS/software-BVH state candidate before submission, but publish it only from the accepted
-    // packet callback below. Fan in the prior accepted states because a frame may leave static or route-inactive
-    // scratch untouched.
-    Core::CommandListResourceStateHandoff shadowPrepareAcceptedStateCandidate(m_arena);
+    // Build the sparse AS/software-BVH state candidate before submission, but let the accepted packet callback
+    // adopt it. The cache folds the prior accepted source with the recorded final state and owns the typed backings.
+    Core::GpuPersistentResourceStateCache::Candidate shadowPrepareAcceptedStateCandidate(m_arena);
     bool shadowPrepareAcceptedStateCandidateReady = true;
-    if(!shadowPrepareLiveStatePointers.empty()){
-        Core::CommandListResourceStateHandoff shadowPrepareFinalState(m_arena);
+    if(!shadowPrepareLiveStateBuffers.empty()){
         shadowPrepareAcceptedStateCandidateReady = shadowPrepareFinalStateSeed
-            && shadowPrepareFinalState.buildResourceSubset(
+            && m_shadowPreparePersistentState.buildMergedBufferSubset(
+                shadowPrepareAcceptedStateCandidate,
                 *shadowPrepareFinalStateSeed,
-                nullptr,
-                0u,
-                shadowPrepareLiveStatePointers.data(),
-                shadowPrepareLiveStatePointers.size()
+                shadowPrepareLiveStateBuffers.data(),
+                shadowPrepareLiveStateBuffers.size()
             )
         ;
-        if(shadowPrepareAcceptedStateCandidateReady){
-            if(!shadowPrepareFinalState.empty()){
-                const Core::CommandListResourceStateHandoff* const stateBranches[] = { &shadowPrepareFinalState };
-                shadowPrepareAcceptedStateCandidateReady = shadowPrepareFilteredPriorStateReady
-                    ? shadowPrepareAcceptedStateCandidate.buildFanIn(
-                        shadowPrepareFilteredPriorState,
-                        stateBranches,
-                        LengthOf(stateBranches)
-                    )
-                    : shadowPrepareAcceptedStateCandidate.copyFrom(shadowPrepareFinalState)
-                ;
-            }
-            else if(shadowPrepareFilteredPriorStateReady)
-                shadowPrepareAcceptedStateCandidateReady = shadowPrepareAcceptedStateCandidate.copyFrom(shadowPrepareFilteredPriorState);
-        }
         if(shadowPrepareAcceptedStateCandidate.valid())
             shadowPrepareAcceptedStateCandidateReady = shadowPrepareAcceptedStateCandidateReady
                 && !shadowPrepareAcceptedStateCandidate.empty()
@@ -3490,8 +3467,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             Core::GpuSubmissionPacketId frameBeginPacket;
             RendererSystem* renderer = nullptr;
             Core::GpuSubmissionPacketId shadowPreparePacket;
-            const Core::CommandListResourceStateHandoff* shadowPrepareStateCandidate = nullptr;
-            const Vector<Core::BufferHandle, Core::Alloc::ScratchArena>* shadowPrepareStateBackings = nullptr;
+            Core::GpuPersistentResourceStateCache::Candidate* shadowPrepareStateCandidate = nullptr;
+            bool shadowPrepareHasLiveStateBuffers = false;
             bool shadowPrepareStateCandidateRequired = false;
             bool shadowPrepareStateReady = true;
         };
@@ -3501,7 +3478,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             .renderer = this,
             .shadowPreparePacket = shadowPreparePacket,
             .shadowPrepareStateCandidate = &shadowPrepareAcceptedStateCandidate,
-            .shadowPrepareStateBackings = &shadowPrepareLiveStateBuffers,
+            .shadowPrepareHasLiveStateBuffers = !shadowPrepareLiveStateBuffers.empty(),
             .shadowPrepareStateCandidateRequired = shadowPrepareStateCandidateRequired,
         };
         const auto acceptPrefixTimingPacket = [](
@@ -3520,12 +3497,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 }
 
                 RendererSystem& renderer = *context->renderer;
-                if(
-                    !context->shadowPrepareStateBackings
-                    || context->shadowPrepareStateBackings->empty()
-                ){
-                    renderer.m_shadowPreparePersistentStateHandoff.reset();
-                    renderer.m_shadowPreparePersistentStateBuffers.clear();
+                if(!context->shadowPrepareHasLiveStateBuffers){
+                    renderer.m_shadowPreparePersistentState.reset();
                 }
                 else if(
                     !context->shadowPrepareStateCandidate
@@ -3533,8 +3506,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     || context->shadowPrepareStateCandidate->empty()
                 ){
                     if(!context->shadowPrepareStateCandidateRequired){
-                        renderer.m_shadowPreparePersistentStateHandoff.reset();
-                        renderer.m_shadowPreparePersistentStateBuffers.clear();
+                        renderer.m_shadowPreparePersistentState.reset();
                         return true;
                     }
                     // The packet is already accepted, so preserve the last accepted source rather than replacing it
@@ -3544,13 +3516,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     return false;
                 }
                 else{
-                    context->shadowPrepareStateReady = renderer.m_shadowPreparePersistentStateHandoff.copyFrom(
+                    context->shadowPrepareStateReady = renderer.m_shadowPreparePersistentState.commit(
                         *context->shadowPrepareStateCandidate
                     );
                     if(context->shadowPrepareStateReady){
-                        renderer.m_shadowPreparePersistentStateBuffers.clear();
-                        for(const Core::BufferHandle& backing : *context->shadowPrepareStateBackings)
-                            renderer.m_shadowPreparePersistentStateBuffers.push_back(backing);
                         // Task acceptance runs before this outer packet callback. Commit frozen AS cache/refit state
                         // only after the accepted backing handoff has been retained successfully.
                         renderer.m_raytracingSystem.confirmPreparedSceneTlasBuild();

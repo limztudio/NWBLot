@@ -15,6 +15,7 @@
 #include <core/graphics/render_pass.h>
 #include <core/graphics/task_graph/compiler.h>
 #include <core/graphics/task_graph/packet_runtime.h>
+#include <core/graphics/task_graph/persistent_state.h>
 #include <core/graphics/task_graph/presentation_contributor.h>
 #include <core/telemetry/frame_graph_contributor.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
@@ -530,8 +531,7 @@ private:
     // Native TLAS/BLAS, software-BVH build storage, and normalized trace geometry change inside Shadow Preparation.
     // Retain only accepted live generations so the next frame's first graph packet seeds their real acceleration,
     // UAV, and descriptor-visible ShaderResource states.
-    Core::CommandListResourceStateHandoff m_shadowPreparePersistentStateHandoff;
-    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_shadowPreparePersistentStateBuffers;
+    Core::GpuPersistentResourceStateCache m_shadowPreparePersistentState;
     // Software caustics retain their temporal scratch on the dedicated Compute lane. Hardware dispatch-rays caustics
     // use the Graphics hardware-caustics packet; normal deferred lighting consumes either resolved irradiance on Compute, while
     // the optional lagged path snapshots it for the next Graphics lighting packet.

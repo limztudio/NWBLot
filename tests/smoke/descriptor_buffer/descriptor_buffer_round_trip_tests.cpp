@@ -17170,9 +17170,11 @@ TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheFiltersAndMergesA
     CommandListResourceStateHandoff finalStates(DescriptorBufferRoundTripTest::arena());
     auto initialProducer = device.createCommandList();
     auto finalProducer = device.createCommandList();
+    auto preAcceptanceConsumer = device.createCommandList();
     auto consumer = device.createCommandList();
     ASSERT_NE(initialProducer.get(), nullptr);
     ASSERT_NE(finalProducer.get(), nullptr);
+    ASSERT_NE(preAcceptanceConsumer.get(), nullptr);
     ASSERT_NE(consumer.get(), nullptr);
 
     initialProducer->open();
@@ -17187,17 +17189,41 @@ TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheFiltersAndMergesA
         ASSERT_TRUE(acceptedState.replaceBufferSubset(initialStates, initialLiveBuffers, LengthOf(initialLiveBuffers)));
     }
     EXPECT_EQ(acceptedState.retainedBufferCount(), 2u);
+    GpuPersistentResourceStateCache::Candidate recordingSource(DescriptorBufferRoundTripTest::arena());
+    {
+        const BufferHandle recordingLiveBuffers[] = { liveBuffer, retiredBuffer };
+        ASSERT_TRUE(acceptedState.buildFilteredBufferSubset(
+            recordingSource,
+            *acceptedState.source(),
+            recordingLiveBuffers,
+            LengthOf(recordingLiveBuffers)
+        ));
+    }
+    ASSERT_NE(recordingSource.source(), nullptr);
     // Drop the caller's retired handle before opening the next command list from the raw handoff. The cache keeps a
     // retirement-safe typed reference until the current-live filter drops that generation.
     retiredBuffer.reset();
 
-    finalProducer->open(&initialStates);
+    finalProducer->open(recordingSource.source());
     finalProducer->setBufferState(liveBuffer.get(), ResourceStates::ShaderResource);
     finalProducer->close(&finalStates);
     ASSERT_TRUE(finalStates.valid());
 
     const BufferHandle currentLiveBuffers[] = { liveBuffer };
-    ASSERT_TRUE(acceptedState.mergeBufferSubset(finalStates, currentLiveBuffers, LengthOf(currentLiveBuffers)));
+    GpuPersistentResourceStateCache::Candidate acceptedCandidate(DescriptorBufferRoundTripTest::arena());
+    ASSERT_TRUE(acceptedState.buildMergedBufferSubset(
+        acceptedCandidate,
+        finalStates,
+        currentLiveBuffers,
+        LengthOf(currentLiveBuffers)
+    ));
+    ASSERT_TRUE(acceptedCandidate.valid());
+    ASSERT_FALSE(acceptedCandidate.empty());
+    // Candidate construction alone must not publish a state from a packet that could still be rejected.
+    preAcceptanceConsumer->open(acceptedState.source());
+    EXPECT_EQ(preAcceptanceConsumer->getBufferState(liveBuffer.get()), ResourceStates::UnorderedAccess);
+    preAcceptanceConsumer->close();
+    ASSERT_TRUE(acceptedState.commit(acceptedCandidate));
     ASSERT_NE(acceptedState.source(), nullptr);
     EXPECT_EQ(acceptedState.retainedBufferCount(), 1u);
 

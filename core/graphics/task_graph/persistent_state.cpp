@@ -52,16 +52,21 @@ void GpuPersistentResourceStateCache::reset()noexcept{
     m_buffers.clear();
 }
 
+void GpuPersistentResourceStateCache::Candidate::reset()noexcept{
+    m_states.reset();
+    m_textures.clear();
+    m_buffers.clear();
+}
+
 bool GpuPersistentResourceStateCache::buildFilteredCandidate(
-    CommandListResourceStateHandoff& outStates,
-    GraphicsVector<TextureHandle>& outTextures,
-    GraphicsVector<BufferHandle>& outBuffers,
+    Candidate& outCandidate,
     const CommandListResourceStateHandoff& source,
     const TextureHandle* const textures,
     const usize textureCount,
     const BufferHandle* const buffers,
     const usize bufferCount
 )const{
+    outCandidate.reset();
     if(
         !source.valid()
         || (textureCount != 0u && !textures)
@@ -69,8 +74,6 @@ bool GpuPersistentResourceStateCache::buildFilteredCandidate(
     )
         return false;
 
-    outTextures.clear();
-    outBuffers.clear();
     GraphicsVector<Texture*> texturePointers(m_arena);
     GraphicsVector<Buffer*> bufferPointers(m_arena);
     texturePointers.reserve(textureCount);
@@ -78,7 +81,7 @@ bool GpuPersistentResourceStateCache::buildFilteredCandidate(
 
     for(usize textureIndex = 0u; textureIndex < textureCount; ++textureIndex){
         const TextureHandle& texture = textures[textureIndex];
-        if(!__hidden_gpu_persistent_resource_state_cache::AppendUniqueHandle(outTextures, texture))
+        if(!__hidden_gpu_persistent_resource_state_cache::AppendUniqueHandle(outCandidate.m_textures, texture))
             return false;
         if(!texture)
             continue;
@@ -96,7 +99,7 @@ bool GpuPersistentResourceStateCache::buildFilteredCandidate(
 
     for(usize bufferIndex = 0u; bufferIndex < bufferCount; ++bufferIndex){
         const BufferHandle& buffer = buffers[bufferIndex];
-        if(!__hidden_gpu_persistent_resource_state_cache::AppendUniqueHandle(outBuffers, buffer))
+        if(!__hidden_gpu_persistent_resource_state_cache::AppendUniqueHandle(outCandidate.m_buffers, buffer))
             return false;
         if(!buffer)
             continue;
@@ -112,30 +115,13 @@ bool GpuPersistentResourceStateCache::buildFilteredCandidate(
             bufferPointers.push_back(buffer.get());
     }
 
-    return outStates.buildResourceSubset(
+    return outCandidate.m_states.buildResourceSubset(
         source,
         texturePointers.data(),
         texturePointers.size(),
         bufferPointers.data(),
         bufferPointers.size()
     );
-}
-
-bool GpuPersistentResourceStateCache::commitCandidate(
-    const CommandListResourceStateHandoff& states,
-    GraphicsVector<TextureHandle>& textures,
-    GraphicsVector<BufferHandle>& buffers
-){
-    if(!states.valid() || !m_states.copyFrom(states))
-        return false;
-
-    m_textures.clear();
-    for(TextureHandle& texture : textures)
-        m_textures.push_back(Move(texture));
-    m_buffers.clear();
-    for(BufferHandle& buffer : buffers)
-        m_buffers.push_back(Move(buffer));
-    return true;
 }
 
 bool GpuPersistentResourceStateCache::replaceResourceSubset(
@@ -145,13 +131,9 @@ bool GpuPersistentResourceStateCache::replaceResourceSubset(
     const BufferHandle* const buffers,
     const usize bufferCount
 ){
-    CommandListResourceStateHandoff candidateStates(m_arena);
-    GraphicsVector<TextureHandle> candidateTextures(m_arena);
-    GraphicsVector<BufferHandle> candidateBuffers(m_arena);
+    Candidate candidate(m_arena);
     if(!buildFilteredCandidate(
-        candidateStates,
-        candidateTextures,
-        candidateBuffers,
+        candidate,
         source,
         textures,
         textureCount,
@@ -162,7 +144,7 @@ bool GpuPersistentResourceStateCache::replaceResourceSubset(
         return false;
     }
 
-    if(!commitCandidate(candidateStates, candidateTextures, candidateBuffers)){
+    if(!commit(candidate)){
         reset();
         return false;
     }
@@ -176,13 +158,35 @@ bool GpuPersistentResourceStateCache::mergeResourceSubset(
     const BufferHandle* const buffers,
     const usize bufferCount
 ){
-    CommandListResourceStateHandoff sourceStates(m_arena);
-    GraphicsVector<TextureHandle> candidateTextures(m_arena);
-    GraphicsVector<BufferHandle> candidateBuffers(m_arena);
+    Candidate candidate(m_arena);
+    if(!buildMergedResourceSubset(candidate, source, textures, textureCount, buffers, bufferCount))
+        return false;
+
+    return commit(candidate);
+}
+
+bool GpuPersistentResourceStateCache::buildFilteredResourceSubset(
+    Candidate& outCandidate,
+    const CommandListResourceStateHandoff& source,
+    const TextureHandle* const textures,
+    const usize textureCount,
+    const BufferHandle* const buffers,
+    const usize bufferCount
+)const{
+    return buildFilteredCandidate(outCandidate, source, textures, textureCount, buffers, bufferCount);
+}
+
+bool GpuPersistentResourceStateCache::buildMergedResourceSubset(
+    Candidate& outCandidate,
+    const CommandListResourceStateHandoff& source,
+    const TextureHandle* const textures,
+    const usize textureCount,
+    const BufferHandle* const buffers,
+    const usize bufferCount
+)const{
+    Candidate sourceCandidate(m_arena);
     if(!buildFilteredCandidate(
-        sourceStates,
-        candidateTextures,
-        candidateBuffers,
+        sourceCandidate,
         source,
         textures,
         textureCount,
@@ -191,15 +195,11 @@ bool GpuPersistentResourceStateCache::mergeResourceSubset(
     ))
         return false;
 
-    CommandListResourceStateHandoff mergedStates(m_arena);
+    outCandidate.reset();
     if(m_states.valid()){
-        CommandListResourceStateHandoff retainedStates(m_arena);
-        GraphicsVector<TextureHandle> retainedTextures(m_arena);
-        GraphicsVector<BufferHandle> retainedBuffers(m_arena);
+        Candidate retainedCandidate(m_arena);
         if(!buildFilteredCandidate(
-            retainedStates,
-            retainedTextures,
-            retainedBuffers,
+            retainedCandidate,
             m_states,
             textures,
             textureCount,
@@ -208,13 +208,31 @@ bool GpuPersistentResourceStateCache::mergeResourceSubset(
         ))
             return false;
 
-        const CommandListResourceStateHandoff* const branches[] = { &sourceStates };
-        if(!mergedStates.buildFanIn(retainedStates, branches, LengthOf(branches)))
+        const CommandListResourceStateHandoff* const branches[] = { &sourceCandidate.m_states };
+        if(!outCandidate.m_states.buildFanIn(retainedCandidate.m_states, branches, LengthOf(branches)))
             return false;
-    }else if(!mergedStates.copyFrom(sourceStates))
+    }else if(!outCandidate.m_states.copyFrom(sourceCandidate.m_states))
         return false;
 
-    return commitCandidate(mergedStates, candidateTextures, candidateBuffers);
+    for(TextureHandle& texture : sourceCandidate.m_textures)
+        outCandidate.m_textures.push_back(Move(texture));
+    for(BufferHandle& buffer : sourceCandidate.m_buffers)
+        outCandidate.m_buffers.push_back(Move(buffer));
+    return true;
+}
+
+bool GpuPersistentResourceStateCache::commit(Candidate& candidate){
+    if(!candidate.valid() || !m_states.copyFrom(candidate.m_states))
+        return false;
+
+    m_textures.clear();
+    for(TextureHandle& texture : candidate.m_textures)
+        m_textures.push_back(Move(texture));
+    m_buffers.clear();
+    for(BufferHandle& buffer : candidate.m_buffers)
+        m_buffers.push_back(Move(buffer));
+    candidate.reset();
+    return true;
 }
 
 

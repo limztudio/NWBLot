@@ -3920,8 +3920,9 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
 
         opaqueResolveResourceUses.reserve(16u);
         opaqueResolveResourceUses.push_back(WriteUse(shadowVisibility, Core::ResourceStates::UnorderedAccess));
-        // The trace result retains its native local transition, while current geometry crosses this exact graph
-        // boundary from the producer's UAV write to the merge/wavelet shader read.
+        // The compiler owns the trace image's same-UAV ordering fence, then the resolve callback locally changes
+        // it for its sampled merge. Current geometry crosses this exact graph boundary from the producer's UAV
+        // write to the merge/wavelet shader read.
         opaqueResolveResourceUses.push_back(ReadWriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
         opaqueResolveResourceUses.push_back(ReadWriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));
         opaqueResolveResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));

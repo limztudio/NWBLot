@@ -936,10 +936,12 @@ bool RendererRayTracingSystem::renderShadowVisibility(
             commandList.dispatch(softGroupsX, softGroupsY, 1u);
         }
 
-        // Preserve the trace image's local UAV fence. The adjacent resolve callback only takes ownership of the
-        // independently produced geometry scratch transition.
-        commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.commitBarriers();
+        // The split resolver declares this same-UAV dependency, so its graph prologue owns the trace fence. Direct
+        // and unsplit compatibility paths retain the established local fence.
+        if(!splitOpaqueSoftResolve){
+            commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+            commandList.commitBarriers();
+        }
 
         // A prepared graph may expose the opaque geometry-to-resolve handoff before the transparent-fold tail.
         dispatchSoftShadowDenoiseAndTransparentFold(
@@ -1463,10 +1465,12 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                 commandList.dispatch(softGroupsX, softGroupsY, 1u);
             }
 
-            // Preserve the trace image's local UAV fence. The adjacent resolve callback only takes ownership of
-            // the independently produced geometry scratch transition.
-            commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-            commandList.commitBarriers();
+            // The split resolver declares this same-UAV dependency, so its graph prologue owns the trace fence.
+            // Direct and unsplit compatibility paths retain the established local fence.
+            if(!splitOpaqueSoftResolve){
+                commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+                commandList.commitBarriers();
+            }
 
             // Shared resolve also guards against a second transparent fold.
             dispatchSoftShadowDenoiseAndTransparentFold(

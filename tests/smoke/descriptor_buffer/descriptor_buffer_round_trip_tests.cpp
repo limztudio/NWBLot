@@ -940,6 +940,7 @@ struct NativePacketSoftOpaqueResolveHandoffProbeTask{
     struct Payload{
         Texture* shadowVisibility = nullptr;
         Texture* shadowSoftGeometry = nullptr;
+        Texture* opaqueSoftHalf = nullptr;
         bool* recorded = nullptr;
     };
 
@@ -952,10 +953,13 @@ struct NativePacketSoftOpaqueResolveHandoffProbeTask{
         const bool ready =
             payload.shadowVisibility
             && payload.shadowSoftGeometry
+            && payload.opaqueSoftHalf
             && commandList.getTextureSubresourceState(payload.shadowVisibility, 0u, 0u)
                 == ResourceStates::UnorderedAccess
             && commandList.getTextureSubresourceState(payload.shadowSoftGeometry, 0u, 0u)
                 == ResourceStates::ShaderResource
+            && commandList.getTextureSubresourceState(payload.opaqueSoftHalf, 0u, 0u)
+                == ResourceStates::UnorderedAccess
         ;
         if(payload.recorded)
             *payload.recorded = ready;
@@ -3778,6 +3782,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
     auto transparentMomentsA = makeShadowTarget();
     auto transparentHistoryB = makeShadowTarget();
     auto transparentMomentsB = makeShadowTarget();
+    auto opaqueSoftHalf = makeShadowTarget();
     auto shadowSoftGeometry = makeShadowTarget();
     auto previousGeometry = makeShadowTarget();
     auto worldPosition = makeShadowTarget();
@@ -3796,6 +3801,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
     ASSERT_NE(transparentMomentsA.get(), nullptr);
     ASSERT_NE(transparentHistoryB.get(), nullptr);
     ASSERT_NE(transparentMomentsB.get(), nullptr);
+    ASSERT_NE(opaqueSoftHalf.get(), nullptr);
     ASSERT_NE(shadowSoftGeometry.get(), nullptr);
     ASSERT_NE(previousGeometry.get(), nullptr);
     ASSERT_NE(worldPosition.get(), nullptr);
@@ -3857,6 +3863,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
         Name("tests/descriptor_buffer/soft_transparent_fold_geometry"),
         "Shadow Soft Geometry"
     );
+    const GpuGraphResourceId opaqueSoftHalfResource = importTexture(
+        opaqueSoftHalf,
+        Name("tests/descriptor_buffer/soft_transparent_fold_opaque_half"),
+        "Opaque Shadow Soft Half"
+    );
     const GpuGraphResourceId previousGeometryResource = importTexture(
         previousGeometry,
         Name("tests/descriptor_buffer/soft_transparent_fold_geometry_previous"),
@@ -3889,6 +3900,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
     ASSERT_TRUE(transparentHistoryBResource.valid());
     ASSERT_TRUE(transparentMomentsBResource.valid());
     ASSERT_TRUE(shadowSoftGeometryResource.valid());
+    ASSERT_TRUE(opaqueSoftHalfResource.valid());
     ASSERT_TRUE(previousGeometryResource.valid());
     ASSERT_TRUE(worldPositionResource.valid());
     ASSERT_TRUE(normalResource.valid());
@@ -3918,6 +3930,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
             .range = {},
             .requiredState = ResourceStates::UnorderedAccess,
             .access = GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = opaqueSoftHalfResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
         },
         {
             .resource = transparentHistoryAResource,
@@ -3979,6 +3997,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
             .requiredState = ResourceStates::ShaderResource,
             .access = GpuTaskResourceAccess::Read,
         },
+        {
+            .resource = opaqueSoftHalfResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
     };
     GpuTaskDesc opaqueResolveDesc;
     opaqueResolveDesc
@@ -3995,6 +4019,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
         NativePacketSoftOpaqueResolveHandoffProbeTask::Payload{
             .shadowVisibility = shadowVisibility.get(),
             .shadowSoftGeometry = shadowSoftGeometry.get(),
+            .opaqueSoftHalf = opaqueSoftHalf.get(),
             .recorded = &opaqueResolveRecorded,
         }
     );
@@ -4204,6 +4229,20 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
         }
     }
     EXPECT_TRUE(hasGeometryResolveTransition);
+    bool hasOpaqueTraceUav = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledOpaqueResolve->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = opaqueResolveBarriers[barrierIndex];
+        if(
+            barrier.type == GpuCompiledBarrierType::TextureUav
+            && barrier.resource == opaqueSoftHalfResource
+            && barrier.before == ResourceStates::UnorderedAccess
+            && barrier.after == ResourceStates::UnorderedAccess
+        ){
+            hasOpaqueTraceUav = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(hasOpaqueTraceUav);
 
     const GpuCompiledTask* const compiledFold = compiledGraph.findTask(foldTask);
     ASSERT_NE(compiledFold, nullptr);

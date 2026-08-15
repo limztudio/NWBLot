@@ -5098,6 +5098,13 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
         Graphics::ResourceStates::Common,
         queueSharing
     );
+    const Graphics::GpuGraphResourceId opaqueSoftHalf = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/soft_transparent_fold_opaque_half"),
+        "Opaque Shadow Soft Half",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
     const Graphics::GpuGraphResourceId transparentSoftHalf = AddTextureMetadata(
         graph,
         Name("tests/task_graph/soft_transparent_fold_half"),
@@ -5176,6 +5183,7 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
         queueSharing
     );
     ASSERT_TRUE(shadowVisibility.valid());
+    ASSERT_TRUE(opaqueSoftHalf.valid());
     ASSERT_TRUE(transparentSoftHalf.valid());
     ASSERT_TRUE(transparentHistoryA.valid());
     ASSERT_TRUE(transparentMomentsA.valid());
@@ -5217,6 +5225,12 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
             .range = {},
             .requiredState = Graphics::ResourceStates::UnorderedAccess,
             .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = opaqueSoftHalf,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
         },
         {
             .resource = transparentHistoryA,
@@ -5269,6 +5283,12 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
             .range = {},
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = opaqueSoftHalf,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
         },
     };
     Graphics::GpuTaskDesc opaqueResolveDesc;
@@ -5494,6 +5514,20 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
         }
     }
     EXPECT_TRUE(hasGeometryResolveTransition);
+    bool hasOpaqueTraceUav = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledOpaqueResolve->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = opaqueResolveBarriers[barrierIndex];
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureUav
+            && barrier.resource == opaqueSoftHalf
+            && barrier.before == Graphics::ResourceStates::UnorderedAccess
+            && barrier.after == Graphics::ResourceStates::UnorderedAccess
+        ){
+            hasOpaqueTraceUav = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(hasOpaqueTraceUav);
 
     const Graphics::GpuCompiledTask* const compiledTrace = compiledGraph.findTask(trace);
     ASSERT_NE(compiledTrace, nullptr);

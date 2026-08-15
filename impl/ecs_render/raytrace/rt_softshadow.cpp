@@ -72,7 +72,9 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
     const bool graphOwnsTransparentTemporalMergeEntryStates,
     const bool dispatchOpaqueResolveTail,
-    const bool graphOwnsOpaqueTraceToFirstWaveletBoundary
+    const bool graphOwnsOpaqueTraceToFirstWaveletBoundary,
+    const bool dispatchTransparentResolveTail,
+    const bool splitTransparentResolve
 ){
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
@@ -142,7 +144,13 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         }
     }
 
-    if(!dispatchOpaqueResolve && !dispatchOpaqueResolveTail && !dispatchTransparentTrace && !dispatchTransparentResolve)
+    if(
+        !dispatchOpaqueResolve
+        && !dispatchOpaqueResolveTail
+        && !dispatchTransparentTrace
+        && !dispatchTransparentResolve
+        && !dispatchTransparentResolveTail
+    )
         return;
 
     u32 slotRangeCount = 0u;
@@ -351,7 +359,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         }
     }
 
-    if(dispatchTransparentResolve && rayTracingState().m_softTransparentReady){
+    if((dispatchTransparentResolve || dispatchTransparentResolveTail) && rayTracingState().m_softTransparentReady){
         const bool transparentTemporalActive = rayTracingState().m_softTransparentTemporalReady;
         const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources transparentMerge = frontIsA
             ? __hidden_rt_softshadow::ShadowReprojectMergeHeapResources{
@@ -368,7 +376,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         // Keep the RGB wavelet's temporal variance paired with the history just emitted by the transparent merge.
         Core::Texture* const transparentResolveMoments = frontIsA ? targets.transparentMomentsB.get() : targets.transparentMomentsA.get();
         const u32 transparentResolveMomentsSlot = frontIsA ? targets.bindless.transparentMomentsB.slot() : targets.bindless.transparentMomentsA.slot();
-        if(transparentTemporalActive){
+        if(dispatchTransparentResolve && transparentTemporalActive){
             Core::GpuTimingMeasure transparentTemporalTiming(
                 graphics().gpuTiming(),
                 RendererGpuTimingScope::s_ShadowTransparentTemporal,
@@ -421,10 +429,25 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             graphEntryStatesOwned && graphOwnsTransparentTraceToResolveBoundary
         ;
         transparentDispatch.graphOwnsUpsampleStaticEntryStates = graphEntryStatesOwned;
+        transparentDispatch.graphOwnsFirstWaveletOutputState =
+            dispatchTransparentResolve && splitTransparentResolve && graphEntryStatesOwned
+        ;
+        const bool graphOwnsOneWaveletTransparentResolveTailEntryStates =
+            !dispatchTransparentResolve
+            && dispatchTransparentResolveTail
+            && graphEntryStatesOwned
+            && NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT == 1u
+        ;
+        transparentDispatch.graphOwnsUpsampleInputColorEntryState =
+            graphOwnsOneWaveletTransparentResolveTailEntryStates
+        ;
+        transparentDispatch.graphOwnsUpsampleVisibilityOutputState =
+            graphOwnsOneWaveletTransparentResolveTailEntryStates
+        ;
         transparentDispatch.firstWaveletWritesHalfA = true;
         transparentDispatch.fold = SoftShadowUpsampleFold::Multiply;
         transparentDispatch.waveletPassCount = static_cast<u32>(NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT);
-        {
+        if(dispatchTransparentResolve && !splitTransparentResolve){
             Core::GpuTimingMeasure transparentResolveTiming(
                 graphics().gpuTiming(),
                 RendererGpuTimingScope::s_ShadowTransparentResolve,
@@ -433,12 +456,19 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             );
             dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, transparentDispatch);
         }
+        else if(dispatchTransparentResolve)
+            dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, transparentDispatch, true, false);
+        else
+            dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, transparentDispatch, false, true);
     }
 
     // Do not mutate the target-generation handles while the sibling caustics and surfel-GI workers can still validate
     // targets.bindless. RendererSystem finalizes this pending CPU-side swap only after its complete ordered Graphics
     // submission succeeds.
-    if(dispatchTransparentResolve && rayTracingState().m_softShadowTemporalReady)
+    if(
+        ((dispatchTransparentResolve && !splitTransparentResolve) || dispatchTransparentResolveTail)
+        && rayTracingState().m_softShadowTemporalReady
+    )
         rayTracingState().m_softShadowTemporalHistoryAdvancePending = true;
 }
 

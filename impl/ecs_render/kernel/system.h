@@ -252,6 +252,7 @@ private:
         Optional<Core::GpuTimingMeasure>& asyncTiming,
         Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
         Optional<Core::GpuTimingMeasure>& opaqueResolveTiming,
+        Optional<Core::GpuTimingMeasure>& transparentResolveTiming,
         bool& opaqueProduced,
         bool& transparentTraceProduced,
         u32& opaqueFrameIndex
@@ -315,6 +316,7 @@ private:
         Optional<Core::GpuTimingMeasure>& shadowVisibilityAsyncTiming,
         Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
         Optional<Core::GpuTimingMeasure>& opaqueSoftResolveTiming,
+        Optional<Core::GpuTimingMeasure>& transparentSoftResolveTiming,
         bool& shadowVisibilityOpaqueProduced,
         bool& shadowVisibilityTransparentTraceProduced,
         u32& shadowVisibilityOpaqueFrameIndex,
@@ -400,12 +402,13 @@ private:
     Core::GpuTaskId m_graphicsPrefixCsgIntervalSampleTask;
     Core::GpuTaskId m_graphicsPrefixTask;
     // Prepared soft-transparent shadow frames split opaque production, first wavelet, resolve tail, transparent
-    // trace, and terminal resolve, but all five tasks must compile into one packet. The terminal ID remains the
-    // output/acceptance/recovery owner.
+    // trace, transparent first wavelet, and terminal resolve tail, but all six tasks must compile into one packet.
+    // The terminal ID remains the output/acceptance/recovery owner.
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueTask;
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueFirstWaveletTask;
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueResolveTask;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentTraceTask;
+    Core::GpuTaskId m_deferredShadowVisibilityTransparentFirstWaveletTask;
     Core::GpuTaskId m_deferredShadowVisibilityTask;
     Core::GpuTaskId m_deferredSoftwareCausticsTask;
     // Both hardware and software caustics use this typed black-output clear. The selected producer must share its

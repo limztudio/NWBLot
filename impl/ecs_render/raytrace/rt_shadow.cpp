@@ -403,6 +403,83 @@ struct ShadowTransparentSoftTraceGraphTask{
 };
 
 
+// The transparent trace publishes RGB half-resolution visibility for temporal merge and the first wavelet. The
+// terminal fold keeps the final upsample plus the established output/acceptance endpoint.
+struct ShadowTransparentSoftFirstWaveletGraphTask{
+    struct Payload{
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+        Core::Graphics* graphics = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        Optional<Core::GpuTimingMeasure>* transparentResolveTiming = nullptr;
+        const bool* opaqueProduced = nullptr;
+        bool* transparentTraceProduced = nullptr;
+        const u32* opaqueFrameIndex = nullptr;
+        bool graphEntryStatesOwned = false;
+        bool graphOwnsTransparentTemporalMergeEntryStates = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(
+            !payload.raytracingSystem
+            || !payload.graphics
+            || !payload.targets
+            || !payload.timingTicket
+            || !payload.transparentResolveTiming
+            || !payload.opaqueProduced
+            || !payload.transparentTraceProduced
+            || !payload.opaqueFrameIndex
+        )
+            return false;
+        if(!*payload.opaqueProduced || !*payload.transparentTraceProduced)
+            return true;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        if(payload.transparentResolveTiming->has_value()){
+            payload.transparentResolveTiming->value().discardTiming();
+            payload.transparentResolveTiming->reset();
+        }
+        payload.transparentResolveTiming->emplace(
+            payload.graphics->gpuTiming(),
+            RendererGpuTimingScope::s_ShadowTransparentResolve,
+            payload.graphics->getDevice(),
+            commandList
+        );
+        if(payload.raytracingSystem->renderSoftTransparentShadowFirstWavelet(
+            commandList,
+            *payload.targets,
+            *payload.opaqueFrameIndex,
+            payload.graphEntryStatesOwned,
+            true,
+            payload.graphOwnsTransparentTemporalMergeEntryStates
+        )){
+            payload.transparentResolveTiming->value().finishMarker();
+            return true;
+        }
+
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split transparent soft-shadow first wavelet failed; preserving opaque visibility"));
+        *payload.transparentTraceProduced = false;
+        payload.transparentResolveTiming->value().discardTiming();
+        payload.transparentResolveTiming->reset();
+        return true;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.transparentTraceProduced)
+            *payload.transparentTraceProduced = false;
+        if(payload.transparentResolveTiming && payload.transparentResolveTiming->has_value()){
+            payload.transparentResolveTiming->value().discardTiming();
+            payload.transparentResolveTiming->reset();
+        }
+    }
+};
+
+
 struct ShadowTransparentSoftFoldGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -410,11 +487,11 @@ struct ShadowTransparentSoftFoldGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming = nullptr;
+        Optional<Core::GpuTimingMeasure>* transparentResolveTiming = nullptr;
         const bool* opaqueProduced = nullptr;
         bool* transparentTraceProduced = nullptr;
         const u32* opaqueFrameIndex = nullptr;
         bool graphEntryStatesOwned = false;
-        bool graphOwnsTransparentTemporalMergeEntryStates = false;
     };
 
     [[nodiscard]] static bool record(
@@ -428,6 +505,7 @@ struct ShadowTransparentSoftFoldGraphTask{
             || !payload.timingTicket
             || !payload.asyncTiming
             || !payload.shadowVisibilityTiming
+            || !payload.transparentResolveTiming
             || !payload.opaqueProduced
             || !payload.transparentTraceProduced
             || !payload.opaqueFrameIndex
@@ -447,18 +525,30 @@ struct ShadowTransparentSoftFoldGraphTask{
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
         if(*payload.transparentTraceProduced){
-            if(!payload.raytracingSystem->renderSoftTransparentShadowFold(
+            if(!payload.transparentResolveTiming->has_value())
+                return false;
+            if(payload.raytracingSystem->renderSoftTransparentShadowFold(
                 commandList,
                 *payload.targets,
                 *payload.opaqueFrameIndex,
-                payload.graphEntryStatesOwned,
-                true,
-                true,
-                payload.graphOwnsTransparentTemporalMergeEntryStates
-            ))
+                payload.graphEntryStatesOwned
+            )){
+                payload.transparentResolveTiming->value().finishTiming(commandList);
+                payload.transparentResolveTiming->reset();
+            }
+            else{
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split transparent soft-shadow resolve failed; preserving opaque visibility"));
-        }else
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split transparent soft-shadow trace failed; preserving opaque visibility"));
+                *payload.transparentTraceProduced = false;
+                payload.transparentResolveTiming->value().discardTiming();
+                payload.transparentResolveTiming->reset();
+            }
+        }else{
+            if(payload.transparentResolveTiming->has_value()){
+                payload.transparentResolveTiming->value().discardTiming();
+                payload.transparentResolveTiming->reset();
+            }
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split transparent soft-shadow trace or first wavelet failed; preserving opaque visibility"));
+        }
 
         if(payload.asyncTiming->has_value()){
             payload.asyncTiming->value().finishTiming(commandList);
@@ -484,6 +574,10 @@ struct ShadowTransparentSoftFoldGraphTask{
         if(payload.shadowVisibilityTiming && payload.shadowVisibilityTiming->has_value()){
             payload.shadowVisibilityTiming->value().discardTiming();
             payload.shadowVisibilityTiming->reset();
+        }
+        if(payload.transparentResolveTiming && payload.transparentResolveTiming->has_value()){
+            payload.transparentResolveTiming->value().discardTiming();
+            payload.transparentResolveTiming->reset();
         }
         if(payload.raytracingSystem)
             payload.raytracingSystem->discardSoftShadowTemporalHistory();
@@ -1368,12 +1462,11 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
     return true;
 }
 
-bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
+bool RendererRayTracingSystem::renderSoftTransparentShadowFirstWavelet(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const u32 frameIndex,
     const bool graphEntryStatesOwned,
-    const bool graphOwnsOpaqueToTransparentBoundary,
     const bool graphOwnsTransparentTraceToResolveBoundary,
     const bool graphOwnsTransparentTemporalMergeEntryStates
 ){
@@ -1399,14 +1492,84 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
         false,
         true,
         false,
-        graphOwnsOpaqueToTransparentBoundary,
+        false,
         graphOwnsTransparentTraceToResolveBoundary,
         false,
         graphOwnsTransparentTemporalMergeEntryStates,
         false,
-        false
+        false,
+        false,
+        true
     );
     return true;
+}
+
+bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const u32 frameIndex,
+    const bool graphEntryStatesOwned
+){
+    if(
+        !rayTracingState().m_softShadowReady
+        || !rayTracingState().m_softTransparentReady
+        || rayTracingState().m_softShadowSlotMask == 0u
+    )
+        return false;
+    const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
+    const u32 softGroupsY = DivideUp(softHalfHeight, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
+    dispatchSoftShadowDenoiseAndTransparentFold(
+        commandList,
+        targets,
+        frameIndex,
+        softGroupsX,
+        softGroupsY,
+        graphEntryStatesOwned,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        true
+    );
+    return true;
+}
+
+Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFirstWaveletTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    Optional<Core::GpuTimingMeasure>* const transparentResolveTiming,
+    const bool* const opaqueProduced,
+    bool* const transparentTraceProduced,
+    const u32* const opaqueFrameIndex,
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsTransparentTemporalMergeEntryStates
+){
+    return graph.addTask<__hidden_shadow_visibility_task::ShadowTransparentSoftFirstWaveletGraphTask>(
+        desc,
+        __hidden_shadow_visibility_task::ShadowTransparentSoftFirstWaveletGraphTask::Payload{
+            .raytracingSystem = this,
+            .graphics = &graphics(),
+            .targets = &targets,
+            .timingTicket = &timingTicket,
+            .transparentResolveTiming = transparentResolveTiming,
+            .opaqueProduced = opaqueProduced,
+            .transparentTraceProduced = transparentTraceProduced,
+            .opaqueFrameIndex = opaqueFrameIndex,
+            .graphEntryStatesOwned = graphEntryStatesOwned,
+            .graphOwnsTransparentTemporalMergeEntryStates = graphOwnsTransparentTemporalMergeEntryStates,
+        }
+    );
 }
 
 Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
@@ -1416,11 +1579,11 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>* const asyncTiming,
     Optional<Core::GpuTimingMeasure>* const shadowVisibilityTiming,
+    Optional<Core::GpuTimingMeasure>* const transparentResolveTiming,
     const bool* const opaqueProduced,
     bool* const transparentTraceProduced,
     const u32* const opaqueFrameIndex,
-    const bool graphEntryStatesOwned,
-    const bool graphOwnsTransparentTemporalMergeEntryStates
+    const bool graphEntryStatesOwned
 ){
     return graph.addTask<__hidden_shadow_visibility_task::ShadowTransparentSoftFoldGraphTask>(
         desc,
@@ -1430,11 +1593,11 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
             .shadowVisibilityTiming = shadowVisibilityTiming,
+            .transparentResolveTiming = transparentResolveTiming,
             .opaqueProduced = opaqueProduced,
             .transparentTraceProduced = transparentTraceProduced,
             .opaqueFrameIndex = opaqueFrameIndex,
             .graphEntryStatesOwned = graphEntryStatesOwned,
-            .graphOwnsTransparentTemporalMergeEntryStates = graphOwnsTransparentTemporalMergeEntryStates,
         }
     );
 }

@@ -3451,6 +3451,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     Optional<Core::GpuTimingMeasure>& asyncTiming,
     Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
     Optional<Core::GpuTimingMeasure>& opaqueResolveTiming,
+    Optional<Core::GpuTimingMeasure>& transparentResolveTiming,
     bool& opaqueProduced,
     bool& transparentTraceProduced,
     u32& opaqueFrameIndex
@@ -3461,6 +3462,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
     m_deferredShadowVisibilityOpaqueResolveTask = {};
     m_deferredShadowVisibilityTransparentTraceTask = {};
+    m_deferredShadowVisibilityTransparentFirstWaveletTask = {};
     m_deferredShadowVisibilityTask = {};
     if(
         !deferredTargets.valid()
@@ -3801,6 +3803,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaqueFirstWaveletResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaqueResolveResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentTraceResourceUses{ scratchArena };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentFirstWaveletResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentFoldResourceUses{ scratchArena };
     bool graphOwnsTransparentTemporalMergeEntryStates = false;
     if(splitSoftTransparentFold){
@@ -3985,18 +3988,14 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
 
         graphOwnsTransparentTemporalMergeEntryStates = m_rayTracingState.m_softTransparentTemporalReady;
         const bool transparentHistoryFrontIsA = m_rayTracingState.m_softShadowHistoryFrontIsA != 0u;
-        transparentFoldResourceUses.reserve(20u);
-        transparentFoldResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
-        transparentFoldResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
-        transparentFoldResourceUses.push_back(ReadUse(depth, Core::ResourceStates::ShaderResource));
-        transparentFoldResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
-        transparentFoldResourceUses.push_back(ReadWriteUse(shadowVisibility, Core::ResourceStates::UnorderedAccess));
-        transparentFoldResourceUses.push_back(ReadWriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
-        transparentFoldResourceUses.push_back(ReadWriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));
-        transparentFoldResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
-        transparentFoldResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious, Core::ResourceStates::ShaderResource));
-        // The compiler owns this exact trace-to-resolve transition. The callback must not re-state this image.
-        transparentFoldResourceUses.push_back(ReadUse(transparentSoftHalf, Core::ResourceStates::ShaderResource));
+        transparentFirstWaveletResourceUses.reserve(12u);
+        // The transparent trace publishes its RGB half image for the temporal merge or first wavelet. That task
+        // writes half-A, which the terminal tail samples for the one-wavelet upsample below.
+        transparentFirstWaveletResourceUses.push_back(ReadUse(transparentSoftHalf, Core::ResourceStates::ShaderResource));
+        transparentFirstWaveletResourceUses.push_back(WriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
+        transparentFirstWaveletResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
+        transparentFirstWaveletResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious, Core::ResourceStates::ShaderResource));
+        transparentFirstWaveletResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
         if(graphOwnsTransparentTemporalMergeEntryStates){
             // Selection is frozen with the compiled frame: merge samples the current front pair and writes the
             // opposite pair before the task-local wavelet reads that just-produced history.
@@ -4016,18 +4015,32 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
                 ? transparentMomentsB
                 : transparentMomentsA
             ;
-            transparentFoldResourceUses.push_back(ReadUse(transparentHistoryIn, Core::ResourceStates::ShaderResource));
-            transparentFoldResourceUses.push_back(ReadUse(transparentMomentsIn, Core::ResourceStates::ShaderResource));
-            transparentFoldResourceUses.push_back(WriteUse(transparentHistoryOut, Core::ResourceStates::UnorderedAccess));
-            transparentFoldResourceUses.push_back(WriteUse(transparentMomentsOut, Core::ResourceStates::UnorderedAccess));
+            transparentFirstWaveletResourceUses.push_back(ReadUse(transparentHistoryIn, Core::ResourceStates::ShaderResource));
+            transparentFirstWaveletResourceUses.push_back(ReadUse(transparentMomentsIn, Core::ResourceStates::ShaderResource));
+            transparentFirstWaveletResourceUses.push_back(WriteUse(transparentHistoryOut, Core::ResourceStates::UnorderedAccess));
+            transparentFirstWaveletResourceUses.push_back(WriteUse(transparentMomentsOut, Core::ResourceStates::UnorderedAccess));
         }else{
             // The non-temporal compatibility route may reactivate temporal history only in a later frame, so retain
             // its established conservative declarations and native transition path for this packet.
-            transparentFoldResourceUses.push_back(ReadWriteUse(transparentHistoryA, Core::ResourceStates::UnorderedAccess));
-            transparentFoldResourceUses.push_back(ReadWriteUse(transparentHistoryB, Core::ResourceStates::UnorderedAccess));
-            transparentFoldResourceUses.push_back(ReadWriteUse(transparentMomentsA, Core::ResourceStates::UnorderedAccess));
-            transparentFoldResourceUses.push_back(ReadWriteUse(transparentMomentsB, Core::ResourceStates::UnorderedAccess));
+            transparentFirstWaveletResourceUses.push_back(ReadWriteUse(transparentHistoryA, Core::ResourceStates::UnorderedAccess));
+            transparentFirstWaveletResourceUses.push_back(ReadWriteUse(transparentHistoryB, Core::ResourceStates::UnorderedAccess));
+            transparentFirstWaveletResourceUses.push_back(ReadWriteUse(transparentMomentsA, Core::ResourceStates::UnorderedAccess));
+            transparentFirstWaveletResourceUses.push_back(ReadWriteUse(transparentMomentsB, Core::ResourceStates::UnorderedAccess));
         }
+        transparentFoldResourceUses.reserve(8u);
+        // With one RGB wavelet the terminal task only samples half-A before multiplying visibility. Preserve a
+        // native ping-pong declaration if the compile-time pass count grows.
+        if(NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT == 1u)
+            transparentFoldResourceUses.push_back(ReadUse(shadowSoftHalfA, Core::ResourceStates::ShaderResource));
+        else{
+            transparentFoldResourceUses.push_back(ReadWriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
+            transparentFoldResourceUses.push_back(ReadWriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));
+        }
+        transparentFoldResourceUses.push_back(ReadWriteUse(shadowVisibility, Core::ResourceStates::UnorderedAccess));
+        transparentFoldResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
+        transparentFoldResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
+        transparentFoldResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
+        transparentFoldResourceUses.push_back(ReadUse(depth, Core::ResourceStates::ShaderResource));
         transparentFoldResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
     }
 
@@ -4152,7 +4165,34 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             return false;
         }
 
-        const Core::GpuTaskId foldDependencies[] = { m_deferredShadowVisibilityTransparentTraceTask };
+        const Core::GpuTaskId transparentFirstWaveletDependencies[] = { m_deferredShadowVisibilityTransparentTraceTask };
+        Core::GpuTaskDesc transparentFirstWaveletDesc;
+        transparentFirstWaveletDesc
+            .setIdentity(Name("render.shadow_visibility.transparent_first_wavelet"))
+            .setMarkerLabel("Shadow Transparent First Wavelet")
+            .setQueue(ComputeQueueRequest())
+            .setScheduling(tailScheduling)
+            .setDependencies(transparentFirstWaveletDependencies, LengthOf(transparentFirstWaveletDependencies))
+            .setResourceUses(transparentFirstWaveletResourceUses.data(), transparentFirstWaveletResourceUses.size())
+        ;
+        m_deferredShadowVisibilityTransparentFirstWaveletTask = m_raytracingSystem.declareShadowTransparentSoftFirstWaveletTask(
+            m_deferredLightingTaskGraph,
+            transparentFirstWaveletDesc,
+            deferredTargets,
+            timingTicket,
+            &transparentResolveTiming,
+            &opaqueProduced,
+            &transparentTraceProduced,
+            &opaqueFrameIndex,
+            true,
+            graphOwnsTransparentTemporalMergeEntryStates
+        );
+        if(!m_deferredShadowVisibilityTransparentFirstWaveletTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow first-wavelet graph task"));
+            return false;
+        }
+
+        const Core::GpuTaskId foldDependencies[] = { m_deferredShadowVisibilityTransparentFirstWaveletTask };
         Core::GpuTaskDesc foldDesc;
         foldDesc
             .setIdentity(Name("render.shadow_visibility.soft_transparent_fold"))
@@ -4172,11 +4212,11 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             timingTicket,
             &asyncTiming,
             &shadowVisibilityTiming,
+            &transparentResolveTiming,
             &opaqueProduced,
             &transparentTraceProduced,
             &opaqueFrameIndex,
-            true,
-            graphOwnsTransparentTemporalMergeEntryStates
+            true
         );
         if(!m_deferredShadowVisibilityTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred soft-transparent shadow-fold graph task"));
@@ -5772,6 +5812,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Optional<Core::GpuTimingMeasure>& shadowVisibilityAsyncTiming,
     Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
     Optional<Core::GpuTimingMeasure>& opaqueSoftResolveTiming,
+    Optional<Core::GpuTimingMeasure>& transparentSoftResolveTiming,
     bool& shadowVisibilityOpaqueProduced,
     bool& shadowVisibilityTransparentTraceProduced,
     u32& shadowVisibilityOpaqueFrameIndex,
@@ -5811,6 +5852,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
     m_deferredShadowVisibilityOpaqueResolveTask = {};
     m_deferredShadowVisibilityTransparentTraceTask = {};
+    m_deferredShadowVisibilityTransparentFirstWaveletTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
@@ -6558,6 +6600,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         shadowVisibilityAsyncTiming,
         shadowVisibilityTiming,
         opaqueSoftResolveTiming,
+        transparentSoftResolveTiming,
         shadowVisibilityOpaqueProduced,
         shadowVisibilityTransparentTraceProduced,
         shadowVisibilityOpaqueFrameIndex

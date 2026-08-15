@@ -169,6 +169,7 @@ namespace __hidden_shadow_visibility_task{
     struct ShadowVisibilityOpaqueFirstWaveletGraphTask;
     struct ShadowVisibilityOpaqueResolveTailGraphTask;
     struct ShadowTransparentSoftTraceGraphTask;
+    struct ShadowTransparentSoftFirstWaveletGraphTask;
     struct ShadowTransparentSoftFoldGraphTask;
     struct ShadowVisibilityGraphTask;
 }
@@ -362,6 +363,20 @@ public:
         bool hardwareShadowSupported,
         bool graphEntryStatesOwned = false
     );
+    // The prepared transparent trace's first wavelet inherits its graph-declared input and output states. The
+    // terminal fold remains responsible for the final upsample, submission acceptance, and history publication.
+    [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftFirstWaveletTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        Optional<Core::GpuTimingMeasure>* transparentResolveTiming,
+        const bool* opaqueProduced,
+        bool* transparentTraceProduced,
+        const u32* opaqueFrameIndex,
+        bool graphEntryStatesOwned = false,
+        bool graphOwnsTransparentTemporalMergeEntryStates = false
+    );
     [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftFoldTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -369,11 +384,11 @@ public:
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>* asyncTiming,
         Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming,
+        Optional<Core::GpuTimingMeasure>* transparentResolveTiming,
         const bool* opaqueProduced,
         bool* transparentTraceProduced,
         const u32* opaqueFrameIndex,
-        bool graphEntryStatesOwned = false,
-        bool graphOwnsTransparentTemporalMergeEntryStates = false
+        bool graphEntryStatesOwned = false
     );
     [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftTraceTask(
         Core::GpuTaskGraph& graph,
@@ -701,6 +716,7 @@ private:
     friend struct __hidden_shadow_visibility_task::ShadowVisibilityOpaqueFirstWaveletGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowVisibilityOpaqueResolveTailGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowTransparentSoftTraceGraphTask;
+    friend struct __hidden_shadow_visibility_task::ShadowTransparentSoftFirstWaveletGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowTransparentSoftFoldGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowVisibilityGraphTask;
     friend struct __hidden_surfel_gi_task::SurfelGiAgeFreeGraphTask;
@@ -956,7 +972,9 @@ private:
         bool graphOwnsOpaqueTemporalMergeEntryStates = false,
         bool graphOwnsTransparentTemporalMergeEntryStates = false,
         bool dispatchOpaqueResolveTail = true,
-        bool graphOwnsOpaqueTraceToFirstWaveletBoundary = false
+        bool graphOwnsOpaqueTraceToFirstWaveletBoundary = false,
+        bool dispatchTransparentResolveTail = false,
+        bool splitTransparentResolve = false
     );
     // Graph-only phase helpers preserve the complete direct route above while exposing both in-packet handoffs to
     // the shared deferred graph.
@@ -996,14 +1014,19 @@ private:
         bool graphEntryStatesOwned,
         bool graphOwnsOpaqueToTransparentBoundary
     );
-    [[nodiscard]] bool renderSoftTransparentShadowFold(
+    [[nodiscard]] bool renderSoftTransparentShadowFirstWavelet(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         u32 frameIndex,
         bool graphEntryStatesOwned,
-        bool graphOwnsOpaqueToTransparentBoundary,
         bool graphOwnsTransparentTraceToResolveBoundary,
         bool graphOwnsTransparentTemporalMergeEntryStates
+    );
+    [[nodiscard]] bool renderSoftTransparentShadowFold(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        u32 frameIndex,
+        bool graphEntryStatesOwned
     );
     // Temporal merge precedes soft resolve and swaps history at frame end.
     [[nodiscard]] bool ensureShadowReprojectMergePipeline();

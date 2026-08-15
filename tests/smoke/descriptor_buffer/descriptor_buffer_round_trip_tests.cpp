@@ -3378,9 +3378,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
 
 
 // Prepared acceleration-structure recording owns no native entry or exit transition on the normal graph path.
-// These getter-only callbacks use real Vulkan TLAS/BLAS objects and their aliased backing buffers, proving the
-// compiler lowers typed Write -> Read handoffs in one accepting Graphics packet while geometry-input setup stays
-// on the retained native bridge shared with the software-BVH builder.
+// These getter-only callbacks use real Vulkan TLAS/BLAS objects, their aliased backing buffers, and frozen position/
+// index build inputs. The compiler must lower the immutable build-input set plus typed Write -> Read finalization
+// handoffs in one accepting Graphics packet without a callback-local transition bridge.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalizeRecordsWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
     if(!device.queryFeatureSupport(Feature::RayTracingAccelStruct))
@@ -3476,10 +3476,40 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
             .setType(GpuGraphResourceType::Buffer)
             .setInitialState(ResourceStates::Common)
     );
+    const GpuGraphResourceId blasPositionResource = graph.importBuffer(
+        blasPosition,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/prepared_blas_position_input_state"))
+            .setMarkerLabel("Prepared BLAS Position Input")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+    );
+    const GpuGraphResourceId blasIndexResource = graph.importBuffer(
+        blasIndex,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/prepared_blas_index_input_state"))
+            .setMarkerLabel("Prepared BLAS Index Input")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+    );
     ASSERT_TRUE(tlasResource.valid());
     ASSERT_TRUE(tlasBackingResource.valid());
     ASSERT_TRUE(blasResource.valid());
     ASSERT_TRUE(blasBackingResource.valid());
+    ASSERT_TRUE(blasPositionResource.valid());
+    ASSERT_TRUE(blasIndexResource.valid());
+
+    const GpuGraphResourceId geometryBuildInputMembers[] = {
+        blasPositionResource,
+        blasIndexResource,
+    };
+    const GpuGraphResourceSetId geometryBuildInputSet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/prepared_blas_geometry_build_inputs"))
+            .setMarkerLabel("Prepared BLAS Geometry Build Inputs")
+            .setMembers(geometryBuildInputMembers, LengthOf(geometryBuildInputMembers))
+    );
+    ASSERT_TRUE(geometryBuildInputSet.valid());
 
     const GpuGraphResourceId finalizeMembers[] = {
         tlasResource,
@@ -3505,6 +3535,36 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
     buildScheduling.cost = GpuTaskCostHint::Medium;
     buildScheduling.forceSubmissionBoundary = false;
     buildScheduling.allowPacketMerge = true;
+    const GpuTaskResourceSetUse geometryBuildInputSetUses[] = {
+        GpuTaskResourceSetUse{
+            .resourceSet = geometryBuildInputSet,
+            .range = {},
+            .requiredState = ResourceStates::AccelStructBuildInput,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    GpuTaskDesc geometryBuildInputDesc;
+    geometryBuildInputDesc
+        .setIdentity(Name("tests/descriptor_buffer/prepared_blas_geometry_build_inputs"))
+        .setMarkerLabel("Prepared BLAS Geometry Build Inputs")
+        .setQueue(graphicsQueue)
+        .setScheduling(buildScheduling)
+        .setResourceSetUses(geometryBuildInputSetUses, LengthOf(geometryBuildInputSetUses))
+    ;
+    bool geometryBuildInputRecorded = false;
+    const GpuTaskId geometryBuildInputTask = graph.addTask<NativePacketPrefixTask>(
+        geometryBuildInputDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = blasPosition.get(),
+            .expectedState = ResourceStates::AccelStructBuildInput,
+            .additionalBuffer = blasIndex.get(),
+            .expectedAdditionalBufferState = ResourceStates::AccelStructBuildInput,
+            .recorded = &geometryBuildInputRecorded,
+        }
+    );
+    ASSERT_TRUE(geometryBuildInputTask.valid());
+
+    buildScheduling.mergeWithPrevious = true;
     const GpuTaskResourceUse buildUses[] = {
         GpuTaskResourceUse{
             .resource = tlasResource,
@@ -3537,6 +3597,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
         .setMarkerLabel("Prepared Accel-Struct Build")
         .setQueue(graphicsQueue)
         .setScheduling(buildScheduling)
+        .setDependencies(&geometryBuildInputTask, 1u)
         .setResourceUses(buildUses, LengthOf(buildUses))
     ;
     bool buildRecorded = false;
@@ -3611,13 +3672,16 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
     const GpuTaskGraphCompiler compiler;
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
     ASSERT_EQ(compiledGraph.packetCount(), 1u);
-    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(buildTask);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(geometryBuildInputTask);
     ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(buildTask), packet);
     EXPECT_EQ(compiledGraph.packetForTask(finalizeTask), packet);
-    ASSERT_EQ(compiledGraph.packet(packet).taskCount, 2u);
+    ASSERT_EQ(compiledGraph.packet(packet).taskCount, 3u);
 
+    const GpuCompiledTask* const compiledGeometryBuildInputs = compiledGraph.findTask(geometryBuildInputTask);
     const GpuCompiledTask* const compiledBuild = compiledGraph.findTask(buildTask);
     const GpuCompiledTask* const compiledFinalize = compiledGraph.findTask(finalizeTask);
+    ASSERT_NE(compiledGeometryBuildInputs, nullptr);
     ASSERT_NE(compiledBuild, nullptr);
     ASSERT_NE(compiledFinalize, nullptr);
     const auto hasTransition = [&](
@@ -3643,6 +3707,22 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
         }
         return false;
     };
+    EXPECT_TRUE(hasTransition(
+        geometryBuildInputTask,
+        *compiledGeometryBuildInputs,
+        GpuCompiledBarrierType::BufferTransition,
+        blasPositionResource,
+        ResourceStates::Common,
+        ResourceStates::AccelStructBuildInput
+    ));
+    EXPECT_TRUE(hasTransition(
+        geometryBuildInputTask,
+        *compiledGeometryBuildInputs,
+        GpuCompiledBarrierType::BufferTransition,
+        blasIndexResource,
+        ResourceStates::Common,
+        ResourceStates::AccelStructBuildInput
+    ));
     EXPECT_TRUE(hasTransition(
         buildTask,
         *compiledBuild,
@@ -3720,6 +3800,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
         recordedGraph,
         &failedPacket
     )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(geometryBuildInputRecorded);
     EXPECT_TRUE(buildRecorded);
     EXPECT_TRUE(finalizeRecorded);
     const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
@@ -3728,6 +3809,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
     stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getBufferState(blasPosition.get()), ResourceStates::AccelStructBuildInput);
+    EXPECT_EQ(stateProbe->getBufferState(blasIndex.get()), ResourceStates::AccelStructBuildInput);
     EXPECT_EQ(stateProbe->getBufferState(tlasBacking.get()), ResourceStates::AccelStructRead);
     EXPECT_EQ(stateProbe->getBufferState(blasBacking.get()), ResourceStates::AccelStructRead);
     stateProbe->close();

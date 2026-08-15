@@ -4668,6 +4668,17 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     ASSERT_TRUE(meshBlasAIndex.valid());
     ASSERT_TRUE(meshBlasB.valid());
     ASSERT_TRUE(meshBlasBBacking.valid());
+    const Graphics::GpuGraphResourceId meshBlasGeometryBuildInputMembers[] = {
+        meshBlasAPosition,
+        meshBlasAIndex,
+    };
+    const Graphics::GpuGraphResourceSetId meshBlasGeometryBuildInputSet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/shadow_prepare_blas_geometry_build_inputs"))
+            .setMarkerLabel("Shadow Prepare BLAS Geometry Build Inputs")
+            .setMembers(meshBlasGeometryBuildInputMembers, LengthOf(meshBlasGeometryBuildInputMembers))
+    );
+    ASSERT_TRUE(meshBlasGeometryBuildInputSet.valid());
     const Graphics::GpuGraphResourceId hybridSoftwareTailInputMembers[] = {
         meshBlasAPosition,
         meshBlasAIndex,
@@ -4918,7 +4929,13 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     const Graphics::GpuTaskId sceneBvhInstancesUpload = graph.addTask(sceneBvhInstancesUploadDesc);
     ASSERT_TRUE(sceneBvhInstancesUpload.valid());
 
-    const Graphics::GpuTaskResourceSetUse softwareBvhBuildStateSetUses[] = {
+    const Graphics::GpuTaskResourceSetUse shadowPrepareResourceSetUses[] = {
+        Graphics::GpuTaskResourceSetUse{
+            .resourceSet = meshBlasGeometryBuildInputSet,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::AccelStructBuildInput,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
         Graphics::GpuTaskResourceSetUse{
             .resourceSet = softwareBvhBuildStateSet,
             .range = {},
@@ -4997,19 +5014,8 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
         // The frozen BLAS build records with graph-owned typed/backing Write aliases. Its frozen shared geometry
-        // inputs enter as build inputs here; the adjacent hybrid tail lowers them to SRV before SW-BVH work records.
-        Graphics::GpuTaskResourceUse{
-            .resource = meshBlasAPosition,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::AccelStructBuildInput,
-            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
-        },
-        Graphics::GpuTaskResourceUse{
-            .resource = meshBlasAIndex,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::AccelStructBuildInput,
-            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
-        },
+        // enters through the immutable build-input set; the adjacent hybrid tail lowers it to SRV before SW-BVH
+        // work records.
         Graphics::GpuTaskResourceUse{
             .resource = meshBlasA,
             .range = {},
@@ -5044,7 +5050,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         .setScheduling(shadowPrepareScheduling)
         .setDependencies(&sceneBvhInstancesUpload, 1u)
         .setResourceUses(shadowPrepareUses, LengthOf(shadowPrepareUses))
-        .setResourceSetUses(softwareBvhBuildStateSetUses, LengthOf(softwareBvhBuildStateSetUses))
+        .setResourceSetUses(shadowPrepareResourceSetUses, LengthOf(shadowPrepareResourceSetUses))
     ;
     const Graphics::GpuTaskId shadowPrepare = graph.addTask(shadowPrepareDesc);
     ASSERT_TRUE(shadowPrepare.valid());

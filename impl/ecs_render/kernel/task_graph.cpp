@@ -2722,7 +2722,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         (sceneTlasBuildGraphOwned ? 2u : 0u)
         + preparedMeshBlasBuilds.size() * 2u
     );
-    resourceSetUses.reserve(2u);
+    resourceSetUses.reserve(3u);
     meshBlasGeometryBuildInputResources.reserve(preparedMeshBlasBuilds.size() * 2u);
     hybridSoftwareTailInputResources.reserve(preparedMeshSwBvhBuilds.size() * 2u);
     shadowPrepareTraceGeometryResources.reserve(shadowTraceGeometryResourceCount);
@@ -2846,10 +2846,31 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             }
         }
     }
-    if(meshBlasGeometryBuildInputStatesGraphOwned){
+    Core::GpuGraphResourceSetId meshBlasGeometryBuildInputSet;
+    if(meshBlasGeometryBuildInputStatesGraphOwned && !meshBlasGeometryBuildInputResources.empty()){
+        meshBlasGeometryBuildInputSet = m_deferredLightingTaskGraph.importResourceSet(
+            Core::GpuGraphResourceSetDesc{}
+                .setIdentity(Name("render.shadow_prepare.blas_geometry_build_inputs"))
+                .setMarkerLabel("Shadow Prepare BLAS Geometry Build Inputs")
+                .setMembers(
+                    meshBlasGeometryBuildInputResources.data(),
+                    meshBlasGeometryBuildInputResources.size()
+                )
+        );
+    }
+    const bool meshBlasGeometryBuildInputSetGraphOwned = meshBlasGeometryBuildInputSet.valid();
+    if(meshBlasGeometryBuildInputStatesGraphOwned && !meshBlasGeometryBuildInputSetGraphOwned){
         for(const Core::GpuGraphResourceId resource : meshBlasGeometryBuildInputResources)
             resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::AccelStructBuildInput));
     }
+    const Core::GpuTaskResourceSetUse meshBlasGeometryBuildInputSetUse{
+        .resourceSet = meshBlasGeometryBuildInputSet,
+        .range = {},
+        .requiredState = Core::ResourceStates::AccelStructBuildInput,
+        .access = Core::GpuTaskResourceAccess::ReadWrite,
+    };
+    if(meshBlasGeometryBuildInputSetGraphOwned)
+        resourceSetUses.push_back(meshBlasGeometryBuildInputSetUse);
     Core::GpuGraphResourceSetId hybridSoftwareTailInputSet;
     if(meshSwBvhInputStatesGraphOwned && !hybridSoftwareTailInputResources.empty()){
         hybridSoftwareTailInputSet = m_deferredLightingTaskGraph.importResourceSet(

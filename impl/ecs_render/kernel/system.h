@@ -536,7 +536,7 @@ private:
     // use the Graphics hardware-caustics packet; normal deferred lighting consumes either resolved irradiance on Compute, while
     // the optional lagged path snapshots it for the next Graphics lighting packet.
     Core::GpuPersistentResourceStateCache m_causticsComputePersistentState;
-    Core::CommandListResourceStateHandoff m_causticIrradianceLightingStateHandoff;
+    Core::GpuPersistentResourceStateCache m_causticIrradianceLightingState;
     Core::GpuPersistentResourceStateCache m_causticIrradianceReturnState;
     // Surfel GI is also entirely compute-dispatched, including its RayQuery trace variant. Its field/history stays on
     // AsyncCompute; the resolved full-resolution irradiance is either consumed there or snapshotted for optional

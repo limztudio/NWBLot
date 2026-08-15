@@ -49,7 +49,7 @@ RendererSystem::RendererSystem(
     , m_shadowVisibilityReturnState(arena)
     , m_shadowPreparePersistentState(arena)
     , m_causticsComputePersistentState(arena)
-    , m_causticIrradianceLightingStateHandoff(arena)
+    , m_causticIrradianceLightingState(arena)
     , m_causticIrradianceReturnState(arena)
     , m_surfelGiComputePersistentState(arena)
     , m_surfelGiCounterPersistentState(arena)
@@ -148,7 +148,7 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     m_shadowComputePersistentState.reset();
     m_shadowVisibilityReturnState.reset();
     m_causticsComputePersistentState.reset();
-    m_causticIrradianceLightingStateHandoff.reset();
+    m_causticIrradianceLightingState.reset();
     m_causticIrradianceReturnState.reset();
     m_surfelGiComputePersistentState.reset();
     m_surfelGiCounterPersistentState.reset();
@@ -163,17 +163,17 @@ void RendererSystem::resetInvalidatedResourceStateHandoffs()noexcept{
 
 void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
     // Preserve accepted compute-local state across fresh recordings.
-    m_causticIrradianceLightingStateHandoff.reset();
+    m_causticIrradianceLightingState.reset();
 }
 
 void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
     // Rejected frames keep only cross-frame state from earlier accepted producers.
-    m_causticIrradianceLightingStateHandoff.reset();
+    m_causticIrradianceLightingState.reset();
 }
 
 void RendererSystem::resetRejectedShadowVisibilityStateHandoffs()noexcept{
     // Preserve accepted Graphics prefix state when graph-owned shadow visibility rejects.
-    m_causticIrradianceLightingStateHandoff.reset();
+    m_causticIrradianceLightingState.reset();
 }
 
 
@@ -3780,9 +3780,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     context->stateReady = false;
                     return false;
                 }
-                context->stateReady = context->renderer->m_causticIrradianceLightingStateHandoff.buildTextureSubset(
+                context->stateReady = context->renderer->m_causticIrradianceLightingState.replaceTextureSubset(
                     *context->finalState,
-                    context->targets->causticIrradiance.get()
+                    context->targets->causticIrradiance
                 );
                 return context->stateReady;
             };
@@ -3844,9 +3844,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             }
         }
         if(!hardwareShadowSupported && laggedAsyncLightingSchedule){
-            if(!m_causticIrradianceLightingStateHandoff.buildTextureSubset(
+            if(!m_causticIrradianceLightingState.replaceTextureSubset(
                 *causticsFinalStateSeed,
-                deferredTargets.causticIrradiance.get()
+                deferredTargets.causticIrradiance
             )){
                 const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
                 discardTimingTickets();
@@ -4013,7 +4013,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         // snapshots are only available after those producers accept, so this remains a late record into the shared
         // recorded graph rather than part of the initial packet prefix; its source binding stays task-anchored.
         const Core::CommandListResourceStateHandoff* const causticHistoryCopySource = laggedAsyncLightingSchedule
-            ? &m_causticIrradianceLightingStateHandoff
+            ? m_causticIrradianceLightingState.source()
             : m_causticIrradianceReturnState.source()
         ;
         Core::GpuExternalPacketStateSource historyCopyStateSources[3] = {};

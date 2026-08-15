@@ -17239,6 +17239,72 @@ TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheFiltersAndMergesA
 }
 
 
+// Compute scratch can include descriptor-visible images as well as buffers. The accepted cache must hold both typed
+// handles after the caller drops its own references, so the next packet can safely import their native states.
+TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheRetainsAcceptedTextureAndBufferStates){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto texture = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    auto buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(texture.get(), nullptr);
+    ASSERT_NE(buffer.get(), nullptr);
+
+    CommandListResourceStateHandoff acceptedStates(DescriptorBufferRoundTripTest::arena());
+    auto producer = device.createCommandList();
+    auto consumer = device.createCommandList();
+    ASSERT_NE(producer.get(), nullptr);
+    ASSERT_NE(consumer.get(), nullptr);
+
+    producer->open();
+    producer->setTextureState(texture.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    producer->setBufferState(buffer.get(), ResourceStates::UnorderedAccess);
+    producer->close(&acceptedStates);
+    ASSERT_TRUE(acceptedStates.valid());
+
+    GpuPersistentResourceStateCache cache(DescriptorBufferRoundTripTest::arena());
+    {
+        const TextureHandle textures[] = { texture };
+        const BufferHandle buffers[] = { buffer };
+        ASSERT_TRUE(cache.replaceResourceSubset(
+            acceptedStates,
+            textures,
+            LengthOf(textures),
+            buffers,
+            LengthOf(buffers)
+        ));
+    }
+    EXPECT_EQ(cache.retainedTextureCount(), 1u);
+    EXPECT_EQ(cache.retainedBufferCount(), 1u);
+    Texture* const retainedTexture = texture.get();
+    Buffer* const retainedBuffer = buffer.get();
+    texture.reset();
+    buffer.reset();
+
+    consumer->open(cache.source());
+    EXPECT_EQ(consumer->getTextureSubresourceState(retainedTexture, 0u, 0u), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(consumer->getBufferState(retainedBuffer), ResourceStates::UnorderedAccess);
+    consumer->close();
+
+    CommandList* commandLists[] = { producer.get(), consumer.get() };
+    bool submitted = false;
+    EXPECT_GT(device.executeCommandLists(commandLists, LengthOf(commandLists), CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_TRUE(submitted);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Cross-frame Compute scratch must not carry the preceding frame's state for resources that the current Graphics
 // prefix has already prepared. Select the private scratch state before fan-in so the current prefix remains authoritative
 // for shared inputs while the Compute-only resource retains its prior layout.

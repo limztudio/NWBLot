@@ -540,8 +540,8 @@ private:
     Core::CommandListResourceStateHandoff m_causticIrradianceReturnStateHandoff;
     // Surfel GI is also entirely compute-dispatched, including its RayQuery trace variant. Its field/history stays on
     // AsyncCompute; the resolved full-resolution irradiance is either consumed there or snapshotted for optional
-    // frame-lagged Graphics lighting.
-    Core::CommandListResourceStateHandoff m_surfelGiComputePersistentStateHandoff;
+    // frame-lagged Graphics lighting. Retain only the accepted private Compute scratch and its typed backings.
+    Core::GpuPersistentResourceStateCache m_surfelGiComputePersistentState;
     // The counter can continue into a late Transfer readback, so retain the accepted tail state and its typed backing
     // separately. The next Surfel-GI packet imports this cache through its semantic task binding.
     Core::GpuPersistentResourceStateCache m_surfelGiCounterPersistentState;

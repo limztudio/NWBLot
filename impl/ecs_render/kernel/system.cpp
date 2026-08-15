@@ -51,7 +51,7 @@ RendererSystem::RendererSystem(
     , m_causticsComputePersistentStateHandoff(arena)
     , m_causticIrradianceLightingStateHandoff(arena)
     , m_causticIrradianceReturnStateHandoff(arena)
-    , m_surfelGiComputePersistentStateHandoff(arena)
+    , m_surfelGiComputePersistentState(arena)
     , m_surfelGiCounterPersistentState(arena)
     , m_surfelIrradianceReturnStateHandoff(arena)
     , m_shaderSystem(*this)
@@ -150,7 +150,7 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     m_causticsComputePersistentStateHandoff.reset();
     m_causticIrradianceLightingStateHandoff.reset();
     m_causticIrradianceReturnStateHandoff.reset();
-    m_surfelGiComputePersistentStateHandoff.reset();
+    m_surfelGiComputePersistentState.reset();
     m_surfelGiCounterPersistentState.reset();
     m_surfelIrradianceReturnStateHandoff.reset();
 }
@@ -2464,13 +2464,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         surfelGiStateSourceCount,
         graphicsPrefixFinalStateSeed
     );
-    if(surfelGiRunsOnCompute && m_surfelGiComputePersistentStateHandoff.valid()){
+    if(surfelGiRunsOnCompute && m_surfelGiComputePersistentState.valid()){
         surfelGiStateSourcesReady = surfelGiStateSourcesReady
             && appendDeclaredStateSource(
                 surfelGiStateSources,
                 LengthOf(surfelGiStateSources),
                 surfelGiStateSourceCount,
-                &m_surfelGiComputePersistentStateHandoff
+                m_surfelGiComputePersistentState.source()
             )
         ;
     }
@@ -3338,18 +3338,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             if(!context->stateReady || !context->runsOnCompute)
                 return context->stateReady;
 
-            Core::Texture* const surfelGiComputeScratchTextures[] = {
-                targets.surfelIrradianceHalf.get(),
+            const Core::TextureHandle surfelGiComputeScratchTextures[] = {
+                targets.surfelIrradianceHalf,
             };
-            Core::Buffer* const surfelGiComputeScratchBuffers[] = {
-                renderer.m_rayTracingState.m_surfelPoolBuffer.get(),
-                renderer.m_rayTracingState.m_surfelCellHeadBuffer.get(),
-                renderer.m_rayTracingState.m_surfelTraceIndirectArgsBuffer.get(),
-                renderer.m_rayTracingState.m_surfelFreeListBuffer.get(),
-                renderer.m_rayTracingState.m_surfelPoolSnapshotBuffer.get(),
-                renderer.m_rayTracingState.m_surfelCellHeadSnapshotBuffer.get(),
+            const Core::BufferHandle surfelGiComputeScratchBuffers[] = {
+                renderer.m_rayTracingState.m_surfelPoolBuffer,
+                renderer.m_rayTracingState.m_surfelCellHeadBuffer,
+                renderer.m_rayTracingState.m_surfelTraceIndirectArgsBuffer,
+                renderer.m_rayTracingState.m_surfelFreeListBuffer,
+                renderer.m_rayTracingState.m_surfelPoolSnapshotBuffer,
+                renderer.m_rayTracingState.m_surfelCellHeadSnapshotBuffer,
             };
-            context->stateReady = renderer.m_surfelGiComputePersistentStateHandoff.buildResourceSubset(
+            context->stateReady = renderer.m_surfelGiComputePersistentState.replaceResourceSubset(
                 *context->finalState,
                 surfelGiComputeScratchTextures,
                 LengthOf(surfelGiComputeScratchTextures),

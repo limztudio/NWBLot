@@ -382,6 +382,7 @@ can receive an unconditional final sign-off.
 | Graph-owned deferred-frame upload follow-up: rebuilt `nwb_testbed` window capture | passed; a real X11/Vulkan deferred frame completed with the graph-owned mesh-view, scene-light, and scene-shading uploads |
 | Graph-owned decoded-texture upload follow-up: `nwb_assets_texture_loader`, `nwb_graphics_task_graph_tests`, and `nwb_descriptor_buffer_tests` | passed; the native smoke now reads back two graph-owned mip payloads after their caller arrays are overwritten (74 passed; 10 expected topology skips) |
 | Graph-owned skinning-dispatch follow-up: `nwb_ecs_mesh_skinning`, `nwb_ecs_graphics_tests`, graph/descriptor smoke, and runtime skinning smoke | passed; one primary-Graphics graph packet combines selector/palette uploads, rest-stream copies, deform, bounds, normal repack, and acceptance-only CPU commits without a native continuation. 18/18 ECS unit tests, 50/50 graph tests, and descriptor smoke 77 passed with 11 expected topology skips; the one-character animated 339-joint Vulkan fast smoke completed its warm-up and sampled frames. |
+| Declaration-owned imported skinning state follow-up: graph-unit, ECS graphics, and descriptor-buffer smoke | passed; a task now retains its filtered external state source in graph-owned metadata, so runtime skinning attaches its accepted prior-frame handoff to the deformation/bounds declarations instead of selecting a packet-specific native recording override after compilation. The source remains serial by contract; a real late-history Vulkan packet proves normal recording imports the declared state without an override. 81 graph tests, 4 focused ECS graphics tests, and 104 descriptor-buffer tests passed with 11 expected topology skips. |
 | Graph-owned opaque material-stream follow-up: `nwb_ecs_graphics_tests`, graph/descriptor smoke, and runtime skinning smoke | passed; 17/17 ECS unit tests, 45/45 graph tests, descriptor smoke 74 passed with 10 expected topology skips, and the one-character Vulkan smoke completed its animated opaque-material case |
 | Graph-owned opaque CSG complete-stream follow-up: static/compute opaque capture plus transparent CSG regression captures | 5/5 passed; both opaque Vulkan/X11 paths consumed graph-owned receiver, cutter, context, and interval-state buffers before Opaque G-Buffer, while all three transparent compatibility captures remained correct |
 | Graph-owned transparent CSG interval-producer follow-up: ECS graphics unit plus static and skinned transparent CSG early/mid/late captures | 7/7 passed; the frozen receiver-surface payload is uploaded before AVBOIT-pre while the existing one/five-packet AVBOIT contract and visible transparent CSG cuts remain intact |
@@ -513,7 +514,9 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    The graph-owned skinning dispatch likewise receives its immutable bindless selector, static skin/meshlet inputs,
    and copied rest streams in their declared descriptor-visible states. Active-pose deformation, bounds/repack, and
    final publication are mergeable graph stages: the compiler lowers their generated-stream UAV/SRV handoffs while
-   retaining one primary-Graphics packet. Direct compatibility helpers retain their native transitions.
+   retaining one primary-Graphics packet. Its accepted prior-frame native state is now attached to the consuming
+   graph task declarations rather than selected as a post-compile packet-record override. Direct compatibility
+   helpers retain their native transitions.
    The transparent AVBOIT interval producer, occupancy, extinction, and
    accumulation phases now freeze and publish their own per-write-point material/CSG streams, preserving the shared
    interval sample state across the low-resolution raster passes. Current and lagged deferred bindless selectors,
@@ -535,7 +538,7 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    worker-affined command-buffer leases: each ready-frontier packet receives the current logical worker identity,
    while Vulkan recycles its one-buffer command pool only to that worker after the physical queue timeline retires
    it. Serial/direct recording retains the default lease. All other packets, command-IR capture, and legacy
-   external-state overrides retain serial recording.
+   external-state overrides or declaration-owned external state sources retain serial recording.
 
 4. **Generic recovery and invalidation proof.** The accepted-token transaction is sound for the exercised paths,
    stale imported completion tokens have graph and native-submission rejection coverage, and recording/transaction

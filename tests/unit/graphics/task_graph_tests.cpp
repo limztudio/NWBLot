@@ -501,6 +501,10 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     ASSERT_TRUE(predecessor.valid());
 
     Graphics::GpuTaskId dependencies[] = { predecessor };
+    Graphics::CommandListResourceStateHandoff externalStateSource(testArena.arena);
+    Graphics::GpuTaskExternalStateSource externalStateSources[] = {
+        Graphics::GpuTaskExternalStateSource{ .states = &externalStateSource },
+    };
     Graphics::GpuTaskResourceUse uses[] = {
         Graphics::GpuTaskResourceUse{
             .resource = resource,
@@ -515,6 +519,7 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
         .setIdentity(Name("tests/task_graph/payload"))
         .setMarkerLabel(AStringView(markerLabel))
         .setDependencies(dependencies, LengthOf(dependencies))
+        .setExternalStateSources(externalStateSources, LengthOf(externalStateSources))
         .setResourceUses(uses, LengthOf(uses))
     ;
 
@@ -524,12 +529,15 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     ASSERT_TRUE(task.valid());
 
     dependencies[0] = {};
+    externalStateSources[0].states = nullptr;
     uses[0].resource = {};
     markerLabel[0] = 'X';
     const Graphics::GpuTaskGraphTaskView stored = graph.taskAt(task.index);
     ASSERT_EQ(stored.dependencyCount, 1u);
+    ASSERT_EQ(stored.externalStateSourceCount, 1u);
     ASSERT_EQ(stored.resourceUseCount, 1u);
     EXPECT_EQ(stored.dependencies[0], predecessor);
+    EXPECT_EQ(stored.externalStateSources[0].states, &externalStateSource);
     EXPECT_EQ(stored.resourceUses[0].resource, resource);
     EXPECT_EQ(stored.markerLabel, AStringView("Stack Marker"));
     EXPECT_TRUE(stored.hasPayload);

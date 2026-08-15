@@ -1050,6 +1050,19 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         return false;
     }
 
+    // Retain the accepted prior-frame state with the graph task that consumes it, rather than selecting a native
+    // packet-record override after compilation.  The source stays serial by contract, while all current-frame
+    // deformation/bounds dependencies remain compiler-owned.
+    const Core::GpuTaskExternalStateSource previousFrameStateSources[] = {
+        Core::GpuTaskExternalStateSource{
+            .states = &m_acceptedSkinningStateHandoff,
+        },
+    };
+    const usize previousFrameStateSourceCount = m_acceptedSkinningStateHandoff.valid()
+        ? LengthOf(previousFrameStateSources)
+        : 0u
+    ;
+
     Core::GpuTimingSubmissionTicket timingTicket(m_graphics.gpuTiming());
     TaskGraphSkinningFinalizerTask::Payload finalizerPayload(m_arena);
     for(const GraphOwnedSkinningDispatchPlan& plan : dispatchPlans)
@@ -1072,6 +1085,8 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             .setScheduling(__hidden_system::SkinningDispatchScheduling())
             .setResourceUses(deformationResourceUses.data(), deformationResourceUses.size())
         ;
+        if(previousFrameStateSourceCount != 0u)
+            deformationDesc.setExternalStateSources(previousFrameStateSources, previousFrameStateSourceCount);
         if(terminalTask.valid())
             deformationDesc.setDependencies(&terminalTask, 1u);
         const Core::GpuTaskId deformationTask = graph.addTask<TaskGraphSkinningDeformationTask>(
@@ -1097,6 +1112,8 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         .setScheduling(__hidden_system::SkinningDispatchScheduling())
         .setResourceUses(postDispatchResourceUses.data(), postDispatchResourceUses.size())
     ;
+    if(previousFrameStateSourceCount != 0u)
+        postDispatchDesc.setExternalStateSources(previousFrameStateSources, previousFrameStateSourceCount);
     if(postDispatchDependency.valid())
         postDispatchDesc.setDependencies(&postDispatchDependency, 1u);
     const Core::GpuTaskId postDispatchTask = graph.addTask<TaskGraphSkinningPostDispatchTask>(
@@ -1156,26 +1173,12 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
 
     transaction.reset(compiledGraph);
     const Core::GpuNativePacketRecorder recorder(device);
-    Core::GpuExternalPacketStateSource previousFrameStateSources[1u] = {};
-    Core::GpuNativePacketRecordDesc recordOverrides[1u] = {};
-    usize recordOverrideCount = 0u;
-    if(m_acceptedSkinningStateHandoff.valid()){
-        previousFrameStateSources[0u] = Core::GpuExternalPacketStateSource{
-            .states = &m_acceptedSkinningStateHandoff,
-        };
-        recordOverrides[0u] = Core::GpuNativePacketRecordDesc{
-            .packet = terminalPacket,
-            .externalStateSources = previousFrameStateSources,
-            .externalStateSourceCount = LengthOf(previousFrameStateSources),
-        };
-        recordOverrideCount = LengthOf(recordOverrides);
-    }
     if(!recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        recordOverrides,
-        recordOverrideCount,
+        nullptr,
+        0u,
         recordedGraph
     )){
         transaction.discardUnaccepted(graph, compiledGraph);

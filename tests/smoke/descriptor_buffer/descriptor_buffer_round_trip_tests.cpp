@@ -15159,6 +15159,18 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
             .access = GpuTaskResourceAccess::Write,
         },
     };
+    // The late history packet imports a prior producer's state through its declaration, not a renderer-selected
+    // packet-record override.  Submit the producer after Present below to retain the existing late-record shape.
+    CommandListResourceStateHandoff sourceState(DescriptorBufferRoundTripTest::arena());
+    auto sourceProducer = device.createCommandList();
+    ASSERT_NE(sourceProducer.get(), nullptr);
+    sourceProducer->open();
+    sourceProducer->setBufferState(sourceBuffer.get(), ResourceStates::CopySource);
+    sourceProducer->close(&sourceState);
+    ASSERT_TRUE(sourceState.valid());
+    const GpuTaskExternalStateSource historyDeclaredStateSources[] = {
+        GpuTaskExternalStateSource{ .states = &sourceState },
+    };
     const GpuTaskId historyDependencies[] = { presentTask };
     GpuTaskDesc historyDesc;
     historyDesc
@@ -15172,6 +15184,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         })
         .setScheduling(scheduling)
         .setDependencies(historyDependencies, LengthOf(historyDependencies))
+        .setExternalStateSources(historyDeclaredStateSources, LengthOf(historyDeclaredStateSources))
         .setResourceUses(historyUses, LengthOf(historyUses))
     ;
     bool historyRecorded = false;
@@ -15228,13 +15241,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
 
     // Current-frame producer state arrives independently from the terminal Present dependency. This is the same
     // late fan-in shape used by the renderer's shadow/caustic/surfel return snapshots.
-    CommandListResourceStateHandoff sourceState(DescriptorBufferRoundTripTest::arena());
-    auto sourceProducer = device.createCommandList();
-    ASSERT_NE(sourceProducer.get(), nullptr);
-    sourceProducer->open();
-    sourceProducer->setBufferState(sourceBuffer.get(), ResourceStates::CopySource);
-    sourceProducer->close(&sourceState);
-    ASSERT_TRUE(sourceState.valid());
     CommandList* const sourceProducerCommandLists[] = { sourceProducer.get() };
     bool sourceProducerSubmitted = false;
     EXPECT_GT(device.executeCommandLists(
@@ -15273,17 +15279,10 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     EXPECT_EQ(presentAcceptedToken.value, presentSubmissionToken.value);
     EXPECT_FALSE(transaction.packetToken(historyPacket).valid());
 
-    const GpuExternalPacketStateSource historyStateSources[] = {
-        GpuExternalPacketStateSource{ .states = &sourceState },
-    };
     ASSERT_TRUE(recorder.recordPacket(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{
-            .packet = historyPacket,
-            .externalStateSources = historyStateSources,
-            .externalStateSourceCount = LengthOf(historyStateSources),
-        },
+        GpuNativePacketRecordDesc{ .packet = historyPacket },
         recordedGraph
     ));
     EXPECT_TRUE(historyRecorded);

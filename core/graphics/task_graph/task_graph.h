@@ -40,6 +40,8 @@ struct GpuTaskGraphTaskView{
     usize dependencyCount = 0u;
     const GpuExternalCompletionId* externalDependencies = nullptr;
     usize externalDependencyCount = 0u;
+    const GpuTaskExternalStateSource* externalStateSources = nullptr;
+    usize externalStateSourceCount = 0u;
     const GpuTaskResourceUse* resourceUses = nullptr;
     usize resourceUseCount = 0u;
     bool hasPayload = false;
@@ -91,6 +93,8 @@ private:
         u32 dependencyCount = 0u;
         u32 externalDependencyOffset = 0u;
         u32 externalDependencyCount = 0u;
+        u32 externalStateSourceOffset = 0u;
+        u32 externalStateSourceCount = 0u;
         u32 resourceUseOffset = 0u;
         u32 resourceUseCount = 0u;
         void* payload = nullptr;
@@ -355,6 +359,7 @@ private:
     GraphicsVector<GpuTaskNode> m_tasks;
     GraphicsVector<GpuTaskId> m_dependencies;
     GraphicsVector<GpuExternalCompletionId> m_externalDependencies;
+    GraphicsVector<GpuTaskExternalStateSource> m_externalStateSources;
     GraphicsVector<GpuTaskResourceUse> m_resourceUses;
     GraphicsVector<GpuGraphResourceNode> m_resources;
     GraphicsVector<GpuGraphPipelineNode> m_pipelines;

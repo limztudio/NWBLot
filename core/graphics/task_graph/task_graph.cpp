@@ -563,6 +563,7 @@ GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
     , m_tasks(arena)
     , m_dependencies(arena)
     , m_externalDependencies(arena)
+    , m_externalStateSources(arena)
     , m_resourceUses(arena)
     , m_resources(arena)
     , m_pipelines(arena)
@@ -1307,6 +1308,7 @@ void GpuTaskGraph::reset(){
     m_tasks.clear();
     m_dependencies.clear();
     m_externalDependencies.clear();
+    m_externalStateSources.clear();
     m_resourceUses.clear();
     m_resources.clear();
     m_pipelines.clear();
@@ -1355,6 +1357,10 @@ GpuTaskGraphTaskView GpuTaskGraph::taskAt(const usize index)const{
             ? m_externalDependencies.data() + task.externalDependencyOffset
             : nullptr,
         .externalDependencyCount = task.externalDependencyCount,
+        .externalStateSources = task.externalStateSourceCount > 0u
+            ? m_externalStateSources.data() + task.externalStateSourceOffset
+            : nullptr,
+        .externalStateSourceCount = task.externalStateSourceCount,
         .resourceUses = task.resourceUseCount > 0u ? m_resourceUses.data() + task.resourceUseOffset : nullptr,
         .resourceUseCount = task.resourceUseCount,
         .hasPayload = task.payload != nullptr,
@@ -1730,12 +1736,19 @@ GpuTaskId GpuTaskGraph::appendTask(
         || m_tasks.size() >= Limit<u32>::s_Max
         || desc.dependencyCount > Limit<u32>::s_Max - m_dependencies.size()
         || desc.externalDependencyCount > Limit<u32>::s_Max - m_externalDependencies.size()
+        || desc.externalStateSourceCount > Limit<u32>::s_Max - m_externalStateSources.size()
         || desc.resourceUseCount > Limit<u32>::s_Max - m_resourceUses.size()
         || (desc.dependencyCount > 0u && !desc.dependencies)
         || (desc.externalDependencyCount > 0u && !desc.externalDependencies)
+        || (desc.externalStateSourceCount > 0u && !desc.externalStateSources)
         || (desc.resourceUseCount > 0u && !desc.resourceUses)
     )
         return {};
+
+    for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
+        if(!desc.externalStateSources[sourceIndex].states)
+            return {};
+    }
 
     u32 markerLabelOffset = 0u;
     u32 markerLabelSize = 0u;
@@ -1752,6 +1765,8 @@ GpuTaskId GpuTaskGraph::appendTask(
     task.dependencyCount = static_cast<u32>(desc.dependencyCount);
     task.externalDependencyOffset = static_cast<u32>(m_externalDependencies.size());
     task.externalDependencyCount = static_cast<u32>(desc.externalDependencyCount);
+    task.externalStateSourceOffset = static_cast<u32>(m_externalStateSources.size());
+    task.externalStateSourceCount = static_cast<u32>(desc.externalStateSourceCount);
     task.resourceUseOffset = static_cast<u32>(m_resourceUses.size());
     task.resourceUseCount = static_cast<u32>(desc.resourceUseCount);
     task.payload = payload;
@@ -1764,6 +1779,8 @@ GpuTaskId GpuTaskGraph::appendTask(
         m_dependencies.push_back(desc.dependencies[dependencyIndex]);
     for(usize dependencyIndex = 0u; dependencyIndex < desc.externalDependencyCount; ++dependencyIndex)
         m_externalDependencies.push_back(desc.externalDependencies[dependencyIndex]);
+    for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex)
+        m_externalStateSources.push_back(desc.externalStateSources[sourceIndex]);
     for(usize useIndex = 0u; useIndex < desc.resourceUseCount; ++useIndex)
         m_resourceUses.push_back(desc.resourceUses[useIndex]);
 

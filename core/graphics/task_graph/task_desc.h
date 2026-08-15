@@ -20,7 +20,16 @@ NWB_CORE_BEGIN
 
 
 class GpuCompiledGraph;
+class CommandListResourceStateHandoff;
 struct GpuTaskRecordContext;
+
+// A declaration-owned native state snapshot from work outside the graph's ordinary internal packet edges.  The
+// source must remain valid through recording; the recorder filters it through this task's declared resources before
+// opening the packet command list.  This is the migration path for accepted cross-frame state until every producer
+// becomes an in-graph packet, and avoids renderer-owned packet-specific record overrides.
+struct GpuTaskExternalStateSource{
+    const CommandListResourceStateHandoff* states = nullptr;
+};
 
 // Typed task payloads are stored in graph-owned memory, while these static thunks let the packet recorder invoke
 // them without allocating a type-erased callable per task.  Acceptance and discard are deliberately separate from
@@ -115,6 +124,8 @@ struct GpuTaskDesc{
     usize dependencyCount = 0u;
     const GpuExternalCompletionId* externalDependencies = nullptr;
     usize externalDependencyCount = 0u;
+    const GpuTaskExternalStateSource* externalStateSources = nullptr;
+    usize externalStateSourceCount = 0u;
     const GpuTaskResourceUse* resourceUses = nullptr;
     usize resourceUseCount = 0u;
 
@@ -126,6 +137,11 @@ struct GpuTaskDesc{
     constexpr GpuTaskDesc& setExternalDependencies(const GpuExternalCompletionId* values, const usize count){
         externalDependencies = values;
         externalDependencyCount = count;
+        return *this;
+    }
+    constexpr GpuTaskDesc& setExternalStateSources(const GpuTaskExternalStateSource* values, const usize count){
+        externalStateSources = values;
+        externalStateSourceCount = count;
         return *this;
     }
     constexpr GpuTaskDesc& setResourceUses(const GpuTaskResourceUse* values, const usize count){

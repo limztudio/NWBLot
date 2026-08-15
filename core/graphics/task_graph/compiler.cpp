@@ -669,6 +669,12 @@ bool GpuTaskGraphCompiler::analyze(
                 );
             }
         }
+        if(task.externalStateSourceCount != 0u && !task.externalStateSources)
+            return fail(GpuTaskGraphAnalysisStatus::InvalidTask, task.id);
+        for(usize sourceIndex = 0u; sourceIndex < task.externalStateSourceCount; ++sourceIndex){
+            if(!task.externalStateSources[sourceIndex].states)
+                return fail(GpuTaskGraphAnalysisStatus::InvalidTask, task.id);
+        }
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
             if(

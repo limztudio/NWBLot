@@ -167,15 +167,22 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     if(!tasks || packet.taskCount == 0u)
         return false;
 
-    for(usize sourceIndex = 0u; sourceIndex < externalStateSourceCount; ++sourceIndex){
-        const GpuExternalPacketStateSource& source = externalStateSources[sourceIndex];
-        if(!source.states || !source.states->valid())
+    const auto appendStateSource = [&](
+        const CommandListResourceStateHandoff* const sourceStates,
+        const GpuTaskId* const sourceTasks,
+        const u32 sourceTaskCount
+    ){
+        if(
+            !sourceStates
+            || !sourceStates->valid()
+            || (sourceTaskCount != 0u && !sourceTasks)
+        )
             return false;
 
         scratch.stateMergeScratch.reset();
 
-        for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
-            const GpuTaskGraphTaskView task = graph.taskAt(tasks[taskIndex].index);
+        for(u32 taskIndex = 0u; taskIndex < sourceTaskCount; ++taskIndex){
+            const GpuTaskGraphTaskView task = graph.taskAt(sourceTasks[taskIndex].index);
             for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
                 const GpuTaskResourceUse& use = task.resourceUses[useIndex];
                 const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
@@ -185,7 +192,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                 case GpuGraphResourceType::Texture:{
                     Texture* const texture = graph.textureForResource(use.resource);
                     if(!texture || !scratch.stateSubsetScratch.buildTextureRangeSubset(
-                        *source.states,
+                        *sourceStates,
                         texture,
                         use.range.textureSubresources
                     ))
@@ -197,7 +204,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                     if(!buffer)
                         return false;
                     Buffer* const buffers[] = { buffer };
-                    if(!scratch.stateSubsetScratch.buildResourceSubset(*source.states, nullptr, 0u, buffers, 1u))
+                    if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))
                         return false;
                     break;
                 }
@@ -220,7 +227,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         }
 
         if(!scratch.stateMergeScratch.valid())
-            continue;
+            return true;
 
         if(!scratch.externalBaseStateSeed.valid()){
             if(
@@ -228,7 +235,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                 || !scratch.externalMergedStateSeed.copyFrom(scratch.stateMergeScratch)
             )
                 return false;
-            continue;
+            return true;
         }
 
         const CommandListResourceStateHandoff* const branches[] = {
@@ -237,7 +244,32 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         };
         if(!scratch.initialStateSeed.buildFanIn(scratch.externalBaseStateSeed, branches, LengthOf(branches)))
             return false;
-        if(!scratch.externalMergedStateSeed.copyFrom(scratch.initialStateSeed))
+        return scratch.externalMergedStateSeed.copyFrom(scratch.initialStateSeed);
+    };
+
+    // Declaration-owned sources are attached to the task that needs their imported state.  That preserves the
+    // source/resource relationship across packet coalescing and lets ordinary record traversal avoid renderer-owned
+    // packet-specific overrides.  Sparse record-descriptor sources below remain as a compatibility bridge.
+    for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
+        const GpuTaskGraphTaskView task = graph.taskAt(tasks[taskIndex].index);
+        if(task.externalStateSourceCount != 0u && !task.externalStateSources)
+            return false;
+        for(usize sourceIndex = 0u; sourceIndex < task.externalStateSourceCount; ++sourceIndex){
+            if(!appendStateSource(
+                task.externalStateSources[sourceIndex].states,
+                tasks + taskIndex,
+                1u
+            ))
+                return false;
+        }
+    }
+
+    for(usize sourceIndex = 0u; sourceIndex < externalStateSourceCount; ++sourceIndex){
+        if(!appendStateSource(
+            externalStateSources[sourceIndex].states,
+            tasks,
+            packet.taskCount
+        ))
             return false;
     }
 
@@ -607,9 +639,8 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         return true;
     };
     const auto packetAllowsParallelRecording = [&](const GpuNativePacketRecordDesc& desc){
-        // Sparse external state overrides are a legacy bridge outside the compiler's dependency graph. Preserve
-        // their established serial ordering rather than assuming an unexpressed producer is safe to read in a
-        // worker frontier.
+        // External state sources still bridge work outside the compiler's internal packet edges. Preserve serial
+        // recording rather than assuming an unexpressed producer is safe to read in a worker frontier.
         if(desc.externalStateSourceCount != 0u)
             return false;
 
@@ -619,7 +650,11 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         if(!tasks || packetPlan.taskCount == 0u)
             return false;
         for(u32 taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-            if(!graph.taskAt(tasks[taskIndex].index).scheduling.allowParallelRecording)
+            const GpuTaskGraphTaskView task = graph.taskAt(tasks[taskIndex].index);
+            if(
+                !task.scheduling.allowParallelRecording
+                || task.externalStateSourceCount != 0u
+            )
                 return false;
         }
         return true;

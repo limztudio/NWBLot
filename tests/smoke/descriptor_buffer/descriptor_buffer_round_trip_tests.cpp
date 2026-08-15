@@ -9976,9 +9976,16 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialGeometryEntryStatesReuse
     materialScheduling.cost = GpuTaskCostHint::Medium;
     materialScheduling.forceSubmissionBoundary = true;
     materialScheduling.allowPacketMerge = false;
-    const GpuTaskResourceUse materialUses[] = {
-        GpuTaskResourceUse{
-            .resource = materialGeometryResource,
+    const GpuGraphResourceSetId materialGeometrySet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/material_geometry_set"))
+            .setMarkerLabel("Material Geometry Set")
+            .setMembers(&materialGeometryResource, 1u)
+    );
+    ASSERT_TRUE(materialGeometrySet.valid());
+    const GpuTaskResourceSetUse materialSetUses[] = {
+        GpuTaskResourceSetUse{
+            .resourceSet = materialGeometrySet,
             .range = {},
             .requiredState = ResourceStates::ShaderResource,
             .access = GpuTaskResourceAccess::Read,
@@ -9990,7 +9997,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialGeometryEntryStatesReuse
         .setMarkerLabel("Material Geometry Entry")
         .setQueue(graphicsQueue)
         .setScheduling(materialScheduling)
-        .setResourceUses(materialUses, LengthOf(materialUses))
+        .setResourceSetUses(materialSetUses, LengthOf(materialSetUses))
     ;
     bool materialRecorded = false;
     const GpuTaskId materialTask = graph.addTask<NativePacketMaterialGeometryEntryProbeTask>(

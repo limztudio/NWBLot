@@ -14503,9 +14503,16 @@ TEST(GpuTaskGraph, PlansGraphOwnedMaterialGeometryEntryStates){
     );
     ASSERT_TRUE(geometry.valid());
 
-    const Graphics::GpuTaskResourceUse materialUses[] = {
-        Graphics::GpuTaskResourceUse{
-            .resource = geometry,
+    const Graphics::GpuGraphResourceSetId materialGeometrySet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/material_geometry_set"))
+            .setMarkerLabel("Prepared Material Geometry")
+            .setMembers(&geometry, 1u)
+    );
+    ASSERT_TRUE(materialGeometrySet.valid());
+    const Graphics::GpuTaskResourceSetUse materialSetUses[] = {
+        Graphics::GpuTaskResourceSetUse{
+            .resourceSet = materialGeometrySet,
             .range = {},
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Read,
@@ -14527,7 +14534,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedMaterialGeometryEntryStates){
         .setMarkerLabel("Material Geometry Entry")
         .setQueue(graphicsRequest)
         .setScheduling(scheduling)
-        .setResourceUses(materialUses, LengthOf(materialUses))
+        .setResourceSetUses(materialSetUses, LengthOf(materialSetUses))
     ;
     const Graphics::GpuTaskId materialTask = graph.addTask(materialDesc);
     ASSERT_TRUE(materialTask.valid());

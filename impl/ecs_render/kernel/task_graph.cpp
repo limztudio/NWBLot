@@ -2065,6 +2065,45 @@ struct DeferredPresentGraphTask{
     return true;
 }
 
+// Material geometry is dynamically enumerable from the frozen draw snapshot. Keep collection/import compatibility in
+// the established helper above, then give the graph one immutable named collection so a consuming task can declare
+// the whole bindless geometry set without retaining its own per-buffer use list.
+[[nodiscard]] static bool GatherPreparedMaterialGeometryResourceSet(
+    RendererMeshSystem& meshSystem,
+    Core::GpuTaskGraph& graph,
+    const MaterialPassDrawItems* const* const drawItemSets,
+    const usize drawItemSetCount,
+    Core::Alloc::ScratchArena& scratchArena,
+    const Name& identity,
+    const AStringView label,
+    Core::GpuGraphResourceSetId& outResourceSet
+){
+    outResourceSet = {};
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
+    if(!GatherPreparedMaterialGeometryUses(
+        meshSystem,
+        graph,
+        drawItemSets,
+        drawItemSetCount,
+        scratchArena,
+        resourceUses
+    ))
+        return false;
+
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> members{ scratchArena };
+    members.reserve(resourceUses.size());
+    for(const Core::GpuTaskResourceUse& use : resourceUses)
+        members.push_back(use.resource);
+
+    outResourceSet = graph.importResourceSet(
+        Core::GpuGraphResourceSetDesc{}
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setMembers(members.data(), members.size())
+    );
+    return outResourceSet.valid();
+}
+
 [[nodiscard]] static Core::GpuTaskResourceUse ReadTextureUse(
     const Core::GpuGraphResourceId resource,
     const Core::TextureSubresourceSet& subresources,
@@ -3892,7 +3931,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferResourceUses{ gbufferResourceScratch };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgReceiverSpanResourceUses{ gbufferResourceScratch };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgIntervalCombineResourceUses{ gbufferResourceScratch };
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferMaterialGeometryUses{ gbufferResourceScratch };
+    Core::GpuGraphResourceSetId gbufferMaterialGeometrySet;
     const MaterialPassDrawItems* const gbufferMaterialGeometryDrawSets[] = {
         &opaqueDrawItems.regular,
         &opaqueDrawItems.csgReceiverSurface,
@@ -3902,13 +3941,15 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         || !opaqueDrawItems.csgReceiverSurface.empty()
     ;
     gbufferPayload.materialGeometryStatesGraphOwned = gbufferUsesMaterialGeometry
-        && GatherPreparedMaterialGeometryUses(
+        && GatherPreparedMaterialGeometryResourceSet(
             m_meshSystem,
             m_deferredLightingTaskGraph,
             gbufferMaterialGeometryDrawSets,
             LengthOf(gbufferMaterialGeometryDrawSets),
             gbufferResourceScratch,
-            gbufferMaterialGeometryUses
+            Name("render.graphics_prefix.gbuffer.material_geometry"),
+            "Opaque Material Geometry",
+            gbufferMaterialGeometrySet
         )
     ;
     if(gbufferUsesMaterialGeometry && !gbufferPayload.materialGeometryStatesGraphOwned)
@@ -4027,8 +4068,12 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     gbufferResourceUses.push_back(WriteUse(normal, Core::ResourceStates::RenderTarget));
     gbufferResourceUses.push_back(WriteUse(worldPosition, Core::ResourceStates::RenderTarget));
     gbufferResourceUses.push_back(WriteUse(depth, Core::ResourceStates::DepthWrite));
-    for(const Core::GpuTaskResourceUse& use : gbufferMaterialGeometryUses)
-        gbufferResourceUses.push_back(use);
+    const Core::GpuTaskResourceSetUse gbufferMaterialGeometrySetUse{
+        .resourceSet = gbufferMaterialGeometrySet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
     Core::GpuTaskSchedulingHint gbufferScheduling;
     gbufferScheduling.cost = Core::GpuTaskCostHint::Medium;
     gbufferScheduling.forceSubmissionBoundary = false;
@@ -4042,6 +4087,10 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         .setScheduling(gbufferScheduling)
         .setDependencies(&csgIntervalClearTask, 1u)
         .setResourceUses(gbufferResourceUses.data(), gbufferResourceUses.size())
+        .setResourceSetUses(
+            gbufferPayload.materialGeometryStatesGraphOwned ? &gbufferMaterialGeometrySetUse : nullptr,
+            gbufferPayload.materialGeometryStatesGraphOwned ? 1u : 0u
+        )
     ;
     m_graphicsPrefixGbufferTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::GbufferGraphTask>(
         gbufferDesc,

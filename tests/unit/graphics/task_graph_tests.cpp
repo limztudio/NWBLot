@@ -5084,7 +5084,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftTransparentTraceEntryStates){
 
 
 // Prepared soft-transparent shadows split opaque visibility, transparent trace, and terminal resolve without adding
-// an effects submission. The compiler owns both in-packet handoffs, including the trace output's UAV-to-SRV edge.
+// an effects submission. The compiler owns their in-packet handoffs plus the terminal resolve's static read batch.
 TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisibility){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -5133,12 +5133,60 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
         Graphics::ResourceStates::Common,
         queueSharing
     );
+    const Graphics::GpuGraphResourceId shadowSoftGeometry = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/soft_transparent_fold_geometry"),
+        "Shadow Soft Geometry",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId previousGeometry = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/soft_transparent_fold_geometry_previous"),
+        "Previous Shadow Soft Geometry",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId worldPosition = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/soft_transparent_fold_world_position"),
+        "World Position",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId normal = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/soft_transparent_fold_normal"),
+        "G-buffer Normal",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId depth = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/soft_transparent_fold_depth"),
+        "G-buffer Depth",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId sceneShading = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/soft_transparent_fold_scene_shading"),
+        "Scene Shading",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
     ASSERT_TRUE(shadowVisibility.valid());
     ASSERT_TRUE(transparentSoftHalf.valid());
     ASSERT_TRUE(transparentHistoryA.valid());
     ASSERT_TRUE(transparentMomentsA.valid());
     ASSERT_TRUE(transparentHistoryB.valid());
     ASSERT_TRUE(transparentMomentsB.valid());
+    ASSERT_TRUE(shadowSoftGeometry.valid());
+    ASSERT_TRUE(previousGeometry.valid());
+    ASSERT_TRUE(worldPosition.valid());
+    ASSERT_TRUE(normal.valid());
+    ASSERT_TRUE(depth.valid());
+    ASSERT_TRUE(sceneShading.valid());
 
     const Graphics::GpuQueueRequest computeRequest{
         Graphics::GpuQueueCapability::Compute,
@@ -5160,6 +5208,12 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     const Graphics::GpuTaskResourceUse opaqueUses[] = {
         {
             .resource = shadowVisibility,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = shadowSoftGeometry,
             .range = {},
             .requiredState = Graphics::ResourceStates::UnorderedAccess,
             .access = Graphics::GpuTaskResourceAccess::Write,
@@ -5240,6 +5294,42 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
             .resource = transparentSoftHalf,
             .range = {},
             .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = shadowSoftGeometry,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = previousGeometry,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = worldPosition,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = normal,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = depth,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = sceneShading,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
             .access = Graphics::GpuTaskResourceAccess::Read,
         },
         {
@@ -5378,22 +5468,41 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     ASSERT_NE(compiledFold, nullptr);
     const Graphics::GpuCompiledBarrier* const foldBarriers = compiledGraph.taskPrologueBarriers(fold);
     ASSERT_NE(foldBarriers, nullptr);
-    const auto hasFoldShaderResourceTransition = [&](const Graphics::GpuGraphResourceId resource){
+    const auto hasFoldShaderResourceTransition = [&](const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before){
         for(u32 barrierIndex = 0u; barrierIndex < compiledFold->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = foldBarriers[barrierIndex];
             if(
                 barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
                 && barrier.resource == resource
-                && barrier.before == Graphics::ResourceStates::UnorderedAccess
+                && barrier.before == before
                 && barrier.after == Graphics::ResourceStates::ShaderResource
             )
                 return true;
         }
         return false;
     };
-    EXPECT_TRUE(hasFoldShaderResourceTransition(transparentSoftHalf));
-    EXPECT_TRUE(hasFoldShaderResourceTransition(transparentHistoryA));
-    EXPECT_TRUE(hasFoldShaderResourceTransition(transparentMomentsA));
+    EXPECT_TRUE(hasFoldShaderResourceTransition(transparentSoftHalf, Graphics::ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasFoldShaderResourceTransition(shadowSoftGeometry, Graphics::ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasFoldShaderResourceTransition(transparentHistoryA, Graphics::ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasFoldShaderResourceTransition(transparentMomentsA, Graphics::ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasFoldShaderResourceTransition(previousGeometry, Graphics::ResourceStates::Common));
+    EXPECT_TRUE(hasFoldShaderResourceTransition(worldPosition, Graphics::ResourceStates::Common));
+    EXPECT_TRUE(hasFoldShaderResourceTransition(normal, Graphics::ResourceStates::Common));
+    EXPECT_TRUE(hasFoldShaderResourceTransition(depth, Graphics::ResourceStates::Common));
+    bool hasSceneShadingTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledFold->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = foldBarriers[barrierIndex];
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+            && barrier.resource == sceneShading
+            && barrier.before == Graphics::ResourceStates::Common
+            && barrier.after == Graphics::ResourceStates::ConstantBuffer
+        ){
+            hasSceneShadingTransition = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(hasSceneShadingTransition);
 
     const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting);
     ASSERT_NE(compiledLighting, nullptr);

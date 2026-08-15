@@ -875,6 +875,11 @@ private:
         bool temporalMomentsValid = false;
         // The prepared graph may already lower the transparent trace output before the first wavelet.
         bool graphOwnsFirstWaveletInputState = false;
+        // The transparent fold can inherit its geometry read from the graph; opaque geometry still transitions
+        // locally after its in-callback downsample.
+        bool graphOwnsWaveletGeometryEntryState = false;
+        // Both prepared opaque and transparent resolve callbacks inherit these descriptor-visible upsample reads.
+        bool graphOwnsUpsampleStaticEntryStates = false;
         bool firstWaveletWritesHalfA = true;
         SoftShadowUpsampleFold::Enum fold = SoftShadowUpsampleFold::Overwrite;
         // Must be odd so the selected upsample input is the final ping-pong result.

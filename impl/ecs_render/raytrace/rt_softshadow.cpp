@@ -261,6 +261,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     opaqueDispatch.visibilityStorage = targets.bindless.shadowVisibilityStorage.slot();
     opaqueDispatch.sceneShading = targets.bindless.sceneShading.slot();
     opaqueDispatch.temporalMomentsValid = opaqueTemporalActive;
+    opaqueDispatch.graphOwnsUpsampleStaticEntryStates = graphEntryStatesOwned;
     opaqueDispatch.firstWaveletWritesHalfA = false;
     opaqueDispatch.fold = SoftShadowUpsampleFold::Overwrite;
     opaqueDispatch.waveletPassCount = static_cast<u32>(NWB_SHADOW_RESOLVE_PASS_COUNT);
@@ -390,6 +391,10 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         transparentDispatch.graphOwnsFirstWaveletInputState =
             graphOwnsTransparentTraceToResolveBoundary && !transparentTemporalActive
         ;
+        transparentDispatch.graphOwnsWaveletGeometryEntryState =
+            graphEntryStatesOwned && graphOwnsTransparentTraceToResolveBoundary
+        ;
+        transparentDispatch.graphOwnsUpsampleStaticEntryStates = graphEntryStatesOwned;
         transparentDispatch.firstWaveletWritesHalfA = true;
         transparentDispatch.fold = SoftShadowUpsampleFold::Multiply;
         transparentDispatch.waveletPassCount = static_cast<u32>(NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT);
@@ -558,7 +563,8 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
                 commandList.setEnableUavBarriersForTexture(resources.outputTexture, true);
                 break;
             case ShadowResolveStage::Wavelet:
-                commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+                if(!dispatch.graphOwnsWaveletGeometryEntryState)
+                    commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
                 if(!graphOwnsInputColorState)
                     commandList.setTextureState(resources.inputColorTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
                 if(dispatch.temporalMomentsValid)
@@ -567,12 +573,14 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
                 commandList.setEnableUavBarriersForTexture(resources.outputTexture, true);
                 break;
             case ShadowResolveStage::Upsample:
-                commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-                commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-                commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+                if(!dispatch.graphOwnsUpsampleStaticEntryStates){
+                    commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+                    commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+                    commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+                    commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+                }
                 commandList.setTextureState(resources.inputColorTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
                 commandList.setTextureState(dispatch.visibilityTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-                commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
                 commandList.setEnableUavBarriersForTexture(dispatch.visibilityTexture, true);
                 break;
         }

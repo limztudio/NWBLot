@@ -35,6 +35,9 @@ struct GpuRecordedPacket{
     CommandListHandle ownedCommandLists[s_MaxCommandLists] = {};
     CommandList* commandLists[s_MaxCommandLists] = {};
     u8 commandListCount = 0u;
+    // Zero is serial/default recording. Nonzero values identify the ready-frontier worker lease that opened this
+    // packet's native command list; kept for transactional diagnostics and worker-affinity smoke coverage.
+    u32 recordingWorkerIndex = 0u;
 };
 
 
@@ -123,6 +126,9 @@ struct GpuNativePacketRecordDesc{
     GpuSubmissionPacketId packet;
     const GpuExternalPacketStateSource* externalStateSources = nullptr;
     usize externalStateSourceCount = 0u;
+    // Internal ready-frontier lease selector. Direct callers leave this at zero; the recorder derives nonzero
+    // values from Alloc::ThreadPool rather than exposing backend-native command-pool handles to task payloads.
+    u32 recordingWorkerIndex = 0u;
 };
 
 

@@ -92,6 +92,27 @@ private:
         usize previousDepth;
     };
 
+    struct ScopedWorkerExecution{
+        inline ScopedWorkerExecution(ThreadPool* owner, const usize workerIndex)noexcept
+            : previousPool(s_CurrentWorkerPool)
+            , previousIndex(s_CurrentWorkerIndex)
+        {
+            s_CurrentWorkerPool = owner;
+            s_CurrentWorkerIndex = workerIndex;
+        }
+
+        inline ~ScopedWorkerExecution(){
+            s_CurrentWorkerPool = previousPool;
+            s_CurrentWorkerIndex = previousIndex;
+        }
+
+        ScopedWorkerExecution(const ScopedWorkerExecution&) = delete;
+        ScopedWorkerExecution& operator=(const ScopedWorkerExecution&) = delete;
+
+        ThreadPool* previousPool;
+        usize previousIndex;
+    };
+
 
 private:
     static inline usize defaultArenaSize(u32 threadCount){
@@ -143,8 +164,8 @@ public:
     {
         m_workers.reserve(threadCount);
         for(u32 i = 0; i < threadCount; ++i){
-            m_workers.emplace_back([this, affinityMask](const StopToken& stopToken){
-                workerLoop(stopToken, affinityMask);
+            m_workers.emplace_back([this, affinityMask, workerIndex = static_cast<usize>(i) + 1u](const StopToken& stopToken){
+                workerLoop(stopToken, affinityMask, workerIndex);
             });
         }
     }
@@ -240,6 +261,11 @@ public:
 public:
     [[nodiscard]] inline u32 workerThreadCount()const{ return m_threadCount; }
     inline bool isParallelEnabled()const{ return m_threadCount > 0; }
+    // The caller thread is logical worker zero. Worker threads receive stable nonzero IDs for the lifetime of this
+    // pool, so native packet recorders can lease worker-affined command storage without depending on OS thread IDs.
+    [[nodiscard]] inline usize currentWorkerIndex()const noexcept{
+        return s_CurrentWorkerPool == this ? s_CurrentWorkerIndex : 0u;
+    }
 
 
 private:
@@ -315,7 +341,8 @@ private:
         }
     }
 
-    inline void workerLoop(const StopToken& stopToken, u64 affinityMask){
+    inline void workerLoop(const StopToken& stopToken, u64 affinityMask, const usize workerIndex){
+        ScopedWorkerExecution workerExecution(this, workerIndex);
         SetCurrentThreadCpuAffinity(affinityMask);
 
         for(;;){
@@ -372,6 +399,8 @@ private:
 
     inline static thread_local ThreadPool* s_CurrentParallelForPool = nullptr;
     inline static thread_local usize s_CurrentParallelForDepth = 0u;
+    inline static thread_local ThreadPool* s_CurrentWorkerPool = nullptr;
+    inline static thread_local usize s_CurrentWorkerIndex = 0u;
 };
 
 

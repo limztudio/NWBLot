@@ -155,6 +155,9 @@ struct CommandListParameters{
     // structure for ordinary command validation while physicalQueue selects the native transport.
     RenderLane::Enum renderLane = RenderLane::Graphics;
     bool resolveRenderLane = false;
+    // Zero is the ordinary serial/direct lease. Ready-frontier graph recording assigns a stable nonzero logical
+    // ThreadPool worker identity so each physical queue can keep native command-buffer pools worker-affined.
+    u32 recordingWorkerIndex = 0u;
 
     constexpr CommandListParameters& setQueueType(CommandQueue::Enum value){
         queueType = value;
@@ -171,6 +174,10 @@ struct CommandListParameters{
     constexpr CommandListParameters& setPhysicalQueue(GpuPhysicalQueueId value){
         physicalQueue = value;
         resolveRenderLane = false;
+        return *this;
+    }
+    constexpr CommandListParameters& setRecordingWorkerIndex(const u32 value){
+        recordingWorkerIndex = value;
         return *this;
     }
 };

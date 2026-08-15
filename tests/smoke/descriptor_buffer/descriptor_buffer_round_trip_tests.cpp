@@ -345,6 +345,30 @@ struct SkinningGraphStateProbeTask{
 };
 
 
+// The ready-frontier recorder may execute one chunk on its caller and another on a worker. Hold both task thunks
+// at a latch after they observe their command-list description, proving each parallel packet received a distinct
+// nonzero worker-affined native lease rather than borrowing the serial/default command arena.
+struct WorkerAffinedPacketTask{
+    struct Payload{
+        Latch* recordingStarted = nullptr;
+        u32* observedWorkerIndex = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext&
+    ){
+        if(!payload.recordingStarted || !payload.observedWorkerIndex)
+            return false;
+        *payload.observedWorkerIndex = commandList.getDescription().recordingWorkerIndex;
+        payload.recordingStarted->count_down();
+        payload.recordingStarted->wait();
+        return commandList.isRecording();
+    }
+};
+
+
 // Minimal Vulkan 1.3 compute shader: `void main(){}`. The retirement test needs a real pipeline layout containing
 // the heap's explicit set-8/9 layouts so CommandList::bindDescriptorBufferHeap records an actual heap use.
 static constexpr u32 s_DescriptorHeapRetirementComputeSpirv[] = {
@@ -11566,6 +11590,175 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRecordsIndependentGra
     }
     device.unmapBuffer(firstDestination.get());
     device.unmapBuffer(secondDestination.get());
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedCommandArenaLeases){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const auto createBuffer = [&device]{
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    auto firstBuffer = createBuffer();
+    auto secondBuffer = createBuffer();
+    ASSERT_NE(firstBuffer.get(), nullptr);
+    ASSERT_NE(secondBuffer.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importBuffer = [&graph](const BufferHandle& buffer, const Name& identity, const AStringView label){
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Buffer)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const GpuGraphResourceId firstResource = importBuffer(
+        firstBuffer,
+        Name("tests/descriptor_buffer/worker_affined_first"),
+        "Worker-Affined First"
+    );
+    const GpuGraphResourceId secondResource = importBuffer(
+        secondBuffer,
+        Name("tests/descriptor_buffer/worker_affined_second"),
+        "Worker-Affined Second"
+    );
+    ASSERT_TRUE(firstResource.valid());
+    ASSERT_TRUE(secondResource.valid());
+
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    scheduling.allowParallelRecording = true;
+    const auto addTask = [&](const Name& identity,
+        const AStringView label,
+        const GpuGraphResourceId resource,
+        Latch& recordingStarted,
+        u32& observedWorkerIndex
+    ){
+        const GpuTaskResourceUse uses[] = {
+            GpuTaskResourceUse{
+                .resource = resource,
+                .requiredState = ResourceStates::CopyDest,
+                .access = GpuTaskResourceAccess::Write,
+            },
+        };
+        GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(GpuQueueRequest{
+                GpuQueueCapability::Graphics,
+                GpuQueuePreference::Graphics,
+                false,
+                false,
+            })
+            .setScheduling(scheduling)
+            .setResourceUses(uses, LengthOf(uses))
+        ;
+        return graph.addTask<WorkerAffinedPacketTask>(
+            desc,
+            WorkerAffinedPacketTask::Payload{
+                .recordingStarted = &recordingStarted,
+                .observedWorkerIndex = &observedWorkerIndex,
+            }
+        );
+    };
+
+    Latch recordingStarted(2);
+    u32 firstWorkerIndex = 0u;
+    u32 secondWorkerIndex = 0u;
+    const GpuTaskId firstTask = addTask(
+        Name("tests/descriptor_buffer/worker_affined_first_task"),
+        "Worker-Affined First Task",
+        firstResource,
+        recordingStarted,
+        firstWorkerIndex
+    );
+    const GpuTaskId secondTask = addTask(
+        Name("tests/descriptor_buffer/worker_affined_second_task"),
+        "Worker-Affined Second Task",
+        secondResource,
+        recordingStarted,
+        secondWorkerIndex
+    );
+    ASSERT_TRUE(firstTask.valid());
+    ASSERT_TRUE(secondTask.valid());
+
+    const GpuPhysicalQueueInfo graphicsQueue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &graphicsQueue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/worker_affined_recording_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(firstTask);
+    const GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(secondTask);
+    ASSERT_TRUE(firstPacket.valid());
+    ASSERT_TRUE(secondPacket.valid());
+    EXPECT_EQ(compiledGraph.packet(firstPacket).recordingFrontier, 0u);
+    EXPECT_EQ(compiledGraph.packet(secondPacket).recordingFrontier, 0u);
+
+    Alloc::ThreadPool recordingWorkers(1u, CpuAffinity::Any);
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInReadyFrontiers(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        recordingWorkers
+    ));
+    const GpuRecordedPacket* const firstRecorded = recordedGraph.find(firstPacket);
+    const GpuRecordedPacket* const secondRecorded = recordedGraph.find(secondPacket);
+    ASSERT_NE(firstRecorded, nullptr);
+    ASSERT_NE(secondRecorded, nullptr);
+    EXPECT_NE(firstWorkerIndex, 0u);
+    EXPECT_NE(secondWorkerIndex, 0u);
+    EXPECT_NE(firstWorkerIndex, secondWorkerIndex);
+    EXPECT_EQ(firstRecorded->recordingWorkerIndex, firstWorkerIndex);
+    EXPECT_EQ(secondRecorded->recordingWorkerIndex, secondWorkerIndex);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(device.waitForIdle());
 }
 
 

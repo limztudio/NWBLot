@@ -532,8 +532,10 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    successor only after confirming that the preceding packet has no cross-queue consumer frontier; existing
    `FrontierSafe` splitting and explicit consumer-frontier overrides remain intact. The compiler-derived native
    ready-frontier recorder is implemented for explicit opt-in packets, with isolated per-packet state scratch and
-   independent native command buffers/pools; all other packets, command-IR capture, and legacy external-state
-   overrides retain serial recording. Reusable per-worker graph command-arena leases are still not implemented.
+   worker-affined command-buffer leases: each ready-frontier packet receives the current logical worker identity,
+   while Vulkan recycles its one-buffer command pool only to that worker after the physical queue timeline retires
+   it. Serial/direct recording retains the default lease. All other packets, command-IR capture, and legacy
+   external-state overrides retain serial recording.
 
 4. **Generic recovery and invalidation proof.** The accepted-token transaction is sound for the exercised paths,
    stale imported completion tokens have graph and native-submission rejection coverage, and recording/transaction

@@ -720,6 +720,9 @@ private:
 
     u64 m_recordingID = 0;
     u64 m_submissionID = 0;
+    // Native command pools are worker-affined through CommandListParameters. Recycled buffers retain this identity
+    // until their queue timeline retires them, so simultaneous graph recorders never open the same Vulkan pool.
+    u32 m_recordingWorkerIndex = 0u;
 
     const VulkanContext& m_context;
 };
@@ -740,8 +743,8 @@ public:
 
 
 public:
-    [[nodiscard]] TrackedCommandBufferPtr createCommandBuffer();
-    [[nodiscard]] TrackedCommandBufferPtr getOrCreateCommandBuffer();
+    [[nodiscard]] TrackedCommandBufferPtr createCommandBuffer(u32 recordingWorkerIndex = 0u);
+    [[nodiscard]] TrackedCommandBufferPtr getOrCreateCommandBuffer(u32 recordingWorkerIndex = 0u);
 
     void addWaitSemaphore(VkSemaphore semaphore, u64 value);
     void addSignalSemaphore(VkSemaphore semaphore, u64 value);

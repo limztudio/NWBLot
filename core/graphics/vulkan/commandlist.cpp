@@ -69,7 +69,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
         return;
     }
 
-    m_currentCmdBuf = queue->getOrCreateCommandBuffer();
+    m_currentCmdBuf = queue->getOrCreateCommandBuffer(m_desc.recordingWorkerIndex);
     if(!m_currentCmdBuf || m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to acquire command buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to acquire command buffer"));

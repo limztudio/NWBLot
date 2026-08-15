@@ -135,7 +135,7 @@ Queue::~Queue(){
     }
 }
 
-TrackedCommandBufferPtr Queue::createCommandBuffer(){
+TrackedCommandBufferPtr Queue::createCommandBuffer(const u32 recordingWorkerIndex){
     auto* cmdBuf = NewArenaObject<TrackedCommandBuffer>(m_context.objectArena, m_context, m_queueFamilyIndex);
     if(!cmdBuf->m_cmdBuf){
         DestroyArenaObject(m_context.objectArena, cmdBuf);
@@ -143,10 +143,11 @@ TrackedCommandBufferPtr Queue::createCommandBuffer(){
     }
 
     cmdBuf->m_recordingID = ++m_lastRecordingID;
+    cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
     return TrackedCommandBufferPtr(cmdBuf, TrackedCommandBufferPtr::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
+TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(const u32 recordingWorkerIndex){
     ScopedLock lock(m_mutex);
 
     updateLastFinishedID();
@@ -161,25 +162,33 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(){
         it = m_commandBuffersInFlight.erase(it);
     }
 
-    if(!m_commandBuffersPool.empty()){
-        TrackedCommandBufferPtr cmdBuf = Move(m_commandBuffersPool.front());
-        m_commandBuffersPool.pop_front();
+    auto available = m_commandBuffersPool.end();
+    for(auto it = m_commandBuffersPool.begin(); it != m_commandBuffersPool.end(); ++it){
+        if(*it && (*it)->m_recordingWorkerIndex == recordingWorkerIndex){
+            available = it;
+            break;
+        }
+    }
+    if(available != m_commandBuffersPool.end()){
+        TrackedCommandBufferPtr cmdBuf = Move(*available);
+        m_commandBuffersPool.erase(available);
 
         if(!cmdBuf || cmdBuf->m_cmdBuf == VK_NULL_HANDLE)
-            return createCommandBuffer();
+            return createCommandBuffer(recordingWorkerIndex);
 
         const VkResult res = vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
         if(res != VK_SUCCESS){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset command buffer, creating a new one: {}"), ResultToString(res));
-            return createCommandBuffer();
+            return createCommandBuffer(recordingWorkerIndex);
         }
 
         cmdBuf->m_recordingID = ++m_lastRecordingID;
+        cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
 
         return cmdBuf;
     }
 
-    return createCommandBuffer();
+    return createCommandBuffer(recordingWorkerIndex);
 }
 
 void Queue::addWaitSemaphore(VkSemaphore semaphore, u64 value){

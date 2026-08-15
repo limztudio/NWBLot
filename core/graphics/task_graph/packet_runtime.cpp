@@ -380,6 +380,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
 
     CommandListParameters parameters;
     parameters.setPhysicalQueue(packet.queue);
+    parameters.setRecordingWorkerIndex(desc.recordingWorkerIndex);
     CommandListHandle commandList = m_device.createCommandList(parameters);
     if(!commandList)
         return false;
@@ -444,6 +445,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     // Publish the slot only after its owned native list is retained. Frontier workers are joined before callers can
     // submit, but this order also keeps the slot self-consistent for diagnostic reads.
     recordedPacket.commandListCount = 1u;
+    recordedPacket.recordingWorkerIndex = desc.recordingWorkerIndex;
     return true;
 }
 
@@ -657,10 +659,14 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             workerPool.parallelFor(0u, parallelDescIndices.size(), [&](const usize parallelIndex){
                 const GpuNativePacketRecordDesc& desc = recordDescs[parallelDescIndices[parallelIndex]];
                 GpuRecordedGraph::PacketRecordingScratch* const scratch = outRecordedGraph.packetRecordingScratch(desc.packet);
+                GpuNativePacketRecordDesc workerDesc = desc;
+                // Reserve zero for serial/direct command lists. ThreadPool's caller is worker zero, so shift every
+                // ready-frontier lease by one and retain a stable distinction even when the caller records a chunk.
+                workerDesc.recordingWorkerIndex = static_cast<u32>(workerPool.currentWorkerIndex() + 1u);
                 parallelResults[parallelIndex] = scratch && recordPacketWithScratch(
                     graph,
                     compiledGraph,
-                    desc,
+                    workerDesc,
                     outRecordedGraph,
                     *scratch,
                     nullptr

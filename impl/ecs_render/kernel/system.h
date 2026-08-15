@@ -402,12 +402,13 @@ private:
     Core::GpuTaskId m_graphicsPrefixCsgIntervalSampleTask;
     Core::GpuTaskId m_graphicsPrefixTask;
     // Prepared soft-transparent shadow frames split opaque production, first wavelet, resolve tail, transparent
-    // trace, transparent first wavelet, and terminal resolve tail, but all six tasks must compile into one packet.
-    // The terminal ID remains the output/acceptance/recovery owner.
+    // trace, optional temporal merge, transparent first wavelet, and terminal resolve tail. Every active task must
+    // compile into one packet; the terminal ID remains the output/acceptance/recovery owner.
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueTask;
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueFirstWaveletTask;
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueResolveTask;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentTraceTask;
+    Core::GpuTaskId m_deferredShadowVisibilityTransparentTemporalMergeTask;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentFirstWaveletTask;
     Core::GpuTaskId m_deferredShadowVisibilityTask;
     Core::GpuTaskId m_deferredSoftwareCausticsTask;

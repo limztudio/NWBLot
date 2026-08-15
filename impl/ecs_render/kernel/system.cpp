@@ -255,6 +255,7 @@ void RendererSystem::invalidateResources(){
     m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
     m_deferredShadowVisibilityOpaqueResolveTask = {};
     m_deferredShadowVisibilityTransparentTraceTask = {};
+    m_deferredShadowVisibilityTransparentTemporalMergeTask = {};
     m_deferredShadowVisibilityTransparentFirstWaveletTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
@@ -537,6 +538,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
     m_deferredShadowVisibilityOpaqueResolveTask = {};
     m_deferredShadowVisibilityTransparentTraceTask = {};
+    m_deferredShadowVisibilityTransparentTemporalMergeTask = {};
     m_deferredShadowVisibilityTransparentFirstWaveletTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
@@ -823,8 +825,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         )],
     };
     Core::GpuTimingSubmissionTicket shadowVisibilityTimingTicket(m_graphics.gpuTiming());
-    // The prepared soft-transparent route spans both resolve ranges across their first-wavelet and tail callbacks;
-    // the terminal fold still closes the aggregate Shadow Visibility range. The monolithic task leaves these empty.
+    // The prepared soft-transparent route spans opaque resolve across its first-wavelet and tail callbacks, and
+    // begins transparent resolve in temporal merge when active (otherwise its first wavelet). The terminal fold
+    // still closes the aggregate Shadow Visibility range. The monolithic task leaves these empty.
     Optional<Core::GpuTimingMeasure> shadowVisibilityAsyncTiming;
     Optional<Core::GpuTimingMeasure> shadowVisibilityTiming;
     Optional<Core::GpuTimingMeasure> opaqueSoftResolveTiming;
@@ -1143,6 +1146,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowVisibilityTransparentTraceTask)
             : Core::GpuSubmissionPacketId{}
     ;
+    const Core::GpuSubmissionPacketId shadowVisibilityTransparentTemporalMergePacket =
+        m_deferredShadowVisibilityTransparentTemporalMergeTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowVisibilityTransparentTemporalMergeTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuSubmissionPacketId shadowVisibilityTransparentFirstWaveletPacket =
         m_deferredShadowVisibilityTransparentFirstWaveletTask.valid()
             ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowVisibilityTransparentFirstWaveletTask)
@@ -1162,6 +1170,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredShadowVisibilityTransparentTraceTask.valid()
             && shadowVisibilityTransparentTracePacket.valid()
             && shadowVisibilityTransparentTracePacket == shadowVisibilityPacket
+            && (
+                !m_deferredShadowVisibilityTransparentTemporalMergeTask.valid()
+                || (
+                    shadowVisibilityTransparentTemporalMergePacket.valid()
+                    && shadowVisibilityTransparentTemporalMergePacket == shadowVisibilityPacket
+                )
+            )
             && m_deferredShadowVisibilityTransparentFirstWaveletTask.valid()
             && shadowVisibilityTransparentFirstWaveletPacket.valid()
             && shadowVisibilityTransparentFirstWaveletPacket == shadowVisibilityPacket

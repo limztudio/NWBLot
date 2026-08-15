@@ -1002,12 +1002,10 @@ struct NativePacketSoftOpaqueResolveTailHandoffProbeTask{
 };
 
 
-// The transparent first wavelet owns temporal merge and receives every graph-declared input/output state without a
-// renderer-native bridge.
-struct NativePacketSoftTransparentFirstWaveletProbeTask{
+// The transparent temporal merge receives every graph-declared input/output state without a renderer-native bridge.
+struct NativePacketSoftTransparentTemporalMergeProbeTask{
     struct Payload{
         Texture* transparentSoftHalf = nullptr;
-        Texture* opaqueSoftHalf = nullptr;
         Texture* shadowSoftGeometry = nullptr;
         Texture* previousGeometry = nullptr;
         Texture* worldPosition = nullptr;
@@ -1026,7 +1024,6 @@ struct NativePacketSoftTransparentFirstWaveletProbeTask{
         static_cast<void>(context);
         const bool ready =
             payload.transparentSoftHalf
-            && payload.opaqueSoftHalf
             && payload.shadowSoftGeometry
             && payload.previousGeometry
             && payload.worldPosition
@@ -1036,8 +1033,6 @@ struct NativePacketSoftTransparentFirstWaveletProbeTask{
             && payload.momentsOutput
             && commandList.getTextureSubresourceState(payload.transparentSoftHalf, 0u, 0u)
                 == ResourceStates::ShaderResource
-            && commandList.getTextureSubresourceState(payload.opaqueSoftHalf, 0u, 0u)
-                == ResourceStates::UnorderedAccess
             && commandList.getTextureSubresourceState(payload.shadowSoftGeometry, 0u, 0u)
                 == ResourceStates::ShaderResource
             && commandList.getTextureSubresourceState(payload.previousGeometry, 0u, 0u)
@@ -1052,6 +1047,44 @@ struct NativePacketSoftTransparentFirstWaveletProbeTask{
                 == ResourceStates::UnorderedAccess
             && commandList.getTextureSubresourceState(payload.momentsOutput, 0u, 0u)
                 == ResourceStates::UnorderedAccess
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
+// The first wavelet samples the pair emitted by temporal merge and publishes half-A for the terminal resolve tail.
+// It uses state getters only, so neither merge output transition can be hidden by a native bridge.
+struct NativePacketSoftTransparentFirstWaveletProbeTask{
+    struct Payload{
+        Texture* opaqueSoftHalf = nullptr;
+        Texture* shadowSoftGeometry = nullptr;
+        Texture* historyOutput = nullptr;
+        Texture* momentsOutput = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        const bool ready =
+            payload.opaqueSoftHalf
+            && payload.shadowSoftGeometry
+            && payload.historyOutput
+            && payload.momentsOutput
+            && commandList.getTextureSubresourceState(payload.opaqueSoftHalf, 0u, 0u)
+                == ResourceStates::UnorderedAccess
+            && commandList.getTextureSubresourceState(payload.shadowSoftGeometry, 0u, 0u)
+                == ResourceStates::ShaderResource
+            && commandList.getTextureSubresourceState(payload.historyOutput, 0u, 0u)
+                == ResourceStates::ShaderResource
+            && commandList.getTextureSubresourceState(payload.momentsOutput, 0u, 0u)
+                == ResourceStates::ShaderResource
         ;
         if(payload.recorded)
             *payload.recorded = ready;
@@ -4188,18 +4221,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
     );
     ASSERT_TRUE(traceTask.valid());
 
-    const GpuTaskResourceUse transparentFirstWaveletUses[] = {
+    const GpuTaskResourceUse transparentTemporalMergeUses[] = {
         {
             .resource = transparentSoftHalfResource,
             .range = {},
             .requiredState = ResourceStates::ShaderResource,
             .access = GpuTaskResourceAccess::Read,
-        },
-        {
-            .resource = opaqueSoftHalfResource,
-            .range = {},
-            .requiredState = ResourceStates::UnorderedAccess,
-            .access = GpuTaskResourceAccess::Write,
         },
         {
             .resource = shadowSoftGeometryResource,
@@ -4244,26 +4271,73 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
             .access = GpuTaskResourceAccess::Write,
         },
     };
+    GpuTaskDesc transparentTemporalMergeDesc;
+    transparentTemporalMergeDesc
+        .setIdentity(Name("tests/descriptor_buffer/soft_transparent_temporal_merge"))
+        .setMarkerLabel("Shadow Transparent Temporal Merge")
+        .setQueue(computeQueue)
+        .setScheduling(traceScheduling)
+        .setDependencies(&traceTask, 1u)
+        .setResourceUses(transparentTemporalMergeUses, LengthOf(transparentTemporalMergeUses))
+    ;
+    bool transparentTemporalMergeRecorded = false;
+    const GpuTaskId transparentTemporalMergeTask = graph.addTask<NativePacketSoftTransparentTemporalMergeProbeTask>(
+        transparentTemporalMergeDesc,
+        NativePacketSoftTransparentTemporalMergeProbeTask::Payload{
+            .transparentSoftHalf = transparentSoftHalf.get(),
+            .shadowSoftGeometry = shadowSoftGeometry.get(),
+            .previousGeometry = previousGeometry.get(),
+            .worldPosition = worldPosition.get(),
+            .historyInput = transparentHistoryA.get(),
+            .momentsInput = transparentMomentsA.get(),
+            .historyOutput = transparentHistoryB.get(),
+            .momentsOutput = transparentMomentsB.get(),
+            .recorded = &transparentTemporalMergeRecorded,
+        }
+    );
+    ASSERT_TRUE(transparentTemporalMergeTask.valid());
+
+    const GpuTaskResourceUse transparentFirstWaveletUses[] = {
+        {
+            .resource = opaqueSoftHalfResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = shadowSoftGeometryResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = transparentHistoryBResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = transparentMomentsBResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
     GpuTaskDesc transparentFirstWaveletDesc;
     transparentFirstWaveletDesc
         .setIdentity(Name("tests/descriptor_buffer/soft_transparent_first_wavelet"))
         .setMarkerLabel("Shadow Transparent First Wavelet")
         .setQueue(computeQueue)
         .setScheduling(traceScheduling)
-        .setDependencies(&traceTask, 1u)
+        .setDependencies(&transparentTemporalMergeTask, 1u)
         .setResourceUses(transparentFirstWaveletUses, LengthOf(transparentFirstWaveletUses))
     ;
     bool transparentFirstWaveletRecorded = false;
     const GpuTaskId transparentFirstWaveletTask = graph.addTask<NativePacketSoftTransparentFirstWaveletProbeTask>(
         transparentFirstWaveletDesc,
         NativePacketSoftTransparentFirstWaveletProbeTask::Payload{
-            .transparentSoftHalf = transparentSoftHalf.get(),
             .opaqueSoftHalf = opaqueSoftHalf.get(),
             .shadowSoftGeometry = shadowSoftGeometry.get(),
-            .previousGeometry = previousGeometry.get(),
-            .worldPosition = worldPosition.get(),
-            .historyInput = transparentHistoryA.get(),
-            .momentsInput = transparentMomentsA.get(),
             .historyOutput = transparentHistoryB.get(),
             .momentsOutput = transparentMomentsB.get(),
             .recorded = &transparentFirstWaveletRecorded,
@@ -4368,8 +4442,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
     EXPECT_EQ(compiledGraph.packetForTask(opaqueFirstWaveletTask), packet);
     EXPECT_EQ(compiledGraph.packetForTask(opaqueResolveTask), packet);
     EXPECT_EQ(compiledGraph.packetForTask(traceTask), packet);
+    EXPECT_EQ(compiledGraph.packetForTask(transparentTemporalMergeTask), packet);
     EXPECT_EQ(compiledGraph.packetForTask(transparentFirstWaveletTask), packet);
     EXPECT_EQ(compiledGraph.packetForTask(foldTask), packet);
+    EXPECT_EQ(compiledGraph.packet(packet).taskCount, 7u);
     const GpuCompiledTask* const compiledTrace = compiledGraph.findTask(traceTask);
     ASSERT_NE(compiledTrace, nullptr);
     const GpuCompiledBarrier* const traceBarriers = compiledGraph.taskPrologueBarriers(traceTask);
@@ -4428,6 +4504,31 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
     }
     EXPECT_TRUE(hasOpaqueWaveletResolveTransition);
 
+    const GpuCompiledTask* const compiledTransparentTemporalMerge = compiledGraph.findTask(transparentTemporalMergeTask);
+    ASSERT_NE(compiledTransparentTemporalMerge, nullptr);
+    const GpuCompiledBarrier* const transparentTemporalMergeBarriers =
+        compiledGraph.taskPrologueBarriers(transparentTemporalMergeTask)
+    ;
+    ASSERT_NE(transparentTemporalMergeBarriers, nullptr);
+    const auto hasTransparentTemporalMergeShaderResourceTransition = [&](const GpuGraphResourceId resource, const ResourceStates::Mask before){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledTransparentTemporalMerge->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = transparentTemporalMergeBarriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == ResourceStates::ShaderResource
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(transparentSoftHalfResource, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(transparentHistoryAResource, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(transparentMomentsAResource, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(previousGeometryResource, ResourceStates::Common));
+    EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(worldPositionResource, ResourceStates::Common));
+
     const GpuCompiledTask* const compiledTransparentFirstWavelet = compiledGraph.findTask(transparentFirstWaveletTask);
     ASSERT_NE(compiledTransparentFirstWavelet, nullptr);
     const GpuCompiledBarrier* const transparentFirstWaveletBarriers =
@@ -4447,11 +4548,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
         }
         return false;
     };
-    EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(transparentSoftHalfResource, ResourceStates::UnorderedAccess));
-    EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(transparentHistoryAResource, ResourceStates::UnorderedAccess));
-    EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(transparentMomentsAResource, ResourceStates::UnorderedAccess));
-    EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(previousGeometryResource, ResourceStates::Common));
-    EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(worldPositionResource, ResourceStates::Common));
+    EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(transparentHistoryBResource, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(transparentMomentsBResource, ResourceStates::UnorderedAccess));
 
     const GpuCompiledTask* const compiledFold = compiledGraph.findTask(foldTask);
     ASSERT_NE(compiledFold, nullptr);
@@ -4504,6 +4602,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
     EXPECT_TRUE(opaqueFirstWaveletRecorded);
     EXPECT_TRUE(opaqueResolveRecorded);
     EXPECT_TRUE(traceRecorded);
+    EXPECT_TRUE(transparentTemporalMergeRecorded);
     EXPECT_TRUE(transparentFirstWaveletRecorded);
     EXPECT_TRUE(foldRecorded);
 

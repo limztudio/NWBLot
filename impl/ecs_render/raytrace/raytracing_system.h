@@ -169,6 +169,7 @@ namespace __hidden_shadow_visibility_task{
     struct ShadowVisibilityOpaqueFirstWaveletGraphTask;
     struct ShadowVisibilityOpaqueResolveTailGraphTask;
     struct ShadowTransparentSoftTraceGraphTask;
+    struct ShadowTransparentSoftTemporalMergeGraphTask;
     struct ShadowTransparentSoftFirstWaveletGraphTask;
     struct ShadowTransparentSoftFoldGraphTask;
     struct ShadowVisibilityGraphTask;
@@ -363,9 +364,9 @@ public:
         bool hardwareShadowSupported,
         bool graphEntryStatesOwned = false
     );
-    // The prepared transparent trace's first wavelet inherits its graph-declared input and output states. The
-    // terminal fold remains responsible for the final upsample, submission acceptance, and history publication.
-    [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftFirstWaveletTask(
+    // The prepared transparent temporal merge receives frozen history/moment entry states and starts the resolve
+    // timing interval. Its output reaches the first wavelet through the compiler-owned task handoff.
+    [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftTemporalMergeTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
@@ -376,6 +377,22 @@ public:
         const u32* opaqueFrameIndex,
         bool graphEntryStatesOwned = false,
         bool graphOwnsTransparentTemporalMergeEntryStates = false
+    );
+    // The prepared transparent trace or temporal merge's first wavelet inherits its graph-declared input and output
+    // states. The terminal fold remains responsible for the final upsample, submission acceptance, and history
+    // publication.
+    [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftFirstWaveletTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        Optional<Core::GpuTimingMeasure>* transparentResolveTiming,
+        const bool* opaqueProduced,
+        bool* transparentTraceProduced,
+        const u32* opaqueFrameIndex,
+        bool graphEntryStatesOwned = false,
+        bool graphOwnsTransparentWaveletInputBoundary = false,
+        bool startsTransparentResolveTiming = true
     );
     [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftFoldTask(
         Core::GpuTaskGraph& graph,
@@ -716,6 +733,7 @@ private:
     friend struct __hidden_shadow_visibility_task::ShadowVisibilityOpaqueFirstWaveletGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowVisibilityOpaqueResolveTailGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowTransparentSoftTraceGraphTask;
+    friend struct __hidden_shadow_visibility_task::ShadowTransparentSoftTemporalMergeGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowTransparentSoftFirstWaveletGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowTransparentSoftFoldGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowVisibilityGraphTask;
@@ -925,8 +943,10 @@ private:
         u32 visibilityStorage = 0u;
         u32 sceneShading = 0u;
         bool temporalMomentsValid = false;
-        // The prepared graph may already lower the transparent trace output before the first wavelet.
+        // The prepared graph may already lower a transparent trace or temporal-merge output before the first wavelet.
         bool graphOwnsFirstWaveletInputState = false;
+        // A split transparent temporal merge also publishes the selected moments input for the first wavelet.
+        bool graphOwnsWaveletMomentsEntryState = false;
         // The split opaque first-wavelet callback inherits its output UAV state from the graph.
         bool graphOwnsFirstWaveletOutputState = false;
         // The transparent fold can inherit its geometry read from the graph; opaque geometry still transitions
@@ -954,7 +974,8 @@ private:
     );
     // Denoise either backend's soft trace and optionally run the transparent trace and resolve phases. The shared
     // deferred graph supplies the first geometry-downsample entry states, the opaque geometry-to-resolve handoff,
-    // and the prepared transparent trace-to-resolve handoff; later lifecycle transitions remain task-local.
+    // and prepared transparent trace-to-merge/first-wavelet plus temporal-merge-to-wavelet handoffs; later
+    // lifecycle transitions remain task-local.
     void dispatchSoftShadowDenoiseAndTransparentFold(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -974,7 +995,8 @@ private:
         bool dispatchOpaqueResolveTail = true,
         bool graphOwnsOpaqueTraceToFirstWaveletBoundary = false,
         bool dispatchTransparentResolveTail = false,
-        bool splitTransparentResolve = false
+        bool splitTransparentResolve = false,
+        bool dispatchTransparentTemporalMerge = false
     );
     // Graph-only phase helpers preserve the complete direct route above while exposing both in-packet handoffs to
     // the shared deferred graph.
@@ -1014,13 +1036,19 @@ private:
         bool graphEntryStatesOwned,
         bool graphOwnsOpaqueToTransparentBoundary
     );
+    [[nodiscard]] bool renderSoftTransparentShadowTemporalMerge(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        u32 frameIndex,
+        bool graphEntryStatesOwned,
+        bool graphOwnsTransparentTemporalMergeEntryStates
+    );
     [[nodiscard]] bool renderSoftTransparentShadowFirstWavelet(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         u32 frameIndex,
         bool graphEntryStatesOwned,
-        bool graphOwnsTransparentTraceToResolveBoundary,
-        bool graphOwnsTransparentTemporalMergeEntryStates
+        bool graphOwnsTransparentWaveletInputBoundary
     );
     [[nodiscard]] bool renderSoftTransparentShadowFold(
         Core::CommandList& commandList,

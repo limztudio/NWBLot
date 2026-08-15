@@ -5376,18 +5376,12 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     const Graphics::GpuTaskId trace = graph.addTask(traceDesc);
     ASSERT_TRUE(trace.valid());
 
-    const Graphics::GpuTaskResourceUse transparentFirstWaveletUses[] = {
+    const Graphics::GpuTaskResourceUse transparentTemporalMergeUses[] = {
         {
             .resource = transparentSoftHalf,
             .range = {},
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Read,
-        },
-        {
-            .resource = opaqueSoftHalf,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::UnorderedAccess,
-            .access = Graphics::GpuTaskResourceAccess::Write,
         },
         {
             .resource = shadowSoftGeometry,
@@ -5432,13 +5426,51 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
     };
+    Graphics::GpuTaskDesc transparentTemporalMergeDesc;
+    transparentTemporalMergeDesc
+        .setIdentity(Name("tests/task_graph/soft_transparent_temporal_merge"))
+        .setMarkerLabel("Shadow Transparent Temporal Merge")
+        .setQueue(computeRequest)
+        .setScheduling(traceScheduling)
+        .setDependencies(&trace, 1u)
+        .setResourceUses(transparentTemporalMergeUses, LengthOf(transparentTemporalMergeUses))
+    ;
+    const Graphics::GpuTaskId transparentTemporalMerge = graph.addTask(transparentTemporalMergeDesc);
+    ASSERT_TRUE(transparentTemporalMerge.valid());
+
+    const Graphics::GpuTaskResourceUse transparentFirstWaveletUses[] = {
+        {
+            .resource = opaqueSoftHalf,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = shadowSoftGeometry,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = transparentHistoryB,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = transparentMomentsB,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
     Graphics::GpuTaskDesc transparentFirstWaveletDesc;
     transparentFirstWaveletDesc
         .setIdentity(Name("tests/task_graph/soft_transparent_first_wavelet"))
         .setMarkerLabel("Shadow Transparent First Wavelet")
         .setQueue(computeRequest)
         .setScheduling(traceScheduling)
-        .setDependencies(&trace, 1u)
+        .setDependencies(&transparentTemporalMerge, 1u)
         .setResourceUses(transparentFirstWaveletUses, LengthOf(transparentFirstWaveletUses))
     ;
     const Graphics::GpuTaskId transparentFirstWavelet = graph.addTask(transparentFirstWaveletDesc);
@@ -5541,7 +5573,8 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     EXPECT_TRUE(analysis.hasExplicitEdge(opaque, opaqueFirstWavelet));
     EXPECT_TRUE(analysis.hasExplicitEdge(opaqueFirstWavelet, opaqueResolve));
     EXPECT_TRUE(analysis.hasExplicitEdge(opaqueResolve, trace));
-    EXPECT_TRUE(analysis.hasExplicitEdge(trace, transparentFirstWavelet));
+    EXPECT_TRUE(analysis.hasExplicitEdge(trace, transparentTemporalMerge));
+    EXPECT_TRUE(analysis.hasExplicitEdge(transparentTemporalMerge, transparentFirstWavelet));
     EXPECT_TRUE(analysis.hasExplicitEdge(transparentFirstWavelet, fold));
     EXPECT_TRUE(analysis.hasExplicitEdge(fold, lighting));
     EXPECT_TRUE(HasInferredHazard(
@@ -5568,8 +5601,22 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     EXPECT_TRUE(HasInferredHazard(
         analysis,
         trace,
-        transparentFirstWavelet,
+        transparentTemporalMerge,
         transparentSoftHalf,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        transparentTemporalMerge,
+        transparentFirstWavelet,
+        transparentHistoryB,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        transparentTemporalMerge,
+        transparentFirstWavelet,
+        transparentMomentsB,
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
     EXPECT_TRUE(HasInferredHazard(
@@ -5584,6 +5631,7 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     const Graphics::GpuSubmissionPacketId opaqueFirstWaveletPacket = compiledGraph.packetForTask(opaqueFirstWavelet);
     const Graphics::GpuSubmissionPacketId opaqueResolvePacket = compiledGraph.packetForTask(opaqueResolve);
     const Graphics::GpuSubmissionPacketId tracePacket = compiledGraph.packetForTask(trace);
+    const Graphics::GpuSubmissionPacketId transparentTemporalMergePacket = compiledGraph.packetForTask(transparentTemporalMerge);
     const Graphics::GpuSubmissionPacketId transparentFirstWaveletPacket = compiledGraph.packetForTask(transparentFirstWavelet);
     const Graphics::GpuSubmissionPacketId foldPacket = compiledGraph.packetForTask(fold);
     const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
@@ -5591,6 +5639,7 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     ASSERT_TRUE(opaqueFirstWaveletPacket.valid());
     ASSERT_TRUE(opaqueResolvePacket.valid());
     ASSERT_TRUE(tracePacket.valid());
+    ASSERT_TRUE(transparentTemporalMergePacket.valid());
     ASSERT_TRUE(transparentFirstWaveletPacket.valid());
     ASSERT_TRUE(foldPacket.valid());
     ASSERT_TRUE(lightingPacket.valid());
@@ -5598,19 +5647,21 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     EXPECT_EQ(opaqueFirstWaveletPacket, foldPacket);
     EXPECT_EQ(opaqueResolvePacket, foldPacket);
     EXPECT_EQ(tracePacket, foldPacket);
+    EXPECT_EQ(transparentTemporalMergePacket, foldPacket);
     EXPECT_EQ(transparentFirstWaveletPacket, foldPacket);
     EXPECT_NE(foldPacket, lightingPacket);
     ASSERT_EQ(compiledGraph.packetCount(), 2u);
     const Graphics::GpuSubmissionPacket& shadowPacket = compiledGraph.packet(foldPacket);
-    ASSERT_EQ(shadowPacket.taskCount, 6u);
+    ASSERT_EQ(shadowPacket.taskCount, 7u);
     const Graphics::GpuTaskId* const shadowTasks = compiledGraph.packetTasks(foldPacket);
     ASSERT_NE(shadowTasks, nullptr);
     EXPECT_EQ(shadowTasks[0u], opaque);
     EXPECT_EQ(shadowTasks[1u], opaqueFirstWavelet);
     EXPECT_EQ(shadowTasks[2u], opaqueResolve);
     EXPECT_EQ(shadowTasks[3u], trace);
-    EXPECT_EQ(shadowTasks[4u], transparentFirstWavelet);
-    EXPECT_EQ(shadowTasks[5u], fold);
+    EXPECT_EQ(shadowTasks[4u], transparentTemporalMerge);
+    EXPECT_EQ(shadowTasks[5u], transparentFirstWavelet);
+    EXPECT_EQ(shadowTasks[6u], fold);
 
     const Graphics::GpuCompiledTask* const compiledOpaqueFirstWavelet = compiledGraph.findTask(opaqueFirstWavelet);
     ASSERT_NE(compiledOpaqueFirstWavelet, nullptr);
@@ -5670,6 +5721,31 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     }
     EXPECT_TRUE(hasOpaqueResolveToTraceUav);
 
+    const Graphics::GpuCompiledTask* const compiledTransparentTemporalMerge = compiledGraph.findTask(transparentTemporalMerge);
+    ASSERT_NE(compiledTransparentTemporalMerge, nullptr);
+    const Graphics::GpuCompiledBarrier* const transparentTemporalMergeBarriers =
+        compiledGraph.taskPrologueBarriers(transparentTemporalMerge)
+    ;
+    ASSERT_NE(transparentTemporalMergeBarriers, nullptr);
+    const auto hasTransparentTemporalMergeShaderResourceTransition = [&](const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledTransparentTemporalMerge->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = transparentTemporalMergeBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == Graphics::ResourceStates::ShaderResource
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(transparentSoftHalf, Graphics::ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(transparentHistoryA, Graphics::ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(transparentMomentsA, Graphics::ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(previousGeometry, Graphics::ResourceStates::Common));
+    EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(worldPosition, Graphics::ResourceStates::Common));
+
     const Graphics::GpuCompiledTask* const compiledTransparentFirstWavelet = compiledGraph.findTask(transparentFirstWavelet);
     ASSERT_NE(compiledTransparentFirstWavelet, nullptr);
     const Graphics::GpuCompiledBarrier* const transparentFirstWaveletBarriers =
@@ -5689,11 +5765,8 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
         }
         return false;
     };
-    EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(transparentSoftHalf, Graphics::ResourceStates::UnorderedAccess));
-    EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(transparentHistoryA, Graphics::ResourceStates::UnorderedAccess));
-    EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(transparentMomentsA, Graphics::ResourceStates::UnorderedAccess));
-    EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(previousGeometry, Graphics::ResourceStates::Common));
-    EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(worldPosition, Graphics::ResourceStates::Common));
+    EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(transparentHistoryB, Graphics::ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(transparentMomentsB, Graphics::ResourceStates::UnorderedAccess));
     bool hasTransparentTraceToFirstWaveletUav = false;
     for(u32 barrierIndex = 0u; barrierIndex < compiledTransparentFirstWavelet->prologueBarrierCount; ++barrierIndex){
         const Graphics::GpuCompiledBarrier& barrier = transparentFirstWaveletBarriers[barrierIndex];

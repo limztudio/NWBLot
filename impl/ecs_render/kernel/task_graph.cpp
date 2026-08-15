@@ -3462,6 +3462,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
     m_deferredShadowVisibilityOpaqueResolveTask = {};
     m_deferredShadowVisibilityTransparentTraceTask = {};
+    m_deferredShadowVisibilityTransparentTemporalMergeTask = {};
     m_deferredShadowVisibilityTransparentFirstWaveletTask = {};
     m_deferredShadowVisibilityTask = {};
     if(
@@ -3803,6 +3804,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaqueFirstWaveletResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaqueResolveResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentTraceResourceUses{ scratchArena };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentTemporalMergeResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentFirstWaveletResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentFoldResourceUses{ scratchArena };
     bool graphOwnsTransparentTemporalMergeEntryStates = false;
@@ -3988,44 +3990,47 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
 
         graphOwnsTransparentTemporalMergeEntryStates = m_rayTracingState.m_softTransparentTemporalReady;
         const bool transparentHistoryFrontIsA = m_rayTracingState.m_softShadowHistoryFrontIsA != 0u;
-        transparentFirstWaveletResourceUses.reserve(12u);
-        // The transparent trace publishes its RGB half image for the temporal merge or first wavelet. That task
-        // writes half-A, which the terminal tail samples for the one-wavelet upsample below.
-        transparentFirstWaveletResourceUses.push_back(ReadUse(transparentSoftHalf, Core::ResourceStates::ShaderResource));
-        transparentFirstWaveletResourceUses.push_back(WriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
-        transparentFirstWaveletResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
-        transparentFirstWaveletResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious, Core::ResourceStates::ShaderResource));
-        transparentFirstWaveletResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
+        const Core::GpuGraphResourceId transparentHistoryIn = transparentHistoryFrontIsA
+            ? transparentHistoryA
+            : transparentHistoryB
+        ;
+        const Core::GpuGraphResourceId transparentMomentsIn = transparentHistoryFrontIsA
+            ? transparentMomentsA
+            : transparentMomentsB
+        ;
+        const Core::GpuGraphResourceId transparentHistoryOut = transparentHistoryFrontIsA
+            ? transparentHistoryB
+            : transparentHistoryA
+        ;
+        const Core::GpuGraphResourceId transparentMomentsOut = transparentHistoryFrontIsA
+            ? transparentMomentsB
+            : transparentMomentsA
+        ;
         if(graphOwnsTransparentTemporalMergeEntryStates){
-            // Selection is frozen with the compiled frame: merge samples the current front pair and writes the
-            // opposite pair before the task-local wavelet reads that just-produced history.
-            const Core::GpuGraphResourceId transparentHistoryIn = transparentHistoryFrontIsA
-                ? transparentHistoryA
-                : transparentHistoryB
-            ;
-            const Core::GpuGraphResourceId transparentMomentsIn = transparentHistoryFrontIsA
-                ? transparentMomentsA
-                : transparentMomentsB
-            ;
-            const Core::GpuGraphResourceId transparentHistoryOut = transparentHistoryFrontIsA
-                ? transparentHistoryB
-                : transparentHistoryA
-            ;
-            const Core::GpuGraphResourceId transparentMomentsOut = transparentHistoryFrontIsA
-                ? transparentMomentsB
-                : transparentMomentsA
-            ;
-            transparentFirstWaveletResourceUses.push_back(ReadUse(transparentHistoryIn, Core::ResourceStates::ShaderResource));
-            transparentFirstWaveletResourceUses.push_back(ReadUse(transparentMomentsIn, Core::ResourceStates::ShaderResource));
-            transparentFirstWaveletResourceUses.push_back(WriteUse(transparentHistoryOut, Core::ResourceStates::UnorderedAccess));
-            transparentFirstWaveletResourceUses.push_back(WriteUse(transparentMomentsOut, Core::ResourceStates::UnorderedAccess));
+            // Selection is frozen with the compiled frame. The merge samples the current front pair and publishes
+            // the opposite pair, which the following wavelet receives as graph-owned sampled inputs.
+            transparentTemporalMergeResourceUses.reserve(8u);
+            transparentTemporalMergeResourceUses.push_back(ReadUse(transparentSoftHalf, Core::ResourceStates::ShaderResource));
+            transparentTemporalMergeResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
+            transparentTemporalMergeResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious, Core::ResourceStates::ShaderResource));
+            transparentTemporalMergeResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
+            transparentTemporalMergeResourceUses.push_back(ReadUse(transparentHistoryIn, Core::ResourceStates::ShaderResource));
+            transparentTemporalMergeResourceUses.push_back(ReadUse(transparentMomentsIn, Core::ResourceStates::ShaderResource));
+            transparentTemporalMergeResourceUses.push_back(WriteUse(transparentHistoryOut, Core::ResourceStates::UnorderedAccess));
+            transparentTemporalMergeResourceUses.push_back(WriteUse(transparentMomentsOut, Core::ResourceStates::UnorderedAccess));
+
+            transparentFirstWaveletResourceUses.reserve(4u);
+            transparentFirstWaveletResourceUses.push_back(ReadUse(transparentHistoryOut, Core::ResourceStates::ShaderResource));
+            transparentFirstWaveletResourceUses.push_back(ReadUse(transparentMomentsOut, Core::ResourceStates::ShaderResource));
+            transparentFirstWaveletResourceUses.push_back(WriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
+            transparentFirstWaveletResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
         }else{
-            // The non-temporal compatibility route may reactivate temporal history only in a later frame, so retain
-            // its established conservative declarations and native transition path for this packet.
-            transparentFirstWaveletResourceUses.push_back(ReadWriteUse(transparentHistoryA, Core::ResourceStates::UnorderedAccess));
-            transparentFirstWaveletResourceUses.push_back(ReadWriteUse(transparentHistoryB, Core::ResourceStates::UnorderedAccess));
-            transparentFirstWaveletResourceUses.push_back(ReadWriteUse(transparentMomentsA, Core::ResourceStates::UnorderedAccess));
-            transparentFirstWaveletResourceUses.push_back(ReadWriteUse(transparentMomentsB, Core::ResourceStates::UnorderedAccess));
+            // Inactive temporal frames keep their existing trace-to-wavelet route and do not acquire stale-history
+            // declarations or a no-op merge callback.
+            transparentFirstWaveletResourceUses.reserve(3u);
+            transparentFirstWaveletResourceUses.push_back(ReadUse(transparentSoftHalf, Core::ResourceStates::ShaderResource));
+            transparentFirstWaveletResourceUses.push_back(WriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
+            transparentFirstWaveletResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
         }
         transparentFoldResourceUses.reserve(8u);
         // With one RGB wavelet the terminal task only samples half-A before multiplying visibility. Preserve a
@@ -4165,7 +4170,45 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             return false;
         }
 
-        const Core::GpuTaskId transparentFirstWaveletDependencies[] = { m_deferredShadowVisibilityTransparentTraceTask };
+        Core::GpuTaskId transparentFirstWaveletDependency = m_deferredShadowVisibilityTransparentTraceTask;
+        if(graphOwnsTransparentTemporalMergeEntryStates){
+            const Core::GpuTaskId transparentTemporalMergeDependencies[] = {
+                m_deferredShadowVisibilityTransparentTraceTask,
+            };
+            Core::GpuTaskDesc transparentTemporalMergeDesc;
+            transparentTemporalMergeDesc
+                .setIdentity(Name("render.shadow_visibility.transparent_temporal_merge"))
+                .setMarkerLabel("Shadow Transparent Temporal Merge")
+                .setQueue(ComputeQueueRequest())
+                .setScheduling(tailScheduling)
+                .setDependencies(transparentTemporalMergeDependencies, LengthOf(transparentTemporalMergeDependencies))
+                .setResourceUses(
+                    transparentTemporalMergeResourceUses.data(),
+                    transparentTemporalMergeResourceUses.size()
+                )
+            ;
+            m_deferredShadowVisibilityTransparentTemporalMergeTask =
+                m_raytracingSystem.declareShadowTransparentSoftTemporalMergeTask(
+                    m_deferredLightingTaskGraph,
+                    transparentTemporalMergeDesc,
+                    deferredTargets,
+                    timingTicket,
+                    &transparentResolveTiming,
+                    &opaqueProduced,
+                    &transparentTraceProduced,
+                    &opaqueFrameIndex,
+                    true,
+                    true
+                )
+            ;
+            if(!m_deferredShadowVisibilityTransparentTemporalMergeTask.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow temporal-merge graph task"));
+                return false;
+            }
+            transparentFirstWaveletDependency = m_deferredShadowVisibilityTransparentTemporalMergeTask;
+        }
+
+        const Core::GpuTaskId transparentFirstWaveletDependencies[] = { transparentFirstWaveletDependency };
         Core::GpuTaskDesc transparentFirstWaveletDesc;
         transparentFirstWaveletDesc
             .setIdentity(Name("render.shadow_visibility.transparent_first_wavelet"))
@@ -4185,7 +4228,8 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             &transparentTraceProduced,
             &opaqueFrameIndex,
             true,
-            graphOwnsTransparentTemporalMergeEntryStates
+            true,
+            !graphOwnsTransparentTemporalMergeEntryStates
         );
         if(!m_deferredShadowVisibilityTransparentFirstWaveletTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow first-wavelet graph task"));
@@ -5852,6 +5896,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
     m_deferredShadowVisibilityOpaqueResolveTask = {};
     m_deferredShadowVisibilityTransparentTraceTask = {};
+    m_deferredShadowVisibilityTransparentTemporalMergeTask = {};
     m_deferredShadowVisibilityTransparentFirstWaveletTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};

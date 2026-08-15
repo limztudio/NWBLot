@@ -5083,10 +5083,9 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftTransparentTraceEntryStates){
 }
 
 
-// Prepared soft-transparent shadows split the opaque resolve from its transparent fold without adding an effects
-// submission. The terminal fold owns the cross-queue lighting consumer, so FrontierSafe may retain both callbacks
-// in the Compute packet while lowering their shared visibility image as a same-UAV fence.
-TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentFoldAfterOpaqueVisibility){
+// Prepared soft-transparent shadows split opaque visibility, transparent trace, and terminal resolve without adding
+// an effects submission. The compiler owns both in-packet handoffs, including the trace output's UAV-to-SRV edge.
+TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisibility){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     constexpr Graphics::ResourceQueueSharing::Mask queueSharing =
@@ -5145,10 +5144,10 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentFoldAfterOpaqueVisibility){
     const Graphics::GpuTaskId opaque = graph.addTask(opaqueDesc);
     ASSERT_TRUE(opaque.valid());
 
-    Graphics::GpuTaskSchedulingHint foldScheduling = opaqueScheduling;
-    foldScheduling.cost = Graphics::GpuTaskCostHint::Medium;
-    foldScheduling.mergeWithPrevious = true;
-    const Graphics::GpuTaskResourceUse foldUses[] = {
+    Graphics::GpuTaskSchedulingHint traceScheduling = opaqueScheduling;
+    traceScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    traceScheduling.mergeWithPrevious = true;
+    const Graphics::GpuTaskResourceUse traceUses[] = {
         {
             .resource = shadowVisibility,
             .range = {},
@@ -5162,13 +5161,39 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentFoldAfterOpaqueVisibility){
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
     };
+    Graphics::GpuTaskDesc traceDesc;
+    traceDesc
+        .setIdentity(Name("tests/task_graph/soft_transparent_trace"))
+        .setMarkerLabel("Shadow Transparent Soft Trace")
+        .setQueue(computeRequest)
+        .setScheduling(traceScheduling)
+        .setDependencies(&opaque, 1u)
+        .setResourceUses(traceUses, LengthOf(traceUses))
+    ;
+    const Graphics::GpuTaskId trace = graph.addTask(traceDesc);
+    ASSERT_TRUE(trace.valid());
+
+    const Graphics::GpuTaskResourceUse foldUses[] = {
+        {
+            .resource = shadowVisibility,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        {
+            .resource = transparentSoftHalf,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
     Graphics::GpuTaskDesc foldDesc;
     foldDesc
         .setIdentity(Name("tests/task_graph/soft_transparent_fold"))
         .setMarkerLabel("Shadow Transparent Soft Fold")
         .setQueue(computeRequest)
-        .setScheduling(foldScheduling)
-        .setDependencies(&opaque, 1u)
+        .setScheduling(traceScheduling)
+        .setDependencies(&trace, 1u)
         .setResourceUses(foldUses, LengthOf(foldUses))
     ;
     const Graphics::GpuTaskId fold = graph.addTask(foldDesc);
@@ -5212,50 +5237,81 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentFoldAfterOpaqueVisibility){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
-    EXPECT_TRUE(analysis.hasExplicitEdge(opaque, fold));
+    EXPECT_TRUE(analysis.hasExplicitEdge(opaque, trace));
+    EXPECT_TRUE(analysis.hasExplicitEdge(trace, fold));
     EXPECT_TRUE(analysis.hasExplicitEdge(fold, lighting));
     EXPECT_TRUE(HasInferredHazard(
         analysis,
         opaque,
-        fold,
+        trace,
         shadowVisibility,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        trace,
+        fold,
+        transparentSoftHalf,
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
 
     const Graphics::GpuSubmissionPacketId opaquePacket = compiledGraph.packetForTask(opaque);
+    const Graphics::GpuSubmissionPacketId tracePacket = compiledGraph.packetForTask(trace);
     const Graphics::GpuSubmissionPacketId foldPacket = compiledGraph.packetForTask(fold);
     const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
     ASSERT_TRUE(opaquePacket.valid());
+    ASSERT_TRUE(tracePacket.valid());
     ASSERT_TRUE(foldPacket.valid());
     ASSERT_TRUE(lightingPacket.valid());
     EXPECT_EQ(opaquePacket, foldPacket);
+    EXPECT_EQ(tracePacket, foldPacket);
     EXPECT_NE(foldPacket, lightingPacket);
     ASSERT_EQ(compiledGraph.packetCount(), 2u);
     const Graphics::GpuSubmissionPacket& shadowPacket = compiledGraph.packet(foldPacket);
-    ASSERT_EQ(shadowPacket.taskCount, 2u);
+    ASSERT_EQ(shadowPacket.taskCount, 3u);
     const Graphics::GpuTaskId* const shadowTasks = compiledGraph.packetTasks(foldPacket);
     ASSERT_NE(shadowTasks, nullptr);
     EXPECT_EQ(shadowTasks[0u], opaque);
-    EXPECT_EQ(shadowTasks[1u], fold);
+    EXPECT_EQ(shadowTasks[1u], trace);
+    EXPECT_EQ(shadowTasks[2u], fold);
 
-    const Graphics::GpuCompiledTask* const compiledFold = compiledGraph.findTask(fold);
-    ASSERT_NE(compiledFold, nullptr);
-    const Graphics::GpuCompiledBarrier* const foldBarriers = compiledGraph.taskPrologueBarriers(fold);
-    ASSERT_NE(foldBarriers, nullptr);
-    bool hasOpaqueToFoldUav = false;
-    for(u32 barrierIndex = 0u; barrierIndex < compiledFold->prologueBarrierCount; ++barrierIndex){
-        const Graphics::GpuCompiledBarrier& barrier = foldBarriers[barrierIndex];
+    const Graphics::GpuCompiledTask* const compiledTrace = compiledGraph.findTask(trace);
+    ASSERT_NE(compiledTrace, nullptr);
+    const Graphics::GpuCompiledBarrier* const traceBarriers = compiledGraph.taskPrologueBarriers(trace);
+    ASSERT_NE(traceBarriers, nullptr);
+    bool hasOpaqueToTraceUav = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledTrace->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = traceBarriers[barrierIndex];
         if(
             barrier.type == Graphics::GpuCompiledBarrierType::TextureUav
             && barrier.resource == shadowVisibility
             && barrier.before == Graphics::ResourceStates::UnorderedAccess
             && barrier.after == Graphics::ResourceStates::UnorderedAccess
         ){
-            hasOpaqueToFoldUav = true;
+            hasOpaqueToTraceUav = true;
             break;
         }
     }
-    EXPECT_TRUE(hasOpaqueToFoldUav);
+    EXPECT_TRUE(hasOpaqueToTraceUav);
+
+    const Graphics::GpuCompiledTask* const compiledFold = compiledGraph.findTask(fold);
+    ASSERT_NE(compiledFold, nullptr);
+    const Graphics::GpuCompiledBarrier* const foldBarriers = compiledGraph.taskPrologueBarriers(fold);
+    ASSERT_NE(foldBarriers, nullptr);
+    bool hasTraceToResolveTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledFold->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = foldBarriers[barrierIndex];
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == transparentSoftHalf
+            && barrier.before == Graphics::ResourceStates::UnorderedAccess
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+        ){
+            hasTraceToResolveTransition = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(hasTraceToResolveTransition);
 
     const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting);
     ASSERT_NE(compiledLighting, nullptr);

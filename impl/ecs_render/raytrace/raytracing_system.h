@@ -166,6 +166,7 @@ namespace __hidden_surfel_gi_task{
 
 namespace __hidden_shadow_visibility_task{
     struct ShadowVisibilityOpaqueGraphTask;
+    struct ShadowTransparentSoftTraceGraphTask;
     struct ShadowTransparentSoftFoldGraphTask;
     struct ShadowVisibilityGraphTask;
 }
@@ -334,7 +335,18 @@ public:
         Optional<Core::GpuTimingMeasure>* asyncTiming,
         Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming,
         const bool* opaqueProduced,
+        bool* transparentTraceProduced,
         const u32* opaqueFrameIndex,
+        bool graphEntryStatesOwned = false
+    );
+    [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftTraceTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        const bool* opaqueProduced,
+        const u32* opaqueFrameIndex,
+        bool* transparentTraceProduced,
         bool graphEntryStatesOwned = false
     );
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
@@ -648,6 +660,7 @@ public:
 private:
     struct SurfelGiInitializationGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowVisibilityOpaqueGraphTask;
+    friend struct __hidden_shadow_visibility_task::ShadowTransparentSoftTraceGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowTransparentSoftFoldGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowVisibilityGraphTask;
     friend struct __hidden_surfel_gi_task::SurfelGiAgeFreeGraphTask;
@@ -856,6 +869,8 @@ private:
         u32 visibilityStorage = 0u;
         u32 sceneShading = 0u;
         bool temporalMomentsValid = false;
+        // The prepared graph may already lower the transparent trace output before the first wavelet.
+        bool graphOwnsFirstWaveletInputState = false;
         bool firstWaveletWritesHalfA = true;
         SoftShadowUpsampleFold::Enum fold = SoftShadowUpsampleFold::Overwrite;
         // Must be odd so the selected upsample input is the final ping-pong result.
@@ -863,8 +878,9 @@ private:
     };
     // Resolve a contiguous shadow-slot range in one heap-selected dispatch.
     void dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slotStart, u32 slotCount, const SoftShadowResolveDispatch& dispatch);
-    // Denoise either backend's soft trace and optionally fold transparent transmittance. The shared deferred graph
-    // supplies the first geometry-downsample entry states; later trace/resolve transitions remain task-local.
+    // Denoise either backend's soft trace and optionally run the transparent trace and resolve phases. The shared
+    // deferred graph supplies the first geometry-downsample entry states and the prepared trace-to-resolve handoff;
+    // later lifecycle transitions remain task-local.
     void dispatchSoftShadowDenoiseAndTransparentFold(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -873,11 +889,13 @@ private:
         u32 softGroupsY,
         bool graphEntryStatesOwned = false,
         bool dispatchOpaque = true,
-        bool dispatchTransparent = true,
-        bool graphOwnsOpaqueToTransparentBoundary = false
+        bool dispatchTransparentTrace = true,
+        bool dispatchTransparentResolve = true,
+        bool graphOwnsOpaqueToTransparentBoundary = false,
+        bool graphOwnsTransparentTraceToResolveBoundary = false
     );
-    // Graph-only phase helpers preserve the complete direct route above while exposing the opaque-resolve to
-    // transparent-fold same-UAV handoff to the shared deferred graph.
+    // Graph-only phase helpers preserve the complete direct route above while exposing both in-packet handoffs to
+    // the shared deferred graph.
     [[nodiscard]] bool renderShadowVisibilityOpaque(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -890,12 +908,20 @@ private:
         u32& outFrameIndex,
         bool graphEntryStatesOwned
     );
-    [[nodiscard]] bool renderSoftTransparentShadowFold(
+    [[nodiscard]] bool renderSoftTransparentShadowTrace(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         u32 frameIndex,
         bool graphEntryStatesOwned,
         bool graphOwnsOpaqueToTransparentBoundary
+    );
+    [[nodiscard]] bool renderSoftTransparentShadowFold(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        u32 frameIndex,
+        bool graphEntryStatesOwned,
+        bool graphOwnsOpaqueToTransparentBoundary,
+        bool graphOwnsTransparentTraceToResolveBoundary
     );
     // Temporal merge precedes soft resolve and swaps history at frame end.
     [[nodiscard]] bool ensureShadowReprojectMergePipeline();

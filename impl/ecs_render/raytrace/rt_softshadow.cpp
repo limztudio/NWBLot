@@ -63,8 +63,10 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const u32 softGroupsY,
     const bool graphEntryStatesOwned,
     const bool dispatchOpaque,
-    const bool dispatchTransparent,
-    const bool graphOwnsOpaqueToTransparentBoundary
+    const bool dispatchTransparentTrace,
+    const bool dispatchTransparentResolve,
+    const bool graphOwnsOpaqueToTransparentBoundary,
+    const bool graphOwnsTransparentTraceToResolveBoundary
 ){
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
@@ -146,9 +148,10 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const bool opaqueTemporalActive = rayTracingState().m_softShadowTemporalReady;
     const u32 historyValid = softShadowTemporalHistoryUsable() ? 1u : 0u;
 
-    const auto dispatchMerge = [&](const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources& resources){
+    const auto dispatchMerge = [&](const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources& resources, const bool graphOwnsSoftTraceInputState){
         NWB_ASSERT(resources.softTrace && resources.historyIn && resources.momentsIn && resources.historyOut && resources.momentsOut);
-        commandList.setTextureState(resources.softTrace, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+        if(!graphOwnsSoftTraceInputState)
+            commandList.setTextureState(resources.softTrace, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(resources.historyIn, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(resources.momentsIn, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -208,7 +211,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             graphics().getDevice(),
             commandList
         );
-        dispatchMerge(opaqueMerge);
+        dispatchMerge(opaqueMerge, false);
     }
 
     // Feed the first wavelet directly from this frame's trace or temporal merge. PREPARE was only a half-res copy into
@@ -257,7 +260,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     }
     }
 
-    if(dispatchTransparent && rayTracingState().m_softTransparentReady){
+    if(dispatchTransparentTrace && rayTracingState().m_softTransparentReady){
         {
             Core::GpuTimingMeasure transparentTraceTiming(
                 graphics().gpuTiming(),
@@ -304,7 +307,9 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             commandList.setPushConstants(&tracePush, sizeof(tracePush));
             commandList.dispatch(softGroupsX, softGroupsY, 1u);
         }
+    }
 
+    if(dispatchTransparentResolve && rayTracingState().m_softTransparentReady){
         const bool transparentTemporalActive = rayTracingState().m_softTransparentTemporalReady;
         const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources transparentMerge = frontIsA
             ? __hidden_rt_softshadow::ShadowReprojectMergeHeapResources{
@@ -328,7 +333,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 graphics().getDevice(),
                 commandList
             );
-            dispatchMerge(transparentMerge);
+            dispatchMerge(transparentMerge, graphOwnsTransparentTraceToResolveBoundary);
         }
 
         Core::Texture* const transparentWaveletInput = transparentTemporalActive
@@ -361,6 +366,9 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         transparentDispatch.visibilityStorage = targets.bindless.shadowVisibilityStorage.slot();
         transparentDispatch.sceneShading = targets.bindless.sceneShading.slot();
         transparentDispatch.temporalMomentsValid = transparentTemporalActive;
+        transparentDispatch.graphOwnsFirstWaveletInputState =
+            graphOwnsTransparentTraceToResolveBoundary && !transparentTemporalActive
+        ;
         transparentDispatch.firstWaveletWritesHalfA = true;
         transparentDispatch.fold = SoftShadowUpsampleFold::Multiply;
         transparentDispatch.waveletPassCount = static_cast<u32>(NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT);
@@ -378,7 +386,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     // Do not mutate the target-generation handles while the sibling caustics and surfel-GI workers can still validate
     // targets.bindless. RendererSystem finalizes this pending CPU-side swap only after its complete ordered Graphics
     // submission succeeds.
-    if(dispatchTransparent && rayTracingState().m_softShadowTemporalReady)
+    if(dispatchTransparentResolve && rayTracingState().m_softShadowTemporalReady)
         rayTracingState().m_softShadowTemporalHistoryAdvancePending = true;
 }
 
@@ -519,7 +527,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
     const DeferredBindlessFrameResources& bindless = targets.bindless;
     Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
 
-    const auto runPass = [&](const SoftShadowResolvePassResources& resources, const u32 stepWidth, const ShadowResolveStage::Enum stage, const u32 groupsX, const u32 groupsY){
+    const auto runPass = [&](const SoftShadowResolvePassResources& resources, const u32 stepWidth, const ShadowResolveStage::Enum stage, const u32 groupsX, const u32 groupsY, const bool graphOwnsInputColorState = false){
         NWB_ASSERT(resources.softHalfTexture && resources.inputColorTexture && resources.momentsTexture && resources.outputTexture);
         switch(stage){
             case ShadowResolveStage::Prepare:
@@ -530,7 +538,8 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
                 break;
             case ShadowResolveStage::Wavelet:
                 commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-                commandList.setTextureState(resources.inputColorTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+                if(!graphOwnsInputColorState)
+                    commandList.setTextureState(resources.inputColorTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
                 if(dispatch.temporalMomentsValid)
                     commandList.setTextureState(resources.momentsTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
                 commandList.setTextureState(resources.outputTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
@@ -582,7 +591,14 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
     static_assert((NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT % 2) == 1, "transparent resolve pass count must be odd");
     NWB_ASSERT(dispatch.waveletPassCount != 0u && (dispatch.waveletPassCount % 2u) == 1u);
 
-    runPass(dispatch.firstWaveletResources, 1u, ShadowResolveStage::Wavelet, halfGroupsX, halfGroupsY);
+    runPass(
+        dispatch.firstWaveletResources,
+        1u,
+        ShadowResolveStage::Wavelet,
+        halfGroupsX,
+        halfGroupsY,
+        dispatch.graphOwnsFirstWaveletInputState
+    );
     bool sourceIsHalfA = dispatch.firstWaveletWritesHalfA;
     [[maybe_unused]] const SoftShadowResolvePassResources* lastWaveletResources = &dispatch.firstWaveletResources;
     for(u32 pass = 1u; pass < dispatch.waveletPassCount; ++pass){

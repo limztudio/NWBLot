@@ -149,6 +149,61 @@ struct ShadowVisibilityOpaqueGraphTask{
 };
 
 
+// The prepared path keeps trace and resolve as separate callbacks so the graph lowers the transparent half output
+// from UAV to shader-read between them. The terminal resolve task retains the legacy timing and acceptance owner.
+struct ShadowTransparentSoftTraceGraphTask{
+    struct Payload{
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        const bool* opaqueProduced = nullptr;
+        const u32* opaqueFrameIndex = nullptr;
+        bool* transparentTraceProduced = nullptr;
+        bool graphEntryStatesOwned = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(
+            !payload.raytracingSystem
+            || !payload.targets
+            || !payload.timingTicket
+            || !payload.opaqueProduced
+            || !payload.opaqueFrameIndex
+            || !payload.transparentTraceProduced
+        )
+            return false;
+
+        *payload.transparentTraceProduced = false;
+        if(!*payload.opaqueProduced)
+            return true;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        if(!payload.raytracingSystem->renderSoftTransparentShadowTrace(
+            commandList,
+            *payload.targets,
+            *payload.opaqueFrameIndex,
+            payload.graphEntryStatesOwned,
+            true
+        )){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split transparent soft-shadow trace could not record; preserving opaque visibility"));
+            return true;
+        }
+        *payload.transparentTraceProduced = true;
+        return true;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.transparentTraceProduced)
+            *payload.transparentTraceProduced = false;
+    }
+};
+
+
 struct ShadowTransparentSoftFoldGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -157,6 +212,7 @@ struct ShadowTransparentSoftFoldGraphTask{
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming = nullptr;
         const bool* opaqueProduced = nullptr;
+        bool* transparentTraceProduced = nullptr;
         const u32* opaqueFrameIndex = nullptr;
         bool graphEntryStatesOwned = false;
     };
@@ -173,6 +229,7 @@ struct ShadowTransparentSoftFoldGraphTask{
             || !payload.asyncTiming
             || !payload.shadowVisibilityTiming
             || !payload.opaqueProduced
+            || !payload.transparentTraceProduced
             || !payload.opaqueFrameIndex
         )
             return false;
@@ -189,14 +246,18 @@ struct ShadowTransparentSoftFoldGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        if(!payload.raytracingSystem->renderSoftTransparentShadowFold(
-            commandList,
-            *payload.targets,
-            *payload.opaqueFrameIndex,
-            payload.graphEntryStatesOwned,
-            true
-        ))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split transparent soft-shadow fold failed; preserving opaque visibility"));
+        if(*payload.transparentTraceProduced){
+            if(!payload.raytracingSystem->renderSoftTransparentShadowFold(
+                commandList,
+                *payload.targets,
+                *payload.opaqueFrameIndex,
+                payload.graphEntryStatesOwned,
+                true,
+                true
+            ))
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split transparent soft-shadow resolve failed; preserving opaque visibility"));
+        }else
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split transparent soft-shadow trace failed; preserving opaque visibility"));
 
         if(payload.asyncTiming->has_value()){
             payload.asyncTiming->value().finishTiming(commandList);
@@ -213,6 +274,8 @@ struct ShadowTransparentSoftFoldGraphTask{
     }
 
     static void discarded(Payload& payload){
+        if(payload.transparentTraceProduced)
+            *payload.transparentTraceProduced = false;
         if(payload.asyncTiming && payload.asyncTiming->has_value()){
             payload.asyncTiming->value().discardTiming();
             payload.asyncTiming->reset();
@@ -794,6 +857,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(
             softGroupsY,
             graphEntryStatesOwned,
             true,
+            !splitSoftTransparentFold,
             !splitSoftTransparentFold
         );
         if(splitSoftTransparentFold){
@@ -895,7 +959,7 @@ bool RendererRayTracingSystem::renderShadowVisibilityOpaque(
     );
 }
 
-bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
+bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const u32 frameIndex,
@@ -910,8 +974,6 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
         return false;
     const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
     const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
-    // The terminal fold always runs the software transparent trace, regardless of whether opaque visibility came
-    // from RayQuery or the software BVH path.
     const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
     const u32 softGroupsY = DivideUp(softHalfHeight, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
     dispatchSoftShadowDenoiseAndTransparentFold(
@@ -923,7 +985,43 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
         graphEntryStatesOwned,
         false,
         true,
-        graphOwnsOpaqueToTransparentBoundary
+        false,
+        graphOwnsOpaqueToTransparentBoundary,
+        false
+    );
+    return true;
+}
+
+bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const u32 frameIndex,
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsOpaqueToTransparentBoundary,
+    const bool graphOwnsTransparentTraceToResolveBoundary
+){
+    if(
+        !rayTracingState().m_softShadowReady
+        || !rayTracingState().m_softTransparentReady
+        || rayTracingState().m_softShadowSlotMask == 0u
+    )
+        return false;
+    const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
+    const u32 softGroupsY = DivideUp(softHalfHeight, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
+    dispatchSoftShadowDenoiseAndTransparentFold(
+        commandList,
+        targets,
+        frameIndex,
+        softGroupsX,
+        softGroupsY,
+        graphEntryStatesOwned,
+        false,
+        false,
+        true,
+        graphOwnsOpaqueToTransparentBoundary,
+        graphOwnsTransparentTraceToResolveBoundary
     );
     return true;
 }
@@ -936,6 +1034,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
     Optional<Core::GpuTimingMeasure>* const asyncTiming,
     Optional<Core::GpuTimingMeasure>* const shadowVisibilityTiming,
     const bool* const opaqueProduced,
+    bool* const transparentTraceProduced,
     const u32* const opaqueFrameIndex,
     const bool graphEntryStatesOwned
 ){
@@ -948,7 +1047,32 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
             .asyncTiming = asyncTiming,
             .shadowVisibilityTiming = shadowVisibilityTiming,
             .opaqueProduced = opaqueProduced,
+            .transparentTraceProduced = transparentTraceProduced,
             .opaqueFrameIndex = opaqueFrameIndex,
+            .graphEntryStatesOwned = graphEntryStatesOwned,
+        }
+    );
+}
+
+Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTraceTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    const bool* const opaqueProduced,
+    const u32* const opaqueFrameIndex,
+    bool* const transparentTraceProduced,
+    const bool graphEntryStatesOwned
+){
+    return graph.addTask<__hidden_shadow_visibility_task::ShadowTransparentSoftTraceGraphTask>(
+        desc,
+        __hidden_shadow_visibility_task::ShadowTransparentSoftTraceGraphTask::Payload{
+            .raytracingSystem = this,
+            .targets = &targets,
+            .timingTicket = &timingTicket,
+            .opaqueProduced = opaqueProduced,
+            .opaqueFrameIndex = opaqueFrameIndex,
+            .transparentTraceProduced = transparentTraceProduced,
             .graphEntryStatesOwned = graphEntryStatesOwned,
         }
     );
@@ -1163,6 +1287,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                 softGroupsY,
                 graphEntryStatesOwned,
                 true,
+                !splitSoftTransparentFold,
                 !splitSoftTransparentFold
             );
             if(splitSoftTransparentFold){

@@ -9514,9 +9514,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     bool extinctionStreamsUploaded = false;
     bool extinctionCsgStreamsUploaded = false;
     Core::Alloc::ScratchArena extinctionMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionMaterialGeometryUses{
-        extinctionMaterialGeometryScratch
-    };
+    Core::GpuGraphResourceSetId extinctionMaterialGeometrySet;
         Core::Alloc::ScratchArena extinctionUploadScratch(RendererArenaScope::s_TaskGraphArena);
         MaterialPassDrawItemPartitions extinctionDrawItems{ extinctionUploadScratch };
         InstanceGpuDataVector extinctionInstanceData{ extinctionUploadScratch };
@@ -9568,13 +9566,15 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 &extinctionDrawItems.regular,
                 &extinctionDrawItems.csg,
             };
-            avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryUses(
+            avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryResourceSet(
                 m_meshSystem,
                 m_deferredLightingTaskGraph,
                 extinctionMaterialGeometryDrawSets,
                 LengthOf(extinctionMaterialGeometryDrawSets),
                 extinctionMaterialGeometryScratch,
-                extinctionMaterialGeometryUses
+                Name("render.avboit.extinction.material_geometry"),
+                "AVBOIT Extinction Material Geometry",
+                extinctionMaterialGeometrySet
             );
             if(!avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT extinction material geometry states"));
@@ -9872,8 +9872,12 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             }
         }
     }
-    for(const Core::GpuTaskResourceUse& use : extinctionMaterialGeometryUses)
-        extinctionResourceUses.push_back(use);
+    const Core::GpuTaskResourceSetUse extinctionMaterialGeometrySetUse{
+        .resourceSet = extinctionMaterialGeometrySet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
     extinctionResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     extinctionResourceUses.push_back(ReadUse(avboitMaterialDomain));
     extinctionResourceUses.push_back(ReadUse(avboitCsgDomain));
@@ -9891,6 +9895,12 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .setScheduling(avboitExtinctionScheduling)
         .setDependencies(&extinctionUploadTask, 1u)
         .setResourceUses(extinctionResourceUses.data(), extinctionResourceUses.size())
+        .setResourceSetUses(
+            avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
+                ? &extinctionMaterialGeometrySetUse
+                : nullptr,
+            avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned ? 1u : 0u
+        )
     ;
     m_deferredAvboitExtinctionTask = m_deferredLightingTaskGraph.addTask<AvboitExtinctionGraphTask>(
         extinctionDesc,

@@ -10794,6 +10794,252 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
 }
 
 
+// AVBOIT Extinction consumes the transparent CSG interval aliases after its optional depth-warp gap. Its exact
+// selected mesh buffers must reach ShaderResource through the immutable graph set before the native callback runs.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitExtinctionMaterialGeometryStateRecordsWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto materialGeometry = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    const auto makeStorageArray = [&device](const u32 arraySize){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setArraySize(arraySize)
+                .setDimension(TextureDimension::Texture2DArray)
+                .setFormat(Format::RGBA32_UINT)
+                .setInUAV(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    auto removedIntervalDepth = makeStorageArray(16u);
+    auto removedIntervalCapNormal = makeStorageArray(16u);
+    auto removedIntervalData = makeStorageArray(16u);
+    auto removedIntervalCount = makeStorageArray(1u);
+    ASSERT_NE(materialGeometry.get(), nullptr);
+    ASSERT_NE(removedIntervalDepth.get(), nullptr);
+    ASSERT_NE(removedIntervalCapNormal.get(), nullptr);
+    ASSERT_NE(removedIntervalData.get(), nullptr);
+    ASSERT_NE(removedIntervalCount.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId materialGeometryResource = graph.importBuffer(
+        materialGeometry,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_extinction_material_geometry"))
+            .setMarkerLabel("AVBOIT Extinction Material Geometry")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId removedIntervalDepthResource = graph.importTexture(
+        removedIntervalDepth,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_extinction_removed_interval_depth"))
+            .setMarkerLabel("AVBOIT Extinction Removed Interval Depth")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId removedIntervalCapNormalResource = graph.importTexture(
+        removedIntervalCapNormal,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_extinction_removed_interval_cap_normal"))
+            .setMarkerLabel("AVBOIT Extinction Removed Interval Cap Normal")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId removedIntervalDataResource = graph.importTexture(
+        removedIntervalData,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_extinction_removed_interval_data"))
+            .setMarkerLabel("AVBOIT Extinction Removed Interval Data")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId removedIntervalCountResource = graph.importTexture(
+        removedIntervalCount,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_extinction_removed_interval_count"))
+            .setMarkerLabel("AVBOIT Extinction Removed Interval Count")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(materialGeometryResource.valid());
+    ASSERT_TRUE(removedIntervalDepthResource.valid());
+    ASSERT_TRUE(removedIntervalCapNormalResource.valid());
+    ASSERT_TRUE(removedIntervalDataResource.valid());
+    ASSERT_TRUE(removedIntervalCountResource.valid());
+
+    const TextureSubresourceSet removedIntervalRange(0u, 1u, 0u, 16u);
+    const TextureSubresourceSet removedIntervalCountRange(0u, 1u, 0u, 1u);
+    const GpuTaskResourceUse extinctionUses[] = {
+        GpuTaskResourceUse{
+            .resource = removedIntervalDepthResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalCapNormalResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalDataResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalCountResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalCountRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    const GpuGraphResourceSetId materialGeometrySet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_extinction_material_geometry_set"))
+            .setMarkerLabel("AVBOIT Extinction Material Geometry")
+            .setMembers(&materialGeometryResource, 1u)
+    );
+    ASSERT_TRUE(materialGeometrySet.valid());
+    const GpuTaskResourceSetUse materialGeometrySetUses[] = {
+        GpuTaskResourceSetUse{
+            .resourceSet = materialGeometrySet,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint extinctionScheduling;
+    extinctionScheduling.cost = GpuTaskCostHint::Large;
+    extinctionScheduling.forceSubmissionBoundary = false;
+    extinctionScheduling.allowPacketMerge = true;
+    GpuTaskDesc extinctionDesc;
+    extinctionDesc
+        .setIdentity(Name("tests/descriptor_buffer/avboit_extinction_csg_sample"))
+        .setMarkerLabel("AVBOIT Extinction")
+        .setQueue(graphicsQueue)
+        .setScheduling(extinctionScheduling)
+        .setResourceUses(extinctionUses, LengthOf(extinctionUses))
+        .setResourceSetUses(materialGeometrySetUses, LengthOf(materialGeometrySetUses))
+    ;
+    bool extinctionRecorded = false;
+    const GpuTaskId extinctionTask = graph.addTask<NativePacketCsgIntervalSampleProbeTask>(
+        extinctionDesc,
+        NativePacketCsgIntervalSampleProbeTask::Payload{
+            .materialGeometry = materialGeometry.get(),
+            .removedIntervalDepth = removedIntervalDepth.get(),
+            .removedIntervalCapNormal = removedIntervalCapNormal.get(),
+            .removedIntervalData = removedIntervalData.get(),
+            .removedIntervalCount = removedIntervalCount.get(),
+            .recorded = &extinctionRecorded,
+        }
+    );
+    ASSERT_TRUE(extinctionTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/avboit_extinction_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(extinctionTask);
+    ASSERT_TRUE(packet.valid());
+    const GpuCompiledTask* const compiledExtinction = compiledGraph.findTask(extinctionTask);
+    ASSERT_NE(compiledExtinction, nullptr);
+    ASSERT_EQ(compiledExtinction->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledExtinction->prologueBarrierCount, 5u);
+    const GpuCompiledBarrier* const extinctionBarriers = compiledGraph.taskPrologueBarriers(extinctionTask);
+    ASSERT_NE(extinctionBarriers, nullptr);
+    bool materialGeometryTransition = false;
+    const auto hasTextureTransition = [](const GpuGraphResourceId resource, const TextureSubresourceSet& range, const GpuCompiledBarrier* barriers, const u32 barrierCount){
+        for(u32 barrierIndex = 0u; barrierIndex < barrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == resource
+                && barrier.range.textureSubresources == range
+                && barrier.before == ResourceStates::Common
+                && barrier.after == ResourceStates::UnorderedAccess
+            )
+                return true;
+        }
+        return false;
+    };
+    for(u32 barrierIndex = 0u; barrierIndex < compiledExtinction->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = extinctionBarriers[barrierIndex];
+        if(
+            barrier.type == GpuCompiledBarrierType::BufferTransition
+            && barrier.resource == materialGeometryResource
+            && barrier.before == ResourceStates::Common
+            && barrier.after == ResourceStates::ShaderResource
+        )
+            materialGeometryTransition = true;
+    }
+    EXPECT_TRUE(hasTextureTransition(removedIntervalDepthResource, removedIntervalRange, extinctionBarriers, compiledExtinction->prologueBarrierCount));
+    EXPECT_TRUE(hasTextureTransition(removedIntervalCapNormalResource, removedIntervalRange, extinctionBarriers, compiledExtinction->prologueBarrierCount));
+    EXPECT_TRUE(hasTextureTransition(removedIntervalDataResource, removedIntervalRange, extinctionBarriers, compiledExtinction->prologueBarrierCount));
+    EXPECT_TRUE(hasTextureTransition(removedIntervalCountResource, removedIntervalCountRange, extinctionBarriers, compiledExtinction->prologueBarrierCount));
+    EXPECT_TRUE(materialGeometryTransition);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(extinctionRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(packet).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Opaque CSG now lowers G-buffer event production, receiver-span build, interval combine, and material/cap sampling
 // as graph tasks. Record the whole same-UAV chain on a real Graphics packet so Span, Combine, and Sample cannot rely
 // on a native state bridge.

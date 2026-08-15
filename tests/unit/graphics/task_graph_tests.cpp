@@ -17019,10 +17019,16 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToExtinctionSampleAcrossAsyncGa
         Name("tests/task_graph/avboit_extinction_removed_interval_count"),
         "AVBOIT Extinction Removed Interval Count"
     );
+    const Graphics::GpuGraphResourceId extinctionMaterialGeometry = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/avboit_extinction_material_geometry"),
+        "AVBOIT Extinction Material Geometry"
+    );
     ASSERT_TRUE(removedIntervalDepth.valid());
     ASSERT_TRUE(removedIntervalCapNormal.valid());
     ASSERT_TRUE(removedIntervalData.valid());
     ASSERT_TRUE(removedIntervalCount.valid());
+    ASSERT_TRUE(extinctionMaterialGeometry.valid());
 
     const Graphics::TextureSubresourceSet removedIntervalRange(0u, 1u, 0u, 16u);
     const Graphics::TextureSubresourceSet removedIntervalCountRange(0u, 1u, 0u, 1u);
@@ -17078,6 +17084,21 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToExtinctionSampleAcrossAsyncGa
             .access = Graphics::GpuTaskResourceAccess::Read,
         },
     };
+    const Graphics::GpuGraphResourceSetId extinctionMaterialGeometrySet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/avboit_extinction_material_geometry_set"))
+            .setMarkerLabel("AVBOIT Extinction Material Geometry")
+            .setMembers(&extinctionMaterialGeometry, 1u)
+    );
+    ASSERT_TRUE(extinctionMaterialGeometrySet.valid());
+    const Graphics::GpuTaskResourceSetUse extinctionMaterialGeometrySetUses[] = {
+        Graphics::GpuTaskResourceSetUse{
+            .resourceSet = extinctionMaterialGeometrySet,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
         Graphics::GpuQueuePreference::Graphics,
@@ -17125,6 +17146,7 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToExtinctionSampleAcrossAsyncGa
         .setScheduling(boundaryScheduling)
         .setDependencies(&depthWarp, 1u)
         .setResourceUses(extinctionUses, LengthOf(extinctionUses))
+        .setResourceSetUses(extinctionMaterialGeometrySetUses, LengthOf(extinctionMaterialGeometrySetUses))
     ;
     const Graphics::GpuTaskId extinction = graph.addTask(extinctionDesc);
     ASSERT_TRUE(extinction.valid());
@@ -17202,7 +17224,7 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToExtinctionSampleAcrossAsyncGa
     ASSERT_EQ(compiledIntervals->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledIntervals->prologueBarrierCount, 4u);
     ASSERT_EQ(compiledExtinction->prologueStateSeedCount, 4u);
-    ASSERT_EQ(compiledExtinction->prologueBarrierCount, 4u);
+    ASSERT_EQ(compiledExtinction->prologueBarrierCount, 5u);
     const Graphics::GpuPacketStateSeed* const extinctionSeeds = compiledGraph.taskPrologueStateSeeds(extinction);
     const Graphics::GpuCompiledBarrier* const extinctionBarriers = compiledGraph.taskPrologueBarriers(extinction);
     ASSERT_NE(extinctionSeeds, nullptr);
@@ -17233,10 +17255,22 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerToExtinctionSampleAcrossAsyncGa
     EXPECT_TRUE(hasExtinctionStateSeed(removedIntervalCapNormal));
     EXPECT_TRUE(hasExtinctionStateSeed(removedIntervalData));
     EXPECT_TRUE(hasExtinctionStateSeed(removedIntervalCount));
+    bool extinctionMaterialGeometryTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledExtinction->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = extinctionBarriers[barrierIndex];
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+            && barrier.resource == extinctionMaterialGeometry
+            && barrier.before == Graphics::ResourceStates::Common
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+        )
+            extinctionMaterialGeometryTransition = true;
+    }
     EXPECT_TRUE(hasExtinctionUav(removedIntervalDepth, removedIntervalRange));
     EXPECT_TRUE(hasExtinctionUav(removedIntervalCapNormal, removedIntervalRange));
     EXPECT_TRUE(hasExtinctionUav(removedIntervalData, removedIntervalRange));
     EXPECT_TRUE(hasExtinctionUav(removedIntervalCount, removedIntervalCountRange));
+    EXPECT_TRUE(extinctionMaterialGeometryTransition);
 }
 
 

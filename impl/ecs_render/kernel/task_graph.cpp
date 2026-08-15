@@ -4157,19 +4157,19 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgIntervalSampleResourceUses{
             csgIntervalSampleResourceScratch
         };
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgIntervalSampleMaterialGeometryUses{
-            csgIntervalSampleResourceScratch
-        };
+        Core::GpuGraphResourceSetId csgIntervalSampleMaterialGeometrySet;
         const MaterialPassDrawItems* const csgIntervalSampleMaterialGeometryDrawSets[] = { &opaqueDrawItems.csg };
         const bool csgIntervalSampleUsesMaterialGeometry = !opaqueDrawItems.csg.empty();
         csgIntervalSamplePayload.materialGeometryStatesGraphOwned = csgIntervalSampleUsesMaterialGeometry
-            && GatherPreparedMaterialGeometryUses(
+            && GatherPreparedMaterialGeometryResourceSet(
                 m_meshSystem,
                 m_deferredLightingTaskGraph,
                 csgIntervalSampleMaterialGeometryDrawSets,
                 LengthOf(csgIntervalSampleMaterialGeometryDrawSets),
                 csgIntervalSampleResourceScratch,
-                csgIntervalSampleMaterialGeometryUses
+                Name("render.graphics_prefix.csg_interval_sample.material_geometry"),
+                "Opaque CSG Material Geometry",
+                csgIntervalSampleMaterialGeometrySet
             )
         ;
         if(csgIntervalSampleUsesMaterialGeometry && !csgIntervalSamplePayload.materialGeometryStatesGraphOwned)
@@ -4217,8 +4217,12 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         csgIntervalSampleResourceUses.push_back(WriteUse(normal, Core::ResourceStates::RenderTarget));
         csgIntervalSampleResourceUses.push_back(WriteUse(worldPosition, Core::ResourceStates::RenderTarget));
         csgIntervalSampleResourceUses.push_back(WriteUse(depth, Core::ResourceStates::DepthWrite));
-        for(const Core::GpuTaskResourceUse& use : csgIntervalSampleMaterialGeometryUses)
-            csgIntervalSampleResourceUses.push_back(use);
+        const Core::GpuTaskResourceSetUse csgIntervalSampleMaterialGeometrySetUse{
+            .resourceSet = csgIntervalSampleMaterialGeometrySet,
+            .range = {},
+            .requiredState = Core::ResourceStates::ShaderResource,
+            .access = Core::GpuTaskResourceAccess::Read,
+        };
 
         Core::GpuTaskSchedulingHint csgIntervalSampleScheduling;
         csgIntervalSampleScheduling.cost = Core::GpuTaskCostHint::Medium;
@@ -4233,6 +4237,10 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             .setScheduling(csgIntervalSampleScheduling)
             .setDependencies(&m_graphicsPrefixCsgIntervalCombineTask, 1u)
             .setResourceUses(csgIntervalSampleResourceUses.data(), csgIntervalSampleResourceUses.size())
+            .setResourceSetUses(
+                csgIntervalSamplePayload.materialGeometryStatesGraphOwned ? &csgIntervalSampleMaterialGeometrySetUse : nullptr,
+                csgIntervalSamplePayload.materialGeometryStatesGraphOwned ? 1u : 0u
+            )
         ;
         m_graphicsPrefixCsgIntervalSampleTask = m_deferredLightingTaskGraph.addTask<
             ECSRenderDetail::CsgIntervalSampleGraphTask

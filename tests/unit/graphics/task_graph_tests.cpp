@@ -14622,6 +14622,11 @@ TEST(GpuTaskGraph, PlansMergedCsgGbufferSpanBuildCombineAndOpaqueSampleUavDepend
         Name("tests/task_graph/csg_sample_removed_interval_count"),
         "CSG Sample Removed Interval Count"
     );
+    const Graphics::GpuGraphResourceId materialGeometry = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/csg_sample_material_geometry"),
+        "Opaque CSG Material Geometry"
+    );
     ASSERT_TRUE(capBackNormal.valid());
     ASSERT_TRUE(intervalDepth.valid());
     ASSERT_TRUE(intervalId.valid());
@@ -14633,6 +14638,7 @@ TEST(GpuTaskGraph, PlansMergedCsgGbufferSpanBuildCombineAndOpaqueSampleUavDepend
     ASSERT_TRUE(removedIntervalCapNormal.valid());
     ASSERT_TRUE(removedIntervalData.valid());
     ASSERT_TRUE(removedIntervalCount.valid());
+    ASSERT_TRUE(materialGeometry.valid());
 
     const Graphics::TextureSubresourceSet peelRange(0u, 1u, 0u, 4u);
     const Graphics::TextureSubresourceSet receiverEventRange(0u, 1u, 0u, 32u);
@@ -14781,6 +14787,21 @@ TEST(GpuTaskGraph, PlansMergedCsgGbufferSpanBuildCombineAndOpaqueSampleUavDepend
             .access = Graphics::GpuTaskResourceAccess::Read,
         },
     };
+    const Graphics::GpuGraphResourceSetId sampleMaterialGeometrySet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/csg_sample_material_geometry_set"))
+            .setMarkerLabel("Opaque CSG Material Geometry")
+            .setMembers(&materialGeometry, 1u)
+    );
+    ASSERT_TRUE(sampleMaterialGeometrySet.valid());
+    const Graphics::GpuTaskResourceSetUse sampleMaterialGeometrySetUses[] = {
+        Graphics::GpuTaskResourceSetUse{
+            .resourceSet = sampleMaterialGeometrySet,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
         Graphics::GpuQueuePreference::Graphics,
@@ -14849,6 +14870,7 @@ TEST(GpuTaskGraph, PlansMergedCsgGbufferSpanBuildCombineAndOpaqueSampleUavDepend
         .setScheduling(sampleScheduling)
         .setDependencies(&combine, 1u)
         .setResourceUses(sampleUses, LengthOf(sampleUses))
+        .setResourceSetUses(sampleMaterialGeometrySetUses, LengthOf(sampleMaterialGeometrySetUses))
     ;
     const Graphics::GpuTaskId sample = graph.addTask(sampleDesc);
     ASSERT_TRUE(sample.valid());
@@ -14981,7 +15003,7 @@ TEST(GpuTaskGraph, PlansMergedCsgGbufferSpanBuildCombineAndOpaqueSampleUavDepend
     ASSERT_EQ(compiledProducer->prologueBarrierCount, 5u);
     ASSERT_EQ(compiledSpanBuild->prologueBarrierCount, 4u);
     ASSERT_EQ(compiledCombine->prologueBarrierCount, 9u);
-    ASSERT_EQ(compiledSample->prologueBarrierCount, 4u);
+    ASSERT_EQ(compiledSample->prologueBarrierCount, 5u);
     const Graphics::GpuCompiledBarrier* const producerBarriers = compiledGraph.taskPrologueBarriers(producer);
     const Graphics::GpuCompiledBarrier* const spanBuildBarriers = compiledGraph.taskPrologueBarriers(spanBuild);
     const Graphics::GpuCompiledBarrier* const combineBarriers = compiledGraph.taskPrologueBarriers(combine);
@@ -15074,6 +15096,19 @@ TEST(GpuTaskGraph, PlansMergedCsgGbufferSpanBuildCombineAndOpaqueSampleUavDepend
         }
         return false;
     };
+    const auto hasSampleMaterialGeometryTransition = [&]{
+        for(u32 barrierIndex = 0u; barrierIndex < compiledSample->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = sampleBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == materialGeometry
+                && barrier.before == Graphics::ResourceStates::Common
+                && barrier.after == Graphics::ResourceStates::ShaderResource
+            )
+                return true;
+        }
+        return false;
+    };
     EXPECT_TRUE(hasProducerTransition(capBackNormal, peelRange));
     EXPECT_TRUE(hasProducerTransition(intervalDepth, peelRange));
     EXPECT_TRUE(hasProducerTransition(intervalId, peelRange));
@@ -15096,6 +15131,7 @@ TEST(GpuTaskGraph, PlansMergedCsgGbufferSpanBuildCombineAndOpaqueSampleUavDepend
     EXPECT_TRUE(hasSampleUav(removedIntervalCapNormal, removedIntervalRange));
     EXPECT_TRUE(hasSampleUav(removedIntervalData, removedIntervalRange));
     EXPECT_TRUE(hasSampleUav(removedIntervalCount, removedIntervalCountRange));
+    EXPECT_TRUE(hasSampleMaterialGeometryTransition());
 }
 
 

@@ -903,12 +903,14 @@ struct NativePacketCsgIntervalCombineProbeTask{
 };
 
 
-// AVBOIT and opaque CSG sampling read four StorageImage aliases produced by the interval-combine task. This probe
-// performs no native state work: it only observes the packet runtime's graph-lowered state before the equivalent
-// thunk runs. Coverage is optional because opaque sampling has no coverage-buffer dependency.
+// AVBOIT and opaque CSG sampling read four StorageImage aliases produced by the interval-combine task. Opaque CSG
+// may also receive its exact selected mesh-source buffers through an immutable ShaderResource set. This probe performs
+// no native state work: it only observes packet-runtime states before the equivalent thunk runs. Coverage is optional
+// because opaque sampling has no coverage-buffer dependency.
 struct NativePacketCsgIntervalSampleProbeTask{
     struct Payload{
         Buffer* coverage = nullptr;
+        Buffer* materialGeometry = nullptr;
         Texture* removedIntervalDepth = nullptr;
         Texture* removedIntervalCapNormal = nullptr;
         Texture* removedIntervalData = nullptr;
@@ -936,6 +938,7 @@ struct NativePacketCsgIntervalSampleProbeTask{
         };
         const bool ready =
             (!payload.coverage || commandList.getBufferState(payload.coverage) == ResourceStates::UnorderedAccess)
+            && (!payload.materialGeometry || commandList.getBufferState(payload.materialGeometry) == ResourceStates::ShaderResource)
             && hasUavRange(payload.removedIntervalDepth, 15u)
             && hasUavRange(payload.removedIntervalCapNormal, 15u)
             && hasUavRange(payload.removedIntervalData, 15u)
@@ -10733,6 +10736,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverSpanCombineAndS
     auto removedIntervalCapNormal = makeStorageArray(16u);
     auto removedIntervalData = makeStorageArray(16u);
     auto removedIntervalCount = makeStorageArray(1u);
+    auto materialGeometry = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
     ASSERT_NE(capBackNormal.get(), nullptr);
     ASSERT_NE(intervalDepth.get(), nullptr);
     ASSERT_NE(intervalId.get(), nullptr);
@@ -10744,6 +10753,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverSpanCombineAndS
     ASSERT_NE(removedIntervalCapNormal.get(), nullptr);
     ASSERT_NE(removedIntervalData.get(), nullptr);
     ASSERT_NE(removedIntervalCount.get(), nullptr);
+    ASSERT_NE(materialGeometry.get(), nullptr);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId capBackNormalResource = graph.importTexture(
@@ -10823,6 +10833,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverSpanCombineAndS
             .setMarkerLabel("Opaque CSG Combine Removed Interval Count")
             .setType(GpuGraphResourceType::Texture)
     );
+    const GpuGraphResourceId materialGeometryResource = graph.importBuffer(
+        materialGeometry,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/opaque_csg_sample_material_geometry"))
+            .setMarkerLabel("Opaque CSG Material Geometry")
+            .setType(GpuGraphResourceType::Buffer)
+    );
     ASSERT_TRUE(capBackNormalResource.valid());
     ASSERT_TRUE(intervalDepthResource.valid());
     ASSERT_TRUE(intervalIdResource.valid());
@@ -10834,6 +10851,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverSpanCombineAndS
     ASSERT_TRUE(removedIntervalCapNormalResource.valid());
     ASSERT_TRUE(removedIntervalDataResource.valid());
     ASSERT_TRUE(removedIntervalCountResource.valid());
+    ASSERT_TRUE(materialGeometryResource.valid());
 
     const TextureSubresourceSet peelRange(0u, 1u, 0u, 4u);
     const TextureSubresourceSet receiverEventRange(0u, 1u, 0u, 32u);
@@ -10982,6 +11000,21 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverSpanCombineAndS
             .access = GpuTaskResourceAccess::Read,
         },
     };
+    const GpuGraphResourceSetId sampleMaterialGeometrySet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/opaque_csg_sample_material_geometry_set"))
+            .setMarkerLabel("Opaque CSG Material Geometry")
+            .setMembers(&materialGeometryResource, 1u)
+    );
+    ASSERT_TRUE(sampleMaterialGeometrySet.valid());
+    const GpuTaskResourceSetUse sampleMaterialGeometrySetUses[] = {
+        GpuTaskResourceSetUse{
+            .resourceSet = sampleMaterialGeometrySet,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
     const GpuQueueRequest graphicsQueue{
         GpuQueueCapability::Graphics,
         GpuQueuePreference::Graphics,
@@ -11073,11 +11106,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverSpanCombineAndS
         .setScheduling(sampleScheduling)
         .setDependencies(&combineTask, 1u)
         .setResourceUses(sampleUses, LengthOf(sampleUses))
+        .setResourceSetUses(sampleMaterialGeometrySetUses, LengthOf(sampleMaterialGeometrySetUses))
     ;
     bool sampleRecorded = false;
     const GpuTaskId sampleTask = graph.addTask<NativePacketCsgIntervalSampleProbeTask>(
         sampleDesc,
         NativePacketCsgIntervalSampleProbeTask::Payload{
+            .materialGeometry = materialGeometry.get(),
             .removedIntervalDepth = removedIntervalDepth.get(),
             .removedIntervalCapNormal = removedIntervalCapNormal.get(),
             .removedIntervalData = removedIntervalData.get(),
@@ -11140,7 +11175,21 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverSpanCombineAndS
     EXPECT_EQ(compiledProducer->prologueBarrierCount, 5u);
     EXPECT_EQ(compiledSpan->prologueBarrierCount, 4u);
     EXPECT_EQ(compiledCombine->prologueBarrierCount, 9u);
-    EXPECT_EQ(compiledSample->prologueBarrierCount, 4u);
+    EXPECT_EQ(compiledSample->prologueBarrierCount, 5u);
+    const GpuCompiledBarrier* const sampleBarriers = compiledGraph.taskPrologueBarriers(sampleTask);
+    ASSERT_NE(sampleBarriers, nullptr);
+    bool materialGeometryTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledSample->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = sampleBarriers[barrierIndex];
+        if(
+            barrier.type == GpuCompiledBarrierType::BufferTransition
+            && barrier.resource == materialGeometryResource
+            && barrier.before == ResourceStates::Common
+            && barrier.after == ResourceStates::ShaderResource
+        )
+            materialGeometryTransition = true;
+    }
+    EXPECT_TRUE(materialGeometryTransition);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);

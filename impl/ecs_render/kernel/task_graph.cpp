@@ -8380,9 +8380,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     // paths, so this snapshot applies only to the receiver-surface interval work immediately before occupancy.
     Core::GpuTaskId transparentCsgUploadTask = m_graphicsPrefixTask;
     Core::Alloc::ScratchArena transparentCsgMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentCsgMaterialGeometryUses{
-        transparentCsgMaterialGeometryScratch
-    };
+    Core::GpuGraphResourceSetId transparentCsgMaterialGeometrySet;
     const bool hasTransparentCsgFrameWork = hasTransparentRenderers
         && (csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork)
     ;
@@ -8443,13 +8441,15 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             const MaterialPassDrawItems* const transparentCsgMaterialGeometryDrawSets[] = {
                 &transparentCsgDrawItems.csgReceiverSurface,
             };
-            avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryUses(
+            avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryResourceSet(
                 m_meshSystem,
                 m_deferredLightingTaskGraph,
                 transparentCsgMaterialGeometryDrawSets,
                 LengthOf(transparentCsgMaterialGeometryDrawSets),
                 transparentCsgMaterialGeometryScratch,
-                transparentCsgMaterialGeometryUses
+                Name("render.avboit.intervals.transparent_csg_material_geometry"),
+                "Transparent CSG Material Geometry",
+                transparentCsgMaterialGeometrySet
             );
             if(!avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared transparent CSG material geometry states"));
@@ -8787,8 +8787,12 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Core::ResourceStates::UnorderedAccess
         ));
     }
-    for(const Core::GpuTaskResourceUse& use : transparentCsgMaterialGeometryUses)
-        avboitIntervalResourceUses.push_back(use);
+    const Core::GpuTaskResourceSetUse transparentCsgMaterialGeometrySetUse{
+        .resourceSet = transparentCsgMaterialGeometrySet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
     avboitIntervalResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer, true));
     avboitIntervalResourceUses.push_back(ReadUse(avboitMaterialDomain));
     avboitIntervalResourceUses.push_back(ReadWriteUse(avboitCsgDomain, Core::ResourceStates::ShaderResource));
@@ -8806,6 +8810,12 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .setScheduling(avboitIntervalScheduling)
         .setDependencies(&transparentCsgUploadTask, 1u)
         .setResourceUses(avboitIntervalResourceUses.data(), avboitIntervalResourceUses.size())
+        .setResourceSetUses(
+            avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned
+                ? &transparentCsgMaterialGeometrySetUse
+                : nullptr,
+            avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned ? 1u : 0u
+        )
     ;
     const bool avboitCsgReceiverSpanGraphOwned =
         avboitPrePayload.transparentCsgStreamsUploaded

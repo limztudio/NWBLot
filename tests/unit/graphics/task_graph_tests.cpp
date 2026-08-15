@@ -15772,6 +15772,11 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerSpanBuildCombineToOccupancyUavD
         Name("tests/task_graph/avboit_coverage"),
         "AVBOIT Coverage"
     );
+    const Graphics::GpuGraphResourceId materialGeometry = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/avboit_csg_material_geometry"),
+        "Transparent CSG Material Geometry"
+    );
     ASSERT_TRUE(capBackNormal.valid());
     ASSERT_TRUE(intervalDepth.valid());
     ASSERT_TRUE(intervalId.valid());
@@ -15784,6 +15789,7 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerSpanBuildCombineToOccupancyUavD
     ASSERT_TRUE(removedIntervalData.valid());
     ASSERT_TRUE(removedIntervalCount.valid());
     ASSERT_TRUE(coverage.valid());
+    ASSERT_TRUE(materialGeometry.valid());
 
     const Graphics::TextureSubresourceSet peelRange(0u, 1u, 0u, 4u);
     const Graphics::TextureSubresourceSet receiverEventRange(0u, 1u, 0u, 32u);
@@ -15822,6 +15828,21 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerSpanBuildCombineToOccupancyUavD
             .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverEventCountRange },
             .requiredState = Graphics::ResourceStates::UnorderedAccess,
             .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    const Graphics::GpuGraphResourceSetId preMaterialGeometrySet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/avboit_csg_material_geometry_set"))
+            .setMarkerLabel("Transparent CSG Material Geometry")
+            .setMembers(&materialGeometry, 1u)
+    );
+    ASSERT_TRUE(preMaterialGeometrySet.valid());
+    const Graphics::GpuTaskResourceSetUse preMaterialGeometrySetUses[] = {
+        Graphics::GpuTaskResourceSetUse{
+            .resourceSet = preMaterialGeometrySet,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
         },
     };
     const Graphics::GpuTaskResourceUse spanBuildUses[] = {
@@ -15963,6 +15984,7 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerSpanBuildCombineToOccupancyUavD
         .setQueue(graphicsRequest)
         .setScheduling(preScheduling)
         .setResourceUses(preUses, LengthOf(preUses))
+        .setResourceSetUses(preMaterialGeometrySetUses, LengthOf(preMaterialGeometrySetUses))
     ;
     const Graphics::GpuTaskId pre = graph.addTask(preDesc);
     ASSERT_TRUE(pre.valid());
@@ -16169,7 +16191,7 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerSpanBuildCombineToOccupancyUavD
     EXPECT_EQ(compiledCombine->prologueStateSeedCount, 0u);
     EXPECT_EQ(compiledClear->prologueStateSeedCount, 0u);
     EXPECT_EQ(compiledOccupancy->prologueStateSeedCount, 0u);
-    EXPECT_EQ(compiledPre->prologueBarrierCount, 5u);
+    EXPECT_EQ(compiledPre->prologueBarrierCount, 6u);
     EXPECT_EQ(compiledSpanBuild->prologueBarrierCount, 4u);
     EXPECT_EQ(compiledCombine->prologueBarrierCount, 9u);
     EXPECT_EQ(compiledClear->prologueBarrierCount, 1u);
@@ -16232,6 +16254,18 @@ TEST(GpuTaskGraph, PlansAvboitCsgIntervalProducerSpanBuildCombineToOccupancyUavD
         receiverEventCount,
         receiverEventCountRange
     ));
+    bool materialGeometryTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledPre->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = preBarriers[barrierIndex];
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+            && barrier.resource == materialGeometry
+            && barrier.before == Graphics::ResourceStates::Common
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+        )
+            materialGeometryTransition = true;
+    }
+    EXPECT_TRUE(materialGeometryTransition);
     EXPECT_TRUE(hasUav(spanBuildBarriers, compiledSpanBuild->prologueBarrierCount, receiverEventData, receiverEventRange));
     EXPECT_TRUE(hasUav(
         spanBuildBarriers,

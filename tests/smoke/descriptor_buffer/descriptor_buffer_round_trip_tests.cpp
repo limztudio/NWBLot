@@ -10094,7 +10094,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
             .setCanHaveUAVs(true)
             .setInitialState(ResourceStates::Common)
     );
+    auto materialGeometry = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
     ASSERT_NE(coverage.get(), nullptr);
+    ASSERT_NE(materialGeometry.get(), nullptr);
     const auto makeStorageArray = [&device](const u32 arraySize){
         return device.createTexture(
             TextureDesc()
@@ -10136,6 +10143,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
         GpuGraphResourceDesc{}
             .setIdentity(Name("tests/descriptor_buffer/avboit_csg_coverage"))
             .setMarkerLabel("AVBOIT CSG Coverage")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId materialGeometryResource = graph.importBuffer(
+        materialGeometry,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_csg_material_geometry"))
+            .setMarkerLabel("Transparent CSG Material Geometry")
             .setType(GpuGraphResourceType::Buffer)
     );
     const GpuGraphResourceId capBackNormalResource = graph.importTexture(
@@ -10227,6 +10241,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
     ASSERT_TRUE(removedIntervalCapNormalResource.valid());
     ASSERT_TRUE(removedIntervalDataResource.valid());
     ASSERT_TRUE(removedIntervalCountResource.valid());
+    ASSERT_TRUE(materialGeometryResource.valid());
 
     const TextureSubresourceSet peelRange(0u, 1u, 0u, 4u);
     const TextureSubresourceSet receiverEventRange(0u, 1u, 0u, 32u);
@@ -10265,6 +10280,21 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
             .range = GpuTaskResourceRange{ .textureSubresources = receiverEventCountRange },
             .requiredState = ResourceStates::UnorderedAccess,
             .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    const GpuGraphResourceSetId preMaterialGeometrySet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_csg_material_geometry_set"))
+            .setMarkerLabel("Transparent CSG Material Geometry")
+            .setMembers(&materialGeometryResource, 1u)
+    );
+    ASSERT_TRUE(preMaterialGeometrySet.valid());
+    const GpuTaskResourceSetUse preMaterialGeometrySetUses[] = {
+        GpuTaskResourceSetUse{
+            .resourceSet = preMaterialGeometrySet,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
         },
     };
     const GpuTaskResourceUse spanUses[] = {
@@ -10406,14 +10436,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
         .setQueue(graphicsQueue)
         .setScheduling(preScheduling)
         .setResourceUses(preUses, LengthOf(preUses))
+        .setResourceSetUses(preMaterialGeometrySetUses, LengthOf(preMaterialGeometrySetUses))
     ;
-    bool preShouldRecord = true;
-    bool preAttempted = false;
-    const GpuTaskId preTask = graph.addTask<NativePacketCaptureRetryTask>(
+    bool preRecorded = false;
+    const GpuTaskId preTask = graph.addTask<NativePacketMaterialGeometryEntryProbeTask>(
         preDesc,
-        NativePacketCaptureRetryTask::Payload{
-            .shouldRecord = &preShouldRecord,
-            .attempted = &preAttempted,
+        NativePacketMaterialGeometryEntryProbeTask::Payload{
+            .geometry = materialGeometry.get(),
+            .recorded = &preRecorded,
         }
     );
     ASSERT_TRUE(preTask.valid());
@@ -10579,7 +10609,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
     ASSERT_EQ(compiledCombine->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledClear->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledOccupancy->prologueStateSeedCount, 0u);
-    ASSERT_EQ(compiledPre->prologueBarrierCount, 5u);
+    ASSERT_EQ(compiledPre->prologueBarrierCount, 6u);
     ASSERT_EQ(compiledSpan->prologueBarrierCount, 4u);
     ASSERT_EQ(compiledCombine->prologueBarrierCount, 9u);
     ASSERT_EQ(compiledClear->prologueBarrierCount, 1u);
@@ -10627,6 +10657,18 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
     EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, intervalIdResource, peelRange, ResourceStates::Common, ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, receiverEventDataResource, receiverEventRange, ResourceStates::Common, ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasTextureTransition(preBarriers, compiledPre->prologueBarrierCount, receiverEventCountResource, receiverEventCountRange, ResourceStates::Common, ResourceStates::UnorderedAccess));
+    bool materialGeometryTransition = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledPre->prologueBarrierCount; ++barrierIndex){
+        const GpuCompiledBarrier& barrier = preBarriers[barrierIndex];
+        if(
+            barrier.type == GpuCompiledBarrierType::BufferTransition
+            && barrier.resource == materialGeometryResource
+            && barrier.before == ResourceStates::Common
+            && barrier.after == ResourceStates::ShaderResource
+        )
+            materialGeometryTransition = true;
+    }
+    EXPECT_TRUE(materialGeometryTransition);
     EXPECT_TRUE(hasTextureUav(spanBarriers, compiledSpan->prologueBarrierCount, receiverEventDataResource, receiverEventRange));
     EXPECT_TRUE(hasTextureUav(spanBarriers, compiledSpan->prologueBarrierCount, receiverEventCountResource, receiverEventCountRange));
     EXPECT_TRUE(hasTextureTransition(spanBarriers, compiledSpan->prologueBarrierCount, receiverSpanDataResource, receiverSpanRange, ResourceStates::Common, ResourceStates::UnorderedAccess));
@@ -10681,7 +10723,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
         recordedGraph,
         &failedPacket
     );
-    EXPECT_TRUE(preAttempted);
+    EXPECT_TRUE(preRecorded);
     EXPECT_TRUE(spanRecorded);
     EXPECT_TRUE(combineRecorded);
     EXPECT_TRUE(clearRecorded);

@@ -519,10 +519,11 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    helpers retain their native transitions. The normal deferred effects chain now also resolves its late Prefix and
    persistent state fan-ins through semantic task-anchored bindings for Shadow Visibility, Software/Hardware
    Caustics, Surfel-GI preparation/copy/final work, AVBOIT-pre, Lighting, and Composite; it no longer builds a
-   renderer-owned table keyed by compiled packet IDs. Shadow Preparation retains its narrow packet override because
-   its current hybrid/direct fallback source includes dynamic BLAS/SW-BVH buffers that cannot yet be declared
-   safely. The optional lagged-history tail remains separately late-recorded after Present acceptance, but now
-   resolves its retained return snapshots through its semantic history-copy task rather than a packet override.
+   renderer-owned table keyed by compiled packet IDs. Shadow Preparation now routes its filtered dynamic
+   BLAS/SW-BVH fallback source through the semantic Shadow Preparation task as well, preserving the same
+   packet-wide filtering while retaining the native record fallback itself. The optional lagged-history tail remains
+   separately late-recorded after Present acceptance, but now resolves its retained return snapshots through its
+   semantic history-copy task rather than a packet override.
    The transparent AVBOIT interval producer, occupancy, extinction, and
    accumulation phases now freeze and publish their own per-write-point material/CSG streams, preserving the shared
    interval sample state across the low-resolution raster passes. Current and lagged deferred bindless selectors,

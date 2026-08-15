@@ -2309,13 +2309,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             shadowPrepareStateSourceCount = 0u;
         }
     }
-    const Core::GpuNativePacketRecordDesc shadowPrepareRecordDescs[] = {
-        Core::GpuNativePacketRecordDesc{
-            .packet = shadowPreparePacket,
-            .externalStateSources = shadowPrepareStateSources,
-            .externalStateSourceCount = shadowPrepareStateSourceCount,
-        },
-    };
+    Core::GpuTaskPacketStateBinding shadowPrepareStateBindings[1] = {};
+    usize shadowPrepareStateBindingCount = 0u;
+    const bool shadowPrepareStateBindingsReady = shadowPrepareStateSourceCount == 0u
+        || appendTaskPacketStateBinding(
+            shadowPrepareStateBindings,
+            LengthOf(shadowPrepareStateBindings),
+            shadowPrepareStateBindingCount,
+            m_deferredShadowPrepareTask,
+            shadowPrepareStateSources,
+            shadowPrepareStateSourceCount
+        )
+    ;
     const bool graphicsPrefixRecorded =
         m_deferredLightingTaskGraphValid
         && m_graphicsPrefixMeshViewSetupTask.valid()
@@ -2335,14 +2340,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && shadowPrepareAccelStructFinalizeMerged
         && graphicsPrefixPacket.valid()
         && graphicsPrefixDeferredClearBundleMerged
+        && shadowPrepareStateBindingsReady
         && deferredRecorder.recordPacketRangeInReadyFrontiers(
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph,
             shadowPrepareThroughPrefixPacketRange,
-            shadowPrepareStateSourceCount != 0u ? shadowPrepareRecordDescs : nullptr,
-            shadowPrepareStateSourceCount != 0u ? LengthOf(shadowPrepareRecordDescs) : 0u,
+            nullptr,
+            0u,
             m_deferredLightingRecordedGraph,
-            m_world.taskPool()
+            m_world.taskPool(),
+            nullptr,
+            nullptr,
+            shadowPrepareStateBindingCount != 0u ? shadowPrepareStateBindings : nullptr,
+            shadowPrepareStateBindingCount
         )
     ;
     const Core::CommandListResourceStateHandoff* const shadowPrepareFinalStateSeed = graphicsPrefixRecorded

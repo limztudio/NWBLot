@@ -516,7 +516,12 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    final publication are mergeable graph stages: the compiler lowers their generated-stream UAV/SRV handoffs while
    retaining one primary-Graphics packet. Its accepted prior-frame native state is now attached to the consuming
    graph task declarations rather than selected as a post-compile packet-record override. Direct compatibility
-   helpers retain their native transitions.
+   helpers retain their native transitions. The normal deferred effects chain now also resolves its late Prefix and
+   persistent state fan-ins through semantic task-anchored bindings for Shadow Visibility, Software/Hardware
+   Caustics, Surfel-GI preparation/copy/final work, AVBOIT-pre, Lighting, and Composite; it no longer builds a
+   renderer-owned table keyed by compiled packet IDs. Shadow Preparation retains its narrow packet override because
+   its current hybrid/direct fallback source includes dynamic BLAS/SW-BVH buffers that cannot yet be declared
+   safely, and the optional lagged-history tail remains a separate late-record migration.
    The transparent AVBOIT interval producer, occupancy, extinction, and
    accumulation phases now freeze and publish their own per-write-point material/CSG streams, preserving the shared
    interval sample state across the low-resolution raster passes. Current and lagged deferred bindless selectors,

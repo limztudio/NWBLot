@@ -2199,6 +2199,28 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         };
         return true;
     };
+    const auto appendTaskPacketStateBinding = [](
+        Core::GpuTaskPacketStateBinding* const bindings,
+        const usize capacity,
+        usize& bindingCount,
+        const Core::GpuTaskId task,
+        const Core::GpuExternalPacketStateSource* const sources,
+        const usize sourceCount
+    ){
+        if(
+            !task.valid()
+            || !sources
+            || sourceCount == 0u
+            || bindingCount >= capacity
+        )
+            return false;
+        bindings[bindingCount++] = Core::GpuTaskPacketStateBinding{
+            .task = task,
+            .externalStateSources = sources,
+            .externalStateSourceCount = sourceCount,
+        };
+        return true;
+    };
 
     // Record preparation and prefix through the graph's ready-frontier path. These renderer payloads intentionally
     // retain the serial default, while graph-owned upload packets later in the frame may opt into worker recording.
@@ -2521,67 +2543,107 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredCompositeStateSourceCount,
         graphicsPrefixFinalStateSeed
     );
-    // Only the packets that import accepted external state need renderer-provided overrides. All remaining packets
-    // receive the compiler-derived default descriptor during range traversal.
-    Core::GpuNativePacketRecordDesc deferredRecordDescs[8] = {};
-    usize deferredRecordDescCount = 0u;
-    deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
-        .packet = shadowVisibilityPacket,
-        .externalStateSources = shadowVisibilityStateSources,
-        .externalStateSourceCount = shadowVisibilityStateSourceCount,
-    };
+    // The accepted Prefix source only exists after the first range records. Bind every late source to its semantic
+    // graph task rather than the packet selected by this compilation; the recorder resolves the current packet and
+    // retains the established packet-wide resource filtering. This lets packetization evolve without rebuilding a
+    // renderer-owned packet override table.
+    Core::GpuTaskPacketStateBinding deferredStateBindings[8] = {};
+    usize deferredStateBindingCount = 0u;
+    bool deferredStateBindingsReady = appendTaskPacketStateBinding(
+        deferredStateBindings,
+        LengthOf(deferredStateBindings),
+        deferredStateBindingCount,
+        m_deferredShadowVisibilityTask,
+        shadowVisibilityStateSources,
+        shadowVisibilityStateSourceCount
+    );
     if(!hardwareShadowSupported){
-        deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
-            .packet = softwareCausticsPacket,
-            .externalStateSources = softwareCausticsStateSources,
-            .externalStateSourceCount = softwareCausticsStateSourceCount,
-        };
+        deferredStateBindingsReady = deferredStateBindingsReady
+            && appendTaskPacketStateBinding(
+                deferredStateBindings,
+                LengthOf(deferredStateBindings),
+                deferredStateBindingCount,
+                m_deferredSoftwareCausticsTask,
+                softwareCausticsStateSources,
+                softwareCausticsStateSourceCount
+            )
+        ;
     }
-    if(surfelGiPreparationPacket.valid() && surfelGiPreparationPacket != surfelGiPacket){
-        deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
-            .packet = surfelGiPreparationPacket,
-            .externalStateSources = surfelGiStateSources,
-            .externalStateSourceCount = surfelGiStateSourceCount,
-        };
+    if(m_deferredSurfelGiPreparationTask.valid()){
+        deferredStateBindingsReady = deferredStateBindingsReady
+            && appendTaskPacketStateBinding(
+                deferredStateBindings,
+                LengthOf(deferredStateBindings),
+                deferredStateBindingCount,
+                m_deferredSurfelGiPreparationTask,
+                surfelGiStateSources,
+                surfelGiStateSourceCount
+            )
+        ;
     }
     if(
-        surfelGiSnapshotCopyPacket.valid()
-        && surfelGiSnapshotCopyPacket != surfelGiPreparationPacket
-        && surfelGiSnapshotCopyPacket != surfelGiPacket
+        m_deferredSurfelGiSnapshotCopyTask.valid()
+        && m_deferredSurfelGiSnapshotCopyTask != m_deferredSurfelGiPreparationTask
     ){
-        deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
-            .packet = surfelGiSnapshotCopyPacket,
-            .externalStateSources = surfelGiStateSources,
-            .externalStateSourceCount = surfelGiStateSourceCount,
-        };
+        deferredStateBindingsReady = deferredStateBindingsReady
+            && appendTaskPacketStateBinding(
+                deferredStateBindings,
+                LengthOf(deferredStateBindings),
+                deferredStateBindingCount,
+                m_deferredSurfelGiSnapshotCopyTask,
+                surfelGiStateSources,
+                surfelGiStateSourceCount
+            )
+        ;
     }
-    deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
-        .packet = surfelGiPacket,
-        .externalStateSources = surfelGiStateSources,
-        .externalStateSourceCount = surfelGiStateSourceCount,
-    };
+    deferredStateBindingsReady = deferredStateBindingsReady
+        && appendTaskPacketStateBinding(
+            deferredStateBindings,
+            LengthOf(deferredStateBindings),
+            deferredStateBindingCount,
+            m_deferredSurfelGiTask,
+            surfelGiStateSources,
+            surfelGiStateSourceCount
+        )
+    ;
     if(hardwareShadowSupported){
-        deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
-            .packet = hardwareCausticsPacket,
-            .externalStateSources = hardwareCausticsStateSources,
-            .externalStateSourceCount = hardwareCausticsStateSourceCount,
-        };
+        deferredStateBindingsReady = deferredStateBindingsReady
+            && appendTaskPacketStateBinding(
+                deferredStateBindings,
+                LengthOf(deferredStateBindings),
+                deferredStateBindingCount,
+                m_deferredHardwareCausticsTask,
+                hardwareCausticsStateSources,
+                hardwareCausticsStateSourceCount
+            )
+        ;
     }
-    deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
-        .packet = avboitPrePacket,
-        .externalStateSources = avboitPreStateSources,
-        .externalStateSourceCount = LengthOf(avboitPreStateSources),
-    };
-    deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
-        .packet = deferredLightingPacket,
-        .externalStateSources = deferredLightingStateSources,
-        .externalStateSourceCount = deferredLightingStateSourceCount,
-    };
-    deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
-        .packet = deferredCompositePacket,
-        .externalStateSources = deferredCompositeStateSources,
-        .externalStateSourceCount = deferredCompositeStateSourceCount,
-    };
+    deferredStateBindingsReady = deferredStateBindingsReady
+        && appendTaskPacketStateBinding(
+            deferredStateBindings,
+            LengthOf(deferredStateBindings),
+            deferredStateBindingCount,
+            m_deferredAvboitPreTask,
+            avboitPreStateSources,
+            LengthOf(avboitPreStateSources)
+        )
+        && appendTaskPacketStateBinding(
+            deferredStateBindings,
+            LengthOf(deferredStateBindings),
+            deferredStateBindingCount,
+            m_deferredLightingTask,
+            deferredLightingStateSources,
+            deferredLightingStateSourceCount
+        )
+        && appendTaskPacketStateBinding(
+            deferredStateBindings,
+            LengthOf(deferredStateBindings),
+            deferredStateBindingCount,
+            m_deferredCompositeTask,
+            deferredCompositeStateSources,
+            deferredCompositeStateSourceCount
+        )
+    ;
     // The optional history tail and independent recovery tail record only after their runtime prerequisites exist.
     // Record the normal compile-order prefix now; both late packets join this recorded graph and transaction without
     // renderer-side completion bridges.
@@ -2592,6 +2654,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && surfelGiStateSourcesReady
         && deferredLightingStateSourcesReady
         && deferredCompositeStateSourcesReady
+        && deferredStateBindingsReady
         && m_deferredLightingTaskGraphValid
         && m_graphicsPrefixMeshViewSetupTask.valid()
         && m_graphicsPrefixSceneShadingSetupTask.valid()
@@ -2682,10 +2745,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph,
             effectsThroughPresentationPacketRange,
-            deferredRecordDescs,
-            deferredRecordDescCount,
+            nullptr,
+            0u,
             m_deferredLightingRecordedGraph,
-            m_world.taskPool()
+            m_world.taskPool(),
+            nullptr,
+            nullptr,
+            deferredStateBindings,
+            deferredStateBindingCount
         );
     }
     if(!deferredPacketsRecorded){

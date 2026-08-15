@@ -14701,6 +14701,157 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
 }
 
 
+TEST_F(DescriptorBufferRoundTripTest, NativePacketResolvesTaskAnchoredRuntimeStateBinding){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const BufferHandle buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId resource = graph.importBuffer(
+        buffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/task_anchored_runtime_state"))
+            .setMarkerLabel("Task-Anchored Runtime State")
+            .setType(GpuGraphResourceType::Buffer)
+            // The graph declaration is already the desired state, so it deliberately emits no first-use
+            // transition. Only the late native source can materialize that state in the recording command list.
+            .setInitialState(ResourceStates::ShaderResource)
+    );
+    ASSERT_TRUE(resource.valid());
+
+    const GpuTaskResourceUse uses[] = {
+        GpuTaskResourceUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    GpuTaskDesc taskDesc;
+    taskDesc
+        .setIdentity(Name("tests/descriptor_buffer/task_anchored_runtime_state_task"))
+        .setMarkerLabel("Task-Anchored Runtime State Task")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(scheduling)
+        .setResourceUses(uses, LengthOf(uses))
+    ;
+    bool taskRecorded = false;
+    const GpuTaskId task = graph.addTask<NativePacketPrefixTask>(
+        taskDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = buffer.get(),
+            .expectedState = ResourceStates::ShaderResource,
+            .recorded = &taskRecorded,
+        }
+    );
+    ASSERT_TRUE(task.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/task_anchored_runtime_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+
+    // This source is intentionally created after compilation, matching the prefix-to-effects handoff shape in the
+    // renderer. A graph task ID, not the compiler packet ID, names its consumer at recording time.
+    CommandListResourceStateHandoff sourceState(DescriptorBufferRoundTripTest::arena());
+    CommandListHandle sourceProducer = device.createCommandList();
+    ASSERT_NE(sourceProducer.get(), nullptr);
+    sourceProducer->open();
+    sourceProducer->setBufferState(buffer.get(), ResourceStates::ShaderResource);
+    sourceProducer->close(&sourceState);
+    ASSERT_TRUE(sourceState.valid());
+    const GpuExternalPacketStateSource sources[] = {
+        GpuExternalPacketStateSource{ .states = &sourceState },
+    };
+    const GpuTaskPacketStateBinding bindings[] = {
+        GpuTaskPacketStateBinding{
+            .task = task,
+            .externalStateSources = sources,
+            .externalStateSourceCount = LengthOf(sources),
+        },
+    };
+
+    const GpuNativePacketRecorder recorder(device);
+    GpuRecordedGraph missingBindingGraph(DescriptorBufferRoundTripTest::arena());
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        missingBindingGraph
+    ));
+    EXPECT_FALSE(taskRecorded);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        nullptr,
+        nullptr,
+        bindings,
+        LengthOf(bindings)
+    ));
+    EXPECT_TRUE(taskRecorded);
+    EXPECT_NE(recordedGraph.find(packet), nullptr);
+    EXPECT_NE(recordedGraph.packetFinalStateSeed(packet), nullptr);
+
+    GpuTaskPacketStateBinding invalidBinding = bindings[0];
+    invalidBinding.task = {};
+    GpuRecordedGraph invalidBindingGraph(DescriptorBufferRoundTripTest::arena());
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        invalidBindingGraph,
+        nullptr,
+        nullptr,
+        &invalidBinding,
+        1u
+    ));
+}
+
+
 TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCompositeSharedTransaction){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto buffer = device.createBuffer(

@@ -537,8 +537,11 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    ready-frontier recorder is implemented for explicit opt-in packets, with isolated per-packet state scratch and
    worker-affined command-buffer leases: each ready-frontier packet receives the current logical worker identity,
    while Vulkan recycles its one-buffer command pool only to that worker after the physical queue timeline retires
-   it. Serial/direct recording retains the default lease. All other packets, command-IR capture, and legacy
-   external-state overrides or declaration-owned external state sources retain serial recording.
+   it. Serial/direct recording retains the default lease. All other packets, command-IR capture, legacy
+   packet-specific external-state overrides, declaration-owned external state sources, and task-anchored late
+   external-state bindings retain serial recording. The latter resolves a semantic task ID to its current compiled
+   packet, so post-prefix sources can retire physical packet selection incrementally while the legacy override
+   bridge remains available.
 
 4. **Generic recovery and invalidation proof.** The accepted-token transaction is sound for the exercised paths,
    stale imported completion tokens have graph and native-submission rejection coverage, and recording/transaction

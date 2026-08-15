@@ -26,6 +26,36 @@ namespace __hidden_gpu_packet_runtime{
 inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph/packet_recording_frontier");
 
 
+[[nodiscard]] bool ValidateTaskPacketStateBindings(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskPacketStateBinding* const taskStateBindings,
+    const usize taskStateBindingCount
+){
+    if(taskStateBindingCount != 0u && !taskStateBindings)
+        return false;
+
+    for(usize bindingIndex = 0u; bindingIndex < taskStateBindingCount; ++bindingIndex){
+        const GpuTaskPacketStateBinding& binding = taskStateBindings[bindingIndex];
+        if(
+            !graph.validTask(binding.task)
+            || !compiledGraph.findTask(binding.task)
+            || binding.externalStateSourceCount == 0u
+            || !binding.externalStateSources
+        )
+            return false;
+        for(usize sourceIndex = 0u; sourceIndex < binding.externalStateSourceCount; ++sourceIndex){
+            const CommandListResourceStateHandoff* const states =
+                binding.externalStateSources[sourceIndex].states
+            ;
+            if(!states || !states->valid())
+                return false;
+        }
+    }
+    return true;
+}
+
+
 } // namespace __hidden_gpu_packet_runtime
 
 
@@ -130,6 +160,8 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     const GpuSubmissionPacketId& packetID,
     const GpuExternalPacketStateSource* const externalStateSources,
     const usize externalStateSourceCount,
+    const GpuTaskPacketStateBinding* const taskStateBindings,
+    const usize taskStateBindingCount,
     const CommandListResourceStateHandoff*& outInitialStates
 ){
     outInitialStates = nullptr;
@@ -137,6 +169,12 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         !validFor(compiledGraph)
         || !compiledGraph.validPacket(packetID)
         || (externalStateSourceCount != 0u && !externalStateSources)
+        || !__hidden_gpu_packet_runtime::ValidateTaskPacketStateBindings(
+            graph,
+            compiledGraph,
+            taskStateBindings,
+            taskStateBindingCount
+        )
     )
         return false;
 
@@ -264,6 +302,24 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         }
     }
 
+    // Late sources remain a recording-time bridge, but their identity is graph-owned: the caller names the task
+    // that semantically receives the imported state and the recorder resolves its current compiled packet.  Apply
+    // each source to the complete packet to preserve the established packet-wide external handoff while compiler
+    // packetization evolves.
+    for(usize bindingIndex = 0u; bindingIndex < taskStateBindingCount; ++bindingIndex){
+        const GpuTaskPacketStateBinding& binding = taskStateBindings[bindingIndex];
+        if(compiledGraph.packetForTask(binding.task) != packetID)
+            continue;
+        for(usize sourceIndex = 0u; sourceIndex < binding.externalStateSourceCount; ++sourceIndex){
+            if(!appendStateSource(
+                binding.externalStateSources[sourceIndex].states,
+                tasks,
+                packet.taskCount
+            ))
+                return false;
+        }
+    }
+
     for(usize sourceIndex = 0u; sourceIndex < externalStateSourceCount; ++sourceIndex){
         if(!appendStateSource(
             externalStateSources[sourceIndex].states,
@@ -340,9 +396,20 @@ bool GpuNativePacketRecorder::recordPacket(
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecordDesc& desc,
     GpuRecordedGraph& outRecordedGraph,
-    GpuCommandIrCapture* const commandIrCapture
+    GpuCommandIrCapture* const commandIrCapture,
+    const GpuTaskPacketStateBinding* const taskStateBindings,
+    const usize taskStateBindingCount
 )const{
-    if(!compiledGraph.validFor(graph) || !compiledGraph.validPacket(desc.packet))
+    if(
+        !compiledGraph.validFor(graph)
+        || !compiledGraph.validPacket(desc.packet)
+        || !__hidden_gpu_packet_runtime::ValidateTaskPacketStateBindings(
+            graph,
+            compiledGraph,
+            taskStateBindings,
+            taskStateBindingCount
+        )
+    )
         return false;
     if(!outRecordedGraph.validFor(compiledGraph))
         outRecordedGraph.reset(compiledGraph);
@@ -352,7 +419,9 @@ bool GpuNativePacketRecorder::recordPacket(
         desc,
         outRecordedGraph,
         outRecordedGraph.m_serialRecordingScratch,
-        commandIrCapture
+        commandIrCapture,
+        taskStateBindings,
+        taskStateBindingCount
     );
 }
 
@@ -363,12 +432,20 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     const GpuNativePacketRecordDesc& desc,
     GpuRecordedGraph& outRecordedGraph,
     GpuRecordedGraph::PacketRecordingScratch& scratch,
-    GpuCommandIrCapture* const commandIrCapture
+    GpuCommandIrCapture* const commandIrCapture,
+    const GpuTaskPacketStateBinding* const taskStateBindings,
+    const usize taskStateBindingCount
 )const{
     if(
         !compiledGraph.validFor(graph)
         || !compiledGraph.validPacket(desc.packet)
         || !outRecordedGraph.validFor(compiledGraph)
+        || !__hidden_gpu_packet_runtime::ValidateTaskPacketStateBindings(
+            graph,
+            compiledGraph,
+            taskStateBindings,
+            taskStateBindingCount
+        )
     )
         return false;
     // A capture is one graph-generation artifact. Reject a stale non-empty capture before opening a packet that
@@ -390,6 +467,8 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         desc.packet,
         desc.externalStateSources,
         desc.externalStateSourceCount,
+        taskStateBindings,
+        taskStateBindingCount,
         initialStates
     ))
         return false;
@@ -490,7 +569,9 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
     const usize recordOverrideCount,
     GpuRecordedGraph& outRecordedGraph,
     GpuSubmissionPacketId* const outFailedPacket,
-    GpuCommandIrCapture* const commandIrCapture
+    GpuCommandIrCapture* const commandIrCapture,
+    const GpuTaskPacketStateBinding* const taskStateBindings,
+    const usize taskStateBindingCount
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
@@ -498,6 +579,12 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
         !compiledGraph.validFor(graph)
         || !compiledGraph.validPacketRange(range)
         || (recordOverrideCount != 0u && !recordOverrides)
+        || !__hidden_gpu_packet_runtime::ValidateTaskPacketStateBindings(
+            graph,
+            compiledGraph,
+            taskStateBindings,
+            taskStateBindingCount
+        )
     )
         return false;
 
@@ -537,7 +624,9 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
             compiledGraph,
             *recordDesc,
             outRecordedGraph,
-            commandIrCapture
+            commandIrCapture,
+            taskStateBindings,
+            taskStateBindingCount
         )){
             if(outFailedPacket)
                 *outFailedPacket = packet;
@@ -557,7 +646,9 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     GpuRecordedGraph& outRecordedGraph,
     Alloc::ThreadPool& workerPool,
     GpuSubmissionPacketId* const outFailedPacket,
-    GpuCommandIrCapture* const commandIrCapture
+    GpuCommandIrCapture* const commandIrCapture,
+    const GpuTaskPacketStateBinding* const taskStateBindings,
+    const usize taskStateBindingCount
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
@@ -565,6 +656,12 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         !compiledGraph.validFor(graph)
         || !compiledGraph.validPacketRange(range)
         || (recordOverrideCount != 0u && !recordOverrides)
+        || !__hidden_gpu_packet_runtime::ValidateTaskPacketStateBindings(
+            graph,
+            compiledGraph,
+            taskStateBindings,
+            taskStateBindingCount
+        )
     )
         return false;
 
@@ -583,7 +680,9 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             recordOverrideCount,
             outRecordedGraph,
             outFailedPacket,
-            commandIrCapture
+            commandIrCapture,
+            taskStateBindings,
+            taskStateBindingCount
         );
     }
 
@@ -645,6 +744,10 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             return false;
 
         const GpuSubmissionPacketId packet = desc.packet;
+        for(usize bindingIndex = 0u; bindingIndex < taskStateBindingCount; ++bindingIndex){
+            if(compiledGraph.packetForTask(taskStateBindings[bindingIndex].task) == packet)
+                return false;
+        }
         const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
         const GpuTaskId* const tasks = compiledGraph.packetTasks(packet);
         if(!tasks || packetPlan.taskCount == 0u)
@@ -681,7 +784,9 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 desc,
                 outRecordedGraph,
                 outRecordedGraph.m_serialRecordingScratch,
-                nullptr
+                nullptr,
+                taskStateBindings,
+                taskStateBindingCount
             )){
                 if(outFailedPacket)
                     *outFailedPacket = desc.packet;
@@ -704,7 +809,9 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                     workerDesc,
                     outRecordedGraph,
                     *scratch,
-                    nullptr
+                    nullptr,
+                    taskStateBindings,
+                    taskStateBindingCount
                 ) ? 1u : 0u;
             });
             for(usize parallelIndex = 0u; parallelIndex < parallelResults.size(); ++parallelIndex){

@@ -25,6 +25,7 @@ class GpuTimingSubmissionTicket;
 class GpuTaskGraph;
 class GpuCommandIrCapture;
 struct GpuExternalPacketStateSource;
+struct GpuTaskPacketStateBinding;
 
 
 struct GpuRecordedPacket{
@@ -93,6 +94,8 @@ private:
         const GpuSubmissionPacketId& packet,
         const GpuExternalPacketStateSource* externalStateSources,
         usize externalStateSourceCount,
+        const GpuTaskPacketStateBinding* taskStateBindings,
+        usize taskStateBindingCount,
         const CommandListResourceStateHandoff*& outInitialStates
     );
     [[nodiscard]] CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet)noexcept;
@@ -117,6 +120,16 @@ private:
 // subsets or fan-ins for graph-owned packet boundaries.
 struct GpuExternalPacketStateSource{
     const CommandListResourceStateHandoff* states = nullptr;
+};
+
+// A late external-state source anchored to semantic graph work rather than a compiler-generated packet ID.  The
+// recorder resolves `task` to its current packet and filters every source through that packet's declared resource
+// uses.  This preserves the legacy packet-wide handoff behavior across packetization changes while retiring
+// renderer-owned packet selection for sources that are only available after an earlier packet records.
+struct GpuTaskPacketStateBinding{
+    GpuTaskId task;
+    const GpuExternalPacketStateSource* externalStateSources = nullptr;
+    usize externalStateSourceCount = 0u;
 };
 
 
@@ -145,7 +158,9 @@ public:
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecordDesc& desc,
         GpuRecordedGraph& outRecordedGraph,
-        GpuCommandIrCapture* commandIrCapture = nullptr
+        GpuCommandIrCapture* commandIrCapture = nullptr,
+        const GpuTaskPacketStateBinding* taskStateBindings = nullptr,
+        usize taskStateBindingCount = 0u
     )const;
     // Records one compiler-derived non-empty contiguous range. `recordOverrides` is optional and sparse: packets
     // without an override receive the ordinary graph-owned state seed. Earlier producer packets needed by the range
@@ -158,7 +173,9 @@ public:
         usize recordOverrideCount,
         GpuRecordedGraph& outRecordedGraph,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
-        GpuCommandIrCapture* commandIrCapture = nullptr
+        GpuCommandIrCapture* commandIrCapture = nullptr,
+        const GpuTaskPacketStateBinding* taskStateBindings = nullptr,
+        usize taskStateBindingCount = 0u
     )const;
     // Records compiler-ready frontiers with `workerPool`. Only packets whose tasks all set
     // GpuTaskSchedulingHint::allowParallelRecording may share a worker frontier; every other packet remains serial.
@@ -173,7 +190,9 @@ public:
         GpuRecordedGraph& outRecordedGraph,
         Alloc::ThreadPool& workerPool,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
-        GpuCommandIrCapture* commandIrCapture = nullptr
+        GpuCommandIrCapture* commandIrCapture = nullptr,
+        const GpuTaskPacketStateBinding* taskStateBindings = nullptr,
+        usize taskStateBindingCount = 0u
     )const;
 private:
     [[nodiscard]] bool recordPacketWithScratch(
@@ -182,7 +201,9 @@ private:
         const GpuNativePacketRecordDesc& desc,
         GpuRecordedGraph& outRecordedGraph,
         GpuRecordedGraph::PacketRecordingScratch& scratch,
-        GpuCommandIrCapture* commandIrCapture
+        GpuCommandIrCapture* commandIrCapture,
+        const GpuTaskPacketStateBinding* taskStateBindings,
+        usize taskStateBindingCount
     )const;
     Device& m_device;
 };

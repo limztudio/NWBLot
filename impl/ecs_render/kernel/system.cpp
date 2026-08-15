@@ -252,6 +252,7 @@ void RendererSystem::invalidateResources(){
     m_deferredLightingTaskGraphValid = false;
     m_deferredShadowPrepareTask = {};
     m_deferredShadowVisibilityOpaqueTask = {};
+    m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
     m_deferredShadowVisibilityOpaqueResolveTask = {};
     m_deferredShadowVisibilityTransparentTraceTask = {};
     m_deferredShadowVisibilityTask = {};
@@ -532,6 +533,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_graphicsPrefixSceneShadingSetupReady = false;
     m_deferredLightingTaskGraphValid = false;
     m_deferredShadowVisibilityOpaqueTask = {};
+    m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
     m_deferredShadowVisibilityOpaqueResolveTask = {};
     m_deferredShadowVisibilityTransparentTraceTask = {};
     m_deferredShadowVisibilityTask = {};
@@ -823,6 +825,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // fold callback. The normal monolithic shadow task leaves these empty.
     Optional<Core::GpuTimingMeasure> shadowVisibilityAsyncTiming;
     Optional<Core::GpuTimingMeasure> shadowVisibilityTiming;
+    Optional<Core::GpuTimingMeasure> opaqueSoftResolveTiming;
     bool shadowVisibilityOpaqueProduced = false;
     bool shadowVisibilityTransparentTraceProduced = false;
     u32 shadowVisibilityOpaqueFrameIndex = 0u;
@@ -876,6 +879,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         shadowVisibilityTimingTicket,
         shadowVisibilityAsyncTiming,
         shadowVisibilityTiming,
+        opaqueSoftResolveTiming,
         shadowVisibilityOpaqueProduced,
         shadowVisibilityTransparentTraceProduced,
         shadowVisibilityOpaqueFrameIndex,
@@ -917,6 +921,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             shadowVisibilityTimingTicket,
             shadowVisibilityAsyncTiming,
             shadowVisibilityTiming,
+            opaqueSoftResolveTiming,
             shadowVisibilityOpaqueProduced,
             shadowVisibilityTransparentTraceProduced,
             shadowVisibilityOpaqueFrameIndex,
@@ -1118,6 +1123,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowVisibilityOpaqueTask)
             : Core::GpuSubmissionPacketId{}
     ;
+    const Core::GpuSubmissionPacketId shadowVisibilityOpaqueFirstWaveletPacket =
+        m_deferredShadowVisibilityOpaqueFirstWaveletTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowVisibilityOpaqueFirstWaveletTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuSubmissionPacketId shadowVisibilityOpaqueResolvePacket =
         m_deferredShadowVisibilityOpaqueResolveTask.valid()
             ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowVisibilityOpaqueResolveTask)
@@ -1133,6 +1143,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || (
             shadowVisibilityOpaquePacket.valid()
             && shadowVisibilityOpaquePacket == shadowVisibilityPacket
+            && m_deferredShadowVisibilityOpaqueFirstWaveletTask.valid()
+            && shadowVisibilityOpaqueFirstWaveletPacket.valid()
+            && shadowVisibilityOpaqueFirstWaveletPacket == shadowVisibilityPacket
             && m_deferredShadowVisibilityOpaqueResolveTask.valid()
             && shadowVisibilityOpaqueResolvePacket.valid()
             && shadowVisibilityOpaqueResolvePacket == shadowVisibilityPacket

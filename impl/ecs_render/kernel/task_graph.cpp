@@ -7,6 +7,8 @@
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/renderer_private.h>
 
+#include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
+
 #include <core/graphics/gpu_timing.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -3448,6 +3450,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming,
     Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
+    Optional<Core::GpuTimingMeasure>& opaqueResolveTiming,
     bool& opaqueProduced,
     bool& transparentTraceProduced,
     u32& opaqueFrameIndex
@@ -3455,6 +3458,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     using namespace __hidden_renderer_task_graph;
 
     m_deferredShadowVisibilityOpaqueTask = {};
+    m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
     m_deferredShadowVisibilityOpaqueResolveTask = {};
     m_deferredShadowVisibilityTransparentTraceTask = {};
     m_deferredShadowVisibilityTask = {};
@@ -3791,8 +3795,10 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
 
-    // The prepared soft path keeps opaque resolve, transparent trace, and temporal/RGB resolve as adjacent
-    // callbacks. Re-importing retains shared graph identities while making both graph-owned handoffs explicit.
+    // The prepared soft path keeps the opaque first wavelet, resolve tail, transparent trace, and temporal/RGB
+    // resolve as adjacent callbacks. Re-importing retains shared graph identities while making each graph-owned
+    // handoff explicit.
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaqueFirstWaveletResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaqueResolveResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentTraceResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> transparentFoldResourceUses{ scratchArena };
@@ -3918,37 +3924,41 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             return false;
         }
 
-        opaqueResolveResourceUses.reserve(16u);
-        opaqueResolveResourceUses.push_back(WriteUse(shadowVisibility, Core::ResourceStates::UnorderedAccess));
-        // The compiler owns the trace image's same-UAV ordering fence, then the resolve callback locally changes
-        // it for its sampled merge. Current geometry crosses this exact graph boundary from the producer's UAV
-        // write to the merge/wavelet shader read.
-        opaqueResolveResourceUses.push_back(ReadWriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
-        opaqueResolveResourceUses.push_back(ReadWriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));
-        opaqueResolveResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
-        opaqueResolveResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
-        opaqueResolveResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
-        opaqueResolveResourceUses.push_back(ReadUse(depth, Core::ResourceStates::ShaderResource));
-        opaqueResolveResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
+        opaqueFirstWaveletResourceUses.reserve(12u);
+        // The compiler lowers the opaque trace from UAV to the exact sampled state required by temporal merge or
+        // the first wavelet. The first wavelet then publishes half-B for the resolve tail.
+        opaqueFirstWaveletResourceUses.push_back(ReadUse(shadowSoftHalfA, Core::ResourceStates::ShaderResource));
+        opaqueFirstWaveletResourceUses.push_back(WriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));
+        opaqueFirstWaveletResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
         if(graphOwnsOpaqueTemporalMergeEntryStates){
             // The frozen selector permits exact selected input/output declarations for the opaque temporal merge.
             const Core::GpuGraphResourceId opaqueHistoryIn = opaqueHistoryFrontIsA ? opaqueHistoryA : opaqueHistoryB;
             const Core::GpuGraphResourceId opaqueMomentsIn = opaqueHistoryFrontIsA ? opaqueMomentsA : opaqueMomentsB;
             const Core::GpuGraphResourceId opaqueHistoryOut = opaqueHistoryFrontIsA ? opaqueHistoryB : opaqueHistoryA;
             const Core::GpuGraphResourceId opaqueMomentsOut = opaqueHistoryFrontIsA ? opaqueMomentsB : opaqueMomentsA;
-            opaqueResolveResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious, Core::ResourceStates::ShaderResource));
-            opaqueResolveResourceUses.push_back(ReadUse(opaqueHistoryIn, Core::ResourceStates::ShaderResource));
-            opaqueResolveResourceUses.push_back(ReadUse(opaqueMomentsIn, Core::ResourceStates::ShaderResource));
-            opaqueResolveResourceUses.push_back(WriteUse(opaqueHistoryOut, Core::ResourceStates::UnorderedAccess));
-            opaqueResolveResourceUses.push_back(WriteUse(opaqueMomentsOut, Core::ResourceStates::UnorderedAccess));
-        }else{
-            // Preserve the established conservative compatibility declarations until a later frame can safely
-            // reactivate temporal history after this graph was compiled.
-            opaqueResolveResourceUses.push_back(ReadWriteUse(opaqueHistoryA, Core::ResourceStates::UnorderedAccess));
-            opaqueResolveResourceUses.push_back(ReadWriteUse(opaqueHistoryB, Core::ResourceStates::UnorderedAccess));
-            opaqueResolveResourceUses.push_back(ReadWriteUse(opaqueMomentsA, Core::ResourceStates::UnorderedAccess));
-            opaqueResolveResourceUses.push_back(ReadWriteUse(opaqueMomentsB, Core::ResourceStates::UnorderedAccess));
+            opaqueFirstWaveletResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious, Core::ResourceStates::ShaderResource));
+            opaqueFirstWaveletResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
+            opaqueFirstWaveletResourceUses.push_back(ReadUse(opaqueHistoryIn, Core::ResourceStates::ShaderResource));
+            opaqueFirstWaveletResourceUses.push_back(ReadUse(opaqueMomentsIn, Core::ResourceStates::ShaderResource));
+            opaqueFirstWaveletResourceUses.push_back(WriteUse(opaqueHistoryOut, Core::ResourceStates::UnorderedAccess));
+            opaqueFirstWaveletResourceUses.push_back(WriteUse(opaqueMomentsOut, Core::ResourceStates::UnorderedAccess));
         }
+
+        opaqueResolveResourceUses.reserve(8u);
+        // With the current one-wavelet opaque resolve, the tail only samples the first-wavelet half-B result for
+        // upsample. Keep a conservative native ping-pong declaration if that compile-time pass count grows.
+        if(NWB_SHADOW_RESOLVE_PASS_COUNT == 1u)
+            opaqueResolveResourceUses.push_back(ReadUse(shadowSoftHalfB, Core::ResourceStates::ShaderResource));
+        else{
+            opaqueResolveResourceUses.push_back(ReadWriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
+            opaqueResolveResourceUses.push_back(ReadWriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));
+        }
+        opaqueResolveResourceUses.push_back(WriteUse(shadowVisibility, Core::ResourceStates::UnorderedAccess));
+        opaqueResolveResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
+        opaqueResolveResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
+        opaqueResolveResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
+        opaqueResolveResourceUses.push_back(ReadUse(depth, Core::ResourceStates::ShaderResource));
+        opaqueResolveResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
 
         transparentTraceResourceUses.reserve(20u + softwareTraceGeometryResourceCount);
         transparentTraceResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
@@ -4060,7 +4070,36 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         tailScheduling.forceSubmissionBoundary = false;
         tailScheduling.allowPacketMerge = true;
         tailScheduling.mergeWithPrevious = true;
-        const Core::GpuTaskId opaqueResolveDependencies[] = { m_deferredShadowVisibilityOpaqueTask };
+        const Core::GpuTaskId opaqueFirstWaveletDependencies[] = { m_deferredShadowVisibilityOpaqueTask };
+        Core::GpuTaskDesc opaqueFirstWaveletDesc;
+        opaqueFirstWaveletDesc
+            .setIdentity(Name("render.shadow_visibility.opaque_first_wavelet"))
+            .setMarkerLabel("Shadow Opaque First Wavelet")
+            .setQueue(ComputeQueueRequest())
+            .setScheduling(tailScheduling)
+            .setDependencies(opaqueFirstWaveletDependencies, LengthOf(opaqueFirstWaveletDependencies))
+            .setResourceUses(opaqueFirstWaveletResourceUses.data(), opaqueFirstWaveletResourceUses.size())
+        ;
+        m_deferredShadowVisibilityOpaqueFirstWaveletTask = m_raytracingSystem.declareShadowVisibilityOpaqueFirstWaveletTask(
+            m_deferredLightingTaskGraph,
+            opaqueFirstWaveletDesc,
+            deferredTargets,
+            timingTicket,
+            &asyncTiming,
+            &shadowVisibilityTiming,
+            &opaqueResolveTiming,
+            &opaqueProduced,
+            &opaqueFrameIndex,
+            hardwareShadowSupported,
+            true,
+            graphOwnsOpaqueTemporalMergeEntryStates
+        );
+        if(!m_deferredShadowVisibilityOpaqueFirstWaveletTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque soft-shadow first-wavelet graph task"));
+            return false;
+        }
+
+        const Core::GpuTaskId opaqueResolveDependencies[] = { m_deferredShadowVisibilityOpaqueFirstWaveletTask };
         Core::GpuTaskDesc opaqueResolveDesc;
         opaqueResolveDesc
             .setIdentity(Name("render.shadow_visibility.opaque_soft_resolve"))
@@ -4070,21 +4109,21 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             .setDependencies(opaqueResolveDependencies, LengthOf(opaqueResolveDependencies))
             .setResourceUses(opaqueResolveResourceUses.data(), opaqueResolveResourceUses.size())
         ;
-        m_deferredShadowVisibilityOpaqueResolveTask = m_raytracingSystem.declareShadowVisibilityOpaqueResolveTask(
+        m_deferredShadowVisibilityOpaqueResolveTask = m_raytracingSystem.declareShadowVisibilityOpaqueResolveTailTask(
             m_deferredLightingTaskGraph,
             opaqueResolveDesc,
             deferredTargets,
             timingTicket,
             &asyncTiming,
             &shadowVisibilityTiming,
+            &opaqueResolveTiming,
             &opaqueProduced,
             &opaqueFrameIndex,
             hardwareShadowSupported,
-            true,
-            graphOwnsOpaqueTemporalMergeEntryStates
+            true
         );
         if(!m_deferredShadowVisibilityOpaqueResolveTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque soft-shadow resolve graph task"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque soft-shadow resolve-tail graph task"));
             return false;
         }
 
@@ -5732,6 +5771,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::GpuTimingSubmissionTicket& shadowVisibilityTimingTicket,
     Optional<Core::GpuTimingMeasure>& shadowVisibilityAsyncTiming,
     Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
+    Optional<Core::GpuTimingMeasure>& opaqueSoftResolveTiming,
     bool& shadowVisibilityOpaqueProduced,
     bool& shadowVisibilityTransparentTraceProduced,
     u32& shadowVisibilityOpaqueFrameIndex,
@@ -5768,6 +5808,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_graphicsPrefixCsgIntervalSampleTask = {};
     m_graphicsPrefixTask = {};
     m_deferredShadowVisibilityOpaqueTask = {};
+    m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
     m_deferredShadowVisibilityOpaqueResolveTask = {};
     m_deferredShadowVisibilityTransparentTraceTask = {};
     m_deferredShadowVisibilityTask = {};
@@ -6516,6 +6557,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         shadowVisibilityTimingTicket,
         shadowVisibilityAsyncTiming,
         shadowVisibilityTiming,
+        opaqueSoftResolveTiming,
         shadowVisibilityOpaqueProduced,
         shadowVisibilityTransparentTraceProduced,
         shadowVisibilityOpaqueFrameIndex

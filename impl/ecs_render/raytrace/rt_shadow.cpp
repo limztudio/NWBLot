@@ -153,15 +153,17 @@ struct ShadowVisibilityOpaqueGraphTask{
 
 
 // The opaque producer leaves the trace and current geometry scratch in their declared states. This adjacent task
-// owns the geometry UAV-to-SRV transition before temporal merge and wavelet resolve. Timing still begins in the
-// producer and ends in the terminal transparent fold callback.
-struct ShadowVisibilityOpaqueResolveGraphTask{
+// owns their sampled entry before temporal merge and the first wavelet. Its tail retains dynamic ping-pong and
+// upsample work, while the terminal transparent fold remains the output/acceptance owner.
+struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
+        Core::Graphics* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming = nullptr;
+        Optional<Core::GpuTimingMeasure>* opaqueResolveTiming = nullptr;
         bool* opaqueProduced = nullptr;
         const u32* opaqueFrameIndex = nullptr;
         bool hardwareShadowSupported = false;
@@ -177,10 +179,12 @@ struct ShadowVisibilityOpaqueResolveGraphTask{
         static_cast<void>(context);
         if(
             !payload.raytracingSystem
+            || !payload.graphics
             || !payload.targets
             || !payload.timingTicket
             || !payload.asyncTiming
             || !payload.shadowVisibilityTiming
+            || !payload.opaqueResolveTiming
             || !payload.opaqueProduced
             || !payload.opaqueFrameIndex
         )
@@ -189,17 +193,29 @@ struct ShadowVisibilityOpaqueResolveGraphTask{
             return true;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        if(payload.raytracingSystem->renderSoftOpaqueShadowResolve(
+        if(payload.opaqueResolveTiming->has_value()){
+            payload.opaqueResolveTiming->value().discardTiming();
+            payload.opaqueResolveTiming->reset();
+        }
+        payload.opaqueResolveTiming->emplace(
+            payload.graphics->gpuTiming(),
+            RendererGpuTimingScope::s_ShadowOpaqueResolve,
+            payload.graphics->getDevice(),
+            commandList
+        );
+        if(payload.raytracingSystem->renderSoftOpaqueShadowFirstWavelet(
             commandList,
             *payload.targets,
             *payload.opaqueFrameIndex,
             payload.hardwareShadowSupported,
             payload.graphEntryStatesOwned,
             payload.graphOwnsOpaqueTemporalMergeEntryStates
-        ))
+        )){
+            payload.opaqueResolveTiming->value().finishMarker();
             return true;
+        }
 
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split opaque soft-shadow resolve failed; retaining all-lit visibility"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split opaque soft-shadow first wavelet failed; retaining all-lit visibility"));
         payload.raytracingSystem->clearShadowVisibility(commandList, *payload.targets);
         // The skipped transparent callbacks still declare this output as UAV. Keep the native state tracker aligned
         // with their no-op graph handoff after the typed fallback clear.
@@ -218,6 +234,8 @@ struct ShadowVisibilityOpaqueResolveGraphTask{
             payload.shadowVisibilityTiming->value().discardTiming();
             payload.shadowVisibilityTiming->reset();
         }
+        payload.opaqueResolveTiming->value().discardTiming();
+        payload.opaqueResolveTiming->reset();
         return true;
     }
 
@@ -231,6 +249,100 @@ struct ShadowVisibilityOpaqueResolveGraphTask{
         if(payload.shadowVisibilityTiming && payload.shadowVisibilityTiming->has_value()){
             payload.shadowVisibilityTiming->value().discardTiming();
             payload.shadowVisibilityTiming->reset();
+        }
+        if(payload.opaqueResolveTiming && payload.opaqueResolveTiming->has_value()){
+            payload.opaqueResolveTiming->value().discardTiming();
+            payload.opaqueResolveTiming->reset();
+        }
+    }
+};
+
+
+struct ShadowVisibilityOpaqueResolveTailGraphTask{
+    struct Payload{
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
+        Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming = nullptr;
+        Optional<Core::GpuTimingMeasure>* opaqueResolveTiming = nullptr;
+        bool* opaqueProduced = nullptr;
+        const u32* opaqueFrameIndex = nullptr;
+        bool hardwareShadowSupported = false;
+        bool graphEntryStatesOwned = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(
+            !payload.raytracingSystem
+            || !payload.targets
+            || !payload.timingTicket
+            || !payload.asyncTiming
+            || !payload.shadowVisibilityTiming
+            || !payload.opaqueResolveTiming
+            || !payload.opaqueProduced
+            || !payload.opaqueFrameIndex
+        )
+            return false;
+        if(!*payload.opaqueProduced)
+            return true;
+        if(!payload.opaqueResolveTiming->has_value())
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        if(payload.raytracingSystem->renderSoftOpaqueShadowResolveTail(
+            commandList,
+            *payload.targets,
+            *payload.opaqueFrameIndex,
+            payload.hardwareShadowSupported,
+            payload.graphEntryStatesOwned
+        )){
+            payload.opaqueResolveTiming->value().finishTiming(commandList);
+            payload.opaqueResolveTiming->reset();
+            return true;
+        }
+
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split opaque soft-shadow resolve tail failed; retaining all-lit visibility"));
+        payload.raytracingSystem->clearShadowVisibility(commandList, *payload.targets);
+        commandList.setTextureState(
+            payload.targets->shadowVisibility.get(),
+            ECSRenderDetail::s_ShadowVisibilitySubresources,
+            Core::ResourceStates::UnorderedAccess
+        );
+        commandList.commitBarriers();
+        *payload.opaqueProduced = false;
+        if(payload.asyncTiming->has_value()){
+            payload.asyncTiming->value().discardTiming();
+            payload.asyncTiming->reset();
+        }
+        if(payload.shadowVisibilityTiming->has_value()){
+            payload.shadowVisibilityTiming->value().discardTiming();
+            payload.shadowVisibilityTiming->reset();
+        }
+        payload.opaqueResolveTiming->value().discardTiming();
+        payload.opaqueResolveTiming->reset();
+        return true;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.opaqueProduced)
+            *payload.opaqueProduced = false;
+        if(payload.asyncTiming && payload.asyncTiming->has_value()){
+            payload.asyncTiming->value().discardTiming();
+            payload.asyncTiming->reset();
+        }
+        if(payload.shadowVisibilityTiming && payload.shadowVisibilityTiming->has_value()){
+            payload.shadowVisibilityTiming->value().discardTiming();
+            payload.shadowVisibilityTiming->reset();
+        }
+        if(payload.opaqueResolveTiming && payload.opaqueResolveTiming->has_value()){
+            payload.opaqueResolveTiming->value().discardTiming();
+            payload.opaqueResolveTiming->reset();
         }
     }
 };
@@ -958,7 +1070,10 @@ bool RendererRayTracingSystem::renderShadowVisibility(
             false,
             false,
             false,
-            graphOwnsOpaqueTemporalMergeEntryStates
+            graphOwnsOpaqueTemporalMergeEntryStates,
+            false,
+            !splitOpaqueSoftResolve,
+            false
         );
         if(splitSoftTransparentFold){
             NWB_ASSERT(opaqueFrameIndex);
@@ -1039,27 +1154,30 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
     );
 }
 
-Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTask(
+Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWaveletTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>* const asyncTiming,
     Optional<Core::GpuTimingMeasure>* const shadowVisibilityTiming,
+    Optional<Core::GpuTimingMeasure>* const opaqueResolveTiming,
     bool* const opaqueProduced,
     const u32* const opaqueFrameIndex,
     const bool hardwareShadowSupported,
     const bool graphEntryStatesOwned,
     const bool graphOwnsOpaqueTemporalMergeEntryStates
 ){
-    return graph.addTask<__hidden_shadow_visibility_task::ShadowVisibilityOpaqueResolveGraphTask>(
+    return graph.addTask<__hidden_shadow_visibility_task::ShadowVisibilityOpaqueFirstWaveletGraphTask>(
         desc,
-        __hidden_shadow_visibility_task::ShadowVisibilityOpaqueResolveGraphTask::Payload{
+        __hidden_shadow_visibility_task::ShadowVisibilityOpaqueFirstWaveletGraphTask::Payload{
             .raytracingSystem = this,
+            .graphics = &graphics(),
             .targets = &targets,
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
             .shadowVisibilityTiming = shadowVisibilityTiming,
+            .opaqueResolveTiming = opaqueResolveTiming,
             .opaqueProduced = opaqueProduced,
             .opaqueFrameIndex = opaqueFrameIndex,
             .hardwareShadowSupported = hardwareShadowSupported,
@@ -1094,7 +1212,37 @@ bool RendererRayTracingSystem::renderShadowVisibilityOpaque(
     );
 }
 
-bool RendererRayTracingSystem::renderSoftOpaqueShadowResolve(
+Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTailTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    Optional<Core::GpuTimingMeasure>* const asyncTiming,
+    Optional<Core::GpuTimingMeasure>* const shadowVisibilityTiming,
+    Optional<Core::GpuTimingMeasure>* const opaqueResolveTiming,
+    bool* const opaqueProduced,
+    const u32* const opaqueFrameIndex,
+    const bool hardwareShadowSupported,
+    const bool graphEntryStatesOwned
+){
+    return graph.addTask<__hidden_shadow_visibility_task::ShadowVisibilityOpaqueResolveTailGraphTask>(
+        desc,
+        __hidden_shadow_visibility_task::ShadowVisibilityOpaqueResolveTailGraphTask::Payload{
+            .raytracingSystem = this,
+            .targets = &targets,
+            .timingTicket = &timingTicket,
+            .asyncTiming = asyncTiming,
+            .shadowVisibilityTiming = shadowVisibilityTiming,
+            .opaqueResolveTiming = opaqueResolveTiming,
+            .opaqueProduced = opaqueProduced,
+            .opaqueFrameIndex = opaqueFrameIndex,
+            .hardwareShadowSupported = hardwareShadowSupported,
+            .graphEntryStatesOwned = graphEntryStatesOwned,
+        }
+    );
+}
+
+bool RendererRayTracingSystem::renderSoftOpaqueShadowFirstWavelet(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const u32 frameIndex,
@@ -1131,6 +1279,51 @@ bool RendererRayTracingSystem::renderSoftOpaqueShadowResolve(
         false,
         false,
         graphOwnsOpaqueTemporalMergeEntryStates,
+        false,
+        false,
+        true
+    );
+    return true;
+}
+
+bool RendererRayTracingSystem::renderSoftOpaqueShadowResolveTail(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const u32 frameIndex,
+    const bool hardwareShadowSupported,
+    const bool graphEntryStatesOwned
+){
+    if(
+        !rayTracingState().m_softShadowReady
+        || !rayTracingState().m_softTransparentReady
+        || rayTracingState().m_softShadowSlotMask == 0u
+    )
+        return false;
+    const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    const u32 groupSize = hardwareShadowSupported
+        ? static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)
+        : static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE)
+    ;
+    const u32 softGroupsX = DivideUp(softHalfWidth, groupSize);
+    const u32 softGroupsY = DivideUp(softHalfHeight, groupSize);
+    dispatchSoftShadowDenoiseAndTransparentFold(
+        commandList,
+        targets,
+        frameIndex,
+        softGroupsX,
+        softGroupsY,
+        graphEntryStatesOwned,
+        false,
+        false,
+        false,
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        true,
         false
     );
     return true;
@@ -1166,6 +1359,8 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
         false,
         false,
         graphOwnsOpaqueToTransparentBoundary,
+        false,
+        false,
         false,
         false,
         false
@@ -1207,7 +1402,9 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
         graphOwnsOpaqueToTransparentBoundary,
         graphOwnsTransparentTraceToResolveBoundary,
         false,
-        graphOwnsTransparentTemporalMergeEntryStates
+        graphOwnsTransparentTemporalMergeEntryStates,
+        false,
+        false
     );
     return true;
 }
@@ -1487,7 +1684,10 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                 false,
                 false,
                 false,
-                graphOwnsOpaqueTemporalMergeEntryStates
+                graphOwnsOpaqueTemporalMergeEntryStates,
+                false,
+                !splitOpaqueSoftResolve,
+                false
             );
             if(splitSoftTransparentFold){
                 NWB_ASSERT(opaqueFrameIndex);

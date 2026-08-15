@@ -251,6 +251,7 @@ private:
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming,
         Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
+        Optional<Core::GpuTimingMeasure>& opaqueResolveTiming,
         bool& opaqueProduced,
         bool& transparentTraceProduced,
         u32& opaqueFrameIndex
@@ -313,6 +314,7 @@ private:
         Core::GpuTimingSubmissionTicket& shadowVisibilityTimingTicket,
         Optional<Core::GpuTimingMeasure>& shadowVisibilityAsyncTiming,
         Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
+        Optional<Core::GpuTimingMeasure>& opaqueSoftResolveTiming,
         bool& shadowVisibilityOpaqueProduced,
         bool& shadowVisibilityTransparentTraceProduced,
         u32& shadowVisibilityOpaqueFrameIndex,
@@ -397,10 +399,11 @@ private:
     Core::GpuTaskId m_graphicsPrefixGbufferTask;
     Core::GpuTaskId m_graphicsPrefixCsgIntervalSampleTask;
     Core::GpuTaskId m_graphicsPrefixTask;
-    // Prepared soft-transparent shadow frames split opaque production, opaque resolve, transparent trace, and
-    // terminal resolve, but all four tasks must compile into one packet. The terminal ID remains the
+    // Prepared soft-transparent shadow frames split opaque production, first wavelet, resolve tail, transparent
+    // trace, and terminal resolve, but all five tasks must compile into one packet. The terminal ID remains the
     // output/acceptance/recovery owner.
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueTask;
+    Core::GpuTaskId m_deferredShadowVisibilityOpaqueFirstWaveletTask;
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueResolveTask;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentTraceTask;
     Core::GpuTaskId m_deferredShadowVisibilityTask;

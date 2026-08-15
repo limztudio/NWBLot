@@ -70,7 +70,9 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const bool graphOwnsOpaqueToTransparentBoundary,
     const bool graphOwnsTransparentTraceToResolveBoundary,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
-    const bool graphOwnsTransparentTemporalMergeEntryStates
+    const bool graphOwnsTransparentTemporalMergeEntryStates,
+    const bool dispatchOpaqueResolveTail,
+    const bool graphOwnsOpaqueTraceToFirstWaveletBoundary
 ){
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
@@ -140,7 +142,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         }
     }
 
-    if(!dispatchOpaqueResolve && !dispatchTransparentTrace && !dispatchTransparentResolve)
+    if(!dispatchOpaqueResolve && !dispatchOpaqueResolveTail && !dispatchTransparentTrace && !dispatchTransparentResolve)
         return;
 
     u32 slotRangeCount = 0u;
@@ -199,7 +201,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         commandList.dispatch(softGroupsX, softGroupsY, 1u);
     };
 
-    if(dispatchOpaqueResolve){
+    if(dispatchOpaqueResolve || dispatchOpaqueResolveTail){
     const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources opaqueMerge = frontIsA
         ? __hidden_rt_softshadow::ShadowReprojectMergeHeapResources{
             targets.shadowSoftHalfA.get(), targets.shadowHistA.get(), targets.shadowMomentsA.get(), targets.shadowHistB.get(), targets.shadowMomentsB.get(),
@@ -216,7 +218,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     // incoming A buffer on every other frame; otherwise its temporal variance is stale (and initially undefined).
     Core::Texture* const opaqueResolveMoments = frontIsA ? targets.shadowMomentsB.get() : targets.shadowMomentsA.get();
     const u32 opaqueResolveMomentsSlot = frontIsA ? targets.bindless.shadowMomentsB.slot() : targets.bindless.shadowMomentsA.slot();
-    if(opaqueTemporalActive){
+    if(dispatchOpaqueResolve && opaqueTemporalActive){
         Core::GpuTimingMeasure opaqueTemporalTiming(
             graphics().gpuTiming(),
             RendererGpuTimingScope::s_ShadowOpaqueTemporal,
@@ -227,7 +229,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         // downsample above still needs this callback's local UAV-to-SRV transition before the opaque merge samples it.
         dispatchMerge(
             opaqueMerge,
-            false,
+            graphOwnsOpaqueTraceToFirstWaveletBoundary,
             graphOwnsOpaqueGeometryToResolveBoundary,
             graphOwnsOpaqueTemporalMergeEntryStates,
             graphOwnsOpaqueTemporalMergeEntryStates
@@ -268,10 +270,24 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     opaqueDispatch.temporalMomentsValid = opaqueTemporalActive;
     opaqueDispatch.graphOwnsWaveletGeometryEntryState = graphOwnsOpaqueGeometryToResolveBoundary;
     opaqueDispatch.graphOwnsUpsampleStaticEntryStates = graphEntryStatesOwned;
+    opaqueDispatch.graphOwnsFirstWaveletInputState =
+        graphOwnsOpaqueTraceToFirstWaveletBoundary && !opaqueTemporalActive
+    ;
+    opaqueDispatch.graphOwnsFirstWaveletOutputState =
+        dispatchOpaqueResolve && !dispatchOpaqueResolveTail && graphEntryStatesOwned
+    ;
+    const bool graphOwnsOneWaveletOpaqueResolveTailEntryStates =
+        !dispatchOpaqueResolve
+        && dispatchOpaqueResolveTail
+        && graphEntryStatesOwned
+        && NWB_SHADOW_RESOLVE_PASS_COUNT == 1u
+    ;
+    opaqueDispatch.graphOwnsUpsampleInputColorEntryState = graphOwnsOneWaveletOpaqueResolveTailEntryStates;
+    opaqueDispatch.graphOwnsUpsampleVisibilityOutputState = graphOwnsOneWaveletOpaqueResolveTailEntryStates;
     opaqueDispatch.firstWaveletWritesHalfA = false;
     opaqueDispatch.fold = SoftShadowUpsampleFold::Overwrite;
     opaqueDispatch.waveletPassCount = static_cast<u32>(NWB_SHADOW_RESOLVE_PASS_COUNT);
-    {
+    if(dispatchOpaqueResolve && dispatchOpaqueResolveTail){
         Core::GpuTimingMeasure opaqueResolveTiming(
             graphics().gpuTiming(),
             RendererGpuTimingScope::s_ShadowOpaqueResolve,
@@ -280,6 +296,10 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         );
         dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, opaqueDispatch);
     }
+    else if(dispatchOpaqueResolve)
+        dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, opaqueDispatch, true, false);
+    else
+        dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, opaqueDispatch, false, true);
     }
 
     if(dispatchTransparentTrace && rayTracingState().m_softTransparentReady){
@@ -547,7 +567,15 @@ bool RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
     return true;
 }
 
-void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slotStart, u32 slotCount, const SoftShadowResolveDispatch& dispatch){
+void RendererRayTracingSystem::dispatchSoftShadowResolve(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const u32 slotStart,
+    const u32 slotCount,
+    const SoftShadowResolveDispatch& dispatch,
+    const bool dispatchFirstWavelet,
+    const bool dispatchTail
+){
     NWB_ASSERT(dispatch.pipeline);
     NWB_ASSERT(dispatch.visibilityTexture);
     const u32 halfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
@@ -559,7 +587,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
     const DeferredBindlessFrameResources& bindless = targets.bindless;
     Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
 
-    const auto runPass = [&](const SoftShadowResolvePassResources& resources, const u32 stepWidth, const ShadowResolveStage::Enum stage, const u32 groupsX, const u32 groupsY, const bool graphOwnsInputColorState = false){
+    const auto runPass = [&](const SoftShadowResolvePassResources& resources, const u32 stepWidth, const ShadowResolveStage::Enum stage, const u32 groupsX, const u32 groupsY, const bool graphOwnsInputColorState = false, const bool graphOwnsOutputState = false){
         NWB_ASSERT(resources.softHalfTexture && resources.inputColorTexture && resources.momentsTexture && resources.outputTexture);
         switch(stage){
             case ShadowResolveStage::Prepare:
@@ -575,7 +603,8 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
                     commandList.setTextureState(resources.inputColorTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
                 if(dispatch.temporalMomentsValid)
                     commandList.setTextureState(resources.momentsTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
-                commandList.setTextureState(resources.outputTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+                if(!graphOwnsOutputState)
+                    commandList.setTextureState(resources.outputTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
                 commandList.setEnableUavBarriersForTexture(resources.outputTexture, true);
                 break;
             case ShadowResolveStage::Upsample:
@@ -585,8 +614,10 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
                     commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
                     commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
                 }
-                commandList.setTextureState(resources.inputColorTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
-                commandList.setTextureState(dispatch.visibilityTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+                if(!graphOwnsInputColorState)
+                    commandList.setTextureState(resources.inputColorTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+                if(!graphOwnsOutputState)
+                    commandList.setTextureState(dispatch.visibilityTexture, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
                 commandList.setEnableUavBarriersForTexture(dispatch.visibilityTexture, true);
                 break;
         }
@@ -625,15 +656,22 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
     static_assert((NWB_SHADOW_RESOLVE_PASS_COUNT % 2) == 1, "opaque resolve pass count must be odd");
     static_assert((NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT % 2) == 1, "transparent resolve pass count must be odd");
     NWB_ASSERT(dispatch.waveletPassCount != 0u && (dispatch.waveletPassCount % 2u) == 1u);
+    NWB_ASSERT(dispatchFirstWavelet || dispatchTail);
 
-    runPass(
-        dispatch.firstWaveletResources,
-        1u,
-        ShadowResolveStage::Wavelet,
-        halfGroupsX,
-        halfGroupsY,
-        dispatch.graphOwnsFirstWaveletInputState
-    );
+    if(dispatchFirstWavelet){
+        runPass(
+            dispatch.firstWaveletResources,
+            1u,
+            ShadowResolveStage::Wavelet,
+            halfGroupsX,
+            halfGroupsY,
+            dispatch.graphOwnsFirstWaveletInputState,
+            dispatch.graphOwnsFirstWaveletOutputState
+        );
+    }
+    if(!dispatchTail)
+        return;
+
     bool sourceIsHalfA = dispatch.firstWaveletWritesHalfA;
     [[maybe_unused]] const SoftShadowResolvePassResources* lastWaveletResources = &dispatch.firstWaveletResources;
     for(u32 pass = 1u; pass < dispatch.waveletPassCount; ++pass){
@@ -652,7 +690,15 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
         sourceIsHalfA = !sourceIsHalfA;
     }
     NWB_ASSERT(dispatch.upsampleResources.inputColorTexture == lastWaveletResources->outputTexture);
-    runPass(dispatch.upsampleResources, 1u, ShadowResolveStage::Upsample, fullGroupsX, fullGroupsY);
+    runPass(
+        dispatch.upsampleResources,
+        1u,
+        ShadowResolveStage::Upsample,
+        fullGroupsX,
+        fullGroupsY,
+        dispatch.graphOwnsUpsampleInputColorEntryState,
+        dispatch.graphOwnsUpsampleVisibilityOutputState
+    );
 }
 
 bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){

@@ -29,6 +29,7 @@
 #include <core/graphics/capture/command_ir.h>
 #include <core/graphics/task_graph/compiler.h>
 #include <core/graphics/task_graph/packet_runtime.h>
+#include <core/graphics/task_graph/persistent_state.h>
 #include <core/perf/timing.h>
 #include <impl/assets/graphics/avboit/constants.h>
 #include <impl/assets/graphics/bindless/runtime_abi.h>
@@ -17139,6 +17140,74 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffTransfersFinalBuffe
     CommandList* commandLists[] = { producer.get(), consumer.get() };
     bool submitted = false;
     EXPECT_GT(device.executeCommandLists(commandLists, 2u, CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_TRUE(submitted);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Accepted graph state must retain only live typed resources while preserving a later packet's final state across
+// generations. This is the shared cache used by runtime skinning instead of renderer-owned raw handoff fan-in.
+TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheFiltersAndMergesAcceptedBufferStates){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto liveBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    auto retiredBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(liveBuffer.get(), nullptr);
+    ASSERT_NE(retiredBuffer.get(), nullptr);
+
+    CommandListResourceStateHandoff initialStates(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff finalStates(DescriptorBufferRoundTripTest::arena());
+    auto initialProducer = device.createCommandList();
+    auto finalProducer = device.createCommandList();
+    auto consumer = device.createCommandList();
+    ASSERT_NE(initialProducer.get(), nullptr);
+    ASSERT_NE(finalProducer.get(), nullptr);
+    ASSERT_NE(consumer.get(), nullptr);
+
+    initialProducer->open();
+    initialProducer->setBufferState(liveBuffer.get(), ResourceStates::UnorderedAccess);
+    initialProducer->setBufferState(retiredBuffer.get(), ResourceStates::UnorderedAccess);
+    initialProducer->close(&initialStates);
+    ASSERT_TRUE(initialStates.valid());
+
+    GpuPersistentResourceStateCache acceptedState(DescriptorBufferRoundTripTest::arena());
+    {
+        const BufferHandle initialLiveBuffers[] = { liveBuffer, retiredBuffer };
+        ASSERT_TRUE(acceptedState.replaceBufferSubset(initialStates, initialLiveBuffers, LengthOf(initialLiveBuffers)));
+    }
+    EXPECT_EQ(acceptedState.retainedBufferCount(), 2u);
+    // Drop the caller's retired handle before opening the next command list from the raw handoff. The cache keeps a
+    // retirement-safe typed reference until the current-live filter drops that generation.
+    retiredBuffer.reset();
+
+    finalProducer->open(&initialStates);
+    finalProducer->setBufferState(liveBuffer.get(), ResourceStates::ShaderResource);
+    finalProducer->close(&finalStates);
+    ASSERT_TRUE(finalStates.valid());
+
+    const BufferHandle currentLiveBuffers[] = { liveBuffer };
+    ASSERT_TRUE(acceptedState.mergeBufferSubset(finalStates, currentLiveBuffers, LengthOf(currentLiveBuffers)));
+    ASSERT_NE(acceptedState.source(), nullptr);
+    EXPECT_EQ(acceptedState.retainedBufferCount(), 1u);
+
+    consumer->open(acceptedState.source());
+    EXPECT_EQ(consumer->getBufferState(liveBuffer.get()), ResourceStates::ShaderResource);
+    consumer->close();
+
+    CommandList* commandLists[] = { initialProducer.get(), finalProducer.get(), consumer.get() };
+    bool submitted = false;
+    EXPECT_GT(device.executeCommandLists(commandLists, LengthOf(commandLists), CommandQueue::Graphics, &submitted), 0u);
     EXPECT_TRUE(submitted);
     EXPECT_TRUE(device.waitForIdle());
 }

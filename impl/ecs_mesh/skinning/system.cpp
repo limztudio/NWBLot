@@ -266,30 +266,18 @@ bool MeshSkinningSystem::resolveRestToSkinnedCopyByteCounts(
     ;
 }
 
-void MeshSkinningSystem::resetAcceptedSkinningStateHandoff()noexcept{
-    m_acceptedSkinningStateHandoff.reset();
-    m_acceptedSkinningStateBuffers.clear();
-}
-
-bool MeshSkinningSystem::replaceAcceptedSkinningStateHandoff(
-    const Core::CommandListResourceStateHandoff& state
-){
-    if(!state.valid()){
-        resetAcceptedSkinningStateHandoff();
-        return false;
-    }
-
-    // The handoff stores raw RHI pointers. Retain and filter against every current skinning buffer before replacing
-    // it, so runtime-resource pruning/rebuild cannot leave an external source dangling or accidentally revive an
-    // old buffer whose address was reused by a new generation.
-    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> retainedBuffers(m_arena);
-    Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_FrameUploadArena);
-    Vector<Core::Buffer*, Core::Alloc::ScratchArena> currentBuffers(scratchArena);
+void MeshSkinningSystem::collectLiveSkinningStateBuffers(
+    Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers
+)const{
+    outBuffers.clear();
     const auto retainBuffer = [&](const Core::BufferHandle& buffer){
         if(!buffer)
             return;
-        retainedBuffers.push_back(buffer);
-        currentBuffers.push_back(buffer.get());
+        for(const Core::BufferHandle& existing : outBuffers){
+            if(existing.get() == buffer.get())
+                return;
+        }
+        outBuffers.push_back(buffer);
     };
     m_world.view<SkinnedMeshBindingComponent>().each(
         [&](Core::ECS::EntityID, const SkinnedMeshBindingComponent& binding){
@@ -329,22 +317,18 @@ bool MeshSkinningSystem::replaceAcceptedSkinningStateHandoff(
             }
         }
     );
+}
 
-    Core::CommandListResourceStateHandoff filteredState(m_arena);
-    if(!filteredState.buildResourceSubset(
-        state,
-        nullptr,
-        0u,
-        currentBuffers.data(),
-        currentBuffers.size()
-    ) || !m_acceptedSkinningStateHandoff.copyFrom(filteredState)){
-        resetAcceptedSkinningStateHandoff();
-        return false;
-    }
-    m_acceptedSkinningStateBuffers.clear();
-    for(Core::BufferHandle& buffer : retainedBuffers)
-        m_acceptedSkinningStateBuffers.push_back(Move(buffer));
-    return true;
+bool MeshSkinningSystem::replaceAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state){
+    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> liveBuffers(m_arena);
+    collectLiveSkinningStateBuffers(liveBuffers);
+    return m_acceptedSkinningState.replaceBufferSubset(state, liveBuffers.data(), liveBuffers.size());
+}
+
+bool MeshSkinningSystem::mergeAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state){
+    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> liveBuffers(m_arena);
+    collectLiveSkinningStateBuffers(liveBuffers);
+    return m_acceptedSkinningState.mergeBufferSubset(state, liveBuffers.data(), liveBuffers.size());
 }
 
 
@@ -366,8 +350,7 @@ MeshSkinningSystem::MeshSkinningSystem(
     , m_runtimeMeshCache(arena, graphics, assetManager)
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), arena)
     , m_graphOwnedRestCopyPlans(arena)
-    , m_acceptedSkinningStateBuffers(arena)
-    , m_acceptedSkinningStateHandoff(arena)
+    , m_acceptedSkinningState(arena)
 {
     writeAccess<SkinnedMeshBindingComponent>();
     readAccess<SkeletonJointPaletteComponent>();
@@ -441,8 +424,8 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
     // useful for surviving generations, but filter out retired buffers now so its ownership handles cannot pin an
     // otherwise-pruned runtime mesh indefinitely.
     if(
-        m_acceptedSkinningStateHandoff.valid()
-        && !replaceAcceptedSkinningStateHandoff(m_acceptedSkinningStateHandoff)
+        m_acceptedSkinningState.valid()
+        && !replaceAcceptedSkinningState(*m_acceptedSkinningState.source())
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to prune the accepted skinning state handoff"));
         return false;
@@ -1055,10 +1038,10 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     // deformation/bounds dependencies remain compiler-owned.
     const Core::GpuTaskExternalStateSource previousFrameStateSources[] = {
         Core::GpuTaskExternalStateSource{
-            .states = &m_acceptedSkinningStateHandoff,
+            .states = m_acceptedSkinningState.source(),
         },
     };
-    const usize previousFrameStateSourceCount = m_acceptedSkinningStateHandoff.valid()
+    const usize previousFrameStateSourceCount = m_acceptedSkinningState.valid()
         ? LengthOf(previousFrameStateSources)
         : 0u
     ;
@@ -1187,20 +1170,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     }
 
     const Core::CommandListResourceStateHandoff* const finalStates = recordedGraph.packetFinalStateSeed(terminalPacket);
-    Core::CommandListResourceStateHandoff graphStateHandoff(m_arena);
-    const Core::CommandListResourceStateHandoff* const graphStateBranches[] = { finalStates };
-    if(
-        !finalStates
-        || (
-            m_acceptedSkinningStateHandoff.valid()
-            ? !graphStateHandoff.buildFanIn(
-                m_acceptedSkinningStateHandoff,
-                graphStateBranches,
-                LengthOf(graphStateBranches)
-            )
-            : !graphStateHandoff.copyFrom(*finalStates)
-        )
-    ){
+    if(!finalStates){
         transaction.discardUnaccepted(graph, compiledGraph);
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain graph-owned skinning frame state"));
         return false;
@@ -1237,7 +1207,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     }
     // Filter the accepted state before retaining it across frames. The graph task already owns every live
     // deformation/bounds/repack transition; filtering merely drops retired runtime-buffer generations.
-    if(!replaceAcceptedSkinningStateHandoff(graphStateHandoff)){
+    if(!mergeAcceptedSkinningState(*finalStates)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain accepted graph-owned skinning state"));
         return false;
     }
@@ -1271,7 +1241,7 @@ void MeshSkinningSystem::pruneRuntimeResources(){
 }
 
 void MeshSkinningSystem::invalidateResources(){
-    resetAcceptedSkinningStateHandoff();
+    m_acceptedSkinningState.reset();
     m_graphOwnedRestCopyPlans.clear();
     for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end(); ++it)
         releaseRuntimeResourceBindlessHeapHandles(it.value());

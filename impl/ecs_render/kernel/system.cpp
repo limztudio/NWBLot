@@ -3598,13 +3598,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         Core::Alloc::ScratchArena shadowEffectsScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter shadowEffectsSubmitter(device);
-        const Core::GpuTaskGraphPacketTimingTicket shadowEffectsTimingTickets[] = {
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = shadowVisibilityPacket,
+        const Core::GpuTaskGraphTaskTimingTicket shadowEffectsTimingTickets[] = {
+            Core::GpuTaskGraphTaskTimingTicket{
+                .task = m_deferredShadowVisibilityTask,
                 .timingTicket = &shadowVisibilityTimingTicket,
             },
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = softwareCausticsPacket,
+            Core::GpuTaskGraphTaskTimingTicket{
+                .task = m_deferredSoftwareCausticsTask,
                 .timingTicket = &softwareCausticsTimingTicket,
             },
         };
@@ -3623,7 +3623,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredSoftwareCausticsTask.valid()
                 && softwareCausticsPacket.valid()
             ))
-            && shadowEffectsSubmitter.submitPacketRangeInCompileOrder(
+            && shadowEffectsSubmitter.submitPacketRangeInCompileOrderFromTasks(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,

@@ -310,6 +310,8 @@ void RendererSystem::invalidateResources(){
     m_deferredAvboitPreTask = {};
     m_deferredAvboitCsgReceiverSpanTask = {};
     m_deferredAvboitCsgIntervalCombineTask = {};
+    m_deferredAvboitOccupancyStreamTask = {};
+    m_deferredAvboitOccupancyComputeEmulationTask = {};
     m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
     m_deferredAvboitExtinctionStreamTask = {};
@@ -610,6 +612,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredAvboitPreTask = {};
     m_deferredAvboitCsgReceiverSpanTask = {};
     m_deferredAvboitCsgIntervalCombineTask = {};
+    m_deferredAvboitOccupancyStreamTask = {};
+    m_deferredAvboitOccupancyComputeEmulationTask = {};
     m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
     m_deferredAvboitExtinctionStreamTask = {};
@@ -919,6 +923,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     };
     // Prepared transparent CSG begins this interval in AVBOIT Pre and closes it in its graph-owned Combine callback.
     Optional<Core::GpuTimingMeasure> transparentCsgIntervalsTiming;
+    // The split Occupancy handoff starts this interval in its compute producer and closes it in the raster consumer.
+    Optional<Core::GpuTimingMeasure> avboitOccupancyComputeEmulationTiming;
     // The split Extinction handoff starts this interval in its compute producer and closes it in the raster consumer.
     Optional<Core::GpuTimingMeasure> avboitExtinctionComputeEmulationTiming;
     Core::GpuTimingSubmissionTicket avboitDepthWarpTimingTicket(m_graphics.gpuTiming());
@@ -959,6 +965,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         avboitClearTimingState,
         transparentCsgIntervalClearTimingState,
         transparentCsgIntervalsTiming,
+        avboitOccupancyComputeEmulationTiming,
         avboitExtinctionComputeEmulationTiming,
         avboitDepthWarpTimingTicket,
         avboitExtinctionTimingTicket,
@@ -1009,6 +1016,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitClearTimingState,
             transparentCsgIntervalClearTimingState,
             transparentCsgIntervalsTiming,
+            avboitOccupancyComputeEmulationTiming,
             avboitExtinctionComputeEmulationTiming,
             avboitDepthWarpTimingTicket,
             avboitExtinctionTimingTicket,
@@ -1567,6 +1575,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId avboitPrePacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitPreTask
     );
+    const Core::GpuSubmissionPacketId avboitOccupancyComputeEmulationPacket =
+        m_deferredAvboitOccupancyComputeEmulationTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitOccupancyComputeEmulationTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
     const bool avboitPrePacketContainsClear = !clearAvboitTargets || (
         m_deferredAvboitClearFirstTask.valid()
         && m_deferredAvboitClearTask.valid()
@@ -1620,6 +1633,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     ;
     const Core::GpuPhysicalQueueInfo* const avboitPreQueue =
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitPreTask);
+    const Core::GpuPhysicalQueueInfo* const avboitOccupancyQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitOccupancyTask);
+    const Core::GpuPhysicalQueueInfo* const avboitOccupancyComputeEmulationQueue =
+        m_deferredAvboitOccupancyComputeEmulationTask.valid()
+            ? m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitOccupancyComputeEmulationTask)
+            : nullptr
+    ;
     const bool avboitUsesAsyncCompute = m_deferredAvboitDepthWarpTask.valid();
     const Core::GpuSubmissionPacketId avboitDepthWarpPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitDepthWarpTask
@@ -1683,6 +1703,74 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitIntegrationTask);
     const Core::GpuPhysicalQueueInfo* const avboitAccumulationQueue =
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitAccumulationTask);
+    // A split Occupancy measurement spans the generator and raster consumer. Require the exact Pre-packet order
+    // so graph declarations, rather than a callback-local transition, own the output UAV-to-VertexBuffer handoff.
+    const bool avboitOccupancyComputeEmulationMerged = [&](){
+        if(!m_deferredAvboitOccupancyComputeEmulationTask.valid())
+            return true;
+        if(
+            !avboitUsesAsyncCompute
+            || !m_deferredAvboitOccupancyStreamTask.valid()
+            || !avboitOccupancyComputeEmulationPacket.valid()
+            || !avboitPrePacket.valid()
+            || !avboitOccupancyComputeEmulationQueue
+            || !avboitOccupancyQueue
+            || !avboitPreQueue
+            || avboitOccupancyComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
+            || avboitOccupancyQueue->queueClass != Core::CommandQueue::Graphics
+            || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
+            || !m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredAvboitPreTask,
+                m_deferredAvboitOccupancyComputeEmulationTask
+            )
+            || !m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredAvboitOccupancyComputeEmulationTask,
+                m_deferredAvboitOccupancyTask
+            )
+            || !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
+                m_deferredAvboitOccupancyStreamTask,
+                m_deferredAvboitOccupancyComputeEmulationTask
+            )
+            || (m_deferredAvboitClearTask.valid()
+                && !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
+                    m_deferredAvboitClearTask,
+                    m_deferredAvboitOccupancyComputeEmulationTask
+                ))
+        )
+            return false;
+        const Core::GpuSubmissionPacket& packet = m_deferredLightingCompiledGraph.packet(
+            avboitOccupancyComputeEmulationPacket
+        );
+        const Core::GpuTaskId* const packetTasks = m_deferredLightingCompiledGraph.packetTasks(
+            avboitOccupancyComputeEmulationPacket
+        );
+        if(!packetTasks || packet.taskCount < 2u)
+            return false;
+        for(usize taskIndex = 0u; taskIndex + 2u <= packet.taskCount; ++taskIndex){
+            if(
+                packetTasks[taskIndex] != m_deferredAvboitOccupancyComputeEmulationTask
+                || packetTasks[taskIndex + 1u] != m_deferredAvboitOccupancyTask
+            )
+                continue;
+            const auto hasPrecedingTask = [&](const Core::GpuTaskId task){
+                if(!task.valid())
+                    return true;
+                if(!m_deferredLightingCompiledGraph.tasksSharePacket(
+                    task,
+                    m_deferredAvboitOccupancyComputeEmulationTask
+                ))
+                    return true;
+                for(usize predecessorIndex = 0u; predecessorIndex < taskIndex; ++predecessorIndex){
+                    if(packetTasks[predecessorIndex] == task)
+                        return true;
+                }
+                return false;
+            };
+            return hasPrecedingTask(m_deferredAvboitOccupancyStreamTask)
+                && hasPrecedingTask(m_deferredAvboitClearTask);
+        }
+        return false;
+    }();
     // A split Extinction measurement spans the generator and raster consumer. Require their exact packet order so
     // the graph, rather than a callback-local transition, owns the output UAV-to-VertexBuffer handoff.
     const bool avboitExtinctionComputeEmulationMerged = [&](){
@@ -2273,6 +2361,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !avboitPrePacketContainsCsgReceiverSpan
         || !avboitPrePacketContainsCsgIntervalCombine
         || !avboitPrePacketContainsOccupancy
+        || !avboitOccupancyComputeEmulationMerged
         || !avboitExtinctionPacketContainsStreams
         || !avboitExtinctionComputeEmulationMerged
         || !avboitAccumulationPacketContainsStreams
@@ -2472,6 +2561,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(transparentCsgIntervalsTiming){
             transparentCsgIntervalsTiming->discardTiming();
             transparentCsgIntervalsTiming.reset();
+        }
+        if(avboitOccupancyComputeEmulationTiming){
+            avboitOccupancyComputeEmulationTiming->discardTiming();
+            avboitOccupancyComputeEmulationTiming.reset();
         }
         if(avboitExtinctionComputeEmulationTiming){
             avboitExtinctionComputeEmulationTiming->discardTiming();
@@ -3014,6 +3107,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && avboitPrePacketContainsCsgReceiverSpan
         && avboitPrePacketContainsCsgIntervalCombine
         && avboitPrePacketContainsOccupancy
+        && avboitOccupancyComputeEmulationMerged
         && avboitExtinctionPacketContainsStreams
         && avboitExtinctionComputeEmulationMerged
         && avboitAccumulationPacketContainsStreams
@@ -3326,6 +3420,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && avboitPrePacketContainsCsgReceiverSpan
             && avboitPrePacketContainsCsgIntervalCombine
             && avboitPrePacketContainsOccupancy
+            && avboitOccupancyComputeEmulationMerged
             && avboitExtinctionPacketContainsStreams
             && avboitExtinctionComputeEmulationMerged
             && avboitAccumulationPacketContainsStreams

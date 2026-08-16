@@ -855,10 +855,10 @@ struct OpaqueRegularComputeEmulationGraphPlan{
 };
 
 
-// The AVBOIT Extinction producer uses the same alias-free principle as opaque regular emulation, but retains its
-// descriptor slot as well: this compute path selects its writable generated-vertex target through the global heap.
-// It is deliberately regular-only; any CSG compute draw keeps the complete phase on its established local bridge.
-struct AvboitExtinctionComputeEmulationGraphPlan{
+// AVBOIT compute-emulation producers retain the descriptor slot as well as the output buffer: this compute path
+// selects its writable generated-vertex target through the global heap. They are deliberately regular-only; any CSG
+// compute draw keeps the complete phase on its established local bridge.
+struct AvboitAliasFreeComputeEmulationGraphPlan{
     using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
     using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
     using HeapSlotVector = Vector<u32, Core::Alloc::GlobalArena>;
@@ -868,7 +868,7 @@ struct AvboitExtinctionComputeEmulationGraphPlan{
     HeapSlotVector outputHeapSlots;
     bool captured = false;
 
-    explicit AvboitExtinctionComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)
+    explicit AvboitAliasFreeComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)
         : drawItems(arena)
         , outputBuffers(arena)
         , outputHeapSlots(arena)
@@ -2861,6 +2861,106 @@ struct AvboitPreGraphTask{
 };
 
 
+// Occupancy's regular compute-emulation stream is independently frozen after the phase's final target clear.
+// Only alias-free outputs can move to this producer; the existing Occupancy callback remains the raster endpoint.
+struct AvboitOccupancyComputeEmulationGraphTask{
+    struct Payload{
+        RendererSystem* renderer = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        Optional<Core::GpuTimingMeasure>* occupancyTiming = nullptr;
+        ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan plan;
+        usize instanceCount = 0u;
+        usize materialTypedByteCount = 0u;
+        bool materialDrawBuffersUploaded = false;
+        bool materialFrameStatesGraphOwned = false;
+        bool materialGeometryStatesGraphOwned = false;
+
+        explicit Payload(Core::Alloc::GlobalArena& arena)
+            : plan(arena)
+        {}
+    };
+
+    static void discardTiming(Optional<Core::GpuTimingMeasure>* const timing){
+        if(!timing || !timing->has_value())
+            return;
+        timing->value().discardTiming();
+        timing->reset();
+    }
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(
+            !payload.renderer
+            || !payload.targets
+            || !payload.timingTicket
+            || !payload.occupancyTiming
+            || !payload.plan.captured
+        )
+            return false;
+
+        RendererSystem& renderer = *payload.renderer;
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        if(
+            !payload.plan.matches(renderer.meshSystem())
+            || !payload.materialDrawBuffersUploaded
+            || !renderer.materialSystem().materialPassDrawBuffersReady(
+                payload.instanceCount,
+                payload.materialTypedByteCount
+            )
+        )
+            return false;
+
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+        MaterialPassDrawItems drawItems{ scratchArena };
+        payload.plan.materialize(drawItems);
+        // The following raster task is graph-owned and cannot safely fall back to its local bridge. Reject a late
+        // material/pipeline loss so the packet is discarded and the next frame re-preflights instead of accepting
+        // Occupancy with stale generated vertices.
+        if(!renderer.materialSystem().materialPassDrawResourcesReady(drawItems))
+            return false;
+        if(payload.occupancyTiming->has_value())
+            return false;
+
+        commandList.endRenderPass();
+        payload.occupancyTiming->emplace(
+            renderer.graphics().gpuTiming(),
+            RendererGpuTimingScope::s_AvboitOccupancy,
+            renderer.graphics().getDevice(),
+            commandList
+        );
+        // Occupancy's raster half records after this producer in the same selected Graphics packet. Close the
+        // marker before this command list completes; its consumer owns finishTiming/discard.
+        payload.occupancyTiming->value().finishMarker();
+        Core::ViewportState viewportState;
+        viewportState.addViewportAndScissorRect(
+            payload.targets->avboit.lowFramebuffer->getFramebufferInfo().getViewport()
+        );
+        const MaterialPassDrawContext drawContext{
+            commandList,
+            nullptr,
+            MaterialPipelinePass::AvboitOccupancy,
+            &payload.targets->avboit,
+            viewportState,
+            false,
+            false,
+            false,
+            payload.materialFrameStatesGraphOwned,
+            payload.materialGeometryStatesGraphOwned,
+            true,
+        };
+        renderer.materialSystem().generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+        return true;
+    }
+
+    static void discarded(Payload& payload){ discardTiming(payload.occupancyTiming); }
+};
+
+
 // Occupancy follows the interval producer in the same AVBOIT packet, but has an independent immutable stream:
 // each transparent raster phase overwrites the shared material and CSG buffers with phase-local instance indices.
 struct AvboitOccupancyGraphTask{
@@ -2878,6 +2978,8 @@ struct AvboitOccupancyGraphTask{
         bool occupancyCsgClipBufferStatesGraphOwned = false;
         bool occupancyMaterialFrameStatesGraphOwned = false;
         bool occupancyMaterialGeometryStatesGraphOwned = false;
+        bool occupancyComputeEmulationOutputStatesGraphOwned = false;
+        Optional<Core::GpuTimingMeasure>* occupancyComputeEmulationTiming = nullptr;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : occupancySnapshot(arena)
@@ -2890,7 +2992,14 @@ struct AvboitOccupancyGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.avboitSystem || !payload.targets || !payload.csgFrameState || !payload.timingTicket)
+        if(
+            !payload.avboitSystem
+            || !payload.targets
+            || !payload.csgFrameState
+            || !payload.timingTicket
+            || (payload.occupancyComputeEmulationOutputStatesGraphOwned
+                && !payload.occupancyComputeEmulationTiming)
+        )
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
@@ -2924,12 +3033,24 @@ struct AvboitOccupancyGraphTask{
                 payload.occupancyCsgIntervalSampleImageStatesGraphOwned,
                 payload.occupancyCsgClipBufferStatesGraphOwned,
                 payload.occupancyMaterialFrameStatesGraphOwned,
-                payload.occupancyMaterialGeometryStatesGraphOwned
+                payload.occupancyMaterialGeometryStatesGraphOwned,
+                payload.occupancyComputeEmulationOutputStatesGraphOwned,
+                payload.occupancyComputeEmulationTiming
             );
         }
         // The declared sampled G-buffer uses remain authoritative here. Occupancy's low-resolution framebuffer
         // does not attach any deferred target, so the graph-established states remain valid for either continuation.
         return true;
+    }
+
+    static void discarded(Payload& payload){
+        if(
+            !payload.occupancyComputeEmulationTiming
+            || !payload.occupancyComputeEmulationTiming->has_value()
+        )
+            return;
+        payload.occupancyComputeEmulationTiming->value().discardTiming();
+        payload.occupancyComputeEmulationTiming->reset();
     }
 };
 
@@ -2965,7 +3086,7 @@ struct AvboitExtinctionComputeEmulationGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* extinctionTiming = nullptr;
-        ECSRenderDetail::AvboitExtinctionComputeEmulationGraphPlan plan;
+        ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan plan;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
         bool materialDrawBuffersUploaded = false;
@@ -3535,11 +3656,11 @@ struct DeferredPresentGraphTask{
     return outResourceSet.valid();
 }
 
-// AVBOIT Extinction retains the same exact-resource import rule, but its plan additionally froze descriptor slots
-// because the compute material path selects each writable output through the global heap.
-[[nodiscard]] static bool GatherAvboitExtinctionComputeEmulationResourceSet(
+// Alias-free AVBOIT compute-emulation plans retain descriptor slots because the compute material path selects each
+// writable output through the global heap.
+[[nodiscard]] static bool GatherAvboitAliasFreeComputeEmulationResourceSet(
     Core::GpuTaskGraph& graph,
-    const ECSRenderDetail::AvboitExtinctionComputeEmulationGraphPlan& plan,
+    const ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan& plan,
     Core::Alloc::ScratchArena& scratchArena,
     const Name& identity,
     const AStringView label,
@@ -9806,6 +9927,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     ECSRenderDetail::AvboitClearTimingRecordState& avboitClearTimingState,
     ECSRenderDetail::CsgIntervalClearTimingRecordState& transparentCsgIntervalClearTimingState,
     Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTiming,
+    Optional<Core::GpuTimingMeasure>& avboitOccupancyComputeEmulationTiming,
     Optional<Core::GpuTimingMeasure>& avboitExtinctionComputeEmulationTiming,
     Core::GpuTimingSubmissionTicket& avboitDepthWarpTimingTicket,
     Core::GpuTimingSubmissionTicket& avboitExtinctionTimingTicket,
@@ -9912,6 +10034,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredAvboitPreTask = {};
     m_deferredAvboitCsgReceiverSpanTask = {};
     m_deferredAvboitCsgIntervalCombineTask = {};
+    m_deferredAvboitOccupancyStreamTask = {};
+    m_deferredAvboitOccupancyComputeEmulationTask = {};
     m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
     m_deferredAvboitExtinctionStreamTask = {};
@@ -12248,6 +12372,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     }
 
     AvboitOccupancyGraphTask::Payload avboitOccupancyPayload{ m_arena };
+    AvboitOccupancyComputeEmulationGraphTask::Payload avboitOccupancyComputeEmulationPayload{ m_arena };
     avboitOccupancyPayload.avboitSystem = &m_avboitSystem;
     avboitOccupancyPayload.targets = &deferredTargets;
     avboitOccupancyPayload.csgFrameState = &csgFrameState;
@@ -12257,6 +12382,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
 
     Core::GpuTaskId occupancyUploadTask = avboitIntervalCompletionTask;
     bool occupancyCsgStreamsUploaded = false;
+    bool occupancyComputeEmulationPlanCaptured = false;
+    bool occupancyMaterialSampledTexturesCollected = false;
     Core::Alloc::ScratchArena occupancyMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
     Core::GpuGraphResourceSetId occupancyMaterialGeometrySet;
     Core::GpuGraphResourceSetId occupancyMaterialSampledTextureSet;
@@ -12324,7 +12451,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             );
             if(!avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT occupancy material geometry states"));
-            const bool occupancyMaterialSampledTexturesCollected =
+            occupancyMaterialSampledTexturesCollected =
                 avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
                 && GatherPreparedMaterialSampledTextureResourceSet(
                     m_materialSystem,
@@ -12529,6 +12656,17 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             );
             avboitOccupancyPayload.occupancyPhasePrepared = true;
             avboitOccupancyPayload.occupancyStreamsUploaded = true;
+            // This intentionally remains split, regular, and alias-free. The aggregate Occupancy callback retains
+            // CSG compute, shared outputs, unsplit AVBOIT, and every late mismatch on its established local bridge.
+            occupancyComputeEmulationPlanCaptured = splitAvboitStages
+                && occupancyDrawItems.csg.computeDrawItems.empty()
+                && avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
+                && occupancyMaterialSampledTexturesCollected
+                && avboitOccupancyComputeEmulationPayload.plan.capture(
+                    m_meshSystem,
+                    occupancyDrawItems.regular
+                )
+            ;
         }
         else{
             // The graph phase is still authoritative for an empty visible set. Retaining the empty snapshot prevents
@@ -12727,6 +12865,34 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         avboitOccupancyPayload.occupancyStreamsUploaded
         && avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
     ;
+    Core::GpuGraphResourceSetId occupancyComputeEmulationOutputSet;
+    Core::Alloc::ScratchArena occupancyComputeEmulationResourceScratch(RendererArenaScope::s_TaskGraphArena);
+    const bool occupancyComputeEmulationOutputStatesGraphOwned =
+        occupancyComputeEmulationPlanCaptured
+        && GatherAvboitAliasFreeComputeEmulationResourceSet(
+            m_deferredLightingTaskGraph,
+            avboitOccupancyComputeEmulationPayload.plan,
+            occupancyComputeEmulationResourceScratch,
+            Name("render.avboit.occupancy.compute_emulation.outputs"),
+            "AVBOIT Occupancy Compute Emulation Outputs",
+            occupancyComputeEmulationOutputSet
+        )
+    ;
+    if(
+        occupancyComputeEmulationPlanCaptured
+        && !occupancyComputeEmulationOutputStatesGraphOwned
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT(
+            "RendererSystem: could not declare graph-owned AVBOIT Occupancy compute-emulation output states"
+        ));
+    }
+    avboitOccupancyPayload.occupancyComputeEmulationOutputStatesGraphOwned =
+        occupancyComputeEmulationOutputStatesGraphOwned;
+    avboitOccupancyPayload.occupancyComputeEmulationTiming =
+        occupancyComputeEmulationOutputStatesGraphOwned
+            ? &avboitOccupancyComputeEmulationTiming
+            : nullptr
+    ;
 
     Core::Alloc::ScratchArena avboitPreResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitPreResourceUses{ avboitPreResourceScratch };
@@ -12789,28 +12955,130 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .requiredState = Core::ResourceStates::ShaderResource,
         .access = Core::GpuTaskResourceAccess::Read,
     };
-    Core::GpuTaskResourceSetUse occupancyMaterialResourceSetUses[2u] = {};
+    const Core::GpuTaskResourceSetUse occupancyComputeEmulationOutputVertexBufferSetUse{
+        .resourceSet = occupancyComputeEmulationOutputSet,
+        .range = {},
+        .requiredState = Core::ResourceStates::VertexBuffer,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
+    Core::GpuTaskResourceSetUse occupancyMaterialResourceSetUses[3u] = {};
     usize occupancyMaterialResourceSetUseCount = 0u;
     if(avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned)
         occupancyMaterialResourceSetUses[occupancyMaterialResourceSetUseCount++] = occupancyMaterialGeometrySetUse;
     if(occupancyMaterialSampledTextureSet.valid())
         occupancyMaterialResourceSetUses[occupancyMaterialResourceSetUseCount++] = occupancyMaterialSampledTextureSetUse;
+    if(occupancyComputeEmulationOutputStatesGraphOwned){
+        occupancyMaterialResourceSetUses[occupancyMaterialResourceSetUseCount++] =
+            occupancyComputeEmulationOutputVertexBufferSetUse;
+    }
     avboitPreResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer, true));
     avboitPreResourceUses.push_back(ReadUse(avboitMaterialDomain));
     avboitPreResourceUses.push_back(ReadUse(avboitCsgDomain, Core::ResourceStates::ShaderResource));
+
+    const Core::GpuTaskResourceSetUse occupancyComputeEmulationOutputUavSetUse{
+        .resourceSet = occupancyComputeEmulationOutputSet,
+        .range = {},
+        .requiredState = Core::ResourceStates::UnorderedAccess,
+        .access = Core::GpuTaskResourceAccess::Write,
+    };
+    // Keep the final immutable upload as the stream anchor. The optional generator only becomes Occupancy's
+    // immediate dependency; replacing this anchor would hide a broken upload/clear-to-producer handoff.
+    const Core::GpuTaskId occupancyStreamTask = occupancyUploadTask;
+    if(avboitOccupancyPayload.occupancyStreamsUploaded)
+        m_deferredAvboitOccupancyStreamTask = occupancyStreamTask;
+    Core::GpuTaskId occupancyDependency = avboitClearTask;
 
     Core::GpuTaskSchedulingHint avboitOccupancyScheduling;
     avboitOccupancyScheduling.cost = Core::GpuTaskCostHint::Large;
     avboitOccupancyScheduling.forceSubmissionBoundary = false;
     avboitOccupancyScheduling.allowPacketMerge = true;
     avboitOccupancyScheduling.mergeWithPrevious = true;
+    if(occupancyComputeEmulationOutputStatesGraphOwned){
+        avboitOccupancyComputeEmulationPayload.renderer = this;
+        avboitOccupancyComputeEmulationPayload.targets = &deferredTargets;
+        avboitOccupancyComputeEmulationPayload.timingTicket = &avboitPreTimingTicket;
+        avboitOccupancyComputeEmulationPayload.occupancyTiming = &avboitOccupancyComputeEmulationTiming;
+        avboitOccupancyComputeEmulationPayload.instanceCount = avboitOccupancyPayload.occupancySnapshot.instanceCount;
+        avboitOccupancyComputeEmulationPayload.materialTypedByteCount =
+            avboitOccupancyPayload.occupancySnapshot.materialTypedByteCount;
+        avboitOccupancyComputeEmulationPayload.materialDrawBuffersUploaded =
+            avboitOccupancyPayload.occupancyStreamsUploaded;
+        avboitOccupancyComputeEmulationPayload.materialFrameStatesGraphOwned =
+            avboitOccupancyPayload.occupancyMaterialFrameStatesGraphOwned;
+        avboitOccupancyComputeEmulationPayload.materialGeometryStatesGraphOwned =
+            avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned;
+
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> occupancyComputeEmulationResourceUses{
+            occupancyComputeEmulationResourceScratch
+        };
+        occupancyComputeEmulationResourceUses.reserve(4u);
+        occupancyComputeEmulationResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
+        occupancyComputeEmulationResourceUses.push_back(
+            ReadUse(materialInstances, Core::ResourceStates::ShaderResource)
+        );
+        occupancyComputeEmulationResourceUses.push_back(
+            ReadUse(materialTyped, Core::ResourceStates::ShaderResource)
+        );
+        occupancyComputeEmulationResourceUses.push_back(
+            ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer)
+        );
+        Core::GpuTaskResourceSetUse occupancyComputeEmulationResourceSetUses[3u] = {};
+        usize occupancyComputeEmulationResourceSetUseCount = 0u;
+        occupancyComputeEmulationResourceSetUses[occupancyComputeEmulationResourceSetUseCount++] =
+            occupancyMaterialGeometrySetUse;
+        if(occupancyMaterialSampledTextureSet.valid()){
+            occupancyComputeEmulationResourceSetUses[occupancyComputeEmulationResourceSetUseCount++] =
+                occupancyMaterialSampledTextureSetUse;
+        }
+        occupancyComputeEmulationResourceSetUses[occupancyComputeEmulationResourceSetUseCount++] =
+            occupancyComputeEmulationOutputUavSetUse;
+
+        Core::GpuTaskSchedulingHint occupancyComputeEmulationScheduling;
+        occupancyComputeEmulationScheduling.cost = Core::GpuTaskCostHint::Medium;
+        occupancyComputeEmulationScheduling.forceSubmissionBoundary = false;
+        occupancyComputeEmulationScheduling.allowPacketMerge = true;
+        occupancyComputeEmulationScheduling.mergeWithPrevious = true;
+        // Depth Warp is a later Compute consumer. Retain the immediate producer/raster pair in AVBOIT Pre's
+        // Graphics packet so one timing ticket and graph-owned UAV-to-VertexBuffer handoff remain authoritative.
+        occupancyComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
+        Core::GpuTaskDesc occupancyComputeEmulationDesc;
+        occupancyComputeEmulationDesc
+            .setIdentity(Name("render.avboit.occupancy.compute_emulation"))
+            .setMarkerLabel("AVBOIT Occupancy Compute Emulation")
+            .setQueue(GraphicsComputeQueueRequest())
+            .setScheduling(occupancyComputeEmulationScheduling)
+            .setDependencies(&occupancyDependency, 1u)
+            .setResourceUses(
+                occupancyComputeEmulationResourceUses.data(),
+                occupancyComputeEmulationResourceUses.size()
+            )
+            .setResourceSetUses(
+                occupancyComputeEmulationResourceSetUses,
+                occupancyComputeEmulationResourceSetUseCount
+            )
+        ;
+        m_deferredAvboitOccupancyComputeEmulationTask = m_deferredLightingTaskGraph.addTask<
+            AvboitOccupancyComputeEmulationGraphTask
+        >(
+            occupancyComputeEmulationDesc,
+            Move(avboitOccupancyComputeEmulationPayload)
+        );
+        if(!m_deferredAvboitOccupancyComputeEmulationTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT(
+                "RendererSystem: could not declare AVBOIT Occupancy compute-emulation producer"
+            ));
+            return;
+        }
+        occupancyDependency = m_deferredAvboitOccupancyComputeEmulationTask;
+        avboitOccupancyScheduling.allowMergeAcrossConsumerFrontier = true;
+    }
     Core::GpuTaskDesc avboitOccupancyDesc;
     avboitOccupancyDesc
         .setIdentity(Name("render.avboit.pre"))
         .setMarkerLabel(splitAvboitStages ? "AVBOIT Pre" : "AVBOIT")
         .setQueue(GraphicsComputeQueueRequest())
         .setScheduling(avboitOccupancyScheduling)
-        .setDependencies(&avboitClearTask, 1u)
+        .setDependencies(&occupancyDependency, 1u)
         .setResourceUses(avboitPreResourceUses.data(), avboitPreResourceUses.size())
         .setResourceSetUses(
             occupancyMaterialResourceSetUseCount != 0u ? occupancyMaterialResourceSetUses : nullptr,
@@ -13211,7 +13479,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::Alloc::ScratchArena extinctionComputeEmulationResourceScratch(RendererArenaScope::s_TaskGraphArena);
     const bool extinctionComputeEmulationOutputStatesGraphOwned =
         extinctionComputeEmulationPlanCaptured
-        && GatherAvboitExtinctionComputeEmulationResourceSet(
+        && GatherAvboitAliasFreeComputeEmulationResourceSet(
             m_deferredLightingTaskGraph,
             avboitExtinctionComputeEmulationPayload.plan,
             extinctionComputeEmulationResourceScratch,

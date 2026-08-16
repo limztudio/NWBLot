@@ -79,7 +79,11 @@ public:
         // A prepared occupancy CSG stream also has graph-declared clip buffers at the material callback entry.
         bool occupancyCsgClipBufferStatesGraphOwned = false,
         bool occupancyMaterialFrameStatesGraphOwned = false,
-        bool occupancyMaterialGeometryStatesGraphOwned = false
+        bool occupancyMaterialGeometryStatesGraphOwned = false,
+        // The split AVBOIT graph can generate alias-free regular emulation vertices in the preceding producer.
+        // CSG, shared-output, direct, and unsplit paths leave this false and retain local dispatch/raster work.
+        bool occupancyComputeEmulationOutputStatesGraphOwned = false,
+        Optional<Core::GpuTimingMeasure>* occupancyComputeEmulationTiming = nullptr
     );
     void renderAvboitPostOccupancyPasses(
         Core::CommandList& commandList,

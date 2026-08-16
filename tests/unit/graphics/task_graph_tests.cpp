@@ -5437,6 +5437,180 @@ TEST(GpuTaskGraph, MergesAliasFreeAvboitExtinctionGeneratedVertexHandoffWithRast
 }
 
 
+// AVBOIT Occupancy can prepare several transparent compute-emulated materials before its raster stage only when
+// each generated-vertex target is distinct. Keep that alias-free producer/consumer handoff graph-owned: the
+// Graphics|Compute producer writes every target as UAV, then the immediate Occupancy raster reads them as vertex
+// buffers in the same FrontierSafe packet.
+TEST(GpuTaskGraph, MergesAliasFreeAvboitOccupancyGeneratedVertexHandoffWithRaster){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId generatedVertexA = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/avboit_occupancy_generated_vertex_a"),
+        "AVBOIT Occupancy Generated Vertex A",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    const Graphics::GpuGraphResourceId generatedVertexB = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/avboit_occupancy_generated_vertex_b"),
+        "AVBOIT Occupancy Generated Vertex B",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    ASSERT_TRUE(generatedVertexA.valid());
+    ASSERT_TRUE(generatedVertexB.valid());
+    EXPECT_NE(generatedVertexA, generatedVertexB);
+
+    const Graphics::GpuGraphResourceId generatedVertexOutputs[] = {
+        generatedVertexA,
+        generatedVertexB,
+    };
+    const Graphics::GpuGraphResourceSetId generatedVertexOutputSet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/avboit_occupancy_generated_vertex_outputs"))
+            .setMarkerLabel("AVBOIT Occupancy Generated Vertex Outputs")
+            .setMembers(generatedVertexOutputs, LengthOf(generatedVertexOutputs))
+    );
+    ASSERT_TRUE(generatedVertexOutputSet.valid());
+
+    const Graphics::GpuQueueRequest graphicsComputeQueue{
+        QueueCapabilities(
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueueCapability::Compute
+        ),
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint producerScheduling;
+    producerScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    producerScheduling.overlapPreferred = false;
+    producerScheduling.avoidQueueCrossing = true;
+    producerScheduling.forceSubmissionBoundary = false;
+    producerScheduling.allowPacketMerge = true;
+    producerScheduling.mergeWithPrevious = false;
+    const Graphics::GpuTaskResourceSetUse outputUavSetUse{
+        .resourceSet = generatedVertexOutputSet,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::UnorderedAccess,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    const Graphics::GpuTaskId producer = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/avboit_occupancy_generated_vertex_producer"))
+            .setMarkerLabel("AVBOIT Occupancy Generated Vertex Producer")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(producerScheduling)
+            .setResourceSetUses(&outputUavSetUse, 1u)
+    );
+    ASSERT_TRUE(producer.valid());
+
+    Graphics::GpuTaskSchedulingHint rasterScheduling = producerScheduling;
+    rasterScheduling.mergeWithPrevious = true;
+    rasterScheduling.allowMergeAcrossConsumerFrontier = true;
+    const Graphics::GpuTaskResourceSetUse outputVertexBufferSetUse{
+        .resourceSet = generatedVertexOutputSet,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::VertexBuffer,
+        .access = Graphics::GpuTaskResourceAccess::Read,
+    };
+    const Graphics::GpuTaskId raster = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/avboit_occupancy_generated_vertex_raster"))
+            .setMarkerLabel("AVBOIT Occupancy Generated Vertex Raster")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(rasterScheduling)
+            .setDependencies(&producer, 1u)
+            .setResourceSetUses(&outputVertexBufferSetUse, 1u)
+    );
+    ASSERT_TRUE(raster.valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    EXPECT_TRUE(analysis.hasExplicitEdge(producer, raster));
+    EXPECT_TRUE(analysis.hasInferredEdge(producer, raster));
+    for(const Graphics::GpuGraphResourceId output : generatedVertexOutputs){
+        EXPECT_TRUE(HasInferredHazard(
+            analysis,
+            producer,
+            raster,
+            output,
+            Graphics::GpuTaskHazardType::ReadAfterWrite
+        ));
+    }
+    ASSERT_EQ(analysis.topologicalOrder().size(), 2u);
+    EXPECT_EQ(analysis.topologicalOrder()[0u], producer);
+    EXPECT_EQ(analysis.topologicalOrder()[1u], raster);
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+
+    for(const Graphics::GpuTaskId task : { producer, raster }){
+        const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
+        ASSERT_NE(assignment, nullptr);
+        EXPECT_EQ(assignment->queue, queue.id);
+        EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
+    }
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(producer);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledGraph.packetForTask(raster));
+    EXPECT_TRUE(compiledGraph.tasksSharePacket(producer, raster));
+    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(producer, raster));
+    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPacket.queue, queue.id);
+    EXPECT_EQ(compiledPacket.dependencyCount, 0u);
+    ASSERT_EQ(compiledPacket.taskCount, 2u);
+    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    ASSERT_NE(packetTasks, nullptr);
+    EXPECT_EQ(packetTasks[0u], producer);
+    EXPECT_EQ(packetTasks[1u], raster);
+
+    const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        if(!compiledTask)
+            return false;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        for(u32 barrierIndex = 0u; barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+                && barrier.sourceQueue == queue.id
+                && barrier.destinationQueue == queue.id
+            )
+                return true;
+        }
+        return false;
+    };
+    for(const Graphics::GpuGraphResourceId output : generatedVertexOutputs){
+        EXPECT_TRUE(hasBufferTransition(
+            producer,
+            output,
+            Graphics::ResourceStates::Common,
+            Graphics::ResourceStates::UnorderedAccess
+        ));
+        EXPECT_TRUE(hasBufferTransition(
+            raster,
+            output,
+            Graphics::ResourceStates::UnorderedAccess,
+            Graphics::ResourceStates::VertexBuffer
+        ));
+    }
+}
+
+
 // The split AVBOIT route brackets the Graphics Extinction packet with dedicated Compute work.  The optional
 // compute-emulation producer must remain immediately before raster in that Graphics packet: it publishes generated
 // vertices as UAVs, raster consumes them as vertex buffers, and Integration receives Extinction's outputs only after
@@ -5881,6 +6055,326 @@ TEST(GpuTaskGraph, OrdersAsyncAvboitExtinctionComputeEmulationPacketBetweenDepth
         Graphics::ResourceStates::UnorderedAccess,
         Graphics::ResourceStates::ShaderResource,
         queues[0u].id,
+        queues[1u].id
+    ));
+}
+
+
+// Occupancy is the first raster phase on the split AVBOIT route. Its graph-owned generator must follow the final
+// target clear, remain adjacent to raster in AVBOIT Pre's Graphics packet, and publish coverage for the following
+// dedicated-Compute depth warp without introducing another packet.
+TEST(GpuTaskGraph, OrdersAsyncAvboitOccupancyComputeEmulationPacketBeforeDepthWarp){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    constexpr Graphics::ResourceQueueSharing::Mask concurrentSharing =
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    ;
+    const Graphics::GpuGraphResourceId coverage = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/async_avboit_occupancy_coverage"),
+        "AVBOIT Coverage",
+        Graphics::ResourceStates::Common,
+        concurrentSharing
+    );
+    const Graphics::GpuGraphResourceId generatedVertex = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/async_avboit_occupancy_generated_vertex"),
+        "AVBOIT Occupancy Generated Vertex",
+        Graphics::ResourceStates::Common,
+        concurrentSharing
+    );
+    const Graphics::GpuGraphResourceId depthWarp = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/async_avboit_occupancy_depth_warp"),
+        "AVBOIT Depth Warp",
+        Graphics::ResourceStates::Common,
+        concurrentSharing
+    );
+    ASSERT_TRUE(coverage.valid());
+    ASSERT_TRUE(generatedVertex.valid());
+    ASSERT_TRUE(depthWarp.valid());
+
+    const Graphics::GpuQueueRequest graphicsComputeRequest{
+        QueueCapabilities(
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueueCapability::Compute
+        ),
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint clearScheduling;
+    clearScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    clearScheduling.forceSubmissionBoundary = false;
+    clearScheduling.allowPacketMerge = true;
+    clearScheduling.mergeWithPrevious = false;
+    Graphics::GpuTaskSchedulingHint occupancyScheduling;
+    occupancyScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    occupancyScheduling.overlapPreferred = false;
+    occupancyScheduling.avoidQueueCrossing = true;
+    occupancyScheduling.forceSubmissionBoundary = false;
+    occupancyScheduling.allowPacketMerge = true;
+    occupancyScheduling.mergeWithPrevious = true;
+    // Depth Warp is a later dedicated-Compute consumer. Keep both sides of the generated-vertex handoff in Pre.
+    occupancyScheduling.allowMergeAcrossConsumerFrontier = true;
+    Graphics::GpuTaskSchedulingHint depthWarpScheduling;
+    depthWarpScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    depthWarpScheduling.forceSubmissionBoundary = true;
+    depthWarpScheduling.allowPacketMerge = false;
+
+    const Graphics::GpuTaskResourceUse clearUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = coverage,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskId clearTask = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/async_avboit_occupancy_clear"))
+            .setMarkerLabel("AVBOIT Clear Coverage")
+            .setQueue(graphicsRequest)
+            .setScheduling(clearScheduling)
+            .setResourceUses(clearUses, LengthOf(clearUses))
+    );
+    ASSERT_TRUE(clearTask.valid());
+
+    const Graphics::GpuTaskResourceUse producerUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = generatedVertex,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskId producerTask = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/async_avboit_occupancy_compute_emulation"))
+            .setMarkerLabel("AVBOIT Occupancy Compute Emulation")
+            .setQueue(graphicsComputeRequest)
+            .setScheduling(occupancyScheduling)
+            .setDependencies(&clearTask, 1u)
+            .setResourceUses(producerUses, LengthOf(producerUses))
+    );
+    ASSERT_TRUE(producerTask.valid());
+
+    const Graphics::GpuTaskResourceUse occupancyUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = generatedVertex,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::VertexBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = coverage,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    const Graphics::GpuTaskId occupancyTask = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/async_avboit_occupancy_raster"))
+            .setMarkerLabel("AVBOIT Occupancy")
+            .setQueue(graphicsComputeRequest)
+            .setScheduling(occupancyScheduling)
+            .setDependencies(&producerTask, 1u)
+            .setResourceUses(occupancyUses, LengthOf(occupancyUses))
+    );
+    ASSERT_TRUE(occupancyTask.valid());
+
+    const Graphics::GpuTaskResourceUse depthWarpUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = coverage,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = depthWarp,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskId depthWarpTask = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/async_avboit_occupancy_depth_warp"))
+            .setMarkerLabel("AVBOIT Depth Warp")
+            .setQueue(computeRequest)
+            .setScheduling(depthWarpScheduling)
+            .setDependencies(&occupancyTask, 1u)
+            .setResourceUses(depthWarpUses, LengthOf(depthWarpUses))
+    );
+    ASSERT_TRUE(depthWarpTask.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+
+    EXPECT_TRUE(analysis.hasExplicitEdge(clearTask, producerTask));
+    EXPECT_TRUE(analysis.hasExplicitEdge(producerTask, occupancyTask));
+    EXPECT_TRUE(analysis.hasExplicitEdge(occupancyTask, depthWarpTask));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        clearTask,
+        occupancyTask,
+        coverage,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        producerTask,
+        occupancyTask,
+        generatedVertex,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        occupancyTask,
+        depthWarpTask,
+        coverage,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    ASSERT_EQ(analysis.topologicalOrder().size(), 4u);
+    EXPECT_EQ(analysis.topologicalOrder()[0u], clearTask);
+    EXPECT_EQ(analysis.topologicalOrder()[1u], producerTask);
+    EXPECT_EQ(analysis.topologicalOrder()[2u], occupancyTask);
+    EXPECT_EQ(analysis.topologicalOrder()[3u], depthWarpTask);
+
+    const auto expectAssignment = [&](const Graphics::GpuTaskId task, const Graphics::GpuPhysicalQueueId queue, const Graphics::CommandQueue::Enum queueClass){
+        const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
+        ASSERT_NE(assignment, nullptr);
+        EXPECT_EQ(assignment->queue, queue);
+        EXPECT_EQ(assignment->queueClass, queueClass);
+    };
+    expectAssignment(clearTask, queues[0u].id, Graphics::CommandQueue::Graphics);
+    expectAssignment(producerTask, queues[0u].id, Graphics::CommandQueue::Graphics);
+    expectAssignment(occupancyTask, queues[0u].id, Graphics::CommandQueue::Graphics);
+    expectAssignment(depthWarpTask, queues[1u].id, Graphics::CommandQueue::Compute);
+
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const Graphics::GpuSubmissionPacketId prePacket = compiledGraph.packetForTask(clearTask);
+    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledGraph.packetForTask(depthWarpTask);
+    ASSERT_TRUE(prePacket.valid());
+    ASSERT_TRUE(depthWarpPacket.valid());
+    EXPECT_EQ(prePacket, compiledGraph.packetForTask(producerTask));
+    EXPECT_EQ(prePacket, compiledGraph.packetForTask(occupancyTask));
+    EXPECT_NE(prePacket, depthWarpPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(0u), prePacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(1u), depthWarpPacket);
+    EXPECT_TRUE(compiledGraph.tasksSharePacket(producerTask, occupancyTask));
+    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(clearTask, producerTask));
+    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(occupancyTask, depthWarpTask));
+    const Graphics::GpuSubmissionPacket& prePacketPlan = compiledGraph.packet(prePacket);
+    const Graphics::GpuSubmissionPacket& depthWarpPacketPlan = compiledGraph.packet(depthWarpPacket);
+    EXPECT_EQ(prePacketPlan.queue, queues[0u].id);
+    EXPECT_EQ(depthWarpPacketPlan.queue, queues[1u].id);
+    ASSERT_EQ(prePacketPlan.taskCount, 3u);
+    const Graphics::GpuTaskId* const prePacketTasks = compiledGraph.packetTasks(prePacket);
+    ASSERT_NE(prePacketTasks, nullptr);
+    EXPECT_EQ(prePacketTasks[0u], clearTask);
+    EXPECT_EQ(prePacketTasks[1u], producerTask);
+    EXPECT_EQ(prePacketTasks[2u], occupancyTask);
+    ASSERT_EQ(depthWarpPacketPlan.dependencyCount, 1u);
+    ASSERT_NE(compiledGraph.packetDependencies(depthWarpPacket), nullptr);
+    EXPECT_EQ(compiledGraph.packetDependencies(depthWarpPacket)[0u].producer, prePacket);
+
+    const Graphics::GpuCompiledTask* const compiledDepthWarp = compiledGraph.findTask(depthWarpTask);
+    ASSERT_NE(compiledDepthWarp, nullptr);
+    ASSERT_EQ(compiledDepthWarp->prologueStateSeedCount, 1u);
+    const Graphics::GpuPacketStateSeed* const depthWarpSeeds = compiledGraph.taskPrologueStateSeeds(depthWarpTask);
+    ASSERT_NE(depthWarpSeeds, nullptr);
+    EXPECT_EQ(depthWarpSeeds[0u].resource, coverage);
+    EXPECT_EQ(depthWarpSeeds[0u].sourcePacket, prePacket);
+
+    const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after, const Graphics::GpuPhysicalQueueId sourceQueue, const Graphics::GpuPhysicalQueueId destinationQueue){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+                && barrier.sourceQueue == sourceQueue
+                && barrier.destinationQueue == destinationQueue
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasBufferTransition(
+        clearTask,
+        coverage,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::CopyDest,
+        queues[0u].id,
+        queues[0u].id
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        producerTask,
+        generatedVertex,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::UnorderedAccess,
+        queues[0u].id,
+        queues[0u].id
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        occupancyTask,
+        generatedVertex,
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::VertexBuffer,
+        queues[0u].id,
+        queues[0u].id
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        occupancyTask,
+        coverage,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::UnorderedAccess,
+        queues[0u].id,
+        queues[0u].id
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        depthWarpTask,
+        coverage,
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::ShaderResource,
+        queues[0u].id,
+        queues[1u].id
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        depthWarpTask,
+        depthWarp,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::UnorderedAccess,
+        queues[1u].id,
         queues[1u].id
     ));
 }

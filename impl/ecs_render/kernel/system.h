@@ -119,6 +119,7 @@ namespace ECSRenderDetail{
 
 
 namespace __hidden_renderer_task_graph{
+    struct AvboitOccupancyComputeEmulationGraphTask;
     struct AvboitExtinctionComputeEmulationGraphTask;
 }
 
@@ -141,6 +142,7 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend struct ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask;
     friend struct ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask;
     friend struct ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask;
+    friend struct __hidden_renderer_task_graph::AvboitOccupancyComputeEmulationGraphTask;
     friend struct __hidden_renderer_task_graph::AvboitExtinctionComputeEmulationGraphTask;
     friend struct ECSRenderDetail::GbufferGraphTask;
     friend struct ECSRenderDetail::CsgReceiverSpanBuildGraphTask;
@@ -362,6 +364,7 @@ private:
         ECSRenderDetail::AvboitClearTimingRecordState& avboitClearTimingState,
         ECSRenderDetail::CsgIntervalClearTimingRecordState& transparentCsgIntervalClearTimingState,
         Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTiming,
+        Optional<Core::GpuTimingMeasure>& avboitOccupancyComputeEmulationTiming,
         Optional<Core::GpuTimingMeasure>& avboitExtinctionComputeEmulationTiming,
         Core::GpuTimingSubmissionTicket& avboitDepthWarpTimingTicket,
         Core::GpuTimingSubmissionTicket& avboitExtinctionTimingTicket,
@@ -563,6 +566,10 @@ private:
     // local occupancy uploads cannot overwrite the frozen CSG stream before those callbacks record.
     Core::GpuTaskId m_deferredAvboitCsgReceiverSpanTask;
     Core::GpuTaskId m_deferredAvboitCsgIntervalCombineTask;
+    // The final immutable Occupancy upload and its optional alias-free regular producer stay in AVBOIT Pre's
+    // accepting Graphics packet before the raster consumer and its later Depth-Warp Compute dependency.
+    Core::GpuTaskId m_deferredAvboitOccupancyStreamTask;
+    Core::GpuTaskId m_deferredAvboitOccupancyComputeEmulationTask;
     Core::GpuTaskId m_deferredAvboitOccupancyTask;
     Core::GpuTaskId m_deferredAvboitDepthWarpTask;
     // The optional alias-free regular producer must remain in Extinction's selected Graphics packet so its

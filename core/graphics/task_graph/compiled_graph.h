@@ -97,6 +97,12 @@ public:
     [[nodiscard]] GpuSubmissionPacketRange allPacketRange()const noexcept;
     [[nodiscard]] const GpuCompiledTask* findTask(const GpuTaskId& task)const noexcept;
     [[nodiscard]] GpuSubmissionPacketId packetForTask(const GpuTaskId& task)const noexcept;
+    // Semantic packet-topology queries.  Renderer policy can validate coalescing and routing without retaining
+    // compiler packet IDs; packet handles remain available below for packet-local runtime compatibility only.
+    [[nodiscard]] bool tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
+    [[nodiscard]] bool taskPrecedesOrSharesPacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
+    [[nodiscard]] bool taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept;
+    [[nodiscard]] const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const noexcept;
     [[nodiscard]] const GpuSubmissionPacket& packet(const GpuSubmissionPacketId& packet)const noexcept;
     [[nodiscard]] const GpuTaskId* packetTasks(const GpuSubmissionPacketId& packet)const noexcept;
     [[nodiscard]] const GpuPacketDependency* packetDependencies(const GpuSubmissionPacketId& packet)const noexcept;

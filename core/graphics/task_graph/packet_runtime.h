@@ -352,6 +352,13 @@ public:
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketId& packet
     )noexcept;
+    // Semantic companion to rejectPacket(). It resolves the current packet only inside the transaction, so
+    // renderer recovery code can revoke unaccepted graph work without mirroring compiler packet identities.
+    void rejectTask(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        GpuTaskId task
+    )noexcept;
     void discardUnaccepted(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)noexcept;
 
     [[nodiscard]] bool hasAcceptedPackets()const noexcept{ return m_valid && m_acceptedSubmissionCount != 0u; }

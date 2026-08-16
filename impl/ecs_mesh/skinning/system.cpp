@@ -1142,14 +1142,9 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         return false;
     }
 
-    const Core::GpuSubmissionPacketId terminalPacket = compiledGraph.packetForTask(terminalTask);
-    if(!terminalPacket.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning work has no terminal packet"));
-        return false;
-    }
-    const Core::GpuSubmissionPacket& packet = compiledGraph.packet(terminalPacket);
+    const Core::GpuPhysicalQueueInfo* const terminalQueue = compiledGraph.queueInfoForTask(terminalTask);
     const Core::GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
-    if(packet.queue != graphicsQueue){
+    if(!terminalQueue || terminalQueue->id != graphicsQueue){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning work did not retain the primary Graphics queue"));
         return false;
     }

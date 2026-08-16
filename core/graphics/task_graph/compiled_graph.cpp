@@ -119,6 +119,42 @@ GpuSubmissionPacketId GpuCompiledGraph::packetForTask(const GpuTaskId& task)cons
     return compiledTask ? compiledTask->packet : GpuSubmissionPacketId{};
 }
 
+bool GpuCompiledGraph::tasksSharePacket(
+    const GpuTaskId& first,
+    const GpuTaskId& second
+)const noexcept{
+    const GpuCompiledTask* const firstTask = findTask(first);
+    const GpuCompiledTask* const secondTask = findTask(second);
+    return firstTask && secondTask && firstTask->packet == secondTask->packet;
+}
+
+bool GpuCompiledGraph::taskPrecedesOrSharesPacket(
+    const GpuTaskId& first,
+    const GpuTaskId& second
+)const noexcept{
+    const GpuCompiledTask* const firstTask = findTask(first);
+    const GpuCompiledTask* const secondTask = findTask(second);
+    return firstTask
+        && secondTask
+        && firstTask->packet.valid()
+        && secondTask->packet.valid()
+        && firstTask->packet.index <= secondTask->packet.index
+    ;
+}
+
+bool GpuCompiledGraph::taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept{
+    const GpuCompiledTask* const compiledTask = findTask(task);
+    return compiledTask
+        && validPacket(compiledTask->packet)
+        && m_packets[compiledTask->packet.index].joinsAcceptedQueueFrontier
+    ;
+}
+
+const GpuPhysicalQueueInfo* GpuCompiledGraph::queueInfoForTask(const GpuTaskId& task)const noexcept{
+    const GpuCompiledTask* const compiledTask = findTask(task);
+    return compiledTask ? queueInfo(compiledTask->queue) : nullptr;
+}
+
 const GpuSubmissionPacket& GpuCompiledGraph::packet(const GpuSubmissionPacketId& packetID)const noexcept{
     NWB_ASSERT(validPacket(packetID));
     return m_packets[packetID.index];

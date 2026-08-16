@@ -1180,6 +1180,16 @@ void GpuGraphSubmissionTransaction::rejectPacket(
     runtime.state = GpuPacketRuntimeState::Rejected;
 }
 
+void GpuGraphSubmissionTransaction::rejectTask(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId task
+)noexcept{
+    if(!validFor(compiledGraph))
+        return;
+    rejectPacket(graph, compiledGraph, compiledGraph.packetForTask(task));
+}
+
 void GpuGraphSubmissionTransaction::discardUnaccepted(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph

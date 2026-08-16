@@ -969,152 +969,95 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId shadowPreparePacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredShadowPrepareTask
     );
-    const Core::GpuSubmissionPacketId shadowPrepareHybridSoftwareTailPacket =
-        m_deferredShadowPrepareHybridSoftwareTailTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowPrepareHybridSoftwareTailTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
     // The optional hybrid tail records real work, but preserves the former aggregate callback's acceptance and
     // fallback boundary by remaining in this exact first Graphics packet.
     const bool shadowPrepareHybridSoftwareTailMerged =
         !m_deferredShadowPrepareHybridSoftwareTailTask.valid()
-        || (
-            shadowPreparePacket.valid()
-            && shadowPrepareHybridSoftwareTailPacket.valid()
-            && shadowPrepareHybridSoftwareTailPacket == shadowPreparePacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredShadowPrepareTask,
+            m_deferredShadowPrepareHybridSoftwareTailTask
         )
-    ;
-    const Core::GpuSubmissionPacketId shadowPrepareAccelStructFinalizePacket =
-        m_deferredShadowPrepareAccelStructFinalizeTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowPrepareAccelStructFinalizeTask)
-            : Core::GpuSubmissionPacketId{}
     ;
     // The state-only finalizer is part of the accepting Shadow Preparation contract. It may be a separate graph
     // callback, but every frozen AS/backing transition must remain in the same first Graphics submission as its
     // build so CPU cache publication and the retained packet-state handoff stay atomic.
     const bool shadowPrepareAccelStructFinalizeMerged =
         !m_deferredShadowPrepareAccelStructFinalizeTask.valid()
-        || (
-            shadowPreparePacket.valid()
-            && shadowPrepareAccelStructFinalizePacket.valid()
-            && shadowPrepareAccelStructFinalizePacket == shadowPreparePacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredShadowPrepareTask,
+            m_deferredShadowPrepareAccelStructFinalizeTask
         )
-    ;
-    const Core::GpuSubmissionPacketId deferredBindlessSlotsUploadPacket =
-        m_deferredBindlessSlotsUploadTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredBindlessSlotsUploadTask)
-            : Core::GpuSubmissionPacketId{}
     ;
     // The prefix submission range is anchored at Shadow Preparation. A selector upload is safe only when the
     // compiler keeps it in that exact packet; otherwise it would be recorded but omitted from the accepted range.
     const bool deferredBindlessSlotsUploadMergedIntoShadowPreparePacket =
         !m_deferredBindlessSlotsUploadTask.valid()
-        || (
-            shadowPreparePacket.valid()
-            && deferredBindlessSlotsUploadPacket.valid()
-            && deferredBindlessSlotsUploadPacket == shadowPreparePacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredShadowPrepareTask,
+            m_deferredBindlessSlotsUploadTask
         )
-    ;
-    const Core::GpuSubmissionPacketId rayTraceMaterialContextSlotsUploadPacket =
-        m_rayTraceMaterialContextSlotsUploadTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_rayTraceMaterialContextSlotsUploadTask)
-            : Core::GpuSubmissionPacketId{}
     ;
     // This selector is consumed by later Compute trace tasks, but the prefix submission range starts at Shadow
     // Preparation. Keep the immutable upload in that exact first packet so Shadow Preparation becomes the handoff.
     const bool rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket =
         !m_rayTraceMaterialContextSlotsUploadTask.valid()
-        || (
-            shadowPreparePacket.valid()
-            && rayTraceMaterialContextSlotsUploadPacket.valid()
-            && rayTraceMaterialContextSlotsUploadPacket == shadowPreparePacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredShadowPrepareTask,
+            m_rayTraceMaterialContextSlotsUploadTask
         )
-    ;
-    const Core::GpuSubmissionPacketId causticEmissionTargetsUploadPacket =
-        m_causticEmissionTargetsUploadTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_causticEmissionTargetsUploadTask)
-            : Core::GpuSubmissionPacketId{}
     ;
     // The caustic input upload is optional for an empty refractive set, but a nonempty payload must live in the
     // exact Shadow Preparation packet that owns the following ShaderResource handoff to later Compute consumers.
     const bool causticEmissionTargetsUploadMergedIntoShadowPreparePacket =
         !m_causticEmissionTargetsUploadTask.valid()
-        || (
-            shadowPreparePacket.valid()
-            && causticEmissionTargetsUploadPacket.valid()
-            && causticEmissionTargetsUploadPacket == shadowPreparePacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredShadowPrepareTask,
+            m_causticEmissionTargetsUploadTask
         )
-    ;
-    const Core::GpuSubmissionPacketId surfelFrameConstantsUploadPacket =
-        m_surfelFrameConstantsUploadTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_surfelFrameConstantsUploadTask)
-            : Core::GpuSubmissionPacketId{}
     ;
     // Active surfel frames freeze a fresh constant payload before compilation. It must share Shadow Preparation's
     // first Graphics packet so that task remains the handoff producer for the asynchronous Surfel-GI consumer.
     const bool surfelFrameConstantsUploadMergedIntoShadowPreparePacket =
         !m_surfelFrameConstantsUploadTask.valid()
-        || (
-            shadowPreparePacket.valid()
-            && surfelFrameConstantsUploadPacket.valid()
-            && surfelFrameConstantsUploadPacket == shadowPreparePacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredShadowPrepareTask,
+            m_surfelFrameConstantsUploadTask
         )
-    ;
-    const Core::GpuSubmissionPacketId shadowInstanceMaterialUploadPacket =
-        m_shadowInstanceMaterialUploadTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_shadowInstanceMaterialUploadTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId shadowInstanceUploadPacket =
-        m_shadowInstanceUploadTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_shadowInstanceUploadTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId shadowMaterialTypedUploadPacket =
-        m_shadowMaterialTypedUploadTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_shadowMaterialTypedUploadTask)
-            : Core::GpuSubmissionPacketId{}
     ;
     // This ABI-coupled triple must remain in the first accepted Graphics packet. Shadow Preparation supersedes the
     // upload writers as the ShaderResource producer observed by later asynchronous trace passes.
     const bool shadowMaterialContextUploadsMergedIntoShadowPreparePacket =
-        (!m_shadowInstanceMaterialUploadTask.valid() || (
-            shadowPreparePacket.valid()
-            && shadowInstanceMaterialUploadPacket.valid()
-            && shadowInstanceMaterialUploadPacket == shadowPreparePacket
-        ))
-        && (!m_shadowInstanceUploadTask.valid() || (
-            shadowPreparePacket.valid()
-            && shadowInstanceUploadPacket.valid()
-            && shadowInstanceUploadPacket == shadowPreparePacket
-        ))
-        && (!m_shadowMaterialTypedUploadTask.valid() || (
-            shadowPreparePacket.valid()
-            && shadowMaterialTypedUploadPacket.valid()
-            && shadowMaterialTypedUploadPacket == shadowPreparePacket
-        ))
-    ;
-    const Core::GpuSubmissionPacketId sceneBvhNodesUploadPacket =
-        m_sceneBvhNodesUploadTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_sceneBvhNodesUploadTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId sceneBvhInstancesUploadPacket =
-        m_sceneBvhInstancesUploadTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_sceneBvhInstancesUploadTask)
-            : Core::GpuSubmissionPacketId{}
+        (!m_shadowInstanceMaterialUploadTask.valid()
+            || m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredShadowPrepareTask,
+                m_shadowInstanceMaterialUploadTask
+            ))
+        && (!m_shadowInstanceUploadTask.valid()
+            || m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredShadowPrepareTask,
+                m_shadowInstanceUploadTask
+            ))
+        && (!m_shadowMaterialTypedUploadTask.valid()
+            || m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredShadowPrepareTask,
+                m_shadowMaterialTypedUploadTask
+            ))
     ;
     // Scene-BVH nodes index the companion leaf-instance stream. Keep the whole immutable pair in the accepting
     // Shadow Preparation packet so it becomes the only ShaderResource producer exposed to later Compute work.
     const bool sceneBvhUploadsMergedIntoShadowPreparePacket =
         m_sceneBvhNodesUploadTask.valid() == m_sceneBvhInstancesUploadTask.valid()
-        && (!m_sceneBvhNodesUploadTask.valid() || (
-            shadowPreparePacket.valid()
-            && sceneBvhNodesUploadPacket.valid()
-            && sceneBvhInstancesUploadPacket.valid()
-            && sceneBvhNodesUploadPacket == shadowPreparePacket
-            && sceneBvhInstancesUploadPacket == shadowPreparePacket
-        ))
+        && (!m_sceneBvhNodesUploadTask.valid()
+            || (
+                m_deferredLightingCompiledGraph.tasksSharePacket(
+                    m_deferredShadowPrepareTask,
+                    m_sceneBvhNodesUploadTask
+                )
+                && m_deferredLightingCompiledGraph.tasksSharePacket(
+                    m_deferredShadowPrepareTask,
+                    m_sceneBvhInstancesUploadTask
+                )
+            ))
     ;
     const Core::GpuSubmissionPacketId graphicsPrefixPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_graphicsPrefixTask
@@ -1129,33 +1072,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixDeferredClearFirstTask);
     const Core::GpuSubmissionPacketId graphicsPrefixGbufferPacket =
         m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixGbufferTask);
-    // The optional CSG callbacks alias the G-buffer packet on ordinary frames. Each retains an independent semantic
+    // The optional CSG callbacks alias the G-buffer task on ordinary frames. Each retains an independent semantic
     // timing anchor when a FrontierSafe boundary splits the Graphics prefix.
-    const Core::GpuSubmissionPacketId graphicsPrefixCsgReceiverSpanPacket =
-        m_graphicsPrefixCsgReceiverSpanTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixCsgReceiverSpanTask)
-            : graphicsPrefixGbufferPacket
-    ;
-    const Core::GpuSubmissionPacketId graphicsPrefixCsgIntervalCombinePacket =
-        m_graphicsPrefixCsgIntervalCombineTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixCsgIntervalCombineTask)
-            : graphicsPrefixGbufferPacket
-    ;
-    const Core::GpuSubmissionPacketId graphicsPrefixCsgIntervalSamplePacket =
-        m_graphicsPrefixCsgIntervalSampleTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixCsgIntervalSampleTask)
-            : graphicsPrefixGbufferPacket
-    ;
-    const Core::GpuSubmissionPacketId graphicsPrefixTaskPackets[graphicsPrefixTimingTicketCount] = {
-        graphicsPrefixMeshViewSetupPacket,
-        graphicsPrefixSceneShadingSetupPacket,
-        graphicsPrefixDeferredClearPacket,
-        graphicsPrefixGbufferPacket,
-        graphicsPrefixCsgReceiverSpanPacket,
-        graphicsPrefixCsgIntervalCombinePacket,
-        graphicsPrefixCsgIntervalSamplePacket,
-        graphicsPrefixPacket,
-    };
     const Core::GpuTaskId graphicsPrefixTimingTasks[graphicsPrefixTimingTicketCount] = {
         m_graphicsPrefixMeshViewSetupTask,
         m_graphicsPrefixSceneShadingSetupTask,
@@ -1175,17 +1093,26 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     bool graphicsPrefixTimingBindingsValid = true;
     usize graphicsPrefixUniquePacketCount = 0u;
     for(usize prefixTaskIndex = 0u; prefixTaskIndex < graphicsPrefixTimingTicketCount; ++prefixTaskIndex){
-        const Core::GpuSubmissionPacketId packet = graphicsPrefixTaskPackets[prefixTaskIndex];
+        const Core::GpuTaskId task = graphicsPrefixTimingTasks[prefixTaskIndex];
         if(
-            !packet.valid()
-            || (prefixTaskIndex != 0u && packet.index < graphicsPrefixTaskPackets[prefixTaskIndex - 1u].index)
+            !m_deferredLightingCompiledGraph.findTask(task)
+            || (
+                prefixTaskIndex != 0u
+                && !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
+                    graphicsPrefixTimingTasks[prefixTaskIndex - 1u],
+                    task
+                )
+            )
         ){
             graphicsPrefixTimingBindingsValid = false;
             break;
         }
         bool sharesPacketWithEarlierTask = false;
         for(usize earlierTaskIndex = 0u; earlierTaskIndex < prefixTaskIndex; ++earlierTaskIndex){
-            if(packet != graphicsPrefixTaskPackets[earlierTaskIndex])
+            if(!m_deferredLightingCompiledGraph.tasksSharePacket(
+                task,
+                graphicsPrefixTimingTasks[earlierTaskIndex]
+            ))
                 continue;
             graphicsPrefixTimingTickets[prefixTaskIndex] = graphicsPrefixTimingTickets[earlierTaskIndex];
             sharesPacketWithEarlierTask = true;
@@ -1200,122 +1127,84 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // exposes a frontier between its endpoints. Immutable built-in uploads may add untimed packets between these
     // semantic anchors; their enclosing Graphics submission remains graph-owned and deterministic.
     asyncPrefixTimingSpansOnePacket = graphicsPrefixTimingBindingsValid
-        && graphicsPrefixMeshViewSetupPacket == graphicsPrefixPacket
+        && m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_graphicsPrefixMeshViewSetupTask,
+            m_graphicsPrefixTask
+        )
     ;
     const Core::GpuSubmissionPacketId shadowVisibilityPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredShadowVisibilityTask
     );
-    const Core::GpuSubmissionPacketId shadowVisibilityOpaquePacket =
-        m_deferredShadowVisibilityOpaqueTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowVisibilityOpaqueTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId shadowVisibilityOpaqueFirstWaveletPacket =
-        m_deferredShadowVisibilityOpaqueFirstWaveletTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowVisibilityOpaqueFirstWaveletTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId shadowVisibilityOpaqueResolvePacket =
-        m_deferredShadowVisibilityOpaqueResolveTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowVisibilityOpaqueResolveTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId shadowVisibilityTransparentTracePacket =
-        m_deferredShadowVisibilityTransparentTraceTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowVisibilityTransparentTraceTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId shadowVisibilityTransparentTemporalMergePacket =
-        m_deferredShadowVisibilityTransparentTemporalMergeTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowVisibilityTransparentTemporalMergeTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId shadowVisibilityTransparentFirstWaveletPacket =
-        m_deferredShadowVisibilityTransparentFirstWaveletTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredShadowVisibilityTransparentFirstWaveletTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
     const bool shadowVisibilityPreparedTasksMerged =
         !m_deferredShadowVisibilityOpaqueTask.valid()
         || (
-            shadowVisibilityOpaquePacket.valid()
-            && shadowVisibilityOpaquePacket == shadowVisibilityPacket
+            m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredShadowVisibilityTask,
+                m_deferredShadowVisibilityOpaqueTask
+            )
             && m_deferredShadowVisibilityOpaqueFirstWaveletTask.valid()
-            && shadowVisibilityOpaqueFirstWaveletPacket.valid()
-            && shadowVisibilityOpaqueFirstWaveletPacket == shadowVisibilityPacket
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredShadowVisibilityTask,
+                m_deferredShadowVisibilityOpaqueFirstWaveletTask
+            )
             && m_deferredShadowVisibilityOpaqueResolveTask.valid()
-            && shadowVisibilityOpaqueResolvePacket.valid()
-            && shadowVisibilityOpaqueResolvePacket == shadowVisibilityPacket
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredShadowVisibilityTask,
+                m_deferredShadowVisibilityOpaqueResolveTask
+            )
             && m_deferredShadowVisibilityTransparentTraceTask.valid()
-            && shadowVisibilityTransparentTracePacket.valid()
-            && shadowVisibilityTransparentTracePacket == shadowVisibilityPacket
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredShadowVisibilityTask,
+                m_deferredShadowVisibilityTransparentTraceTask
+            )
             && (
                 !m_deferredShadowVisibilityTransparentTemporalMergeTask.valid()
-                || (
-                    shadowVisibilityTransparentTemporalMergePacket.valid()
-                    && shadowVisibilityTransparentTemporalMergePacket == shadowVisibilityPacket
+                || m_deferredLightingCompiledGraph.tasksSharePacket(
+                    m_deferredShadowVisibilityTask,
+                    m_deferredShadowVisibilityTransparentTemporalMergeTask
                 )
             )
             && m_deferredShadowVisibilityTransparentFirstWaveletTask.valid()
-            && shadowVisibilityTransparentFirstWaveletPacket.valid()
-            && shadowVisibilityTransparentFirstWaveletPacket == shadowVisibilityPacket
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredShadowVisibilityTask,
+                m_deferredShadowVisibilityTransparentFirstWaveletTask
+            )
         )
     ;
     const Core::GpuSubmissionPacketId softwareCausticsPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredSoftwareCausticsTask
     );
-    const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = shadowVisibilityPacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(
-            m_deferredLightingCompiledGraph.packet(shadowVisibilityPacket).queue
-        )
-        : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue = graphicsPrefixPacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(
-            m_deferredLightingCompiledGraph.packet(graphicsPrefixPacket).queue
-        )
-        : nullptr
-    ;
+    const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredShadowVisibilityTask);
+    const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_graphicsPrefixTask);
     bool graphicsPrefixPacketsAreGraphics = graphicsPrefixTimingBindingsValid;
     for(usize prefixTaskIndex = 0u;
         graphicsPrefixPacketsAreGraphics && prefixTaskIndex < graphicsPrefixTimingTicketCount;
         ++prefixTaskIndex
     ){
-        const Core::GpuSubmissionPacketId packet = graphicsPrefixTaskPackets[prefixTaskIndex];
-        const Core::GpuPhysicalQueueInfo* const queue = packet.valid()
-            ? m_deferredLightingCompiledGraph.queueInfo(m_deferredLightingCompiledGraph.packet(packet).queue)
-            : nullptr
-        ;
+        const Core::GpuPhysicalQueueInfo* const queue =
+            m_deferredLightingCompiledGraph.queueInfoForTask(graphicsPrefixTimingTasks[prefixTaskIndex]);
         graphicsPrefixPacketsAreGraphics = queue && queue->queueClass == Core::CommandQueue::Graphics;
     }
     // The deferred-clear measure begins and ends inside the first and terminal typed clear tasks.  The terminal
     // clear owns the later asynchronous handoff, so do not record unless the entire bracket is one Graphics packet.
     const Core::GpuPhysicalQueueInfo* const graphicsPrefixDeferredClearQueue =
-        graphicsPrefixDeferredClearPacket.valid()
-            ? m_deferredLightingCompiledGraph.queueInfo(
-                m_deferredLightingCompiledGraph.packet(graphicsPrefixDeferredClearPacket).queue
-            )
-            : nullptr
-    ;
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_graphicsPrefixDeferredClearTask);
     const bool graphicsPrefixDeferredClearBundleMerged =
         graphicsPrefixDeferredClearFirstPacket.valid()
         && graphicsPrefixDeferredClearPacket.valid()
-        && graphicsPrefixDeferredClearFirstPacket == graphicsPrefixDeferredClearPacket
+        && m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_graphicsPrefixDeferredClearFirstTask,
+            m_graphicsPrefixDeferredClearTask
+        )
         && graphicsPrefixDeferredClearQueue
         && graphicsPrefixDeferredClearQueue->queueClass == Core::CommandQueue::Graphics
     ;
-    const Core::GpuPhysicalQueueInfo* const shadowPrepareQueue = shadowPreparePacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(
-            m_deferredLightingCompiledGraph.packet(shadowPreparePacket).queue
-        )
-        : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const softwareCausticsQueue = softwareCausticsPacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(
-            m_deferredLightingCompiledGraph.packet(softwareCausticsPacket).queue
-        )
-        : nullptr
-    ;
+    const Core::GpuPhysicalQueueInfo* const shadowPrepareQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredShadowPrepareTask);
+    const Core::GpuPhysicalQueueInfo* const softwareCausticsQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredSoftwareCausticsTask);
     const bool shadowVisibilityRunsOnCompute = shadowVisibilityQueue
         && shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute
     ;
@@ -1326,54 +1215,36 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId avboitPrePacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitPreTask
     );
-    const Core::GpuSubmissionPacketId avboitCsgReceiverSpanPacket =
-        m_deferredAvboitCsgReceiverSpanTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitCsgReceiverSpanTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId avboitCsgIntervalCombinePacket =
-        m_deferredAvboitCsgIntervalCombineTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitCsgIntervalCombineTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId avboitClearPacket = m_deferredAvboitClearTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitClearTask)
-        : avboitPrePacket
-    ;
-    const Core::GpuSubmissionPacketId avboitOccupancyPacket = m_deferredLightingCompiledGraph.packetForTask(
-        m_deferredAvboitOccupancyTask
-    );
     const bool avboitPrePacketContainsClear = !clearAvboitTargets || (
-        avboitClearPacket.valid()
-        && avboitPrePacket.valid()
-        && avboitClearPacket == avboitPrePacket
+        m_deferredAvboitClearTask.valid()
+        && m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredAvboitPreTask,
+            m_deferredAvboitClearTask
+        )
     );
-    const bool avboitPrePacketContainsOccupancy = avboitPrePacket.valid()
-        && avboitOccupancyPacket.valid()
-        && avboitPrePacket == avboitOccupancyPacket
+    const bool avboitPrePacketContainsOccupancy = m_deferredLightingCompiledGraph.tasksSharePacket(
+        m_deferredAvboitPreTask,
+        m_deferredAvboitOccupancyTask
+    )
     ;
     // The transparent Span/Combine callbacks consume the frozen CSG stream before phase-local occupancy uploads
     // replace it. They share AVBOIT Pre's timing and external state source, so a split is rejected before recording.
     const bool avboitPrePacketContainsCsgReceiverSpan =
         !m_deferredAvboitCsgReceiverSpanTask.valid()
-        || (
-            avboitPrePacket.valid()
-            && avboitCsgReceiverSpanPacket.valid()
-            && avboitPrePacket == avboitCsgReceiverSpanPacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredAvboitPreTask,
+            m_deferredAvboitCsgReceiverSpanTask
         )
     ;
     const bool avboitPrePacketContainsCsgIntervalCombine =
         !m_deferredAvboitCsgIntervalCombineTask.valid()
-        || (
-            avboitPrePacket.valid()
-            && avboitCsgIntervalCombinePacket.valid()
-            && avboitPrePacket == avboitCsgIntervalCombinePacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredAvboitPreTask,
+            m_deferredAvboitCsgIntervalCombineTask
         )
     ;
-    const Core::GpuPhysicalQueueInfo* const avboitPreQueue = avboitPrePacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(m_deferredLightingCompiledGraph.packet(avboitPrePacket).queue)
-        : nullptr
-    ;
+    const Core::GpuPhysicalQueueInfo* const avboitPreQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitPreTask);
     const bool avboitUsesAsyncCompute = m_deferredAvboitDepthWarpTask.valid();
     const Core::GpuSubmissionPacketId avboitDepthWarpPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitDepthWarpTask
@@ -1381,23 +1252,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId avboitExtinctionPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitExtinctionTask
     );
-    const Core::GpuSubmissionPacketId avboitExtinctionStreamPacket =
-        m_deferredAvboitExtinctionStreamTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitExtinctionStreamTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
     const bool avboitExtinctionPacketContainsStreams = !m_deferredAvboitExtinctionStreamTask.valid()
-        || (
-            avboitExtinctionPacket.valid()
-            && avboitExtinctionStreamPacket.valid()
-            && avboitExtinctionPacket == avboitExtinctionStreamPacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredAvboitExtinctionTask,
+            m_deferredAvboitExtinctionStreamTask
         )
     ;
     const bool avboitUnsplitPrePacketContainsExtinction = !hasTransparentRenderers
-        || (
-            avboitPrePacket.valid()
-            && avboitExtinctionPacket.valid()
-            && avboitPrePacket == avboitExtinctionPacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredAvboitPreTask,
+            m_deferredAvboitExtinctionTask
         )
     ;
     const Core::GpuSubmissionPacketId avboitIntegrationPacket = m_deferredLightingCompiledGraph.packetForTask(
@@ -1406,63 +1270,34 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId avboitAccumulationPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitAccumulationTask
     );
-    const Core::GpuSubmissionPacketId avboitAccumulationFinalizePacket =
-        m_deferredAvboitAccumulationFinalizeTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitAccumulationFinalizeTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId avboitAccumulationStreamPacket =
-        m_deferredAvboitAccumulationStreamTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitAccumulationStreamTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
     const bool avboitAccumulationPacketContainsStreams = !m_deferredAvboitAccumulationStreamTask.valid()
-        || (
-            avboitAccumulationPacket.valid()
-            && avboitAccumulationStreamPacket.valid()
-            && avboitAccumulationPacket == avboitAccumulationStreamPacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredAvboitAccumulationTask,
+            m_deferredAvboitAccumulationStreamTask
         )
     ;
     // The graph-only finalizer lowers the final attachment transition, so it is part of accumulation's accepted
     // Graphics packet and its timing/submission endpoint. A split here would let Composite bypass that handoff.
     const bool avboitAccumulationPacketContainsFinalizer = !hasTransparentRenderers
-        || (
-            avboitAccumulationPacket.valid()
-            && avboitAccumulationFinalizePacket.valid()
-            && avboitAccumulationPacket == avboitAccumulationFinalizePacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredAvboitAccumulationTask,
+            m_deferredAvboitAccumulationFinalizeTask
         )
     ;
     const bool avboitUnsplitPrePacketContainsAccumulation = !hasTransparentRenderers
-        || (
-            avboitPrePacket.valid()
-            && avboitAccumulationPacket.valid()
-            && avboitPrePacket == avboitAccumulationPacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredAvboitPreTask,
+            m_deferredAvboitAccumulationTask
         )
     ;
-    const Core::GpuPhysicalQueueInfo* const avboitDepthWarpQueue = avboitDepthWarpPacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(
-            m_deferredLightingCompiledGraph.packet(avboitDepthWarpPacket).queue
-        )
-        : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const avboitExtinctionQueue = avboitExtinctionPacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(
-            m_deferredLightingCompiledGraph.packet(avboitExtinctionPacket).queue
-        )
-        : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const avboitIntegrationQueue = avboitIntegrationPacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(
-            m_deferredLightingCompiledGraph.packet(avboitIntegrationPacket).queue
-        )
-        : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const avboitAccumulationQueue = avboitAccumulationPacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(
-            m_deferredLightingCompiledGraph.packet(avboitAccumulationPacket).queue
-        )
-        : nullptr
-    ;
+    const Core::GpuPhysicalQueueInfo* const avboitDepthWarpQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitDepthWarpTask);
+    const Core::GpuPhysicalQueueInfo* const avboitExtinctionQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitExtinctionTask);
+    const Core::GpuPhysicalQueueInfo* const avboitIntegrationQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitIntegrationTask);
+    const Core::GpuPhysicalQueueInfo* const avboitAccumulationQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitAccumulationTask);
     const Core::GpuSubmissionPacketId hardwareCausticsPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredHardwareCausticsTask
     );
@@ -1550,19 +1385,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId deferredLightingPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredLightingTask
     );
-    const Core::GpuSubmissionPacketId laggedLightingHistorySlotsUploadPacket =
-        m_deferredLaggedLightingHistorySlotsUploadTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredLaggedLightingHistorySlotsUploadTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
     // Deferred Lighting's submission range starts at the Lighting packet. A fresh history-selector upload must
     // compile into that exact packet, or it would be recorded but omitted from its external wait and acceptance.
     const bool laggedLightingHistorySlotsUploadMergedIntoLightingPacket =
         !m_deferredLaggedLightingHistorySlotsUploadTask.valid()
-        || (
-            deferredLightingPacket.valid()
-            && laggedLightingHistorySlotsUploadPacket.valid()
-            && laggedLightingHistorySlotsUploadPacket == deferredLightingPacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredLightingTask,
+            m_deferredLaggedLightingHistorySlotsUploadTask
         )
     ;
     const Core::GpuSubmissionPacketId deferredCompositePacket = m_deferredLightingCompiledGraph.packetForTask(
@@ -1573,6 +1402,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     );
     const Core::GpuSubmissionPacketId deferredPresentationOverlayPacket =
         m_deferredLightingCompiledGraph.packetForTask(m_deferredPresentationOverlayTask);
+    const Core::GpuTaskId terminalPresentationTask = m_deferredPresentationOverlayTask.valid()
+        ? m_deferredPresentationOverlayTask
+        : m_deferredPresentTask
+    ;
     const Core::GpuSubmissionPacketId terminalPresentationPacket = deferredPresentationOverlayPacket.valid()
         ? deferredPresentationOverlayPacket
         : deferredPresentPacket
@@ -1581,66 +1414,28 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.packetForTask(m_deferredLaggedLightingHistoryTask);
     const Core::GpuSubmissionPacketId deferredFrameRecoveryPacket =
         m_deferredLightingCompiledGraph.packetForTask(m_deferredFrameRecoveryTask);
-    const Core::GpuPhysicalQueueInfo* const deferredLightingQueue = deferredLightingPacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(m_deferredLightingCompiledGraph.packet(deferredLightingPacket).queue)
-        : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const deferredCompositeQueue = deferredCompositePacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(m_deferredLightingCompiledGraph.packet(deferredCompositePacket).queue)
-        : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const deferredPresentQueue = deferredPresentPacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(m_deferredLightingCompiledGraph.packet(deferredPresentPacket).queue)
-        : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const terminalPresentationQueue = terminalPresentationPacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(
-            m_deferredLightingCompiledGraph.packet(terminalPresentationPacket).queue
-        )
-        : nullptr
-    ;
+    const Core::GpuPhysicalQueueInfo* const deferredLightingQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredLightingTask);
+    const Core::GpuPhysicalQueueInfo* const deferredCompositeQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredCompositeTask);
+    const Core::GpuPhysicalQueueInfo* const deferredPresentQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredPresentTask);
+    const Core::GpuPhysicalQueueInfo* const terminalPresentationQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(terminalPresentationTask);
     const Core::GpuPhysicalQueueInfo* const deferredLaggedLightingHistoryQueue =
-        deferredLaggedLightingHistoryPacket.valid()
-            ? m_deferredLightingCompiledGraph.queueInfo(
-                m_deferredLightingCompiledGraph.packet(deferredLaggedLightingHistoryPacket).queue
-            )
-            : nullptr
-    ;
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredLaggedLightingHistoryTask);
     const Core::GpuPhysicalQueueInfo* const deferredFrameRecoveryQueue =
-        deferredFrameRecoveryPacket.valid()
-            ? m_deferredLightingCompiledGraph.queueInfo(
-                m_deferredLightingCompiledGraph.packet(deferredFrameRecoveryPacket).queue
-            )
-            : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const hardwareCausticsQueue = hardwareCausticsPacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(
-            m_deferredLightingCompiledGraph.packet(hardwareCausticsPacket).queue
-        )
-        : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const surfelGiQueue = surfelGiPacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(m_deferredLightingCompiledGraph.packet(surfelGiPacket).queue)
-        : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const surfelGiPreparationQueue = surfelGiPreparationPacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(
-            m_deferredLightingCompiledGraph.packet(surfelGiPreparationPacket).queue
-        )
-        : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const surfelGiSnapshotCopyQueue = surfelGiSnapshotCopyPacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(
-            m_deferredLightingCompiledGraph.packet(surfelGiSnapshotCopyPacket).queue
-        )
-        : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const surfelGiCounterReadbackQueue = surfelGiCounterReadbackPacket.valid()
-        ? m_deferredLightingCompiledGraph.queueInfo(
-            m_deferredLightingCompiledGraph.packet(surfelGiCounterReadbackPacket).queue
-        )
-        : nullptr
-    ;
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredFrameRecoveryTask);
+    const Core::GpuPhysicalQueueInfo* const hardwareCausticsQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredHardwareCausticsTask);
+    const Core::GpuPhysicalQueueInfo* const surfelGiQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredSurfelGiTask);
+    const Core::GpuPhysicalQueueInfo* const surfelGiPreparationQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredSurfelGiPreparationTask);
+    const Core::GpuPhysicalQueueInfo* const surfelGiSnapshotCopyQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredSurfelGiSnapshotCopyTask);
+    const Core::GpuPhysicalQueueInfo* const surfelGiCounterReadbackQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredSurfelGiCounterReadbackTask);
     const bool surfelGiRunsOnCompute = surfelGiQueue && surfelGiQueue->queueClass == Core::CommandQueue::Compute;
     // The clear must remain in GI's semantic packet. If it split, the standard effects range would either gain a
     // hidden submission or record an output write outside the acceptance/timing endpoint it protects.
@@ -1829,7 +1624,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketRange surfelGiPacketRange =
         m_deferredLightingCompiledGraph.packetRangeForTasks(surfelGiFirstTask, m_deferredSurfelGiTask);
     const usize expectedSurfelGiPacketCount = m_deferredSurfelGiSnapshotCopyTask.valid()
-        ? (surfelGiPreparationPacket == surfelGiSnapshotCopyPacket ? 2u : 3u)
+        ? (m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredSurfelGiPreparationTask,
+                m_deferredSurfelGiSnapshotCopyTask
+            )
+            ? 2u
+            : 3u)
         : 1u
     ;
     const Core::GpuSubmissionPacketRange hardwareCausticsPacketRange =
@@ -1849,10 +1649,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredLightingTask, m_deferredCompositeTask);
     const Core::GpuSubmissionPacketRange deferredPresentPacketRange =
         m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredPresentTask, m_deferredPresentTask);
-    const Core::GpuTaskId terminalPresentationTask = m_deferredPresentationOverlayTask.valid()
-        ? m_deferredPresentationOverlayTask
-        : m_deferredPresentTask
-    ;
     const Core::GpuSubmissionPacketRange terminalPresentationPacketRange =
         m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredPresentTask, terminalPresentationTask);
     const Core::GpuSubmissionPacketRange deferredLaggedLightingHistoryPacketRange =
@@ -1934,9 +1730,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !graphicsPrefixDeferredClearFirstPacket.valid()
         || !graphicsPrefixDeferredClearPacket.valid()
         || !graphicsPrefixGbufferPacket.valid()
-        || !graphicsPrefixCsgReceiverSpanPacket.valid()
-        || !graphicsPrefixCsgIntervalCombinePacket.valid()
-        || !graphicsPrefixCsgIntervalSamplePacket.valid()
+        || (hasOpaqueCsgFrameWork && (
+            !m_deferredLightingCompiledGraph.findTask(m_graphicsPrefixCsgReceiverSpanTask)
+            || !m_deferredLightingCompiledGraph.findTask(m_graphicsPrefixCsgIntervalCombineTask)
+            || !m_deferredLightingCompiledGraph.findTask(m_graphicsPrefixCsgIntervalSampleTask)
+        ))
         || !graphicsPrefixPacket.valid()
         || !graphicsPrefixTimingBindingsValid
         || !graphicsPrefixPacketsAreGraphics
@@ -2018,7 +1816,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !m_deferredAvboitAccumulationFinalizeTask.valid()
             || !avboitExtinctionPacket.valid()
             || !avboitAccumulationPacket.valid()
-            || !avboitAccumulationFinalizePacket.valid()
+            || !m_deferredLightingCompiledGraph.findTask(m_deferredAvboitAccumulationFinalizeTask)
             || (!avboitUsesAsyncCompute && (
                 !avboitUnsplitPrePacketContainsExtinction
                 || !avboitUnsplitPrePacketContainsAccumulation
@@ -2735,7 +2533,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredAvboitAccumulationFinalizeTask.valid()
             && avboitExtinctionPacket.valid()
             && avboitAccumulationPacket.valid()
-            && avboitAccumulationFinalizePacket.valid()
+            && m_deferredLightingCompiledGraph.findTask(m_deferredAvboitAccumulationFinalizeTask)
             && (avboitUsesAsyncCompute || (
                 avboitUnsplitPrePacketContainsExtinction
                 && avboitUnsplitPrePacketContainsAccumulation
@@ -2898,12 +2696,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const auto discardFrameRecovery = [&](){
             if(
                 m_deferredLightingTaskGraphValid
-                && deferredFrameRecoveryPacket.valid()
+                && m_deferredLightingCompiledGraph.findTask(m_deferredFrameRecoveryTask)
             ){
-                m_deferredLightingSubmissionTransaction.rejectPacket(
+                m_deferredLightingSubmissionTransaction.rejectTask(
                     m_deferredLightingTaskGraph,
                     m_deferredLightingCompiledGraph,
-                    deferredFrameRecoveryPacket
+                    m_deferredFrameRecoveryTask
                 );
             }
             else{
@@ -2915,11 +2713,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(
             !m_deferredLightingTaskGraphValid
             || !m_deferredFrameRecoveryTask.valid()
-            || !deferredFrameRecoveryPacket.valid()
+            || !m_deferredLightingCompiledGraph.findTask(m_deferredFrameRecoveryTask)
             || !deferredFrameRecoveryPacketRange.valid()
             || !deferredFrameRecoveryQueue
             || deferredFrameRecoveryQueue->queueClass != Core::CommandQueue::Graphics
-            || !m_deferredLightingCompiledGraph.packet(deferredFrameRecoveryPacket).joinsAcceptedQueueFrontier
+            || !m_deferredLightingCompiledGraph.taskJoinsAcceptedQueueFrontier(m_deferredFrameRecoveryTask)
             || !m_deferredLightingSubmissionTransaction.hasAcceptedPackets()
         ){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred frame recovery packet was unavailable"));
@@ -3042,7 +2840,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 && m_deferredAvboitAccumulationFinalizeTask.valid()
                 && avboitExtinctionPacket.valid()
                 && avboitAccumulationPacket.valid()
-                && avboitAccumulationFinalizePacket.valid()
+                && m_deferredLightingCompiledGraph.findTask(m_deferredAvboitAccumulationFinalizeTask)
                 && (avboitUsesAsyncCompute || (
                     avboitUnsplitPrePacketContainsExtinction
                     && avboitUnsplitPrePacketContainsAccumulation
@@ -3535,18 +3333,23 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             shadowPreparePrefixTimingTicketsValid && prefixTaskIndex < graphicsPrefixTimingTicketCount;
             ++prefixTaskIndex
         ){
-            const Core::GpuSubmissionPacketId packet = graphicsPrefixTaskPackets[prefixTaskIndex];
             const Core::GpuTaskId task = graphicsPrefixTimingTasks[prefixTaskIndex];
             bool packetAlreadyTimed = false;
             for(usize earlierTaskIndex = 0u; earlierTaskIndex < prefixTaskIndex; ++earlierTaskIndex){
-                if(packet == graphicsPrefixTaskPackets[earlierTaskIndex]){
+                if(m_deferredLightingCompiledGraph.tasksSharePacket(
+                    task,
+                    graphicsPrefixTimingTasks[earlierTaskIndex]
+                )){
                     packetAlreadyTimed = true;
                     break;
                 }
             }
             if(packetAlreadyTimed)
                 continue;
-            if(!packet.valid() || !task.valid() || !graphicsPrefixTimingTickets[prefixTaskIndex]){
+            if(
+                !m_deferredLightingCompiledGraph.findTask(task)
+                || !graphicsPrefixTimingTickets[prefixTaskIndex]
+            ){
                 shadowPreparePrefixTimingTicketsValid = false;
                 break;
             }
@@ -4033,7 +3836,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const bool readbackTailAvailable =
             finalPresentationSubmissionToken.valid()
             && m_deferredLightingTaskGraphValid
-            && surfelGiCounterReadbackPacket.valid()
+            && m_deferredLightingCompiledGraph.findTask(m_deferredSurfelGiCounterReadbackTask)
             && surfelGiCounterReadbackQueue
             && (static_cast<u8>(surfelGiCounterReadbackQueue->capabilities)
                 & static_cast<u8>(Core::GpuQueueCapability::Transfer)) != 0u
@@ -4041,10 +3844,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && surfelGiCounterReadbackPacketRange.packetCount == 1u
         ;
         if(!readbackTailAvailable){
-            m_deferredLightingSubmissionTransaction.rejectPacket(
+            m_deferredLightingSubmissionTransaction.rejectTask(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
-                surfelGiCounterReadbackPacket
+                m_deferredSurfelGiCounterReadbackTask
             );
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback tail was unavailable"));
         }
@@ -4081,10 +3884,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 )
             ;
             if(!readbackRecorded || !readbackFinalStateReady){
-                m_deferredLightingSubmissionTransaction.rejectPacket(
+                m_deferredLightingSubmissionTransaction.rejectTask(
                     m_deferredLightingTaskGraph,
                     m_deferredLightingCompiledGraph,
-                    surfelGiCounterReadbackPacket
+                    m_deferredSurfelGiCounterReadbackTask
                 );
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retain late deferred surfel counter-readback state"));
             }

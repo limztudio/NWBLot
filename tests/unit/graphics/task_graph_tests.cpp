@@ -3331,6 +3331,22 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     ASSERT_TRUE(recoveryPacket.valid());
     EXPECT_NE(firstPacket, secondPacket);
     EXPECT_NE(recoveryPacket, secondPacket);
+    EXPECT_TRUE(compiledGraph.tasksSharePacket(first, first));
+    EXPECT_FALSE(compiledGraph.tasksSharePacket(first, second));
+    EXPECT_FALSE(compiledGraph.tasksSharePacket(first, {}));
+    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(first, second));
+    EXPECT_FALSE(compiledGraph.taskPrecedesOrSharesPacket(second, first));
+    EXPECT_FALSE(compiledGraph.taskPrecedesOrSharesPacket(first, {}));
+    EXPECT_FALSE(compiledGraph.taskJoinsAcceptedQueueFrontier(first));
+    EXPECT_TRUE(compiledGraph.taskJoinsAcceptedQueueFrontier(recovery));
+    EXPECT_FALSE(compiledGraph.taskJoinsAcceptedQueueFrontier({}));
+    const Graphics::GpuPhysicalQueueInfo* const firstTaskQueue = compiledGraph.queueInfoForTask(first);
+    const Graphics::GpuPhysicalQueueInfo* const recoveryTaskQueue = compiledGraph.queueInfoForTask(recovery);
+    ASSERT_NE(firstTaskQueue, nullptr);
+    ASSERT_NE(recoveryTaskQueue, nullptr);
+    EXPECT_EQ(firstTaskQueue->id, compiledGraph.packet(firstPacket).queue);
+    EXPECT_EQ(recoveryTaskQueue->id, compiledGraph.packet(recoveryPacket).queue);
+    EXPECT_EQ(compiledGraph.queueInfoForTask({}), nullptr);
     const Graphics::GpuSubmissionPacketRange firstTwoPacketRange = compiledGraph.packetRange(
         firstPacket,
         secondPacket
@@ -3429,7 +3445,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
 
     // A later packet may reject while the independent recovery tail remains Declared. The accepted producer stays
     // visible, then recovery can still accept before the normal blanket cleanup rejects any remaining packet.
-    transaction.rejectPacket(graph, compiledGraph, secondPacket);
+    transaction.rejectTask(graph, compiledGraph, second);
     EXPECT_EQ(acceptedCount, 2u);
     EXPECT_EQ(discardedCount, 1u);
     ASSERT_NE(transaction.packetRuntime(secondPacket), nullptr);

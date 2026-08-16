@@ -3720,9 +3720,9 @@ struct AvboitAccumulationComputeEmulationGraphTask{
 };
 
 
-// A pair of regular AVBOIT Accumulation draws sharing one generated-vertex buffer cannot batch its generators
-// ahead of rasterization. Keep the original D(A) -> R(A) -> D(B) -> R(B) stream as explicit primary-Graphics
-// callbacks so the compiler owns every alternating UAV/VertexBuffer boundary.
+// Two or three regular AVBOIT Accumulation draws sharing one generated-vertex buffer cannot batch their generators
+// ahead of rasterization. Keep the original D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C)] stream as explicit
+// primary-Graphics callbacks so the compiler owns every alternating UAV/VertexBuffer boundary.
 struct AvboitAccumulationSharedComputeEmulationGraphTask{
     enum class Phase : u8{
         Generate,
@@ -15270,9 +15270,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     accumulationCsgFrameData
                 )
             ;
-            // The unsplit all-compute two-draw case can preserve one shared generated output only as an explicit
-            // D(A) -> R(A) -> D(B) -> R(B) sequence. Keep mesh and CSG work out of this narrow first slice so the
-            // aggregate accumulation callback is never partially replayed around the alternating phases.
+            // The unsplit all-compute two- or three-draw case can preserve one shared generated output only as an
+            // explicit D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C)] sequence. Keep mesh and CSG work out of this
+            // narrow slice so the aggregate accumulation callback is never partially replayed around its phases.
             accumulationSharedComputeEmulationPlanCaptured = !splitAvboitStages
                 && !accumulationRegularComputeEmulationPlanCaptured
                 && accumulationDrawItems.regular.meshDrawItems.empty()
@@ -15283,7 +15283,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     m_meshSystem,
                     accumulationDrawItems.regular
                 )
-                && accumulationSharedComputeEmulationPlan.drawCount == 2u
+                && accumulationSharedComputeEmulationPlan.drawCount >= 2u
+                && accumulationSharedComputeEmulationPlan.drawCount <= 3u
             ;
             NWB_ASSERT(
                 !(accumulationRegularComputeEmulationPlanCaptured && accumulationCsgComputeEmulationPlanCaptured)
@@ -15754,15 +15755,28 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Name("render.avboit.accumulation.shared_compute_emulation_raster_a"),
             Name("render.avboit.accumulation.shared_compute_emulation_generate_b"),
             Name("render.avboit.accumulation.shared_compute_emulation_raster_b"),
+            Name("render.avboit.accumulation.shared_compute_emulation_generate_c"),
+            Name("render.avboit.accumulation.shared_compute_emulation_raster_c"),
         };
         const AStringView accumulationSharedComputeEmulationPhaseMarkers[] = {
             "AVBOIT Accumulation Shared Compute Emulation Generate A",
             "AVBOIT Accumulation Shared Compute Emulation Raster A",
             "AVBOIT Accumulation Shared Compute Emulation Generate B",
             "AVBOIT Accumulation Shared Compute Emulation Raster B",
+            "AVBOIT Accumulation Shared Compute Emulation Generate C",
+            "AVBOIT Accumulation Shared Compute Emulation Raster C",
         };
-        constexpr usize accumulationSharedComputeEmulationPhaseCount = 4u;
-        NWB_ASSERT(accumulationSharedComputeEmulationPlan.drawCount == 2u);
+        const usize accumulationSharedComputeEmulationPhaseCount =
+            accumulationSharedComputeEmulationPlan.drawCount * 2u
+        ;
+        NWB_ASSERT(
+            accumulationSharedComputeEmulationPlan.drawCount == 2u
+            || accumulationSharedComputeEmulationPlan.drawCount == 3u
+        );
+        NWB_ASSERT(
+            accumulationSharedComputeEmulationPhaseCount
+            <= LengthOf(accumulationSharedComputeEmulationPhaseIdentities)
+        );
         Core::GpuTaskId accumulationSharedComputeEmulationDependency = accumulationDependency;
         for(usize phaseIndex = 0u;
             phaseIndex < accumulationSharedComputeEmulationPhaseCount;

@@ -2310,11 +2310,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return true;
         }
         if(
-            phaseCount != 4u
+            (phaseCount != 4u && phaseCount != 6u)
             || m_deferredAvboitAccumulationComputeEmulationTask.valid()
             || !m_deferredAvboitAccumulationStreamTask.valid()
             || !avboitAccumulationSharedComputeEmulationPacket.valid()
             || !avboitAccumulationPacket.valid()
+            || !m_deferredAvboitAccumulationFinalizeTask.valid()
             || !avboitPrePacket.valid()
             || !avboitAccumulationSharedComputeEmulationQueue
             || !avboitAccumulationQueue
@@ -2350,15 +2351,22 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             )
                 return false;
         }
+        for(usize phaseIndex = phaseCount;
+            phaseIndex < LengthOf(m_deferredAvboitAccumulationSharedComputeEmulationTasks);
+            ++phaseIndex
+        ){
+            if(m_deferredAvboitAccumulationSharedComputeEmulationTasks[phaseIndex].valid())
+                return false;
+        }
         const Core::GpuSubmissionPacket& packet = m_deferredLightingCompiledGraph.packet(
             avboitAccumulationSharedComputeEmulationPacket
         );
         const Core::GpuTaskId* const packetTasks = m_deferredLightingCompiledGraph.packetTasks(
             avboitAccumulationSharedComputeEmulationPacket
         );
-        if(!packetTasks || packet.taskCount < phaseCount)
+        if(!packetTasks || packet.taskCount < phaseCount + 1u)
             return false;
-        for(usize taskIndex = 0u; taskIndex + phaseCount <= packet.taskCount; ++taskIndex){
+        for(usize taskIndex = 0u; taskIndex + phaseCount < packet.taskCount; ++taskIndex){
             bool matchesSequence = true;
             for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
                 if(packetTasks[taskIndex + phaseIndex]
@@ -2367,7 +2375,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 matchesSequence = false;
                 break;
             }
-            if(!matchesSequence)
+            if(!matchesSequence
+                || packetTasks[taskIndex + phaseCount] != m_deferredAvboitAccumulationFinalizeTask)
                 continue;
             const auto hasPrecedingTask = [&](const Core::GpuTaskId task){
                 if(!task.valid())

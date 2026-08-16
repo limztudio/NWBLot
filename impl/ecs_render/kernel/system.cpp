@@ -3790,9 +3790,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 .context = &hardwareCausticsAcceptance,
                 .invoke = acceptHardwareCausticsPacket,
             };
-            const Core::GpuTaskGraphPacketTimingTicket hardwareCausticsTimingTickets[] = {
-                Core::GpuTaskGraphPacketTimingTicket{
-                    .packet = hardwareCausticsPacket,
+            const Core::GpuTaskGraphTaskTimingTicket hardwareCausticsTimingTickets[] = {
+                Core::GpuTaskGraphTaskTimingTicket{
+                    .task = m_deferredHardwareCausticsTask,
                     .timingTicket = &hardwareCausticsTimingTicket,
                 },
             };
@@ -3803,7 +3803,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 && hardwareCausticsPacket.valid()
                 && hardwareCausticsPacketRange.valid()
                 && hardwareCausticsPacketRange.packetCount == LengthOf(hardwareCausticsTimingTickets)
-                && hardwareCausticsSubmitter.submitPacketRangeInCompileOrder(
+                && hardwareCausticsSubmitter.submitPacketRangeInCompileOrderFromTasks(
                     m_deferredLightingTaskGraph,
                     m_deferredLightingCompiledGraph,
                     m_deferredLightingRecordedGraph,

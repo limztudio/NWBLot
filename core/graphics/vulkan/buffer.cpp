@@ -523,7 +523,8 @@ bool CommandList::tryWriteBuffer(Buffer* bufferResource, const void* data, usize
 }
 
 void CommandList::writeBuffer(Buffer* bufferResource, const void* data, usize dataSize, u64 destOffsetBytes){
-    static_cast<void>(tryWriteBuffer(bufferResource, data, dataSize, destOffsetBytes));
+    if(!tryWriteBuffer(bufferResource, data, dataSize, destOffsetBytes))
+        return;
 }
 
 void CommandList::clearBufferUInt(Buffer* bufferResource, u32 clearValue){

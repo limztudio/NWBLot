@@ -2074,7 +2074,8 @@ bool CommandList::tryWriteTexture(
 }
 
 void CommandList::writeTexture(Texture* destResource, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch){
-    static_cast<void>(tryWriteTexture(destResource, arraySlice, mipLevel, data, rowPitch, depthPitch));
+    if(!tryWriteTexture(destResource, arraySlice, mipLevel, data, rowPitch, depthPitch))
+        return;
 }
 
 void CommandList::resolveTexture(Texture* destResource, const TextureSubresourceSet& dstSubresources, Texture* srcResource, const TextureSubresourceSet& srcSubresources){

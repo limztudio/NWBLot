@@ -7316,7 +7316,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         csgReceiverSpanDesc
             .setIdentity(Name("render.graphics_prefix.csg_receiver_span"))
             .setMarkerLabel("Opaque CSG Receiver Span")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(csgReceiverSpanScheduling)
             .setDependencies(&gbufferCompletionTask, 1u)
             .setResourceUses(csgReceiverSpanResourceUses.data(), csgReceiverSpanResourceUses.size())
@@ -7341,7 +7341,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         csgIntervalCombineDesc
             .setIdentity(Name("render.graphics_prefix.csg_interval_combine"))
             .setMarkerLabel("Opaque CSG Interval Combine")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(csgIntervalCombineScheduling)
             .setDependencies(&m_graphicsPrefixCsgReceiverSpanTask, 1u)
             .setResourceUses(csgIntervalCombineResourceUses.data(), csgIntervalCombineResourceUses.size())
@@ -8453,7 +8453,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         opaqueDesc
             .setIdentity(Name("render.shadow_visibility.opaque"))
             .setMarkerLabel("Shadow Visibility Opaque")
-            .setQueue(ComputeQueueRequest())
+            .setQueue(ComputeTransferPacketQueueRequest())
             .setScheduling(opaqueScheduling)
             .setDependencies(&prefixTask, 1u)
             .setResourceUses(resourceUses.data(), resourceUses.size())

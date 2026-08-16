@@ -241,6 +241,15 @@ struct GpuTaskGraphPacketTimingTicket{
     GpuTimingSubmissionTicket* timingTicket = nullptr;
 };
 
+// Binds a timing submission ticket to semantic graph work instead of a compiler-generated packet ID.  The
+// submitter resolves the task to its current packet after compilation and rejects a range that would assign
+// conflicting tickets to the same packet.  This is the migration path for renderer code that should not mirror
+// packetization merely to route its timing transaction.
+struct GpuTaskGraphTaskTimingTicket{
+    GpuTaskId task;
+    GpuTimingSubmissionTicket* timingTicket = nullptr;
+};
+
 // Associates one packet with a native pre-submit hook. The graph still owns packet routing and all timeline waits;
 // this narrow escape hatch is for one-shot native signals such as the swap-chain binary semaphore that must be
 // emitted by the terminal presentation packet itself.
@@ -348,6 +357,25 @@ public:
         usize externalCompletionTokenCount,
         const GpuTaskGraphPacketTimingTicket* timingTickets,
         usize timingTicketCount,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuSubmissionPacketId* outFailedPacket = nullptr,
+        const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr,
+        const GpuTaskGraphPacketSubmissionHook* submissionHooks = nullptr,
+        usize submissionHookCount = 0u
+    )const;
+    // Semantic companion to the packet-timing overload above.  It resolves each task binding through the current
+    // compiled graph, so packet splitting/merging remains compiler-owned.  Multiple bindings may target one
+    // packet only when they deliberately share the same timing ticket.
+    [[nodiscard]] bool submitPacketRangeInCompileOrderFromTasks(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuRecordedGraph& recordedGraph,
+        const GpuSubmissionPacketRange& range,
+        const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
+        usize externalCompletionTokenCount,
+        const GpuTaskGraphTaskTimingTicket* taskTimingTickets,
+        usize taskTimingTicketCount,
         GpuGraphSubmissionTransaction& transaction,
         Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr,

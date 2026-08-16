@@ -1176,14 +1176,14 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         return false;
     }
 
-    const Core::GpuTaskGraphPacketTimingTicket timingTickets[] = {
-        Core::GpuTaskGraphPacketTimingTicket{
-            .packet = terminalPacket,
+    const Core::GpuTaskGraphTaskTimingTicket timingTickets[] = {
+        Core::GpuTaskGraphTaskTimingTicket{
+            .task = terminalTask,
             .timingTicket = &timingTicket,
         },
     };
     const Core::GpuTaskGraphSubmitter submitter(device);
-    if(!submitter.submitPacketRangeInCompileOrder(
+    if(!submitter.submitPacketRangeInCompileOrderFromTasks(
         graph,
         compiledGraph,
         recordedGraph,

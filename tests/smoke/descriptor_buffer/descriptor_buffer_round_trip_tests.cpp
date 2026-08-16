@@ -18244,6 +18244,167 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
 }
 
 
+// Timing ownership follows semantic task anchors instead of packet IDs.  The two graph tasks deliberately force
+// separate Graphics packets, but this caller never asks the compiler which packet owns either timing scope.
+// A valid collected frame sample proves the submitter resolved both task bindings to the correct native submits.
+TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraphTasks){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTransactionScope.identity, device, 1u));
+    timing.beginFrame(122u);
+
+    auto resetCommandList = device.createCommandList();
+    ASSERT_NE(resetCommandList.get(), nullptr);
+    resetCommandList->open();
+    timing.recordFrameReset(*resetCommandList);
+    resetCommandList->close();
+    CommandList* resetCommandLists[] = { resetCommandList.get() };
+    bool resetSubmitted = false;
+    device.executeCommandLists(resetCommandLists, LengthOf(resetCommandLists), CommandQueue::Graphics, &resetSubmitted);
+    ASSERT_TRUE(resetSubmitted);
+    timing.confirmFrameReset();
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+
+    GpuTimingFrameTransaction frameTransaction(timing);
+    GpuTimingSubmissionTicket beginTicket(timing);
+    GpuTimingSubmissionTicket endTicket(timing);
+    bool beginRecorded = false;
+    bool endRecorded = false;
+
+    const GpuTaskId beginTask = graph.addTask<NativeFrameTimingPacketTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/task_timing_begin"))
+            .setMarkerLabel("Task Timing Begin")
+            .setQueue(graphicsQueue)
+            .setScheduling(scheduling),
+        NativeFrameTimingPacketTask::Payload{
+            .device = &device,
+            .transaction = &frameTransaction,
+            .timingTicket = &beginTicket,
+            .endpoint = NativeFrameTimingPacketTask::Endpoint::Begin,
+            .recorded = &beginRecorded,
+        }
+    );
+    ASSERT_TRUE(beginTask.valid());
+
+    const GpuTaskId endDependencies[] = { beginTask };
+    const GpuTaskId endTask = graph.addTask<NativeFrameTimingPacketTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/task_timing_end"))
+            .setMarkerLabel("Task Timing End")
+            .setQueue(graphicsQueue)
+            .setScheduling(scheduling)
+            .setDependencies(endDependencies, LengthOf(endDependencies)),
+        NativeFrameTimingPacketTask::Payload{
+            .device = &device,
+            .transaction = &frameTransaction,
+            .timingTicket = &endTicket,
+            .endpoint = NativeFrameTimingPacketTask::Endpoint::End,
+            .recorded = &endRecorded,
+        }
+    );
+    ASSERT_TRUE(endTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/task_timing_binding_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+    EXPECT_TRUE(beginRecorded);
+    EXPECT_TRUE(endRecorded);
+    ASSERT_NE(compiledGraph.packetForTask(beginTask), compiledGraph.packetForTask(endTask));
+
+    const GpuTaskGraphTaskTimingTicket timingTickets[] = {
+        GpuTaskGraphTaskTimingTicket{ .task = beginTask, .timingTicket = &beginTicket },
+        GpuTaskGraphTaskTimingTicket{ .task = endTask, .timingTicket = &endTicket },
+    };
+    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskGraphTaskTimingTicket duplicateTaskTimingTickets[] = {
+        GpuTaskGraphTaskTimingTicket{ .task = beginTask, .timingTicket = &beginTicket },
+        GpuTaskGraphTaskTimingTicket{ .task = beginTask, .timingTicket = &beginTicket },
+    };
+    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrderFromTasks(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        duplicateTaskTimingTickets,
+        LengthOf(duplicateTaskTimingTickets),
+        transaction,
+        scratchArena
+    ));
+    EXPECT_FALSE(transaction.hasAcceptedPackets());
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrderFromTasks(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        timingTickets,
+        LengthOf(timingTickets),
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.hasAcceptedPackets());
+    frameTransaction.confirmBeginSubmission();
+    ASSERT_TRUE(frameTransaction.confirmEndSubmission(true));
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 122u);
+    EXPECT_TRUE(timingSink.stats(s_FrameTransactionScope.identity).valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
 // A renderer failure can leave an automatic setup upload accepted on a genuinely dedicated Transfer queue while a
 // later Graphics packet rejects.  The late Graphics recovery packet has no graph dependency on that rejected
 // suffix, so the transaction must turn the accepted Transfer completion into a submission-local frontier wait.

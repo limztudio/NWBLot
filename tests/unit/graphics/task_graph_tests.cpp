@@ -7957,10 +7957,11 @@ TEST(GpuTaskGraph, PlansGraphOwnedPreparedSoftwareBvhInputStates){
 }
 
 
-// Frozen pure-software mesh builds share their sort/payload/counter scratch.  Each operation therefore keeps its
-// typed CopyDest setup immediately before its own UAV compute callback, and the entire chain must stay in the
-// accepting Graphics packet even when Shadow Preparation has a later dedicated-Compute traversal consumer.
-TEST(GpuTaskGraph, MergesPreparedPureSoftwareBvhSentinelChainIntoShadowPreparePacket){
+// Frozen pure-software mesh builds share their sort/payload/counter scratch, while the scene/material uploads carry
+// the matching immutable traversal table. Each operation keeps its typed CopyDest setup immediately before its own
+// UAV compute callback, then Shadow Preparation consumes the frozen scene table in the same accepting Graphics
+// packet even when a later dedicated-Compute traversal consumer exists.
+TEST(GpuTaskGraph, MergesPreparedPureSoftwareBvhAndSceneTraversalIntoShadowPreparePacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     constexpr Graphics::ResourceQueueSharing::Mask queueSharing =
@@ -8003,6 +8004,26 @@ TEST(GpuTaskGraph, MergesPreparedPureSoftwareBvhSentinelChainIntoShadowPreparePa
         Name("tests/task_graph/pure_sw_bvh_visit_counter"),
         "Pure SW-BVH Visit Counter"
     );
+    const Graphics::GpuGraphResourceId sceneNodes = addBuffer(
+        Name("tests/task_graph/pure_sw_scene_nodes"),
+        "Pure SW Scene Nodes"
+    );
+    const Graphics::GpuGraphResourceId sceneInstances = addBuffer(
+        Name("tests/task_graph/pure_sw_scene_instances"),
+        "Pure SW Scene Instances"
+    );
+    const Graphics::GpuGraphResourceId instanceMaterials = addBuffer(
+        Name("tests/task_graph/pure_sw_instance_materials"),
+        "Pure SW Instance Materials"
+    );
+    const Graphics::GpuGraphResourceId shadowInstances = addBuffer(
+        Name("tests/task_graph/pure_sw_shadow_instances"),
+        "Pure SW Shadow Instances"
+    );
+    const Graphics::GpuGraphResourceId materialTyped = addBuffer(
+        Name("tests/task_graph/pure_sw_material_typed"),
+        "Pure SW Typed Materials"
+    );
     ASSERT_TRUE(position.valid());
     ASSERT_TRUE(index.valid());
     ASSERT_TRUE(node.valid());
@@ -8010,6 +8031,11 @@ TEST(GpuTaskGraph, MergesPreparedPureSoftwareBvhSentinelChainIntoShadowPreparePa
     ASSERT_TRUE(sortKeys.valid());
     ASSERT_TRUE(sortPayload.valid());
     ASSERT_TRUE(visitCounter.valid());
+    ASSERT_TRUE(sceneNodes.valid());
+    ASSERT_TRUE(sceneInstances.valid());
+    ASSERT_TRUE(instanceMaterials.valid());
+    ASSERT_TRUE(shadowInstances.valid());
+    ASSERT_TRUE(materialTyped.valid());
 
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
@@ -8153,6 +8179,11 @@ TEST(GpuTaskGraph, MergesPreparedPureSoftwareBvhSentinelChainIntoShadowPreparePa
         { .resource = sortKeys, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
         { .resource = sortPayload, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
         { .resource = visitCounter, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::ReadWrite },
+        { .resource = sceneNodes, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = sceneInstances, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = instanceMaterials, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = shadowInstances, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = materialTyped, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Write },
     };
     Graphics::GpuTaskSchedulingHint shadowPrepareScheduling = chainedScheduling;
     shadowPrepareScheduling.cost = Graphics::GpuTaskCostHint::Large;
@@ -8259,6 +8290,11 @@ TEST(GpuTaskGraph, MergesPreparedPureSoftwareBvhSentinelChainIntoShadowPreparePa
     EXPECT_TRUE(hasTransition(refitCounterClear, visitCounter, Graphics::ResourceStates::UnorderedAccess, Graphics::ResourceStates::CopyDest));
     EXPECT_TRUE(hasTransition(refit, visitCounter, Graphics::ResourceStates::CopyDest, Graphics::ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasTransition(shadowPrepare, node, Graphics::ResourceStates::UnorderedAccess, Graphics::ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasTransition(shadowPrepare, sceneNodes, Graphics::ResourceStates::Common, Graphics::ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasTransition(shadowPrepare, sceneInstances, Graphics::ResourceStates::Common, Graphics::ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasTransition(shadowPrepare, instanceMaterials, Graphics::ResourceStates::Common, Graphics::ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasTransition(shadowPrepare, shadowInstances, Graphics::ResourceStates::Common, Graphics::ResourceStates::ShaderResource));
+    EXPECT_TRUE(hasTransition(shadowPrepare, materialTyped, Graphics::ResourceStates::Common, Graphics::ResourceStates::ShaderResource));
     const auto hasUavBarrier = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource){
         const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
         const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);

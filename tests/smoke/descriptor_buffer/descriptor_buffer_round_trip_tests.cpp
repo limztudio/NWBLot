@@ -4793,9 +4793,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowPrepareSoftwareBvhBuildSta
 
 // Pure-software prepared mesh builds graph-own every typed sentinel clear. A rebuild clears sort keys, parent
 // links, and the shared visit counter; a following refit clears that counter again only after the rebuild callback
-// has consumed it. The native callbacks here are state probes, so the capture proves the real built-ins and values
-// while the compiler owns each CopyDest -> UAV / terminal SRV handoff.
-TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPureSoftwareBvhSentinelClearChainRecordsWithoutNativeBridge){
+// has consumed it. Shadow Preparation then consumes the exact frozen scene/material traversal inputs. The native
+// callbacks here are state probes, so the capture proves the real built-ins and values while the compiler owns every
+// CopyDest -> UAV / terminal SRV handoff without a callback-local scene-table transition.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPureSoftwareBvhAndSceneTraversalRecordsWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto makeBuildStateBuffer = [&device]{
         return device.createBuffer(
@@ -4813,6 +4814,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPureSoftwareBvhSentinelClearChai
     const BufferHandle sortKeys = makeBuildStateBuffer();
     const BufferHandle sortPayload = makeBuildStateBuffer();
     const BufferHandle visitCounter = makeBuildStateBuffer();
+    const BufferHandle sceneNodes = makeBuildStateBuffer();
+    const BufferHandle sceneInstances = makeBuildStateBuffer();
+    const BufferHandle instanceMaterials = makeBuildStateBuffer();
+    const BufferHandle shadowInstances = makeBuildStateBuffer();
+    const BufferHandle materialTyped = makeBuildStateBuffer();
     ASSERT_NE(position.get(), nullptr);
     ASSERT_NE(index.get(), nullptr);
     ASSERT_NE(node.get(), nullptr);
@@ -4820,6 +4826,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPureSoftwareBvhSentinelClearChai
     ASSERT_NE(sortKeys.get(), nullptr);
     ASSERT_NE(sortPayload.get(), nullptr);
     ASSERT_NE(visitCounter.get(), nullptr);
+    ASSERT_NE(sceneNodes.get(), nullptr);
+    ASSERT_NE(sceneInstances.get(), nullptr);
+    ASSERT_NE(instanceMaterials.get(), nullptr);
+    ASSERT_NE(shadowInstances.get(), nullptr);
+    ASSERT_NE(materialTyped.get(), nullptr);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importBuildState = [&graph](const BufferHandle& buffer, const Name identity, const AStringView label){
@@ -4867,6 +4878,31 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPureSoftwareBvhSentinelClearChai
         Name("tests/descriptor_buffer/pure_sw_bvh_visit_counter"),
         "Pure SW-BVH Visit Counter"
     );
+    const GpuGraphResourceId sceneNodesResource = importBuildState(
+        sceneNodes,
+        Name("tests/descriptor_buffer/pure_sw_scene_nodes"),
+        "Pure SW Scene Nodes"
+    );
+    const GpuGraphResourceId sceneInstancesResource = importBuildState(
+        sceneInstances,
+        Name("tests/descriptor_buffer/pure_sw_scene_instances"),
+        "Pure SW Scene Instances"
+    );
+    const GpuGraphResourceId instanceMaterialsResource = importBuildState(
+        instanceMaterials,
+        Name("tests/descriptor_buffer/pure_sw_instance_materials"),
+        "Pure SW Instance Materials"
+    );
+    const GpuGraphResourceId shadowInstancesResource = importBuildState(
+        shadowInstances,
+        Name("tests/descriptor_buffer/pure_sw_shadow_instances"),
+        "Pure SW Shadow Instances"
+    );
+    const GpuGraphResourceId materialTypedResource = importBuildState(
+        materialTyped,
+        Name("tests/descriptor_buffer/pure_sw_material_typed"),
+        "Pure SW Typed Materials"
+    );
     ASSERT_TRUE(positionResource.valid());
     ASSERT_TRUE(indexResource.valid());
     ASSERT_TRUE(nodeResource.valid());
@@ -4874,6 +4910,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPureSoftwareBvhSentinelClearChai
     ASSERT_TRUE(sortKeysResource.valid());
     ASSERT_TRUE(sortPayloadResource.valid());
     ASSERT_TRUE(visitCounterResource.valid());
+    ASSERT_TRUE(sceneNodesResource.valid());
+    ASSERT_TRUE(sceneInstancesResource.valid());
+    ASSERT_TRUE(instanceMaterialsResource.valid());
+    ASSERT_TRUE(shadowInstancesResource.valid());
+    ASSERT_TRUE(materialTypedResource.valid());
 
     const GpuQueueRequest clearQueue{
         GpuQueueCapability::Transfer,
@@ -4960,6 +5001,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPureSoftwareBvhSentinelClearChai
         { .resource = sortKeysResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
         { .resource = sortPayloadResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
         { .resource = visitCounterResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
+        { .resource = sceneNodesResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Write },
+        { .resource = sceneInstancesResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Write },
+        { .resource = instanceMaterialsResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Write },
+        { .resource = shadowInstancesResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Write },
+        { .resource = materialTypedResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Write },
     };
     GpuTaskSchedulingHint buildScheduling;
     buildScheduling.cost = GpuTaskCostHint::Large;
@@ -5039,6 +5085,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPureSoftwareBvhSentinelClearChai
         NativePacketPrefixTask::Payload{
             .buffer = node.get(),
             .expectedState = ResourceStates::ShaderResource,
+            .additionalBuffer = sceneNodes.get(),
+            .expectedAdditionalBufferState = ResourceStates::ShaderResource,
             .recorded = &shadowPrepareRecorded,
             .acceptedToken = &acceptedToken,
         }
@@ -5188,6 +5236,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPureSoftwareBvhSentinelClearChai
     EXPECT_EQ(stateProbe->getBufferState(sortKeys.get()), ResourceStates::UnorderedAccess);
     EXPECT_EQ(stateProbe->getBufferState(sortPayload.get()), ResourceStates::UnorderedAccess);
     EXPECT_EQ(stateProbe->getBufferState(visitCounter.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(stateProbe->getBufferState(sceneNodes.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(stateProbe->getBufferState(sceneInstances.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(stateProbe->getBufferState(instanceMaterials.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(stateProbe->getBufferState(shadowInstances.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(stateProbe->getBufferState(materialTyped.get()), ResourceStates::ShaderResource);
     stateProbe->close();
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());

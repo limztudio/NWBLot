@@ -879,7 +879,9 @@ private:
         usize meshCount,
         u32 instanceCount
     );
-    [[nodiscard]] bool recordPreparedSceneSwBvhTraversal();
+    // Pure software keeps the descriptor tables populated by preflight and only verifies them while recording;
+    // healthy hybrid restores that immutable table after its hardware preparation has repurposed the live state.
+    [[nodiscard]] bool recordPreparedSceneSwBvhTraversal(bool restoreMutableTables = true);
     void clearPreparedSceneSwBvhTraversal()noexcept;
     [[nodiscard]] bool capturePreparedSceneTlasBuild(
         bool staticScene,

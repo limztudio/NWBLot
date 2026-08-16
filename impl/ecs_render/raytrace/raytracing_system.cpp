@@ -649,6 +649,18 @@ bool RendererRayTracingSystem::capturePreparedSceneSwBvhTraversal(
     )
         return false;
 
+    // The frozen traversal table is restored while Shadow Preparation records.  Reserve every live descriptor
+    // table here, during preflight, so that restoring the immutable entries cannot grow renderer storage after the
+    // graph has compiled.
+    auto& mutableState = rayTracingState();
+    mutableState.m_swShadowMeshNodeBuffers.reserve(meshCount);
+    mutableState.m_swShadowMeshPositionBuffers.reserve(meshCount);
+    mutableState.m_swShadowMeshIndexBuffers.reserve(meshCount);
+    mutableState.m_swShadowMeshAttributeBuffers.reserve(meshCount);
+    mutableState.m_swShadowMeshNodeHandles.reserve(meshCount);
+    mutableState.m_swShadowMeshPositionHandles.reserve(meshCount);
+    mutableState.m_swShadowMeshIndexHandles.reserve(meshCount);
+    mutableState.m_swShadowMeshAttributeHandles.reserve(meshCount);
     m_preparedSceneSwBvhMeshes.reserve(meshCount);
     for(usize index = 0u; index < meshCount; ++index){
         const PreparedSceneSwBvhMesh& mesh = meshes[index];
@@ -681,7 +693,7 @@ bool RendererRayTracingSystem::capturePreparedSceneSwBvhTraversal(
     return true;
 }
 
-bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
+bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(const bool restoreMutableTables){
     const auto validStorageHandle = [](const Core::GpuDescriptorHandle handle){
         return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
     };
@@ -714,7 +726,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
         || !validStorageHandle(state.m_shadowInstanceHeapHandle)
         || !validStorageHandle(state.m_shadowMaterialTypedHeapHandle)
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen hybrid software scene traversal no longer matches preflight storage"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene traversal no longer matches preflight storage"));
         return false;
     }
     if(
@@ -722,7 +734,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
         || world().componentMutationVersion<NWB::Impl::Scene::TransformComponent>() != m_preparedSceneSwBvhTransformMutationVersion
         || world().componentMutationVersion<MaterialInstanceComponent>() != m_preparedSceneSwBvhMaterialMutationVersion
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid software scene inputs changed after graph preflight"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene inputs changed after graph preflight"));
         return false;
     }
 
@@ -762,7 +774,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
     for(const PreparedSceneSwBvhMesh& prepared : m_preparedSceneSwBvhMeshes){
         const auto found = meshes.find(prepared.meshName);
         if(found == meshes.end() || !matchesMesh(found.value(), prepared)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen hybrid software scene lost mesh '{}'")
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene lost mesh '{}'")
                 , StringConvert(prepared.meshName.c_str())
             );
             return false;
@@ -770,6 +782,45 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
     }
 
     auto& mutableState = rayTracingState();
+    if(!restoreMutableTables){
+        // Pure-SW preflight already populated these exact live descriptor tables before graph declaration froze the
+        // resource set.  Revalidate instead of clearing/rebuilding them while the accepting packet records: that
+        // keeps the frozen path free of callback-time allocation and CPU scene-table publication.
+        const bool tablesMatch =
+            mutableState.m_swShadowMeshCount == static_cast<u32>(m_preparedSceneSwBvhMeshes.size())
+            && mutableState.m_sceneBvhInstanceCount == m_preparedSceneSwBvhInstanceCount
+            && mutableState.m_swShadowMeshNodeBuffers.size() == m_preparedSceneSwBvhMeshes.size()
+            && mutableState.m_swShadowMeshPositionBuffers.size() == m_preparedSceneSwBvhMeshes.size()
+            && mutableState.m_swShadowMeshIndexBuffers.size() == m_preparedSceneSwBvhMeshes.size()
+            && mutableState.m_swShadowMeshAttributeBuffers.size() == m_preparedSceneSwBvhMeshes.size()
+            && mutableState.m_swShadowMeshNodeHandles.size() == m_preparedSceneSwBvhMeshes.size()
+            && mutableState.m_swShadowMeshPositionHandles.size() == m_preparedSceneSwBvhMeshes.size()
+            && mutableState.m_swShadowMeshIndexHandles.size() == m_preparedSceneSwBvhMeshes.size()
+            && mutableState.m_swShadowMeshAttributeHandles.size() == m_preparedSceneSwBvhMeshes.size()
+        ;
+        if(!tablesMatch){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen pure software scene traversal table changed after graph preflight"));
+            return false;
+        }
+        for(usize index = 0u; index < m_preparedSceneSwBvhMeshes.size(); ++index){
+            const PreparedSceneSwBvhMesh& prepared = m_preparedSceneSwBvhMeshes[index];
+            if(
+                mutableState.m_swShadowMeshNodeBuffers[index] != prepared.nodeBuffer.get()
+                || mutableState.m_swShadowMeshPositionBuffers[index] != prepared.positionBuffer.get()
+                || mutableState.m_swShadowMeshIndexBuffers[index] != prepared.triangleIndexBuffer.get()
+                || mutableState.m_swShadowMeshAttributeBuffers[index] != prepared.attributeBuffer.get()
+                || mutableState.m_swShadowMeshNodeHandles[index] != prepared.nodeHeapHandle
+                || mutableState.m_swShadowMeshPositionHandles[index] != prepared.positionHeapHandle
+                || mutableState.m_swShadowMeshIndexHandles[index] != prepared.triangleIndexHeapHandle
+                || mutableState.m_swShadowMeshAttributeHandles[index] != prepared.attributeHeapHandle
+            ){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen pure software scene traversal table no longer matches preflight"));
+                return false;
+            }
+        }
+        return true;
+    }
+
     mutableState.m_swShadowMeshNodeBuffers.clear();
     mutableState.m_swShadowMeshPositionBuffers.clear();
     mutableState.m_swShadowMeshIndexBuffers.clear();
@@ -778,14 +829,8 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
     mutableState.m_swShadowMeshPositionHandles.clear();
     mutableState.m_swShadowMeshIndexHandles.clear();
     mutableState.m_swShadowMeshAttributeHandles.clear();
-    mutableState.m_swShadowMeshNodeBuffers.reserve(m_preparedSceneSwBvhMeshes.size());
-    mutableState.m_swShadowMeshPositionBuffers.reserve(m_preparedSceneSwBvhMeshes.size());
-    mutableState.m_swShadowMeshIndexBuffers.reserve(m_preparedSceneSwBvhMeshes.size());
-    mutableState.m_swShadowMeshAttributeBuffers.reserve(m_preparedSceneSwBvhMeshes.size());
-    mutableState.m_swShadowMeshNodeHandles.reserve(m_preparedSceneSwBvhMeshes.size());
-    mutableState.m_swShadowMeshPositionHandles.reserve(m_preparedSceneSwBvhMeshes.size());
-    mutableState.m_swShadowMeshIndexHandles.reserve(m_preparedSceneSwBvhMeshes.size());
-    mutableState.m_swShadowMeshAttributeHandles.reserve(m_preparedSceneSwBvhMeshes.size());
+    // capturePreparedSceneSwBvhTraversal reserved each table before graph compilation.  Do not allocate while
+    // recording: every entry below is a retained immutable descriptor/buffer identity.
     for(const PreparedSceneSwBvhMesh& prepared : m_preparedSceneSwBvhMeshes){
         const auto attributeCache = mutableState.m_swMeshHeapHandleCache.find(prepared.attributeBuffer.get());
         if(attributeCache != mutableState.m_swMeshHeapHandleCache.end())
@@ -1737,13 +1782,27 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
             return false;
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow BVH update failed"));
     }
-    if(!buildSceneSwBvh(
-        commandList,
-        scratchArena,
-        shadowMaterialContextBatchGraphOwned,
-        sceneBvhBatchGraphOwned,
-        meshSwBvhBuildsGraphOwned
-    )){
+    // Pure software frames have no opaque-HW fallback.  When both immutable upload batches and their matching
+    // traversal table survived preflight, restore that exact table instead of regathering scene/material data while
+    // this accepting graph packet records.  A stale frozen plan rejects the packet; the next preflight rebuilds it.
+    const bool frozenPureSceneTraversal =
+        shadowMaterialContextBatchGraphOwned
+        && sceneBvhBatchGraphOwned
+        && m_preparedSceneSwBvhReady
+    ;
+    const bool sceneSwBvhReady = frozenPureSceneTraversal
+        ? recordPreparedSceneSwBvhTraversal(false)
+        : buildSceneSwBvh(
+            commandList,
+            scratchArena,
+            shadowMaterialContextBatchGraphOwned,
+            sceneBvhBatchGraphOwned,
+            meshSwBvhBuildsGraphOwned
+        )
+    ;
+    if(!sceneSwBvhReady){
+        if(frozenPureSceneTraversal)
+            return false;
         if(shadowMaterialContextBatchGraphOwned || sceneBvhBatchGraphOwned)
             return false;
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow scene BVH recording failed"));

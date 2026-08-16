@@ -2050,10 +2050,10 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                 preparedMeshes.size(),
                 instanceCount
             )){
-                // The paired immutable uploads remain valid even when the optional traversal-table snapshot cannot
-                // be retained. Keep the established recording-time revalidation path rather than dropping hybrid
-                // transparent shadows during preflight.
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze hybrid software scene traversal; retaining direct retry fallback"));
+                // The paired immutable uploads remain valid even when their traversal-table snapshot cannot be
+                // retained. The pure graph route keeps its existing direct recorder for this frame; the healthy
+                // hybrid route retains its later optional direct-retry boundary.
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software scene traversal; retaining direct compatibility recorder"));
             }
         }
         else

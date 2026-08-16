@@ -164,7 +164,10 @@ public:
         bool accumulationMaterialFrameStatesGraphOwned = false,
         bool accumulationMaterialGeometryStatesGraphOwned = false,
         bool accumulationComputeEmulationOutputStatesGraphOwned = false,
-        Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr
+        Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr,
+        // A distinct frozen CSG-only producer may own this handoff. Keep it separate from the regular flag so
+        // mixed CSG streams retain their local dispatch/raster interleaving.
+        bool accumulationCsgComputeEmulationOutputStatesGraphOwned = false
     );
     void renderAvboitPasses(
         Core::CommandList& commandList,

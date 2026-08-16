@@ -693,7 +693,8 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     const bool accumulationMaterialFrameStatesGraphOwned,
     const bool accumulationMaterialGeometryStatesGraphOwned,
     const bool accumulationComputeEmulationOutputStatesGraphOwned,
-    Optional<Core::GpuTimingMeasure>* const accumulationComputeEmulationTiming
+    Optional<Core::GpuTimingMeasure>* const accumulationComputeEmulationTiming,
+    const bool accumulationCsgComputeEmulationOutputStatesGraphOwned
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -719,7 +720,8 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
                 accumulationMaterialFrameStatesGraphOwned,
                 accumulationMaterialGeometryStatesGraphOwned,
                 accumulationComputeEmulationOutputStatesGraphOwned,
-                accumulationComputeEmulationTiming
+                accumulationComputeEmulationTiming,
+                accumulationCsgComputeEmulationOutputStatesGraphOwned
             );
         }
     }

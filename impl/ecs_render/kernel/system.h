@@ -586,8 +586,9 @@ private:
     // The accumulation phase owns another immutable stream after integration. It must remain in the final
     // accumulation packet so a rejected/retried recording cannot publish only its upload prefix.
     Core::GpuTaskId m_deferredAvboitAccumulationStreamTask;
-    // The optional alias-free regular producer stays immediately before Accumulation so the generated-vertex
-    // handoff and its cross-callback timing interval share the terminal Graphics packet and finalizer.
+    // The optional alias-free regular or CSG-only producer stays immediately before Accumulation so the
+    // generated-vertex handoff and its cross-callback timing interval share the terminal Graphics packet and
+    // finalizer.
     Core::GpuTaskId m_deferredAvboitAccumulationComputeEmulationTask;
     Core::GpuTaskId m_deferredAvboitAccumulationTask;
     // A no-op Graphics task that returns accumulation color outputs and read-only deferred depth to sampled state.

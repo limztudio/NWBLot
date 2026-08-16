@@ -1202,9 +1202,9 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
 
 
 // Pairwise-distinct CSG compute emulation retains the complete frozen CSG stream and generated-vertex targets.
-// Opaque interval-sample and CSG-only AVBOIT Occupancy or Extinction each place their producer directly before the
-// matching raster, so aliases with prior phase outputs are harmless; only aliases inside this frozen CSG stream
-// could overwrite a generated buffer before its own raster consumes it.
+// Opaque interval-sample and CSG-only AVBOIT Occupancy, Extinction, or Accumulation each place their producer
+// directly before the matching raster, so aliases with prior phase outputs are harmless; only aliases inside this
+// frozen CSG stream could overwrite a generated buffer before its own raster consumes it.
 struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
     using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
     using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
@@ -3344,9 +3344,9 @@ struct AvboitIntegrationGraphTask{
 };
 
 
-// Accumulation's regular compute-emulation stream is independently frozen after Integration and its immutable
-// upload chain. Only alias-free outputs can move to this producer; the existing Accumulation callback remains the
-// raster endpoint and its following finalizer retains the terminal attachment handoff.
+// Accumulation's alias-free compute-emulation stream is independently frozen after Integration and its immutable
+// upload chain. The regular and CSG-only variants are mutually exclusive: the existing Accumulation callback
+// remains the shared raster endpoint and its following finalizer retains the terminal attachment handoff.
 struct AvboitAccumulationComputeEmulationGraphTask{
     struct Payload{
         RendererSystem* renderer = nullptr;
@@ -3354,14 +3354,19 @@ struct AvboitAccumulationComputeEmulationGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* accumulationTiming = nullptr;
         ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan plan;
+        ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan csgPlan;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
         bool materialDrawBuffersUploaded = false;
+        bool csgFrameBuffersUploaded = false;
+        bool csgIntervalSampleImageStatesGraphOwned = false;
+        bool csgClipBufferStatesGraphOwned = false;
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : plan(arena)
+            , csgPlan(arena)
         {}
     };
 
@@ -3383,14 +3388,18 @@ struct AvboitAccumulationComputeEmulationGraphTask{
             || !payload.targets
             || !payload.timingTicket
             || !payload.accumulationTiming
-            || !payload.plan.captured
+            || (!payload.plan.captured && !payload.csgPlan.captured)
+            || payload.plan.captured == payload.csgPlan.captured
         )
             return false;
 
         RendererSystem& renderer = *payload.renderer;
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        const bool csgComputeEmulation = payload.csgPlan.captured;
         if(
-            !payload.plan.matches(renderer.meshSystem())
+            !(csgComputeEmulation
+                ? payload.csgPlan.matches(renderer.meshSystem())
+                : payload.plan.matches(renderer.meshSystem()))
             || !payload.materialDrawBuffersUploaded
             || !renderer.materialSystem().materialPassDrawBuffersReady(
                 payload.instanceCount,
@@ -3401,11 +3410,24 @@ struct AvboitAccumulationComputeEmulationGraphTask{
 
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
         MaterialPassDrawItems drawItems{ scratchArena };
-        payload.plan.materialize(drawItems);
+        CsgFrameGpuData csgFrameData{ scratchArena };
+        if(csgComputeEmulation)
+            payload.csgPlan.materialize(drawItems, csgFrameData);
+        else
+            payload.plan.materialize(drawItems);
         // The following raster task is deliberately graph-owned and cannot safely fall back to its local bridge.
         // Reject a late material/pipeline loss so the packet is discarded and the next frame re-preflights instead
         // of accepting an all-or-nothing Accumulation phase with stale generated vertices.
-        if(!renderer.materialSystem().materialPassDrawResourcesReady(drawItems))
+        if(
+            !renderer.materialSystem().materialPassDrawResourcesReady(drawItems)
+            || (csgComputeEmulation && (
+                !payload.csgFrameBuffersUploaded
+                || !payload.csgIntervalSampleImageStatesGraphOwned
+                || !payload.csgClipBufferStatesGraphOwned
+                || !csgFrameData.hasWork()
+                || !renderer.csgSystem().csgFrameBuffersReady(csgFrameData)
+            ))
+        )
             return false;
         if(payload.accumulationTiming->has_value())
             return false;
@@ -3431,8 +3453,8 @@ struct AvboitAccumulationComputeEmulationGraphTask{
             &payload.targets->avboit,
             viewportState,
             false,
-            false,
-            false,
+            csgComputeEmulation && payload.csgIntervalSampleImageStatesGraphOwned,
+            csgComputeEmulation && payload.csgClipBufferStatesGraphOwned,
             payload.materialFrameStatesGraphOwned,
             payload.materialGeometryStatesGraphOwned,
             true,
@@ -3458,6 +3480,7 @@ struct AvboitAccumulationGraphTask{
         bool accumulationMaterialFrameStatesGraphOwned = false;
         bool accumulationMaterialGeometryStatesGraphOwned = false;
         bool accumulationComputeEmulationOutputStatesGraphOwned = false;
+        bool accumulationCsgComputeEmulationOutputStatesGraphOwned = false;
         Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr;
         bool hasTransparentRenderers = false;
         bool splitStages = false;
@@ -3478,7 +3501,8 @@ struct AvboitAccumulationGraphTask{
             || !payload.targets
             || !payload.csgFrameState
             || !payload.timingTicket
-            || (payload.accumulationComputeEmulationOutputStatesGraphOwned
+            || ((payload.accumulationComputeEmulationOutputStatesGraphOwned
+                    || payload.accumulationCsgComputeEmulationOutputStatesGraphOwned)
                 && !payload.accumulationComputeEmulationTiming)
         )
             return false;
@@ -3516,7 +3540,8 @@ struct AvboitAccumulationGraphTask{
                 payload.accumulationMaterialFrameStatesGraphOwned,
                 payload.accumulationMaterialGeometryStatesGraphOwned,
                 payload.accumulationComputeEmulationOutputStatesGraphOwned,
-                payload.accumulationComputeEmulationTiming
+                payload.accumulationComputeEmulationTiming,
+                payload.accumulationCsgComputeEmulationOutputStatesGraphOwned
             );
         }
         return true;
@@ -14128,7 +14153,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     ;
     bool accumulationStreamsUploaded = false;
     bool accumulationCsgStreamsUploaded = false;
-    bool accumulationComputeEmulationPlanCaptured = false;
+    bool accumulationRegularComputeEmulationPlanCaptured = false;
+    bool accumulationCsgComputeEmulationPlanCaptured = false;
     bool accumulationMaterialSampledTexturesCollected = false;
     Core::Alloc::ScratchArena accumulationMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
     Core::GpuGraphResourceSetId accumulationMaterialGeometrySet;
@@ -14402,9 +14428,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             );
             avboitAccumulationPayload.accumulationPhasePrepared = true;
             accumulationStreamsUploaded = true;
-            // This is intentionally available only after the final immutable Accumulation upload. The direct
-            // AVBOIT callback still owns shared outputs, CSG compute, and any late mismatch.
-            accumulationComputeEmulationPlanCaptured = accumulationDrawItems.csg.computeDrawItems.empty()
+            // A phase may graph-own exactly one alias-free compute stream. Mixed regular/CSG work and any shared
+            // output retain the established local interleaving because a single producer/raster handoff cannot
+            // preserve their per-draw overwrite order.
+            accumulationRegularComputeEmulationPlanCaptured = accumulationDrawItems.csg.computeDrawItems.empty()
                 && avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
                 && accumulationMaterialSampledTexturesCollected
                 && avboitAccumulationComputeEmulationPayload.plan.capture(
@@ -14412,7 +14439,22 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     accumulationDrawItems.regular
                 )
             ;
-            if(accumulationComputeEmulationPlanCaptured){
+            accumulationCsgComputeEmulationPlanCaptured = accumulationDrawItems.regular.computeDrawItems.empty()
+                && accumulationCsgStreamsUploaded
+                && avboitIntervalOutputsGraphOwned
+                && avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
+                && accumulationMaterialSampledTexturesCollected
+                && avboitAccumulationComputeEmulationPayload.csgPlan.capture(
+                    m_meshSystem,
+                    accumulationDrawItems.csg,
+                    accumulationCsgFrameData
+                )
+            ;
+            NWB_ASSERT(!(accumulationRegularComputeEmulationPlanCaptured && accumulationCsgComputeEmulationPlanCaptured));
+            if(
+                accumulationRegularComputeEmulationPlanCaptured
+                || accumulationCsgComputeEmulationPlanCaptured
+            ){
                 avboitAccumulationComputeEmulationPayload.instanceCount = accumulationInstanceData.size();
                 avboitAccumulationComputeEmulationPayload.materialTypedByteCount = accumulationMaterialTypedBytes.size();
             }
@@ -14460,17 +14502,33 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     ;
     Core::GpuGraphResourceSetId accumulationComputeEmulationOutputSet;
     Core::Alloc::ScratchArena accumulationComputeEmulationResourceScratch(RendererArenaScope::s_TaskGraphArena);
-    const bool accumulationComputeEmulationOutputStatesGraphOwned =
-        accumulationComputeEmulationPlanCaptured
-        && GatherAvboitAliasFreeComputeEmulationResourceSet(
+    const bool accumulationComputeEmulationPlanCaptured =
+        accumulationRegularComputeEmulationPlanCaptured
+        || accumulationCsgComputeEmulationPlanCaptured
+    ;
+    bool accumulationComputeEmulationOutputStatesGraphOwned = false;
+    if(accumulationRegularComputeEmulationPlanCaptured){
+        accumulationComputeEmulationOutputStatesGraphOwned = GatherAvboitAliasFreeComputeEmulationResourceSet(
             m_deferredLightingTaskGraph,
             avboitAccumulationComputeEmulationPayload.plan,
             accumulationComputeEmulationResourceScratch,
             Name("render.avboit.accumulation.compute_emulation.outputs"),
             "AVBOIT Accumulation Compute Emulation Outputs",
             accumulationComputeEmulationOutputSet
-        )
-    ;
+        );
+    }
+    else if(accumulationCsgComputeEmulationPlanCaptured){
+        accumulationComputeEmulationOutputStatesGraphOwned =
+            GatherOpaqueCsgIntervalSampleComputeEmulationResourceSet(
+                m_deferredLightingTaskGraph,
+                avboitAccumulationComputeEmulationPayload.csgPlan,
+                accumulationComputeEmulationResourceScratch,
+                Name("render.avboit.accumulation.csg_compute_emulation.outputs"),
+                "AVBOIT Accumulation CSG Compute Emulation Outputs",
+                accumulationComputeEmulationOutputSet
+            )
+        ;
+    }
     if(
         accumulationComputeEmulationPlanCaptured
         && !accumulationComputeEmulationOutputStatesGraphOwned
@@ -14480,7 +14538,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ));
     }
     avboitAccumulationPayload.accumulationComputeEmulationOutputStatesGraphOwned =
-        accumulationComputeEmulationOutputStatesGraphOwned;
+        accumulationRegularComputeEmulationPlanCaptured
+        && accumulationComputeEmulationOutputStatesGraphOwned
+    ;
+    avboitAccumulationPayload.accumulationCsgComputeEmulationOutputStatesGraphOwned =
+        accumulationCsgComputeEmulationPlanCaptured
+        && accumulationComputeEmulationOutputStatesGraphOwned
+    ;
     avboitAccumulationPayload.accumulationComputeEmulationTiming =
         accumulationComputeEmulationOutputStatesGraphOwned
             ? &avboitAccumulationComputeEmulationTiming
@@ -14603,6 +14667,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         avboitAccumulationComputeEmulationPayload.timingTicket = avboitAccumulationPayload.timingTicket;
         avboitAccumulationComputeEmulationPayload.accumulationTiming = &avboitAccumulationComputeEmulationTiming;
         avboitAccumulationComputeEmulationPayload.materialDrawBuffersUploaded = accumulationStreamsUploaded;
+        avboitAccumulationComputeEmulationPayload.csgFrameBuffersUploaded = accumulationCsgStreamsUploaded;
+        avboitAccumulationComputeEmulationPayload.csgIntervalSampleImageStatesGraphOwned =
+            accumulationCsgIntervalSampleImageStatesGraphOwned;
+        avboitAccumulationComputeEmulationPayload.csgClipBufferStatesGraphOwned =
+            accumulationCsgClipBufferStatesGraphOwned;
         avboitAccumulationComputeEmulationPayload.materialFrameStatesGraphOwned =
             avboitAccumulationPayload.accumulationMaterialFrameStatesGraphOwned;
         avboitAccumulationComputeEmulationPayload.materialGeometryStatesGraphOwned =
@@ -14611,7 +14680,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationComputeEmulationResourceUses{
             accumulationResourceScratch
         };
-        accumulationComputeEmulationResourceUses.reserve(4u);
+        accumulationComputeEmulationResourceUses.reserve(
+            4u + (accumulationCsgComputeEmulationPlanCaptured ? 8u : 0u)
+        );
         accumulationComputeEmulationResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
         accumulationComputeEmulationResourceUses.push_back(
             ReadUse(materialInstances, Core::ResourceStates::ShaderResource)
@@ -14622,6 +14693,40 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         accumulationComputeEmulationResourceUses.push_back(
             ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer)
         );
+        if(accumulationCsgComputeEmulationPlanCaptured){
+            accumulationComputeEmulationResourceUses.push_back(
+                ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource)
+            );
+            accumulationComputeEmulationResourceUses.push_back(
+                ReadUse(csgCutters, Core::ResourceStates::ShaderResource)
+            );
+            accumulationComputeEmulationResourceUses.push_back(
+                ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer)
+            );
+            accumulationComputeEmulationResourceUses.push_back(
+                ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer)
+            );
+            accumulationComputeEmulationResourceUses.push_back(ReadTextureUse(
+                csgRemovedIntervalDepth,
+                csgRemovedIntervalSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ));
+            accumulationComputeEmulationResourceUses.push_back(ReadTextureUse(
+                csgRemovedIntervalCapNormal,
+                csgRemovedIntervalSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ));
+            accumulationComputeEmulationResourceUses.push_back(ReadTextureUse(
+                csgRemovedIntervalData,
+                csgRemovedIntervalSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ));
+            accumulationComputeEmulationResourceUses.push_back(ReadTextureUse(
+                csgRemovedIntervalCount,
+                csgRemovedIntervalCountSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ));
+        }
         Core::GpuTaskResourceSetUse accumulationComputeEmulationResourceSetUses[3u] = {};
         usize accumulationComputeEmulationResourceSetUseCount = 0u;
         accumulationComputeEmulationResourceSetUses[accumulationComputeEmulationResourceSetUseCount++] =
@@ -14644,8 +14749,12 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         accumulationComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
         Core::GpuTaskDesc accumulationComputeEmulationDesc;
         accumulationComputeEmulationDesc
-            .setIdentity(Name("render.avboit.accumulation.compute_emulation"))
-            .setMarkerLabel("AVBOIT Accumulation Compute Emulation")
+            .setIdentity(accumulationCsgComputeEmulationPlanCaptured
+                ? Name("render.avboit.accumulation.csg_compute_emulation")
+                : Name("render.avboit.accumulation.compute_emulation"))
+            .setMarkerLabel(accumulationCsgComputeEmulationPlanCaptured
+                ? "AVBOIT Accumulation CSG Compute Emulation"
+                : "AVBOIT Accumulation Compute Emulation")
             .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(accumulationComputeEmulationScheduling)
             .setDependencies(&accumulationDependency, 1u)

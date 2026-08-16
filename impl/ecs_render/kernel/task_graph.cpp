@@ -3373,7 +3373,6 @@ struct AvboitExtinctionGraphTask{
         bool extinctionCsgComputeEmulationOutputStatesGraphOwned = false;
         Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr;
         bool hasTransparentRenderers = false;
-        bool splitStages = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : extinctionSnapshot(arena)
@@ -3431,10 +3430,6 @@ struct AvboitExtinctionGraphTask{
                 payload.extinctionComputeEmulationTiming,
                 payload.extinctionCsgComputeEmulationOutputStatesGraphOwned
             );
-            // The unsplit graph recorded Depth Warp in its preceding packet-local task, leaving this callback's
-            // producer/raster pair contiguous while retaining the native Extinction -> Integration order.
-            if(!payload.splitStages)
-                payload.avboitSystem->dispatchAvboitIntegration(commandList, payload.targets->avboit);
         }
         return true;
     }
@@ -13919,7 +13914,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         : &avboitPreTimingTicket
     ;
     avboitExtinctionPayload.hasTransparentRenderers = hasTransparentRenderers;
-    avboitExtinctionPayload.splitStages = splitAvboitStages;
 
     Core::GpuTaskId extinctionUploadTask = avboitDepthWarpCompletionTask;
     bool extinctionStreamsUploaded = false;
@@ -14335,7 +14329,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         extinctionResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
         extinctionResourceUses.push_back(ReadUse(depth));
         extinctionResourceUses.push_back(ReadWriteUse(avboitLowRaster, Core::ResourceStates::RenderTarget));
-        extinctionResourceUses.push_back(ReadWriteUse(avboitTransmittance, Core::ResourceStates::UnorderedAccess));
         extinctionResourceUses.push_back(ReadUse(avboitDepthWarp));
         extinctionResourceUses.push_back(ReadUse(avboitControl));
         extinctionResourceUses.push_back(ReadWriteUse(avboitExtinction, Core::ResourceStates::UnorderedAccess));
@@ -14570,37 +14563,59 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
         return;
     }
+    // Integration was the last normal AVBOIT dispatch still hidden in Extinction's unsplit callback.  Keep the
+    // established split Compute route, while the unsplit route records the same typed work as an adjacent Graphics
+    // tail in AVBOIT Pre so the compiler owns Extinction/UAV-to-Integration/SRV state lowering in both modes.
+    const Core::GpuTaskResourceUse integrationResourceUses[] = {
+        ReadUse(avboitExtinction),
+        ReadUse(avboitControl),
+        ReadUse(avboitExtinctionOverflow),
+        ReadWriteUse(avboitTransmittance, Core::ResourceStates::UnorderedAccess),
+        ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+    };
+    const Core::GpuTaskId integrationDependency[] = { m_deferredAvboitExtinctionTask };
+    Core::GpuTaskDesc integrationDesc;
     if(splitAvboitStages){
-        const Core::GpuTaskResourceUse integrationResourceUses[] = {
-            ReadUse(avboitExtinction),
-            ReadUse(avboitControl),
-            ReadUse(avboitExtinctionOverflow),
-            ReadWriteUse(avboitTransmittance, Core::ResourceStates::UnorderedAccess),
-            ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
-        };
-        const Core::GpuTaskId extinctionDependency[] = { m_deferredAvboitExtinctionTask };
-        Core::GpuTaskDesc integrationDesc;
         integrationDesc
             .setIdentity(Name("render.avboit.integration"))
             .setMarkerLabel("AVBOIT Integration")
             .setQueue(ComputeQueueRequest())
             .setScheduling(avboitComputeScheduling)
-            .setDependencies(extinctionDependency, LengthOf(extinctionDependency))
-            .setResourceUses(integrationResourceUses, LengthOf(integrationResourceUses))
         ;
-        m_deferredAvboitIntegrationTask = m_deferredLightingTaskGraph.addTask<AvboitIntegrationGraphTask>(
-            integrationDesc,
-            AvboitIntegrationGraphTask::Payload{
-                .avboitSystem = &m_avboitSystem,
-                .targets = &deferredTargets.avboit,
-                .timingTicket = &avboitIntegrationTimingTicket,
-            }
-        );
-        if(!m_deferredAvboitIntegrationTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
-            return;
+    }
+    else{
+        Core::GpuTaskSchedulingHint unsplitIntegrationScheduling;
+        unsplitIntegrationScheduling.cost = Core::GpuTaskCostHint::Medium;
+        unsplitIntegrationScheduling.forceSubmissionBoundary = false;
+        unsplitIntegrationScheduling.allowPacketMerge = true;
+        unsplitIntegrationScheduling.mergeWithPrevious = true;
+        // The explicit Extinction successor is permitted to stay in AVBOIT Pre even when later consumers form a
+        // FrontierSafe frontier; it has an immediate dependency and must share the one Pre timing submission.
+        unsplitIntegrationScheduling.allowMergeAcrossConsumerFrontier = true;
+        integrationDesc
+            .setIdentity(Name("render.avboit.integration"))
+            .setMarkerLabel("AVBOIT Integration")
+            .setQueue(GraphicsComputeQueueRequest())
+            .setScheduling(unsplitIntegrationScheduling)
+        ;
+    }
+    integrationDesc
+        .setDependencies(integrationDependency, LengthOf(integrationDependency))
+        .setResourceUses(integrationResourceUses, LengthOf(integrationResourceUses))
+    ;
+    m_deferredAvboitIntegrationTask = m_deferredLightingTaskGraph.addTask<AvboitIntegrationGraphTask>(
+        integrationDesc,
+        AvboitIntegrationGraphTask::Payload{
+            .avboitSystem = &m_avboitSystem,
+            .targets = &deferredTargets.avboit,
+            .timingTicket = splitAvboitStages
+                ? &avboitIntegrationTimingTicket
+                : &avboitPreTimingTicket,
         }
-
+    );
+    if(!m_deferredAvboitIntegrationTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
+        return;
     }
 
     // Accumulation is another independent write point for the shared material/CSG buffers. Freeze and publish its
@@ -14617,10 +14632,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitAccumulationPayload.hasTransparentRenderers = hasTransparentRenderers;
     avboitAccumulationPayload.splitStages = splitAvboitStages;
 
-    Core::GpuTaskId accumulationUploadTask = splitAvboitStages
-        ? m_deferredAvboitIntegrationTask
-        : m_deferredAvboitExtinctionTask
-    ;
+    Core::GpuTaskId accumulationUploadTask = m_deferredAvboitIntegrationTask;
     bool accumulationStreamsUploaded = false;
     bool accumulationCsgStreamsUploaded = false;
     bool accumulationRegularComputeEmulationPlanCaptured = false;

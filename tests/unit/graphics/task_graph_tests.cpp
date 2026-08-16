@@ -9975,6 +9975,326 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitExtinctionAliasFreeRegularComputeEmulationI
 }
 
 
+// Unsplit AVBOIT Integration is a typed successor of Extinction even though the Graphics queue can execute both
+// stages in one submission.  Keep the explicit Extinction -> Integration edge, its packed-output handoff, and the
+// transmittance UAV write graph-owned so the native Integration thunk never needs a local state bridge.
+TEST(GpuTaskGraph, KeepsUnsplitTypedAvboitIntegrationTailWithExtinctionInGraphicsPacket){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId stateProbe = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/unsplit_typed_avboit_integration_state_probe"),
+        "Unsplit Typed AVBOIT Integration State Probe",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    const Graphics::GpuGraphResourceId depthWarp = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/unsplit_typed_avboit_integration_depth_warp"),
+        "AVBOIT Depth Warp",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    const Graphics::GpuGraphResourceId control = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/unsplit_typed_avboit_integration_control"),
+        "AVBOIT Control",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    const Graphics::GpuGraphResourceId extinction = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/unsplit_typed_avboit_integration_extinction"),
+        "AVBOIT Extinction",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    const Graphics::GpuGraphResourceId extinctionOverflow = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/unsplit_typed_avboit_integration_extinction_overflow"),
+        "AVBOIT Extinction Overflow",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    const Graphics::GpuGraphResourceId transmittance = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/unsplit_typed_avboit_integration_transmittance"),
+        "AVBOIT Transmittance",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    ASSERT_TRUE(stateProbe.valid());
+    ASSERT_TRUE(depthWarp.valid());
+    ASSERT_TRUE(control.valid());
+    ASSERT_TRUE(extinction.valid());
+    ASSERT_TRUE(extinctionOverflow.valid());
+    ASSERT_TRUE(transmittance.valid());
+
+    const Graphics::GpuQueueRequest graphicsComputeQueue{
+        QueueCapabilities(
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueueCapability::Compute
+        ),
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint extinctionScheduling;
+    extinctionScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    extinctionScheduling.overlapPreferred = false;
+    extinctionScheduling.avoidQueueCrossing = true;
+    extinctionScheduling.forceSubmissionBoundary = false;
+    extinctionScheduling.allowPacketMerge = true;
+    extinctionScheduling.mergeWithPrevious = false;
+    Graphics::GpuTaskSchedulingHint integrationScheduling = extinctionScheduling;
+    integrationScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    integrationScheduling.mergeWithPrevious = true;
+    integrationScheduling.allowMergeAcrossConsumerFrontier = true;
+
+    const Graphics::GpuTaskResourceUse extinctionUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = stateProbe,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = depthWarp,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = control,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = extinction,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = extinctionOverflow,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    const Graphics::GpuTaskResourceUse integrationUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = stateProbe,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = extinction,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = control,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = extinctionOverflow,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = transmittance,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    const Graphics::GpuTaskResourceUse accumulationUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = stateProbe,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = transmittance,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+
+    const Graphics::GpuTaskId extinctionTask = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/unsplit_typed_avboit_extinction"))
+            .setMarkerLabel("AVBOIT Extinction")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(extinctionScheduling)
+            .setResourceUses(extinctionUses, LengthOf(extinctionUses))
+    );
+    ASSERT_TRUE(extinctionTask.valid());
+    const Graphics::GpuTaskId integrationTask = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/unsplit_typed_avboit_integration"))
+            .setMarkerLabel("AVBOIT Integration")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(integrationScheduling)
+            .setDependencies(&extinctionTask, 1u)
+            .setResourceUses(integrationUses, LengthOf(integrationUses))
+    );
+    ASSERT_TRUE(integrationTask.valid());
+    const Graphics::GpuTaskId accumulationTask = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/unsplit_typed_avboit_integration_accumulation"))
+            .setMarkerLabel("AVBOIT Accumulation")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(integrationScheduling)
+            .setDependencies(&integrationTask, 1u)
+            .setResourceUses(accumulationUses, LengthOf(accumulationUses))
+    );
+    ASSERT_TRUE(accumulationTask.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+
+    EXPECT_TRUE(analysis.hasExplicitEdge(extinctionTask, integrationTask));
+    EXPECT_TRUE(analysis.hasExplicitEdge(integrationTask, accumulationTask));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        extinctionTask,
+        integrationTask,
+        extinction,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        extinctionTask,
+        integrationTask,
+        extinctionOverflow,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        integrationTask,
+        accumulationTask,
+        transmittance,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    const Graphics::GpuTaskId tasks[] = {
+        extinctionTask,
+        integrationTask,
+        accumulationTask,
+    };
+    ASSERT_EQ(analysis.topologicalOrder().size(), LengthOf(tasks));
+    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex)
+        EXPECT_EQ(analysis.topologicalOrder()[taskIndex], tasks[taskIndex]);
+    for(const Graphics::GpuTaskId task : tasks){
+        const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
+        ASSERT_NE(assignment, nullptr);
+        EXPECT_EQ(assignment->queue, queue.id);
+        EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
+    }
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(extinctionTask);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(compiledGraph.packetForTask(integrationTask), packet);
+    EXPECT_EQ(compiledGraph.packetForTask(accumulationTask), packet);
+    EXPECT_TRUE(compiledGraph.tasksSharePacket(extinctionTask, accumulationTask));
+    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(extinctionTask, integrationTask));
+    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(integrationTask, accumulationTask));
+    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPacket.queue, queue.id);
+    EXPECT_EQ(compiledPacket.dependencyCount, 0u);
+    ASSERT_EQ(compiledPacket.taskCount, LengthOf(tasks));
+    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    ASSERT_NE(packetTasks, nullptr);
+    EXPECT_EQ(packetTasks[0u], extinctionTask);
+    EXPECT_EQ(packetTasks[1u], integrationTask);
+    EXPECT_EQ(packetTasks[2u], accumulationTask);
+
+    const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+                && barrier.sourceQueue == queue.id
+                && barrier.destinationQueue == queue.id
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasBufferTransition(
+        extinctionTask,
+        depthWarp,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::ShaderResource
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        extinctionTask,
+        control,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::ShaderResource
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        extinctionTask,
+        extinction,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        extinctionTask,
+        extinctionOverflow,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        integrationTask,
+        extinction,
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::ShaderResource
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        integrationTask,
+        extinctionOverflow,
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::ShaderResource
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        integrationTask,
+        transmittance,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        accumulationTask,
+        transmittance,
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::ShaderResource
+    ));
+}
+
+
 // The split AVBOIT route brackets the Graphics Extinction packet with dedicated Compute work.  The optional
 // compute-emulation producer must remain immediately before raster in that Graphics packet: it publishes generated
 // vertices as UAVs, raster consumes them as vertex buffers, and Integration receives Extinction's outputs only after

@@ -1714,6 +1714,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId avboitIntegrationPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitIntegrationTask
     );
+    const bool avboitUnsplitPrePacketContainsIntegration = !hasTransparentRenderers
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredAvboitPreTask,
+            m_deferredAvboitIntegrationTask
+        )
+    ;
     const Core::GpuSubmissionPacketId avboitAccumulationPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitAccumulationTask
     );
@@ -1763,6 +1769,65 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             )
             : nullptr
     ;
+    // Integration is now a typed unsplit AVBOIT tail instead of native work hidden inside Extinction.  Require the
+    // exact Extinction -> Integration boundary and its one-packet Pre handoff before packet recording/submission.
+    const bool avboitUnsplitIntegrationTailMerged = [&](){
+        if(avboitUsesAsyncCompute || !hasTransparentRenderers)
+            return true;
+        if(
+            !m_deferredAvboitExtinctionTask.valid()
+            || !m_deferredAvboitIntegrationTask.valid()
+            || !m_deferredAvboitAccumulationTask.valid()
+            || !avboitPrePacket.valid()
+            || !avboitExtinctionPacket.valid()
+            || !avboitIntegrationPacket.valid()
+            || !avboitAccumulationPacket.valid()
+            || !avboitPreQueue
+            || !avboitExtinctionQueue
+            || !avboitIntegrationQueue
+            || !avboitAccumulationQueue
+            || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
+            || avboitExtinctionQueue->queueClass != Core::CommandQueue::Graphics
+            || avboitIntegrationQueue->queueClass != Core::CommandQueue::Graphics
+            || avboitAccumulationQueue->queueClass != Core::CommandQueue::Graphics
+            || !m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredAvboitPreTask,
+                m_deferredAvboitExtinctionTask
+            )
+            || !m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredAvboitPreTask,
+                m_deferredAvboitIntegrationTask
+            )
+            || !m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredAvboitPreTask,
+                m_deferredAvboitAccumulationTask
+            )
+            || !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
+                m_deferredAvboitIntegrationTask,
+                m_deferredAvboitAccumulationTask
+            )
+        )
+            return false;
+        const Core::GpuSubmissionPacket& packet = m_deferredLightingCompiledGraph.packet(avboitIntegrationPacket);
+        const Core::GpuTaskId* const packetTasks = m_deferredLightingCompiledGraph.packetTasks(
+            avboitIntegrationPacket
+        );
+        if(!packetTasks || packet.taskCount < 3u)
+            return false;
+        for(usize taskIndex = 0u; taskIndex + 1u < packet.taskCount; ++taskIndex){
+            if(
+                packetTasks[taskIndex] != m_deferredAvboitExtinctionTask
+                || packetTasks[taskIndex + 1u] != m_deferredAvboitIntegrationTask
+            )
+                continue;
+            for(usize successorIndex = taskIndex + 2u; successorIndex < packet.taskCount; ++successorIndex){
+                if(packetTasks[successorIndex] == m_deferredAvboitAccumulationTask)
+                    return true;
+            }
+            return false;
+        }
+        return false;
+    }();
     // Occupancy's measurement spans the generator and raster consumer. Require the exact Pre-packet order so
     // graph declarations, rather than a callback-local transition, own the output UAV-to-VertexBuffer handoff on
     // both the split and unsplit AVBOIT routes.
@@ -2737,6 +2802,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !avboitOccupancyAllComputeEmulationMerged
         || !avboitExtinctionPacketContainsStreams
         || !avboitExtinctionComputeEmulationMerged
+        || !avboitUnsplitIntegrationTailMerged
         || !avboitAccumulationAllComputeEmulationMerged
         || !avboitAccumulationPacketContainsStreams
         || !avboitAccumulationPacketContainsFinalizer
@@ -2749,6 +2815,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !m_deferredLightingCompiledGraph.findTask(m_deferredAvboitAccumulationFinalizeTask)
             || (!avboitUsesAsyncCompute && (
                 !avboitUnsplitPrePacketContainsExtinction
+                || !avboitUnsplitPrePacketContainsIntegration
                 || !avboitUnsplitPrePacketContainsAccumulation
             ))
         ))
@@ -3488,6 +3555,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && avboitOccupancyAllComputeEmulationMerged
         && avboitExtinctionPacketContainsStreams
         && avboitExtinctionComputeEmulationMerged
+        && avboitUnsplitIntegrationTailMerged
         && avboitAccumulationAllComputeEmulationMerged
         && avboitAccumulationPacketContainsStreams
         && avboitAccumulationPacketContainsFinalizer
@@ -3500,6 +3568,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredLightingCompiledGraph.findTask(m_deferredAvboitAccumulationFinalizeTask)
             && (avboitUsesAsyncCompute || (
                 avboitUnsplitPrePacketContainsExtinction
+                && avboitUnsplitPrePacketContainsIntegration
                 && avboitUnsplitPrePacketContainsAccumulation
             ))
         ))
@@ -3809,6 +3878,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && avboitOccupancyAllComputeEmulationMerged
             && avboitExtinctionPacketContainsStreams
             && avboitExtinctionComputeEmulationMerged
+            && avboitUnsplitIntegrationTailMerged
             && avboitAccumulationAllComputeEmulationMerged
             && avboitAccumulationPacketContainsStreams
             && avboitAccumulationPacketContainsFinalizer
@@ -3821,6 +3891,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 && m_deferredLightingCompiledGraph.findTask(m_deferredAvboitAccumulationFinalizeTask)
                 && (avboitUsesAsyncCompute || (
                     avboitUnsplitPrePacketContainsExtinction
+                    && avboitUnsplitPrePacketContainsIntegration
                     && avboitUnsplitPrePacketContainsAccumulation
                 ))
             ))

@@ -320,6 +320,9 @@ void RendererSystem::invalidateResources(){
     m_deferredAvboitIntegrationTask = {};
     m_deferredAvboitAccumulationStreamTask = {};
     m_deferredAvboitAccumulationComputeEmulationTask = {};
+    for(Core::GpuTaskId& task : m_deferredAvboitAccumulationSharedComputeEmulationTasks)
+        task = {};
+    m_deferredAvboitAccumulationSharedComputeEmulationTaskCount = 0u;
     m_deferredAvboitAccumulationTask = {};
     m_deferredAvboitAccumulationFinalizeTask = {};
     m_deferredLightingTask = {};
@@ -623,6 +626,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredAvboitIntegrationTask = {};
     m_deferredAvboitAccumulationStreamTask = {};
     m_deferredAvboitAccumulationComputeEmulationTask = {};
+    for(Core::GpuTaskId& task : m_deferredAvboitAccumulationSharedComputeEmulationTasks)
+        task = {};
+    m_deferredAvboitAccumulationSharedComputeEmulationTaskCount = 0u;
     m_deferredAvboitAccumulationTask = {};
     m_deferredAvboitAccumulationFinalizeTask = {};
     m_deferredLightingTask = {};
@@ -1663,6 +1669,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitAccumulationComputeEmulationTask)
             : Core::GpuSubmissionPacketId{}
     ;
+    const Core::GpuSubmissionPacketId avboitAccumulationSharedComputeEmulationPacket =
+        m_deferredAvboitAccumulationSharedComputeEmulationTaskCount != 0u
+            && m_deferredAvboitAccumulationSharedComputeEmulationTasks[0u].valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(
+                m_deferredAvboitAccumulationSharedComputeEmulationTasks[0u]
+            )
+            : Core::GpuSubmissionPacketId{}
+    ;
     const bool avboitExtinctionPacketContainsStreams = !m_deferredAvboitExtinctionStreamTask.valid()
         || m_deferredLightingCompiledGraph.tasksSharePacket(
             m_deferredAvboitExtinctionTask,
@@ -1717,6 +1731,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuPhysicalQueueInfo* const avboitAccumulationComputeEmulationQueue =
         m_deferredAvboitAccumulationComputeEmulationTask.valid()
             ? m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitAccumulationComputeEmulationTask)
+            : nullptr
+    ;
+    const Core::GpuPhysicalQueueInfo* const avboitAccumulationSharedComputeEmulationQueue =
+        m_deferredAvboitAccumulationSharedComputeEmulationTaskCount != 0u
+            && m_deferredAvboitAccumulationSharedComputeEmulationTasks[0u].valid()
+            ? m_deferredLightingCompiledGraph.queueInfoForTask(
+                m_deferredAvboitAccumulationSharedComputeEmulationTasks[0u]
+            )
             : nullptr
     ;
     // Occupancy's measurement spans the generator and raster consumer. Require the exact Pre-packet order so
@@ -1928,6 +1950,101 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         return false;
     }();
+    // A shared output needs more than the ordinary producer/raster endpoint check: every alternating D/R callback
+    // must be contiguous in AVBOIT Pre's one Graphics packet, or a later local bridge could overwrite the retained
+    // output between the compiler-owned UAV and VertexBuffer phases.
+    const bool avboitAccumulationSharedComputeEmulationMerged = [&](){
+        const usize phaseCount = m_deferredAvboitAccumulationSharedComputeEmulationTaskCount;
+        if(phaseCount == 0u){
+            for(const Core::GpuTaskId& task : m_deferredAvboitAccumulationSharedComputeEmulationTasks){
+                if(task.valid())
+                    return false;
+            }
+            return true;
+        }
+        if(
+            phaseCount != 4u
+            || m_deferredAvboitAccumulationComputeEmulationTask.valid()
+            || !m_deferredAvboitAccumulationStreamTask.valid()
+            || !avboitAccumulationSharedComputeEmulationPacket.valid()
+            || !avboitAccumulationPacket.valid()
+            || !avboitPrePacket.valid()
+            || !avboitAccumulationSharedComputeEmulationQueue
+            || !avboitAccumulationQueue
+            || !avboitPreQueue
+            || avboitUsesAsyncCompute
+            || avboitAccumulationSharedComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
+            || avboitAccumulationQueue->queueClass != Core::CommandQueue::Graphics
+            || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
+            || m_deferredAvboitAccumulationTask
+                != m_deferredAvboitAccumulationSharedComputeEmulationTasks[phaseCount - 1u]
+            || !m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredAvboitPreTask,
+                m_deferredAvboitAccumulationSharedComputeEmulationTasks[0u]
+            )
+            || !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
+                m_deferredAvboitAccumulationStreamTask,
+                m_deferredAvboitAccumulationSharedComputeEmulationTasks[0u]
+            )
+        )
+            return false;
+        for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
+            const Core::GpuTaskId task = m_deferredAvboitAccumulationSharedComputeEmulationTasks[phaseIndex];
+            if(!task.valid())
+                return false;
+            const Core::GpuPhysicalQueueInfo* const queue = m_deferredLightingCompiledGraph.queueInfoForTask(task);
+            if(
+                !queue
+                || queue->queueClass != Core::CommandQueue::Graphics
+                || !m_deferredLightingCompiledGraph.tasksSharePacket(
+                    m_deferredAvboitAccumulationSharedComputeEmulationTasks[0u],
+                    task
+                )
+            )
+                return false;
+        }
+        const Core::GpuSubmissionPacket& packet = m_deferredLightingCompiledGraph.packet(
+            avboitAccumulationSharedComputeEmulationPacket
+        );
+        const Core::GpuTaskId* const packetTasks = m_deferredLightingCompiledGraph.packetTasks(
+            avboitAccumulationSharedComputeEmulationPacket
+        );
+        if(!packetTasks || packet.taskCount < phaseCount)
+            return false;
+        for(usize taskIndex = 0u; taskIndex + phaseCount <= packet.taskCount; ++taskIndex){
+            bool matchesSequence = true;
+            for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
+                if(packetTasks[taskIndex + phaseIndex]
+                    == m_deferredAvboitAccumulationSharedComputeEmulationTasks[phaseIndex])
+                    continue;
+                matchesSequence = false;
+                break;
+            }
+            if(!matchesSequence)
+                continue;
+            const auto hasPrecedingTask = [&](const Core::GpuTaskId task){
+                if(!task.valid())
+                    return true;
+                if(!m_deferredLightingCompiledGraph.tasksSharePacket(
+                    task,
+                    m_deferredAvboitAccumulationSharedComputeEmulationTasks[0u]
+                ))
+                    return true;
+                for(usize predecessorIndex = 0u; predecessorIndex < taskIndex; ++predecessorIndex){
+                    if(packetTasks[predecessorIndex] == task)
+                        return true;
+                }
+                return false;
+            };
+            return hasPrecedingTask(m_deferredAvboitPreTask)
+                && hasPrecedingTask(m_deferredAvboitAccumulationStreamTask);
+        }
+        return false;
+    }();
+    const bool avboitAccumulationAllComputeEmulationMerged =
+        avboitAccumulationComputeEmulationMerged
+        && avboitAccumulationSharedComputeEmulationMerged
+    ;
     const Core::GpuSubmissionPacketId hardwareCausticsPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredHardwareCausticsTask
     );
@@ -2470,7 +2587,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !avboitOccupancyComputeEmulationMerged
         || !avboitExtinctionPacketContainsStreams
         || !avboitExtinctionComputeEmulationMerged
-        || !avboitAccumulationComputeEmulationMerged
+        || !avboitAccumulationAllComputeEmulationMerged
         || !avboitAccumulationPacketContainsStreams
         || !avboitAccumulationPacketContainsFinalizer
         || (hasTransparentRenderers && (
@@ -3221,7 +3338,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && avboitOccupancyComputeEmulationMerged
         && avboitExtinctionPacketContainsStreams
         && avboitExtinctionComputeEmulationMerged
-        && avboitAccumulationComputeEmulationMerged
+        && avboitAccumulationAllComputeEmulationMerged
         && avboitAccumulationPacketContainsStreams
         && avboitAccumulationPacketContainsFinalizer
         && (!hasTransparentRenderers || (
@@ -3542,7 +3659,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && avboitOccupancyComputeEmulationMerged
             && avboitExtinctionPacketContainsStreams
             && avboitExtinctionComputeEmulationMerged
-            && avboitAccumulationComputeEmulationMerged
+            && avboitAccumulationAllComputeEmulationMerged
             && avboitAccumulationPacketContainsStreams
             && avboitAccumulationPacketContainsFinalizer
             && (!hasTransparentRenderers || (

@@ -122,6 +122,7 @@ namespace __hidden_renderer_task_graph{
     struct AvboitOccupancyComputeEmulationGraphTask;
     struct AvboitExtinctionComputeEmulationGraphTask;
     struct AvboitAccumulationComputeEmulationGraphTask;
+    struct AvboitAccumulationSharedComputeEmulationGraphTask;
 }
 
 
@@ -146,6 +147,7 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend struct __hidden_renderer_task_graph::AvboitOccupancyComputeEmulationGraphTask;
     friend struct __hidden_renderer_task_graph::AvboitExtinctionComputeEmulationGraphTask;
     friend struct __hidden_renderer_task_graph::AvboitAccumulationComputeEmulationGraphTask;
+    friend struct __hidden_renderer_task_graph::AvboitAccumulationSharedComputeEmulationGraphTask;
     friend struct ECSRenderDetail::GbufferGraphTask;
     friend struct ECSRenderDetail::CsgReceiverSpanBuildGraphTask;
     friend struct ECSRenderDetail::CsgIntervalCombineGraphTask;
@@ -590,6 +592,10 @@ private:
     // generated-vertex handoff and its cross-callback timing interval share the terminal Graphics packet and
     // finalizer.
     Core::GpuTaskId m_deferredAvboitAccumulationComputeEmulationTask;
+    // A narrowly accepted two-draw shared-output regular stream retains every alternating D/R phase so the
+    // runtime can prove exact packet order instead of accepting only its two endpoints.
+    Core::GpuTaskId m_deferredAvboitAccumulationSharedComputeEmulationTasks[4u] = {};
+    usize m_deferredAvboitAccumulationSharedComputeEmulationTaskCount = 0u;
     Core::GpuTaskId m_deferredAvboitAccumulationTask;
     // A no-op Graphics task that returns accumulation color outputs and read-only deferred depth to sampled state.
     Core::GpuTaskId m_deferredAvboitAccumulationFinalizeTask;

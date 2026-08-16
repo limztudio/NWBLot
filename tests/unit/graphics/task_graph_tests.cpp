@@ -4576,6 +4576,211 @@ TEST(GpuTaskGraph, MergesSharedOpaqueComputeEmulationDispatchRasterPairsIntoOneP
 }
 
 
+// Three opaque compute-emulation items can reuse one persistent generated-vertex buffer only when every dispatch
+// is immediately followed by its raster consumer. The expanded bounded path must keep the same graph-owned
+// alternation as the pair: D(A) -> R(A) -> D(B) -> R(B) -> D(C) -> R(C).
+TEST(GpuTaskGraph, MergesSharedOpaqueComputeEmulationDispatchRasterTriplesIntoOnePacket){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId generatedVertexBuffer = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/shared_generated_vertex_buffer_triple"),
+        "Shared Generated Vertex Buffer Triple",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    ASSERT_TRUE(generatedVertexBuffer.valid());
+
+    const Graphics::GpuQueueRequest graphicsComputeQueue{
+        QueueCapabilities(
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueueCapability::Compute
+        ),
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest graphicsRasterQueue{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint dispatchScheduling;
+    dispatchScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    dispatchScheduling.overlapPreferred = false;
+    dispatchScheduling.avoidQueueCrossing = true;
+    dispatchScheduling.forceSubmissionBoundary = false;
+    dispatchScheduling.allowPacketMerge = true;
+    dispatchScheduling.mergeWithPrevious = false;
+    Graphics::GpuTaskSchedulingHint sequenceTailScheduling = dispatchScheduling;
+    sequenceTailScheduling.mergeWithPrevious = true;
+    // Every callback has an explicit immediate predecessor, so the complete sequence remains in one accepting
+    // Graphics packet even when FrontierSafe detects a later cross-queue consumer frontier.
+    sequenceTailScheduling.allowMergeAcrossConsumerFrontier = true;
+    const Graphics::GpuTaskResourceUse dispatchUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = generatedVertexBuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskResourceUse rasterUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = generatedVertexBuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::VertexBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Name identities[] = {
+        Name("tests/task_graph/shared_opaque_compute_dispatch_a_triple"),
+        Name("tests/task_graph/shared_opaque_compute_raster_a_triple"),
+        Name("tests/task_graph/shared_opaque_compute_dispatch_b_triple"),
+        Name("tests/task_graph/shared_opaque_compute_raster_b_triple"),
+        Name("tests/task_graph/shared_opaque_compute_dispatch_c_triple"),
+        Name("tests/task_graph/shared_opaque_compute_raster_c_triple"),
+    };
+    const AStringView markers[] = {
+        "Shared Opaque Compute Dispatch A Triple",
+        "Shared Opaque Compute Raster A Triple",
+        "Shared Opaque Compute Dispatch B Triple",
+        "Shared Opaque Compute Raster B Triple",
+        "Shared Opaque Compute Dispatch C Triple",
+        "Shared Opaque Compute Raster C Triple",
+    };
+    Graphics::GpuTaskId tasks[LengthOf(identities)] = {};
+    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
+        const bool isRaster = taskIndex % 2u != 0u;
+        Graphics::GpuTaskDesc desc;
+        desc
+            .setIdentity(identities[taskIndex])
+            .setMarkerLabel(markers[taskIndex])
+            .setQueue(isRaster ? graphicsRasterQueue : graphicsComputeQueue)
+            .setScheduling(taskIndex == 0u ? dispatchScheduling : sequenceTailScheduling)
+            .setResourceUses(
+                isRaster ? rasterUses : dispatchUses,
+                isRaster ? LengthOf(rasterUses) : LengthOf(dispatchUses)
+            )
+        ;
+        if(taskIndex != 0u)
+            desc.setDependencies(&tasks[taskIndex - 1u], 1u);
+        tasks[taskIndex] = graph.addTask(desc);
+        ASSERT_TRUE(tasks[taskIndex].valid());
+    }
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    for(usize taskIndex = 1u; taskIndex < LengthOf(tasks); ++taskIndex)
+        EXPECT_TRUE(analysis.hasExplicitEdge(tasks[taskIndex - 1u], tasks[taskIndex]));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        tasks[0u],
+        tasks[1u],
+        generatedVertexBuffer,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        tasks[1u],
+        tasks[2u],
+        generatedVertexBuffer,
+        Graphics::GpuTaskHazardType::WriteAfterRead
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        tasks[2u],
+        tasks[3u],
+        generatedVertexBuffer,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        tasks[3u],
+        tasks[4u],
+        generatedVertexBuffer,
+        Graphics::GpuTaskHazardType::WriteAfterRead
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        tasks[4u],
+        tasks[5u],
+        generatedVertexBuffer,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        tasks[0u],
+        tasks[2u],
+        generatedVertexBuffer,
+        Graphics::GpuTaskHazardType::WriteAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        tasks[2u],
+        tasks[4u],
+        generatedVertexBuffer,
+        Graphics::GpuTaskHazardType::WriteAfterWrite
+    ));
+    ASSERT_EQ(analysis.topologicalOrder().size(), LengthOf(tasks));
+    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex)
+        EXPECT_EQ(analysis.topologicalOrder()[taskIndex], tasks[taskIndex]);
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(tasks[0u]);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    for(const Graphics::GpuTaskId task : tasks){
+        const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
+        ASSERT_NE(assignment, nullptr);
+        EXPECT_EQ(assignment->queue, queue.id);
+        EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
+        EXPECT_EQ(compiledGraph.packetForTask(task), packet);
+    }
+    EXPECT_TRUE(compiledGraph.tasksSharePacket(tasks[0u], tasks[5u]));
+    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPacket.queue, queue.id);
+    EXPECT_EQ(compiledPacket.dependencyCount, 0u);
+    ASSERT_EQ(compiledPacket.taskCount, LengthOf(tasks));
+    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    ASSERT_NE(packetTasks, nullptr);
+    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex)
+        EXPECT_EQ(packetTasks[taskIndex], tasks[taskIndex]);
+
+    const auto expectTransition = [&](const usize taskIndex, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(tasks[taskIndex]);
+        ASSERT_NE(compiledTask, nullptr);
+        ASSERT_EQ(compiledTask->prologueBarrierCount, 1u);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(tasks[taskIndex]);
+        ASSERT_NE(barriers, nullptr);
+        const Graphics::GpuCompiledBarrier& barrier = barriers[0u];
+        EXPECT_EQ(barrier.type, Graphics::GpuCompiledBarrierType::BufferTransition);
+        EXPECT_EQ(barrier.resource, generatedVertexBuffer);
+        EXPECT_EQ(barrier.before, before);
+        EXPECT_EQ(barrier.after, after);
+        EXPECT_EQ(barrier.sourceQueue, queue.id);
+        EXPECT_EQ(barrier.destinationQueue, queue.id);
+    };
+    expectTransition(0u, Graphics::ResourceStates::Common, Graphics::ResourceStates::UnorderedAccess);
+    expectTransition(1u, Graphics::ResourceStates::UnorderedAccess, Graphics::ResourceStates::VertexBuffer);
+    expectTransition(2u, Graphics::ResourceStates::VertexBuffer, Graphics::ResourceStates::UnorderedAccess);
+    expectTransition(3u, Graphics::ResourceStates::UnorderedAccess, Graphics::ResourceStates::VertexBuffer);
+    expectTransition(4u, Graphics::ResourceStates::VertexBuffer, Graphics::ResourceStates::UnorderedAccess);
+    expectTransition(5u, Graphics::ResourceStates::UnorderedAccess, Graphics::ResourceStates::VertexBuffer);
+}
+
+
 // Receiver-surface CSG generation must happen after its CSG setup but before G-buffer's later raster consumer. The
 // graph owns both the CSG CopyDest->UAV preparation and the generated-vertex UAV->VertexBuffer handoff in one
 // primary-Graphics packet; the receiver-event image itself remains a G-buffer raster output.

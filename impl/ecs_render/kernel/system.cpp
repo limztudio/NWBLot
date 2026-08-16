@@ -249,6 +249,7 @@ void RendererSystem::invalidateResources(){
     m_graphicsPrefixOpaqueComputeEmulationTask = {};
     for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
         task = {};
+    m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
     m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixCsgReceiverSpanTask = {};
@@ -551,6 +552,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_graphicsPrefixOpaqueComputeEmulationTask = {};
     for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
         task = {};
+    m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
     m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixCsgReceiverSpanTask = {};
@@ -872,8 +874,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::Gbuffer
         )],
     };
-    // The exact shared-output opaque pair spans G-buffer's mesh prelude and four graph callbacks. Keep its
-    // measurement alive through graph declaration, recording, submission, and rejection just like CSG intervals.
+    // The small shared-output opaque sequence spans G-buffer's mesh prelude and four or six graph callbacks. Keep
+    // its measurement alive through graph declaration, recording, submission, and rejection just like CSG intervals.
     Optional<Core::GpuTimingMeasure> opaqueRegularSharedComputeEmulationTiming;
     Core::GpuTimingSubmissionTicket shadowVisibilityTimingTicket(m_graphics.gpuTiming());
     // The prepared soft-transparent route spans opaque resolve across its first-wavelet and tail callbacks, and
@@ -1151,7 +1153,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             : Core::GpuSubmissionPacketId{}
     ;
     const Core::GpuSubmissionPacketId graphicsPrefixOpaqueSharedComputeEmulationPacket =
-        m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u].valid()
+        m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount != 0u
+        && m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u].valid()
             ? m_deferredLightingCompiledGraph.packetForTask(
                 m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u]
             )
@@ -1315,7 +1318,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             : nullptr
     ;
     const Core::GpuPhysicalQueueInfo* const graphicsPrefixOpaqueSharedComputeEmulationQueue =
-        m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u].valid()
+        m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount != 0u
+        && m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u].valid()
             ? m_deferredLightingCompiledGraph.queueInfoForTask(
                 m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u]
             )
@@ -1363,18 +1367,20 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && graphicsPrefixOpaqueComputeEmulationQueue->queueClass == Core::CommandQueue::Graphics
         )
     ;
-    // A shared persistent generated-vertex output cannot be reduced to an endpoint coalescing check: each of the
-    // four alternating callbacks must remain in exact packet order, or a later local dispatch/raster bridge could
-    // silently return. Keep the G-buffer prelude before the contiguous D(A) -> R(A) -> D(B) -> R(B) run.
+    // A shared persistent generated-vertex output cannot be reduced to an endpoint coalescing check: every
+    // alternating callback must remain in exact packet order, or a later local dispatch/raster bridge could
+    // silently return. Keep the G-buffer prelude before the contiguous D(A) -> R(A) -> ... run.
     const bool graphicsPrefixOpaqueSharedComputeEmulationMerged = [&](){
-        const bool firstPhaseDeclared = m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u].valid();
-        if(!firstPhaseDeclared){
+        const usize phaseCount = m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount;
+        if(phaseCount == 0u){
             for(const Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks){
                 if(task.valid())
                     return false;
             }
             return true;
         }
+        if(phaseCount != 4u && phaseCount != 6u)
+            return false;
         if(
             !graphicsPrefixOpaqueSharedComputeEmulationPacket.valid()
             || !graphicsPrefixOpaqueSharedComputeEmulationQueue
@@ -1385,7 +1391,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             )
         )
             return false;
-        for(const Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks){
+        for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
+            const Core::GpuTaskId task = m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex];
             const Core::GpuPhysicalQueueInfo* const queue = m_deferredLightingCompiledGraph.queueInfoForTask(task);
             if(
                 !task.valid()
@@ -1398,21 +1405,28 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             )
                 return false;
         }
+        for(usize phaseIndex = phaseCount;
+            phaseIndex < LengthOf(m_graphicsPrefixOpaqueSharedComputeEmulationTasks);
+            ++phaseIndex
+        ){
+            if(m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex].valid())
+                return false;
+        }
         const Core::GpuSubmissionPacket& packet = m_deferredLightingCompiledGraph.packet(
             graphicsPrefixOpaqueSharedComputeEmulationPacket
         );
         const Core::GpuTaskId* const packetTasks = m_deferredLightingCompiledGraph.packetTasks(
             graphicsPrefixOpaqueSharedComputeEmulationPacket
         );
-        if(!packetTasks || packet.taskCount < LengthOf(m_graphicsPrefixOpaqueSharedComputeEmulationTasks))
+        if(!packetTasks || packet.taskCount < phaseCount)
             return false;
         for(usize firstPhaseIndex = 0u;
-            firstPhaseIndex + LengthOf(m_graphicsPrefixOpaqueSharedComputeEmulationTasks) <= packet.taskCount;
+            firstPhaseIndex + phaseCount <= packet.taskCount;
             ++firstPhaseIndex
         ){
             bool matchesSequence = true;
             for(usize phaseIndex = 0u;
-                phaseIndex < LengthOf(m_graphicsPrefixOpaqueSharedComputeEmulationTasks);
+                phaseIndex < phaseCount;
                 ++phaseIndex
             ){
                 if(packetTasks[firstPhaseIndex + phaseIndex]

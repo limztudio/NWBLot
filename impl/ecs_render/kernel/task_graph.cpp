@@ -855,22 +855,25 @@ struct OpaqueRegularComputeEmulationGraphPlan{
 };
 
 
-// A persistent generated-vertex buffer normally forces local dispatch/raster interleaving.  This deliberately
-// narrow graph-owned case accepts exactly two regular opaque draws that share one retained buffer and descriptor
-// slot, so four serial callbacks can preserve the original D(A) -> R(A) -> D(B) -> R(B) order.
+// A persistent generated-vertex buffer normally forces local dispatch/raster interleaving. This deliberately
+// narrow graph-owned case accepts two or three regular opaque draws that share one retained buffer and descriptor
+// slot, so serial callbacks can preserve the original D(A) -> R(A) -> ... ordering without batching producers.
 struct OpaqueRegularSharedComputeEmulationGraphPlan{
-    static constexpr usize s_DrawCount = 2u;
+    static constexpr usize s_MinDrawCount = 2u;
+    static constexpr usize s_MaxDrawCount = 3u;
 
-    MaterialPassDrawItem drawItems[s_DrawCount] = {};
+    MaterialPassDrawItem drawItems[s_MaxDrawCount] = {};
     Core::BufferHandle outputBuffer;
     u32 outputHeapSlot = 0u;
+    usize drawCount = 0u;
     bool captured = false;
 
     void reset(){
-        drawItems[0u] = {};
-        drawItems[1u] = {};
+        for(MaterialPassDrawItem& drawItem : drawItems)
+            drawItem = {};
         outputBuffer = nullptr;
         outputHeapSlot = 0u;
+        drawCount = 0u;
         captured = false;
     }
 
@@ -879,10 +882,14 @@ struct OpaqueRegularSharedComputeEmulationGraphPlan{
         const MaterialPassDrawItems& sourceDrawItems
     ){
         reset();
-        if(sourceDrawItems.computeDrawItems.size() != s_DrawCount)
+        if(
+            sourceDrawItems.computeDrawItems.size() < s_MinDrawCount
+            || sourceDrawItems.computeDrawItems.size() > s_MaxDrawCount
+        )
             return false;
 
-        for(usize drawIndex = 0u; drawIndex < s_DrawCount; ++drawIndex){
+        drawCount = sourceDrawItems.computeDrawItems.size();
+        for(usize drawIndex = 0u; drawIndex < drawCount; ++drawIndex){
             const MaterialPassDrawItem& drawItem = sourceDrawItems.computeDrawItems[drawIndex];
             if(drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None)
                 return false;
@@ -913,7 +920,7 @@ struct OpaqueRegularSharedComputeEmulationGraphPlan{
     }
 
     [[nodiscard]] bool matches(RendererMeshSystem& meshSystem, const usize drawIndex)const{
-        if(!captured || drawIndex >= s_DrawCount || !outputBuffer)
+        if(!captured || drawIndex >= drawCount || !outputBuffer)
             return false;
 
         MeshResources* mesh = nullptr;
@@ -927,7 +934,7 @@ struct OpaqueRegularSharedComputeEmulationGraphPlan{
     }
 
     void materialize(const usize drawIndex, MaterialPassDrawItems& outDrawItems)const{
-        NWB_ASSERT(captured && drawIndex < s_DrawCount);
+        NWB_ASSERT(captured && drawIndex < drawCount);
         outDrawItems.computeDrawItems.push_back(drawItems[drawIndex]);
     }
 };
@@ -1420,9 +1427,9 @@ struct OpaqueRegularComputeEmulationGraphTask{
 };
 
 
-// The exact shared-output pair keeps the compatibility order without hiding its alternating output states inside
-// one callback. Each graph instance records either one compute generation or one raster draw; raster phases close
-// dynamic rendering before the next generation phase can bind a compute pipeline.
+// The small shared-output sequence keeps the compatibility order without hiding its alternating output states
+// inside one callback. Each graph instance records either one compute generation or one raster draw; raster phases
+// close dynamic rendering before the next generation phase can bind a compute pipeline.
 struct OpaqueRegularSharedComputeEmulationGraphTask{
     enum class Phase : u8{
         Generate,
@@ -1664,9 +1671,9 @@ struct GbufferGraphTask{
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
         bool regularComputeEmulationOutputStatesGraphOwned = false;
-        // Exactly two shared-output regular compute draws are recorded by four successor tasks. G-buffer retains
-        // only regular mesh rasterization, starts the original timing range, and leaves it open for the terminal
-        // shared raster task to finish.
+        // Two or three shared-output regular compute draws are recorded by serial successor tasks. G-buffer
+        // retains only regular mesh rasterization, starts the original timing range, and leaves it open for the
+        // terminal shared raster task to finish.
         bool regularSharedComputeEmulationDrawsGraphOwned = false;
         Optional<Core::GpuTimingMeasure>* regularSharedComputeEmulationTiming = nullptr;
         bool csgReceiverComputeEmulationOutputStatesGraphOwned = false;
@@ -3018,8 +3025,8 @@ struct DeferredPresentGraphTask{
     return outResourceSet.valid();
 }
 
-// A shared-output pair imports its one retained generated-vertex buffer exactly once. Repeating it in a resource
-// set would collapse the four alternating uses, so each phase declares this concrete graph resource directly.
+// A small shared-output sequence imports its one retained generated-vertex buffer exactly once. Repeating it in a
+// resource set would collapse the alternating uses, so each phase declares this concrete graph resource directly.
 [[nodiscard]] static bool GatherOpaqueRegularSharedComputeEmulationResource(
     Core::GpuTaskGraph& graph,
     const ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphPlan& plan,
@@ -4456,6 +4463,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     m_graphicsPrefixOpaqueComputeEmulationTask = {};
     for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
         task = {};
+    m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
     m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixCsgReceiverSpanTask = {};
@@ -5399,9 +5407,9 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     }
     gbufferPayload.regularComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationOutputStatesGraphOwned;
 
-    // A persistent generated-vertex buffer is normally a local dispatch/raster bridge. Handle its smallest alias
-    // class explicitly: exactly two regular opaque compute items sharing one frozen output and heap slot. Opaque
-    // CSG remains out of scope so no CSG producer/raster phase can observe this four-callback alternation.
+    // A persistent generated-vertex buffer is normally a local dispatch/raster bridge. Handle the small alias
+    // classes explicitly: two or three regular opaque compute items sharing one frozen output and heap slot.
+    // Opaque CSG remains out of scope so no CSG producer/raster phase can observe this alternation.
     ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphPlan opaqueSharedComputeEmulationPlan;
     const bool opaqueSharedComputeEmulationPlanCaptured =
         !hasOpaqueCsgFrameWork
@@ -5823,7 +5831,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             gbufferMaterialResourceSetUseCount
         )
     ;
-    // The four shared-output successors are declared after G-buffer has moved its payload into the graph. Keep
+    // The shared-output successors are declared after G-buffer has moved its payload into the graph. Keep
     // their frozen readiness/state bits by value instead of reading a moved-from payload below.
     const bool opaqueSharedMaterialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
     const bool opaqueSharedMaterialFrameStatesGraphOwned = gbufferPayload.materialFrameStatesGraphOwned;
@@ -5839,9 +5847,9 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
     Core::GpuTaskId gbufferCompletionTask = m_graphicsPrefixGbufferTask;
     if(opaqueSharedComputeEmulationOutputStatesGraphOwned){
-        // These two draw items target exactly one imported buffer. Keep every state phase explicit so the compiler,
-        // not the material callback, owns Common -> UAV -> VertexBuffer -> UAV -> VertexBuffer. The immediate
-        // chain is also the semantic ordering contract for the retained persistent output alias.
+        // These two or three draw items target exactly one imported buffer. Keep every state phase explicit so the
+        // compiler, not the material callback, owns Common -> UAV -> VertexBuffer -> ... -> VertexBuffer. The
+        // immediate chain is also the semantic ordering contract for the retained persistent output alias.
         opaqueSharedComputeEmulationGenerateResourceUses.reserve(4u);
         opaqueSharedComputeEmulationGenerateResourceUses.push_back(
             ReadUse(meshView, Core::ResourceStates::ConstantBuffer)
@@ -5952,57 +5960,59 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             >(desc, Move(payload));
         };
         using OpaqueSharedPhase = ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask::Phase;
-        m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u] = addOpaqueSharedComputeEmulationPhase(
+        const Name opaqueSharedComputeEmulationPhaseIdentities[] = {
             Name("render.graphics_prefix.opaque_shared_compute_emulation_generate_a"),
-            "Opaque Shared Compute Emulation Generate A",
-            m_graphicsPrefixGbufferTask,
-            OpaqueSharedPhase::Generate,
-            0u,
-            false,
-            opaqueSharedComputeEmulationGenerateResourceUses,
-            opaqueSharedComputeEmulationResourceSetUses,
-            opaqueSharedComputeEmulationResourceSetUseCount
-        );
-        m_graphicsPrefixOpaqueSharedComputeEmulationTasks[1u] = addOpaqueSharedComputeEmulationPhase(
             Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_a"),
-            "Opaque Shared Compute Emulation Raster A",
-            m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u],
-            OpaqueSharedPhase::Raster,
-            0u,
-            false,
-            opaqueSharedComputeEmulationRasterResourceUses,
-            opaqueSharedComputeEmulationResourceSetUses,
-            opaqueSharedComputeEmulationResourceSetUseCount
-        );
-        m_graphicsPrefixOpaqueSharedComputeEmulationTasks[2u] = addOpaqueSharedComputeEmulationPhase(
             Name("render.graphics_prefix.opaque_shared_compute_emulation_generate_b"),
-            "Opaque Shared Compute Emulation Generate B",
-            m_graphicsPrefixOpaqueSharedComputeEmulationTasks[1u],
-            OpaqueSharedPhase::Generate,
-            1u,
-            false,
-            opaqueSharedComputeEmulationGenerateResourceUses,
-            opaqueSharedComputeEmulationResourceSetUses,
-            opaqueSharedComputeEmulationResourceSetUseCount
-        );
-        m_graphicsPrefixOpaqueSharedComputeEmulationTasks[3u] = addOpaqueSharedComputeEmulationPhase(
             Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_b"),
+            Name("render.graphics_prefix.opaque_shared_compute_emulation_generate_c"),
+            Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_c"),
+        };
+        const AStringView opaqueSharedComputeEmulationPhaseMarkers[] = {
+            "Opaque Shared Compute Emulation Generate A",
+            "Opaque Shared Compute Emulation Raster A",
+            "Opaque Shared Compute Emulation Generate B",
             "Opaque Shared Compute Emulation Raster B",
-            m_graphicsPrefixOpaqueSharedComputeEmulationTasks[2u],
-            OpaqueSharedPhase::Raster,
-            1u,
-            true,
-            opaqueSharedComputeEmulationRasterResourceUses,
-            opaqueSharedComputeEmulationResourceSetUses,
-            opaqueSharedComputeEmulationResourceSetUseCount
-        );
-        for(const Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks){
-            if(task.valid())
-                continue;
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared opaque compute-emulation phase"));
+            "Opaque Shared Compute Emulation Generate C",
+            "Opaque Shared Compute Emulation Raster C",
+        };
+        const usize opaqueSharedComputeEmulationPhaseCount = opaqueSharedComputeEmulationPlan.drawCount * 2u;
+        if(
+            opaqueSharedComputeEmulationPhaseCount != 4u
+            && opaqueSharedComputeEmulationPhaseCount != 6u
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid shared opaque compute-emulation phase count"));
             return false;
         }
-        gbufferCompletionTask = m_graphicsPrefixOpaqueSharedComputeEmulationTasks[3u];
+        Core::GpuTaskId opaqueSharedComputeEmulationDependency = m_graphicsPrefixGbufferTask;
+        for(usize phaseIndex = 0u;
+            phaseIndex < opaqueSharedComputeEmulationPhaseCount;
+            ++phaseIndex
+        ){
+            const bool isRasterPhase = phaseIndex % 2u != 0u;
+            m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex] =
+                addOpaqueSharedComputeEmulationPhase(
+                    opaqueSharedComputeEmulationPhaseIdentities[phaseIndex],
+                    opaqueSharedComputeEmulationPhaseMarkers[phaseIndex],
+                    opaqueSharedComputeEmulationDependency,
+                    isRasterPhase ? OpaqueSharedPhase::Raster : OpaqueSharedPhase::Generate,
+                    phaseIndex / 2u,
+                    phaseIndex + 1u == opaqueSharedComputeEmulationPhaseCount,
+                    isRasterPhase
+                        ? opaqueSharedComputeEmulationRasterResourceUses
+                        : opaqueSharedComputeEmulationGenerateResourceUses,
+                    opaqueSharedComputeEmulationResourceSetUses,
+                    opaqueSharedComputeEmulationResourceSetUseCount
+                )
+            ;
+            if(!m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex].valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared opaque compute-emulation phase"));
+                return false;
+            }
+            opaqueSharedComputeEmulationDependency = m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex];
+        }
+        m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = opaqueSharedComputeEmulationPhaseCount;
+        gbufferCompletionTask = opaqueSharedComputeEmulationDependency;
     }
     if(hasOpaqueCsgFrameWork){
         Core::GpuTaskSchedulingHint csgReceiverSpanScheduling;
@@ -9062,6 +9072,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_graphicsPrefixOpaqueComputeEmulationTask = {};
     for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
         task = {};
+    m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
     m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixCsgReceiverSpanTask = {};

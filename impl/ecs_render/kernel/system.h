@@ -460,10 +460,11 @@ private:
     // producer must share G-buffer's existing primary-Graphics packet for the graph-owned UAV-to-VertexBuffer
     // handoff to remain inside the semantic prefix range.
     Core::GpuTaskId m_graphicsPrefixOpaqueComputeEmulationTask;
-    // The exact two-item shared-output regular path keeps dispatch/raster alternation in the same packet. Retain
-    // every phase ID so runtime validation can prove the strict D(A) -> R(A) -> D(B) -> R(B) packet order, rather
-    // than merely proving that the two endpoint callbacks coalesced.
-    Core::GpuTaskId m_graphicsPrefixOpaqueSharedComputeEmulationTasks[4u] = {};
+    // Small shared-output regular paths keep dispatch/raster alternation in the same packet. Retain every phase ID
+    // so runtime validation can prove the strict D(A) -> R(A) -> ... packet order, rather than merely proving
+    // that the two endpoint callbacks coalesced. The active prefix holds four or six phases for two or three draws.
+    Core::GpuTaskId m_graphicsPrefixOpaqueSharedComputeEmulationTasks[6u] = {};
+    usize m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
     // Receiver-surface CSG has its own readiness gate but needs the same packet-local output handoff.
     Core::GpuTaskId m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask;
     Core::GpuTaskId m_graphicsPrefixGbufferTask;

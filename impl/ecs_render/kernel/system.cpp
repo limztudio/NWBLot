@@ -2390,11 +2390,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         )
     ;
     const Core::CommandListResourceStateHandoff* const shadowPrepareFinalStateSeed = graphicsPrefixRecorded
-        ? m_deferredLightingRecordedGraph.packetFinalStateSeed(shadowPreparePacket)
+        ? m_deferredLightingRecordedGraph.taskFinalStateSeed(
+            m_deferredLightingCompiledGraph,
+            m_deferredShadowPrepareTask
+        )
         : nullptr
     ;
     const Core::CommandListResourceStateHandoff* const graphicsPrefixFinalStateSeed = graphicsPrefixRecorded
-        ? m_deferredLightingRecordedGraph.packetFinalStateSeed(graphicsPrefixPacket)
+        ? m_deferredLightingRecordedGraph.taskFinalStateSeed(
+            m_deferredLightingCompiledGraph,
+            m_graphicsPrefixTask
+        )
         : nullptr
     ;
     // Build the sparse AS/software-BVH state candidate before submission, but let the accepted packet callback
@@ -2802,21 +2808,36 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
     const Core::CommandListResourceStateHandoff* const shadowVisibilityFinalStateSeed =
-        m_deferredLightingRecordedGraph.packetFinalStateSeed(shadowVisibilityPacket)
+        m_deferredLightingRecordedGraph.taskFinalStateSeed(
+            m_deferredLightingCompiledGraph,
+            m_deferredShadowVisibilityTask
+        )
     ;
     const Core::CommandListResourceStateHandoff* const softwareCausticsFinalStateSeed = !hardwareShadowSupported
-        ? m_deferredLightingRecordedGraph.packetFinalStateSeed(softwareCausticsPacket)
+        ? m_deferredLightingRecordedGraph.taskFinalStateSeed(
+            m_deferredLightingCompiledGraph,
+            m_deferredSoftwareCausticsTask
+        )
         : nullptr
     ;
     const Core::CommandListResourceStateHandoff* const causticsFinalStateSeed = softwareCausticsFinalStateSeed;
     const Core::CommandListResourceStateHandoff* const deferredLightingFinalStateSeed =
-        m_deferredLightingRecordedGraph.packetFinalStateSeed(deferredLightingPacket)
+        m_deferredLightingRecordedGraph.taskFinalStateSeed(
+            m_deferredLightingCompiledGraph,
+            m_deferredLightingTask
+        )
     ;
     const Core::CommandListResourceStateHandoff* const surfelGiFinalStateSeed =
-        m_deferredLightingRecordedGraph.packetFinalStateSeed(surfelGiPacket)
+        m_deferredLightingRecordedGraph.taskFinalStateSeed(
+            m_deferredLightingCompiledGraph,
+            m_deferredSurfelGiTask
+        )
     ;
     const Core::CommandListResourceStateHandoff* const hardwareCausticsFinalStateSeed = hardwareShadowSupported
-        ? m_deferredLightingRecordedGraph.packetFinalStateSeed(hardwareCausticsPacket)
+        ? m_deferredLightingRecordedGraph.taskFinalStateSeed(
+            m_deferredLightingCompiledGraph,
+            m_deferredHardwareCausticsTask
+        )
         : nullptr
     ;
     if(
@@ -4039,7 +4060,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredLightingRecordedGraph
             );
             const Core::CommandListResourceStateHandoff* const readbackFinalStateSeed = readbackRecorded
-                ? m_deferredLightingRecordedGraph.packetFinalStateSeed(surfelGiCounterReadbackPacket)
+                ? m_deferredLightingRecordedGraph.taskFinalStateSeed(
+                    m_deferredLightingCompiledGraph,
+                    m_deferredSurfelGiCounterReadbackTask
+                )
                 : nullptr
             ;
             // The tail is recorded before it is submitted. Keep its filtered final-state candidate private until the
@@ -4199,7 +4223,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 )
             ;
             const Core::CommandListResourceStateHandoff* const historyCopyFinalStateSeed = historyCopyRecorded
-                ? m_deferredLightingRecordedGraph.packetFinalStateSeed(deferredLaggedLightingHistoryPacket)
+                ? m_deferredLightingRecordedGraph.taskFinalStateSeed(
+                    m_deferredLightingCompiledGraph,
+                    m_deferredLaggedLightingHistoryTask
+                )
                 : nullptr
             ;
             if(!historyCopyRecorded || !historyCopyFinalStateSeed){

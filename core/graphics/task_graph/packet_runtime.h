@@ -84,6 +84,13 @@ public:
     [[nodiscard]] const CommandListResourceStateHandoff* packetFinalStateSeed(
         const GpuSubmissionPacketId& packet
     )const noexcept;
+    // Semantic companion to packetFinalStateSeed. It validates this recorded graph against the current compiler
+    // output before resolving the declared task's containing packet, so lifecycle consumers do not mirror packet
+    // IDs merely to retain a graph-recorded native final state.
+    [[nodiscard]] const CommandListResourceStateHandoff* taskFinalStateSeed(
+        const GpuCompiledGraph& compiledGraph,
+        GpuTaskId task
+    )const noexcept;
 
 
 private:

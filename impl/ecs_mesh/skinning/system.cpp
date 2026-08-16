@@ -1169,7 +1169,10 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         return false;
     }
 
-    const Core::CommandListResourceStateHandoff* const finalStates = recordedGraph.packetFinalStateSeed(terminalPacket);
+    const Core::CommandListResourceStateHandoff* const finalStates = recordedGraph.taskFinalStateSeed(
+        compiledGraph,
+        terminalTask
+    );
     if(!finalStates){
         transaction.discardUnaccepted(graph, compiledGraph);
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain graph-owned skinning frame state"));

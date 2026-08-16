@@ -18518,7 +18518,24 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
     ));
     EXPECT_TRUE(beginRecorded);
     EXPECT_TRUE(endRecorded);
-    ASSERT_NE(compiledGraph.packetForTask(beginTask), compiledGraph.packetForTask(endTask));
+    const GpuSubmissionPacketId beginPacket = compiledGraph.packetForTask(beginTask);
+    const GpuSubmissionPacketId endPacket = compiledGraph.packetForTask(endTask);
+    ASSERT_NE(beginPacket, endPacket);
+    const CommandListResourceStateHandoff* const beginTaskFinalState = recordedGraph.taskFinalStateSeed(
+        compiledGraph,
+        beginTask
+    );
+    const CommandListResourceStateHandoff* const endTaskFinalState = recordedGraph.taskFinalStateSeed(
+        compiledGraph,
+        endTask
+    );
+    ASSERT_NE(beginTaskFinalState, nullptr);
+    ASSERT_NE(endTaskFinalState, nullptr);
+    EXPECT_EQ(beginTaskFinalState, recordedGraph.packetFinalStateSeed(beginPacket));
+    EXPECT_EQ(endTaskFinalState, recordedGraph.packetFinalStateSeed(endPacket));
+    EXPECT_EQ(recordedGraph.taskFinalStateSeed(compiledGraph, GpuTaskId{}), nullptr);
+    GpuCompiledGraph unrelatedFinalStateGraph(DescriptorBufferRoundTripTest::arena());
+    EXPECT_EQ(recordedGraph.taskFinalStateSeed(unrelatedFinalStateGraph, beginTask), nullptr);
 
     const GpuTaskGraphTaskTimingTicket timingTickets[] = {
         GpuTaskGraphTaskTimingTicket{ .task = beginTask, .timingTicket = &beginTicket },

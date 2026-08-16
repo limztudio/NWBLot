@@ -222,6 +222,15 @@ const CommandListResourceStateHandoff* GpuRecordedGraph::packetFinalStateSeed(
     return find(packet) && stateSeed && stateSeed->valid() ? stateSeed : nullptr;
 }
 
+const CommandListResourceStateHandoff* GpuRecordedGraph::taskFinalStateSeed(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId task
+)const noexcept{
+    if(!validFor(compiledGraph) || !compiledGraph.findTask(task))
+        return nullptr;
+    return packetFinalStateSeed(compiledGraph.packetForTask(task));
+}
+
 CommandListResourceStateHandoff* GpuRecordedGraph::packetStateSeed(const GpuSubmissionPacketId& packet)noexcept{
     if(!packet.valid() || packet.generation != m_generation || packet.index >= m_packetStateSeeds.size())
         return nullptr;

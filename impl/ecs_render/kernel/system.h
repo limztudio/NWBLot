@@ -118,6 +118,11 @@ namespace ECSRenderDetail{
 };
 
 
+namespace __hidden_renderer_task_graph{
+    struct AvboitExtinctionComputeEmulationGraphTask;
+}
+
+
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass, public Core::Telemetry::IFrameGraphContributor{
     template<typename RendererT>
     friend class RendererSystemSubsystemBase;
@@ -136,6 +141,7 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend struct ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask;
     friend struct ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask;
     friend struct ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask;
+    friend struct __hidden_renderer_task_graph::AvboitExtinctionComputeEmulationGraphTask;
     friend struct ECSRenderDetail::GbufferGraphTask;
     friend struct ECSRenderDetail::CsgReceiverSpanBuildGraphTask;
     friend struct ECSRenderDetail::CsgIntervalCombineGraphTask;
@@ -356,6 +362,7 @@ private:
         ECSRenderDetail::AvboitClearTimingRecordState& avboitClearTimingState,
         ECSRenderDetail::CsgIntervalClearTimingRecordState& transparentCsgIntervalClearTimingState,
         Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTiming,
+        Optional<Core::GpuTimingMeasure>& avboitExtinctionComputeEmulationTiming,
         Core::GpuTimingSubmissionTicket& avboitDepthWarpTimingTicket,
         Core::GpuTimingSubmissionTicket& avboitExtinctionTimingTicket,
         Core::GpuTimingSubmissionTicket& avboitIntegrationTimingTicket,
@@ -558,6 +565,9 @@ private:
     Core::GpuTaskId m_deferredAvboitCsgIntervalCombineTask;
     Core::GpuTaskId m_deferredAvboitOccupancyTask;
     Core::GpuTaskId m_deferredAvboitDepthWarpTask;
+    // The optional alias-free regular producer must remain in Extinction's selected Graphics packet so its
+    // cross-callback material timing interval and generated-vertex handoff share the consumer's token.
+    Core::GpuTaskId m_deferredAvboitExtinctionComputeEmulationTask;
     // The final immutable extinction upload, when that phase has visible draws. It must live in the native
     // extinction packet so rejected/retried packet recording cannot publish only a partial phase stream.
     Core::GpuTaskId m_deferredAvboitExtinctionStreamTask;

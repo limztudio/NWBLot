@@ -627,7 +627,9 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
     const bool extinctionCsgIntervalSampleImageStatesGraphOwned,
     const bool extinctionCsgClipBufferStatesGraphOwned,
     const bool extinctionMaterialFrameStatesGraphOwned,
-    const bool extinctionMaterialGeometryStatesGraphOwned
+    const bool extinctionMaterialGeometryStatesGraphOwned,
+    const bool extinctionComputeEmulationOutputStatesGraphOwned,
+    Optional<Core::GpuTimingMeasure>* const extinctionComputeEmulationTiming
 ){
     NWB_ASSERT(avboitTargets.valid());
 
@@ -650,7 +652,9 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
                 extinctionCsgIntervalSampleImageStatesGraphOwned,
                 extinctionCsgClipBufferStatesGraphOwned,
                 extinctionMaterialFrameStatesGraphOwned,
-                extinctionMaterialGeometryStatesGraphOwned
+                extinctionMaterialGeometryStatesGraphOwned,
+                extinctionComputeEmulationOutputStatesGraphOwned,
+                extinctionComputeEmulationTiming
             );
         }
     }
@@ -752,7 +756,9 @@ void RendererAvboitSystem::renderAvboitPostOccupancyPreAccumulationPasses(
     const bool extinctionCsgIntervalSampleImageStatesGraphOwned,
     const bool extinctionCsgClipBufferStatesGraphOwned,
     const bool extinctionMaterialFrameStatesGraphOwned,
-    const bool extinctionMaterialGeometryStatesGraphOwned
+    const bool extinctionMaterialGeometryStatesGraphOwned,
+    const bool extinctionComputeEmulationOutputStatesGraphOwned,
+    Optional<Core::GpuTimingMeasure>* const extinctionComputeEmulationTiming
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -771,7 +777,9 @@ void RendererAvboitSystem::renderAvboitPostOccupancyPreAccumulationPasses(
         extinctionCsgIntervalSampleImageStatesGraphOwned,
         extinctionCsgClipBufferStatesGraphOwned,
         extinctionMaterialFrameStatesGraphOwned,
-        extinctionMaterialGeometryStatesGraphOwned
+        extinctionMaterialGeometryStatesGraphOwned,
+        extinctionComputeEmulationOutputStatesGraphOwned,
+        extinctionComputeEmulationTiming
     );
     dispatchAvboitIntegration(commandList, avboitTargets);
 }

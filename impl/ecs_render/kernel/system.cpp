@@ -313,6 +313,7 @@ void RendererSystem::invalidateResources(){
     m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
     m_deferredAvboitExtinctionStreamTask = {};
+    m_deferredAvboitExtinctionComputeEmulationTask = {};
     m_deferredAvboitExtinctionTask = {};
     m_deferredAvboitIntegrationTask = {};
     m_deferredAvboitAccumulationStreamTask = {};
@@ -612,6 +613,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
     m_deferredAvboitExtinctionStreamTask = {};
+    m_deferredAvboitExtinctionComputeEmulationTask = {};
     m_deferredAvboitExtinctionTask = {};
     m_deferredAvboitIntegrationTask = {};
     m_deferredAvboitAccumulationStreamTask = {};
@@ -917,6 +919,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     };
     // Prepared transparent CSG begins this interval in AVBOIT Pre and closes it in its graph-owned Combine callback.
     Optional<Core::GpuTimingMeasure> transparentCsgIntervalsTiming;
+    // The split Extinction handoff starts this interval in its compute producer and closes it in the raster consumer.
+    Optional<Core::GpuTimingMeasure> avboitExtinctionComputeEmulationTiming;
     Core::GpuTimingSubmissionTicket avboitDepthWarpTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket avboitExtinctionTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket avboitIntegrationTimingTicket(m_graphics.gpuTiming());
@@ -955,6 +959,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         avboitClearTimingState,
         transparentCsgIntervalClearTimingState,
         transparentCsgIntervalsTiming,
+        avboitExtinctionComputeEmulationTiming,
         avboitDepthWarpTimingTicket,
         avboitExtinctionTimingTicket,
         avboitIntegrationTimingTicket,
@@ -1004,6 +1009,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitClearTimingState,
             transparentCsgIntervalClearTimingState,
             transparentCsgIntervalsTiming,
+            avboitExtinctionComputeEmulationTiming,
             avboitDepthWarpTimingTicket,
             avboitExtinctionTimingTicket,
             avboitIntegrationTimingTicket,
@@ -1621,6 +1627,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId avboitExtinctionPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitExtinctionTask
     );
+    const Core::GpuSubmissionPacketId avboitExtinctionComputeEmulationPacket =
+        m_deferredAvboitExtinctionComputeEmulationTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitExtinctionComputeEmulationTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
     const bool avboitExtinctionPacketContainsStreams = !m_deferredAvboitExtinctionStreamTask.valid()
         || m_deferredLightingCompiledGraph.tasksSharePacket(
             m_deferredAvboitExtinctionTask,
@@ -1663,10 +1674,66 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitDepthWarpTask);
     const Core::GpuPhysicalQueueInfo* const avboitExtinctionQueue =
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitExtinctionTask);
+    const Core::GpuPhysicalQueueInfo* const avboitExtinctionComputeEmulationQueue =
+        m_deferredAvboitExtinctionComputeEmulationTask.valid()
+            ? m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitExtinctionComputeEmulationTask)
+            : nullptr
+    ;
     const Core::GpuPhysicalQueueInfo* const avboitIntegrationQueue =
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitIntegrationTask);
     const Core::GpuPhysicalQueueInfo* const avboitAccumulationQueue =
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitAccumulationTask);
+    // A split Extinction measurement spans the generator and raster consumer. Require their exact packet order so
+    // the graph, rather than a callback-local transition, owns the output UAV-to-VertexBuffer handoff.
+    const bool avboitExtinctionComputeEmulationMerged = [&](){
+        if(!m_deferredAvboitExtinctionComputeEmulationTask.valid())
+            return true;
+        if(
+            !avboitUsesAsyncCompute
+            || !m_deferredAvboitExtinctionStreamTask.valid()
+            || !avboitExtinctionComputeEmulationPacket.valid()
+            || !avboitExtinctionPacket.valid()
+            || !avboitExtinctionComputeEmulationQueue
+            || !avboitExtinctionQueue
+            || avboitExtinctionComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
+            || avboitExtinctionQueue->queueClass != Core::CommandQueue::Graphics
+            || !m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredAvboitExtinctionComputeEmulationTask,
+                m_deferredAvboitExtinctionTask
+            )
+            || !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
+                m_deferredAvboitExtinctionStreamTask,
+                m_deferredAvboitExtinctionComputeEmulationTask
+            )
+        )
+            return false;
+        const Core::GpuSubmissionPacket& packet = m_deferredLightingCompiledGraph.packet(
+            avboitExtinctionComputeEmulationPacket
+        );
+        const Core::GpuTaskId* const packetTasks = m_deferredLightingCompiledGraph.packetTasks(
+            avboitExtinctionComputeEmulationPacket
+        );
+        if(!packetTasks || packet.taskCount < 2u)
+            return false;
+        for(usize taskIndex = 0u; taskIndex + 2u <= packet.taskCount; ++taskIndex){
+            if(
+                packetTasks[taskIndex] != m_deferredAvboitExtinctionComputeEmulationTask
+                || packetTasks[taskIndex + 1u] != m_deferredAvboitExtinctionTask
+            )
+                continue;
+            if(!m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredAvboitExtinctionStreamTask,
+                m_deferredAvboitExtinctionComputeEmulationTask
+            ))
+                return true;
+            for(usize streamTaskIndex = 0u; streamTaskIndex < taskIndex; ++streamTaskIndex){
+                if(packetTasks[streamTaskIndex] == m_deferredAvboitExtinctionStreamTask)
+                    return true;
+            }
+            return false;
+        }
+        return false;
+    }();
     const Core::GpuSubmissionPacketId hardwareCausticsPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredHardwareCausticsTask
     );
@@ -2207,6 +2274,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !avboitPrePacketContainsCsgIntervalCombine
         || !avboitPrePacketContainsOccupancy
         || !avboitExtinctionPacketContainsStreams
+        || !avboitExtinctionComputeEmulationMerged
         || !avboitAccumulationPacketContainsStreams
         || !avboitAccumulationPacketContainsFinalizer
         || (hasTransparentRenderers && (
@@ -2404,6 +2472,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(transparentCsgIntervalsTiming){
             transparentCsgIntervalsTiming->discardTiming();
             transparentCsgIntervalsTiming.reset();
+        }
+        if(avboitExtinctionComputeEmulationTiming){
+            avboitExtinctionComputeEmulationTiming->discardTiming();
+            avboitExtinctionComputeEmulationTiming.reset();
         }
         if(opaqueRegularSharedComputeEmulationTiming){
             opaqueRegularSharedComputeEmulationTiming->discardTiming();
@@ -2943,6 +3015,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && avboitPrePacketContainsCsgIntervalCombine
         && avboitPrePacketContainsOccupancy
         && avboitExtinctionPacketContainsStreams
+        && avboitExtinctionComputeEmulationMerged
         && avboitAccumulationPacketContainsStreams
         && avboitAccumulationPacketContainsFinalizer
         && (!hasTransparentRenderers || (
@@ -3217,29 +3290,33 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const auto submitAvboitLightingAndComposite = [&]() -> bool {
         Core::Alloc::ScratchArena deferredScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter deferredSubmitter(device);
-        const Core::GpuTaskGraphTaskTimingTicket avboitTimingTickets[] = {
-            Core::GpuTaskGraphTaskTimingTicket{
-                .task = m_deferredAvboitPreTask,
-                .timingTicket = &avboitPreTimingTicket,
-            },
-            Core::GpuTaskGraphTaskTimingTicket{
-                .task = m_deferredAvboitDepthWarpTask,
-                .timingTicket = &avboitDepthWarpTimingTicket,
-            },
-            Core::GpuTaskGraphTaskTimingTicket{
-                .task = m_deferredAvboitExtinctionTask,
-                .timingTicket = &avboitExtinctionTimingTicket,
-            },
-            Core::GpuTaskGraphTaskTimingTicket{
-                .task = m_deferredAvboitIntegrationTask,
-                .timingTicket = &avboitIntegrationTimingTicket,
-            },
-            Core::GpuTaskGraphTaskTimingTicket{
-                .task = m_deferredAvboitAccumulationTask,
-                .timingTicket = &avboitAccumulationTimingTicket,
-            },
+        Core::GpuTaskGraphTaskTimingTicket avboitTimingTickets[6u] = {};
+        usize avboitTimingTicketCount = 0u;
+        const auto appendAvboitTimingTicket = [&avboitTimingTickets, &avboitTimingTicketCount](
+            const Core::GpuTaskId task,
+            Core::GpuTimingSubmissionTicket* const timingTicket
+        ){
+            NWB_ASSERT(avboitTimingTicketCount < LengthOf(avboitTimingTickets));
+            avboitTimingTickets[avboitTimingTicketCount++] = Core::GpuTaskGraphTaskTimingTicket{
+                .task = task,
+                .timingTicket = timingTicket,
+            };
         };
-        const usize avboitTimingTicketCount = avboitUsesAsyncCompute ? LengthOf(avboitTimingTickets) : 1u;
+        appendAvboitTimingTicket(m_deferredAvboitPreTask, &avboitPreTimingTicket);
+        if(avboitUsesAsyncCompute){
+            appendAvboitTimingTicket(m_deferredAvboitDepthWarpTask, &avboitDepthWarpTimingTicket);
+            if(m_deferredAvboitExtinctionComputeEmulationTask.valid()){
+                // Both callbacks resolve to one packet and deliberately share the one Extinction timing ticket.
+                appendAvboitTimingTicket(
+                    m_deferredAvboitExtinctionComputeEmulationTask,
+                    &avboitExtinctionTimingTicket
+                );
+            }
+            appendAvboitTimingTicket(m_deferredAvboitExtinctionTask, &avboitExtinctionTimingTicket);
+            appendAvboitTimingTicket(m_deferredAvboitIntegrationTask, &avboitIntegrationTimingTicket);
+            appendAvboitTimingTicket(m_deferredAvboitAccumulationTask, &avboitAccumulationTimingTicket);
+        }
+        const usize avboitPacketExpectedCount = avboitUsesAsyncCompute ? 5u : 1u;
         const bool avboitPacketsAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredAvboitPreTask.valid()
@@ -3250,6 +3327,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && avboitPrePacketContainsCsgIntervalCombine
             && avboitPrePacketContainsOccupancy
             && avboitExtinctionPacketContainsStreams
+            && avboitExtinctionComputeEmulationMerged
             && avboitAccumulationPacketContainsStreams
             && avboitAccumulationPacketContainsFinalizer
             && (!hasTransparentRenderers || (
@@ -3265,7 +3343,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 ))
             ))
             && avboitPacketRange.valid()
-            && avboitPacketRange.packetCount == avboitTimingTicketCount
+            && avboitPacketRange.packetCount == avboitPacketExpectedCount
             && (!avboitUsesAsyncCompute || (
                 m_deferredAvboitDepthWarpTask.valid()
                 && m_deferredAvboitExtinctionTask.valid()

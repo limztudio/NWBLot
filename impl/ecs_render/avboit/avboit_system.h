@@ -105,7 +105,9 @@ public:
         bool extinctionCsgIntervalSampleImageStatesGraphOwned = false,
         bool extinctionCsgClipBufferStatesGraphOwned = false,
         bool extinctionMaterialFrameStatesGraphOwned = false,
-        bool extinctionMaterialGeometryStatesGraphOwned = false
+        bool extinctionMaterialGeometryStatesGraphOwned = false,
+        bool extinctionComputeEmulationOutputStatesGraphOwned = false,
+        Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr
     );
     // AVBOIT alternates raster and compute work. The Graphics-routed plan calls the three slices consecutively,
     // while the dedicated AsyncCompute schedule brackets the two compute dispatches with Graphics submissions.
@@ -129,7 +131,9 @@ public:
         bool extinctionCsgIntervalSampleImageStatesGraphOwned = false,
         bool extinctionCsgClipBufferStatesGraphOwned = false,
         bool extinctionMaterialFrameStatesGraphOwned = false,
-        bool extinctionMaterialGeometryStatesGraphOwned = false
+        bool extinctionMaterialGeometryStatesGraphOwned = false,
+        bool extinctionComputeEmulationOutputStatesGraphOwned = false,
+        Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr
     );
     void renderAvboitAccumulatePass(
         Core::CommandList& commandList,

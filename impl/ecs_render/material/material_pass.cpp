@@ -242,28 +242,49 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     const bool csgIntervalSampleImageStatesGraphOwned,
     const bool csgClipBufferStatesGraphOwned,
     const bool materialFrameStatesGraphOwned,
-    const bool materialGeometryStatesGraphOwned
+    const bool materialGeometryStatesGraphOwned,
+    const bool emulationOutputEntryStateGraphOwned,
+    Optional<Core::GpuTimingMeasure>* const emulationOutputTiming
 ){
-    if(!framebuffer || drawItems.empty())
+    const auto discardEmulationOutputTiming = [emulationOutputTiming](){
+        if(!emulationOutputTiming || !emulationOutputTiming->has_value())
+            return;
+        emulationOutputTiming->value().discardTiming();
+        emulationOutputTiming->reset();
+    };
+    if(!framebuffer || drawItems.empty()){
+        discardEmulationOutputTiming();
         return;
+    }
     const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(pass);
-    if(usesAvboit && (!avboitTargets || !avboitTargets->valid()))
+    if(usesAvboit && (!avboitTargets || !avboitTargets->valid())){
+        discardEmulationOutputTiming();
         return;
+    }
 
     commandList.endRenderPass();
 
-    Core::GpuTimingMeasure timing(
-        graphics().gpuTiming(),
-        __hidden_material_pass::MaterialPassGpuTimingScope(pass),
-        graphics().getDevice(),
-        commandList
-    );
+    // The graph producer creates this measurement before its dispatches. Without it, the producer intentionally
+    // recorded no output, so a raster-only consumer must not read a stale generated-vertex buffer.
+    if(emulationOutputEntryStateGraphOwned && (
+        !emulationOutputTiming
+        || !emulationOutputTiming->has_value()
+    ))
+        return;
 
     // Graph declaration froze the draw ordering and published all stream bytes before this task records. Keep this
     // consumer side-effect free: in particular, never replace its mesh-view, material, or CSG buffer contents.
-    if(!materialPassDrawBuffersReady(instanceCount, materialTypedByteCount))
+    if(!materialPassDrawBuffersReady(instanceCount, materialTypedByteCount)){
+        discardEmulationOutputTiming();
         return;
+    }
     const bool regularDrawResourcesReady = materialPassDrawResourcesReady(drawItems.regular);
+    // An active output handoff covers every regular compute draw. If a late resource check disagrees with the
+    // producer, reject this prepared raster rather than consuming a buffer the current packet did not generate.
+    if(emulationOutputEntryStateGraphOwned && !regularDrawResourcesReady){
+        discardEmulationOutputTiming();
+        return;
+    }
     const bool csgResourcesReady = !csgFrameData.hasWork() || m_renderer.csgSystem().csgFrameBuffersReady(csgFrameData);
     const bool csgDrawResourcesReady = csgResourcesReady
         && (drawItems.csg.empty() || materialPassDrawResourcesReady(drawItems.csg))
@@ -271,7 +292,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
 
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
-    const MaterialPassDrawContext drawContext{
+    const MaterialPassDrawContext regularDrawContext{
         commandList,
         framebuffer,
         pass,
@@ -281,12 +302,44 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         csgIntervalSampleImageStatesGraphOwned,
         csgClipBufferStatesGraphOwned,
         materialFrameStatesGraphOwned,
-        materialGeometryStatesGraphOwned
+        materialGeometryStatesGraphOwned,
+        emulationOutputEntryStateGraphOwned
     };
-    if(regularDrawResourcesReady)
-        renderMaterialPassDrawItems(drawContext, drawItems.regular);
-    if(csgDrawResourcesReady)
-        renderMaterialPassDrawItems(drawContext, drawItems.csg);
+    // The graph-owned handoff is deliberately regular-only. Preserve an unrelated CSG stream's local interleaving
+    // even if a future caller elects to split only the regular phase.
+    const MaterialPassDrawContext csgDrawContext{
+        commandList,
+        framebuffer,
+        pass,
+        avboitTargets,
+        viewportState,
+        false,
+        csgIntervalSampleImageStatesGraphOwned,
+        csgClipBufferStatesGraphOwned,
+        materialFrameStatesGraphOwned,
+        materialGeometryStatesGraphOwned,
+        false
+    };
+    const auto recordPreparedDraws = [&](){
+        if(regularDrawResourcesReady)
+            renderMaterialPassDrawItems(regularDrawContext, drawItems.regular);
+        if(csgDrawResourcesReady)
+            renderMaterialPassDrawItems(csgDrawContext, drawItems.csg);
+    };
+    if(emulationOutputEntryStateGraphOwned){
+        recordPreparedDraws();
+        emulationOutputTiming->value().finishTiming(commandList);
+        emulationOutputTiming->reset();
+    }
+    else{
+        Core::GpuTimingMeasure timing(
+            graphics().gpuTiming(),
+            __hidden_material_pass::MaterialPassGpuTimingScope(pass),
+            graphics().getDevice(),
+            commandList
+        );
+        recordPreparedDraws();
+    }
 }
 
 void RendererMaterialSystem::gatherMaterialPassDrawItems(

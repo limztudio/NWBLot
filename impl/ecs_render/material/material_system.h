@@ -81,7 +81,13 @@ public:
         // compatibility consumers retain their historical native setup by leaving this false.
         bool materialFrameStatesGraphOwned = false,
         // The graph can also retain the per-mesh source buffer batch selected by the prepared draw stream.
-        bool materialGeometryStatesGraphOwned = false
+        bool materialGeometryStatesGraphOwned = false,
+        // An immediately preceding graph task generated every regular emulation output. Consume those buffers as
+        // VertexBuffer inputs instead of replaying the local UAV-to-VertexBuffer bridge.
+        bool emulationOutputEntryStateGraphOwned = false,
+        // The producer opens this established pass measure before its dispatches; the prepared raster closes it.
+        // A missing measure means the producer intentionally no-op'd, so this consumer must not raster stale data.
+        Optional<Core::GpuTimingMeasure>* emulationOutputTiming = nullptr
     );
     [[nodiscard]] bool prepareMaterialPassResources(
         Core::Framebuffer* framebuffer,

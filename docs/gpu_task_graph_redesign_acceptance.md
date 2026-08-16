@@ -520,6 +520,7 @@ can receive an unconditional final sign-off.
 | Semantic task timing binding: Surfel GI | passed; the normal Surfel GI scope now binds directly to its semantic task even when its compiler-derived range also contains preparation and snapshot-copy packets. The main packet ID remains only for acceptance-state publication and completion-token lookup; the separate late counter-readback/recovery submission is unchanged. `nwb_ecs_render` rebuilt; graph tests passed 87/87, descriptor smoke passed 115 with 12 expected topology skips, and ECS graphics passed 18/18. |
 | Semantic task timing binding: Hardware Caustics | passed; Hardware Caustics now binds its timing ticket to the declared producer task instead of its compiler packet. The packet ID continues to identify its acceptance-state publication and optional lagged-history completion, so existing hardware/software routing and history behavior are unchanged. `nwb_ecs_render` rebuilt; graph tests passed 87/87, descriptor smoke passed 115 with 12 expected topology skips, and ECS graphics passed 18/18. |
 | Semantic task timing bindings: Shadow Visibility and Software Caustics | passed; the shared Shadow Effects submission resolves its first ticket from Shadow Visibility and, on the software route, its second from Software Caustics. The branch-dependent ticket count, exact packet-token lookups, and the retained hybrid HW→SW compatibility path are unchanged; compiler packet IDs no longer select those timing submits. `nwb_ecs_render` rebuilt; graph tests passed 87/87, descriptor smoke passed 115 with 12 expected topology skips, and ECS graphics passed 18/18. |
+| Semantic task timing bindings: AVBOIT chain | passed; AVBOIT now binds its Pre, Depth-Warp, Extinction, Integration, and Accumulation timing scopes to the corresponding declared tasks. The non-async route still submits only Pre, while the async route retains all five task anchors and existing packet-token/finalizer handling; no compiler packet ID is used merely to select timing submission. `nwb_ecs_render` rebuilt; graph tests passed 87/87, descriptor smoke passed 115 with 12 expected topology skips, and ECS graphics passed 18/18. |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -564,6 +565,8 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    accepted-state and optional lagged-history completion path.
    The Shadow Visibility and Software Caustics timing scopes now follow their semantic effect tasks while the
    retained hybrid compatibility fallback and accepted packet-token handling remain unchanged.
+   AVBOIT timing now follows its semantic Pre-through-Accumulation chain on both its normal and opt-in async
+   routes, while packet identity remains for completion and finalizer handling.
    Direct compatibility helpers retain their native transitions. The normal deferred effects chain now also resolves its late Prefix and
    persistent state fan-ins through semantic task-anchored bindings for Shadow Visibility, Software/Hardware
    Caustics, Surfel-GI preparation/copy/final work, AVBOIT-pre, Lighting, and Composite; it no longer builds a

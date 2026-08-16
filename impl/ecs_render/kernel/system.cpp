@@ -2938,25 +2938,25 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const auto submitAvboitLightingAndComposite = [&]() -> bool {
         Core::Alloc::ScratchArena deferredScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter deferredSubmitter(device);
-        const Core::GpuTaskGraphPacketTimingTicket avboitTimingTickets[] = {
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = avboitPrePacket,
+        const Core::GpuTaskGraphTaskTimingTicket avboitTimingTickets[] = {
+            Core::GpuTaskGraphTaskTimingTicket{
+                .task = m_deferredAvboitPreTask,
                 .timingTicket = &avboitPreTimingTicket,
             },
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = avboitDepthWarpPacket,
+            Core::GpuTaskGraphTaskTimingTicket{
+                .task = m_deferredAvboitDepthWarpTask,
                 .timingTicket = &avboitDepthWarpTimingTicket,
             },
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = avboitExtinctionPacket,
+            Core::GpuTaskGraphTaskTimingTicket{
+                .task = m_deferredAvboitExtinctionTask,
                 .timingTicket = &avboitExtinctionTimingTicket,
             },
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = avboitIntegrationPacket,
+            Core::GpuTaskGraphTaskTimingTicket{
+                .task = m_deferredAvboitIntegrationTask,
                 .timingTicket = &avboitIntegrationTimingTicket,
             },
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = avboitAccumulationPacket,
+            Core::GpuTaskGraphTaskTimingTicket{
+                .task = m_deferredAvboitAccumulationTask,
                 .timingTicket = &avboitAccumulationTimingTicket,
             },
         };
@@ -2997,7 +2997,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 && avboitIntegrationPacket.valid()
                 && avboitAccumulationPacket.valid()
             ))
-            && deferredSubmitter.submitPacketRangeInCompileOrder(
+            && deferredSubmitter.submitPacketRangeInCompileOrderFromTasks(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,

@@ -3362,9 +3362,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             .context = &surfelGiAcceptance,
             .invoke = acceptSurfelGiPacket,
         };
-        const Core::GpuTaskGraphPacketTimingTicket surfelGiTimingTickets[] = {
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = surfelGiPacket,
+        const Core::GpuTaskGraphTaskTimingTicket surfelGiTimingTickets[] = {
+            Core::GpuTaskGraphTaskTimingTicket{
+                .task = m_deferredSurfelGiTask,
                 .timingTicket = &surfelGiTimingTicket,
             },
         };
@@ -3381,7 +3381,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ))
             && surfelGiPacketRange.valid()
             && surfelGiPacketRange.packetCount == expectedSurfelGiPacketCount
-            && surfelGiSubmitter.submitPacketRangeInCompileOrder(
+            && surfelGiSubmitter.submitPacketRangeInCompileOrderFromTasks(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,

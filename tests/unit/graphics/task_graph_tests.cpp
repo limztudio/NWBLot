@@ -4222,6 +4222,154 @@ TEST(GpuTaskGraph, MergesExplicitCompatibleSuccessorIntoOnePacket){
 }
 
 
+// A compute-capable producer can run on Graphics, then immediately feed the raster vertex-input stage without a
+// renderer-owned bridge. Keep the hazard, execution order, packet coalescing, and exact state transition together:
+// a generated vertex buffer must go straight from UAV to VertexBuffer in the consumer task.
+TEST(GpuTaskGraph, MergesGraphicsComputeUavProducerIntoGraphicsVertexBufferConsumer){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId generatedVertexBuffer = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/generated_vertex_buffer"),
+        "Generated Vertex Buffer",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    ASSERT_TRUE(generatedVertexBuffer.valid());
+
+    const Graphics::GpuQueueRequest graphicsComputeQueue{
+        QueueCapabilities(
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueueCapability::Compute
+        ),
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest graphicsRasterQueue{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint producerScheduling;
+    producerScheduling.cost = Graphics::GpuTaskCostHint::Small;
+    producerScheduling.overlapPreferred = false;
+    producerScheduling.avoidQueueCrossing = true;
+    producerScheduling.forceSubmissionBoundary = false;
+    producerScheduling.allowPacketMerge = true;
+    producerScheduling.mergeWithPrevious = false;
+    const Graphics::GpuTaskResourceUse producerUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = generatedVertexBuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskId producer = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/generated_vertex_producer"))
+            .setMarkerLabel("Generate Vertex Buffer")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(producerScheduling)
+            .setResourceUses(producerUses, LengthOf(producerUses))
+    );
+    ASSERT_TRUE(producer.valid());
+
+    Graphics::GpuTaskSchedulingHint rasterScheduling = producerScheduling;
+    rasterScheduling.mergeWithPrevious = true;
+    rasterScheduling.allowMergeAcrossConsumerFrontier = true;
+    const Graphics::GpuTaskResourceUse rasterUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = generatedVertexBuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::VertexBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuTaskId raster = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/generated_vertex_raster"))
+            .setMarkerLabel("Raster Generated Vertex Buffer")
+            .setQueue(graphicsRasterQueue)
+            .setScheduling(rasterScheduling)
+            .setDependencies(&producer, 1u)
+            .setResourceUses(rasterUses, LengthOf(rasterUses))
+    );
+    ASSERT_TRUE(raster.valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    EXPECT_TRUE(analysis.hasExplicitEdge(producer, raster));
+    EXPECT_TRUE(analysis.hasInferredEdge(producer, raster));
+    const Graphics::GpuTaskDependencyEdge* const dependency = FindEdge(analysis, producer, raster);
+    ASSERT_NE(dependency, nullptr);
+    EXPECT_EQ(dependency->hazard, Graphics::GpuTaskHazardType::Explicit);
+    EXPECT_FALSE(dependency->resource.valid());
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        producer,
+        raster,
+        generatedVertexBuffer,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    ASSERT_EQ(analysis.topologicalOrder().size(), 2u);
+    EXPECT_EQ(analysis.topologicalOrder()[0u], producer);
+    EXPECT_EQ(analysis.topologicalOrder()[1u], raster);
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
+    const Graphics::GpuTaskQueueAssignment* const rasterAssignment = assignments.find(raster);
+    ASSERT_NE(producerAssignment, nullptr);
+    ASSERT_NE(rasterAssignment, nullptr);
+    EXPECT_EQ(producerAssignment->queue, queue.id);
+    EXPECT_EQ(rasterAssignment->queue, queue.id);
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId rasterPacket = compiledGraph.packetForTask(raster);
+    ASSERT_TRUE(producerPacket.valid());
+    ASSERT_TRUE(rasterPacket.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(producerPacket, rasterPacket);
+    const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(producerPacket);
+    EXPECT_EQ(packet.queue, queue.id);
+    EXPECT_EQ(packet.dependencyCount, 0u);
+    ASSERT_EQ(packet.taskCount, 2u);
+    ASSERT_NE(compiledGraph.packetTasks(producerPacket), nullptr);
+    EXPECT_EQ(compiledGraph.packetTasks(producerPacket)[0u], producer);
+    EXPECT_EQ(compiledGraph.packetTasks(producerPacket)[1u], raster);
+
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+    const Graphics::GpuCompiledTask* const compiledRaster = compiledGraph.findTask(raster);
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledRaster, nullptr);
+    ASSERT_EQ(compiledProducer->prologueBarrierCount, 1u);
+    ASSERT_EQ(compiledRaster->prologueBarrierCount, 1u);
+    const Graphics::GpuCompiledBarrier* const producerBarrier = compiledGraph.taskPrologueBarriers(producer);
+    const Graphics::GpuCompiledBarrier* const rasterBarrier = compiledGraph.taskPrologueBarriers(raster);
+    ASSERT_NE(producerBarrier, nullptr);
+    ASSERT_NE(rasterBarrier, nullptr);
+    EXPECT_EQ(producerBarrier[0u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(producerBarrier[0u].resource, generatedVertexBuffer);
+    EXPECT_EQ(producerBarrier[0u].before, Graphics::ResourceStates::Common);
+    EXPECT_EQ(producerBarrier[0u].after, Graphics::ResourceStates::UnorderedAccess);
+    EXPECT_EQ(rasterBarrier[0u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(rasterBarrier[0u].resource, generatedVertexBuffer);
+    EXPECT_EQ(rasterBarrier[0u].before, Graphics::ResourceStates::UnorderedAccess);
+    EXPECT_EQ(rasterBarrier[0u].after, Graphics::ResourceStates::VertexBuffer);
+    EXPECT_EQ(rasterBarrier[0u].sourceQueue, queue.id);
+    EXPECT_EQ(rasterBarrier[0u].destinationQueue, queue.id);
+}
+
+
 TEST(GpuTaskGraph, KeepsAvboitUploadSequenceOutOfHardwareCausticsPacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

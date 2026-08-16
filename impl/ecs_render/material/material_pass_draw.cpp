@@ -223,7 +223,10 @@ void RendererMaterialSystem::renderMaterialPassDrawItems(
     const MaterialPassDrawItems& drawItems
 ){
     renderMeshMaterialPassDrawItems(context, drawItems.meshDrawItems);
-    renderComputeMaterialPassDrawItems(context, drawItems.computeDrawItems);
+    if(context.emulationOutputEntryStateGraphOwned)
+        renderComputeMaterialPassDrawItemsRasterOnly(context, drawItems.computeDrawItems);
+    else
+        renderComputeMaterialPassDrawItems(context, drawItems.computeDrawItems);
 }
 
 void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
@@ -270,12 +273,136 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
     });
 }
 
+void RendererMaterialSystem::generateComputeMaterialPassDrawItems(
+    const MaterialPassDrawContext& context,
+    const MaterialPassDrawItemVector& drawItems
+){
+    if(drawItems.empty())
+        return;
+    // This half deliberately has no local output transition. A graph producer must have declared every selected
+    // generated-vertex buffer as a UAV before recording it.
+    NWB_ASSERT(context.emulationOutputEntryStateGraphOwned);
+    NWB_ASSERT(drawState().m_meshViewBuffer);
+
+    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
+        NWB_ASSERT(materialPassDrawResourcesReady(mesh));
+        NWB_ASSERT(pipelineResources.computePipeline);
+        NWB_ASSERT(mesh.emulationVertexHeapHandle.valid());
+        NWB_ASSERT(mesh.emulationVertexBuffer);
+        const MaterialPipelineCsgBindingUse csgBindingUse =
+            MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, context.pass);
+
+        setMaterialPassCommonBufferStates(
+            context.commandList,
+            mesh,
+            context.materialFrameStatesGraphOwned,
+            context.materialGeometryStatesGraphOwned
+        );
+        __hidden_material_pass_draw::SetCsgHeapResourceStates(
+            m_renderer.csgSystem(),
+            context.commandList,
+            deferredState().m_targets,
+            csgBindingUse,
+            context.csgReceiverSurfaceImageStatesGraphOwned,
+            context.csgIntervalSampleImageStatesGraphOwned,
+            context.csgClipBufferStatesGraphOwned
+        );
+
+        Core::ComputeState computeState;
+        computeState.setPipeline(pipelineResources.computePipeline.get());
+        // Set 0 contains the shared push range only; every resource, including this mesh's graph-provided writable
+        // generated-vertex buffer, is selected through the global descriptor heap.
+
+        context.commandList.setComputeState(computeState);
+        graphics().getDevice().getDescriptorHeap().bindCompute(context.commandList, *pipelineResources.computePipeline.get());
+
+        ECSRenderDetail::MeshFrameHeapSlots frameHeapSlots;
+        m_renderer.meshSystem().populateMeshFrameHeapSlots(frameHeapSlots);
+        frameHeapSlots.generatedVertex = mesh.emulationVertexHeapHandle.slot();
+        ECSRenderDetail::SetShaderDrivenPushConstants(
+            context.commandList,
+            mesh.meshletCount,
+            drawItem.instanceIndex,
+            drawItem.materialConstantByteOffset,
+            context.viewportState,
+            frameHeapSlots,
+            materialPassDrawDispatchFlags(context, drawItem, mesh)
+        );
+        {
+            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, graphics().getDevice(), context.commandList);
+
+            context.commandList.dispatch(mesh.meshletCount);
+        }
+    });
+}
+
+void RendererMaterialSystem::renderComputeMaterialPassDrawItemsRasterOnly(
+    const MaterialPassDrawContext& context,
+    const MaterialPassDrawItemVector& drawItems
+){
+    if(drawItems.empty())
+        return;
+    // This half deliberately has no local output transition. A graph consumer must have declared every selected
+    // generated-vertex buffer as a VertexBuffer before recording it.
+    NWB_ASSERT(context.emulationOutputEntryStateGraphOwned);
+    NWB_ASSERT(drawState().m_meshViewBuffer);
+
+    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
+        NWB_ASSERT(materialPassDrawResourcesReady(mesh));
+        NWB_ASSERT(pipelineResources.emulationPipeline);
+        NWB_ASSERT(mesh.emulationVertexBuffer);
+        const MaterialPipelineCsgBindingUse csgBindingUse =
+            MaterialPipelineResolveCsgBindingUse(drawItem.pipelineKey, context.pass);
+
+        setMaterialPassCommonBufferStates(
+            context.commandList,
+            mesh,
+            context.materialFrameStatesGraphOwned,
+            context.materialGeometryStatesGraphOwned
+        );
+        __hidden_material_pass_draw::SetCsgHeapResourceStates(
+            m_renderer.csgSystem(),
+            context.commandList,
+            deferredState().m_targets,
+            csgBindingUse,
+            context.csgReceiverSurfaceImageStatesGraphOwned,
+            context.csgIntervalSampleImageStatesGraphOwned,
+            context.csgClipBufferStatesGraphOwned
+        );
+
+        Core::GraphicsState graphicsState;
+        graphicsState.setPipeline(pipelineResources.emulationPipeline.get());
+        graphicsState.setFramebuffer(context.framebuffer);
+        graphicsState.setViewport(context.viewportState);
+        graphicsState.addVertexBuffer(
+            Core::VertexBufferBinding()
+                .setBuffer(mesh.emulationVertexBuffer.get())
+                .setSlot(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX)
+                .setOffset(0)
+        );
+
+        context.commandList.setGraphicsState(graphicsState);
+        graphics().getDevice().getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.emulationPipeline.get());
+
+        setMaterialPassDrawPushConstants(context, drawItem, mesh);
+
+        Core::DrawArguments drawArgs;
+        drawArgs.setVertexCount(mesh.meshletPrimitiveIndexCount);
+        {
+            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_Raster, graphics().getDevice(), context.commandList);
+
+            context.commandList.draw(drawArgs);
+        }
+    });
+}
+
 void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
     const MaterialPassDrawItemVector& drawItems
 ){
     if(drawItems.empty())
         return;
+    NWB_ASSERT(!context.emulationOutputEntryStateGraphOwned);
     NWB_ASSERT(drawState().m_meshViewBuffer);
 
     forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){

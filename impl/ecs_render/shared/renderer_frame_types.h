@@ -109,8 +109,12 @@ struct MaterialPassDrawContext{
     // can independently retain every selected mesh-source SRV, while direct/unprepared draws keep local setup.
     bool materialFrameStatesGraphOwned = false;
     // The graph may also retain and declare every source buffer selected by this frozen draw stream. Generated
-    // emulation vertices still transition locally between the compute and raster portions of one draw.
+    // emulation vertices remain local by default; an alias-free opaque split opts into the trailing graph handoff.
     bool materialGeometryStatesGraphOwned = false;
+    // A split compute-emulation producer/raster pair receives this mesh's generated-vertex output in its required
+    // entry state from the graph (UAV for the producer and VertexBuffer for the raster consumer). Compatibility
+    // callers leave this false and retain the per-item native UAV-to-VertexBuffer handoff.
+    bool emulationOutputEntryStateGraphOwned = false;
 };
 
 

@@ -742,6 +742,119 @@ struct TransparentCsgIntervalGraphSnapshot{
 };
 
 
+// Compute-emulated material draws write one persistent generated-vertex buffer per mesh.  A graph producer may
+// only run ahead of the G-buffer raster stage when every frozen regular opaque draw owns a distinct output.  Keep
+// the exact draw order and retained handles so recording can reject a mesh-resource replacement instead of
+// dispatching into a newly selected buffer that the compiled graph did not import.
+struct OpaqueRegularComputeEmulationGraphPlan{
+    using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
+    using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
+
+    DrawItemVector meshDrawItems;
+    DrawItemVector drawItems;
+    BufferVector outputBuffers;
+    bool captured = false;
+
+    explicit OpaqueRegularComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)
+        : meshDrawItems(arena)
+        , drawItems(arena)
+        , outputBuffers(arena)
+    {}
+
+    void reset(){
+        meshDrawItems.clear();
+        drawItems.clear();
+        outputBuffers.clear();
+        captured = false;
+    }
+
+    [[nodiscard]] bool capture(
+        RendererMeshSystem& meshSystem,
+        const MaterialPassDrawItems& sourceDrawItems
+    ){
+        reset();
+        if(sourceDrawItems.computeDrawItems.empty())
+            return false;
+
+        meshDrawItems.assign(sourceDrawItems.meshDrawItems.begin(), sourceDrawItems.meshDrawItems.end());
+        drawItems.reserve(sourceDrawItems.computeDrawItems.size());
+        outputBuffers.reserve(sourceDrawItems.computeDrawItems.size());
+        for(const MaterialPassDrawItem& drawItem : sourceDrawItems.computeDrawItems){
+            // This first split is deliberately regular opaque-only. A CSG binding may need clip/image state and
+            // maintains a different producer/raster ordering contract, so it remains on the combined callback.
+            if(drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None){
+                reset();
+                return false;
+            }
+            MeshResources* mesh = nullptr;
+            if(
+                !meshSystem.findMeshResources(drawItem.meshKey, mesh)
+                || !mesh
+                || !mesh->emulationVertexBuffer
+                || !mesh->emulationVertexHeapHandle.valid()
+            ){
+                reset();
+                return false;
+            }
+            // The original callback interleaves dispatch and raster specifically because a second instance can
+            // overwrite this whole persistent buffer.  This first graph-owned slice deliberately declines that
+            // case rather than moving either draw across a potentially aliasing producer.
+            for(const Core::BufferHandle& existing : outputBuffers){
+                if(existing.get() == mesh->emulationVertexBuffer.get()){
+                    reset();
+                    return false;
+                }
+            }
+            drawItems.push_back(drawItem);
+            outputBuffers.push_back(mesh->emulationVertexBuffer);
+        }
+        captured = drawItems.size() == outputBuffers.size() && !drawItems.empty();
+        return captured;
+    }
+
+    [[nodiscard]] bool matches(
+        RendererMeshSystem& meshSystem,
+        const MaterialPassDrawItemVector& currentDrawItems
+    )const{
+        if(
+            !captured
+            || currentDrawItems.size() != drawItems.size()
+            || outputBuffers.size() != drawItems.size()
+        )
+            return false;
+
+        for(usize drawIndex = 0u; drawIndex < currentDrawItems.size(); ++drawIndex){
+            const MaterialPassDrawItem& expected = drawItems[drawIndex];
+            const MaterialPassDrawItem& current = currentDrawItems[drawIndex];
+            if(
+                current.meshKey != expected.meshKey
+                || current.instanceIndex != expected.instanceIndex
+                || current.materialConstantByteOffset != expected.materialConstantByteOffset
+                || current.shadingModelId != expected.shadingModelId
+                || current.meshletConeCullScaleSafe != expected.meshletConeCullScaleSafe
+            )
+                return false;
+
+            MeshResources* mesh = nullptr;
+            if(
+                !meshSystem.findMeshResources(current.meshKey, mesh)
+                || !mesh
+                || !mesh->emulationVertexBuffer
+                || !mesh->emulationVertexHeapHandle.valid()
+                || mesh->emulationVertexBuffer.get() != outputBuffers[drawIndex].get()
+            )
+                return false;
+        }
+        return true;
+    }
+
+    void materialize(MaterialPassDrawItems& outDrawItems)const{
+        outDrawItems.meshDrawItems.assign(meshDrawItems.begin(), meshDrawItems.end());
+        outDrawItems.computeDrawItems.assign(drawItems.begin(), drawItems.end());
+    }
+};
+
+
 // Prepared transparent CSG exposes receiver-surface -> span before the following interval-combine callback. The
 // later phase-local occupancy uploads depend on Combine so they cannot overwrite its frozen CSG buffers first.
 struct AvboitCsgReceiverSpanGraphTask{
@@ -979,6 +1092,95 @@ struct TransparentMaterialPassGraphSnapshot{
 };
 
 
+// The opaque regular compute-emulation producer is deliberately a separate callback: it must finish every selected
+// alias-free generated-vertex output before G-buffer begins dynamic rendering. The paired G-buffer consumer then
+// receives the compiler-owned UAV-to-VertexBuffer transition. Shared-output batches remain on the compatibility
+// combined callback, where dispatch and raster still interleave per draw.
+struct OpaqueRegularComputeEmulationGraphTask{
+    struct Payload{
+        RendererSystem* renderer = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
+        const bool* meshViewSetupReady = nullptr;
+        const bool* sceneShadingSetupReady = nullptr;
+        OpaqueRegularComputeEmulationGraphPlan plan;
+        usize instanceCount = 0u;
+        usize materialTypedByteCount = 0u;
+        bool materialDrawBuffersUploaded = false;
+        bool materialFrameStatesGraphOwned = false;
+        bool materialGeometryStatesGraphOwned = false;
+
+        explicit Payload(Core::Alloc::GlobalArena& arena)
+            : plan(arena)
+        {}
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(
+            !payload.renderer
+            || !payload.targets
+            || !payload.timingTicket
+            || !*payload.timingTicket
+            || !payload.meshViewSetupReady
+            || !payload.sceneShadingSetupReady
+            || !payload.plan.captured
+        )
+            return false;
+
+        RendererSystem& renderer = *payload.renderer;
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
+        const bool frameSetupReady =
+            *payload.meshViewSetupReady
+            && *payload.sceneShadingSetupReady
+        ;
+        if(!frameSetupReady)
+            return true;
+
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+        MaterialPassDrawItems drawItems{ scratchArena };
+        payload.plan.materialize(drawItems);
+        // The graph imported the exact persistent output handles retained by the frozen plan. Reject a live mesh
+        // resource replacement instead of dispatching into a newly selected descriptor target outside that set.
+        if(!payload.plan.matches(renderer.m_meshSystem, drawItems.computeDrawItems))
+            return false;
+        if(
+            !payload.materialDrawBuffersUploaded
+            || !renderer.m_materialSystem.materialPassDrawBuffersReady(
+                payload.instanceCount,
+                payload.materialTypedByteCount
+            )
+            || !renderer.m_materialSystem.materialPassDrawResourcesReady(drawItems)
+        )
+            return true;
+
+        Core::ViewportState deferredViewportState;
+        deferredViewportState.addViewportAndScissorRect(
+            payload.targets->framebuffer->getFramebufferInfo().getViewport()
+        );
+        const MaterialPassDrawContext drawContext{
+            commandList,
+            nullptr,
+            MaterialPipelinePass::Opaque,
+            nullptr,
+            deferredViewportState,
+            false,
+            false,
+            false,
+            payload.materialFrameStatesGraphOwned,
+            payload.materialGeometryStatesGraphOwned,
+            true,
+        };
+        renderer.m_materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+        return true;
+    }
+};
+
+
 // The opaque G-buffer runs after graph-owned material and CSG uploads plus the native deferred clear. Its barriers
 // and final state are therefore part of the graph packet; transparent CSG retains its separate AVBOIT snapshot.
 struct GbufferGraphTask{
@@ -996,6 +1198,7 @@ struct GbufferGraphTask{
         bool csgClipBufferStatesGraphOwned = false;
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
+        bool regularComputeEmulationOutputStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : opaqueDrawSnapshot(arena)
@@ -1088,7 +1291,8 @@ struct GbufferGraphTask{
                 false,
                 false,
                 payload.materialFrameStatesGraphOwned,
-                payload.materialGeometryStatesGraphOwned
+                payload.materialGeometryStatesGraphOwned,
+                payload.regularComputeEmulationOutputStatesGraphOwned
             };
             if(regularDrawResourcesReady && !opaqueDrawItems.regular.empty()){
                 Core::GpuTimingMeasure timing(
@@ -2241,6 +2445,46 @@ struct DeferredPresentGraphTask{
     for(const Core::GpuTaskResourceUse& use : resourceUses)
         members.push_back(use.resource);
 
+    outResourceSet = graph.importResourceSet(
+        Core::GpuGraphResourceSetDesc{}
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setMembers(members.data(), members.size())
+    );
+    return outResourceSet.valid();
+}
+
+// The opaque regular compute-emulation producer owns one frozen, pairwise-distinct generated-vertex buffer per
+// draw. Reuse an existing typed import when another preparation phase already retained that buffer; a second
+// identity for the same native resource would otherwise make the later UAV-to-VertexBuffer handoff ambiguous.
+[[nodiscard]] static bool GatherOpaqueRegularComputeEmulationResourceSet(
+    Core::GpuTaskGraph& graph,
+    const ECSRenderDetail::OpaqueRegularComputeEmulationGraphPlan& plan,
+    Core::Alloc::ScratchArena& scratchArena,
+    const Name& identity,
+    const AStringView label,
+    Core::GpuGraphResourceSetId& outResourceSet
+){
+    outResourceSet = {};
+    if(!plan.captured || plan.outputBuffers.empty())
+        return false;
+
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> members{ scratchArena };
+    members.reserve(plan.outputBuffers.size());
+    for(const Core::BufferHandle& buffer : plan.outputBuffers){
+        if(!buffer)
+            return false;
+        Core::GpuGraphResourceId resource = graph.findImportedBuffer(buffer);
+        if(!resource.valid()){
+            const Name bufferIdentity = buffer->getDescription().debugName;
+            if(!bufferIdentity)
+                return false;
+            resource = graph.importBuffer(buffer, BufferResourceDesc(bufferIdentity, label));
+        }
+        if(!resource.valid())
+            return false;
+        members.push_back(resource);
+    }
     outResourceSet = graph.importResourceSet(
         Core::GpuGraphResourceSetDesc{}
             .setIdentity(identity)
@@ -3623,6 +3867,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixCsgIntervalClearFirstTask = {};
     m_graphicsPrefixCsgIntervalClearTask = {};
+    m_graphicsPrefixOpaqueComputeEmulationTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixCsgReceiverSpanTask = {};
     m_graphicsPrefixCsgIntervalCombineTask = {};
@@ -4480,10 +4725,14 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
     Core::Alloc::ScratchArena gbufferResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferResourceUses{ gbufferResourceScratch };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> opaqueComputeEmulationResourceUses{
+        gbufferResourceScratch
+    };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgReceiverSpanResourceUses{ gbufferResourceScratch };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgIntervalCombineResourceUses{ gbufferResourceScratch };
     Core::GpuGraphResourceSetId gbufferMaterialGeometrySet;
     Core::GpuGraphResourceSetId gbufferMaterialSampledTextureSet;
+    Core::GpuGraphResourceSetId opaqueComputeEmulationOutputSet;
     const MaterialPassDrawItems* const gbufferMaterialGeometryDrawSets[] = {
         &opaqueDrawItems.regular,
         &opaqueDrawItems.csgReceiverSurface,
@@ -4520,7 +4769,41 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     ;
     if(gbufferUsesMaterialGeometry && !gbufferMaterialSampledTexturesCollected)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque material sampled textures"));
-    gbufferResourceUses.reserve((hasOpaqueDrawItems ? 7u : 5u) + (hasCsgFrameGpuWork ? 5u : 0u) + (hasOpaqueCsgFrameWork ? 5u : 0u));
+
+    // A generated-vertex buffer is persistent per mesh, so pulling every compute dispatch ahead of raster would be
+    // wrong when multiple frozen draw items select the same output. The plan deliberately enables only the fully
+    // alias-free regular opaque case; all other streams keep their established local interleaved handoff.
+    ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask::Payload opaqueComputeEmulationPayload{ m_arena };
+    const bool opaqueComputeEmulationPlanCaptured = gbufferPayload.materialFrameStatesGraphOwned
+        && gbufferPayload.materialGeometryStatesGraphOwned
+        && gbufferMaterialSampledTexturesCollected
+        && opaqueComputeEmulationPayload.plan.capture(
+            m_meshSystem,
+            opaqueDrawItems.regular
+        )
+    ;
+    const bool opaqueComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationPlanCaptured
+        && GatherOpaqueRegularComputeEmulationResourceSet(
+            m_deferredLightingTaskGraph,
+            opaqueComputeEmulationPayload.plan,
+            gbufferResourceScratch,
+            Name("render.graphics_prefix.opaque_compute_emulation.outputs"),
+            "Opaque Compute Emulation Outputs",
+            opaqueComputeEmulationOutputSet
+        )
+    ;
+    if(opaqueComputeEmulationPlanCaptured && !opaqueComputeEmulationOutputStatesGraphOwned){
+        NWB_LOGGER_WARNING(NWB_TEXT(
+            "RendererSystem: could not declare graph-owned opaque compute-emulation output states"
+        ));
+    }
+    gbufferPayload.regularComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationOutputStatesGraphOwned;
+
+    gbufferResourceUses.reserve(
+        (hasOpaqueDrawItems ? 7u : 5u)
+        + (hasCsgFrameGpuWork ? 5u : 0u)
+        + (hasOpaqueCsgFrameWork ? 5u : 0u)
+    );
     gbufferResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
     if(hasOpaqueDrawItems){
         gbufferResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
@@ -4646,24 +4929,107 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         .requiredState = Core::ResourceStates::ShaderResource,
         .access = Core::GpuTaskResourceAccess::Read,
     };
-    Core::GpuTaskResourceSetUse gbufferMaterialResourceSetUses[2u] = {};
+    const Core::GpuTaskResourceSetUse opaqueComputeEmulationOutputUavSetUse{
+        .resourceSet = opaqueComputeEmulationOutputSet,
+        .range = {},
+        .requiredState = Core::ResourceStates::UnorderedAccess,
+        .access = Core::GpuTaskResourceAccess::Write,
+    };
+    const Core::GpuTaskResourceSetUse opaqueComputeEmulationOutputVertexBufferSetUse{
+        .resourceSet = opaqueComputeEmulationOutputSet,
+        .range = {},
+        .requiredState = Core::ResourceStates::VertexBuffer,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
+    Core::GpuTaskResourceSetUse gbufferMaterialResourceSetUses[3u] = {};
     usize gbufferMaterialResourceSetUseCount = 0u;
     if(gbufferPayload.materialGeometryStatesGraphOwned)
         gbufferMaterialResourceSetUses[gbufferMaterialResourceSetUseCount++] = gbufferMaterialGeometrySetUse;
     if(gbufferMaterialSampledTextureSet.valid())
         gbufferMaterialResourceSetUses[gbufferMaterialResourceSetUseCount++] = gbufferMaterialSampledTextureSetUse;
+    if(opaqueComputeEmulationOutputStatesGraphOwned){
+        gbufferMaterialResourceSetUses[gbufferMaterialResourceSetUseCount++] =
+            opaqueComputeEmulationOutputVertexBufferSetUse;
+    }
+
+    Core::GpuTaskId gbufferDependency = csgIntervalClearTask;
+    if(opaqueComputeEmulationOutputStatesGraphOwned){
+        opaqueComputeEmulationPayload.renderer = this;
+        opaqueComputeEmulationPayload.targets = &deferredTargets;
+        // G-buffer's semantic timing ticket spans its preparatory compute half and its raster half in one packet.
+        opaqueComputeEmulationPayload.timingTicket = timingTicketSlot(PrefixTimingSlot::Gbuffer);
+        opaqueComputeEmulationPayload.meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady;
+        opaqueComputeEmulationPayload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
+        opaqueComputeEmulationPayload.instanceCount = instanceData.size();
+        opaqueComputeEmulationPayload.materialTypedByteCount = materialTypedBytes.size();
+        opaqueComputeEmulationPayload.materialDrawBuffersUploaded = gbufferPayload.materialDrawBuffersUploaded;
+        opaqueComputeEmulationPayload.materialFrameStatesGraphOwned = gbufferPayload.materialFrameStatesGraphOwned;
+        opaqueComputeEmulationPayload.materialGeometryStatesGraphOwned = gbufferPayload.materialGeometryStatesGraphOwned;
+
+        opaqueComputeEmulationResourceUses.reserve(3u);
+        opaqueComputeEmulationResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
+        opaqueComputeEmulationResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
+        opaqueComputeEmulationResourceUses.push_back(ReadUse(materialTyped, Core::ResourceStates::ShaderResource));
+        Core::GpuTaskResourceSetUse opaqueComputeEmulationResourceSetUses[3u] = {};
+        usize opaqueComputeEmulationResourceSetUseCount = 0u;
+        opaqueComputeEmulationResourceSetUses[opaqueComputeEmulationResourceSetUseCount++] = gbufferMaterialGeometrySetUse;
+        if(gbufferMaterialSampledTextureSet.valid()){
+            opaqueComputeEmulationResourceSetUses[opaqueComputeEmulationResourceSetUseCount++] =
+                gbufferMaterialSampledTextureSetUse;
+        }
+        opaqueComputeEmulationResourceSetUses[opaqueComputeEmulationResourceSetUseCount++] =
+            opaqueComputeEmulationOutputUavSetUse;
+        Core::GpuTaskSchedulingHint opaqueComputeEmulationScheduling;
+        opaqueComputeEmulationScheduling.cost = Core::GpuTaskCostHint::Medium;
+        opaqueComputeEmulationScheduling.forceSubmissionBoundary = false;
+        opaqueComputeEmulationScheduling.allowPacketMerge = true;
+        opaqueComputeEmulationScheduling.mergeWithPrevious = true;
+        // This explicit immediate successor must remain with the preceding Graphics prefix work: CSG clear timing
+        // and the G-buffer semantic range both require one accepting command list under FrontierSafe packetization.
+        opaqueComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
+        Core::GpuTaskDesc opaqueComputeEmulationDesc;
+        opaqueComputeEmulationDesc
+            .setIdentity(Name("render.graphics_prefix.opaque_compute_emulation"))
+            .setMarkerLabel("Opaque Compute Emulation")
+            .setQueue(GraphicsComputeQueueRequest())
+            .setScheduling(opaqueComputeEmulationScheduling)
+            .setDependencies(&gbufferDependency, 1u)
+            .setResourceUses(
+                opaqueComputeEmulationResourceUses.data(),
+                opaqueComputeEmulationResourceUses.size()
+            )
+            .setResourceSetUses(
+                opaqueComputeEmulationResourceSetUses,
+                opaqueComputeEmulationResourceSetUseCount
+            )
+        ;
+        m_graphicsPrefixOpaqueComputeEmulationTask = m_deferredLightingTaskGraph.addTask<
+            ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask
+        >(
+            opaqueComputeEmulationDesc,
+            Move(opaqueComputeEmulationPayload)
+        );
+        if(!m_graphicsPrefixOpaqueComputeEmulationTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque compute-emulation producer"));
+            return false;
+        }
+        gbufferDependency = m_graphicsPrefixOpaqueComputeEmulationTask;
+    }
     Core::GpuTaskSchedulingHint gbufferScheduling;
     gbufferScheduling.cost = Core::GpuTaskCostHint::Medium;
     gbufferScheduling.forceSubmissionBoundary = false;
     gbufferScheduling.allowPacketMerge = true;
     gbufferScheduling.mergeWithPrevious = true;
+    // The producer is an explicit immediate predecessor. Preserve its compiler-owned UAV-to-VertexBuffer handoff
+    // inside the existing primary-Graphics packet even when FrontierSafe sees an earlier cross-queue consumer.
+    gbufferScheduling.allowMergeAcrossConsumerFrontier = opaqueComputeEmulationOutputStatesGraphOwned;
     Core::GpuTaskDesc gbufferDesc;
     gbufferDesc
         .setIdentity(Name("render.graphics_prefix.gbuffer"))
         .setMarkerLabel("Opaque G-Buffer")
         .setQueue(GraphicsComputeQueueRequest())
         .setScheduling(gbufferScheduling)
-        .setDependencies(&csgIntervalClearTask, 1u)
+        .setDependencies(&gbufferDependency, 1u)
         .setResourceUses(gbufferResourceUses.data(), gbufferResourceUses.size())
         .setResourceSetUses(
             gbufferMaterialResourceSetUseCount != 0u ? gbufferMaterialResourceSetUses : nullptr,
@@ -7734,6 +8100,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixCsgIntervalClearFirstTask = {};
     m_graphicsPrefixCsgIntervalClearTask = {};
+    m_graphicsPrefixOpaqueComputeEmulationTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixCsgReceiverSpanTask = {};
     m_graphicsPrefixCsgIntervalCombineTask = {};

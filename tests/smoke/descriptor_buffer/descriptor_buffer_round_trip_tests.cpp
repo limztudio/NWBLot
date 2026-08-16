@@ -15931,6 +15931,227 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningOutputStatesFinalizeInGr
 }
 
 
+// Compute-emulated material work writes its generated vertex stream before the ordinary raster callback consumes
+// that exact stream. Both command capabilities must remain on primary Graphics, so the graph owns the direct
+// UAV -> VertexBuffer handoff inside one accepting packet rather than relying on a callback-local bridge.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedComputeEmulationGeneratedVertexHandoffMergesWithRaster){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto generatedVertex = device.createBuffer(
+        BufferDesc()
+            .setDebugName(Name("tests/descriptor_buffer/compute_emulation_generated_vertex"))
+            .setByteSize(3u * 4u * sizeof(f32))
+            .setStructStride(4u * sizeof(f32))
+            .setCanHaveUAVs(true)
+            .setCanHaveRawViews(true)
+            .setIsVertexBuffer(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::Exclusive)
+    );
+    ASSERT_NE(generatedVertex.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const BufferDesc& generatedVertexDesc = generatedVertex->getDescription();
+    const GpuGraphResourceId generatedVertexResource = graph.importBuffer(
+        generatedVertex,
+        GpuGraphResourceDesc{}
+            .setIdentity(generatedVertexDesc.debugName)
+            .setMarkerLabel("Compute-Emulated Generated Vertex")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(generatedVertexDesc.initialState)
+            .setQueueSharing(generatedVertexDesc.queueSharing)
+    );
+    ASSERT_TRUE(generatedVertexResource.valid());
+
+    const GpuQueueRequest graphicsComputeQueue{
+        static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+        ),
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint producerScheduling;
+    producerScheduling.cost = GpuTaskCostHint::Small;
+    producerScheduling.overlapPreferred = false;
+    producerScheduling.avoidQueueCrossing = true;
+    producerScheduling.forceSubmissionBoundary = false;
+    producerScheduling.allowPacketMerge = true;
+    producerScheduling.mergeWithPrevious = false;
+    const GpuTaskResourceUse producerUses[] = {
+        GpuTaskResourceUse{
+            .resource = generatedVertexResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    bool producerObservedUnorderedAccess = false;
+    QueueSubmissionToken producerAcceptedToken;
+    const GpuTaskId producerTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/compute_emulation_generated_vertex_producer"))
+            .setMarkerLabel("Compute-Emulated Generated Vertex Producer")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(producerScheduling)
+            .setResourceUses(producerUses, LengthOf(producerUses)),
+        NativePacketPrefixTask::Payload{
+            // This callback only observes the graph-owned UAV entry state.
+            .buffer = generatedVertex.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .recorded = &producerObservedUnorderedAccess,
+            .acceptedToken = &producerAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(producerTask.valid());
+
+    GpuTaskSchedulingHint rasterScheduling = producerScheduling;
+    rasterScheduling.mergeWithPrevious = true;
+    rasterScheduling.allowMergeAcrossConsumerFrontier = true;
+    const GpuTaskResourceUse rasterUses[] = {
+        GpuTaskResourceUse{
+            .resource = generatedVertexResource,
+            .range = {},
+            .requiredState = ResourceStates::VertexBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    bool rasterObservedVertexBuffer = false;
+    QueueSubmissionToken rasterAcceptedToken;
+    const GpuTaskId rasterTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/compute_emulation_generated_vertex_raster"))
+            .setMarkerLabel("Compute-Emulated Generated Vertex Raster Consume")
+            .setQueue(graphicsQueue)
+            .setScheduling(rasterScheduling)
+            .setDependencies(&producerTask, 1u)
+            .setResourceUses(rasterUses, LengthOf(rasterUses)),
+        NativePacketPrefixTask::Payload{
+            // This callback likewise performs no native transition; packet lowering owns UAV -> VertexBuffer.
+            .buffer = generatedVertex.get(),
+            .expectedState = ResourceStates::VertexBuffer,
+            .recorded = &rasterObservedVertexBuffer,
+            .acceptedToken = &rasterAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(rasterTask.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    ASSERT_TRUE(primaryGraphicsQueue.valid());
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/compute_emulation_generated_vertex_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    EXPECT_TRUE(analysis.hasExplicitEdge(producerTask, rasterTask));
+    EXPECT_TRUE(analysis.hasInferredEdge(producerTask, rasterTask));
+    ASSERT_EQ(analysis.topologicalOrder().size(), 2u);
+    EXPECT_EQ(analysis.topologicalOrder()[0u], producerTask);
+    EXPECT_EQ(analysis.topologicalOrder()[1u], rasterTask);
+
+    const GpuTaskQueueAssignment* const producerAssignment = assignments.find(producerTask);
+    const GpuTaskQueueAssignment* const rasterAssignment = assignments.find(rasterTask);
+    ASSERT_NE(producerAssignment, nullptr);
+    ASSERT_NE(rasterAssignment, nullptr);
+    EXPECT_EQ(producerAssignment->queue, primaryGraphicsQueue);
+    EXPECT_EQ(rasterAssignment->queue, primaryGraphicsQueue);
+    EXPECT_EQ(producerAssignment->queueClass, CommandQueue::Graphics);
+    EXPECT_EQ(rasterAssignment->queueClass, CommandQueue::Graphics);
+
+    const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producerTask);
+    const GpuSubmissionPacketId rasterPacket = compiledGraph.packetForTask(rasterTask);
+    ASSERT_TRUE(producerPacket.valid());
+    ASSERT_TRUE(rasterPacket.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(rasterPacket, producerPacket);
+    EXPECT_TRUE(compiledGraph.tasksSharePacket(producerTask, rasterTask));
+    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(producerTask, rasterTask));
+    EXPECT_EQ(compiledGraph.packet(producerPacket).queue, primaryGraphicsQueue);
+    EXPECT_EQ(compiledGraph.packet(producerPacket).dependencyCount, 0u);
+    ASSERT_EQ(compiledGraph.packet(producerPacket).taskCount, 2u);
+    const GpuTaskId* const packetTasks = compiledGraph.packetTasks(producerPacket);
+    ASSERT_NE(packetTasks, nullptr);
+    EXPECT_EQ(packetTasks[0u], producerTask);
+    EXPECT_EQ(packetTasks[1u], rasterTask);
+
+    const GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producerTask);
+    const GpuCompiledTask* const compiledRaster = compiledGraph.findTask(rasterTask);
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledRaster, nullptr);
+    ASSERT_EQ(compiledProducer->prologueBarrierCount, 1u);
+    ASSERT_EQ(compiledRaster->prologueBarrierCount, 1u);
+    const GpuCompiledBarrier* const producerBarrier = compiledGraph.taskPrologueBarriers(producerTask);
+    const GpuCompiledBarrier* const rasterBarrier = compiledGraph.taskPrologueBarriers(rasterTask);
+    ASSERT_NE(producerBarrier, nullptr);
+    ASSERT_NE(rasterBarrier, nullptr);
+    EXPECT_EQ(producerBarrier[0u].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(producerBarrier[0u].resource, generatedVertexResource);
+    EXPECT_EQ(producerBarrier[0u].before, ResourceStates::Common);
+    EXPECT_EQ(producerBarrier[0u].after, ResourceStates::UnorderedAccess);
+    EXPECT_EQ(rasterBarrier[0u].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(rasterBarrier[0u].resource, generatedVertexResource);
+    EXPECT_EQ(rasterBarrier[0u].before, ResourceStates::UnorderedAccess);
+    EXPECT_EQ(rasterBarrier[0u].after, ResourceStates::VertexBuffer);
+    EXPECT_EQ(rasterBarrier[0u].sourceQueue, primaryGraphicsQueue);
+    EXPECT_EQ(rasterBarrier[0u].destinationQueue, primaryGraphicsQueue);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+    EXPECT_TRUE(producerObservedUnorderedAccess);
+    EXPECT_TRUE(rasterObservedVertexBuffer);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(producerPacket);
+    ASSERT_NE(finalState, nullptr);
+    auto stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getBufferState(generatedVertex.get()), ResourceStates::VertexBuffer);
+    stateProbe->close();
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken packetToken = transaction.packetToken(producerPacket);
+    ASSERT_TRUE(packetToken.valid());
+    ASSERT_TRUE(producerAcceptedToken.valid());
+    EXPECT_EQ(producerAcceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(producerAcceptedToken.value, packetToken.value);
+    ASSERT_TRUE(rasterAcceptedToken.valid());
+    EXPECT_EQ(rasterAcceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(rasterAcceptedToken.value, packetToken.value);
+    ASSERT_TRUE(device.waitForIdle());
+}
+
+
 // Active-pose skinning must not rely on a native UAV/SRV bridge between deformation and bounds/repack. This native
 // packet smoke models the exact three graph tasks: deformation writes skinned position/normal/tangent, post-dispatch
 // reads position/normal while writing bounds/attributes, and the finalizer publishes every generated buffer as SRV.

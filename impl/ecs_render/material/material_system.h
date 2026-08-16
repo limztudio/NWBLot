@@ -176,6 +176,13 @@ public:
     void setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MeshResources& mesh);
     void renderMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItems& drawItems);
     void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
+    // Graph-only producer half. The graph must provide each generated-vertex output in UAV state; this method
+    // records the compute state, descriptor heap, push constants, and dispatches without an output transition.
+    void generateComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
+    // Graph-only raster half. The graph must provide each generated-vertex output in VertexBuffer state; this
+    // method records the graphics state, descriptor heap, push constants, and draws without an output transition.
+    void renderComputeMaterialPassDrawItemsRasterOnly(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
+    // Compatibility combined producer/raster path. It retains the native per-item UAV-to-VertexBuffer handoff.
     void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool reserveInstanceBufferCapacity(usize instanceCount);
     [[nodiscard]] bool reserveMaterialTypedBufferCapacity(usize byteCount);

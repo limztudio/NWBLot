@@ -523,6 +523,7 @@ can receive an unconditional final sign-off.
 | Semantic task timing bindings: AVBOIT chain | passed; AVBOIT now binds its Pre, Depth-Warp, Extinction, Integration, and Accumulation timing scopes to the corresponding declared tasks. The non-async route still submits only Pre, while the async route retains all five task anchors and existing packet-token/finalizer handling; no compiler packet ID is used merely to select timing submission. `nwb_ecs_render` rebuilt; graph tests passed 87/87, descriptor smoke passed 115 with 12 expected topology skips, and ECS graphics passed 18/18. |
 | Semantic task timing bindings: Shadow Prepare and dynamic Graphics Prefix | passed; Shadow Prepare and every Prefix timing anchor now submit by task ID. The established compiler-derived merge-alias check remains only to coalesce several Prefix callbacks into one shared ticket for one native command list; optional CSG anchors fall back to the G-buffer task, exactly matching the prior packet contract. The dynamic submission array itself contains no packet IDs. `nwb_ecs_render` rebuilt; graph tests passed 87/87, descriptor smoke passed 115 with 12 expected topology skips, and ECS graphics passed 18/18. |
 | Semantic task-range routing: shared deferred record/submit spans | passed; `GpuCompiledGraph` now resolves an inclusive compiler-order range from declared task endpoints. The normal deferred renderer uses that path for every normal and late recovery/readback/history record/submit span, so packet splitting and merging no longer require it to assemble range endpoints from packet IDs. Packet identities remain only for exact queue/merge validation, accepted-token lookup, and the terminal presentation hook. `nwb_ecs_render` rebuilt; graph tests passed 87/87, descriptor smoke passed 115 with 12 expected topology skips, and ECS graphics passed 18/18. |
+| Semantic task-range runtime routing: shared deferred recorder/submitter | passed; `GpuNativePacketRecorder` and `GpuTaskGraphSubmitter` now resolve record and submit spans directly from declared task endpoints. Every normal and late recovery/readback/history renderer invocation uses those APIs; packet ranges remain only for validation/count guards, while packet identities remain only for exact queue/merge validation, accepted-token lookup, and terminal presentation. The real-Vulkan timing smoke now exercises task-range recording and task-range task-timing submission. `nwb_ecs_render` rebuilt; graph tests passed 87/87, descriptor smoke passed 115 with 12 expected topology skips, and ECS graphics passed 18/18. |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -542,9 +543,10 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    barrier. There is still no policy for same-class queues from different families, dynamic queue scaling, or target
    scene performance evidence for the new route.
 
-2. **Complete graph ownership.** Renderer code still controls recording/submission and holds legacy state-handoff
-   data, but shared deferred record/submit spans now resolve from declared task endpoints rather than renderer-built
-   packet-range endpoints. The shared deferred path now owns per-frame ImGui draw/font/texture uploads; its
+2. **Complete graph ownership.** Renderer code still controls high-level recording/submission sequencing and holds
+   legacy state-handoff data, but the shared deferred renderer now gives the task runtime semantic task endpoints
+   for every normal and late recovery/readback/history record/submit span; the runtime alone resolves current
+   compiler packet ranges. The shared deferred path now owns per-frame ImGui draw/font/texture uploads; its
    direct path remains only as a compatibility fallback for worlds without a graph-owning renderer or a rejected
    graph attempt. Frame GPU-timing query-pool reset is now a strict primary-Graphics graph packet whose accepted
    callback alone publishes query availability; failed work remains revoked. Public buffer/texture setup uploads, decoded texture-asset uploads, and the shared deferred

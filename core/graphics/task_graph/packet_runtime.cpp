@@ -795,6 +795,34 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
 }
 
 
+bool GpuNativePacketRecorder::recordTaskRangeInCompileOrder(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId firstTask,
+    const GpuTaskId lastTask,
+    const GpuNativePacketRecordDesc* const recordOverrides,
+    const usize recordOverrideCount,
+    GpuRecordedGraph& outRecordedGraph,
+    GpuSubmissionPacketId* const outFailedPacket,
+    GpuCommandIrCapture* const commandIrCapture,
+    const GpuTaskPacketStateBinding* const taskStateBindings,
+    const usize taskStateBindingCount
+)const{
+    return recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.packetRangeForTasks(firstTask, lastTask),
+        recordOverrides,
+        recordOverrideCount,
+        outRecordedGraph,
+        outFailedPacket,
+        commandIrCapture,
+        taskStateBindings,
+        taskStateBindingCount
+    );
+}
+
+
 bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
@@ -982,6 +1010,36 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             break;
     }
     return true;
+}
+
+
+bool GpuNativePacketRecorder::recordTaskRangeInReadyFrontiers(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId firstTask,
+    const GpuTaskId lastTask,
+    const GpuNativePacketRecordDesc* const recordOverrides,
+    const usize recordOverrideCount,
+    GpuRecordedGraph& outRecordedGraph,
+    Alloc::ThreadPool& workerPool,
+    GpuSubmissionPacketId* const outFailedPacket,
+    GpuCommandIrCapture* const commandIrCapture,
+    const GpuTaskPacketStateBinding* const taskStateBindings,
+    const usize taskStateBindingCount
+)const{
+    return recordPacketRangeInReadyFrontiers(
+        graph,
+        compiledGraph,
+        compiledGraph.packetRangeForTasks(firstTask, lastTask),
+        recordOverrides,
+        recordOverrideCount,
+        outRecordedGraph,
+        workerPool,
+        outFailedPacket,
+        commandIrCapture,
+        taskStateBindings,
+        taskStateBindingCount
+    );
 }
 
 
@@ -1385,6 +1443,42 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
 }
 
 
+bool GpuTaskGraphSubmitter::submitTaskRangeInCompileOrder(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuRecordedGraph& recordedGraph,
+    const GpuTaskId firstTask,
+    const GpuTaskId lastTask,
+    const GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
+    const usize externalCompletionTokenCount,
+    const GpuTaskGraphPacketTimingTicket* const timingTickets,
+    const usize timingTicketCount,
+    GpuGraphSubmissionTransaction& transaction,
+    Alloc::ScratchArena& scratchArena,
+    GpuSubmissionPacketId* const outFailedPacket,
+    const GpuTaskGraphPacketAcceptedCallback* const acceptedCallback,
+    const GpuTaskGraphPacketSubmissionHook* const submissionHooks,
+    const usize submissionHookCount
+)const{
+    return submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.packetRangeForTasks(firstTask, lastTask),
+        externalCompletionTokens,
+        externalCompletionTokenCount,
+        timingTickets,
+        timingTicketCount,
+        transaction,
+        scratchArena,
+        outFailedPacket,
+        acceptedCallback,
+        submissionHooks,
+        submissionHookCount
+    );
+}
+
+
 bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderFromTasks(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
@@ -1460,6 +1554,42 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderFromTasks(
         externalCompletionTokenCount,
         packetTimingTickets.data(),
         packetTimingTickets.size(),
+        transaction,
+        scratchArena,
+        outFailedPacket,
+        acceptedCallback,
+        submissionHooks,
+        submissionHookCount
+    );
+}
+
+
+bool GpuTaskGraphSubmitter::submitTaskRangeInCompileOrderFromTasks(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuRecordedGraph& recordedGraph,
+    const GpuTaskId firstTask,
+    const GpuTaskId lastTask,
+    const GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
+    const usize externalCompletionTokenCount,
+    const GpuTaskGraphTaskTimingTicket* const taskTimingTickets,
+    const usize taskTimingTicketCount,
+    GpuGraphSubmissionTransaction& transaction,
+    Alloc::ScratchArena& scratchArena,
+    GpuSubmissionPacketId* const outFailedPacket,
+    const GpuTaskGraphPacketAcceptedCallback* const acceptedCallback,
+    const GpuTaskGraphPacketSubmissionHook* const submissionHooks,
+    const usize submissionHookCount
+)const{
+    return submitPacketRangeInCompileOrderFromTasks(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.packetRangeForTasks(firstTask, lastTask),
+        externalCompletionTokens,
+        externalCompletionTokenCount,
+        taskTimingTickets,
+        taskTimingTicketCount,
         transaction,
         scratchArena,
         outFailedPacket,

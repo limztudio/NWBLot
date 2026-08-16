@@ -177,6 +177,21 @@ public:
         const GpuTaskPacketStateBinding* taskStateBindings = nullptr,
         usize taskStateBindingCount = 0u
     )const;
+    // Semantic companion to the packet-range recorder. Task endpoints resolve only after compilation, keeping
+    // renderer record spans independent from packet splitting and merging while preserving intentional late tails.
+    [[nodiscard]] bool recordTaskRangeInCompileOrder(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        GpuTaskId firstTask,
+        GpuTaskId lastTask,
+        const GpuNativePacketRecordDesc* recordOverrides,
+        usize recordOverrideCount,
+        GpuRecordedGraph& outRecordedGraph,
+        GpuSubmissionPacketId* outFailedPacket = nullptr,
+        GpuCommandIrCapture* commandIrCapture = nullptr,
+        const GpuTaskPacketStateBinding* taskStateBindings = nullptr,
+        usize taskStateBindingCount = 0u
+    )const;
     // Records compiler-ready frontiers with `workerPool`. Only packets whose tasks all set
     // GpuTaskSchedulingHint::allowParallelRecording may share a worker frontier; every other packet remains serial.
     // Command-IR capture deliberately keeps the established serial order. The method is synchronous: callers may
@@ -185,6 +200,21 @@ public:
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketRange& range,
+        const GpuNativePacketRecordDesc* recordOverrides,
+        usize recordOverrideCount,
+        GpuRecordedGraph& outRecordedGraph,
+        Alloc::ThreadPool& workerPool,
+        GpuSubmissionPacketId* outFailedPacket = nullptr,
+        GpuCommandIrCapture* commandIrCapture = nullptr,
+        const GpuTaskPacketStateBinding* taskStateBindings = nullptr,
+        usize taskStateBindingCount = 0u
+    )const;
+    // Semantic companion to ready-frontier recording. Worker eligibility and packet ordering remain compiler-owned.
+    [[nodiscard]] bool recordTaskRangeInReadyFrontiers(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        GpuTaskId firstTask,
+        GpuTaskId lastTask,
         const GpuNativePacketRecordDesc* recordOverrides,
         usize recordOverrideCount,
         GpuRecordedGraph& outRecordedGraph,
@@ -364,6 +394,25 @@ public:
         const GpuTaskGraphPacketSubmissionHook* submissionHooks = nullptr,
         usize submissionHookCount = 0u
     )const;
+    // Semantic companion to packet-range submission. It resolves the inclusive compiler-order range from declared
+    // task endpoints and leaves packet IDs only for narrow accepted-token and pre-submit hook integrations.
+    [[nodiscard]] bool submitTaskRangeInCompileOrder(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuRecordedGraph& recordedGraph,
+        GpuTaskId firstTask,
+        GpuTaskId lastTask,
+        const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
+        usize externalCompletionTokenCount,
+        const GpuTaskGraphPacketTimingTicket* timingTickets,
+        usize timingTicketCount,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuSubmissionPacketId* outFailedPacket = nullptr,
+        const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr,
+        const GpuTaskGraphPacketSubmissionHook* submissionHooks = nullptr,
+        usize submissionHookCount = 0u
+    )const;
     // Semantic companion to the packet-timing overload above.  It resolves each task binding through the current
     // compiled graph, so packet splitting/merging remains compiler-owned.  Multiple bindings may target one
     // packet only when they deliberately share the same timing ticket.
@@ -372,6 +421,25 @@ public:
         const GpuCompiledGraph& compiledGraph,
         const GpuRecordedGraph& recordedGraph,
         const GpuSubmissionPacketRange& range,
+        const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
+        usize externalCompletionTokenCount,
+        const GpuTaskGraphTaskTimingTicket* taskTimingTickets,
+        usize taskTimingTicketCount,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuSubmissionPacketId* outFailedPacket = nullptr,
+        const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr,
+        const GpuTaskGraphPacketSubmissionHook* submissionHooks = nullptr,
+        usize submissionHookCount = 0u
+    )const;
+    // Resolves both the submitted range and timing bindings from semantic tasks after compilation. Multiple timing
+    // anchors may share one packet only when they deliberately reference the same submission ticket.
+    [[nodiscard]] bool submitTaskRangeInCompileOrderFromTasks(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuRecordedGraph& recordedGraph,
+        GpuTaskId firstTask,
+        GpuTaskId lastTask,
         const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
         usize externalCompletionTokenCount,
         const GpuTaskGraphTaskTimingTicket* taskTimingTickets,

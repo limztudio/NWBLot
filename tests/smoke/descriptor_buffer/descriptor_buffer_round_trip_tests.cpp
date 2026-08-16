@@ -18347,10 +18347,11 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+    ASSERT_TRUE(recorder.recordTaskRangeInCompileOrder(
         graph,
         compiledGraph,
-        compiledGraph.allPacketRange(),
+        beginTask,
+        endTask,
         nullptr,
         0u,
         recordedGraph
@@ -18368,11 +18369,12 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
         GpuTaskGraphTaskTimingTicket{ .task = beginTask, .timingTicket = &beginTicket },
         GpuTaskGraphTaskTimingTicket{ .task = beginTask, .timingTicket = &beginTicket },
     };
-    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrderFromTasks(
+    EXPECT_FALSE(submitter.submitTaskRangeInCompileOrderFromTasks(
         graph,
         compiledGraph,
         recordedGraph,
-        compiledGraph.allPacketRange(),
+        beginTask,
+        endTask,
         nullptr,
         0u,
         duplicateTaskTimingTickets,
@@ -18381,11 +18383,12 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
         scratchArena
     ));
     EXPECT_FALSE(transaction.hasAcceptedPackets());
-    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrderFromTasks(
+    ASSERT_TRUE(submitter.submitTaskRangeInCompileOrderFromTasks(
         graph,
         compiledGraph,
         recordedGraph,
-        compiledGraph.allPacketRange(),
+        beginTask,
+        endTask,
         nullptr,
         0u,
         timingTickets,

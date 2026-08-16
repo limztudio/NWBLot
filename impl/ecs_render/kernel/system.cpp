@@ -902,8 +902,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::Gbuffer
         )],
     };
-    // The small shared-output opaque sequence spans G-buffer's mesh prelude and four or six graph callbacks. Keep
-    // its measurement alive through graph declaration, recording, submission, and rejection just like CSG intervals.
+    // The small shared-output opaque sequence spans G-buffer's mesh prelude and four, six, or eight graph callbacks.
+    // Keep its measurement alive through graph declaration, recording, submission, and rejection just like CSG
+    // intervals.
     Optional<Core::GpuTimingMeasure> opaqueRegularSharedComputeEmulationTiming;
     // Opaque CSG interval-sample compute/raster can span two graph callbacks while retaining the old material scope.
     Optional<Core::GpuTimingMeasure> opaqueCsgIntervalSampleComputeEmulationTiming;
@@ -1437,7 +1438,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             }
             return true;
         }
-        if(phaseCount != 4u && phaseCount != 6u)
+        if(phaseCount != 4u && phaseCount != 6u && phaseCount != 8u)
             return false;
         if(
             !graphicsPrefixOpaqueSharedComputeEmulationPacket.valid()

@@ -485,8 +485,9 @@ private:
     Core::GpuTaskId m_graphicsPrefixOpaqueComputeEmulationTask;
     // Small shared-output regular paths keep dispatch/raster alternation in the same packet. Retain every phase ID
     // so runtime validation can prove the strict D(A) -> R(A) -> ... packet order, rather than merely proving
-    // that the two endpoint callbacks coalesced. The active prefix holds four or six phases for two or three draws.
-    Core::GpuTaskId m_graphicsPrefixOpaqueSharedComputeEmulationTasks[6u] = {};
+    // that the two endpoint callbacks coalesced. The active prefix holds four, six, or eight phases for two, three,
+    // or four draws.
+    Core::GpuTaskId m_graphicsPrefixOpaqueSharedComputeEmulationTasks[8u] = {};
     usize m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
     // Receiver-surface CSG has its own readiness gate but needs the same packet-local output handoff.
     Core::GpuTaskId m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask;

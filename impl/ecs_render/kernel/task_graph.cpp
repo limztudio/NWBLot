@@ -6695,9 +6695,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     gbufferPayload.regularComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationOutputStatesGraphOwned;
 
     // A persistent generated-vertex buffer is normally a local dispatch/raster bridge. Handle the small alias
-    // classes explicitly: two or three regular opaque compute items sharing one frozen output and heap slot.
-    // Opaque CSG remains out of scope so no CSG producer/raster phase can observe this alternation. Keep this
-    // consumer at three while Occupancy separately proves the four-draw extension below.
+    // classes explicitly: two, three, or four regular opaque compute items sharing one frozen output and heap slot.
+    // Opaque CSG remains out of scope so no CSG producer/raster phase can observe this alternation.
     ECSRenderDetail::RegularSharedComputeEmulationGraphPlan opaqueSharedComputeEmulationPlan;
     const bool opaqueSharedComputeEmulationPlanCaptured =
         !hasOpaqueCsgFrameWork
@@ -6705,7 +6704,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         && gbufferPayload.materialFrameStatesGraphOwned
         && gbufferPayload.materialGeometryStatesGraphOwned
         && gbufferMaterialSampledTexturesCollected
-        && opaqueSharedComputeEmulationPlan.capture(m_meshSystem, opaqueDrawItems.regular, 3u)
+        && opaqueSharedComputeEmulationPlan.capture(m_meshSystem, opaqueDrawItems.regular, 4u)
     ;
     const bool opaqueSharedComputeEmulationOutputStatesGraphOwned =
         opaqueSharedComputeEmulationPlanCaptured
@@ -7135,9 +7134,9 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
     Core::GpuTaskId gbufferCompletionTask = m_graphicsPrefixGbufferTask;
     if(opaqueSharedComputeEmulationOutputStatesGraphOwned){
-        // These two or three draw items target exactly one imported buffer. Keep every state phase explicit so the
-        // compiler, not the material callback, owns Common -> UAV -> VertexBuffer -> ... -> VertexBuffer. The
-        // immediate chain is also the semantic ordering contract for the retained persistent output alias.
+        // These two, three, or four draw items target exactly one imported buffer. Keep every state phase explicit
+        // so the compiler, not the material callback, owns Common -> UAV -> VertexBuffer -> ... -> VertexBuffer.
+        // The immediate chain is also the semantic ordering contract for the retained persistent output alias.
         opaqueSharedComputeEmulationGenerateResourceUses.reserve(4u);
         opaqueSharedComputeEmulationGenerateResourceUses.push_back(
             ReadUse(meshView, Core::ResourceStates::ConstantBuffer)
@@ -7255,6 +7254,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_b"),
             Name("render.graphics_prefix.opaque_shared_compute_emulation_generate_c"),
             Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_c"),
+            Name("render.graphics_prefix.opaque_shared_compute_emulation_generate_d"),
+            Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_d"),
         };
         const AStringView opaqueSharedComputeEmulationPhaseMarkers[] = {
             "Opaque Shared Compute Emulation Generate A",
@@ -7263,11 +7264,14 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             "Opaque Shared Compute Emulation Raster B",
             "Opaque Shared Compute Emulation Generate C",
             "Opaque Shared Compute Emulation Raster C",
+            "Opaque Shared Compute Emulation Generate D",
+            "Opaque Shared Compute Emulation Raster D",
         };
         const usize opaqueSharedComputeEmulationPhaseCount = opaqueSharedComputeEmulationPlan.drawCount * 2u;
         if(
             opaqueSharedComputeEmulationPhaseCount != 4u
             && opaqueSharedComputeEmulationPhaseCount != 6u
+            && opaqueSharedComputeEmulationPhaseCount != 8u
         ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid shared opaque compute-emulation phase count"));
             return false;

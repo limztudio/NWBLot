@@ -16975,6 +16975,285 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
 }
 
 
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationQuadruplesStayInOnePacket){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_SharedOpaqueComputeEmulationScope.identity, device, 1u));
+    auto timingResetCommandList = device.createCommandList();
+    ASSERT_NE(timingResetCommandList.get(), nullptr);
+    timingResetCommandList->open();
+    timing.recordFrameReset(*timingResetCommandList);
+    timingResetCommandList->close();
+    CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
+    bool timingResetSubmitted = false;
+    device.executeCommandLists(
+        timingResetCommandLists,
+        LengthOf(timingResetCommandLists),
+        CommandQueue::Graphics,
+        &timingResetSubmitted
+    );
+    ASSERT_TRUE(timingResetSubmitted);
+    timing.confirmFrameReset();
+
+    auto generatedVertex = device.createBuffer(
+        BufferDesc()
+            .setDebugName(Name("tests/descriptor_buffer/shared_opaque_compute_generated_vertex_quad"))
+            .setByteSize(3u * 4u * sizeof(f32))
+            .setStructStride(4u * sizeof(f32))
+            .setCanHaveUAVs(true)
+            .setCanHaveRawViews(true)
+            .setIsVertexBuffer(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::Exclusive)
+    );
+    ASSERT_NE(generatedVertex.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const BufferDesc& generatedVertexDesc = generatedVertex->getDescription();
+    const GpuGraphResourceId generatedVertexResource = graph.importBuffer(
+        generatedVertex,
+        GpuGraphResourceDesc{}
+            .setIdentity(generatedVertexDesc.debugName)
+            .setMarkerLabel("Shared Opaque Compute Generated Vertex Quadruple")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(generatedVertexDesc.initialState)
+            .setQueueSharing(generatedVertexDesc.queueSharing)
+    );
+    ASSERT_TRUE(generatedVertexResource.valid());
+
+    const GpuQueueRequest graphicsComputeQueue{
+        static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+        ),
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const GpuQueueRequest graphicsRasterQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint dispatchScheduling;
+    dispatchScheduling.cost = GpuTaskCostHint::Medium;
+    dispatchScheduling.overlapPreferred = false;
+    dispatchScheduling.avoidQueueCrossing = true;
+    dispatchScheduling.forceSubmissionBoundary = false;
+    dispatchScheduling.allowPacketMerge = true;
+    dispatchScheduling.mergeWithPrevious = false;
+    GpuTaskSchedulingHint sequenceTailScheduling = dispatchScheduling;
+    sequenceTailScheduling.mergeWithPrevious = true;
+    sequenceTailScheduling.allowMergeAcrossConsumerFrontier = true;
+    const GpuTaskResourceUse dispatchUses[] = {
+        GpuTaskResourceUse{
+            .resource = generatedVertexResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    const GpuTaskResourceUse rasterUses[] = {
+        GpuTaskResourceUse{
+            .resource = generatedVertexResource,
+            .range = {},
+            .requiredState = ResourceStates::VertexBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    const Name identities[] = {
+        Name("tests/descriptor_buffer/shared_opaque_compute_dispatch_a_quad"),
+        Name("tests/descriptor_buffer/shared_opaque_compute_raster_a_quad"),
+        Name("tests/descriptor_buffer/shared_opaque_compute_dispatch_b_quad"),
+        Name("tests/descriptor_buffer/shared_opaque_compute_raster_b_quad"),
+        Name("tests/descriptor_buffer/shared_opaque_compute_dispatch_c_quad"),
+        Name("tests/descriptor_buffer/shared_opaque_compute_raster_c_quad"),
+        Name("tests/descriptor_buffer/shared_opaque_compute_dispatch_d_quad"),
+        Name("tests/descriptor_buffer/shared_opaque_compute_raster_d_quad"),
+    };
+    const AStringView markers[] = {
+        "Shared Opaque Compute Dispatch A Quadruple",
+        "Shared Opaque Compute Raster A Quadruple",
+        "Shared Opaque Compute Dispatch B Quadruple",
+        "Shared Opaque Compute Raster B Quadruple",
+        "Shared Opaque Compute Dispatch C Quadruple",
+        "Shared Opaque Compute Raster C Quadruple",
+        "Shared Opaque Compute Dispatch D Quadruple",
+        "Shared Opaque Compute Raster D Quadruple",
+    };
+    GpuTimingSubmissionTicket timingTicket(timing);
+    u32 recordOrdinal = 0u;
+    bool observedStates[LengthOf(identities)] = {};
+    QueueSubmissionToken acceptedTokens[LengthOf(identities)] = {};
+    GpuTaskId tasks[LengthOf(identities)] = {};
+    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
+        const bool isRaster = taskIndex % 2u != 0u;
+        GpuTaskDesc desc;
+        desc
+            .setIdentity(identities[taskIndex])
+            .setMarkerLabel(markers[taskIndex])
+            .setQueue(isRaster ? graphicsRasterQueue : graphicsComputeQueue)
+            .setScheduling(taskIndex == 0u ? dispatchScheduling : sequenceTailScheduling)
+            .setResourceUses(
+                isRaster ? rasterUses : dispatchUses,
+                isRaster ? LengthOf(rasterUses) : LengthOf(dispatchUses)
+            )
+        ;
+        if(taskIndex != 0u)
+            desc.setDependencies(&tasks[taskIndex - 1u], 1u);
+        tasks[taskIndex] = graph.addTask<NativePacketSharedOutputHandoffTask>(
+            desc,
+            NativePacketSharedOutputHandoffTask::Payload{
+                .buffer = generatedVertex.get(),
+                .expectedState = isRaster ? ResourceStates::VertexBuffer : ResourceStates::UnorderedAccess,
+                .recordOrdinal = &recordOrdinal,
+                .expectedOrdinal = static_cast<u32>(taskIndex),
+                .device = &device,
+                .timing = &timing,
+                .timingTicket = &timingTicket,
+                .recordTiming = taskIndex + 1u == LengthOf(tasks),
+                .recorded = &observedStates[taskIndex],
+                .acceptedToken = &acceptedTokens[taskIndex],
+            }
+        );
+        ASSERT_TRUE(tasks[taskIndex].valid());
+    }
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    ASSERT_TRUE(primaryGraphicsQueue.valid());
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/shared_opaque_compute_emulation_quad_scratch"));
+    GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, frontierOptions));
+    for(usize taskIndex = 1u; taskIndex < LengthOf(tasks); ++taskIndex)
+        EXPECT_TRUE(analysis.hasExplicitEdge(tasks[taskIndex - 1u], tasks[taskIndex]));
+
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(tasks[0u]);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    for(const GpuTaskId task : tasks){
+        const GpuTaskQueueAssignment* const assignment = assignments.find(task);
+        ASSERT_NE(assignment, nullptr);
+        EXPECT_EQ(assignment->queue, primaryGraphicsQueue);
+        EXPECT_EQ(assignment->queueClass, CommandQueue::Graphics);
+        EXPECT_EQ(compiledGraph.packetForTask(task), packet);
+    }
+    EXPECT_TRUE(compiledGraph.tasksSharePacket(tasks[0u], tasks[7u]));
+    EXPECT_EQ(compiledGraph.packet(packet).queue, primaryGraphicsQueue);
+    EXPECT_EQ(compiledGraph.packet(packet).dependencyCount, 0u);
+    ASSERT_EQ(compiledGraph.packet(packet).taskCount, LengthOf(tasks));
+    const GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    ASSERT_NE(packetTasks, nullptr);
+    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex)
+        EXPECT_EQ(packetTasks[taskIndex], tasks[taskIndex]);
+
+    const auto expectTransition = [&](const usize taskIndex, const ResourceStates::Mask before, const ResourceStates::Mask after){
+        const GpuCompiledTask* const compiledTask = compiledGraph.findTask(tasks[taskIndex]);
+        ASSERT_NE(compiledTask, nullptr);
+        ASSERT_EQ(compiledTask->prologueBarrierCount, 1u);
+        const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(tasks[taskIndex]);
+        ASSERT_NE(barriers, nullptr);
+        const GpuCompiledBarrier& barrier = barriers[0u];
+        EXPECT_EQ(barrier.type, GpuCompiledBarrierType::BufferTransition);
+        EXPECT_EQ(barrier.resource, generatedVertexResource);
+        EXPECT_EQ(barrier.before, before);
+        EXPECT_EQ(barrier.after, after);
+        EXPECT_EQ(barrier.sourceQueue, primaryGraphicsQueue);
+        EXPECT_EQ(barrier.destinationQueue, primaryGraphicsQueue);
+    };
+    expectTransition(0u, ResourceStates::Common, ResourceStates::UnorderedAccess);
+    expectTransition(1u, ResourceStates::UnorderedAccess, ResourceStates::VertexBuffer);
+    expectTransition(2u, ResourceStates::VertexBuffer, ResourceStates::UnorderedAccess);
+    expectTransition(3u, ResourceStates::UnorderedAccess, ResourceStates::VertexBuffer);
+    expectTransition(4u, ResourceStates::VertexBuffer, ResourceStates::UnorderedAccess);
+    expectTransition(5u, ResourceStates::UnorderedAccess, ResourceStates::VertexBuffer);
+    expectTransition(6u, ResourceStates::VertexBuffer, ResourceStates::UnorderedAccess);
+    expectTransition(7u, ResourceStates::UnorderedAccess, ResourceStates::VertexBuffer);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+    EXPECT_EQ(recordOrdinal, LengthOf(tasks));
+    for(const bool observed : observedStates)
+        EXPECT_TRUE(observed);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    ASSERT_NE(finalState, nullptr);
+    auto stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getBufferState(generatedVertex.get()), ResourceStates::VertexBuffer);
+    stateProbe->close();
+
+    GpuTaskGraphTaskTimingTicket timingTickets[LengthOf(tasks)] = {};
+    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
+        timingTickets[taskIndex] = GpuTaskGraphTaskTimingTicket{
+            .task = tasks[taskIndex],
+            .timingTicket = &timingTicket,
+        };
+    }
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitTaskRangeInCompileOrderFromTasks(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        tasks[0u],
+        tasks[7u],
+        nullptr,
+        0u,
+        timingTickets,
+        LengthOf(timingTickets),
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken packetToken = transaction.packetToken(packet);
+    ASSERT_TRUE(packetToken.valid());
+    const auto expectPacketToken = [&](const QueueSubmissionToken& token){
+        ASSERT_TRUE(token.valid());
+        EXPECT_EQ(token.queue, packetToken.queue);
+        EXPECT_EQ(token.value, packetToken.value);
+        EXPECT_EQ(token.physicalQueueIndex, packetToken.physicalQueueIndex);
+        EXPECT_EQ(token.deviceGeneration, packetToken.deviceGeneration);
+    };
+    for(const GpuTaskId task : tasks)
+        expectPacketToken(transaction.taskToken(compiledGraph, task));
+    for(const QueueSubmissionToken& token : acceptedTokens)
+        expectPacketToken(token);
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 1u);
+    const auto timingStats = timingSink.stats(s_SharedOpaqueComputeEmulationScope.identity);
+    ASSERT_TRUE(timingStats.valid());
+    EXPECT_EQ(timingStats.sampleCount, 1u);
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
+// CSG receiver-surface compute generation consumes graph-owned clip data, then G-buffer owns the receiver-event
+// raster output and the generated vertex-buffer handoff. This records all three callbacks in one real primary
+// Graphics packet without either callback performing a native state transition.
+
 // CSG receiver-surface compute generation consumes graph-owned clip data, then G-buffer owns the receiver-event
 // raster output and the generated vertex-buffer handoff. This records all three callbacks in one real primary
 // Graphics packet without either callback performing a native state transition.

@@ -575,11 +575,12 @@ private:
     // local occupancy uploads cannot overwrite the frozen CSG stream before those callbacks record.
     Core::GpuTaskId m_deferredAvboitCsgReceiverSpanTask;
     Core::GpuTaskId m_deferredAvboitCsgIntervalCombineTask;
-    // The final immutable Occupancy upload and optional graph-owned regular producer/alternating shared-output
-    // phases stay in AVBOIT Pre's accepting Graphics packet before its later Depth-Warp Compute dependency.
+    // The final immutable Occupancy upload and optional graph-owned regular producer/two- or three-draw alternating
+    // shared-output phases stay in AVBOIT Pre's accepting Graphics packet before its later Depth-Warp Compute
+    // dependency.
     Core::GpuTaskId m_deferredAvboitOccupancyStreamTask;
     Core::GpuTaskId m_deferredAvboitOccupancyComputeEmulationTask;
-    Core::GpuTaskId m_deferredAvboitOccupancySharedComputeEmulationTasks[4u] = {};
+    Core::GpuTaskId m_deferredAvboitOccupancySharedComputeEmulationTasks[6u] = {};
     usize m_deferredAvboitOccupancySharedComputeEmulationTaskCount = 0u;
     Core::GpuTaskId m_deferredAvboitOccupancyTask;
     Core::GpuTaskId m_deferredAvboitDepthWarpTask;

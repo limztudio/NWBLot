@@ -2985,9 +2985,10 @@ struct AvboitOccupancyComputeEmulationGraphTask{
 };
 
 
-// A pair of regular AVBOIT Occupancy draws sharing one generated-vertex buffer cannot batch its generators ahead
-// of rasterization. Keep the original D(A) -> R(A) -> D(B) -> R(B) stream as explicit primary-Graphics callbacks
-// so the compiler owns every alternating UAV/VertexBuffer boundary before the existing Depth-Warp successor.
+// Two or three regular AVBOIT Occupancy draws sharing one generated-vertex buffer cannot batch their generators
+// ahead of rasterization. Keep the original D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C)] stream as explicit
+// primary-Graphics callbacks so the compiler owns every alternating UAV/VertexBuffer boundary before the existing
+// Depth-Warp successor.
 struct AvboitOccupancySharedComputeEmulationGraphTask{
     enum class Phase : u8{
         Generate,
@@ -13260,9 +13261,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     occupancyCsgFrameData
                 )
             ;
-            // The unsplit all-compute two-draw case can preserve one shared generated output only as an explicit
-            // D(A) -> R(A) -> D(B) -> R(B) sequence. Keep mesh and CSG work out of this narrow first slice so the
-            // aggregate Occupancy callback is never partially replayed around the alternating phases.
+            // The unsplit all-compute two- or three-draw case can preserve one shared generated output only as an
+            // explicit D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C)] sequence. Keep mesh and CSG work out of this
+            // narrow slice so the aggregate Occupancy callback is never partially replayed around its phases.
             occupancySharedComputeEmulationPlanCaptured = !splitAvboitStages
                 && !occupancyRegularComputeEmulationPlanCaptured
                 && occupancyDrawItems.regular.meshDrawItems.empty()
@@ -13273,7 +13274,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     m_meshSystem,
                     occupancyDrawItems.regular
                 )
-                && occupancySharedComputeEmulationPlan.drawCount == 2u
+                && occupancySharedComputeEmulationPlan.drawCount >= 2u
+                && occupancySharedComputeEmulationPlan.drawCount <= 3u
             ;
             NWB_ASSERT(
                 !(occupancyRegularComputeEmulationPlanCaptured && occupancyCsgComputeEmulationPlanCaptured)
@@ -13885,15 +13887,28 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Name("render.avboit.occupancy.shared_compute_emulation_raster_a"),
             Name("render.avboit.occupancy.shared_compute_emulation_generate_b"),
             Name("render.avboit.occupancy.shared_compute_emulation_raster_b"),
+            Name("render.avboit.occupancy.shared_compute_emulation_generate_c"),
+            Name("render.avboit.occupancy.shared_compute_emulation_raster_c"),
         };
         const AStringView occupancySharedComputeEmulationPhaseMarkers[] = {
             "AVBOIT Occupancy Shared Compute Emulation Generate A",
             "AVBOIT Occupancy Shared Compute Emulation Raster A",
             "AVBOIT Occupancy Shared Compute Emulation Generate B",
             "AVBOIT Occupancy Shared Compute Emulation Raster B",
+            "AVBOIT Occupancy Shared Compute Emulation Generate C",
+            "AVBOIT Occupancy Shared Compute Emulation Raster C",
         };
-        constexpr usize occupancySharedComputeEmulationPhaseCount = 4u;
-        NWB_ASSERT(occupancySharedComputeEmulationPlan.drawCount == 2u);
+        const usize occupancySharedComputeEmulationPhaseCount =
+            occupancySharedComputeEmulationPlan.drawCount * 2u
+        ;
+        NWB_ASSERT(
+            occupancySharedComputeEmulationPlan.drawCount == 2u
+            || occupancySharedComputeEmulationPlan.drawCount == 3u
+        );
+        NWB_ASSERT(
+            occupancySharedComputeEmulationPhaseCount
+            <= LengthOf(occupancySharedComputeEmulationPhaseIdentities)
+        );
         Core::GpuTaskId occupancySharedComputeEmulationDependency = occupancyDependency;
         for(usize phaseIndex = 0u;
             phaseIndex < occupancySharedComputeEmulationPhaseCount;

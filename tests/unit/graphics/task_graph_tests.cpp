@@ -8254,9 +8254,36 @@ TEST(GpuTaskGraph, MergesPreparedPureSoftwareBvhSentinelChainIntoShadowPreparePa
     EXPECT_TRUE(hasTransition(rebuild, sortKeys, Graphics::ResourceStates::CopyDest, Graphics::ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasTransition(rebuild, parent, Graphics::ResourceStates::CopyDest, Graphics::ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasTransition(rebuild, visitCounter, Graphics::ResourceStates::CopyDest, Graphics::ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransition(rebuild, node, Graphics::ResourceStates::Common, Graphics::ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransition(rebuild, sortPayload, Graphics::ResourceStates::Common, Graphics::ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasTransition(refitCounterClear, visitCounter, Graphics::ResourceStates::UnorderedAccess, Graphics::ResourceStates::CopyDest));
     EXPECT_TRUE(hasTransition(refit, visitCounter, Graphics::ResourceStates::CopyDest, Graphics::ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasTransition(shadowPrepare, node, Graphics::ResourceStates::UnorderedAccess, Graphics::ResourceStates::ShaderResource));
+    const auto hasUavBarrier = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        if(!compiledTask || (compiledTask->prologueBarrierCount != 0u && !barriers))
+            return false;
+        for(usize barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferUav
+                && barrier.resource == resource
+                && barrier.before == Graphics::ResourceStates::UnorderedAccess
+                && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasUavBarrier(shadowPrepare, parent));
+    EXPECT_TRUE(hasUavBarrier(shadowPrepare, sortKeys));
+    EXPECT_TRUE(hasUavBarrier(shadowPrepare, sortPayload));
+    EXPECT_TRUE(hasUavBarrier(shadowPrepare, visitCounter));
+    EXPECT_TRUE(hasUavBarrier(refit, node));
+    EXPECT_TRUE(hasUavBarrier(refit, parent));
+    EXPECT_TRUE(hasUavBarrier(refit, sortKeys));
+    EXPECT_TRUE(hasUavBarrier(refit, sortPayload));
 }
 
 

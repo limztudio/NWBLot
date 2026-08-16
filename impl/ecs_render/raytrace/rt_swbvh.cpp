@@ -818,7 +818,8 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuild(
     Core::CommandList& commandList,
     const PreparedMeshSwBvhBuild& build,
     const bool meshSwBvhInputStatesGraphOwned,
-    const bool sentinelClearsGraphOwned
+    const bool sentinelClearsGraphOwned,
+    const bool graphBoundaryStatesOwned
 ){
     if(!preparedMeshSwBvhBuildMatchesCurrent(build)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build no longer matches mesh '{}'")
@@ -846,7 +847,8 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuild(
             parentBuffer,
             build.nodeHeapHandle,
             build.parentHeapHandle,
-            sentinelClearsGraphOwned
+            sentinelClearsGraphOwned,
+            graphBoundaryStatesOwned
         )
         : buildMeshSwBvhPrepared(
             commandList,
@@ -859,7 +861,8 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuild(
             parentBuffer,
             build.nodeHeapHandle,
             build.parentHeapHandle,
-            sentinelClearsGraphOwned
+            sentinelClearsGraphOwned,
+            graphBoundaryStatesOwned
         )
     ;
     if(!recorded){
@@ -874,7 +877,9 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(
     Core::CommandList& commandList,
     const PreparedMeshSwBvhBuild& build
 ){
-    return recordPreparedMeshSwBvhBuild(commandList, build, true, true);
+    // The graph callback has exact SRV/UAV uses and a typed clear predecessor, so it owns both the entry and
+    // successor state boundaries. The native recorder keeps only dispatch-internal UAV fences.
+    return recordPreparedMeshSwBvhBuild(commandList, build, true, true, true);
 }
 
 bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuilds(
@@ -896,7 +901,7 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuilds(
     }
 
     for(const PreparedMeshSwBvhBuild& build : m_preparedMeshSwBvhBuilds){
-        if(!recordPreparedMeshSwBvhBuild(commandList, build, meshSwBvhInputStatesGraphOwned, false))
+        if(!recordPreparedMeshSwBvhBuild(commandList, build, meshSwBvhInputStatesGraphOwned, false, false))
             return false;
     }
     return true;
@@ -2672,7 +2677,8 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     Core::BufferHandle& parentBuffer,
     const Core::GpuDescriptorHandle nodeHeapHandle,
     const Core::GpuDescriptorHandle parentHeapHandle,
-    const bool sentinelClearsGraphOwned
+    const bool sentinelClearsGraphOwned,
+    const bool graphBoundaryStatesOwned
 ){
     if(
         primitiveCount == 0u
@@ -2742,7 +2748,10 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
         commandList.dispatch(groupCount, 1u, 1u);
     };
 
-    bvhBuildBarrier();
+    // The pure-software graph callback declares every input/output state. It owns the first boundary after its
+    // typed clears; direct and hybrid callers retain the standalone native transition/UAV fence.
+    if(!graphBoundaryStatesOwned)
+        bvhBuildBarrier();
 
     dispatchBuildKernel(rayTracingState().m_bvhMortonPipeline.get(), DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
     bvhBuildBarrier();
@@ -2761,7 +2770,10 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     }
 
     dispatchBuildKernel(rayTracingState().m_bvhFitPipeline.get(), DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
-    bvhBuildBarrier();
+    // Shadow Preparation's declared successor uses lower the final node UAV -> SRV and retained scratch UAV
+    // handoffs for graph callers. Keep the direct/hybrid close fence for compatibility recorders.
+    if(!graphBoundaryStatesOwned)
+        bvhBuildBarrier();
     return true;
 }
 
@@ -2801,7 +2813,8 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     Core::BufferHandle& parentBuffer,
     const Core::GpuDescriptorHandle nodeHeapHandle,
     const Core::GpuDescriptorHandle parentHeapHandle,
-    const bool sentinelClearsGraphOwned
+    const bool sentinelClearsGraphOwned,
+    const bool graphBoundaryStatesOwned
 ){
     if(
         primitiveCount == 0u
@@ -2842,13 +2855,16 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     commandList.setEnableUavBarriersForBuffer(meshNodeBuffer, true);
     commandList.setEnableUavBarriersForBuffer(meshParentBuffer, true);
     commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
-    // Fit declares all scratch views, so each needs a UAV state.
-    commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
-    commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);
-    commandList.setBufferState(meshNodeBuffer, Core::ResourceStates::UnorderedAccess);
-    commandList.setBufferState(meshParentBuffer, Core::ResourceStates::UnorderedAccess);
-    commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::UnorderedAccess);
-    commandList.commitBarriers();
+    // Fit declares all scratch views, so direct/hybrid callers retain its native entry UAV fence. The graph-split
+    // pure-software callback declares these exact states and lowers the CopyDest/UAV handoff in its prologue.
+    if(!graphBoundaryStatesOwned){
+        commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(meshNodeBuffer, Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(meshParentBuffer, Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+    }
 
     Core::ComputeState computeState;
     computeState.setPipeline(rayTracingState().m_bvhFitPipeline.get());
@@ -2857,8 +2873,11 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)), 1u, 1u);
 
-    commandList.setBufferState(meshNodeBuffer, Core::ResourceStates::UnorderedAccess);
-    commandList.commitBarriers();
+    // The graph successor owns this final node state for pure software; direct and hybrid callers retain it.
+    if(!graphBoundaryStatesOwned){
+        commandList.setBufferState(meshNodeBuffer, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+    }
     return true;
 }
 

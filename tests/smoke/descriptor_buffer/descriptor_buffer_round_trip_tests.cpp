@@ -5114,9 +5114,36 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPureSoftwareBvhSentinelClearChai
     EXPECT_TRUE(hasTransition(rebuild, sortKeysResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasTransition(rebuild, parentResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasTransition(rebuild, visitCounterResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransition(rebuild, nodeResource, ResourceStates::Common, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransition(rebuild, sortPayloadResource, ResourceStates::Common, ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasTransition(refitCounterClear, visitCounterResource, ResourceStates::UnorderedAccess, ResourceStates::CopyDest));
     EXPECT_TRUE(hasTransition(refit, visitCounterResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasTransition(shadowPrepare, nodeResource, ResourceStates::UnorderedAccess, ResourceStates::ShaderResource));
+    const auto hasUavBarrier = [&](const GpuTaskId task, const GpuGraphResourceId resource){
+        const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        if(!compiledTask || (compiledTask->prologueBarrierCount != 0u && !barriers))
+            return false;
+        for(usize barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::BufferUav
+                && barrier.resource == resource
+                && barrier.before == ResourceStates::UnorderedAccess
+                && barrier.after == ResourceStates::UnorderedAccess
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasUavBarrier(shadowPrepare, parentResource));
+    EXPECT_TRUE(hasUavBarrier(shadowPrepare, sortKeysResource));
+    EXPECT_TRUE(hasUavBarrier(shadowPrepare, sortPayloadResource));
+    EXPECT_TRUE(hasUavBarrier(shadowPrepare, visitCounterResource));
+    EXPECT_TRUE(hasUavBarrier(refit, nodeResource));
+    EXPECT_TRUE(hasUavBarrier(refit, parentResource));
+    EXPECT_TRUE(hasUavBarrier(refit, sortKeysResource));
+    EXPECT_TRUE(hasUavBarrier(refit, sortPayloadResource));
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuCommandIrCapture commandIrCapture(DescriptorBufferRoundTripTest::arena());

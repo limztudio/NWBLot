@@ -120,6 +120,7 @@ namespace ECSRenderDetail{
 
 namespace __hidden_renderer_task_graph{
     struct AvboitOccupancyComputeEmulationGraphTask;
+    struct AvboitOccupancySharedComputeEmulationGraphTask;
     struct AvboitExtinctionComputeEmulationGraphTask;
     struct AvboitAccumulationComputeEmulationGraphTask;
     struct AvboitAccumulationSharedComputeEmulationGraphTask;
@@ -145,6 +146,7 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend struct ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask;
     friend struct ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask;
     friend struct __hidden_renderer_task_graph::AvboitOccupancyComputeEmulationGraphTask;
+    friend struct __hidden_renderer_task_graph::AvboitOccupancySharedComputeEmulationGraphTask;
     friend struct __hidden_renderer_task_graph::AvboitExtinctionComputeEmulationGraphTask;
     friend struct __hidden_renderer_task_graph::AvboitAccumulationComputeEmulationGraphTask;
     friend struct __hidden_renderer_task_graph::AvboitAccumulationSharedComputeEmulationGraphTask;
@@ -571,10 +573,12 @@ private:
     // local occupancy uploads cannot overwrite the frozen CSG stream before those callbacks record.
     Core::GpuTaskId m_deferredAvboitCsgReceiverSpanTask;
     Core::GpuTaskId m_deferredAvboitCsgIntervalCombineTask;
-    // The final immutable Occupancy upload and its optional alias-free regular producer stay in AVBOIT Pre's
-    // accepting Graphics packet before the raster consumer and its later Depth-Warp Compute dependency.
+    // The final immutable Occupancy upload and optional graph-owned regular producer/alternating shared-output
+    // phases stay in AVBOIT Pre's accepting Graphics packet before its later Depth-Warp Compute dependency.
     Core::GpuTaskId m_deferredAvboitOccupancyStreamTask;
     Core::GpuTaskId m_deferredAvboitOccupancyComputeEmulationTask;
+    Core::GpuTaskId m_deferredAvboitOccupancySharedComputeEmulationTasks[4u] = {};
+    usize m_deferredAvboitOccupancySharedComputeEmulationTaskCount = 0u;
     Core::GpuTaskId m_deferredAvboitOccupancyTask;
     Core::GpuTaskId m_deferredAvboitDepthWarpTask;
     // The optional alias-free regular or CSG-only producer must remain in Extinction's selected Graphics packet so

@@ -88,6 +88,15 @@ GpuSubmissionPacketRange GpuCompiledGraph::packetRange(
     };
 }
 
+GpuSubmissionPacketRange GpuCompiledGraph::packetRangeForTasks(
+    const GpuTaskId& first,
+    const GpuTaskId& last
+)const noexcept{
+    const GpuSubmissionPacketId firstPacket = packetForTask(first);
+    const GpuSubmissionPacketId lastPacket = packetForTask(last);
+    return packetRange(firstPacket, lastPacket);
+}
+
 GpuSubmissionPacketRange GpuCompiledGraph::allPacketRange()const noexcept{
     return m_packets.empty()
         ? GpuSubmissionPacketRange{}

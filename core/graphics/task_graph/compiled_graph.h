@@ -87,6 +87,13 @@ public:
         const GpuSubmissionPacketId& first,
         const GpuSubmissionPacketId& last
     )const noexcept;
+    // Semantic companion to packetRange(). Resolves both declared task endpoints through this compiled generation,
+    // keeping renderer record/submit spans independent from packet splitting and merging. The result remains an
+    // inclusive contiguous compiler-order range, so deliberately late tails retain their existing traversal rules.
+    [[nodiscard]] GpuSubmissionPacketRange packetRangeForTasks(
+        const GpuTaskId& first,
+        const GpuTaskId& last
+    )const noexcept;
     [[nodiscard]] GpuSubmissionPacketRange allPacketRange()const noexcept;
     [[nodiscard]] const GpuCompiledTask* findTask(const GpuTaskId& task)const noexcept;
     [[nodiscard]] GpuSubmissionPacketId packetForTask(const GpuTaskId& task)const noexcept;

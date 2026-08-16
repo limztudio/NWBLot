@@ -3339,12 +3339,18 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_TRUE(compiledGraph.validPacketRange(firstTwoPacketRange));
     EXPECT_EQ(firstTwoPacketRange.first, firstPacket);
     EXPECT_EQ(firstTwoPacketRange.packetCount, 2u);
+    const Graphics::GpuSubmissionPacketRange firstTwoTaskRange = compiledGraph.packetRangeForTasks(first, second);
+    ASSERT_TRUE(firstTwoTaskRange.valid());
+    EXPECT_EQ(firstTwoTaskRange.first, firstPacket);
+    EXPECT_EQ(firstTwoTaskRange.packetCount, firstTwoPacketRange.packetCount);
     const Graphics::GpuSubmissionPacketRange fullPacketRange = compiledGraph.allPacketRange();
     ASSERT_TRUE(fullPacketRange.valid());
     EXPECT_TRUE(compiledGraph.validPacketRange(fullPacketRange));
     EXPECT_EQ(fullPacketRange.first, firstPacket);
     EXPECT_EQ(fullPacketRange.packetCount, compiledGraph.packetCount());
     EXPECT_FALSE(compiledGraph.packetRange(secondPacket, firstPacket).valid());
+    EXPECT_FALSE(compiledGraph.packetRangeForTasks(second, first).valid());
+    EXPECT_FALSE(compiledGraph.packetRangeForTasks(first, {}).valid());
     EXPECT_FALSE(compiledGraph.validPacketRange(Graphics::GpuSubmissionPacketRange{
         .first = firstPacket,
         .packetCount = compiledGraph.packetCount() + 1u,

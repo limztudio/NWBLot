@@ -1805,73 +1805,92 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && causticAccumulatorDecayPacket == causticsPacket
         )
     ;
-    // Keep every recording and submission span derived from compiled packet handles. The renderer names semantic
-    // endpoints only; raw compiler-order indices remain inside the task-graph runtime.
+    // Keep every recording and submission span derived from semantic task endpoints. Compiler packet identities
+    // remain below for validation, accepted-token lookup, and the terminal presentation signal only.
     const Core::GpuSubmissionPacketRange shadowPreparePacketRange =
-        m_deferredLightingCompiledGraph.packetRange(shadowPreparePacket, shadowPreparePacket);
+        m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredShadowPrepareTask, m_deferredShadowPrepareTask);
     const Core::GpuSubmissionPacketRange graphicsPrefixWorkPacketRange =
-        m_deferredLightingCompiledGraph.packetRange(graphicsPrefixMeshViewSetupPacket, graphicsPrefixPacket);
+        m_deferredLightingCompiledGraph.packetRangeForTasks(
+            m_graphicsPrefixMeshViewSetupTask,
+            m_graphicsPrefixTask
+        );
     const Core::GpuSubmissionPacketRange graphicsPrefixPacketRange =
-        m_deferredLightingCompiledGraph.packetRange(graphicsPrefixPacket, graphicsPrefixPacket);
+        m_deferredLightingCompiledGraph.packetRangeForTasks(m_graphicsPrefixTask, m_graphicsPrefixTask);
     const Core::GpuSubmissionPacketRange shadowPrepareThroughPrefixPacketRange =
-        m_deferredLightingCompiledGraph.packetRange(shadowPreparePacket, graphicsPrefixPacket);
-    const Core::GpuSubmissionPacketRange shadowEffectsPacketRange = m_deferredLightingCompiledGraph.packetRange(
-        shadowVisibilityPacket,
-        hardwareShadowSupported ? shadowVisibilityPacket : softwareCausticsPacket
+        m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredShadowPrepareTask, m_graphicsPrefixTask);
+    const Core::GpuSubmissionPacketRange shadowEffectsPacketRange = m_deferredLightingCompiledGraph.packetRangeForTasks(
+        m_deferredShadowVisibilityTask,
+        hardwareShadowSupported ? m_deferredShadowVisibilityTask : m_deferredSoftwareCausticsTask
     );
-    const Core::GpuSubmissionPacketId surfelGiFirstPacket = surfelGiPreparationPacket.valid()
-        ? surfelGiPreparationPacket
-        : surfelGiPacket
+    const Core::GpuTaskId surfelGiFirstTask = m_deferredSurfelGiPreparationTask.valid()
+        ? m_deferredSurfelGiPreparationTask
+        : m_deferredSurfelGiTask
     ;
     const Core::GpuSubmissionPacketRange surfelGiPacketRange =
-        m_deferredLightingCompiledGraph.packetRange(surfelGiFirstPacket, surfelGiPacket);
+        m_deferredLightingCompiledGraph.packetRangeForTasks(surfelGiFirstTask, m_deferredSurfelGiTask);
     const usize expectedSurfelGiPacketCount = m_deferredSurfelGiSnapshotCopyTask.valid()
         ? (surfelGiPreparationPacket == surfelGiSnapshotCopyPacket ? 2u : 3u)
         : 1u
     ;
     const Core::GpuSubmissionPacketRange hardwareCausticsPacketRange =
-        m_deferredLightingCompiledGraph.packetRange(hardwareCausticsPacket, hardwareCausticsPacket);
-    const Core::GpuSubmissionPacketId avboitUnsplitFinalPacket = hasTransparentRenderers
-        ? avboitAccumulationFinalizePacket
-        : avboitPrePacket
+        m_deferredLightingCompiledGraph.packetRangeForTasks(
+            m_deferredHardwareCausticsTask,
+            m_deferredHardwareCausticsTask
+        );
+    const Core::GpuTaskId avboitUnsplitFinalTask = hasTransparentRenderers
+        ? m_deferredAvboitAccumulationFinalizeTask
+        : m_deferredAvboitPreTask
     ;
-    const Core::GpuSubmissionPacketRange avboitPacketRange = m_deferredLightingCompiledGraph.packetRange(
-        avboitPrePacket,
-        avboitUsesAsyncCompute ? avboitAccumulationFinalizePacket : avboitUnsplitFinalPacket
+    const Core::GpuSubmissionPacketRange avboitPacketRange = m_deferredLightingCompiledGraph.packetRangeForTasks(
+        m_deferredAvboitPreTask,
+        avboitUsesAsyncCompute ? m_deferredAvboitAccumulationFinalizeTask : avboitUnsplitFinalTask
     );
     const Core::GpuSubmissionPacketRange deferredLightingCompositePacketRange =
-        m_deferredLightingCompiledGraph.packetRange(deferredLightingPacket, deferredCompositePacket);
+        m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredLightingTask, m_deferredCompositeTask);
     const Core::GpuSubmissionPacketRange deferredPresentPacketRange =
-        m_deferredLightingCompiledGraph.packetRange(deferredPresentPacket, deferredPresentPacket);
+        m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredPresentTask, m_deferredPresentTask);
+    const Core::GpuTaskId terminalPresentationTask = m_deferredPresentationOverlayTask.valid()
+        ? m_deferredPresentationOverlayTask
+        : m_deferredPresentTask
+    ;
     const Core::GpuSubmissionPacketRange terminalPresentationPacketRange =
-        m_deferredLightingCompiledGraph.packetRange(deferredPresentPacket, terminalPresentationPacket);
+        m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredPresentTask, terminalPresentationTask);
     const Core::GpuSubmissionPacketRange deferredLaggedLightingHistoryPacketRange =
-        m_deferredLightingCompiledGraph.packetRange(
-            deferredLaggedLightingHistoryPacket,
-            deferredLaggedLightingHistoryPacket
+        m_deferredLightingCompiledGraph.packetRangeForTasks(
+            m_deferredLaggedLightingHistoryTask,
+            m_deferredLaggedLightingHistoryTask
         )
     ;
     const Core::GpuSubmissionPacketRange surfelGiCounterReadbackPacketRange =
-        m_deferredLightingCompiledGraph.packetRange(
-            surfelGiCounterReadbackPacket,
-            surfelGiCounterReadbackPacket
+        m_deferredLightingCompiledGraph.packetRangeForTasks(
+            m_deferredSurfelGiCounterReadbackTask,
+            m_deferredSurfelGiCounterReadbackTask
         );
     const Core::GpuSubmissionPacketRange deferredFrameRecoveryPacketRange =
-        m_deferredLightingCompiledGraph.packetRange(deferredFrameRecoveryPacket, deferredFrameRecoveryPacket);
+        m_deferredLightingCompiledGraph.packetRangeForTasks(
+            m_deferredFrameRecoveryTask,
+            m_deferredFrameRecoveryTask
+        );
     const Core::GpuSubmissionPacketRange effectsThroughPresentationPacketRange =
-        m_deferredLightingCompiledGraph.packetRange(shadowVisibilityPacket, terminalPresentationPacket);
+        m_deferredLightingCompiledGraph.packetRangeForTasks(
+            m_deferredShadowVisibilityTask,
+            terminalPresentationTask
+        );
     const Core::GpuSubmissionPacketRange deferredNormalPacketRange =
-        m_deferredLightingCompiledGraph.packetRange(shadowPreparePacket, terminalPresentationPacket);
-    const Core::GpuSubmissionPacketId deferredTailFirstPacket = m_deferredSurfelGiCounterReadbackTask.valid()
-        ? surfelGiCounterReadbackPacket
-        : (captureLaggedLightingHistory ? deferredLaggedLightingHistoryPacket : deferredFrameRecoveryPacket)
+        m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredShadowPrepareTask, terminalPresentationTask);
+    const Core::GpuTaskId deferredTailFirstTask = m_deferredSurfelGiCounterReadbackTask.valid()
+        ? m_deferredSurfelGiCounterReadbackTask
+        : (captureLaggedLightingHistory ? m_deferredLaggedLightingHistoryTask : m_deferredFrameRecoveryTask)
     ;
-    const Core::GpuSubmissionPacketRange deferredTailPacketRange = m_deferredLightingCompiledGraph.packetRange(
-        deferredTailFirstPacket,
-        deferredFrameRecoveryPacket
+    const Core::GpuSubmissionPacketRange deferredTailPacketRange = m_deferredLightingCompiledGraph.packetRangeForTasks(
+        deferredTailFirstTask,
+        m_deferredFrameRecoveryTask
     );
     const Core::GpuSubmissionPacketRange deferredFullPacketRange =
-        m_deferredLightingCompiledGraph.packetRange(shadowPreparePacket, deferredFrameRecoveryPacket);
+        m_deferredLightingCompiledGraph.packetRangeForTasks(
+            m_deferredShadowPrepareTask,
+            m_deferredFrameRecoveryTask
+        );
     const usize expectedAvboitPacketCount = avboitUsesAsyncCompute ? 5u : 1u;
     const usize expectedDeferredTailPacketCount = 1u
         + (m_deferredSurfelGiCounterReadbackTask.valid() ? 1u : 0u)

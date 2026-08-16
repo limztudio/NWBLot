@@ -3102,7 +3102,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             RendererSystem* renderer = nullptr;
             DeferredFrameTargets* targets = nullptr;
             const Core::CommandListResourceStateHandoff* finalState = nullptr;
-            Core::GpuSubmissionPacketId lightingPacket;
             bool runsOnCompute = false;
             bool usesLaggedHistory = false;
             bool returnStatesReady = true;
@@ -3111,13 +3110,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             .renderer = this,
             .targets = &deferredTargets,
             .finalState = deferredLightingFinalStateSeed,
-            .lightingPacket = deferredLightingPacket,
             .runsOnCompute = deferredLightingRunsOnCompute,
             .usesLaggedHistory = laggedAsyncLightingSchedule,
         };
-        const auto acceptDeferredLightingPacket = [](
+        const auto acceptDeferredLightingTask = [](
             void* const rawContext,
-            const Core::GpuSubmissionPacketId& packet,
             const Core::QueueSubmissionToken& token
         ) -> bool {
             static_cast<void>(token);
@@ -3126,8 +3123,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ;
             if(!context || !context->renderer || !context->targets || !context->finalState)
                 return false;
-            if(packet != context->lightingPacket)
-                return true;
 
             RendererSystem& renderer = *context->renderer;
             if(context->usesLaggedHistory)
@@ -3157,9 +3152,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             }
             return true;
         };
-        const Core::GpuTaskGraphPacketAcceptedCallback deferredLightingAcceptedCallback{
+        const Core::GpuTaskGraphTaskAcceptedCallback deferredLightingAcceptedCallback{
+            .task = m_deferredLightingTask,
             .context = &deferredLightingAcceptance,
-            .invoke = acceptDeferredLightingPacket,
+            .invoke = acceptDeferredLightingTask,
         };
         const Core::GpuTaskGraphTaskTimingTicket deferredLightingCompositeTimingTickets[] = {
             Core::GpuTaskGraphTaskTimingTicket{
@@ -3202,7 +3198,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredLightingSubmissionTransaction,
                 deferredScratchArena,
                 nullptr,
-                &deferredLightingAcceptedCallback
+                nullptr,
+                nullptr,
+                0u,
+                &deferredLightingAcceptedCallback,
+                1u
             )
         ;
         deferredLightingSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
@@ -3357,7 +3357,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             RendererSystem* renderer = nullptr;
             DeferredFrameTargets* targets = nullptr;
             const Core::CommandListResourceStateHandoff* finalState = nullptr;
-            Core::GpuSubmissionPacketId surfelGiPacket;
             bool runsOnCompute = false;
             bool stateReady = true;
         };
@@ -3365,12 +3364,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             .renderer = this,
             .targets = &deferredTargets,
             .finalState = surfelGiFinalStateSeed,
-            .surfelGiPacket = surfelGiPacket,
             .runsOnCompute = surfelGiRunsOnCompute,
         };
-        const auto acceptSurfelGiPacket = [](
+        const auto acceptSurfelGiTask = [](
             void* const rawContext,
-            const Core::GpuSubmissionPacketId& packet,
             const Core::QueueSubmissionToken& token
         ) -> bool {
             static_cast<void>(token);
@@ -3379,8 +3376,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ;
             if(!context)
                 return false;
-            if(packet != context->surfelGiPacket)
-                return true;
             if(!context->renderer || !context->targets || !context->finalState){
                 context->stateReady = false;
                 return false;
@@ -3425,9 +3420,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             );
             return context->stateReady;
         };
-        const Core::GpuTaskGraphPacketAcceptedCallback surfelGiAcceptedCallback{
+        const Core::GpuTaskGraphTaskAcceptedCallback surfelGiAcceptedCallback{
+            .task = m_deferredSurfelGiTask,
             .context = &surfelGiAcceptance,
-            .invoke = acceptSurfelGiPacket,
+            .invoke = acceptSurfelGiTask,
         };
         const Core::GpuTaskGraphTaskTimingTicket surfelGiTimingTickets[] = {
             Core::GpuTaskGraphTaskTimingTicket{
@@ -3461,7 +3457,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredLightingSubmissionTransaction,
                 surfelGiScratchArena,
                 nullptr,
-                &surfelGiAcceptedCallback
+                nullptr,
+                nullptr,
+                0u,
+                &surfelGiAcceptedCallback,
+                1u
             )
         ;
         surfelGiSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
@@ -3534,9 +3534,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         struct PrefixTimingAcceptanceContext{
             Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
-            Core::GpuSubmissionPacketId frameBeginPacket;
             RendererSystem* renderer = nullptr;
-            Core::GpuSubmissionPacketId shadowPreparePacket;
             Core::GpuPersistentResourceStateCache::Candidate* shadowPrepareStateCandidate = nullptr;
             bool shadowPrepareHasLiveStateBuffers = false;
             bool shadowPrepareStateCandidateRequired = false;
@@ -3544,72 +3542,84 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         };
         PrefixTimingAcceptanceContext prefixTimingAcceptance{
             .frameTimingTransaction = &frameTimingTransaction,
-            .frameBeginPacket = graphicsPrefixMeshViewSetupPacket,
             .renderer = this,
-            .shadowPreparePacket = shadowPreparePacket,
             .shadowPrepareStateCandidate = &shadowPrepareAcceptedStateCandidate,
             .shadowPrepareHasLiveStateBuffers = !shadowPrepareLiveStateBuffers.empty(),
             .shadowPrepareStateCandidateRequired = shadowPrepareStateCandidateRequired,
         };
-        const auto acceptPrefixTimingPacket = [](
+        const auto acceptShadowPrepareTask = [](
             void* const rawContext,
-            const Core::GpuSubmissionPacketId& packet,
             const Core::QueueSubmissionToken& token
         ) -> bool {
             static_cast<void>(token);
             PrefixTimingAcceptanceContext* const context = static_cast<PrefixTimingAcceptanceContext*>(rawContext);
-            if(!context || !context->frameTimingTransaction || !context->frameBeginPacket.valid())
+            if(!context)
                 return false;
-            if(packet == context->shadowPreparePacket){
-                if(!context->renderer){
-                    context->shadowPrepareStateReady = false;
-                    return false;
-                }
+            if(!context->renderer){
+                context->shadowPrepareStateReady = false;
+                return false;
+            }
 
-                RendererSystem& renderer = *context->renderer;
-                if(!context->shadowPrepareHasLiveStateBuffers){
+            RendererSystem& renderer = *context->renderer;
+            if(!context->shadowPrepareHasLiveStateBuffers){
+                renderer.m_shadowPreparePersistentState.reset();
+            }
+            else if(
+                !context->shadowPrepareStateCandidate
+                || !context->shadowPrepareStateCandidate->valid()
+                || context->shadowPrepareStateCandidate->empty()
+            ){
+                if(!context->shadowPrepareStateCandidateRequired){
                     renderer.m_shadowPreparePersistentState.reset();
+                    return true;
                 }
-                else if(
-                    !context->shadowPrepareStateCandidate
-                    || !context->shadowPrepareStateCandidate->valid()
-                    || context->shadowPrepareStateCandidate->empty()
-                ){
-                    if(!context->shadowPrepareStateCandidateRequired){
-                        renderer.m_shadowPreparePersistentState.reset();
-                        return true;
-                    }
-                    // The packet is already accepted, so preserve the last accepted source rather than replacing it
-                    // with a partial generation. Re-pend the semantic plan for a conservative rebuild next frame.
+                // The packet is already accepted, so preserve the last accepted source rather than replacing it
+                // with a partial generation. Re-pend the semantic plan for a conservative rebuild next frame.
+                renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();
+                context->shadowPrepareStateReady = false;
+                return false;
+            }
+            else{
+                context->shadowPrepareStateReady = renderer.m_shadowPreparePersistentState.commit(
+                    *context->shadowPrepareStateCandidate
+                );
+                if(context->shadowPrepareStateReady){
+                    // Task acceptance has retained the backing handoff. Commit the frozen AS cache/refit state
+                    // only after that graph-owned source exists for the next frame.
+                    renderer.m_raytracingSystem.confirmPreparedSceneTlasBuild();
+                    renderer.m_raytracingSystem.confirmPreparedMeshBlasBuilds();
+                    renderer.m_raytracingSystem.confirmPreparedMeshSwBvhBuilds();
+                }
+                else{
                     renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();
                     context->shadowPrepareStateReady = false;
                     return false;
                 }
-                else{
-                    context->shadowPrepareStateReady = renderer.m_shadowPreparePersistentState.commit(
-                        *context->shadowPrepareStateCandidate
-                    );
-                    if(context->shadowPrepareStateReady){
-                        // Task acceptance runs before this outer packet callback. Commit frozen AS cache/refit state
-                        // only after the accepted backing handoff has been retained successfully.
-                        renderer.m_raytracingSystem.confirmPreparedSceneTlasBuild();
-                        renderer.m_raytracingSystem.confirmPreparedMeshBlasBuilds();
-                        renderer.m_raytracingSystem.confirmPreparedMeshSwBvhBuilds();
-                    }
-                    else{
-                        renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();
-                        context->shadowPrepareStateReady = false;
-                        return false;
-                    }
-                }
             }
-            if(packet == context->frameBeginPacket)
-                context->frameTimingTransaction->confirmBeginSubmission();
             return true;
         };
-        const Core::GpuTaskGraphPacketAcceptedCallback shadowPreparePrefixAcceptedCallback{
-            .context = &prefixTimingAcceptance,
-            .invoke = acceptPrefixTimingPacket,
+        const auto acceptGraphicsPrefixBeginTask = [](
+            void* const rawContext,
+            const Core::QueueSubmissionToken& token
+        ) -> bool {
+            static_cast<void>(token);
+            PrefixTimingAcceptanceContext* const context = static_cast<PrefixTimingAcceptanceContext*>(rawContext);
+            if(!context || !context->frameTimingTransaction)
+                return false;
+            context->frameTimingTransaction->confirmBeginSubmission();
+            return true;
+        };
+        const Core::GpuTaskGraphTaskAcceptedCallback shadowPreparePrefixAcceptedCallbacks[] = {
+            Core::GpuTaskGraphTaskAcceptedCallback{
+                .task = m_deferredShadowPrepareTask,
+                .context = &prefixTimingAcceptance,
+                .invoke = acceptShadowPrepareTask,
+            },
+            Core::GpuTaskGraphTaskAcceptedCallback{
+                .task = m_graphicsPrefixMeshViewSetupTask,
+                .context = &prefixTimingAcceptance,
+                .invoke = acceptGraphicsPrefixBeginTask,
+            },
         };
         const bool shadowPreparePrefixAccepted =
             m_deferredLightingTaskGraphValid
@@ -3655,7 +3665,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredLightingSubmissionTransaction,
                 shadowPreparePrefixScratchArena,
                 nullptr,
-                &shadowPreparePrefixAcceptedCallback
+                nullptr,
+                nullptr,
+                0u,
+                shadowPreparePrefixAcceptedCallbacks,
+                LengthOf(shadowPreparePrefixAcceptedCallbacks)
             )
         ;
         if(
@@ -3834,7 +3848,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 RendererSystem* renderer = nullptr;
                 DeferredFrameTargets* targets = nullptr;
                 const Core::CommandListResourceStateHandoff* finalState = nullptr;
-                Core::GpuSubmissionPacketId hardwareCausticsPacket;
                 bool usesLaggedHistory = false;
                 bool stateReady = true;
             };
@@ -3842,12 +3855,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 .renderer = this,
                 .targets = &deferredTargets,
                 .finalState = hardwareCausticsFinalStateSeed,
-                .hardwareCausticsPacket = hardwareCausticsPacket,
                 .usesLaggedHistory = laggedAsyncLightingSchedule,
             };
-            const auto acceptHardwareCausticsPacket = [](
+            const auto acceptHardwareCausticsTask = [](
                 void* const rawContext,
-                const Core::GpuSubmissionPacketId& packet,
                 const Core::QueueSubmissionToken& token
             ) -> bool {
                 static_cast<void>(token);
@@ -3856,8 +3867,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 ;
                 if(!context)
                     return false;
-                if(packet != context->hardwareCausticsPacket)
-                    return true;
                 if(!context->usesLaggedHistory)
                     return true;
                 if(!context->renderer || !context->targets || !context->finalState){
@@ -3870,9 +3879,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 );
                 return context->stateReady;
             };
-            const Core::GpuTaskGraphPacketAcceptedCallback hardwareCausticsAcceptedCallback{
+            const Core::GpuTaskGraphTaskAcceptedCallback hardwareCausticsAcceptedCallback{
+                .task = m_deferredHardwareCausticsTask,
                 .context = &hardwareCausticsAcceptance,
-                .invoke = acceptHardwareCausticsPacket,
+                .invoke = acceptHardwareCausticsTask,
             };
             const Core::GpuTaskGraphTaskTimingTicket hardwareCausticsTimingTickets[] = {
                 Core::GpuTaskGraphTaskTimingTicket{
@@ -3900,7 +3910,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     m_deferredLightingSubmissionTransaction,
                     hardwareCausticsScratchArena,
                     nullptr,
-                    &hardwareCausticsAcceptedCallback
+                    nullptr,
+                    nullptr,
+                    0u,
+                    &hardwareCausticsAcceptedCallback,
+                    1u
                 )
             ;
             hardwareCausticsSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(

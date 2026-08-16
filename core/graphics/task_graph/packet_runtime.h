@@ -300,6 +300,18 @@ struct GpuTaskGraphPacketAcceptedCallback{
     ) = nullptr;
 };
 
+// Semantic acceptance binding for one declared task. The submitter resolves the task after compilation and invokes
+// bindings in compiled task order once their containing native packet has accepted. Returning false stops range
+// traversal after retaining that accepted packet, just like the packet-wide compatibility callback.
+struct GpuTaskGraphTaskAcceptedCallback{
+    GpuTaskId task;
+    void* context = nullptr;
+    [[nodiscard]] bool (*invoke)(
+        void* context,
+        const QueueSubmissionToken& token
+    ) = nullptr;
+};
+
 
 class GpuGraphSubmissionTransaction final : NoCopy{
 public:
@@ -399,7 +411,9 @@ public:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr,
         const GpuTaskGraphPacketSubmissionHook* submissionHooks = nullptr,
-        usize submissionHookCount = 0u
+        usize submissionHookCount = 0u,
+        const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr,
+        usize taskAcceptedCallbackCount = 0u
     )const;
     // Semantic companion to packet-range submission. It resolves the inclusive compiler-order range from declared
     // task endpoints and leaves packet IDs only for narrow accepted-token and pre-submit hook integrations.
@@ -418,7 +432,9 @@ public:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr,
         const GpuTaskGraphPacketSubmissionHook* submissionHooks = nullptr,
-        usize submissionHookCount = 0u
+        usize submissionHookCount = 0u,
+        const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr,
+        usize taskAcceptedCallbackCount = 0u
     )const;
     // Semantic companion to the packet-timing overload above.  It resolves each task binding through the current
     // compiled graph, so packet splitting/merging remains compiler-owned.  Multiple bindings may target one
@@ -437,7 +453,9 @@ public:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr,
         const GpuTaskGraphPacketSubmissionHook* submissionHooks = nullptr,
-        usize submissionHookCount = 0u
+        usize submissionHookCount = 0u,
+        const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr,
+        usize taskAcceptedCallbackCount = 0u
     )const;
     // Resolves both the submitted range and timing bindings from semantic tasks after compilation. Multiple timing
     // anchors may share one packet only when they deliberately reference the same submission ticket.
@@ -456,7 +474,9 @@ public:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr,
         const GpuTaskGraphPacketSubmissionHook* submissionHooks = nullptr,
-        usize submissionHookCount = 0u
+        usize submissionHookCount = 0u,
+        const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr,
+        usize taskAcceptedCallbackCount = 0u
     )const;
 private:
     Device& m_device;

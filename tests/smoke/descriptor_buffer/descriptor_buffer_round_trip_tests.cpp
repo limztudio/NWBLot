@@ -2862,6 +2862,36 @@ struct NativePacketRangeAcceptanceObserver{
     return context->continueSubmission;
 }
 
+struct NativeTaskAcceptanceOrder{
+    u32 invocationCount = 0u;
+    u32 markers[4] = {};
+};
+
+struct NativeTaskAcceptanceObserver{
+    u32 acceptedCount = 0u;
+    QueueSubmissionToken lastToken;
+    bool continueSubmission = true;
+    NativeTaskAcceptanceOrder* order = nullptr;
+    u32 orderMarker = 0u;
+};
+
+[[nodiscard]] static bool ObserveNativeTaskAcceptance(
+    void* const rawContext,
+    const QueueSubmissionToken& token
+){
+    NativeTaskAcceptanceObserver* const context = static_cast<NativeTaskAcceptanceObserver*>(rawContext);
+    if(!context || !token.valid())
+        return false;
+    ++context->acceptedCount;
+    context->lastToken = token;
+    if(context->order){
+        if(context->order->invocationCount >= LengthOf(context->order->markers))
+            return false;
+        context->order->markers[context->order->invocationCount++] = context->orderMarker;
+    }
+    return context->continueSubmission;
+}
+
 
 // The production presentation hook supplies a real swap-chain binary semaphore. The headless fixture cannot
 // manufacture one through BackendContext, so this probe verifies range validation rejects a hook before native
@@ -3376,6 +3406,27 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
     stateProbe->close();
 
     const GpuTaskGraphSubmitter submitter(device);
+    NativeTaskAcceptanceOrder taskAcceptanceOrder;
+    NativeTaskAcceptanceObserver meshViewSetupAcceptance{
+        .order = &taskAcceptanceOrder,
+        .orderMarker = 1u,
+    };
+    NativeTaskAcceptanceObserver normalizeAcceptance{
+        .order = &taskAcceptanceOrder,
+        .orderMarker = 2u,
+    };
+    const GpuTaskGraphTaskAcceptedCallback taskAcceptedCallbacks[] = {
+        GpuTaskGraphTaskAcceptedCallback{
+            .task = meshViewSetupTask,
+            .context = &meshViewSetupAcceptance,
+            .invoke = ObserveNativeTaskAcceptance,
+        },
+        GpuTaskGraphTaskAcceptedCallback{
+            .task = normalizeTask,
+            .context = &normalizeAcceptance,
+            .invoke = ObserveNativeTaskAcceptance,
+        },
+    };
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -3386,9 +3437,23 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
         nullptr,
         0u,
         transaction,
-        scratchArena
+        scratchArena,
+        nullptr,
+        nullptr,
+        nullptr,
+        0u,
+        taskAcceptedCallbacks,
+        LengthOf(taskAcceptedCallbacks)
     ));
-    EXPECT_TRUE(transaction.packetToken(packet).valid());
+    const QueueSubmissionToken packetToken = transaction.packetToken(packet);
+    EXPECT_TRUE(packetToken.valid());
+    EXPECT_EQ(meshViewSetupAcceptance.acceptedCount, 1u);
+    EXPECT_EQ(normalizeAcceptance.acceptedCount, 1u);
+    EXPECT_EQ(meshViewSetupAcceptance.lastToken.value, packetToken.value);
+    EXPECT_EQ(normalizeAcceptance.lastToken.value, packetToken.value);
+    EXPECT_EQ(taskAcceptanceOrder.invocationCount, 2u);
+    EXPECT_EQ(taskAcceptanceOrder.markers[0u], 1u);
+    EXPECT_EQ(taskAcceptanceOrder.markers[1u], 2u);
     EXPECT_TRUE(device.waitForIdle());
 }
 
@@ -18364,6 +18429,20 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
         GpuTaskGraphTaskTimingTicket{ .task = beginTask, .timingTicket = &beginTicket },
         GpuTaskGraphTaskTimingTicket{ .task = endTask, .timingTicket = &endTicket },
     };
+    NativeTaskAcceptanceObserver beginTaskAcceptance;
+    NativeTaskAcceptanceObserver endTaskAcceptance;
+    const GpuTaskGraphTaskAcceptedCallback taskAcceptedCallbacks[] = {
+        GpuTaskGraphTaskAcceptedCallback{
+            .task = beginTask,
+            .context = &beginTaskAcceptance,
+            .invoke = ObserveNativeTaskAcceptance,
+        },
+        GpuTaskGraphTaskAcceptedCallback{
+            .task = endTask,
+            .context = &endTaskAcceptance,
+            .invoke = ObserveNativeTaskAcceptance,
+        },
+    };
     const GpuTaskGraphSubmitter submitter(device);
     const GpuTaskGraphTaskTimingTicket duplicateTaskTimingTickets[] = {
         GpuTaskGraphTaskTimingTicket{ .task = beginTask, .timingTicket = &beginTicket },
@@ -18383,6 +18462,32 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
         scratchArena
     ));
     EXPECT_FALSE(transaction.hasAcceptedPackets());
+    const GpuTaskGraphTaskAcceptedCallback duplicateTaskAcceptedCallbacks[] = {
+        taskAcceptedCallbacks[0],
+        taskAcceptedCallbacks[0],
+    };
+    EXPECT_FALSE(submitter.submitTaskRangeInCompileOrderFromTasks(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        beginTask,
+        endTask,
+        nullptr,
+        0u,
+        timingTickets,
+        LengthOf(timingTickets),
+        transaction,
+        scratchArena,
+        nullptr,
+        nullptr,
+        nullptr,
+        0u,
+        duplicateTaskAcceptedCallbacks,
+        LengthOf(duplicateTaskAcceptedCallbacks)
+    ));
+    EXPECT_FALSE(transaction.hasAcceptedPackets());
+    EXPECT_EQ(beginTaskAcceptance.acceptedCount, 0u);
+    EXPECT_EQ(endTaskAcceptance.acceptedCount, 0u);
     ASSERT_TRUE(submitter.submitTaskRangeInCompileOrderFromTasks(
         graph,
         compiledGraph,
@@ -18394,7 +18499,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
         timingTickets,
         LengthOf(timingTickets),
         transaction,
-        scratchArena
+        scratchArena,
+        nullptr,
+        nullptr,
+        nullptr,
+        0u,
+        taskAcceptedCallbacks,
+        LengthOf(taskAcceptedCallbacks)
     ));
     EXPECT_TRUE(transaction.hasAcceptedPackets());
     const QueueSubmissionToken beginTaskToken = transaction.taskToken(compiledGraph, beginTask);
@@ -18404,6 +18515,10 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
     EXPECT_NE(beginTaskToken.value, endTaskToken.value);
     EXPECT_EQ(beginTaskToken.value, transaction.packetToken(compiledGraph.packetForTask(beginTask)).value);
     EXPECT_EQ(endTaskToken.value, transaction.packetToken(compiledGraph.packetForTask(endTask)).value);
+    EXPECT_EQ(beginTaskAcceptance.acceptedCount, 1u);
+    EXPECT_EQ(endTaskAcceptance.acceptedCount, 1u);
+    EXPECT_EQ(beginTaskAcceptance.lastToken.value, beginTaskToken.value);
+    EXPECT_EQ(endTaskAcceptance.lastToken.value, endTaskToken.value);
     EXPECT_FALSE(transaction.taskToken(compiledGraph, GpuTaskId{}).valid());
     GpuCompiledGraph unrelatedCompiledGraph(DescriptorBufferRoundTripTest::arena());
     EXPECT_FALSE(transaction.taskToken(unrelatedCompiledGraph, beginTask).valid());

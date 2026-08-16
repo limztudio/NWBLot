@@ -64,6 +64,41 @@ inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph
     return true;
 }
 
+[[nodiscard]] bool ValidateTaskAcceptedCallbacks(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketRange& range,
+    const GpuTaskGraphTaskAcceptedCallback* const callbacks,
+    const usize callbackCount
+){
+    if(callbackCount != 0u && !callbacks)
+        return false;
+
+    for(usize callbackIndex = 0u; callbackIndex < callbackCount; ++callbackIndex){
+        const GpuTaskGraphTaskAcceptedCallback& callback = callbacks[callbackIndex];
+        if(
+            !callback.invoke
+            || !graph.validTask(callback.task)
+            || !compiledGraph.findTask(callback.task)
+        )
+            return false;
+
+        const GpuSubmissionPacketId packet = compiledGraph.packetForTask(callback.task);
+        if(
+            !packet.valid()
+            || packet.index < range.first.index
+            || static_cast<usize>(packet.index) >= static_cast<usize>(range.first.index) + range.packetCount
+        )
+            return false;
+
+        for(usize previousIndex = 0u; previousIndex < callbackIndex; ++previousIndex){
+            if(callbacks[previousIndex].task == callback.task)
+                return false;
+        }
+    }
+    return true;
+}
+
 // Ordinary external completions may originate on any current-device queue. A completion paired with an imported
 // ownership acquire is narrower: it must prove the exact physical source queue that released the resource, or the
 // consumer could wait an unrelated timeline and race the Vulkan acquire.
@@ -1344,7 +1379,9 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
     GpuSubmissionPacketId* const outFailedPacket,
     const GpuTaskGraphPacketAcceptedCallback* const acceptedCallback,
     const GpuTaskGraphPacketSubmissionHook* const submissionHooks,
-    const usize submissionHookCount
+    const usize submissionHookCount,
+    const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
+    const usize taskAcceptedCallbackCount
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
@@ -1357,6 +1394,13 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
         || (timingTicketCount != 0u && !timingTickets)
         || (submissionHookCount != 0u && !submissionHooks)
         || (acceptedCallback && !acceptedCallback->invoke)
+        || !__hidden_gpu_packet_runtime::ValidateTaskAcceptedCallbacks(
+            graph,
+            compiledGraph,
+            range,
+            taskAcceptedCallbacks,
+            taskAcceptedCallbackCount
+        )
     )
         return false;
 
@@ -1447,6 +1491,28 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
                 *outFailedPacket = packet;
             return false;
         }
+        if(taskAcceptedCallbackCount != 0u){
+            const GpuSubmissionPacket& submittedPacket = compiledGraph.packet(packet);
+            const GpuTaskId* const submittedTasks = compiledGraph.packetTasks(packet);
+            if(!token.valid() || (submittedPacket.taskCount != 0u && !submittedTasks)){
+                if(outFailedPacket)
+                    *outFailedPacket = packet;
+                return false;
+            }
+            for(u32 taskIndex = 0u; taskIndex < submittedPacket.taskCount; ++taskIndex){
+                for(usize callbackIndex = 0u; callbackIndex < taskAcceptedCallbackCount; ++callbackIndex){
+                    const GpuTaskGraphTaskAcceptedCallback& callback = taskAcceptedCallbacks[callbackIndex];
+                    if(
+                        callback.task == submittedTasks[taskIndex]
+                        && !callback.invoke(callback.context, token)
+                    ){
+                        if(outFailedPacket)
+                            *outFailedPacket = packet;
+                        return false;
+                    }
+                }
+            }
+        }
     }
     return true;
 }
@@ -1467,7 +1533,9 @@ bool GpuTaskGraphSubmitter::submitTaskRangeInCompileOrder(
     GpuSubmissionPacketId* const outFailedPacket,
     const GpuTaskGraphPacketAcceptedCallback* const acceptedCallback,
     const GpuTaskGraphPacketSubmissionHook* const submissionHooks,
-    const usize submissionHookCount
+    const usize submissionHookCount,
+    const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
+    const usize taskAcceptedCallbackCount
 )const{
     return submitPacketRangeInCompileOrder(
         graph,
@@ -1483,7 +1551,9 @@ bool GpuTaskGraphSubmitter::submitTaskRangeInCompileOrder(
         outFailedPacket,
         acceptedCallback,
         submissionHooks,
-        submissionHookCount
+        submissionHookCount,
+        taskAcceptedCallbacks,
+        taskAcceptedCallbackCount
     );
 }
 
@@ -1502,7 +1572,9 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderFromTasks(
     GpuSubmissionPacketId* const outFailedPacket,
     const GpuTaskGraphPacketAcceptedCallback* const acceptedCallback,
     const GpuTaskGraphPacketSubmissionHook* const submissionHooks,
-    const usize submissionHookCount
+    const usize submissionHookCount,
+    const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
+    const usize taskAcceptedCallbackCount
 )const{
     if(
         !compiledGraph.validFor(graph)
@@ -1568,7 +1640,9 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderFromTasks(
         outFailedPacket,
         acceptedCallback,
         submissionHooks,
-        submissionHookCount
+        submissionHookCount,
+        taskAcceptedCallbacks,
+        taskAcceptedCallbackCount
     );
 }
 
@@ -1588,7 +1662,9 @@ bool GpuTaskGraphSubmitter::submitTaskRangeInCompileOrderFromTasks(
     GpuSubmissionPacketId* const outFailedPacket,
     const GpuTaskGraphPacketAcceptedCallback* const acceptedCallback,
     const GpuTaskGraphPacketSubmissionHook* const submissionHooks,
-    const usize submissionHookCount
+    const usize submissionHookCount,
+    const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
+    const usize taskAcceptedCallbackCount
 )const{
     return submitPacketRangeInCompileOrderFromTasks(
         graph,
@@ -1604,7 +1680,9 @@ bool GpuTaskGraphSubmitter::submitTaskRangeInCompileOrderFromTasks(
         outFailedPacket,
         acceptedCallback,
         submissionHooks,
-        submissionHookCount
+        submissionHookCount,
+        taskAcceptedCallbacks,
+        taskAcceptedCallbackCount
     );
 }
 

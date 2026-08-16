@@ -1154,6 +1154,15 @@ QueueSubmissionToken GpuGraphSubmissionTransaction::packetToken(const GpuSubmiss
     return runtime && runtime->state == GpuPacketRuntimeState::Accepted ? runtime->token : QueueSubmissionToken{};
 }
 
+QueueSubmissionToken GpuGraphSubmissionTransaction::taskToken(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId task
+)const noexcept{
+    if(!validFor(compiledGraph))
+        return {};
+    return packetToken(compiledGraph.packetForTask(task));
+}
+
 const QueueSubmissionToken* GpuGraphSubmissionTransaction::latestAcceptedToken(
     const GpuPhysicalQueueId& queue
 )const noexcept{

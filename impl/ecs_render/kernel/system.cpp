@@ -2212,7 +2212,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         discardTimingTickets();
         discardUnacceptedGraphPackets();
         const bool shadowPrepareAccepted = shadowPreparePacket.valid()
-            && m_deferredLightingSubmissionTransaction.packetToken(shadowPreparePacket).valid()
+            && m_deferredLightingSubmissionTransaction.taskToken(
+                m_deferredLightingCompiledGraph,
+                m_deferredShadowPrepareTask
+            ).valid()
         ;
         restorePostGbufferPacketCpuState(!shadowPrepareAccepted);
         m_raytracingSystem.discardSoftShadowTemporalHistory();
@@ -3050,12 +3053,25 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 deferredScratchArena
             )
         ;
-        avboitPreSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(avboitPrePacket);
-        avboitDepthWarpSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(avboitDepthWarpPacket);
-        avboitExtinctionSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(avboitExtinctionPacket);
-        avboitIntegrationSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(avboitIntegrationPacket);
-        avboitAccumulationSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(
-            avboitAccumulationPacket
+        avboitPreSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
+            m_deferredLightingCompiledGraph,
+            m_deferredAvboitPreTask
+        );
+        avboitDepthWarpSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
+            m_deferredLightingCompiledGraph,
+            m_deferredAvboitDepthWarpTask
+        );
+        avboitExtinctionSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
+            m_deferredLightingCompiledGraph,
+            m_deferredAvboitExtinctionTask
+        );
+        avboitIntegrationSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
+            m_deferredLightingCompiledGraph,
+            m_deferredAvboitIntegrationTask
+        );
+        avboitAccumulationSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
+            m_deferredLightingCompiledGraph,
+            m_deferredAvboitAccumulationTask
         );
         avboitFinalSubmissionToken = (avboitUsesAsyncCompute || hasTransparentRenderers)
             ? avboitAccumulationSubmissionToken
@@ -3189,8 +3205,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 &deferredLightingAcceptedCallback
             )
         ;
-        deferredLightingSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(deferredLightingPacket);
-        deferredCompositeSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(deferredCompositePacket);
+        deferredLightingSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
+            m_deferredLightingCompiledGraph,
+            m_deferredLightingTask
+        );
+        deferredCompositeSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
+            m_deferredLightingCompiledGraph,
+            m_deferredCompositeTask
+        );
         if(!deferredLightingAcceptance.returnStatesReady){
             const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
@@ -3269,7 +3291,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             )
         ;
         finalPresentationSubmissionToken = deferredPresentationAccepted
-            ? m_deferredLightingSubmissionTransaction.packetToken(terminalPresentationPacket)
+            ? m_deferredLightingSubmissionTransaction.taskToken(
+                m_deferredLightingCompiledGraph,
+                terminalPresentationTask
+            )
             : Core::QueueSubmissionToken{}
         ;
         if(!finalPresentationSubmissionToken.valid()){
@@ -3439,7 +3464,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 &surfelGiAcceptedCallback
             )
         ;
-        surfelGiSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(surfelGiPacket);
+        surfelGiSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
+            m_deferredLightingCompiledGraph,
+            m_deferredSurfelGiTask
+        );
         if(!surfelGiAcceptance.stateReady){
             const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
@@ -3632,8 +3660,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ;
         if(
             !shadowPreparePrefixAccepted
-            || !m_deferredLightingSubmissionTransaction.packetToken(shadowPreparePacket).valid()
-            || !m_deferredLightingSubmissionTransaction.packetToken(graphicsPrefixPacket).valid()
+            || !m_deferredLightingSubmissionTransaction.taskToken(
+                m_deferredLightingCompiledGraph,
+                m_deferredShadowPrepareTask
+            ).valid()
+            || !m_deferredLightingSubmissionTransaction.taskToken(
+                m_deferredLightingCompiledGraph,
+                m_graphicsPrefixTask
+            ).valid()
         ){
             const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardRenderPackets();
@@ -3682,11 +3716,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 shadowEffectsScratchArena
             )
         ;
-        shadowVisibilitySubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(
-            shadowVisibilityPacket
+        shadowVisibilitySubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
+            m_deferredLightingCompiledGraph,
+            m_deferredShadowVisibilityTask
         );
         softwareCausticsSubmissionToken = !hardwareShadowSupported
-            ? m_deferredLightingSubmissionTransaction.packetToken(softwareCausticsPacket)
+            ? m_deferredLightingSubmissionTransaction.taskToken(
+                m_deferredLightingCompiledGraph,
+                m_deferredSoftwareCausticsTask
+            )
             : Core::QueueSubmissionToken{}
         ;
         if(!shadowVisibilitySubmissionToken.valid()){
@@ -3865,8 +3903,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     &hardwareCausticsAcceptedCallback
                 )
             ;
-            hardwareCausticsSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(
-                hardwareCausticsPacket
+            hardwareCausticsSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
+                m_deferredLightingCompiledGraph,
+                m_deferredHardwareCausticsTask
             );
             const bool hardwareCausticsStateReady =
                 hardwareCausticsAccepted
@@ -4024,7 +4063,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     scratchArena
                 );
                 const Core::QueueSubmissionToken readbackSubmissionToken = readbackAccepted
-                    ? m_deferredLightingSubmissionTransaction.packetToken(surfelGiCounterReadbackPacket)
+                    ? m_deferredLightingSubmissionTransaction.taskToken(
+                        m_deferredLightingCompiledGraph,
+                        m_deferredSurfelGiCounterReadbackTask
+                    )
                     : Core::QueueSubmissionToken{}
                 ;
                 if(!readbackSubmissionToken.valid()){
@@ -4167,7 +4209,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     scratchArena
                 );
                 const Core::QueueSubmissionToken historyCopySubmissionToken = historyCopyAccepted
-                    ? m_deferredLightingSubmissionTransaction.packetToken(deferredLaggedLightingHistoryPacket)
+                    ? m_deferredLightingSubmissionTransaction.taskToken(
+                        m_deferredLightingCompiledGraph,
+                        m_deferredLaggedLightingHistoryTask
+                    )
                     : Core::QueueSubmissionToken{}
                 ;
                 if(!historyCopySubmissionToken.valid()){

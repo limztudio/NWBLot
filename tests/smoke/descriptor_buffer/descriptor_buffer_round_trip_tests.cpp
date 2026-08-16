@@ -18397,6 +18397,16 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
         scratchArena
     ));
     EXPECT_TRUE(transaction.hasAcceptedPackets());
+    const QueueSubmissionToken beginTaskToken = transaction.taskToken(compiledGraph, beginTask);
+    const QueueSubmissionToken endTaskToken = transaction.taskToken(compiledGraph, endTask);
+    EXPECT_TRUE(beginTaskToken.valid());
+    EXPECT_TRUE(endTaskToken.valid());
+    EXPECT_NE(beginTaskToken.value, endTaskToken.value);
+    EXPECT_EQ(beginTaskToken.value, transaction.packetToken(compiledGraph.packetForTask(beginTask)).value);
+    EXPECT_EQ(endTaskToken.value, transaction.packetToken(compiledGraph.packetForTask(endTask)).value);
+    EXPECT_FALSE(transaction.taskToken(compiledGraph, GpuTaskId{}).valid());
+    GpuCompiledGraph unrelatedCompiledGraph(DescriptorBufferRoundTripTest::arena());
+    EXPECT_FALSE(transaction.taskToken(unrelatedCompiledGraph, beginTask).valid());
     frameTransaction.confirmBeginSubmission();
     ASSERT_TRUE(frameTransaction.confirmEndSubmission(true));
     ASSERT_TRUE(device.waitForIdle());

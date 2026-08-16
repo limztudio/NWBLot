@@ -329,6 +329,13 @@ public:
 
     [[nodiscard]] bool hasAcceptedPackets()const noexcept{ return m_valid && m_acceptedSubmissionCount != 0u; }
     [[nodiscard]] QueueSubmissionToken packetToken(const GpuSubmissionPacketId& packet)const noexcept;
+    // Resolves the current compiler packet for semantic graph work before returning its accepted submission token.
+    // This is generation-checked so renderer lifecycle code cannot treat a task from an older compiled graph as
+    // an accepted submission on a replacement device or packetization.
+    [[nodiscard]] QueueSubmissionToken taskToken(
+        const GpuCompiledGraph& compiledGraph,
+        GpuTaskId task
+    )const noexcept;
     [[nodiscard]] const QueueSubmissionToken* latestAcceptedToken(const GpuPhysicalQueueId& queue)const noexcept;
     // Appends one latest accepted token for every physical queue other than `destinationQueue`. A recovery packet
     // submitted on that destination does not need to wait on its own queue because queue order already supplies the

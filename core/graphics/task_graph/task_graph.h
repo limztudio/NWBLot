@@ -58,6 +58,7 @@ struct GpuTaskGraphResourceView{
     GpuPhysicalQueueId initialOwnerQueue;
     GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
     GpuExternalCompletionId initialOwnerCompletion;
+    // For imported exclusive-owner handoffs this is a graph-owned immutable snapshot, captured at declaration.
     const CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     bool hasBackendResource = false;
@@ -126,7 +127,10 @@ private:
         GpuPhysicalQueueId initialOwnerQueue;
         GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
         GpuExternalCompletionId initialOwnerCompletion;
-        const CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
+        // The graph retains its own immutable copy for late recording. Keep the declaration source identity
+        // separately so repeated typed imports continue to reject incompatible external handoff metadata.
+        CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
+        const CommandListResourceStateHandoff* initialOwnerStateSourceIdentity = nullptr;
         ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
@@ -386,6 +390,7 @@ private:
     [[nodiscard]] bool appendMarkerLabel(AStringView text, u32& outOffset, u32& outSize);
     [[nodiscard]] AStringView markerLabel(u32 offset, u32 size)const;
     void destroyTaskPayloads()noexcept;
+    void destroyResourceStateSnapshots()noexcept;
 
 
 private:

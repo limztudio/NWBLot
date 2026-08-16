@@ -2810,7 +2810,9 @@ TEST(GpuTaskGraph, CompilesExplicitInitialExclusiveOwnershipHandoff){
         EXPECT_EQ(view.initialOwnerQueue, queues[0u].id);
         EXPECT_EQ(view.initialOwnerReleaseDestinationQueue, queues[1u].id);
         EXPECT_EQ(view.initialOwnerCompletion, completion);
-        EXPECT_EQ(view.initialOwnerStateSource, &stateSource);
+        ASSERT_NE(view.initialOwnerStateSource, nullptr);
+        EXPECT_NE(view.initialOwnerStateSource, &stateSource);
+        EXPECT_FALSE(view.initialOwnerStateSource->valid());
         const Graphics::GpuTaskId task = addFirstUse(
             graph,
             resource,

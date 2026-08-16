@@ -8,6 +8,7 @@
 
 #include <core/graphics/capture/command_ir.h>
 #include <core/graphics/backend_selection.h>
+#include <core/graphics/rhi/command.h>
 #include <core/telemetry/frame_graph_contributor.h>
 
 #include <global/atomic.h>
@@ -416,6 +417,7 @@ struct ClearTextureTask{
 
 [[nodiscard]] static bool CompatibleResourceMetadata(
     const GpuTaskGraphResourceView& resource,
+    const CommandListResourceStateHandoff* const initialOwnerStateSourceIdentity,
     const GpuGraphResourceDesc& desc
 )noexcept{
     return resource.identity == desc.identity
@@ -425,7 +427,7 @@ struct ClearTextureTask{
         && resource.initialOwnerQueue == desc.initialOwnerQueue
         && resource.initialOwnerReleaseDestinationQueue == desc.initialOwnerReleaseDestinationQueue
         && resource.initialOwnerCompletion == desc.initialOwnerCompletion
-        && resource.initialOwnerStateSource == desc.initialOwnerStateSource
+        && initialOwnerStateSourceIdentity == desc.initialOwnerStateSource
         && resource.queueSharing == desc.queueSharing;
 }
 
@@ -582,6 +584,7 @@ GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
 
 GpuTaskGraph::~GpuTaskGraph(){
     destroyTaskPayloads();
+    destroyResourceStateSnapshots();
 }
 
 
@@ -1090,7 +1093,11 @@ GpuGraphResourceId GpuTaskGraph::importResource(const GpuGraphResourceDesc& desc
         const GpuTaskGraphResourceView existing = resourceAt(resourceIndex);
         if(existing.identity != desc.identity)
             continue;
-        if(!__hidden_gpu_task_graph::CompatibleResourceMetadata(existing, desc))
+        if(!__hidden_gpu_task_graph::CompatibleResourceMetadata(
+            existing,
+            m_resources[resourceIndex].initialOwnerStateSourceIdentity,
+            desc
+        ))
             return {};
         return GpuGraphResourceId{ static_cast<u32>(resourceIndex), m_generation };
     }
@@ -1111,7 +1118,11 @@ GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, con
     for(usize resourceIndex = 0u; resourceIndex < m_resources.size(); ++resourceIndex){
         const GpuGraphResourceNode& existing = m_resources[resourceIndex];
         if(existing.type == GpuGraphResourceType::Texture && existing.texture.get() == texture.get()){
-            if(!__hidden_gpu_task_graph::CompatibleResourceMetadata(resourceAt(resourceIndex), resolvedDesc))
+            if(!__hidden_gpu_task_graph::CompatibleResourceMetadata(
+                resourceAt(resourceIndex),
+                existing.initialOwnerStateSourceIdentity,
+                resolvedDesc
+            ))
                 return {};
             return GpuGraphResourceId{ static_cast<u32>(resourceIndex), m_generation };
         }
@@ -1138,7 +1149,11 @@ GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const 
     for(usize resourceIndex = 0u; resourceIndex < m_resources.size(); ++resourceIndex){
         const GpuGraphResourceNode& existing = m_resources[resourceIndex];
         if(existing.type == GpuGraphResourceType::Buffer && existing.buffer.get() == buffer.get()){
-            if(!__hidden_gpu_task_graph::CompatibleResourceMetadata(resourceAt(resourceIndex), resolvedDesc))
+            if(!__hidden_gpu_task_graph::CompatibleResourceMetadata(
+                resourceAt(resourceIndex),
+                existing.initialOwnerStateSourceIdentity,
+                resolvedDesc
+            ))
                 return {};
             return GpuGraphResourceId{ static_cast<u32>(resourceIndex), m_generation };
         }
@@ -1178,7 +1193,11 @@ GpuGraphResourceId GpuTaskGraph::importAccelStruct(
     for(usize resourceIndex = 0u; resourceIndex < m_resources.size(); ++resourceIndex){
         const GpuGraphResourceNode& existing = m_resources[resourceIndex];
         if(existing.type == GpuGraphResourceType::AccelStruct && existing.accelStruct.get() == accelStruct.get()){
-            if(!__hidden_gpu_task_graph::CompatibleResourceMetadata(resourceAt(resourceIndex), resolvedDesc))
+            if(!__hidden_gpu_task_graph::CompatibleResourceMetadata(
+                resourceAt(resourceIndex),
+                existing.initialOwnerStateSourceIdentity,
+                resolvedDesc
+            ))
                 return {};
             return GpuGraphResourceId{ static_cast<u32>(resourceIndex), m_generation };
         }
@@ -1348,6 +1367,7 @@ GpuExternalCompletionId GpuTaskGraph::importExternalCompletion(const GpuExternal
 
 void GpuTaskGraph::reset(){
     destroyTaskPayloads();
+    destroyResourceStateSnapshots();
     m_tasks.clear();
     m_dependencies.clear();
     m_externalDependencies.clear();
@@ -1947,10 +1967,30 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
     )
         return {};
 
+    // Initial-owner imports previously borrowed this producer snapshot until late recording. Freeze it while the
+    // resource is declared instead, so the declaration owns the exact state metadata. Preserve an invalid snapshot
+    // as invalid so the established record-time diagnostic remains intact for malformed legacy callers.
+    CommandListResourceStateHandoff* initialOwnerStateSnapshot = nullptr;
+    if(desc.initialOwnerStateSource){
+        initialOwnerStateSnapshot = NewArenaObject<CommandListResourceStateHandoff>(m_arena, m_arena);
+        if(!initialOwnerStateSnapshot)
+            return {};
+        if(
+            desc.initialOwnerStateSource->valid()
+            && !initialOwnerStateSnapshot->copyFrom(*desc.initialOwnerStateSource)
+        ){
+            DestroyArenaObject(m_arena, initialOwnerStateSnapshot);
+            return {};
+        }
+    }
+
     u32 markerLabelOffset = 0u;
     u32 markerLabelSize = 0u;
-    if(!appendMarkerLabel(desc.markerLabel, markerLabelOffset, markerLabelSize))
+    if(!appendMarkerLabel(desc.markerLabel, markerLabelOffset, markerLabelSize)){
+        if(initialOwnerStateSnapshot)
+            DestroyArenaObject(m_arena, initialOwnerStateSnapshot);
         return {};
+    }
 
     GpuGraphResourceNode resource;
     resource.identity = desc.identity;
@@ -1960,7 +2000,8 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
     resource.initialOwnerQueue = desc.initialOwnerQueue;
     resource.initialOwnerReleaseDestinationQueue = desc.initialOwnerReleaseDestinationQueue;
     resource.initialOwnerCompletion = desc.initialOwnerCompletion;
-    resource.initialOwnerStateSource = desc.initialOwnerStateSource;
+    resource.initialOwnerStateSource = initialOwnerStateSnapshot;
+    resource.initialOwnerStateSourceIdentity = desc.initialOwnerStateSource;
     resource.queueSharing = desc.queueSharing;
     resource.markerLabelOffset = markerLabelOffset;
     resource.markerLabelSize = markerLabelSize;
@@ -2090,6 +2131,15 @@ void GpuTaskGraph::destroyTaskPayloads()noexcept{
             task.destroyPayload(m_arena, task.payload);
         task.payload = nullptr;
         task.destroyPayload = nullptr;
+    }
+}
+
+void GpuTaskGraph::destroyResourceStateSnapshots()noexcept{
+    for(GpuGraphResourceNode& resource : m_resources){
+        if(resource.initialOwnerStateSource)
+            DestroyArenaObject(m_arena, resource.initialOwnerStateSource);
+        resource.initialOwnerStateSource = nullptr;
+        resource.initialOwnerStateSourceIdentity = nullptr;
     }
 }
 

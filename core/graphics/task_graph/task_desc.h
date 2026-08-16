@@ -91,8 +91,10 @@ struct GpuGraphResourceDesc{
     // match needs no extra synchronization because submission order on one physical queue is sufficient.
     GpuPhysicalQueueId initialOwnerQueue;
     // A different first packet is permitted only when an already-recorded external producer released ownership to
-    // this exact physical queue, exported the state snapshot below, and supplies the completion node imported into
-    // this graph before the resource. The compiler then attaches that completion to the first consumer packet.
+    // this exact physical queue, exports the state snapshot below, and supplies the completion node imported into
+    // this graph before the resource. The graph captures the source snapshot at declaration, so the producer may
+    // release its original handoff before late packet recording. The compiler attaches that completion to the first
+    // consumer packet.
     GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
     GpuExternalCompletionId initialOwnerCompletion;
     const CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;

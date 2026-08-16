@@ -2716,6 +2716,15 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
             .setInitialOwnerStateSource(&computeState)
     );
     ASSERT_TRUE(resource.valid());
+    const GpuTaskGraphResourceView importedResource = graph.resourceAt(resource.index);
+    ASSERT_NE(importedResource.initialOwnerStateSource, nullptr);
+    EXPECT_NE(importedResource.initialOwnerStateSource, &computeState);
+    EXPECT_TRUE(importedResource.initialOwnerStateSource->valid());
+    // Graph declaration owns a deep state snapshot now. The producer's transient handoff can be released before
+    // late native recording without losing the released queue-family layout/owner information.
+    computeState.reset();
+    EXPECT_FALSE(computeState.valid());
+    EXPECT_TRUE(graph.resourceAt(resource.index).initialOwnerStateSource->valid());
 
     const GpuTaskResourceUse uses[] = {
         GpuTaskResourceUse{

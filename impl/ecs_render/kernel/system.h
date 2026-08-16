@@ -584,11 +584,11 @@ private:
     usize m_deferredAvboitOccupancySharedComputeEmulationTaskCount = 0u;
     Core::GpuTaskId m_deferredAvboitOccupancyTask;
     Core::GpuTaskId m_deferredAvboitDepthWarpTask;
-    // The optional alias-free regular/CSG producer or narrowly retained shared-output phases must remain in
-    // Extinction's selected Graphics packet so their material timing interval and generated-vertex handoff share
-    // the consumer's token.
+    // The optional alias-free regular/CSG producer or narrowly retained two-, three-, or four-draw shared-output
+    // phases must remain in Extinction's selected Graphics packet so their material timing interval and
+    // generated-vertex handoff share the consumer's token.
     Core::GpuTaskId m_deferredAvboitExtinctionComputeEmulationTask;
-    Core::GpuTaskId m_deferredAvboitExtinctionSharedComputeEmulationTasks[6u] = {};
+    Core::GpuTaskId m_deferredAvboitExtinctionSharedComputeEmulationTasks[8u] = {};
     usize m_deferredAvboitExtinctionSharedComputeEmulationTaskCount = 0u;
     // The final immutable extinction upload, when that phase has visible draws. It must live in the native
     // extinction packet so rejected/retried packet recording cannot publish only a partial phase stream.

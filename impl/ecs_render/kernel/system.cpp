@@ -2140,7 +2140,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return true;
         }
         if(
-            (phaseCount != 4u && phaseCount != 6u)
+            (phaseCount != 4u && phaseCount != 6u && phaseCount != 8u)
             || m_deferredAvboitExtinctionComputeEmulationTask.valid()
             || !m_deferredAvboitExtinctionStreamTask.valid()
             || !avboitExtinctionSharedComputeEmulationPacket.valid()

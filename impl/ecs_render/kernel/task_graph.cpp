@@ -3361,9 +3361,10 @@ struct AvboitExtinctionComputeEmulationGraphTask{
 };
 
 
-// Two or three regular Extinction draws targeting one persistent generated-vertex buffer must retain their native
-// D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C)] order. Each phase is graph-visible so the compiler lowers the
-// alternating UAV/VertexBuffer states before the common typed Integration tail consumes the packed outputs.
+// Two, three, or four regular Extinction draws targeting one persistent generated-vertex buffer must retain their
+// native D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) -> R(D)] order. Each phase is graph-visible so the
+// compiler lowers the alternating UAV/VertexBuffer states before the common typed Integration tail consumes the
+// packed outputs.
 struct AvboitExtinctionSharedComputeEmulationGraphTask{
     enum class Phase : u8{
         Generate,
@@ -14353,7 +14354,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             );
             avboitExtinctionPayload.extinctionPhasePrepared = true;
             extinctionStreamsUploaded = true;
-            // A phase may graph-own one alias-free stream or the narrowly retained two-draw regular shared stream.
+            // A phase may graph-own one alias-free stream or a narrowly retained regular shared stream.
             // Mixed regular/CSG work and every other shared-output shape retain local interleaving because a single
             // producer/raster handoff cannot preserve their per-draw overwrite order.
             extinctionRegularComputeEmulationPlanCaptured = extinctionDrawItems.csg.computeDrawItems.empty()
@@ -14381,9 +14382,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 && extinctionDrawItems.csg.empty()
                 && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
                 && extinctionMaterialSampledTexturesCollected
-                && extinctionSharedComputeEmulationPlan.capture(m_meshSystem, extinctionDrawItems.regular, 3u)
+                && extinctionSharedComputeEmulationPlan.capture(m_meshSystem, extinctionDrawItems.regular, 4u)
                 && extinctionSharedComputeEmulationPlan.drawCount >= 2u
-                && extinctionSharedComputeEmulationPlan.drawCount <= 3u
+                && extinctionSharedComputeEmulationPlan.drawCount <= 4u
             ;
             if(extinctionSharedComputeEmulationPlanCaptured){
                 extinctionSharedComputeEmulationInstanceCount = extinctionInstanceData.size();
@@ -14847,6 +14848,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Name("render.avboit.extinction.shared_compute_emulation_raster_b"),
             Name("render.avboit.extinction.shared_compute_emulation_generate_c"),
             Name("render.avboit.extinction.shared_compute_emulation_raster_c"),
+            Name("render.avboit.extinction.shared_compute_emulation_generate_d"),
+            Name("render.avboit.extinction.shared_compute_emulation_raster_d"),
         };
         const AStringView extinctionSharedComputeEmulationPhaseMarkers[] = {
             "AVBOIT Extinction Shared Compute Emulation Generate A",
@@ -14855,6 +14858,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             "AVBOIT Extinction Shared Compute Emulation Raster B",
             "AVBOIT Extinction Shared Compute Emulation Generate C",
             "AVBOIT Extinction Shared Compute Emulation Raster C",
+            "AVBOIT Extinction Shared Compute Emulation Generate D",
+            "AVBOIT Extinction Shared Compute Emulation Raster D",
         };
         const usize extinctionSharedComputeEmulationPhaseCount =
             extinctionSharedComputeEmulationPlan.drawCount * 2u
@@ -14862,6 +14867,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         NWB_ASSERT(
             extinctionSharedComputeEmulationPlan.drawCount == 2u
             || extinctionSharedComputeEmulationPlan.drawCount == 3u
+            || extinctionSharedComputeEmulationPlan.drawCount == 4u
         );
         NWB_ASSERT(extinctionSharedComputeEmulationPhaseCount <= LengthOf(extinctionSharedComputeEmulationPhaseIdentities));
         Core::GpuTaskId extinctionSharedComputeEmulationDependency = extinctionDependency;

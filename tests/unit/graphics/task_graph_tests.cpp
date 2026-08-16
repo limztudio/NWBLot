@@ -4997,6 +4997,272 @@ TEST(GpuTaskGraph, MergesOpaqueCsgReceiverComputeProducerIntoGbufferPacket){
 }
 
 
+// The opaque CSG interval-sample producer runs after Combine, reads the removed-interval StorageImage, and feeds
+// the immediately following material/cap raster callback. Its output set is intentionally alias-free: every
+// generated vertex buffer must receive the graph-owned UAV -> VertexBuffer handoff in Combine's Graphics packet.
+TEST(GpuTaskGraph, MergesAliasFreeOpaqueCsgIntervalSampleComputeEmulationWithRaster){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId removedInterval = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/csg_interval_sample_removed_interval"),
+        "Opaque CSG Removed Interval"
+    );
+    const Graphics::GpuGraphResourceId generatedVertexA = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/csg_interval_sample_generated_vertex_a"),
+        "Opaque CSG Interval-Sample Generated Vertex A",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    const Graphics::GpuGraphResourceId generatedVertexB = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/csg_interval_sample_generated_vertex_b"),
+        "Opaque CSG Interval-Sample Generated Vertex B",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    ASSERT_TRUE(removedInterval.valid());
+    ASSERT_TRUE(generatedVertexA.valid());
+    ASSERT_TRUE(generatedVertexB.valid());
+    EXPECT_NE(generatedVertexA, generatedVertexB);
+
+    const Graphics::GpuGraphResourceId generatedVertexOutputs[] = {
+        generatedVertexA,
+        generatedVertexB,
+    };
+    const Graphics::GpuGraphResourceSetId generatedVertexOutputSet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/csg_interval_sample_generated_vertex_outputs"))
+            .setMarkerLabel("Opaque CSG Interval-Sample Generated Vertex Outputs")
+            .setMembers(generatedVertexOutputs, LengthOf(generatedVertexOutputs))
+    );
+    ASSERT_TRUE(generatedVertexOutputSet.valid());
+
+    const Graphics::TextureSubresourceSet removedIntervalRange(0u, 1u, 0u, 1u);
+    const Graphics::GpuTaskResourceUse combineUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = removedInterval,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskResourceUse computeEmulationUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = removedInterval,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuTaskResourceUse sampleUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = removedInterval,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuTaskResourceSetUse outputUavSetUse{
+        .resourceSet = generatedVertexOutputSet,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::UnorderedAccess,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    const Graphics::GpuTaskResourceSetUse outputVertexBufferSetUse{
+        .resourceSet = generatedVertexOutputSet,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::VertexBuffer,
+        .access = Graphics::GpuTaskResourceAccess::Read,
+    };
+
+    const Graphics::GpuQueueRequest graphicsComputeQueue{
+        QueueCapabilities(
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueueCapability::Compute
+        ),
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint combineScheduling;
+    combineScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    combineScheduling.overlapPreferred = false;
+    combineScheduling.avoidQueueCrossing = true;
+    combineScheduling.forceSubmissionBoundary = false;
+    combineScheduling.allowPacketMerge = true;
+    combineScheduling.mergeWithPrevious = false;
+    const Graphics::GpuTaskId combine = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/csg_interval_sample_combine"))
+            .setMarkerLabel("Opaque CSG Interval Combine")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(combineScheduling)
+            .setResourceUses(combineUses, LengthOf(combineUses))
+    );
+    ASSERT_TRUE(combine.valid());
+
+    Graphics::GpuTaskSchedulingHint handoffScheduling = combineScheduling;
+    handoffScheduling.mergeWithPrevious = true;
+    handoffScheduling.allowMergeAcrossConsumerFrontier = true;
+    const Graphics::GpuTaskId computeEmulation = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/csg_interval_sample_compute_emulation"))
+            .setMarkerLabel("Opaque CSG Interval-Sample Compute Emulation")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(handoffScheduling)
+            .setDependencies(&combine, 1u)
+            .setResourceUses(computeEmulationUses, LengthOf(computeEmulationUses))
+            .setResourceSetUses(&outputUavSetUse, 1u)
+    );
+    ASSERT_TRUE(computeEmulation.valid());
+
+    const Graphics::GpuTaskId sample = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/csg_interval_sample_raster"))
+            .setMarkerLabel("Opaque CSG Interval Sample")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(handoffScheduling)
+            .setDependencies(&computeEmulation, 1u)
+            .setResourceUses(sampleUses, LengthOf(sampleUses))
+            .setResourceSetUses(&outputVertexBufferSetUse, 1u)
+    );
+    ASSERT_TRUE(sample.valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    EXPECT_TRUE(analysis.hasExplicitEdge(combine, computeEmulation));
+    EXPECT_TRUE(analysis.hasExplicitEdge(computeEmulation, sample));
+    EXPECT_TRUE(analysis.hasInferredEdge(combine, computeEmulation));
+    EXPECT_TRUE(analysis.hasInferredEdge(combine, sample));
+    EXPECT_TRUE(analysis.hasInferredEdge(computeEmulation, sample));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        combine,
+        computeEmulation,
+        removedInterval,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        computeEmulation,
+        sample,
+        generatedVertexA,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        computeEmulation,
+        sample,
+        generatedVertexB,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
+    EXPECT_EQ(analysis.topologicalOrder()[0u], combine);
+    EXPECT_EQ(analysis.topologicalOrder()[1u], computeEmulation);
+    EXPECT_EQ(analysis.topologicalOrder()[2u], sample);
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+
+    for(const Graphics::GpuTaskId task : { combine, computeEmulation, sample }){
+        const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
+        ASSERT_NE(assignment, nullptr);
+        EXPECT_EQ(assignment->queue, queue.id);
+        EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
+    }
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(combine);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledGraph.packetForTask(computeEmulation));
+    EXPECT_EQ(packet, compiledGraph.packetForTask(sample));
+    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(combine, computeEmulation));
+    EXPECT_TRUE(compiledGraph.tasksSharePacket(computeEmulation, sample));
+    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPacket.queue, queue.id);
+    EXPECT_EQ(compiledPacket.dependencyCount, 0u);
+    ASSERT_EQ(compiledPacket.taskCount, 3u);
+    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    ASSERT_NE(packetTasks, nullptr);
+    EXPECT_EQ(packetTasks[0u], combine);
+    EXPECT_EQ(packetTasks[1u], computeEmulation);
+    EXPECT_EQ(packetTasks[2u], sample);
+
+    const auto hasTextureBarrier = [&](const Graphics::GpuTaskId task, const Graphics::GpuCompiledBarrierType::Enum type, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        if(!compiledTask)
+            return false;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        for(u32 barrierIndex = 0u; barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == type
+                && barrier.resource == removedInterval
+                && barrier.range.textureSubresources == removedIntervalRange
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        if(!compiledTask)
+            return false;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        for(u32 barrierIndex = 0u; barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+                && barrier.sourceQueue == queue.id
+                && barrier.destinationQueue == queue.id
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTextureBarrier(
+        combine,
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasTextureBarrier(
+        computeEmulation,
+        Graphics::GpuCompiledBarrierType::TextureUav,
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    for(const Graphics::GpuGraphResourceId output : generatedVertexOutputs){
+        EXPECT_TRUE(hasBufferTransition(
+            computeEmulation,
+            output,
+            Graphics::ResourceStates::Common,
+            Graphics::ResourceStates::UnorderedAccess
+        ));
+        EXPECT_TRUE(hasBufferTransition(
+            sample,
+            output,
+            Graphics::ResourceStates::UnorderedAccess,
+            Graphics::ResourceStates::VertexBuffer
+        ));
+    }
+}
+
+
 TEST(GpuTaskGraph, KeepsAvboitUploadSequenceOutOfHardwareCausticsPacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

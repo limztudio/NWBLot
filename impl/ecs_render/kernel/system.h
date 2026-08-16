@@ -113,6 +113,7 @@ namespace ECSRenderDetail{
     struct OpaqueRegularComputeEmulationGraphTask;
     struct OpaqueRegularSharedComputeEmulationGraphTask;
     struct OpaqueCsgReceiverComputeEmulationGraphTask;
+    struct OpaqueCsgIntervalSampleComputeEmulationGraphTask;
     struct GbufferGraphTask;
 };
 
@@ -134,6 +135,7 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend struct ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask;
     friend struct ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask;
     friend struct ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask;
+    friend struct ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask;
     friend struct ECSRenderDetail::GbufferGraphTask;
     friend struct ECSRenderDetail::CsgReceiverSpanBuildGraphTask;
     friend struct ECSRenderDetail::CsgIntervalCombineGraphTask;
@@ -267,6 +269,7 @@ private:
         ECSRenderDetail::DeferredClearTimingRecordState& deferredClearTimingState,
         ECSRenderDetail::CsgIntervalClearTimingRecordState& csgIntervalClearTimingState,
         Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
+        Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
         Core::GpuTimingSubmissionTicket** timingTickets,
         const bool* asyncPrefixTimingSpansOnePacket
     );
@@ -344,6 +347,7 @@ private:
         ECSRenderDetail::DeferredClearTimingRecordState& deferredClearTimingState,
         ECSRenderDetail::CsgIntervalClearTimingRecordState& opaqueCsgIntervalClearTimingState,
         Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
+        Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
         Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
         Core::GpuTimingSubmissionTicket** graphicsPrefixTimingTickets,
         const bool* asyncPrefixTimingSpansOnePacket,
@@ -467,6 +471,9 @@ private:
     usize m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
     // Receiver-surface CSG has its own readiness gate but needs the same packet-local output handoff.
     Core::GpuTaskId m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask;
+    // Interval-sample CSG follows Combine and has a separate alias-free output plan. Its raster consumer remains
+    // the existing CSG Interval Sample task, so both IDs must stay in that primary Graphics packet.
+    Core::GpuTaskId m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask;
     Core::GpuTaskId m_graphicsPrefixGbufferTask;
     Core::GpuTaskId m_graphicsPrefixCsgReceiverSpanTask;
     Core::GpuTaskId m_graphicsPrefixCsgIntervalCombineTask;

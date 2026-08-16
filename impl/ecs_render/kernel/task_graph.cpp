@@ -1101,6 +1101,127 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
 };
 
 
+// Opaque interval-sample compute emulation runs only after receiver span/interval combine.  Its raster consumer
+// immediately follows in the same CSG packet, so aliases with earlier regular/receiver outputs are harmless; only
+// aliases inside this frozen CSG stream would overwrite a generated buffer before its own raster consumes it.
+struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
+    using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
+    using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
+    using HeapSlotVector = Vector<u32, Core::Alloc::GlobalArena>;
+    using ReceiverRangeVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::GlobalArena>;
+    using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
+
+    DrawItemVector meshDrawItems;
+    DrawItemVector drawItems;
+    BufferVector outputBuffers;
+    HeapSlotVector outputHeapSlots;
+    ReceiverRangeVector receiverRanges;
+    CutterVector cutters;
+    CsgFrameWorkRegion workRegion;
+    bool captured = false;
+
+    explicit OpaqueCsgIntervalSampleComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)
+        : meshDrawItems(arena)
+        , drawItems(arena)
+        , outputBuffers(arena)
+        , outputHeapSlots(arena)
+        , receiverRanges(arena)
+        , cutters(arena)
+    {}
+
+    void reset(){
+        meshDrawItems.clear();
+        drawItems.clear();
+        outputBuffers.clear();
+        outputHeapSlots.clear();
+        receiverRanges.clear();
+        cutters.clear();
+        workRegion = {};
+        captured = false;
+    }
+
+    [[nodiscard]] bool capture(
+        RendererMeshSystem& meshSystem,
+        const MaterialPassDrawItems& sourceDrawItems,
+        const CsgFrameGpuData& csgFrameData
+    ){
+        reset();
+        if(sourceDrawItems.computeDrawItems.empty() || !csgFrameData.hasWork())
+            return false;
+
+        meshDrawItems.assign(sourceDrawItems.meshDrawItems.begin(), sourceDrawItems.meshDrawItems.end());
+        drawItems.reserve(sourceDrawItems.computeDrawItems.size());
+        outputBuffers.reserve(sourceDrawItems.computeDrawItems.size());
+        outputHeapSlots.reserve(sourceDrawItems.computeDrawItems.size());
+        for(const MaterialPassDrawItem& drawItem : sourceDrawItems.computeDrawItems){
+            if(drawItem.pipelineKey.csgMode == MaterialPipelineCsgMode::None){
+                reset();
+                return false;
+            }
+            MeshResources* mesh = nullptr;
+            if(
+                !meshSystem.findMeshResources(drawItem.meshKey, mesh)
+                || !mesh
+                || !mesh->emulationVertexBuffer
+                || !mesh->emulationVertexHeapHandle.valid()
+            ){
+                reset();
+                return false;
+            }
+            for(usize outputIndex = 0u; outputIndex < outputBuffers.size(); ++outputIndex){
+                if(
+                    outputBuffers[outputIndex].get() == mesh->emulationVertexBuffer.get()
+                    || outputHeapSlots[outputIndex] == mesh->emulationVertexHeapHandle.slot()
+                ){
+                    reset();
+                    return false;
+                }
+            }
+            drawItems.push_back(drawItem);
+            outputBuffers.push_back(mesh->emulationVertexBuffer);
+            outputHeapSlots.push_back(mesh->emulationVertexHeapHandle.slot());
+        }
+        receiverRanges.assign(csgFrameData.receiverRanges.begin(), csgFrameData.receiverRanges.end());
+        cutters.assign(csgFrameData.cutters.begin(), csgFrameData.cutters.end());
+        workRegion = csgFrameData.workRegion;
+        captured = drawItems.size() == outputBuffers.size()
+            && outputBuffers.size() == outputHeapSlots.size()
+            && !drawItems.empty();
+        return captured;
+    }
+
+    [[nodiscard]] bool matches(RendererMeshSystem& meshSystem)const{
+        if(
+            !captured
+            || outputBuffers.size() != drawItems.size()
+            || outputHeapSlots.size() != drawItems.size()
+        )
+            return false;
+        for(usize drawIndex = 0u; drawIndex < drawItems.size(); ++drawIndex){
+            MeshResources* mesh = nullptr;
+            if(
+                !meshSystem.findMeshResources(drawItems[drawIndex].meshKey, mesh)
+                || !mesh
+                || !mesh->emulationVertexBuffer
+                || !mesh->emulationVertexHeapHandle.valid()
+                || mesh->emulationVertexBuffer.get() != outputBuffers[drawIndex].get()
+                || mesh->emulationVertexHeapHandle.slot() != outputHeapSlots[drawIndex]
+            )
+                return false;
+        }
+        return true;
+    }
+
+    void materialize(MaterialPassDrawItems& outDrawItems, CsgFrameGpuData& outCsgFrameData)const{
+        outDrawItems.meshDrawItems.assign(meshDrawItems.begin(), meshDrawItems.end());
+        outDrawItems.computeDrawItems.assign(drawItems.begin(), drawItems.end());
+        outCsgFrameData.receiverRanges.assign(receiverRanges.begin(), receiverRanges.end());
+        outCsgFrameData.cutters.assign(cutters.begin(), cutters.end());
+        outCsgFrameData.workRegion = workRegion;
+    }
+};
+
+
 // Prepared transparent CSG exposes receiver-surface -> span before the following interval-combine callback. The
 // later phase-local occupancy uploads depend on Combine so they cannot overwrite its frozen CSG buffers first.
 struct AvboitCsgReceiverSpanGraphTask{
@@ -1653,6 +1774,130 @@ struct OpaqueCsgReceiverComputeEmulationGraphTask{
 };
 
 
+// Interval-sample CSG compute emulation is split only for pairwise-distinct generated outputs. It follows
+// interval combine and precedes the existing CSG material/cap raster callback, keeping the output handoff and the
+// original Opaque CSG timing range inside that one semantic Graphics packet.
+struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
+    struct Payload{
+        RendererSystem* renderer = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
+        const bool* meshViewSetupReady = nullptr;
+        const bool* sceneShadingSetupReady = nullptr;
+        Optional<Core::GpuTimingMeasure>* opaqueCsgTiming = nullptr;
+        OpaqueCsgIntervalSampleComputeEmulationGraphPlan plan;
+        usize instanceCount = 0u;
+        usize materialTypedByteCount = 0u;
+        bool materialDrawBuffersUploaded = false;
+        bool csgFrameBuffersUploaded = false;
+        bool intervalSampleImageStatesGraphOwned = false;
+        bool csgClipBufferStatesGraphOwned = false;
+        bool materialFrameStatesGraphOwned = false;
+        bool materialGeometryStatesGraphOwned = false;
+
+        explicit Payload(Core::Alloc::GlobalArena& arena)
+            : plan(arena)
+        {}
+    };
+
+    static void discardTiming(Optional<Core::GpuTimingMeasure>* const timing){
+        if(!timing || !timing->has_value())
+            return;
+        timing->value().discardTiming();
+        timing->reset();
+    }
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(
+            !payload.renderer
+            || !payload.targets
+            || !payload.timingTicket
+            || !*payload.timingTicket
+            || !payload.meshViewSetupReady
+            || !payload.sceneShadingSetupReady
+            || !payload.opaqueCsgTiming
+            || !payload.plan.captured
+        )
+            return false;
+
+        RendererSystem& renderer = *payload.renderer;
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
+        const bool frameSetupReady =
+            *payload.meshViewSetupReady
+            && *payload.sceneShadingSetupReady
+        ;
+        if(!frameSetupReady)
+            return true;
+
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+        MaterialPassDrawItems drawItems{ scratchArena };
+        CsgFrameGpuData csgFrameData{ scratchArena };
+        payload.plan.materialize(drawItems, csgFrameData);
+        // The graph imported these exact output handles and descriptor slots. A live replacement must reject the
+        // packet, not write through a newly selected CSG material descriptor after declaration.
+        if(!payload.plan.matches(renderer.m_meshSystem))
+            return false;
+
+        const bool deferredResourcesReady =
+            payload.materialDrawBuffersUploaded
+            && renderer.m_materialSystem.materialPassDrawBuffersReady(
+                payload.instanceCount,
+                payload.materialTypedByteCount
+            )
+        ;
+        const bool csgResourcesReady =
+            deferredResourcesReady
+            && payload.csgFrameBuffersUploaded
+            && csgFrameData.hasWork()
+            && renderer.m_csgSystem.csgFrameBuffersReady(csgFrameData)
+        ;
+        if(
+            !csgResourcesReady
+            || !renderer.m_materialSystem.materialPassDrawResourcesReady(drawItems)
+        )
+            return true;
+        if(payload.opaqueCsgTiming->has_value())
+            return false;
+
+        Core::ViewportState deferredViewportState;
+        deferredViewportState.addViewportAndScissorRect(
+            payload.targets->framebuffer->getFramebufferInfo().getViewport()
+        );
+        payload.opaqueCsgTiming->emplace(
+            renderer.m_graphics.gpuTiming(),
+            RendererGpuTimingScope::s_OpaqueCsg,
+            renderer.m_graphics.getDevice(),
+            commandList
+        );
+        // The scope crosses the following raster callback, so close its marker in this producer before command-list
+        // finalization. The terminal sample callback owns finishTiming/discard.
+        payload.opaqueCsgTiming->value().finishMarker();
+        const MaterialPassDrawContext drawContext{
+            commandList,
+            nullptr,
+            MaterialPipelinePass::Opaque,
+            nullptr,
+            deferredViewportState,
+            false,
+            payload.intervalSampleImageStatesGraphOwned,
+            payload.csgClipBufferStatesGraphOwned,
+            payload.materialFrameStatesGraphOwned,
+            payload.materialGeometryStatesGraphOwned,
+            true,
+        };
+        renderer.m_materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
+        return true;
+    }
+
+    static void discarded(Payload& payload){ discardTiming(payload.opaqueCsgTiming); }
+};
+
+
 // The opaque G-buffer runs after graph-owned material and CSG uploads plus the native deferred clear. Its barriers
 // and final state are therefore part of the graph packet; transparent CSG retains its separate AVBOIT snapshot.
 struct GbufferGraphTask{
@@ -2091,6 +2336,10 @@ struct CsgIntervalSampleGraphTask{
         bool csgClipBufferStatesGraphOwned = false;
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
+        // When the preceding interval-sample producer owns generated-vertex UAV output, this callback keeps the
+        // frozen CSG compute draws raster-only so the compiler supplies the one UAV-to-VertexBuffer boundary.
+        bool csgComputeEmulationOutputStatesGraphOwned = false;
+        Optional<Core::GpuTimingMeasure>* opaqueCsgComputeEmulationTiming = nullptr;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : opaqueDrawSnapshot(arena)
@@ -2111,6 +2360,8 @@ struct CsgIntervalSampleGraphTask{
             || !payload.meshViewSetupReady
             || !payload.sceneShadingSetupReady
             || !payload.opaqueDrawSnapshot.captured
+            || (payload.csgComputeEmulationOutputStatesGraphOwned
+                && !payload.opaqueCsgComputeEmulationTiming)
         )
             return false;
 
@@ -2157,7 +2408,24 @@ struct CsgIntervalSampleGraphTask{
             && (opaqueDrawItems.csgReceiverSurface.empty()
                 || renderer.m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
         ;
-        if(csgResourcesReady && csgDrawResourcesReady){
+        // The producer validates the same frozen full CSG stream before opening this cross-callback measure. Keep
+        // the fallback defensive: if a later readiness check disagrees, retire the reservation instead of leaving
+        // a stale generated-vertex raster or an unsubmitted timing scope alive.
+        if(
+            payload.csgComputeEmulationOutputStatesGraphOwned
+            && payload.opaqueCsgComputeEmulationTiming->has_value()
+            && (!csgResourcesReady || !csgDrawResourcesReady)
+        ){
+            payload.opaqueCsgComputeEmulationTiming->value().discardTiming();
+            payload.opaqueCsgComputeEmulationTiming->reset();
+            commandList.endRenderPass();
+            return true;
+        }
+        const bool csgComputeEmulationReady =
+            !payload.csgComputeEmulationOutputStatesGraphOwned
+            || payload.opaqueCsgComputeEmulationTiming->has_value()
+        ;
+        if(csgResourcesReady && csgDrawResourcesReady && csgComputeEmulationReady){
             Core::ViewportState deferredViewportState;
             deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
             const MaterialPassDrawContext csgDrawContext{
@@ -2170,16 +2438,24 @@ struct CsgIntervalSampleGraphTask{
                 payload.intervalSampleImageStatesGraphOwned,
                 payload.csgClipBufferStatesGraphOwned,
                 payload.materialFrameStatesGraphOwned,
-                payload.materialGeometryStatesGraphOwned
+                payload.materialGeometryStatesGraphOwned,
+                payload.csgComputeEmulationOutputStatesGraphOwned
             };
             if(!opaqueDrawItems.csg.empty()){
-                Core::GpuTimingMeasure timing(
-                    renderer.m_graphics.gpuTiming(),
-                    RendererGpuTimingScope::s_OpaqueCsg,
-                    renderer.m_graphics.getDevice(),
-                    commandList
-                );
-                renderer.m_materialSystem.renderMaterialPassDrawItems(csgDrawContext, opaqueDrawItems.csg);
+                if(payload.csgComputeEmulationOutputStatesGraphOwned){
+                    renderer.m_materialSystem.renderMaterialPassDrawItems(csgDrawContext, opaqueDrawItems.csg);
+                    payload.opaqueCsgComputeEmulationTiming->value().finishTiming(commandList);
+                    payload.opaqueCsgComputeEmulationTiming->reset();
+                }
+                else{
+                    Core::GpuTimingMeasure timing(
+                        renderer.m_graphics.gpuTiming(),
+                        RendererGpuTimingScope::s_OpaqueCsg,
+                        renderer.m_graphics.getDevice(),
+                        commandList
+                    );
+                    renderer.m_materialSystem.renderMaterialPassDrawItems(csgDrawContext, opaqueDrawItems.csg);
+                }
             }
             if(csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady){
                 renderer.m_csgSystem.renderCsgIntervalCaps(
@@ -2194,6 +2470,16 @@ struct CsgIntervalSampleGraphTask{
         }
         commandList.endRenderPass();
         return true;
+    }
+
+    static void discarded(Payload& payload){
+        if(
+            !payload.opaqueCsgComputeEmulationTiming
+            || !payload.opaqueCsgComputeEmulationTiming->has_value()
+        )
+            return;
+        payload.opaqueCsgComputeEmulationTiming->value().discardTiming();
+        payload.opaqueCsgComputeEmulationTiming->reset();
     }
 };
 
@@ -3052,6 +3338,46 @@ struct DeferredPresentGraphTask{
 [[nodiscard]] static bool GatherOpaqueCsgReceiverComputeEmulationResourceSet(
     Core::GpuTaskGraph& graph,
     const ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphPlan& plan,
+    Core::Alloc::ScratchArena& scratchArena,
+    const Name& identity,
+    const AStringView label,
+    Core::GpuGraphResourceSetId& outResourceSet
+){
+    outResourceSet = {};
+    if(!plan.captured || plan.outputBuffers.empty())
+        return false;
+
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> members{ scratchArena };
+    members.reserve(plan.outputBuffers.size());
+    for(const Core::BufferHandle& buffer : plan.outputBuffers){
+        if(!buffer)
+            return false;
+        Core::GpuGraphResourceId resource = graph.findImportedBuffer(buffer);
+        if(!resource.valid()){
+            const Name bufferIdentity = buffer->getDescription().debugName;
+            if(!bufferIdentity)
+                return false;
+            resource = graph.importBuffer(buffer, BufferResourceDesc(bufferIdentity, label));
+        }
+        if(!resource.valid())
+            return false;
+        members.push_back(resource);
+    }
+    outResourceSet = graph.importResourceSet(
+        Core::GpuGraphResourceSetDesc{}
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setMembers(members.data(), members.size())
+    );
+    return outResourceSet.valid();
+}
+
+// Interval-sample CSG outputs are separately optional from receiver-surface outputs, but use the same immutable
+// import rule: retain the exact generated-vertex handles selected during declaration so record-time replacement
+// rejects the packet instead of silently writing an untracked descriptor target.
+[[nodiscard]] static bool GatherOpaqueCsgIntervalSampleComputeEmulationResourceSet(
+    Core::GpuTaskGraph& graph,
+    const ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan& plan,
     Core::Alloc::ScratchArena& scratchArena,
     const Name& identity,
     const AStringView label,
@@ -4448,6 +4774,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     ECSRenderDetail::DeferredClearTimingRecordState& deferredClearTimingState,
     ECSRenderDetail::CsgIntervalClearTimingRecordState& csgIntervalClearTimingState,
     Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
+    Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
     Core::GpuTimingSubmissionTicket** const timingTickets,
     const bool* const asyncPrefixTimingSpansOnePacket
 ){
@@ -4465,6 +4792,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         task = {};
     m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
     m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
+    m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixCsgReceiverSpanTask = {};
     m_graphicsPrefixCsgIntervalCombineTask = {};
@@ -5209,6 +5537,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         );
     }
     ECSRenderDetail::CsgIntervalSampleGraphTask::Payload csgIntervalSamplePayload{ m_arena };
+    ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask::Payload
+        opaqueCsgIntervalSampleComputeEmulationPayload{ m_arena };
     if(hasOpaqueCsgFrameWork){
         csgIntervalSamplePayload.renderer = this;
         csgIntervalSamplePayload.targets = &deferredTargets;
@@ -5341,6 +5671,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     Core::GpuGraphResourceSetId opaqueComputeEmulationOutputSet;
     Core::GpuGraphResourceId opaqueSharedComputeEmulationOutput;
     Core::GpuGraphResourceSetId opaqueCsgReceiverComputeEmulationOutputSet;
+    Core::GpuGraphResourceSetId opaqueCsgIntervalSampleComputeEmulationOutputSet;
     const MaterialPassDrawItems* const gbufferMaterialGeometryDrawSets[] = {
         &opaqueDrawItems.regular,
         &opaqueDrawItems.csgReceiverSurface,
@@ -6069,6 +6400,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgIntervalSampleResourceUses{
             csgIntervalSampleResourceScratch
         };
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>
+            opaqueCsgIntervalSampleComputeEmulationResourceUses{ csgIntervalSampleResourceScratch };
         Core::GpuGraphResourceSetId csgIntervalSampleMaterialGeometrySet;
         Core::GpuGraphResourceSetId csgIntervalSampleMaterialSampledTextureSet;
         const MaterialPassDrawItems* const csgIntervalSampleMaterialGeometryDrawSets[] = { &opaqueDrawItems.csg };
@@ -6101,6 +6434,46 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         ;
         if(csgIntervalSampleUsesMaterialGeometry && !csgIntervalSampleMaterialSampledTexturesCollected)
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque CSG material sampled textures"));
+
+        // The CSG interval-sample material stream has a different placement from both regular opaque and receiver
+        // CSG work: Combine has already completed, and the following Sample callback rasterizes immediately. That
+        // makes pairwise-distinct outputs graph-ownable without excluding earlier regular/receiver aliases.
+        const bool opaqueCsgIntervalSampleComputeEmulationPlanCaptured = hasCsgFrameGpuWork
+            && csgIntervalSamplePayload.materialFrameStatesGraphOwned
+            && csgIntervalSamplePayload.materialGeometryStatesGraphOwned
+            && csgIntervalSampleMaterialSampledTexturesCollected
+            && opaqueCsgIntervalSampleComputeEmulationPayload.plan.capture(
+                m_meshSystem,
+                opaqueDrawItems.csg,
+                csgFrameData
+            )
+        ;
+        const bool opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned =
+            opaqueCsgIntervalSampleComputeEmulationPlanCaptured
+            && GatherOpaqueCsgIntervalSampleComputeEmulationResourceSet(
+                m_deferredLightingTaskGraph,
+                opaqueCsgIntervalSampleComputeEmulationPayload.plan,
+                csgIntervalSampleResourceScratch,
+                Name("render.graphics_prefix.opaque_csg_interval_sample_compute_emulation.outputs"),
+                "Opaque CSG Interval-Sample Compute Emulation Outputs",
+                opaqueCsgIntervalSampleComputeEmulationOutputSet
+            )
+        ;
+        if(
+            opaqueCsgIntervalSampleComputeEmulationPlanCaptured
+            && !opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT(
+                "RendererSystem: could not declare graph-owned opaque CSG interval-sample compute-emulation outputs"
+            ));
+        }
+        csgIntervalSamplePayload.csgComputeEmulationOutputStatesGraphOwned =
+            opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned;
+        csgIntervalSamplePayload.opaqueCsgComputeEmulationTiming =
+            opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned
+                ? &opaqueCsgIntervalSampleComputeEmulationTiming
+                : nullptr
+        ;
         csgIntervalSampleResourceUses.reserve(
             1u
             + (hasOpaqueDrawItems ? 2u : 0u)
@@ -6156,7 +6529,19 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             .requiredState = Core::ResourceStates::ShaderResource,
             .access = Core::GpuTaskResourceAccess::Read,
         };
-        Core::GpuTaskResourceSetUse csgIntervalSampleMaterialResourceSetUses[2u] = {};
+        const Core::GpuTaskResourceSetUse opaqueCsgIntervalSampleComputeEmulationOutputUavSetUse{
+            .resourceSet = opaqueCsgIntervalSampleComputeEmulationOutputSet,
+            .range = {},
+            .requiredState = Core::ResourceStates::UnorderedAccess,
+            .access = Core::GpuTaskResourceAccess::Write,
+        };
+        const Core::GpuTaskResourceSetUse opaqueCsgIntervalSampleComputeEmulationOutputVertexBufferSetUse{
+            .resourceSet = opaqueCsgIntervalSampleComputeEmulationOutputSet,
+            .range = {},
+            .requiredState = Core::ResourceStates::VertexBuffer,
+            .access = Core::GpuTaskResourceAccess::Read,
+        };
+        Core::GpuTaskResourceSetUse csgIntervalSampleMaterialResourceSetUses[3u] = {};
         usize csgIntervalSampleMaterialResourceSetUseCount = 0u;
         if(csgIntervalSamplePayload.materialGeometryStatesGraphOwned){
             csgIntervalSampleMaterialResourceSetUses[csgIntervalSampleMaterialResourceSetUseCount++] =
@@ -6166,19 +6551,154 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             csgIntervalSampleMaterialResourceSetUses[csgIntervalSampleMaterialResourceSetUseCount++] =
                 csgIntervalSampleMaterialSampledTextureSetUse;
         }
+        if(opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned){
+            csgIntervalSampleMaterialResourceSetUses[csgIntervalSampleMaterialResourceSetUseCount++] =
+                opaqueCsgIntervalSampleComputeEmulationOutputVertexBufferSetUse;
+        }
+
+        Core::GpuTaskId csgIntervalSampleDependency = m_graphicsPrefixCsgIntervalCombineTask;
+        if(opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned){
+            opaqueCsgIntervalSampleComputeEmulationPayload.renderer = this;
+            opaqueCsgIntervalSampleComputeEmulationPayload.targets = &deferredTargets;
+            // Producer and sample share the semantic CSG interval-sample submission/ticket; the timer opens here
+            // and closes after the raster half, exactly preserving the former local material timing scope.
+            opaqueCsgIntervalSampleComputeEmulationPayload.timingTicket =
+                timingTicketSlot(PrefixTimingSlot::CsgIntervalSample);
+            opaqueCsgIntervalSampleComputeEmulationPayload.meshViewSetupReady =
+                &m_graphicsPrefixMeshViewSetupReady;
+            opaqueCsgIntervalSampleComputeEmulationPayload.sceneShadingSetupReady =
+                &m_graphicsPrefixSceneShadingSetupReady;
+            opaqueCsgIntervalSampleComputeEmulationPayload.opaqueCsgTiming =
+                &opaqueCsgIntervalSampleComputeEmulationTiming;
+            opaqueCsgIntervalSampleComputeEmulationPayload.instanceCount = instanceData.size();
+            opaqueCsgIntervalSampleComputeEmulationPayload.materialTypedByteCount = materialTypedBytes.size();
+            opaqueCsgIntervalSampleComputeEmulationPayload.materialDrawBuffersUploaded =
+                csgIntervalSamplePayload.materialDrawBuffersUploaded;
+            opaqueCsgIntervalSampleComputeEmulationPayload.csgFrameBuffersUploaded =
+                csgIntervalSamplePayload.csgFrameBuffersUploaded;
+            opaqueCsgIntervalSampleComputeEmulationPayload.intervalSampleImageStatesGraphOwned =
+                csgIntervalSamplePayload.intervalSampleImageStatesGraphOwned;
+            opaqueCsgIntervalSampleComputeEmulationPayload.csgClipBufferStatesGraphOwned =
+                csgIntervalSamplePayload.csgClipBufferStatesGraphOwned;
+            opaqueCsgIntervalSampleComputeEmulationPayload.materialFrameStatesGraphOwned =
+                csgIntervalSamplePayload.materialFrameStatesGraphOwned;
+            opaqueCsgIntervalSampleComputeEmulationPayload.materialGeometryStatesGraphOwned =
+                csgIntervalSamplePayload.materialGeometryStatesGraphOwned;
+
+            opaqueCsgIntervalSampleComputeEmulationResourceUses.reserve(12u);
+            opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(
+                ReadUse(meshView, Core::ResourceStates::ConstantBuffer)
+            );
+            opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(
+                ReadUse(materialInstances, Core::ResourceStates::ShaderResource)
+            );
+            opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(
+                ReadUse(materialTyped, Core::ResourceStates::ShaderResource)
+            );
+            opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(
+                ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource)
+            );
+            opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(
+                ReadUse(csgCutters, Core::ResourceStates::ShaderResource)
+            );
+            opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(
+                ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer)
+            );
+            opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(
+                ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer)
+            );
+            opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(
+                ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer)
+            );
+            opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(ReadTextureUse(
+                csgRemovedIntervalDepth,
+                csgRemovedIntervalSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ));
+            opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(ReadTextureUse(
+                csgRemovedIntervalCapNormal,
+                csgRemovedIntervalSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ));
+            opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(ReadTextureUse(
+                csgRemovedIntervalData,
+                csgRemovedIntervalSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ));
+            opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(ReadTextureUse(
+                csgRemovedIntervalCount,
+                csgRemovedIntervalCountSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ));
+            Core::GpuTaskResourceSetUse opaqueCsgIntervalSampleComputeEmulationResourceSetUses[3u] = {};
+            usize opaqueCsgIntervalSampleComputeEmulationResourceSetUseCount = 0u;
+            opaqueCsgIntervalSampleComputeEmulationResourceSetUses[
+                opaqueCsgIntervalSampleComputeEmulationResourceSetUseCount++
+            ] = csgIntervalSampleMaterialGeometrySetUse;
+            if(csgIntervalSampleMaterialSampledTextureSet.valid()){
+                opaqueCsgIntervalSampleComputeEmulationResourceSetUses[
+                    opaqueCsgIntervalSampleComputeEmulationResourceSetUseCount++
+                ] = csgIntervalSampleMaterialSampledTextureSetUse;
+            }
+            opaqueCsgIntervalSampleComputeEmulationResourceSetUses[
+                opaqueCsgIntervalSampleComputeEmulationResourceSetUseCount++
+            ] = opaqueCsgIntervalSampleComputeEmulationOutputUavSetUse;
+            Core::GpuTaskSchedulingHint opaqueCsgIntervalSampleComputeEmulationScheduling;
+            opaqueCsgIntervalSampleComputeEmulationScheduling.cost = Core::GpuTaskCostHint::Medium;
+            opaqueCsgIntervalSampleComputeEmulationScheduling.forceSubmissionBoundary = false;
+            opaqueCsgIntervalSampleComputeEmulationScheduling.allowPacketMerge = true;
+            opaqueCsgIntervalSampleComputeEmulationScheduling.mergeWithPrevious = true;
+            // Combine is the explicit immediate predecessor. The graph preserves its interval-image UAV handoff
+            // across any FrontierSafe split; Sample merges with this producer so its generated-vertex handoff and
+            // timing scope remain in one accepted Graphics packet.
+            opaqueCsgIntervalSampleComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
+            Core::GpuTaskDesc opaqueCsgIntervalSampleComputeEmulationDesc;
+            opaqueCsgIntervalSampleComputeEmulationDesc
+                .setIdentity(Name("render.graphics_prefix.opaque_csg_interval_sample_compute_emulation"))
+                .setMarkerLabel("Opaque CSG Interval-Sample Compute Emulation")
+                .setQueue(GraphicsComputeQueueRequest())
+                .setScheduling(opaqueCsgIntervalSampleComputeEmulationScheduling)
+                .setDependencies(&m_graphicsPrefixCsgIntervalCombineTask, 1u)
+                .setResourceUses(
+                    opaqueCsgIntervalSampleComputeEmulationResourceUses.data(),
+                    opaqueCsgIntervalSampleComputeEmulationResourceUses.size()
+                )
+                .setResourceSetUses(
+                    opaqueCsgIntervalSampleComputeEmulationResourceSetUses,
+                    opaqueCsgIntervalSampleComputeEmulationResourceSetUseCount
+                )
+            ;
+            m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask =
+                m_deferredLightingTaskGraph.addTask<
+                    ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask
+                >(
+                    opaqueCsgIntervalSampleComputeEmulationDesc,
+                    Move(opaqueCsgIntervalSampleComputeEmulationPayload)
+                )
+            ;
+            if(!m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT(
+                    "RendererSystem: could not declare opaque CSG interval-sample compute-emulation producer"
+                ));
+                return false;
+            }
+            csgIntervalSampleDependency = m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask;
+        }
 
         Core::GpuTaskSchedulingHint csgIntervalSampleScheduling;
         csgIntervalSampleScheduling.cost = Core::GpuTaskCostHint::Medium;
         csgIntervalSampleScheduling.forceSubmissionBoundary = false;
         csgIntervalSampleScheduling.allowPacketMerge = true;
         csgIntervalSampleScheduling.mergeWithPrevious = true;
+        csgIntervalSampleScheduling.allowMergeAcrossConsumerFrontier =
+            opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned;
         Core::GpuTaskDesc csgIntervalSampleDesc;
         csgIntervalSampleDesc
             .setIdentity(Name("render.graphics_prefix.csg_interval_sample"))
             .setMarkerLabel("Opaque CSG Interval Sample")
             .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(csgIntervalSampleScheduling)
-            .setDependencies(&m_graphicsPrefixCsgIntervalCombineTask, 1u)
+            .setDependencies(&csgIntervalSampleDependency, 1u)
             .setResourceUses(csgIntervalSampleResourceUses.data(), csgIntervalSampleResourceUses.size())
             .setResourceSetUses(
                 csgIntervalSampleMaterialResourceSetUseCount != 0u
@@ -9014,6 +9534,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     ECSRenderDetail::DeferredClearTimingRecordState& deferredClearTimingState,
     ECSRenderDetail::CsgIntervalClearTimingRecordState& opaqueCsgIntervalClearTimingState,
     Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
+    Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
     Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
     Core::GpuTimingSubmissionTicket** const graphicsPrefixTimingTickets,
     const bool* const asyncPrefixTimingSpansOnePacket,
@@ -9074,6 +9595,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         task = {};
     m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
     m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
+    m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixCsgReceiverSpanTask = {};
     m_graphicsPrefixCsgIntervalCombineTask = {};
@@ -9828,6 +10350,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         deferredClearTimingState,
         opaqueCsgIntervalClearTimingState,
         opaqueRegularSharedComputeEmulationTiming,
+        opaqueCsgIntervalSampleComputeEmulationTiming,
         graphicsPrefixTimingTickets,
         asyncPrefixTimingSpansOnePacket
     )){

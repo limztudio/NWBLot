@@ -17109,6 +17109,398 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverComputeHandoffM
 }
 
 
+// The opaque CSG interval-sample path has its own placement: Combine publishes the removed-interval aliases,
+// compute emulation consumes them and writes a pairwise-distinct generated-vertex set, then Sample rasterizes that
+// exact set. Record the full handoff on a real Graphics packet without callback-local state transitions.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeOpaqueCsgIntervalSampleComputeHandoffMergesWithSample){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto csgClipContext = device.createBuffer(
+        BufferDesc()
+            .setDebugName(Name("tests/descriptor_buffer/csg_interval_sample_clip_context"))
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::Exclusive)
+    );
+    const auto createGeneratedVertex = [&device](const Name& debugName){
+        return device.createBuffer(
+            BufferDesc()
+                .setDebugName(debugName)
+                .setByteSize(3u * 4u * sizeof(f32))
+                .setStructStride(4u * sizeof(f32))
+                .setCanHaveUAVs(true)
+                .setCanHaveRawViews(true)
+                .setIsVertexBuffer(true)
+                .setInitialState(ResourceStates::Common)
+                .setQueueSharing(ResourceQueueSharing::Exclusive)
+        );
+    };
+    auto generatedVertexA = createGeneratedVertex(
+        Name("tests/descriptor_buffer/csg_interval_sample_generated_vertex_a")
+    );
+    auto generatedVertexB = createGeneratedVertex(
+        Name("tests/descriptor_buffer/csg_interval_sample_generated_vertex_b")
+    );
+    auto removedInterval = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setArraySize(1u)
+            .setDimension(TextureDimension::Texture2DArray)
+            .setFormat(Format::RGBA32_UINT)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(csgClipContext.get(), nullptr);
+    ASSERT_NE(generatedVertexA.get(), nullptr);
+    ASSERT_NE(generatedVertexB.get(), nullptr);
+    ASSERT_NE(removedInterval.get(), nullptr);
+    EXPECT_NE(generatedVertexA.get(), generatedVertexB.get());
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importBuffer = [&graph](const BufferHandle& buffer, const AStringView markerLabel){
+        const BufferDesc& description = buffer->getDescription();
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(description.debugName)
+                .setMarkerLabel(markerLabel)
+                .setType(GpuGraphResourceType::Buffer)
+                .setInitialState(description.initialState)
+                .setQueueSharing(description.queueSharing)
+        );
+    };
+    const GpuGraphResourceId csgClipContextResource = importBuffer(csgClipContext, "CSG Interval-Sample Clip Context");
+    const GpuGraphResourceId generatedVertexAResource = importBuffer(
+        generatedVertexA,
+        "CSG Interval-Sample Generated Vertex A"
+    );
+    const GpuGraphResourceId generatedVertexBResource = importBuffer(
+        generatedVertexB,
+        "CSG Interval-Sample Generated Vertex B"
+    );
+    const TextureDesc& removedIntervalDescription = removedInterval->getDescription();
+    const GpuGraphResourceId removedIntervalResource = graph.importTexture(
+        removedInterval,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/csg_interval_sample_removed_interval"))
+            .setMarkerLabel("Opaque CSG Removed Interval")
+            .setType(GpuGraphResourceType::Texture)
+            .setInitialState(removedIntervalDescription.initialState)
+            .setQueueSharing(removedIntervalDescription.queueSharing)
+    );
+    ASSERT_TRUE(csgClipContextResource.valid());
+    ASSERT_TRUE(generatedVertexAResource.valid());
+    ASSERT_TRUE(generatedVertexBResource.valid());
+    ASSERT_TRUE(removedIntervalResource.valid());
+    EXPECT_NE(generatedVertexAResource, generatedVertexBResource);
+
+    const GpuGraphResourceId generatedVertexOutputs[] = {
+        generatedVertexAResource,
+        generatedVertexBResource,
+    };
+    const GpuGraphResourceSetId generatedVertexOutputSet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/csg_interval_sample_generated_vertex_outputs"))
+            .setMarkerLabel("Opaque CSG Interval-Sample Generated Vertex Outputs")
+            .setMembers(generatedVertexOutputs, LengthOf(generatedVertexOutputs))
+    );
+    ASSERT_TRUE(generatedVertexOutputSet.valid());
+
+    const TextureSubresourceSet removedIntervalRange(0u, 1u, 0u, 1u);
+    const GpuTaskResourceUse combineUses[] = {
+        GpuTaskResourceUse{
+            .resource = csgClipContextResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = removedIntervalResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    const GpuTaskResourceUse computeEmulationUses[] = {
+        GpuTaskResourceUse{
+            .resource = removedIntervalResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    const GpuTaskResourceUse sampleUses[] = {
+        GpuTaskResourceUse{
+            .resource = removedIntervalResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = removedIntervalRange },
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    const GpuTaskResourceSetUse outputUavSetUse{
+        .resourceSet = generatedVertexOutputSet,
+        .range = {},
+        .requiredState = ResourceStates::UnorderedAccess,
+        .access = GpuTaskResourceAccess::Write,
+    };
+    const GpuTaskResourceSetUse outputVertexBufferSetUse{
+        .resourceSet = generatedVertexOutputSet,
+        .range = {},
+        .requiredState = ResourceStates::VertexBuffer,
+        .access = GpuTaskResourceAccess::Read,
+    };
+
+    const GpuQueueRequest graphicsComputeQueue{
+        static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+        ),
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint combineScheduling;
+    combineScheduling.cost = GpuTaskCostHint::Medium;
+    combineScheduling.overlapPreferred = false;
+    combineScheduling.avoidQueueCrossing = true;
+    combineScheduling.forceSubmissionBoundary = false;
+    combineScheduling.allowPacketMerge = true;
+    combineScheduling.mergeWithPrevious = false;
+    bool combineObservedStates = false;
+    QueueSubmissionToken combineAcceptedToken;
+    const GpuTaskId combineTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/csg_interval_sample_combine"))
+            .setMarkerLabel("Opaque CSG Interval Combine")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(combineScheduling)
+            .setResourceUses(combineUses, LengthOf(combineUses)),
+        NativePacketPrefixTask::Payload{
+            .buffer = csgClipContext.get(),
+            .expectedState = ResourceStates::ConstantBuffer,
+            .texture = removedInterval.get(),
+            .expectedTextureState = ResourceStates::UnorderedAccess,
+            .recorded = &combineObservedStates,
+            .acceptedToken = &combineAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(combineTask.valid());
+
+    GpuTaskSchedulingHint handoffScheduling = combineScheduling;
+    handoffScheduling.mergeWithPrevious = true;
+    handoffScheduling.allowMergeAcrossConsumerFrontier = true;
+    bool computeEmulationObservedStates = false;
+    QueueSubmissionToken computeEmulationAcceptedToken;
+    const GpuTaskId computeEmulationTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/csg_interval_sample_compute_emulation"))
+            .setMarkerLabel("Opaque CSG Interval-Sample Compute Emulation")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(handoffScheduling)
+            .setDependencies(&combineTask, 1u)
+            .setResourceUses(computeEmulationUses, LengthOf(computeEmulationUses))
+            .setResourceSetUses(&outputUavSetUse, 1u),
+        NativePacketPrefixTask::Payload{
+            .buffer = generatedVertexA.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .additionalBuffer = generatedVertexB.get(),
+            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
+            .texture = removedInterval.get(),
+            .expectedTextureState = ResourceStates::UnorderedAccess,
+            .recorded = &computeEmulationObservedStates,
+            .acceptedToken = &computeEmulationAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(computeEmulationTask.valid());
+
+    bool sampleObservedStates = false;
+    QueueSubmissionToken sampleAcceptedToken;
+    const GpuTaskId sampleTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/csg_interval_sample_raster"))
+            .setMarkerLabel("Opaque CSG Interval Sample")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(handoffScheduling)
+            .setDependencies(&computeEmulationTask, 1u)
+            .setResourceUses(sampleUses, LengthOf(sampleUses))
+            .setResourceSetUses(&outputVertexBufferSetUse, 1u),
+        NativePacketPrefixTask::Payload{
+            .buffer = generatedVertexA.get(),
+            .expectedState = ResourceStates::VertexBuffer,
+            .additionalBuffer = generatedVertexB.get(),
+            .expectedAdditionalBufferState = ResourceStates::VertexBuffer,
+            .texture = removedInterval.get(),
+            .expectedTextureState = ResourceStates::UnorderedAccess,
+            .recorded = &sampleObservedStates,
+            .acceptedToken = &sampleAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(sampleTask.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    ASSERT_TRUE(primaryGraphicsQueue.valid());
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/csg_interval_sample_compute_emulation_scratch"));
+    GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, frontierOptions));
+    EXPECT_TRUE(analysis.hasExplicitEdge(combineTask, computeEmulationTask));
+    EXPECT_TRUE(analysis.hasExplicitEdge(computeEmulationTask, sampleTask));
+    EXPECT_TRUE(analysis.hasInferredEdge(combineTask, computeEmulationTask));
+    EXPECT_TRUE(analysis.hasInferredEdge(combineTask, sampleTask));
+    EXPECT_TRUE(analysis.hasInferredEdge(computeEmulationTask, sampleTask));
+
+    for(const GpuTaskId task : { combineTask, computeEmulationTask, sampleTask }){
+        const GpuTaskQueueAssignment* const assignment = assignments.find(task);
+        ASSERT_NE(assignment, nullptr);
+        EXPECT_EQ(assignment->queue, primaryGraphicsQueue);
+        EXPECT_EQ(assignment->queueClass, CommandQueue::Graphics);
+    }
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(combineTask);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledGraph.packetForTask(computeEmulationTask));
+    EXPECT_EQ(packet, compiledGraph.packetForTask(sampleTask));
+    EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(combineTask, computeEmulationTask));
+    EXPECT_TRUE(compiledGraph.tasksSharePacket(computeEmulationTask, sampleTask));
+    EXPECT_EQ(compiledGraph.packet(packet).queue, primaryGraphicsQueue);
+    EXPECT_EQ(compiledGraph.packet(packet).dependencyCount, 0u);
+    ASSERT_EQ(compiledGraph.packet(packet).taskCount, 3u);
+    const GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    ASSERT_NE(packetTasks, nullptr);
+    EXPECT_EQ(packetTasks[0u], combineTask);
+    EXPECT_EQ(packetTasks[1u], computeEmulationTask);
+    EXPECT_EQ(packetTasks[2u], sampleTask);
+
+    const auto hasTextureBarrier = [&](const GpuTaskId task, const GpuCompiledBarrierType::Enum type, const ResourceStates::Mask before, const ResourceStates::Mask after){
+        const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        if(!compiledTask)
+            return false;
+        const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        for(u32 barrierIndex = 0u; barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == type
+                && barrier.resource == removedIntervalResource
+                && barrier.range.textureSubresources == removedIntervalRange
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    const auto hasBufferTransition = [&](const GpuTaskId task, const GpuGraphResourceId resource, const ResourceStates::Mask before, const ResourceStates::Mask after){
+        const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        if(!compiledTask)
+            return false;
+        const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        for(u32 barrierIndex = 0u; barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+                && barrier.sourceQueue == primaryGraphicsQueue
+                && barrier.destinationQueue == primaryGraphicsQueue
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTextureBarrier(
+        combineTask,
+        GpuCompiledBarrierType::TextureTransition,
+        ResourceStates::Common,
+        ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasTextureBarrier(
+        computeEmulationTask,
+        GpuCompiledBarrierType::TextureUav,
+        ResourceStates::UnorderedAccess,
+        ResourceStates::UnorderedAccess
+    ));
+    for(const GpuGraphResourceId output : generatedVertexOutputs){
+        EXPECT_TRUE(hasBufferTransition(
+            computeEmulationTask,
+            output,
+            ResourceStates::Common,
+            ResourceStates::UnorderedAccess
+        ));
+        EXPECT_TRUE(hasBufferTransition(
+            sampleTask,
+            output,
+            ResourceStates::UnorderedAccess,
+            ResourceStates::VertexBuffer
+        ));
+    }
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+    EXPECT_TRUE(combineObservedStates);
+    EXPECT_TRUE(computeEmulationObservedStates);
+    EXPECT_TRUE(sampleObservedStates);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    ASSERT_NE(finalState, nullptr);
+    auto stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getBufferState(generatedVertexA.get()), ResourceStates::VertexBuffer);
+    EXPECT_EQ(stateProbe->getBufferState(generatedVertexB.get()), ResourceStates::VertexBuffer);
+    EXPECT_EQ(
+        stateProbe->getTextureSubresourceState(removedInterval.get(), 0u, 0u),
+        ResourceStates::UnorderedAccess
+    );
+    stateProbe->close();
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken packetToken = transaction.packetToken(packet);
+    ASSERT_TRUE(packetToken.valid());
+    for(const QueueSubmissionToken& acceptedToken : {
+        combineAcceptedToken,
+        computeEmulationAcceptedToken,
+        sampleAcceptedToken,
+    }){
+        ASSERT_TRUE(acceptedToken.valid());
+        EXPECT_EQ(acceptedToken.queue, packetToken.queue);
+        EXPECT_EQ(acceptedToken.value, packetToken.value);
+        EXPECT_EQ(acceptedToken.physicalQueueIndex, packetToken.physicalQueueIndex);
+        EXPECT_EQ(acceptedToken.deviceGeneration, packetToken.deviceGeneration);
+    }
+    ASSERT_TRUE(device.waitForIdle());
+}
+
+
 // Active-pose skinning must not rely on a native UAV/SRV bridge between deformation and bounds/repack. This native
 // packet smoke models the exact three graph tasks: deformation writes skinned position/normal/tangent, post-dispatch
 // reads position/normal while writing bounds/attributes, and the finalizer publishes every generated buffer as SRV.

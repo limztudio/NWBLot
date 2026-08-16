@@ -251,6 +251,7 @@ void RendererSystem::invalidateResources(){
         task = {};
     m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
     m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
+    m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixCsgReceiverSpanTask = {};
     m_graphicsPrefixCsgIntervalCombineTask = {};
@@ -554,6 +555,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         task = {};
     m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
     m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
+    m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixCsgReceiverSpanTask = {};
     m_graphicsPrefixCsgIntervalCombineTask = {};
@@ -877,6 +879,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // The small shared-output opaque sequence spans G-buffer's mesh prelude and four or six graph callbacks. Keep
     // its measurement alive through graph declaration, recording, submission, and rejection just like CSG intervals.
     Optional<Core::GpuTimingMeasure> opaqueRegularSharedComputeEmulationTiming;
+    // Opaque CSG interval-sample compute/raster can span two graph callbacks while retaining the old material scope.
+    Optional<Core::GpuTimingMeasure> opaqueCsgIntervalSampleComputeEmulationTiming;
     Core::GpuTimingSubmissionTicket shadowVisibilityTimingTicket(m_graphics.gpuTiming());
     // The prepared soft-transparent route spans opaque resolve across its first-wavelet and tail callbacks, and
     // begins transparent resolve in temporal merge when active (otherwise its first wavelet). The terminal fold
@@ -942,6 +946,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredClearTimingState,
         opaqueCsgIntervalClearTimingState,
         opaqueRegularSharedComputeEmulationTiming,
+        opaqueCsgIntervalSampleComputeEmulationTiming,
         shadowPrepareTimingTicket,
         graphicsPrefixTimingTickets,
         &asyncPrefixTimingSpansOnePacket,
@@ -990,6 +995,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             deferredClearTimingState,
             opaqueCsgIntervalClearTimingState,
             opaqueRegularSharedComputeEmulationTiming,
+            opaqueCsgIntervalSampleComputeEmulationTiming,
             shadowPrepareTimingTicket,
             graphicsPrefixTimingTickets,
             &asyncPrefixTimingSpansOnePacket,
@@ -1165,6 +1171,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask)
             : Core::GpuSubmissionPacketId{}
     ;
+    const Core::GpuSubmissionPacketId graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationPacket =
+        m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(
+                m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask
+            )
+            : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuSubmissionPacketId graphicsPrefixCsgIntervalClearFirstPacket =
         m_graphicsPrefixCsgIntervalClearFirstTask.valid()
             ? m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixCsgIntervalClearFirstTask)
@@ -1330,6 +1343,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? m_deferredLightingCompiledGraph.queueInfoForTask(m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask)
             : nullptr
     ;
+    const Core::GpuPhysicalQueueInfo* const graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationQueue =
+        m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask.valid()
+            ? m_deferredLightingCompiledGraph.queueInfoForTask(
+                m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask
+            )
+            : nullptr
+    ;
     bool graphicsPrefixPacketsAreGraphics = graphicsPrefixTimingBindingsValid;
     for(usize prefixTaskIndex = 0u;
         graphicsPrefixPacketsAreGraphics && prefixTaskIndex < graphicsPrefixTimingTicketCount;
@@ -1460,6 +1480,46 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && graphicsPrefixOpaqueCsgReceiverComputeEmulationQueue->queueClass == Core::CommandQueue::Graphics
         )
     ;
+    // Interval-sample emulation starts after Combine, but Combine retains its own semantic timing packet and may
+    // safely split at a compiler frontier. The producer/raster pair itself must stay contiguous in one Graphics
+    // packet before accepting the timing scope that crosses their command-list recording.
+    const bool graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationMerged = [&](){
+        if(!m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask.valid())
+            return true;
+        if(
+            !graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationPacket.valid()
+            || !m_graphicsPrefixCsgIntervalCombineTask.valid()
+            || !m_graphicsPrefixCsgIntervalSampleTask.valid()
+            || !graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationQueue
+            || graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationQueue->queueClass
+                != Core::CommandQueue::Graphics
+            || !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
+                m_graphicsPrefixCsgIntervalCombineTask,
+                m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask
+            )
+            || !m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask,
+                m_graphicsPrefixCsgIntervalSampleTask
+            )
+        )
+            return false;
+        const Core::GpuSubmissionPacket& packet = m_deferredLightingCompiledGraph.packet(
+            graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationPacket
+        );
+        const Core::GpuTaskId* const packetTasks = m_deferredLightingCompiledGraph.packetTasks(
+            graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationPacket
+        );
+        if(!packetTasks || packet.taskCount < 2u)
+            return false;
+        for(usize taskIndex = 0u; taskIndex + 2u <= packet.taskCount; ++taskIndex){
+            if(
+                packetTasks[taskIndex] == m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask
+                && packetTasks[taskIndex + 1u] == m_graphicsPrefixCsgIntervalSampleTask
+            )
+                return true;
+        }
+        return false;
+    }();
     // The opaque CSG work-region clear keeps its original one-range timing scope in first/last typed primitives.
     // They must remain with G-buffer's rebound Graphics ticket; a split would bind query ownership to a different
     // native submission even though the compiler still preserves resource ordering.
@@ -2072,6 +2132,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !graphicsPrefixOpaqueComputeEmulationMerged
         || !graphicsPrefixOpaqueSharedComputeEmulationMerged
         || !graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged
+        || !graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationMerged
         || !graphicsPrefixCsgIntervalClearBundleMerged
         || !graphicsPrefixQueue
         || graphicsPrefixQueue->queueClass != Core::CommandQueue::Graphics
@@ -2348,6 +2409,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             opaqueRegularSharedComputeEmulationTiming->discardTiming();
             opaqueRegularSharedComputeEmulationTiming.reset();
         }
+        if(opaqueCsgIntervalSampleComputeEmulationTiming){
+            opaqueCsgIntervalSampleComputeEmulationTiming->discardTiming();
+            opaqueCsgIntervalSampleComputeEmulationTiming.reset();
+        }
         frameTimingTransaction.discard();
         discardTimingTickets();
         discardUnacceptedGraphPackets();
@@ -2517,6 +2582,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && graphicsPrefixOpaqueComputeEmulationMerged
         && graphicsPrefixOpaqueSharedComputeEmulationMerged
         && graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged
+        && graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationMerged
         && shadowPrepareStateBindingsReady
         && deferredRecorder.recordTaskRangeInReadyFrontiers(
             m_deferredLightingTaskGraph,
@@ -2848,6 +2914,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && graphicsPrefixOpaqueComputeEmulationMerged
         && graphicsPrefixOpaqueSharedComputeEmulationMerged
         && graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged
+        && graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationMerged
         && m_deferredShadowVisibilityTask.valid()
         && shadowVisibilityPacket.valid()
         && shadowVisibilityPreparedTasksMerged
@@ -3828,6 +3895,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && graphicsPrefixOpaqueComputeEmulationMerged
             && graphicsPrefixOpaqueSharedComputeEmulationMerged
             && graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged
+            && graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationMerged
             && graphicsPrefixWorkPacketRange.valid()
             && shadowPrepareThroughPrefixPacketRange.valid()
             && shadowPreparePrefixTimingTicketsValid

@@ -88,6 +88,11 @@ struct GpuGraphResourceDesc{
     // graph declared for an imported texture/buffer and publishes it in the accepted packet's native state
     // snapshot. Unknown leaves the resource's final state under ordinary task ownership.
     ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
+    // Optional physical queue that receives an exclusive imported texture/buffer after its final graph use. The
+    // compiler emits the terminal state export first, then a release to this exact destination. The accepted
+    // terminal packet token and recorded state snapshot form the external handoff consumed by subsequent native
+    // work or a later graph import.
+    GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
     // Optional owner of an exclusive imported texture/buffer before its first graph use. An exact first-packet
     // match needs no extra synchronization because submission order on one physical queue is sufficient.
     GpuPhysicalQueueId initialOwnerQueue;
@@ -106,6 +111,7 @@ struct GpuGraphResourceDesc{
     constexpr GpuGraphResourceDesc& setType(const GpuGraphResourceType::Enum value){ type = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialState(const ResourceStates::Mask value){ initialState = value; return *this; }
     constexpr GpuGraphResourceDesc& setExternalFinalState(const ResourceStates::Mask value){ externalFinalState = value; return *this; }
+    constexpr GpuGraphResourceDesc& setExternalFinalReleaseDestinationQueue(const GpuPhysicalQueueId value){ externalFinalReleaseDestinationQueue = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerQueue(const GpuPhysicalQueueId value){ initialOwnerQueue = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerReleaseDestinationQueue(const GpuPhysicalQueueId value){ initialOwnerReleaseDestinationQueue = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerCompletion(const GpuExternalCompletionId value){ initialOwnerCompletion = value; return *this; }

@@ -1151,6 +1151,7 @@ bool GpuTaskGraphCompiler::compile(
     outCompiledGraph.m_prologueStateSeeds.reserve(graph.taskCount());
     outCompiledGraph.m_prologueBarriers.reserve(graph.taskCount());
     outCompiledGraph.m_epilogueBarriers.reserve(graph.taskCount());
+    outCompiledGraph.m_externalResourceExports.reserve(graph.resourceCount());
     outCompiledGraph.m_queueTopology.reserve(topology.queueCount);
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex)
         outCompiledGraph.m_queueTopology.push_back(topology.queues[queueIndex]);
@@ -1160,6 +1161,18 @@ bool GpuTaskGraphCompiler::compile(
     // state handoff source. That keeps the compiler from manufacturing an acquire or cross-queue wait on its own.
     for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
         const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
+        const bool hasExternalFinalRelease = resource.externalFinalReleaseDestinationQueue.valid();
+        if(
+            hasExternalFinalRelease
+            && (
+                resource.externalFinalState == ResourceStates::Unknown
+                || ResourceUsesConcurrentQueueSharing(resource.queueSharing, topology)
+                || !outCompiledGraph.queueInfo(resource.externalFinalReleaseDestinationQueue)
+            )
+        ){
+            outCompiledGraph.reset();
+            return false;
+        }
         if(!resource.initialOwnerQueue.valid())
             continue;
         const bool hasInitialOwnerHandoff = resource.initialOwnerReleaseDestinationQueue.valid();
@@ -1587,6 +1600,8 @@ bool GpuTaskGraphCompiler::compile(
         if(resource.externalFinalState == ResourceStates::Unknown)
             continue;
 
+        const bool hasExternalFinalRelease = resource.externalFinalReleaseDestinationQueue.valid();
+
         const GpuCompiledBarrierType::Enum exportType = StateExportBarrierType(resource.type);
         if(exportType >= GpuCompiledBarrierType::kCount){
             outCompiledGraph.reset();
@@ -1594,6 +1609,9 @@ bool GpuTaskGraphCompiler::compile(
         }
 
         bool hasTerminalDeclaredRange = false;
+        GpuTaskId externalExportTask;
+        GpuSubmissionPacketId externalExportPacket;
+        GpuPhysicalQueueId externalExportSourceQueue;
         for(usize stateIndex = 0u; stateIndex < trackedResourceStates.size(); ++stateIndex){
             const TrackedCompiledResourceState& state = trackedResourceStates[stateIndex];
             if(state.resource != resource.id)
@@ -1616,6 +1634,29 @@ bool GpuTaskGraphCompiler::compile(
             if(hasLaterOverlappingUse)
                 continue;
 
+            if(hasExternalFinalRelease){
+                const GpuSubmissionPacketId terminalPacket = outCompiledGraph.packetForTask(state.task);
+                if(!terminalPacket.valid()){
+                    outCompiledGraph.reset();
+                    return false;
+                }
+                if(!externalExportTask.valid()){
+                    externalExportTask = state.task;
+                    externalExportPacket = terminalPacket;
+                    externalExportSourceQueue = state.queue;
+                }
+                else if(
+                    externalExportPacket != terminalPacket
+                    || externalExportSourceQueue != state.queue
+                ){
+                    // An external recipient receives one completion token and one native state snapshot. Require
+                    // every terminal declared range to close in one packet until a deliberate multi-token export
+                    // contract is designed and proven.
+                    outCompiledGraph.reset();
+                    return false;
+                }
+            }
+
             pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
                 .task = state.task,
                 .barrier = GpuCompiledBarrier{
@@ -1628,6 +1669,27 @@ bool GpuTaskGraphCompiler::compile(
                     .destinationQueue = state.queue,
                 },
             });
+            if(hasExternalFinalRelease && state.queue != resource.externalFinalReleaseDestinationQueue){
+                const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
+                if(releaseType >= GpuCompiledBarrierType::kCount){
+                    outCompiledGraph.reset();
+                    return false;
+                }
+                // Export the exact final state before ownership moves. Native lowering therefore captures the same
+                // state in the released snapshot and the paired Vulkan queue-family release barrier.
+                pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
+                    .task = state.task,
+                    .barrier = GpuCompiledBarrier{
+                        .type = releaseType,
+                        .resource = state.resource,
+                        .range = state.range,
+                        .before = resource.externalFinalState,
+                        .after = resource.externalFinalState,
+                        .sourceQueue = state.queue,
+                        .destinationQueue = resource.externalFinalReleaseDestinationQueue,
+                    },
+                });
+            }
             hasTerminalDeclaredRange = true;
         }
         if(!hasTerminalDeclaredRange){
@@ -1635,6 +1697,19 @@ bool GpuTaskGraphCompiler::compile(
             // compilation rather than leaving a direct renderer bridge to guess whether the requirement held.
             outCompiledGraph.reset();
             return false;
+        }
+        if(hasExternalFinalRelease){
+            if(!externalExportTask.valid() || !externalExportPacket.valid() || !externalExportSourceQueue.valid()){
+                outCompiledGraph.reset();
+                return false;
+            }
+            outCompiledGraph.m_externalResourceExports.push_back(GpuCompiledExternalResourceExport{
+                .resource = resource.id,
+                .producerTask = externalExportTask,
+                .sourceQueue = externalExportSourceQueue,
+                .destinationQueue = resource.externalFinalReleaseDestinationQueue,
+                .finalState = resource.externalFinalState,
+            });
         }
     }
 

@@ -59,6 +59,17 @@ struct GpuCompiledTask{
     u32 epilogueBarrierCount = 0u;
 };
 
+// One accepted packet may publish an imported texture/buffer to code outside this graph. The compiler creates this
+// only for an explicit external-final release declaration, and rejects resource ranges that would need more than
+// one producer packet so consumers never have to infer a multi-token handoff.
+struct GpuCompiledExternalResourceExport{
+    GpuGraphResourceId resource;
+    GpuTaskId producerTask;
+    GpuPhysicalQueueId sourceQueue;
+    GpuPhysicalQueueId destinationQueue;
+    ResourceStates::Mask finalState = ResourceStates::Unknown;
+};
+
 
 class GpuCompiledGraph final : NoCopy{
     friend class GpuTaskGraphCompiler;
@@ -112,6 +123,11 @@ public:
     [[nodiscard]] const GpuPacketStateSeed* taskPrologueStateSeeds(const GpuTaskId& task)const noexcept;
     [[nodiscard]] const GpuCompiledBarrier* taskPrologueBarriers(const GpuTaskId& task)const noexcept;
     [[nodiscard]] const GpuCompiledBarrier* taskEpilogueBarriers(const GpuTaskId& task)const noexcept;
+    // Resolves the one terminal packet that publishes this imported resource to its declared external destination.
+    // No result means the resource did not request a graph-to-external handoff in this compiled generation.
+    [[nodiscard]] const GpuCompiledExternalResourceExport* externalResourceExport(
+        const GpuGraphResourceId& resource
+    )const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* queueInfo(const GpuPhysicalQueueId& queue)const noexcept;
 
 
@@ -124,6 +140,7 @@ private:
     GraphicsVector<GpuPacketStateSeed> m_prologueStateSeeds;
     GraphicsVector<GpuCompiledBarrier> m_prologueBarriers;
     GraphicsVector<GpuCompiledBarrier> m_epilogueBarriers;
+    GraphicsVector<GpuCompiledExternalResourceExport> m_externalResourceExports;
     GraphicsVector<GpuPhysicalQueueInfo> m_queueTopology;
     u64 m_generation = 0u;
     u16 m_deviceGeneration = 0u;

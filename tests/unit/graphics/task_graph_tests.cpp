@@ -2538,6 +2538,156 @@ TEST(GpuTaskGraph, ExportsRequiredImportedResourceFinalStates){
 }
 
 
+TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+
+    const Graphics::GpuGraphResourceId buffer = graph.importResource(
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/external_final_release_buffer"))
+            .setMarkerLabel("External Final Release Buffer")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::Common)
+            .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
+            .setExternalFinalReleaseDestinationQueue(queues[1u].id)
+    );
+    ASSERT_TRUE(buffer.valid());
+    EXPECT_EQ(graph.resourceAt(buffer.index).externalFinalReleaseDestinationQueue, queues[1u].id);
+
+    const Graphics::GpuTaskResourceUse use{
+        .resource = buffer,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::CopyDest,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    const Graphics::GpuTaskId task = AddTask(
+        graph,
+        Name("tests/task_graph/external_final_release_writer"),
+        "External Final Release Writer",
+        nullptr,
+        0u,
+        &use,
+        1u
+    );
+    ASSERT_TRUE(task.valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+    ASSERT_NE(compiledTask, nullptr);
+    EXPECT_EQ(compiledTask->queue, queues[0u].id);
+    const Graphics::GpuCompiledExternalResourceExport* const exportInfo = compiledGraph.externalResourceExport(buffer);
+    ASSERT_NE(exportInfo, nullptr);
+    EXPECT_EQ(exportInfo->resource, buffer);
+    EXPECT_EQ(exportInfo->producerTask, task);
+    EXPECT_EQ(exportInfo->sourceQueue, queues[0u].id);
+    EXPECT_EQ(exportInfo->destinationQueue, queues[1u].id);
+    EXPECT_EQ(exportInfo->finalState, Graphics::ResourceStates::ShaderResource);
+
+    ASSERT_EQ(compiledTask->epilogueBarrierCount, 2u);
+    const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskEpilogueBarriers(task);
+    ASSERT_NE(barriers, nullptr);
+    EXPECT_EQ(barriers[0u].type, Graphics::GpuCompiledBarrierType::BufferStateExport);
+    EXPECT_EQ(barriers[0u].resource, buffer);
+    EXPECT_EQ(barriers[0u].before, Graphics::ResourceStates::CopyDest);
+    EXPECT_EQ(barriers[0u].after, Graphics::ResourceStates::ShaderResource);
+    EXPECT_EQ(barriers[0u].sourceQueue, queues[0u].id);
+    EXPECT_EQ(barriers[0u].destinationQueue, queues[0u].id);
+    EXPECT_EQ(barriers[1u].type, Graphics::GpuCompiledBarrierType::BufferOwnershipRelease);
+    EXPECT_EQ(barriers[1u].resource, buffer);
+    EXPECT_EQ(barriers[1u].before, Graphics::ResourceStates::ShaderResource);
+    EXPECT_EQ(barriers[1u].after, Graphics::ResourceStates::ShaderResource);
+    EXPECT_EQ(barriers[1u].sourceQueue, queues[0u].id);
+    EXPECT_EQ(barriers[1u].destinationQueue, queues[1u].id);
+}
+
+
+TEST(GpuTaskGraph, RejectsExternalFinalOwnershipExportWithMultipleTerminalPackets){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    const Graphics::GpuGraphResourceId texture = graph.importResource(
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/external_final_multiple_packets"))
+            .setMarkerLabel("External Final Multiple Packets")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::Common)
+            .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
+            .setExternalFinalReleaseDestinationQueue(queues[1u].id)
+    );
+    ASSERT_TRUE(texture.valid());
+
+    const Graphics::GpuTaskResourceUse graphicsUse{
+        .resource = texture,
+        .range = Graphics::GpuTaskResourceRange{
+            .textureSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+        },
+        .requiredState = Graphics::ResourceStates::CopyDest,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    const Graphics::GpuTaskResourceUse computeUse{
+        .resource = texture,
+        .range = Graphics::GpuTaskResourceRange{
+            .textureSubresources = Graphics::TextureSubresourceSet(1u, 1u, 0u, 1u),
+        },
+        .requiredState = Graphics::ResourceStates::UnorderedAccess,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    Graphics::GpuTaskDesc graphicsDesc;
+    graphicsDesc
+        .setIdentity(Name("tests/task_graph/external_final_multiple_graphics"))
+        .setMarkerLabel("External Final Multiple Graphics")
+        .setQueue(graphicsRequest)
+        .setResourceUses(&graphicsUse, 1u)
+    ;
+    Graphics::GpuTaskDesc computeDesc;
+    computeDesc
+        .setIdentity(Name("tests/task_graph/external_final_multiple_compute"))
+        .setMarkerLabel("External Final Multiple Compute")
+        .setQueue(computeRequest)
+        .setResourceUses(&computeUse, 1u)
+    ;
+    ASSERT_TRUE(graph.addTask(graphicsDesc).valid());
+    ASSERT_TRUE(graph.addTask(computeDesc).valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    EXPECT_FALSE(compiledGraph.valid());
+}
+
+
 TEST(GpuTaskGraph, RejectsUnpublishableExternalFinalStateContracts){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -2550,6 +2700,16 @@ TEST(GpuTaskGraph, RejectsUnpublishableExternalFinalStateContracts){
         .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
     ;
     EXPECT_FALSE(graph.importResource(unsupportedDesc).valid());
+
+    Graphics::GpuGraphResourceDesc destinationWithoutFinalState;
+    destinationWithoutFinalState
+        .setIdentity(Name("tests/task_graph/external_final_release_without_state"))
+        .setMarkerLabel("External Final Release Without State")
+        .setType(Graphics::GpuGraphResourceType::Buffer)
+        .setInitialState(Graphics::ResourceStates::Common)
+        .setExternalFinalReleaseDestinationQueue(DedicatedComputeQueue().id)
+    ;
+    EXPECT_FALSE(graph.importResource(destinationWithoutFinalState).valid());
 
     Graphics::GpuGraphResourceDesc untouchedDesc;
     untouchedDesc

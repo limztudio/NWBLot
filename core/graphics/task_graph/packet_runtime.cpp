@@ -201,6 +201,24 @@ bool GpuTaskGraphExternalCompletionToken::validFor(const GpuCompiledGraph& compi
     return token.deviceGeneration == compiledGraph.deviceGeneration();
 }
 
+bool GpuTaskGraphExternalResourceHandoff::validFor(const GpuCompiledGraph& compiledGraph)const noexcept{
+    return compiledGraph.valid()
+        && resource.valid()
+        && resource.generation == compiledGraph.generation()
+        && producerTask.valid()
+        && producerTask.generation == compiledGraph.generation()
+        && sourceQueue.valid()
+        && sourceQueue.deviceGeneration == compiledGraph.deviceGeneration()
+        && destinationQueue.valid()
+        && destinationQueue.deviceGeneration == compiledGraph.deviceGeneration()
+        && finalState != ResourceStates::Unknown
+        && token.valid()
+        && token.matchesPhysicalQueue(sourceQueue.index, sourceQueue.deviceGeneration)
+        && stateSource
+        && stateSource->valid()
+    ;
+}
+
 const GpuRecordedPacket* GpuRecordedGraph::find(const GpuSubmissionPacketId& packet)const noexcept{
     if(
         !packet.valid()
@@ -1215,6 +1233,29 @@ QueueSubmissionToken GpuGraphSubmissionTransaction::taskToken(
     if(!validFor(compiledGraph))
         return {};
     return packetToken(compiledGraph.packetForTask(task));
+}
+
+GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResourceHandoff(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuRecordedGraph& recordedGraph,
+    const GpuGraphResourceId resource
+)const noexcept{
+    if(!validFor(compiledGraph) || !recordedGraph.validFor(compiledGraph))
+        return {};
+
+    const GpuCompiledExternalResourceExport* const exportInfo = compiledGraph.externalResourceExport(resource);
+    if(!exportInfo)
+        return {};
+
+    GpuTaskGraphExternalResourceHandoff handoff;
+    handoff.resource = exportInfo->resource;
+    handoff.producerTask = exportInfo->producerTask;
+    handoff.sourceQueue = exportInfo->sourceQueue;
+    handoff.destinationQueue = exportInfo->destinationQueue;
+    handoff.finalState = exportInfo->finalState;
+    handoff.token = taskToken(compiledGraph, exportInfo->producerTask);
+    handoff.stateSource = recordedGraph.taskFinalStateSeed(compiledGraph, exportInfo->producerTask);
+    return handoff.validFor(compiledGraph) ? handoff : GpuTaskGraphExternalResourceHandoff{};
 }
 
 const QueueSubmissionToken* GpuGraphSubmissionTransaction::latestAcceptedToken(

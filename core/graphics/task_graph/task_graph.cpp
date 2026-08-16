@@ -424,6 +424,7 @@ struct ClearTextureTask{
         && resource.type == desc.type
         && resource.initialState == desc.initialState
         && resource.externalFinalState == desc.externalFinalState
+        && resource.externalFinalReleaseDestinationQueue == desc.externalFinalReleaseDestinationQueue
         && resource.initialOwnerQueue == desc.initialOwnerQueue
         && resource.initialOwnerReleaseDestinationQueue == desc.initialOwnerReleaseDestinationQueue
         && resource.initialOwnerCompletion == desc.initialOwnerCompletion
@@ -1462,6 +1463,7 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
         .type = resource.type,
         .initialState = resource.initialState,
         .externalFinalState = resource.externalFinalState,
+        .externalFinalReleaseDestinationQueue = resource.externalFinalReleaseDestinationQueue,
         .initialOwnerQueue = resource.initialOwnerQueue,
         .initialOwnerReleaseDestinationQueue = resource.initialOwnerReleaseDestinationQueue,
         .initialOwnerCompletion = resource.initialOwnerCompletion,
@@ -1983,6 +1985,7 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
         || desc.initialOwnerCompletion.valid()
         || desc.initialOwnerStateSource != nullptr
     ;
+    const bool hasExternalFinalRelease = desc.externalFinalReleaseDestinationQueue.valid();
     if(
         !desc.identity
         || desc.markerLabel.empty()
@@ -1991,6 +1994,13 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
             desc.externalFinalState != ResourceStates::Unknown
             && desc.type != GpuGraphResourceType::Texture
             && desc.type != GpuGraphResourceType::Buffer
+        )
+        || (
+            hasExternalFinalRelease
+            && (
+                desc.externalFinalState == ResourceStates::Unknown
+                || (desc.type != GpuGraphResourceType::Texture && desc.type != GpuGraphResourceType::Buffer)
+            )
         )
         || (
             desc.initialOwnerQueue.valid()
@@ -2043,6 +2053,7 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
     resource.type = desc.type;
     resource.initialState = desc.initialState;
     resource.externalFinalState = desc.externalFinalState;
+    resource.externalFinalReleaseDestinationQueue = desc.externalFinalReleaseDestinationQueue;
     resource.initialOwnerQueue = desc.initialOwnerQueue;
     resource.initialOwnerReleaseDestinationQueue = desc.initialOwnerReleaseDestinationQueue;
     resource.initialOwnerCompletion = desc.initialOwnerCompletion;

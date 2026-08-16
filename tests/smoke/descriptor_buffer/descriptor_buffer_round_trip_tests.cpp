@@ -2432,6 +2432,8 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
 // to CopyDest. The imported final-state contract must restore ShaderResource in the accepted packet snapshot.
 TEST_F(DescriptorBufferRoundTripTest, ImportedFinalStateExportReassertsStateAfterTaskLocalTransition){
     auto& device = DescriptorBufferRoundTripTest::device();
+    const GpuPhysicalQueueId graphicsPhysicalQueue = BackendQueueId(device, CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsPhysicalQueue.valid());
     const TextureHandle texture = device.createTexture(
         TextureDesc()
             .setWidth(4u)
@@ -2450,6 +2452,7 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedFinalStateExportReassertsStateAfte
             .setType(GpuGraphResourceType::Texture)
             .setInitialState(ResourceStates::Common)
             .setExternalFinalState(ResourceStates::ShaderResource)
+            .setExternalFinalReleaseDestinationQueue(graphicsPhysicalQueue)
     );
     ASSERT_TRUE(resource.valid());
 
@@ -2500,6 +2503,11 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedFinalStateExportReassertsStateAfte
     ASSERT_TRUE(packet.valid());
     const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
     ASSERT_NE(compiledTask, nullptr);
+    const GpuCompiledExternalResourceExport* const exportInfo = compiledGraph.externalResourceExport(resource);
+    ASSERT_NE(exportInfo, nullptr);
+    EXPECT_EQ(exportInfo->producerTask, task);
+    EXPECT_EQ(exportInfo->sourceQueue, graphicsPhysicalQueue);
+    EXPECT_EQ(exportInfo->destinationQueue, graphicsPhysicalQueue);
     ASSERT_EQ(compiledTask->prologueBarrierCount, 1u);
     const GpuCompiledBarrier* const prologue = compiledGraph.taskPrologueBarriers(task);
     ASSERT_NE(prologue, nullptr);
@@ -2549,6 +2557,170 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedFinalStateExportReassertsStateAfte
         scratchArena
     ));
     EXPECT_TRUE(transaction.packetToken(packet).valid());
+    const GpuTaskGraphExternalResourceHandoff handoff = transaction.externalResourceHandoff(
+        compiledGraph,
+        recordedGraph,
+        resource
+    );
+    ASSERT_TRUE(handoff.validFor(compiledGraph));
+    EXPECT_EQ(handoff.producerTask, task);
+    EXPECT_EQ(handoff.sourceQueue, graphicsPhysicalQueue);
+    EXPECT_EQ(handoff.destinationQueue, graphicsPhysicalQueue);
+    EXPECT_EQ(handoff.finalState, ResourceStates::ShaderResource);
+    EXPECT_TRUE(handoff.token.matchesPhysicalQueue(
+        graphicsPhysicalQueue.index,
+        graphicsPhysicalQueue.deviceGeneration
+    ));
+    EXPECT_EQ(handoff.stateSource, finalState);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// A graph-owned terminal export may release an exclusive resource to a direct native consumer. The graph publishes
+// the accepting source token and exact state snapshot together; the Compute list opens from that snapshot and waits
+// on that token, so neither caller reconstructs a packet ID or manually emits a queue-family acquire.
+TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffReleasesToDedicatedCompute){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "External-final handoff: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "External-final handoff: adapter has no dedicated compute-only queue family.";
+
+    const GpuPhysicalQueueId graphicsQueue = BackendQueueId(device, CommandQueue::Graphics);
+    const GpuPhysicalQueueId computeQueue = BackendQueueId(device, CommandQueue::Compute);
+    ASSERT_TRUE(graphicsQueue.valid());
+    ASSERT_TRUE(computeQueue.valid());
+    ASSERT_NE(graphicsQueue, computeQueue);
+
+    const BufferHandle buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+
+    GpuTaskGraph graph(asyncScope.arena());
+    const GpuGraphResourceId resource = graph.importBuffer(
+        buffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/external_final_compute_buffer"))
+            .setMarkerLabel("External Final Compute Buffer")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+            .setExternalFinalState(ResourceStates::ShaderResource)
+            .setExternalFinalReleaseDestinationQueue(computeQueue)
+    );
+    ASSERT_TRUE(resource.valid());
+
+    const GpuTaskResourceUse uses[] = {
+        GpuTaskResourceUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = ResourceStates::CopyDest,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskDesc taskDesc;
+    taskDesc
+        .setIdentity(Name("tests/descriptor_buffer/external_final_graphics_writer"))
+        .setMarkerLabel("External Final Graphics Writer")
+        .setQueue(graphicsRequest)
+        .setResourceUses(uses, LengthOf(uses))
+    ;
+    bool taskRecorded = false;
+    const GpuTaskId task = graph.addTask<NativePacketPrefixTask>(
+        taskDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = buffer.get(),
+            .expectedState = ResourceStates::CopyDest,
+            .recorded = &taskRecorded,
+        }
+    );
+    ASSERT_TRUE(task.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    GpuTaskGraphAnalysis analysis(asyncScope.arena());
+    GpuTaskGraphQueueAssignments assignments(asyncScope.arena());
+    GpuCompiledGraph compiledGraph(asyncScope.arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/external_final_handoff_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+    ASSERT_NE(compiledTask, nullptr);
+    EXPECT_EQ(compiledTask->queue, graphicsQueue);
+    const GpuCompiledExternalResourceExport* const exportInfo = compiledGraph.externalResourceExport(resource);
+    ASSERT_NE(exportInfo, nullptr);
+    EXPECT_EQ(exportInfo->producerTask, task);
+    EXPECT_EQ(exportInfo->sourceQueue, graphicsQueue);
+    EXPECT_EQ(exportInfo->destinationQueue, computeQueue);
+
+    GpuRecordedGraph recordedGraph(asyncScope.arena());
+    GpuGraphSubmissionTransaction transaction(asyncScope.arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = packet },
+        recordedGraph
+    ));
+    EXPECT_TRUE(taskRecorded);
+    EXPECT_FALSE(transaction.externalResourceHandoff(compiledGraph, recordedGraph, resource).validFor(compiledGraph));
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        packet,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const GpuTaskGraphExternalResourceHandoff handoff = transaction.externalResourceHandoff(
+        compiledGraph,
+        recordedGraph,
+        resource
+    );
+    ASSERT_TRUE(handoff.validFor(compiledGraph));
+    EXPECT_EQ(handoff.resource, resource);
+    EXPECT_EQ(handoff.producerTask, task);
+    EXPECT_EQ(handoff.sourceQueue, graphicsQueue);
+    EXPECT_EQ(handoff.destinationQueue, computeQueue);
+    EXPECT_EQ(handoff.finalState, ResourceStates::ShaderResource);
+    EXPECT_TRUE(handoff.token.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
+
+    CommandListParameters computeParameters;
+    computeParameters.setRenderLane(RenderLane::AsyncCompute);
+    const CommandListHandle computeConsumer = device.createCommandList(computeParameters);
+    ASSERT_NE(computeConsumer.get(), nullptr);
+    computeConsumer->open(handoff.stateSource);
+    EXPECT_EQ(computeConsumer->getBufferState(buffer.get()), ResourceStates::ShaderResource);
+    computeConsumer->close();
+    CommandList* const consumerLists[] = { computeConsumer.get() };
+    QueueSubmissionDesc consumerSubmission;
+    consumerSubmission.setWaitTokens(&handoff.token, 1u);
+    const QueueSubmissionToken consumerToken = device.executeCommandLists(
+        consumerLists,
+        LengthOf(consumerLists),
+        computeQueue,
+        consumerSubmission
+    );
+    ASSERT_TRUE(consumerToken.valid());
+    EXPECT_TRUE(consumerToken.matchesPhysicalQueue(computeQueue.index, computeQueue.deviceGeneration));
     EXPECT_TRUE(device.waitForIdle());
 }
 

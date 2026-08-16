@@ -25,6 +25,7 @@ GpuCompiledGraph::GpuCompiledGraph(GraphicsArena& arena)
     , m_prologueStateSeeds(arena)
     , m_prologueBarriers(arena)
     , m_epilogueBarriers(arena)
+    , m_externalResourceExports(arena)
     , m_queueTopology(arena)
 {}
 
@@ -38,6 +39,7 @@ void GpuCompiledGraph::reset(){
     m_prologueStateSeeds.clear();
     m_prologueBarriers.clear();
     m_epilogueBarriers.clear();
+    m_externalResourceExports.clear();
     m_queueTopology.clear();
     m_generation = 0u;
     m_deviceGeneration = 0u;
@@ -214,6 +216,18 @@ const GpuCompiledBarrier* GpuCompiledGraph::taskEpilogueBarriers(const GpuTaskId
     )
         return nullptr;
     return m_epilogueBarriers.data() + compiledTask->epilogueBarrierOffset;
+}
+
+const GpuCompiledExternalResourceExport* GpuCompiledGraph::externalResourceExport(
+    const GpuGraphResourceId& resource
+)const noexcept{
+    if(!resource.valid() || resource.generation != m_generation)
+        return nullptr;
+    for(const GpuCompiledExternalResourceExport& exportInfo : m_externalResourceExports){
+        if(exportInfo.resource == resource)
+            return &exportInfo;
+    }
+    return nullptr;
 }
 
 const GpuPhysicalQueueInfo* GpuCompiledGraph::queueInfo(const GpuPhysicalQueueId& queue)const noexcept{

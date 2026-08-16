@@ -56,6 +56,7 @@ struct GpuTaskGraphResourceView{
     GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
     ResourceStates::Mask initialState = ResourceStates::Unknown;
     ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
+    GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
     GpuPhysicalQueueId initialOwnerQueue;
     GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
     GpuExternalCompletionId initialOwnerCompletion;
@@ -125,6 +126,7 @@ private:
         GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
         ResourceStates::Mask initialState = ResourceStates::Unknown;
         ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
+        GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
         GpuPhysicalQueueId initialOwnerQueue;
         GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
         GpuExternalCompletionId initialOwnerCompletion;

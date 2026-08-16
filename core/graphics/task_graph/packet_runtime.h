@@ -270,6 +270,22 @@ struct GpuTaskGraphExternalCompletionToken{
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
 };
 
+// Acceptance-gated graph-to-external handoff for an imported texture or buffer. The descriptor fixes the external
+// destination before compilation; this result supplies the one terminal producer token and the native state source
+// that a direct consumer or a later graph import must consume. It deliberately has no packet ID so callers do not
+// reconstruct compiler packet topology merely to continue an ownership handoff.
+struct GpuTaskGraphExternalResourceHandoff{
+    GpuGraphResourceId resource;
+    GpuTaskId producerTask;
+    GpuPhysicalQueueId sourceQueue;
+    GpuPhysicalQueueId destinationQueue;
+    ResourceStates::Mask finalState = ResourceStates::Unknown;
+    QueueSubmissionToken token;
+    const CommandListResourceStateHandoff* stateSource = nullptr;
+
+    [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
+};
+
 
 // Associates one compiler-generated packet with the timing ticket that must submit its native command list.  A
 // packet omitted from a compile-order submission uses the ordinary non-timing transport.
@@ -369,6 +385,13 @@ public:
     [[nodiscard]] QueueSubmissionToken taskToken(
         const GpuCompiledGraph& compiledGraph,
         GpuTaskId task
+    )const noexcept;
+    // Publishes the exact external final-state/ownership handoff only after the compiler-selected producer packet
+    // accepted. The compiled graph rejects resource exports that would require more than one producer token.
+    [[nodiscard]] GpuTaskGraphExternalResourceHandoff externalResourceHandoff(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuRecordedGraph& recordedGraph,
+        GpuGraphResourceId resource
     )const noexcept;
     [[nodiscard]] const QueueSubmissionToken* latestAcceptedToken(const GpuPhysicalQueueId& queue)const noexcept;
     // Appends one latest accepted token for every physical queue other than `destinationQueue`. A recovery packet

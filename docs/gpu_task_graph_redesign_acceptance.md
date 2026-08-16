@@ -10,7 +10,7 @@ routing, actual-device stale packet-recording recreation coverage, qualified ded
 coverage, graph-owned public setup uploads,
 graph-owned deferred mesh-view, scene-light, and scene-shading frame updates, and graph-owned decoded texture-asset
 uploads, graph-owned runtime-skinning dispatch packets, graph-owned opaque material draw-stream and sampled-image resource sets, and
-graph-owned opaque CSG receiver/cutter/context/interval streams, graph-owned transparent CSG interval-producer
+graph-owned opaque CSG receiver/cutter/context/interval streams and typed work-region interval clears, graph-owned transparent CSG interval-producer
 streams, graph-owned AVBOIT typed target clears plus transparent occupancy, extinction, and accumulation material/CSG streams and sampled-image resource sets, and
 graph-owned AVBOIT final G-buffer state handoffs, graph-owned normal Shadow Visibility hardware/software traversal
 entry-state handoffs, graph-owned normal Software Caustics, Hardware Caustics, and Surfel GI typed persistent-initialization clears, descriptor-visible entry-state, and prepared-frame age/free-to-cell-head-clear-to-hash-build-to-Spawn-to-trace-build-args-to-trace-to-resolve-to-upsample-to-consumer handoffs, graph-owned CSG clip-buffer entry-state handoffs, and graph-owned current and lagged deferred bindless-selector, ray-trace material-context
@@ -288,8 +288,9 @@ can receive an unconditional final sign-off.
   sample bytes from that same frozen payload are immutable graph blobs, uploaded in order before the G-buffer. The
   graph declares the receiver/cutter `ShaderResource` reads and the context/sample plus target-generation deferred
   bindless-slot `ConstantBuffer` reads. Its two persistent CSG interval values (`csgIntervalId` over all peel
-  layers and slice-zero `csgReceiverEventCount`) now clear through a frozen-rect graph task immediately before the
-  opaque native producer, then explicitly hand off from `CopyDest` to `UnorderedAccess`. All three peel arrays
+  layers and slice-zero `csgReceiverEventCount`) now clear through serial typed rectangular unsigned-integer graph
+  primitives immediately before the opaque native producer; their first/last recording hooks preserve the original
+  CSG-clear timing interval, then explicitly hand off from `CopyDest` to `UnorderedAccess`. All three peel arrays
   (`csgCapBackNormal`, `csgIntervalDepth`, and `csgIntervalId`) and receiver-surface event images now declare their
   exact `UnorderedAccess` ranges in the opaque G-buffer producer. The following opaque receiver-span callback
   declares the two event reads and two span writes, and the following interval-combine callback declares the four
@@ -312,8 +313,8 @@ can receive an unconditional final sign-off.
   it freezes its fresh mesh-view work region, receiver-surface draw ordering, material instance/typed data, and CSG
   receiver/cutter/context/sample payloads during graph declaration. Its first serial Graphics upload starts the
   established AVBOIT-pre packet and the remaining uploads merge into it, so that packet consumes the graph-owned
-  bytes before later AVBOIT phases overwrite their shared buffers. Its prepared path also uses the same graph-owned
-  paired rect clear before native interval
+  bytes before later AVBOIT phases overwrite their shared buffers. Its prepared path also uses paired typed
+  rectangular-`UInt` graph clears before native interval
   production, while an unprepared compatibility path retains the direct helper. The subsequent transparent
   occupancy phase now freezes its own material instance/typed stream and, when it contains CSG draws, its
   receiver/cutter/clip-context stream. Its serial Graphics uploads run
@@ -555,6 +556,7 @@ can receive an unconditional final sign-off.
 | Graph-owned adaptive software-shadow primitive chain: renderer build, task-graph unit, descriptor-buffer smoke, and ECS graphics | passed; the normal adaptive fallback freezes its compact/stat-snapshot plan during declaration, declares typed stats/counter `CopyDest` clears before the monolithic Shadow Visibility callback, and optionally declares a stats `CopySource` to readback `CopyDest` tail. The full chain shares the selected Compute/Graphics packet, so the callback consumes compiler-lowered UAV states and accepts the frozen tick/readback handoff only when adaptive work actually records and that packet accepts. Rejected and no-producer routes retain rollback/no-publication behavior, while direct compatibility callers retain native primitives. The compiler proof asserts exact chain order and `CopyDest`-to-UAV-to-`CopySource` barriers under FrontierSafe; the real-Vulkan smoke records two clears and the copy in IR order, observes both UAV inputs in a getter-only callback, verifies the accepted token/final states, and maps the zeroed readback. `nwb_ecs_render` rebuilt; graph tests passed 90/90, descriptor smoke passed 117 with 13 expected topology skips, and ECS graphics passed 18/18. |
 | Graph-owned AVBOIT typed-clear primitives: renderer build, task-graph unit, descriptor-buffer smoke, and ECS graphics | passed; normal AVBOIT setup records its original nine values as ordered built-in clears—black low-raster/accumulation textures, zeroed coverage/depth-warp/control/extinction buffers, the overflow sentinel, then white transmittance—rather than a custom native clear thunk. First/last texture hooks preserve the `AvboitClear` timing scope, and runtime validation keeps the complete chain in AVBOIT Pre's accepted Graphics packet before occupancy. The compiler proof asserts all nine tasks' order, one-packet coalescing, and every `CopyDest`-to-`UnorderedAccess` occupancy handoff; the real-Vulkan probe captures the typed clear IR record and observes the unchanged occupancy/tail state chain. The direct helper remains for compatibility callers. `nwb_ecs_render` rebuilt; graph tests passed 91/91, descriptor smoke passed 117 with 13 expected topology skips, and ECS graphics passed 18/18. |
 | Graph-owned Surfel persistent-initialization clear primitives: renderer build, task-graph unit, descriptor-buffer smoke, and ECS graphics | passed; first-use normal Surfel GI now chains four typed buffer clears before a resource-free acceptance/discard lifecycle tail, retaining the direct native helper only for compatibility callers. The FrontierSafe compiler proof forces distinct Graphics, Compute, and Transfer queues with the later pool/cell snapshot as a cross-queue RAW consumer, then proves all four clears plus lifecycle remain one Compute packet while the snapshot remains separate. The real-Vulkan smoke captures the four exact clear IR records and values, verifies each `UnorderedAccess`-to-`CopyDest` prologue, maps all cleared buffers, and proves accepted publication plus rejected retry-state restoration. `nwb_ecs_render` rebuilt; graph tests passed 91/91, descriptor smoke passed 117 with 13 expected topology skips, and ECS graphics passed 18/18. |
+| Graph-owned CSG interval rectangular clear primitives: renderer build, task-graph unit, descriptor-buffer smoke, and ECS graphics | passed; normal opaque and prepared transparent CSG interval production now records its interval-ID and receiver-event-count work regions as serial typed `UInt` rectangular-clear primitives rather than a custom native clear thunk. First/last hooks preserve the `CsgIntervalClear` timing scope, while runtime checks retain the two clears in the accepting G-buffer or AVBOIT-pre Graphics packet. The direct helper remains compatibility-only. Command IR v2 keeps v1 decoding compatible, captures and generic-replays the rectangle record, and the real-Vulkan probe maps the exact changed 2x2 subregion. `nwb_ecs_render` rebuilt; graph tests passed 92/92, descriptor smoke passed 117 with 13 expected topology skips, and ECS graphics passed 18/18. |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -649,8 +651,11 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    readback are now typed graph primitives in the Shadow Visibility packet; their private CPU mirror only publishes
    when the adaptive callback records and that shared packet accepts. Normal AVBOIT target setup likewise records
    its complete nine-value clear sequence as typed graph primitives in the accepted Pre packet, preserving its
-   existing timing scope while leaving the direct helper to compatibility callers. Other specialized descriptor/resource updates
-   still retain direct native recording or submission. The graph
+   existing timing scope while leaving the direct helper to compatibility callers. Normal opaque and prepared
+   transparent CSG interval production likewise records its interval-ID and receiver-event-count work regions as
+   paired typed rectangular-`UInt` graph clears, preserving the original `CsgIntervalClear` timing scope in the
+   existing accepted G-buffer or AVBOIT-pre packet. Direct and unprepared CSG callers retain the native helper.
+   Other specialized descriptor/resource updates still retain direct native recording or submission. The graph
    therefore does not yet authoritatively own all frame work and state retirement.
 
 3. **Packet scheduling and recording completion (partially addressed).** Explicit merging remains the renderer

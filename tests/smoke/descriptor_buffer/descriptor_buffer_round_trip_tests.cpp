@@ -16322,6 +16322,13 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
         .setQueue(transferQueue)
         .setScheduling(clearScheduling)
     ;
+    GpuTaskDesc clearTextureRectTaskDesc;
+    clearTextureRectTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/built_in_clear_texture_rect_task"))
+        .setMarkerLabel("Built-In Clear Texture Rect Task")
+        .setQueue(transferQueue)
+        .setScheduling(clearScheduling)
+    ;
     GpuTaskDesc clearDepthTextureTaskDesc;
     clearDepthTextureTaskDesc
         .setIdentity(Name("tests/descriptor_buffer/built_in_clear_depth_texture_task"))
@@ -16331,6 +16338,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     ;
     QueueSubmissionToken clearBufferAcceptedToken;
     QueueSubmissionToken clearTextureAcceptedToken;
+    QueueSubmissionToken clearTextureRectAcceptedToken;
     QueueSubmissionToken clearDepthTextureAcceptedToken;
     const GpuTaskId clearBufferTask = graph.addClearBufferTask(
         clearBufferTaskDesc,
@@ -16344,7 +16352,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     clearTextureTaskDescPayload.destination = textureResource;
     clearTextureTaskDescPayload.subresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
     clearTextureTaskDescPayload.valueType = GpuClearTextureTaskValueType::UInt;
-    clearTextureTaskDescPayload.uintValue = UIntColor(0x10203040u, 0x50607080u, 0x90a0b0c0u, 0xd0e0f000u);
+    clearTextureTaskDescPayload.uintValue = UIntColor(1u, 2u, 3u, 4u);
     clearTextureTaskDescPayload.recordHooks = GpuClearTextureTaskRecordHooks{
         .context = &textureHooks,
         .beforeClear = beforeTextureClear,
@@ -16353,6 +16361,22 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     };
     clearTextureTaskDescPayload.acceptedToken = &clearTextureAcceptedToken;
     const GpuTaskId clearTextureTask = graph.addClearTextureTask(clearTextureTaskDesc, clearTextureTaskDescPayload);
+    const GpuTaskId clearTextureRectDependencies[] = { clearTextureTask };
+    clearTextureRectTaskDesc.setDependencies(
+        clearTextureRectDependencies,
+        LengthOf(clearTextureRectDependencies)
+    );
+    const GpuClearTextureRectUIntTaskDesc clearTextureRectTaskDescPayload{
+        .destination = textureResource,
+        .subresources = TextureSubresourceSet(0u, 1u, 0u, 1u),
+        .rect = Rect(1, 3, 1, 3),
+        .uintValue = UIntColor(9u, 10u, 11u, 12u),
+        .acceptedToken = &clearTextureRectAcceptedToken,
+    };
+    const GpuTaskId clearTextureRectTask = graph.addClearTextureRectUIntTask(
+        clearTextureRectTaskDesc,
+        clearTextureRectTaskDescPayload
+    );
     const GpuTaskId clearDepthTextureTask = graph.addClearTextureTask(
         clearDepthTextureTaskDesc,
         GpuClearTextureTaskDesc{
@@ -16368,9 +16392,11 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     );
     ASSERT_TRUE(clearBufferTask.valid());
     ASSERT_TRUE(clearTextureTask.valid());
+    ASSERT_TRUE(clearTextureRectTask.valid());
     ASSERT_TRUE(clearDepthTextureTask.valid());
     ASSERT_EQ(graph.taskAt(clearBufferTask.index).resourceUseCount, 1u);
     ASSERT_EQ(graph.taskAt(clearTextureTask.index).resourceUseCount, 1u);
+    ASSERT_EQ(graph.taskAt(clearTextureRectTask.index).resourceUseCount, 1u);
     ASSERT_EQ(graph.taskAt(clearDepthTextureTask.index).resourceUseCount, 1u);
     EXPECT_EQ(
         graph.taskAt(clearBufferTask.index).resourceUses[0u].requiredState,
@@ -16378,6 +16404,10 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     );
     EXPECT_EQ(
         graph.taskAt(clearTextureTask.index).resourceUses[0u].requiredState,
+        ResourceStates::CopyDest
+    );
+    EXPECT_EQ(
+        graph.taskAt(clearTextureRectTask.index).resourceUses[0u].requiredState,
         ResourceStates::CopyDest
     );
     EXPECT_EQ(
@@ -16397,6 +16427,20 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
         GpuClearTextureTaskDesc{
             .destination = depthTextureResource,
             .valueType = GpuClearTextureTaskValueType::UInt,
+        }
+    ).valid());
+    EXPECT_FALSE(graph.addClearTextureRectUIntTask(
+        clearTextureRectTaskDesc,
+        GpuClearTextureRectUIntTaskDesc{
+            .destination = depthTextureResource,
+            .rect = Rect(1, 3, 1, 3),
+        }
+    ).valid());
+    EXPECT_FALSE(graph.addClearTextureRectUIntTask(
+        clearTextureRectTaskDesc,
+        GpuClearTextureRectUIntTaskDesc{
+            .destination = textureResource,
+            .rect = Rect(2, 2, 1, 3),
         }
     ).valid());
 
@@ -16444,9 +16488,11 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
     const GpuSubmissionPacketId clearBufferPacket = compiledGraph.packetForTask(clearBufferTask);
     const GpuSubmissionPacketId clearTexturePacket = compiledGraph.packetForTask(clearTextureTask);
+    const GpuSubmissionPacketId clearTextureRectPacket = compiledGraph.packetForTask(clearTextureRectTask);
     const GpuSubmissionPacketId clearDepthTexturePacket = compiledGraph.packetForTask(clearDepthTextureTask);
     ASSERT_TRUE(clearBufferPacket.valid());
     ASSERT_TRUE(clearTexturePacket.valid());
+    ASSERT_TRUE(clearTextureRectPacket.valid());
     ASSERT_TRUE(clearDepthTexturePacket.valid());
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
@@ -16467,12 +16513,14 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     EXPECT_EQ(textureHooks.beforeCount, 1u);
     EXPECT_EQ(textureHooks.afterCount, 1u);
     EXPECT_EQ(textureHooks.discardedCount, 0u);
-    ASSERT_EQ(commandIrCapture.recordCount(), 3u);
+    ASSERT_EQ(commandIrCapture.recordCount(), 4u);
     const GpuCommandIrBuiltinTaskRecord* const bufferCapture = commandIrCapture.recordAt(0u);
     const GpuCommandIrBuiltinTaskRecord* const textureCapture = commandIrCapture.recordAt(1u);
-    const GpuCommandIrBuiltinTaskRecord* const depthTextureCapture = commandIrCapture.recordAt(2u);
+    const GpuCommandIrBuiltinTaskRecord* const textureRectCapture = commandIrCapture.recordAt(2u);
+    const GpuCommandIrBuiltinTaskRecord* const depthTextureCapture = commandIrCapture.recordAt(3u);
     ASSERT_NE(bufferCapture, nullptr);
     ASSERT_NE(textureCapture, nullptr);
+    ASSERT_NE(textureRectCapture, nullptr);
     ASSERT_NE(depthTextureCapture, nullptr);
     EXPECT_EQ(bufferCapture->opcode, GpuCommandIrOpcode::ClearBuffer);
     EXPECT_EQ(bufferCapture->task, clearBufferTask);
@@ -16484,7 +16532,14 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     EXPECT_EQ(textureCapture->packet, clearTexturePacket);
     EXPECT_EQ(textureCapture->destination, textureResource);
     EXPECT_EQ(textureCapture->clearTextureValueType, GpuClearTextureTaskValueType::UInt);
-    EXPECT_EQ(textureCapture->uintClearValue, UIntColor(0x10203040u, 0x50607080u, 0x90a0b0c0u, 0xd0e0f000u));
+    EXPECT_EQ(textureCapture->uintClearValue, UIntColor(1u, 2u, 3u, 4u));
+    EXPECT_EQ(textureRectCapture->opcode, GpuCommandIrOpcode::ClearTextureRectUInt);
+    EXPECT_EQ(textureRectCapture->task, clearTextureRectTask);
+    EXPECT_EQ(textureRectCapture->packet, clearTextureRectPacket);
+    EXPECT_EQ(textureRectCapture->destination, textureResource);
+    EXPECT_EQ(textureRectCapture->destinationSubresources, clearTextureRectTaskDescPayload.subresources);
+    EXPECT_EQ(textureRectCapture->clearRect, clearTextureRectTaskDescPayload.rect);
+    EXPECT_EQ(textureRectCapture->uintClearValue, clearTextureRectTaskDescPayload.uintValue);
     EXPECT_EQ(depthTextureCapture->opcode, GpuCommandIrOpcode::ClearTexture);
     EXPECT_EQ(depthTextureCapture->task, clearDepthTextureTask);
     EXPECT_EQ(depthTextureCapture->packet, clearDepthTexturePacket);
@@ -16510,8 +16565,101 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     ));
     EXPECT_TRUE(clearBufferAcceptedToken.valid());
     EXPECT_TRUE(clearTextureAcceptedToken.valid());
+    EXPECT_TRUE(clearTextureRectAcceptedToken.valid());
     EXPECT_TRUE(clearDepthTextureAcceptedToken.valid());
+    EXPECT_EQ(
+        clearTextureRectAcceptedToken.value,
+        transaction.packetToken(clearTextureRectPacket).value
+    );
     ASSERT_TRUE(device.waitForIdle());
+
+    // The ordinary replay lowerer remains graph-aware: it selects only the rectangular-clear packet from the full
+    // capture after preflight, then relies on the already-established graph final state rather than a native
+    // state bridge. The narrow direct-Vulkan prototype remains CopyBuffer-only in its separate coverage.
+    const CommandListResourceStateHandoff* const clearTextureRectFinalState =
+        recordedGraph.packetFinalStateSeed(clearTextureRectPacket)
+    ;
+    ASSERT_NE(clearTextureRectFinalState, nullptr);
+    const GpuPhysicalQueueInfo* const clearTextureRectQueue = compiledGraph.queueInfo(
+        compiledGraph.packet(clearTextureRectPacket).queue
+    );
+    ASSERT_NE(clearTextureRectQueue, nullptr);
+    CommandListParameters replayParameters;
+    replayParameters.setPhysicalQueue(clearTextureRectQueue->id);
+    CommandListHandle replay = device.createCommandList(replayParameters);
+    ASSERT_NE(replay.get(), nullptr);
+    replay->open(clearTextureRectFinalState);
+    ASSERT_TRUE(replay->isRecording());
+    const GpuCommandIrReplayResult replayResult = ReplayGpuCommandIrPacket(
+        commandIrCapture.commandBytes(),
+        graph,
+        compiledGraph,
+        clearTextureRectPacket,
+        *replay
+    );
+    EXPECT_TRUE(replayResult.valid());
+    EXPECT_TRUE(replayResult.streamValidation.valid());
+    replay->close();
+    CommandList* const replayLists[] = { replay.get() };
+    const QueueSubmissionToken replayToken = device.executeCommandLists(
+        replayLists,
+        LengthOf(replayLists),
+        clearTextureRectQueue->id,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(replayToken.valid());
+    ASSERT_TRUE(device.waitForIdle());
+
+    // Read the small uint image back after both graph recording and graph-aware replay. The two interior pixels
+    // prove that the region coordinates, component payload, and lowerer are exact rather than falling back to a
+    // whole-image clear.
+    StagingTextureHandle textureReadback = device.createStagingTexture(texture->getDescription(), CpuAccessMode::Read);
+    ASSERT_NE(textureReadback.get(), nullptr);
+    CommandListHandle textureReadbackCommandList = device.createCommandList();
+    ASSERT_NE(textureReadbackCommandList.get(), nullptr);
+    textureReadbackCommandList->open(clearTextureRectFinalState);
+    ASSERT_TRUE(textureReadbackCommandList->hasCommandBuffer());
+    textureReadbackCommandList->copyTexture(
+        textureReadback.get(),
+        TextureSlice{},
+        texture.get(),
+        TextureSlice{}
+    );
+    textureReadbackCommandList->close();
+    CommandList* const textureReadbackLists[] = { textureReadbackCommandList.get() };
+    ASSERT_TRUE(device.executeCommandLists(
+        textureReadbackLists,
+        LengthOf(textureReadbackLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
+    ASSERT_TRUE(device.waitForIdle());
+    usize textureReadbackRowPitch = 0u;
+    const u8* const textureReadbackBytes = static_cast<const u8*>(device.mapStagingTexture(
+        textureReadback.get(),
+        TextureSlice{},
+        CpuAccessMode::Read,
+        &textureReadbackRowPitch
+    ));
+    ASSERT_NE(textureReadbackBytes, nullptr);
+    ASSERT_GE(textureReadbackRowPitch, 4u * sizeof(u32));
+    for(u32 row = 0u; row < 4u; ++row){
+        for(u32 column = 0u; column < 4u; ++column){
+            const UIntColor expected = column >= 1u && column < 3u && row >= 1u && row < 3u
+                ? clearTextureRectTaskDescPayload.uintValue
+                : clearTextureTaskDescPayload.uintValue
+            ;
+            const u8* const pixel = textureReadbackBytes
+                + static_cast<usize>(row) * textureReadbackRowPitch
+                + static_cast<usize>(column) * sizeof(u32)
+            ;
+            EXPECT_EQ(pixel[0u], static_cast<u8>(expected.r));
+            EXPECT_EQ(pixel[1u], static_cast<u8>(expected.g));
+            EXPECT_EQ(pixel[2u], static_cast<u8>(expected.b));
+            EXPECT_EQ(pixel[3u], static_cast<u8>(expected.a));
+        }
+    }
+    device.unmapStagingTexture(textureReadback.get());
 
     const u32* const clearedWords = static_cast<const u32*>(device.mapBuffer(buffer.get(), CpuAccessMode::Read));
     ASSERT_NE(clearedWords, nullptr);

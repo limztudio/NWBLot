@@ -56,6 +56,12 @@ namespace __hidden_gpu_command_ir{
                 || record.clearStencil
             )
         ;
+    case GpuCommandIrOpcode::ClearTextureRectUInt:
+        return record.destinationSubresources.numMipLevels != 0u
+            && record.destinationSubresources.numArraySlices != 0u
+            && record.clearRect.maxX > record.clearRect.minX
+            && record.clearRect.maxY > record.clearRect.minY
+        ;
     default:
         return false;
     }
@@ -107,6 +113,15 @@ template<typename RecordT>
         .numMipLevels = subresources.numMipLevels,
         .baseArraySlice = subresources.baseArraySlice,
         .numArraySlices = subresources.numArraySlices,
+    };
+}
+
+[[nodiscard]] static GpuCommandIrRect EncodeRect(const Rect& rect)noexcept{
+    return GpuCommandIrRect{
+        .minX = rect.minX,
+        .maxX = rect.maxX,
+        .minY = rect.minY,
+        .maxY = rect.maxY,
     };
 }
 
@@ -189,6 +204,10 @@ static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum
     );
 }
 
+[[nodiscard]] static Rect DecodeRect(const GpuCommandIrRect& rect)noexcept{
+    return Rect(rect.minX, rect.maxX, rect.minY, rect.maxY);
+}
+
 [[nodiscard]] static Color DecodeColor(const GpuCommandIrFloatColor& color)noexcept{
     return Color(color.r, color.g, color.b, color.a);
 }
@@ -220,6 +239,16 @@ static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum
     return record.clearTextureValueType == GpuClearTextureTaskValueType::DepthStencil
         ? clearFlags != GpuCommandIrClearTextureFlag::None
         : clearFlags == GpuCommandIrClearTextureFlag::None
+    ;
+}
+
+[[nodiscard]] static bool ValidateClearTextureRectUIntRecord(
+    const GpuCommandIrClearTextureRectUIntRecord& record
+)noexcept{
+    return record.destinationSubresources.numMipLevels != 0u
+        && record.destinationSubresources.numArraySlices != 0u
+        && record.clearRect.maxX > record.clearRect.minX
+        && record.clearRect.maxY > record.clearRect.minY
     ;
 }
 
@@ -353,6 +382,14 @@ static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum
     default:
         return false;
     }
+}
+
+[[nodiscard]] static bool ClearTextureRectUIntValueMatchesFormat(const TextureDesc& description)noexcept{
+    const FormatInfo& formatInfo = GetFormatInfo(description.format);
+    return !formatInfo.hasDepth && !formatInfo.hasStencil
+        && formatInfo.kind == FormatKind::Integer
+        && !formatInfo.isSigned
+    ;
 }
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateRecordContext(
@@ -611,6 +648,48 @@ static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum
     return GpuCommandIrReplayError::None;
 }
 
+[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureRectUIntClearRecord(
+    const GpuCommandIrBuiltinTaskRecord& record,
+    const GpuTaskGraph& graph,
+    const GpuTaskGraphTaskView& task
+)noexcept{
+    if(!graph.validResource(record.destination))
+        return GpuCommandIrReplayError::InvalidResource;
+
+    const GpuTaskGraphResourceView destinationView = graph.resourceAt(record.destination.index);
+    if(destinationView.type != GpuGraphResourceType::Texture)
+        return GpuCommandIrReplayError::ResourceTypeMismatch;
+
+    Texture* const destination = graph.textureForResource(record.destination);
+    if(!destination)
+        return GpuCommandIrReplayError::MissingBackendResource;
+
+    const GpuTaskResourceUse* const destinationUse = FindTaskResourceUse(
+        task,
+        record.destination,
+        ResourceStates::CopyDest,
+        GpuTaskResourceAccess::Write
+    );
+    if(!destinationUse)
+        return GpuCommandIrReplayError::ResourceUseMismatch;
+
+    const TextureDesc& description = destination->getDescription();
+    if(
+        record.clearRect.maxX <= record.clearRect.minX
+        || record.clearRect.maxY <= record.clearRect.minY
+        || description.sampleCount != 1u
+        || !TextureSubresourcesAreCanonical(description, record.destinationSubresources)
+        || !TextureSubresourcesContain(
+            destinationUse->range.textureSubresources,
+            description,
+            record.destinationSubresources
+        )
+        || !ClearTextureRectUIntValueMatchesFormat(description)
+    )
+        return GpuCommandIrReplayError::InvalidTextureClear;
+    return GpuCommandIrReplayError::None;
+}
+
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateOperation(
     const GpuCommandIrBuiltinTaskRecord& record,
     const GpuTaskGraph& graph,
@@ -625,6 +704,8 @@ static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum
         return ValidateBufferClearRecord(record, graph, task);
     case GpuCommandIrOpcode::ClearTexture:
         return ValidateTextureClearRecord(record, graph, task);
+    case GpuCommandIrOpcode::ClearTextureRectUInt:
+        return ValidateTextureRectUIntClearRecord(record, graph, task);
     default:
         return GpuCommandIrReplayError::InvalidStream;
     }
@@ -693,6 +774,14 @@ static void LowerOperation(
             NWB_ASSERT_MSG(false, NWB_TEXT("Validated command IR clear type lost its lowerer"));
             return;
         }
+    case GpuCommandIrOpcode::ClearTextureRectUInt:
+        commandList.clearTextureRectUInt(
+            graph.textureForResource(record.destination),
+            record.destinationSubresources,
+            record.clearRect,
+            record.uintClearValue
+        );
+        return;
     default:
         NWB_ASSERT_MSG(false, NWB_TEXT("Validated command IR opcode lost its lowerer"));
         return;
@@ -777,7 +866,10 @@ GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)no
         fail(GpuCommandIrStreamValidationError::InvalidMagic, 0u, Limit<u64>::s_Max);
         return;
     }
-    if(header.version != s_GpuCommandIrStreamVersion){
+    if(
+        header.version < s_GpuCommandIrStreamFirstSupportedVersion
+        || header.version > s_GpuCommandIrStreamVersion
+    ){
         fail(GpuCommandIrStreamValidationError::UnsupportedVersion, 0u, Limit<u64>::s_Max);
         return;
     }
@@ -809,6 +901,7 @@ GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)no
 
     m_cursor = cursor;
     m_payloadEnd = m_bytes.size();
+    m_streamVersion = header.version;
     m_graphGeneration = header.graphGeneration;
     m_recordCount = header.recordCount;
 }
@@ -863,6 +956,13 @@ GpuCommandIrStreamReadStatus::Enum GpuCommandIrStreamReader::next(
         break;
     case GpuCommandIrWireOpcode::ClearTexture:
         expectedByteSize = sizeof(GpuCommandIrClearTextureRecord);
+        break;
+    case GpuCommandIrWireOpcode::ClearTextureRectUInt:
+        if(m_streamVersion < 2u){
+            fail(GpuCommandIrStreamValidationError::UnsupportedOpcode, recordOffset, m_nextRecordIndex);
+            return GpuCommandIrStreamReadStatus::Error;
+        }
+        expectedByteSize = sizeof(GpuCommandIrClearTextureRectUIntRecord);
         break;
     default:
         fail(GpuCommandIrStreamValidationError::UnsupportedOpcode, recordOffset, m_nextRecordIndex);
@@ -952,6 +1052,23 @@ GpuCommandIrStreamReadStatus::Enum GpuCommandIrStreamReader::next(
         decoded.stencilClearValue = record.stencilClearValue;
         decoded.clearDepth = (static_cast<u8>(record.clearFlags) & GpuCommandIrClearTextureFlag::ClearDepth) != 0u;
         decoded.clearStencil = (static_cast<u8>(record.clearFlags) & GpuCommandIrClearTextureFlag::ClearStencil) != 0u;
+        break;
+    }
+    case GpuCommandIrWireOpcode::ClearTextureRectUInt:{
+        GpuCommandIrClearTextureRectUIntRecord record;
+        recordCursor = recordOffset;
+        if(!ReadPOD(m_bytes, recordCursor, record)){
+            fail(GpuCommandIrStreamValidationError::TruncatedRecord, recordOffset, m_nextRecordIndex);
+            return GpuCommandIrStreamReadStatus::Error;
+        }
+        decoded.opcode = GpuCommandIrOpcode::ClearTextureRectUInt;
+        decodedRecord = DecodeContext(record.context, m_graphGeneration, decoded)
+            && DecodeResource(record.destinationResourceIndex, m_graphGeneration, decoded.destination)
+            && ValidateClearTextureRectUIntRecord(record)
+        ;
+        decoded.destinationSubresources = DecodeSubresources(record.destinationSubresources);
+        decoded.clearRect = DecodeRect(record.clearRect);
+        decoded.uintClearValue = DecodeColor(record.uintClearValue);
         break;
     }
     default:
@@ -1406,6 +1523,25 @@ bool GpuCommandIrCapture::captureClearTexture(
     return append(record);
 }
 
+bool GpuCommandIrCapture::captureClearTextureRectUInt(
+    const GpuTaskId task,
+    const GpuSubmissionPacketId packet,
+    const GpuPhysicalQueueId queue,
+    const GpuGraphResourceId destination,
+    const GpuClearTextureRectUIntTaskDesc& clearDesc
+){
+    GpuCommandIrBuiltinTaskRecord record;
+    record.opcode = GpuCommandIrOpcode::ClearTextureRectUInt;
+    record.task = task;
+    record.packet = packet;
+    record.queue = queue;
+    record.destination = destination;
+    record.destinationSubresources = clearDesc.subresources;
+    record.clearRect = clearDesc.rect;
+    record.uintClearValue = clearDesc.uintValue;
+    return append(record);
+}
+
 bool GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
     if(!__hidden_gpu_command_ir::ValidateBuiltinRecord(record))
         return false;
@@ -1492,6 +1628,16 @@ bool GpuCommandIrCapture::appendCommandBytes(const GpuCommandIrBuiltinTaskRecord
                     static_cast<u8>(encoded.clearFlags) | GpuCommandIrClearTextureFlag::ClearStencil
                 );
         }
+        return AppendEncodedRecord(m_commandBytes, encoded);
+    }
+    case GpuCommandIrOpcode::ClearTextureRectUInt:{
+        GpuCommandIrClearTextureRectUIntRecord encoded;
+        InitializeRecord(encoded, GpuCommandIrWireOpcode::ClearTextureRectUInt);
+        encoded.context = EncodeContext(record);
+        encoded.destinationResourceIndex = record.destination.index;
+        encoded.destinationSubresources = EncodeSubresources(record.destinationSubresources);
+        encoded.clearRect = EncodeRect(record.clearRect);
+        encoded.uintClearValue = EncodeColor(record.uintClearValue);
         return AppendEncodedRecord(m_commandBytes, encoded);
     }
     default:

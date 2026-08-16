@@ -850,6 +850,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::DeferredClear
         )],
     };
+    Optional<Core::GpuTimingMeasure> opaqueCsgIntervalClearTiming;
+    ECSRenderDetail::CsgIntervalClearTimingRecordState opaqueCsgIntervalClearTimingState{
+        .graphics = &m_graphics,
+        .timing = &opaqueCsgIntervalClearTiming,
+        .rebindableTimingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(
+            ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::Gbuffer
+        )],
+    };
     Core::GpuTimingSubmissionTicket shadowVisibilityTimingTicket(m_graphics.gpuTiming());
     // The prepared soft-transparent route spans opaque resolve across its first-wavelet and tail callbacks, and
     // begins transparent resolve in temporal merge when active (otherwise its first wavelet). The terminal fold
@@ -876,6 +884,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     ECSRenderDetail::AvboitClearTimingRecordState avboitClearTimingState{
         .graphics = &m_graphics,
         .timing = &avboitClearTiming,
+        .timingTicket = &avboitPreTimingTicket,
+    };
+    Optional<Core::GpuTimingMeasure> transparentCsgIntervalClearTiming;
+    ECSRenderDetail::CsgIntervalClearTimingRecordState transparentCsgIntervalClearTimingState{
+        .graphics = &m_graphics,
+        .timing = &transparentCsgIntervalClearTiming,
         .timingTicket = &avboitPreTimingTicket,
     };
     // Prepared transparent CSG begins this interval in AVBOIT Pre and closes it in its graph-owned Combine callback.
@@ -907,12 +921,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         asyncPrefixTiming,
         deferredClearTiming,
         deferredClearTimingState,
+        opaqueCsgIntervalClearTimingState,
         shadowPrepareTimingTicket,
         graphicsPrefixTimingTickets,
         &asyncPrefixTimingSpansOnePacket,
         asyncFinalTiming,
         avboitPreTimingTicket,
         avboitClearTimingState,
+        transparentCsgIntervalClearTimingState,
         transparentCsgIntervalsTiming,
         avboitDepthWarpTimingTicket,
         avboitExtinctionTimingTicket,
@@ -952,12 +968,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             asyncPrefixTiming,
             deferredClearTiming,
             deferredClearTimingState,
+            opaqueCsgIntervalClearTimingState,
             shadowPrepareTimingTicket,
             graphicsPrefixTimingTickets,
             &asyncPrefixTimingSpansOnePacket,
             asyncFinalTiming,
             avboitPreTimingTicket,
             avboitClearTimingState,
+            transparentCsgIntervalClearTimingState,
             transparentCsgIntervalsTiming,
             avboitDepthWarpTimingTicket,
             avboitExtinctionTimingTicket,
@@ -1090,6 +1108,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixDeferredClearFirstTask);
     const Core::GpuSubmissionPacketId graphicsPrefixGbufferPacket =
         m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixGbufferTask);
+    const Core::GpuSubmissionPacketId graphicsPrefixCsgIntervalClearFirstPacket =
+        m_graphicsPrefixCsgIntervalClearFirstTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixCsgIntervalClearFirstTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    const Core::GpuSubmissionPacketId graphicsPrefixCsgIntervalClearPacket =
+        m_graphicsPrefixCsgIntervalClearTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixCsgIntervalClearTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
     // The optional CSG callbacks alias the G-buffer task on ordinary frames. Each retains an independent semantic
     // timing anchor when a FrontierSafe boundary splits the Graphics prefix.
     const Core::GpuTaskId graphicsPrefixTimingTasks[graphicsPrefixTimingTicketCount] = {
@@ -1239,6 +1267,33 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && graphicsPrefixDeferredClearQueue
         && graphicsPrefixDeferredClearQueue->queueClass == Core::CommandQueue::Graphics
     ;
+    // The opaque CSG work-region clear keeps its original one-range timing scope in first/last typed primitives.
+    // They must remain with G-buffer's rebound Graphics ticket; a split would bind query ownership to a different
+    // native submission even though the compiler still preserves resource ordering.
+    const Core::GpuPhysicalQueueInfo* const graphicsPrefixCsgIntervalClearQueue =
+        m_graphicsPrefixCsgIntervalClearTask.valid()
+            ? m_deferredLightingCompiledGraph.queueInfoForTask(m_graphicsPrefixCsgIntervalClearTask)
+            : nullptr
+    ;
+    const bool graphicsPrefixCsgIntervalClearBundleMerged = !hasOpaqueCsgFrameWork
+        ? (!m_graphicsPrefixCsgIntervalClearFirstTask.valid() && !m_graphicsPrefixCsgIntervalClearTask.valid())
+        : (
+            m_graphicsPrefixCsgIntervalClearFirstTask.valid()
+            && m_graphicsPrefixCsgIntervalClearTask.valid()
+            && graphicsPrefixCsgIntervalClearFirstPacket.valid()
+            && graphicsPrefixCsgIntervalClearPacket.valid()
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_graphicsPrefixCsgIntervalClearFirstTask,
+                m_graphicsPrefixCsgIntervalClearTask
+            )
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_graphicsPrefixCsgIntervalClearTask,
+                m_graphicsPrefixGbufferTask
+            )
+            && graphicsPrefixCsgIntervalClearQueue
+            && graphicsPrefixCsgIntervalClearQueue->queueClass == Core::CommandQueue::Graphics
+        )
+    ;
     const Core::GpuPhysicalQueueInfo* const shadowPrepareQueue =
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredShadowPrepareTask);
     const Core::GpuPhysicalQueueInfo* const softwareCausticsQueue =
@@ -1265,6 +1320,24 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredAvboitClearTask
         )
     );
+    // Prepared transparent CSG clears the two persistent interval values through the same first/last primitive
+    // bracket. Keep both with AVBOIT Pre so its stable timing ticket and accepted endpoint remain authoritative.
+    const bool avboitPrePacketContainsTransparentCsgClear =
+        (!m_deferredAvboitTransparentCsgIntervalClearFirstTask.valid()
+            && !m_deferredAvboitTransparentCsgIntervalClearTask.valid())
+        || (
+            m_deferredAvboitTransparentCsgIntervalClearFirstTask.valid()
+            && m_deferredAvboitTransparentCsgIntervalClearTask.valid()
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredAvboitPreTask,
+                m_deferredAvboitTransparentCsgIntervalClearFirstTask
+            )
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredAvboitPreTask,
+                m_deferredAvboitTransparentCsgIntervalClearTask
+            )
+        )
+    ;
     const bool avboitPrePacketContainsOccupancy = m_deferredLightingCompiledGraph.tasksSharePacket(
         m_deferredAvboitPreTask,
         m_deferredAvboitOccupancyTask
@@ -1802,6 +1875,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !graphicsPrefixTimingBindingsValid
         || !graphicsPrefixPacketsAreGraphics
         || !graphicsPrefixDeferredClearBundleMerged
+        || !graphicsPrefixCsgIntervalClearBundleMerged
         || !graphicsPrefixQueue
         || graphicsPrefixQueue->queueClass != Core::CommandQueue::Graphics
         || !m_deferredShadowVisibilityTask.valid()
@@ -1869,6 +1943,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredAvboitOccupancyTask.valid()
         || !avboitPrePacket.valid()
         || !avboitPrePacketContainsClear
+        || !avboitPrePacketContainsTransparentCsgClear
         || !avboitPrePacketContainsCsgReceiverSpan
         || !avboitPrePacketContainsCsgIntervalCombine
         || !avboitPrePacketContainsOccupancy

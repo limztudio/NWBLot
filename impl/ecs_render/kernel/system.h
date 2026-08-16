@@ -102,6 +102,14 @@ namespace ECSRenderDetail{
         Optional<Core::GpuTimingMeasure>* timing = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
     };
+    // Opaque prefix timing tickets are rebound after compilation, whereas transparent CSG keeps AVBOIT Pre's
+    // stable ticket. The rectangular clear pair resolves either form while preserving one timing range.
+    struct CsgIntervalClearTimingRecordState{
+        Core::Graphics* graphics = nullptr;
+        Optional<Core::GpuTimingMeasure>* timing = nullptr;
+        Core::GpuTimingSubmissionTicket** rebindableTimingTicket = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+    };
     struct GbufferGraphTask;
 };
 
@@ -251,6 +259,7 @@ private:
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
         Optional<Core::GpuTimingMeasure>& deferredClearTiming,
         ECSRenderDetail::DeferredClearTimingRecordState& deferredClearTimingState,
+        ECSRenderDetail::CsgIntervalClearTimingRecordState& csgIntervalClearTimingState,
         Core::GpuTimingSubmissionTicket** timingTickets,
         const bool* asyncPrefixTimingSpansOnePacket
     );
@@ -326,12 +335,14 @@ private:
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
         Optional<Core::GpuTimingMeasure>& deferredClearTiming,
         ECSRenderDetail::DeferredClearTimingRecordState& deferredClearTimingState,
+        ECSRenderDetail::CsgIntervalClearTimingRecordState& opaqueCsgIntervalClearTimingState,
         Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
         Core::GpuTimingSubmissionTicket** graphicsPrefixTimingTickets,
         const bool* asyncPrefixTimingSpansOnePacket,
         Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
         Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
         ECSRenderDetail::AvboitClearTimingRecordState& avboitClearTimingState,
+        ECSRenderDetail::CsgIntervalClearTimingRecordState& transparentCsgIntervalClearTimingState,
         Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTiming,
         Core::GpuTimingSubmissionTicket& avboitDepthWarpTimingTicket,
         Core::GpuTimingSubmissionTicket& avboitExtinctionTimingTicket,
@@ -429,6 +440,10 @@ private:
     // Both IDs must compile into one Graphics packet before recording.
     Core::GpuTaskId m_graphicsPrefixDeferredClearFirstTask;
     Core::GpuTaskId m_graphicsPrefixDeferredClearTask;
+    // The opaque CSG work-region clear is a two-value typed rectangle chain. Both tasks must remain in one
+    // Graphics packet so its first/last hooks retain the existing CSG-clear timing interval.
+    Core::GpuTaskId m_graphicsPrefixCsgIntervalClearFirstTask;
+    Core::GpuTaskId m_graphicsPrefixCsgIntervalClearTask;
     Core::GpuTaskId m_graphicsPrefixGbufferTask;
     Core::GpuTaskId m_graphicsPrefixCsgReceiverSpanTask;
     Core::GpuTaskId m_graphicsPrefixCsgIntervalCombineTask;
@@ -499,6 +514,9 @@ private:
     // packet. Their pair proves the whole nine-clear chain stays at the established semantic endpoint.
     Core::GpuTaskId m_deferredAvboitClearFirstTask;
     Core::GpuTaskId m_deferredAvboitClearTask;
+    // Prepared transparent CSG repeats the same two-value work-region clear before its interval producer.
+    Core::GpuTaskId m_deferredAvboitTransparentCsgIntervalClearFirstTask;
+    Core::GpuTaskId m_deferredAvboitTransparentCsgIntervalClearTask;
     Core::GpuTaskId m_deferredAvboitPreTask;
     // Prepared transparent CSG split: receiver-span and interval-combine retain the AVBOIT-pre packet so phase-
     // local occupancy uploads cannot overwrite the frozen CSG stream before those callbacks record.

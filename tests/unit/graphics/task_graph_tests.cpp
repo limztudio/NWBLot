@@ -903,6 +903,110 @@ TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphGeneration){
     EXPECT_EQ(resetCursor, resetBytes.size());
 }
 
+TEST(GpuCommandIrCapture, EncodesVersionedRectUIntTextureClearAndRetainsV1Compatibility){
+    TestArena testArena;
+    Graphics::GpuCommandIrCapture capture(testArena.arena);
+    Graphics::GpuClearTextureRectUIntTaskDesc clear;
+    clear.destination = s_CommandIrDestination;
+    clear.subresources = Graphics::TextureSubresourceSet(2u, 3u, 4u, 5u);
+    clear.rect = Graphics::Rect(-2, 7, 3, 11);
+    clear.uintValue = Graphics::UIntColor(0x10203040u, 0x50607080u, 0x90a0b0c0u, 0xd0e0f000u);
+    ASSERT_TRUE(capture.captureClearTextureRectUInt(
+        s_CommandIrTask,
+        s_CommandIrPacket,
+        s_CommandIrQueue,
+        s_CommandIrDestination,
+        clear
+    ));
+
+    ASSERT_EQ(capture.recordCount(), 1u);
+    const Graphics::GpuCommandIrBuiltinTaskRecord* const captured = capture.recordAt(0u);
+    ASSERT_NE(captured, nullptr);
+    EXPECT_EQ(captured->opcode, Graphics::GpuCommandIrOpcode::ClearTextureRectUInt);
+    EXPECT_EQ(captured->destination, s_CommandIrDestination);
+    EXPECT_EQ(captured->destinationSubresources, clear.subresources);
+    EXPECT_EQ(captured->clearRect, clear.rect);
+    EXPECT_EQ(captured->uintClearValue, clear.uintValue);
+
+    const BinaryByteView bytes = capture.commandBytes();
+    usize cursor = 0u;
+    Graphics::GpuCommandIrStreamHeader header;
+    Graphics::GpuCommandIrClearTextureRectUIntRecord encoded;
+    ASSERT_TRUE(ReadPOD(bytes, cursor, header));
+    ASSERT_TRUE(ReadPOD(bytes, cursor, encoded));
+    EXPECT_EQ(header.version, Graphics::s_GpuCommandIrStreamVersion);
+    EXPECT_EQ(encoded.header.opcode, Graphics::GpuCommandIrWireOpcode::ClearTextureRectUInt);
+    EXPECT_EQ(encoded.header.byteSize, sizeof(encoded));
+    EXPECT_EQ(encoded.context.taskIndex, s_CommandIrTask.index);
+    EXPECT_EQ(encoded.destinationResourceIndex, s_CommandIrDestination.index);
+    EXPECT_EQ(encoded.clearRect.minX, clear.rect.minX);
+    EXPECT_EQ(encoded.clearRect.maxX, clear.rect.maxX);
+    EXPECT_EQ(encoded.clearRect.minY, clear.rect.minY);
+    EXPECT_EQ(encoded.clearRect.maxY, clear.rect.maxY);
+    EXPECT_EQ(encoded.uintClearValue.r, clear.uintValue.r);
+    EXPECT_EQ(encoded.uintClearValue.g, clear.uintValue.g);
+    EXPECT_EQ(encoded.uintClearValue.b, clear.uintValue.b);
+    EXPECT_EQ(encoded.uintClearValue.a, clear.uintValue.a);
+    EXPECT_EQ(cursor, bytes.size());
+
+    Graphics::GpuCommandIrStreamReader reader(bytes);
+    Graphics::GpuCommandIrBuiltinTaskRecord decoded;
+    ASSERT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::Record);
+    EXPECT_EQ(decoded.opcode, Graphics::GpuCommandIrOpcode::ClearTextureRectUInt);
+    EXPECT_EQ(decoded.clearRect, clear.rect);
+    EXPECT_EQ(decoded.uintClearValue, clear.uintValue);
+    EXPECT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::End);
+    EXPECT_TRUE(reader.validation().valid());
+
+    clear.rect = Graphics::Rect(4, 4, 0, 1);
+    EXPECT_FALSE(capture.captureClearTextureRectUInt(
+        s_CommandIrTask,
+        s_CommandIrPacket,
+        s_CommandIrQueue,
+        s_CommandIrDestination,
+        clear
+    ));
+    EXPECT_EQ(capture.recordCount(), 1u);
+
+    Graphics::GraphicsBytes downgradedRectBytes(testArena.arena);
+    CopyCommandIrBytes(downgradedRectBytes, bytes);
+    WriteCommandIrPod(
+        downgradedRectBytes,
+        offsetof(Graphics::GpuCommandIrStreamHeader, version),
+        Graphics::s_GpuCommandIrStreamFirstSupportedVersion
+    );
+    Graphics::GpuCommandIrStreamReader downgradedRectReader(BinaryByteView{
+        downgradedRectBytes.data(),
+        downgradedRectBytes.size(),
+    });
+    EXPECT_EQ(downgradedRectReader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::Error);
+    EXPECT_EQ(
+        downgradedRectReader.validation().error,
+        Graphics::GpuCommandIrStreamValidationError::UnsupportedOpcode
+    );
+
+    Graphics::GpuCommandIrCapture legacyCapture(testArena.arena);
+    ASSERT_TRUE(legacyCapture.captureClearBuffer(
+        s_CommandIrTask,
+        s_CommandIrPacket,
+        s_CommandIrQueue,
+        s_CommandIrDestination,
+        0xdecafbadU
+    ));
+    Graphics::GraphicsBytes legacyBytes(testArena.arena);
+    CopyCommandIrBytes(legacyBytes, legacyCapture.commandBytes());
+    WriteCommandIrPod(
+        legacyBytes,
+        offsetof(Graphics::GpuCommandIrStreamHeader, version),
+        Graphics::s_GpuCommandIrStreamFirstSupportedVersion
+    );
+    Graphics::GpuCommandIrStreamReader legacyReader(BinaryByteView{ legacyBytes.data(), legacyBytes.size() });
+    ASSERT_EQ(legacyReader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::Record);
+    EXPECT_EQ(decoded.opcode, Graphics::GpuCommandIrOpcode::ClearBuffer);
+    EXPECT_EQ(legacyReader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::End);
+    EXPECT_TRUE(legacyReader.validation().valid());
+}
+
 TEST(GpuCommandIrCapture, EncodesBuiltInsAsLinearPodRecordsAndRollsBackAtRecordBoundaries){
     TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
@@ -14761,13 +14865,17 @@ TEST(GpuTaskGraph, PlansCsgIntervalWorkingSetStorageStates){
     const Graphics::TextureSubresourceSet receiverSpanCountRange(0u, 1u, 0u, 1u);
     const Graphics::TextureSubresourceSet removedIntervalRange(0u, 1u, 0u, 16u);
     const Graphics::TextureSubresourceSet removedIntervalCountRange(0u, 1u, 0u, 1u);
-    const Graphics::GpuTaskResourceUse clearUses[] = {
+    // The metadata fixture mirrors the one-use declarations automatically derived by the two typed rectangular
+    // primitives. Native rectangle payload/capture lowering is exercised by the descriptor-buffer smoke below.
+    const Graphics::GpuTaskResourceUse intervalIdClearUses[] = {
         Graphics::GpuTaskResourceUse{
             .resource = intervalId,
             .range = Graphics::GpuTaskResourceRange{ .textureSubresources = peelRange },
             .requiredState = Graphics::ResourceStates::CopyDest,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
+    };
+    const Graphics::GpuTaskResourceUse receiverEventCountClearUses[] = {
         Graphics::GpuTaskResourceUse{
             .resource = receiverEventCount,
             .range = Graphics::GpuTaskResourceRange{ .textureSubresources = receiverEventCountRange },
@@ -14843,49 +14951,71 @@ TEST(GpuTaskGraph, PlansCsgIntervalWorkingSetStorageStates){
             .access = Graphics::GpuTaskResourceAccess::ReadWrite,
         },
     };
-    const Graphics::GpuTaskId opaqueClear = AddTask(
+    const Graphics::GpuTaskId opaqueIntervalIdClear = AddTask(
         graph,
-        Name("tests/task_graph/csg_opaque_interval_clear"),
-        "Opaque CSG Interval Clear",
+        Name("tests/task_graph/csg_opaque_interval_id_clear"),
+        "Opaque CSG Interval Id Clear",
         nullptr,
         0u,
-        clearUses,
-        LengthOf(clearUses)
+        intervalIdClearUses,
+        LengthOf(intervalIdClearUses)
+    );
+    const Graphics::GpuTaskId opaqueReceiverEventCountClear = AddTask(
+        graph,
+        Name("tests/task_graph/csg_opaque_receiver_event_count_clear"),
+        "Opaque CSG Receiver Event Count Clear",
+        &opaqueIntervalIdClear,
+        1u,
+        receiverEventCountClearUses,
+        LengthOf(receiverEventCountClearUses)
     );
     const Graphics::GpuTaskId opaqueProducer = AddTask(
         graph,
         Name("tests/task_graph/csg_opaque_interval_producer"),
         "Opaque CSG Interval Producer",
-        &opaqueClear,
+        &opaqueReceiverEventCountClear,
         1u,
         intervalProducerUses,
         LengthOf(intervalProducerUses)
     );
-    const Graphics::GpuTaskId transparentClear = AddTask(
+    const Graphics::GpuTaskId transparentIntervalIdClear = AddTask(
         graph,
-        Name("tests/task_graph/csg_transparent_interval_clear"),
-        "Transparent CSG Interval Clear",
+        Name("tests/task_graph/csg_transparent_interval_id_clear"),
+        "Transparent CSG Interval Id Clear",
         &opaqueProducer,
         1u,
-        clearUses,
-        LengthOf(clearUses)
+        intervalIdClearUses,
+        LengthOf(intervalIdClearUses)
+    );
+    const Graphics::GpuTaskId transparentReceiverEventCountClear = AddTask(
+        graph,
+        Name("tests/task_graph/csg_transparent_receiver_event_count_clear"),
+        "Transparent CSG Receiver Event Count Clear",
+        &transparentIntervalIdClear,
+        1u,
+        receiverEventCountClearUses,
+        LengthOf(receiverEventCountClearUses)
     );
     const Graphics::GpuTaskId transparentProducer = AddTask(
         graph,
         Name("tests/task_graph/csg_transparent_interval_producer"),
         "Transparent CSG Interval Producer",
-        &transparentClear,
+        &transparentReceiverEventCountClear,
         1u,
         intervalProducerUses,
         LengthOf(intervalProducerUses)
     );
-    ASSERT_TRUE(opaqueClear.valid());
+    ASSERT_TRUE(opaqueIntervalIdClear.valid());
+    ASSERT_TRUE(opaqueReceiverEventCountClear.valid());
     ASSERT_TRUE(opaqueProducer.valid());
-    ASSERT_TRUE(transparentClear.valid());
+    ASSERT_TRUE(transparentIntervalIdClear.valid());
+    ASSERT_TRUE(transparentReceiverEventCountClear.valid());
     ASSERT_TRUE(transparentProducer.valid());
-    EXPECT_EQ(graph.taskAt(opaqueClear.index).resourceUseCount, 2u);
+    EXPECT_EQ(graph.taskAt(opaqueIntervalIdClear.index).resourceUseCount, 1u);
+    EXPECT_EQ(graph.taskAt(opaqueReceiverEventCountClear.index).resourceUseCount, 1u);
     EXPECT_EQ(graph.taskAt(opaqueProducer.index).resourceUseCount, 11u);
-    EXPECT_EQ(graph.taskAt(transparentClear.index).resourceUseCount, 2u);
+    EXPECT_EQ(graph.taskAt(transparentIntervalIdClear.index).resourceUseCount, 1u);
+    EXPECT_EQ(graph.taskAt(transparentReceiverEventCountClear.index).resourceUseCount, 1u);
     EXPECT_EQ(graph.taskAt(transparentProducer.index).resourceUseCount, 11u);
 
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
@@ -14897,19 +15027,35 @@ TEST(GpuTaskGraph, PlansCsgIntervalWorkingSetStorageStates){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    EXPECT_NE(FindEdge(analysis, opaqueClear, opaqueProducer), nullptr);
-    EXPECT_NE(FindEdge(analysis, transparentClear, transparentProducer), nullptr);
+    EXPECT_NE(FindEdge(analysis, opaqueIntervalIdClear, opaqueReceiverEventCountClear), nullptr);
+    EXPECT_NE(FindEdge(analysis, opaqueReceiverEventCountClear, opaqueProducer), nullptr);
+    EXPECT_NE(FindEdge(analysis, transparentIntervalIdClear, transparentReceiverEventCountClear), nullptr);
+    EXPECT_NE(FindEdge(analysis, transparentReceiverEventCountClear, transparentProducer), nullptr);
     EXPECT_TRUE(HasInferredHazard(
         analysis,
-        opaqueClear,
+        opaqueIntervalIdClear,
         opaqueProducer,
         intervalId,
         Graphics::GpuTaskHazardType::WriteAfterWrite
     ));
     EXPECT_TRUE(HasInferredHazard(
         analysis,
-        opaqueClear,
+        opaqueReceiverEventCountClear,
         opaqueProducer,
+        receiverEventCount,
+        Graphics::GpuTaskHazardType::WriteAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        transparentIntervalIdClear,
+        transparentProducer,
+        intervalId,
+        Graphics::GpuTaskHazardType::WriteAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        transparentReceiverEventCountClear,
+        transparentProducer,
         receiverEventCount,
         Graphics::GpuTaskHazardType::WriteAfterWrite
     ));

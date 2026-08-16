@@ -317,6 +317,20 @@ struct GpuClearTextureTaskDesc{
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 
+// A rectangular unsigned-integer clear keeps the same graph-owned CopyDest/lifecycle contract as the general
+// texture clear, while preserving the work-region bounds that a whole-image clear cannot represent. It is kept
+// deliberately narrow until another renderer path needs a different typed rectangle operation.
+struct GpuClearTextureRectUIntTaskDesc{
+    GpuGraphResourceId destination;
+    TextureSubresourceSet subresources = s_AllSubresources;
+    Rect rect;
+    UIntColor uintValue;
+    // Optional recording-local hooks use the same bracket contract as whole-texture clears.
+    GpuClearTextureTaskRecordHooks recordHooks;
+    // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
+    QueueSubmissionToken* acceptedToken = nullptr;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -33,6 +33,7 @@ namespace GpuCommandIrOpcode{
         CopyTexture = 1u,
         ClearBuffer = 2u,
         ClearTexture = 3u,
+        ClearTextureRectUInt = 4u,
 
         kCount,
     };
@@ -56,6 +57,7 @@ namespace GpuCommandIrWireOpcode{
         LocalMemoryBarrier,
         BeginMarker,
         EndMarker,
+        ClearTextureRectUInt,
 
         kCount,
     };
@@ -64,7 +66,8 @@ namespace GpuCommandIrWireOpcode{
 // The stream is a same-host tooling format for now. The magic/version make a future reader reject incompatible
 // layouts before interpreting its POD records; remote or persistent cross-platform transport will add endian policy.
 inline constexpr u32 s_GpuCommandIrStreamMagic = 0x4E574349u; // NWCI
-inline constexpr u16 s_GpuCommandIrStreamVersion = 1u;
+inline constexpr u16 s_GpuCommandIrStreamFirstSupportedVersion = 1u;
+inline constexpr u16 s_GpuCommandIrStreamVersion = 2u;
 
 #pragma pack(push, 1)
 struct GpuCommandIrStreamHeader{
@@ -107,6 +110,13 @@ struct GpuCommandIrTextureSubresourceSet{
     u32 numMipLevels = 1u;
     u32 baseArraySlice = 0u;
     u32 numArraySlices = 1u;
+};
+
+struct GpuCommandIrRect{
+    i32 minX = 0;
+    i32 maxX = 0;
+    i32 minY = 0;
+    i32 maxY = 0;
 };
 
 struct GpuCommandIrFloatColor{
@@ -178,6 +188,17 @@ struct GpuCommandIrClearTextureRecord{
     GpuCommandIrClearTextureFlag::Mask clearFlags = GpuCommandIrClearTextureFlag::None;
     u8 reserved = 0u;
 };
+
+// Version 2 adds a distinct typed record instead of changing the v1 whole-texture clear payload. This preserves
+// v1 byte layouts for tooling that retained older captures while making a work-region clear explicit in the IR.
+struct GpuCommandIrClearTextureRectUIntRecord{
+    GpuCommandIrHeader header;
+    GpuCommandIrRecordContext context;
+    u32 destinationResourceIndex = Limit<u32>::s_Max;
+    GpuCommandIrTextureSubresourceSet destinationSubresources;
+    GpuCommandIrRect clearRect;
+    GpuCommandIrUIntColor uintClearValue;
+};
 #pragma pack(pop)
 
 static_assert(sizeof(GpuCommandIrStreamHeader) == 32u, "Command IR stream header wire layout drifted");
@@ -185,10 +206,12 @@ static_assert(sizeof(GpuCommandIrHeader) == 4u, "Command IR command header wire 
 static_assert(sizeof(GpuCommandIrRecordContext) == 12u, "Command IR context wire layout drifted");
 static_assert(sizeof(GpuCommandIrTextureSlice) == 32u, "Command IR texture slice wire layout drifted");
 static_assert(sizeof(GpuCommandIrTextureSubresourceSet) == 16u, "Command IR subresource wire layout drifted");
+static_assert(sizeof(GpuCommandIrRect) == 16u, "Command IR rect wire layout drifted");
 static_assert(sizeof(GpuCommandIrCopyBufferRecord) == 48u, "Command IR copy-buffer wire layout drifted");
 static_assert(sizeof(GpuCommandIrCopyTextureRecord) == 88u, "Command IR copy-texture wire layout drifted");
 static_assert(sizeof(GpuCommandIrClearBufferRecord) == 24u, "Command IR clear-buffer wire layout drifted");
 static_assert(sizeof(GpuCommandIrClearTextureRecord) == 92u, "Command IR clear-texture wire layout drifted");
+static_assert(sizeof(GpuCommandIrClearTextureRectUIntRecord) == 68u, "Command IR rectangular clear wire layout drifted");
 static_assert(alignof(GpuCommandIrStreamHeader) == 1u, "Command IR stream header must stay packed");
 static_assert(alignof(GpuCommandIrCopyBufferRecord) == 1u, "Command IR records must stay packed");
 static_assert(IsStandardLayout_V<GpuCommandIrStreamHeader>, "Command IR stream header must be binary-serializable");
@@ -201,6 +224,8 @@ static_assert(IsStandardLayout_V<GpuCommandIrClearBufferRecord>, "Command IR rec
 static_assert(IsTriviallyCopyable_V<GpuCommandIrClearBufferRecord>, "Command IR records must be binary-serializable");
 static_assert(IsStandardLayout_V<GpuCommandIrClearTextureRecord>, "Command IR records must be binary-serializable");
 static_assert(IsTriviallyCopyable_V<GpuCommandIrClearTextureRecord>, "Command IR records must be binary-serializable");
+static_assert(IsStandardLayout_V<GpuCommandIrClearTextureRectUIntRecord>, "Command IR records must be binary-serializable");
+static_assert(IsTriviallyCopyable_V<GpuCommandIrClearTextureRectUIntRecord>, "Command IR records must be binary-serializable");
 
 
 struct GpuCommandIrBuiltinTaskRecord{
@@ -217,6 +242,7 @@ struct GpuCommandIrBuiltinTaskRecord{
     TextureSlice sourceSlice;
     TextureSlice destinationSlice;
     TextureSubresourceSet destinationSubresources = s_AllSubresources;
+    Rect clearRect;
 
     GpuClearTextureTaskValueType::Enum clearTextureValueType = GpuClearTextureTaskValueType::UInt;
     Color floatClearValue;
@@ -229,7 +255,7 @@ struct GpuCommandIrBuiltinTaskRecord{
 };
 
 
-// The reader validates only the self-contained v1 wire contract. Graph/resource topology, resource ranges and
+// The reader validates only the self-contained versioned wire contract. Graph/resource topology, resource ranges and
 // backend command legality require a later context-aware validation/replay phase.
 namespace GpuCommandIrStreamReadStatus{
     enum Enum : u8{
@@ -300,6 +326,7 @@ private:
     GpuCommandIrStreamValidationResult m_validation;
     usize m_cursor = 0u;
     usize m_payloadEnd = 0u;
+    u16 m_streamVersion = 0u;
     u64 m_graphGeneration = 0u;
     u64 m_recordCount = 0u;
     u64 m_nextRecordIndex = 0u;
@@ -447,6 +474,13 @@ public:
         GpuPhysicalQueueId queue,
         GpuGraphResourceId destination,
         const GpuClearTextureTaskDesc& clearDesc
+    );
+    [[nodiscard]] bool captureClearTextureRectUInt(
+        GpuTaskId task,
+        GpuSubmissionPacketId packet,
+        GpuPhysicalQueueId queue,
+        GpuGraphResourceId destination,
+        const GpuClearTextureRectUIntTaskDesc& clearDesc
     );
 
 

@@ -991,21 +991,6 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     return true;
 }
 
-void RendererDeferredSystem::clearGraphOwnedCsgIntervalTargets(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const Core::Rect& csgClearRect
-){
-    __hidden_deferred_targets::AssertCsgIntervalTargetsAvailable(targets);
-
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, graphics().getDevice(), commandList);
-
-    const __hidden_deferred_targets::CsgIntervalSubresources csgSubresources =
-        __hidden_deferred_targets::MakeCsgIntervalSubresources(targets)
-    ;
-    __hidden_deferred_targets::ClearCsgIntervalTargets(commandList, targets, csgSubresources, csgClearRect);
-}
-
 void RendererDeferredSystem::clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::Rect& csgClearRect){
     __hidden_deferred_targets::AssertCsgIntervalTargetsAvailable(targets);
 

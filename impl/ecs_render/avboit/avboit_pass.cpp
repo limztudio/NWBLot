@@ -394,7 +394,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         graphics().getDevice(),
         commandList
     );
-    // The normal prepared path records this exact rect clear as a preceding graph task. Retain the direct helper
+    // The normal prepared path records the two exact rect clears as preceding graph primitives. Retain the direct helper
     // for compatibility callers, including its historical all-target state preparation before readiness checks.
     if(!intervalTargetsGraphOwned){
         m_renderer.m_deferredSystem.clearCsgIntervalTargets(

@@ -218,6 +218,14 @@ public:
     // write declaration, so desc must declare Transfer capability and must not provide separate resource uses.
     [[nodiscard]] GpuTaskId addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc);
 
+    // Adds a graph-owned native rectangular unsigned-integer texture clear. The helper retains the imported texture
+    // and derives its exact subresource CopyDest write declaration, so desc must declare Transfer capability and
+    // must not provide separate resource uses.
+    [[nodiscard]] GpuTaskId addClearTextureRectUIntTask(
+        const GpuTaskDesc& desc,
+        const GpuClearTextureRectUIntTaskDesc& clearDesc
+    );
+
     template<typename TaskT>
     [[nodiscard]] GpuTaskId addTask(const GpuTaskDesc& desc, typename TaskT::Payload&& payload){
         using Payload = typename TaskT::Payload;

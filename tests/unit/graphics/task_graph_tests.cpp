@@ -8482,6 +8482,501 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancySharedOutputComputeEmulationTriple
 }
 
 
+// Four regular Occupancy draws may reuse one persistent generated-vertex output only by immediately consuming
+// every dispatch before the next overwrite. Keep Pre -> stream -> typed clear -> D(A) -> R(A) -> D(B) -> R(B)
+// -> D(C) -> R(C) -> D(D) -> R(D) -> packet-local Depth Warp in AVBOIT Pre's accepting FrontierSafe packet.
+TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancySharedOutputComputeEmulationQuadruplesInPrePacket){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId stateProbe = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/unsplit_avboit_occupancy_shared_output_quad_state_probe"),
+        "AVBOIT Occupancy Shared Output State Probe",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    const Graphics::GpuGraphResourceId materialStream = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/unsplit_avboit_occupancy_shared_output_quad_material_stream"),
+        "AVBOIT Occupancy Shared Output Material Stream",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    const Graphics::GpuGraphResourceId coverage = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/unsplit_avboit_occupancy_shared_output_quad_coverage"),
+        "AVBOIT Coverage",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    const Graphics::GpuGraphResourceId generatedVertex = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/unsplit_avboit_occupancy_shared_output_quad_generated_vertex"),
+        "AVBOIT Occupancy Shared Generated Vertex",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    ASSERT_TRUE(stateProbe.valid());
+    ASSERT_TRUE(materialStream.valid());
+    ASSERT_TRUE(coverage.valid());
+    ASSERT_TRUE(generatedVertex.valid());
+
+    const Graphics::GpuQueueRequest graphicsComputeQueue{
+        QueueCapabilities(
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueueCapability::Compute
+        ),
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest graphicsQueue{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint preScheduling;
+    preScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    preScheduling.overlapPreferred = false;
+    preScheduling.avoidQueueCrossing = true;
+    preScheduling.forceSubmissionBoundary = false;
+    preScheduling.allowPacketMerge = true;
+    preScheduling.mergeWithPrevious = false;
+    Graphics::GpuTaskSchedulingHint packetTailScheduling = preScheduling;
+    packetTailScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    packetTailScheduling.mergeWithPrevious = true;
+    packetTailScheduling.allowMergeAcrossConsumerFrontier = true;
+
+    const Graphics::GpuTaskResourceUse preUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = stateProbe,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuTaskResourceUse streamUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = stateProbe,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = materialStream,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskResourceUse clearUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = stateProbe,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = coverage,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskResourceUse dispatchUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = stateProbe,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = materialStream,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = generatedVertex,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskResourceUse rasterUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = stateProbe,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = materialStream,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = generatedVertex,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::VertexBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = coverage,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    const Graphics::GpuTaskResourceUse depthWarpUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = stateProbe,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = coverage,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+
+    const Graphics::GpuTaskId pre = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/unsplit_avboit_occupancy_shared_output_quad_pre"))
+            .setMarkerLabel("AVBOIT Pre")
+            .setQueue(graphicsQueue)
+            .setScheduling(preScheduling)
+            .setResourceUses(preUses, LengthOf(preUses))
+    );
+    ASSERT_TRUE(pre.valid());
+    const Graphics::GpuTaskId stream = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/unsplit_avboit_occupancy_shared_output_quad_stream"))
+            .setMarkerLabel("AVBOIT Occupancy Material Upload")
+            .setQueue(graphicsQueue)
+            .setScheduling(packetTailScheduling)
+            .setDependencies(&pre, 1u)
+            .setResourceUses(streamUses, LengthOf(streamUses))
+    );
+    ASSERT_TRUE(stream.valid());
+    const Graphics::GpuTaskId clear = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/unsplit_avboit_occupancy_shared_output_quad_clear"))
+            .setMarkerLabel("AVBOIT Clear Coverage")
+            .setQueue(graphicsQueue)
+            .setScheduling(packetTailScheduling)
+            .setDependencies(&stream, 1u)
+            .setResourceUses(clearUses, LengthOf(clearUses))
+    );
+    ASSERT_TRUE(clear.valid());
+
+    const Name sharedPhaseIdentities[] = {
+        Name("tests/task_graph/unsplit_avboit_occupancy_shared_output_quad_dispatch_a"),
+        Name("tests/task_graph/unsplit_avboit_occupancy_shared_output_quad_raster_a"),
+        Name("tests/task_graph/unsplit_avboit_occupancy_shared_output_quad_dispatch_b"),
+        Name("tests/task_graph/unsplit_avboit_occupancy_shared_output_quad_raster_b"),
+        Name("tests/task_graph/unsplit_avboit_occupancy_shared_output_quad_dispatch_c"),
+        Name("tests/task_graph/unsplit_avboit_occupancy_shared_output_quad_raster_c"),
+        Name("tests/task_graph/unsplit_avboit_occupancy_shared_output_quad_dispatch_d"),
+        Name("tests/task_graph/unsplit_avboit_occupancy_shared_output_quad_raster_d"),
+    };
+    const AStringView sharedPhaseMarkers[] = {
+        "AVBOIT Occupancy Shared Compute Emulation A",
+        "AVBOIT Occupancy Shared A",
+        "AVBOIT Occupancy Shared Compute Emulation B",
+        "AVBOIT Occupancy Shared B",
+        "AVBOIT Occupancy Shared Compute Emulation C",
+        "AVBOIT Occupancy Shared C",
+        "AVBOIT Occupancy Shared Compute Emulation D",
+        "AVBOIT Occupancy Shared D",
+    };
+    Graphics::GpuTaskId sharedPhaseTasks[LengthOf(sharedPhaseIdentities)] = {};
+    for(usize phaseIndex = 0u; phaseIndex < LengthOf(sharedPhaseTasks); ++phaseIndex){
+        const bool isRaster = phaseIndex % 2u != 0u;
+        const Graphics::GpuTaskId dependency = phaseIndex == 0u ? clear : sharedPhaseTasks[phaseIndex - 1u];
+        sharedPhaseTasks[phaseIndex] = graph.addTask(
+            Graphics::GpuTaskDesc{}
+                .setIdentity(sharedPhaseIdentities[phaseIndex])
+                .setMarkerLabel(sharedPhaseMarkers[phaseIndex])
+                .setQueue(isRaster ? graphicsQueue : graphicsComputeQueue)
+                .setScheduling(packetTailScheduling)
+                .setDependencies(&dependency, 1u)
+                .setResourceUses(
+                    isRaster ? rasterUses : dispatchUses,
+                    isRaster ? LengthOf(rasterUses) : LengthOf(dispatchUses)
+                )
+        );
+        ASSERT_TRUE(sharedPhaseTasks[phaseIndex].valid());
+    }
+    const Graphics::GpuTaskId dispatchA = sharedPhaseTasks[0u];
+    const Graphics::GpuTaskId rasterA = sharedPhaseTasks[1u];
+    const Graphics::GpuTaskId dispatchB = sharedPhaseTasks[2u];
+    const Graphics::GpuTaskId rasterB = sharedPhaseTasks[3u];
+    const Graphics::GpuTaskId dispatchC = sharedPhaseTasks[4u];
+    const Graphics::GpuTaskId rasterC = sharedPhaseTasks[5u];
+    const Graphics::GpuTaskId dispatchD = sharedPhaseTasks[6u];
+    const Graphics::GpuTaskId rasterD = sharedPhaseTasks[7u];
+    const Graphics::GpuTaskId depthWarpDependencies[] = { rasterD };
+    const Graphics::GpuTaskId depthWarp = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/unsplit_avboit_occupancy_shared_output_quad_depth_warp"))
+            .setMarkerLabel("AVBOIT Depth Warp")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(packetTailScheduling)
+            .setDependencies(depthWarpDependencies, LengthOf(depthWarpDependencies))
+            .setResourceUses(depthWarpUses, LengthOf(depthWarpUses))
+    );
+    ASSERT_TRUE(depthWarp.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+
+    EXPECT_TRUE(analysis.hasExplicitEdge(pre, stream));
+    EXPECT_TRUE(analysis.hasExplicitEdge(stream, clear));
+    EXPECT_TRUE(analysis.hasExplicitEdge(clear, dispatchA));
+    EXPECT_TRUE(analysis.hasExplicitEdge(dispatchA, rasterA));
+    EXPECT_TRUE(analysis.hasExplicitEdge(rasterA, dispatchB));
+    EXPECT_TRUE(analysis.hasExplicitEdge(dispatchB, rasterB));
+    EXPECT_TRUE(analysis.hasExplicitEdge(rasterB, dispatchC));
+    EXPECT_TRUE(analysis.hasExplicitEdge(dispatchC, rasterC));
+    EXPECT_TRUE(analysis.hasExplicitEdge(rasterC, dispatchD));
+    EXPECT_TRUE(analysis.hasExplicitEdge(dispatchD, rasterD));
+    EXPECT_TRUE(analysis.hasExplicitEdge(rasterD, depthWarp));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        stream,
+        dispatchA,
+        materialStream,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        clear,
+        rasterA,
+        coverage,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        dispatchA,
+        rasterA,
+        generatedVertex,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        rasterA,
+        dispatchB,
+        generatedVertex,
+        Graphics::GpuTaskHazardType::WriteAfterRead
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        dispatchB,
+        rasterB,
+        generatedVertex,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        rasterB,
+        dispatchC,
+        generatedVertex,
+        Graphics::GpuTaskHazardType::WriteAfterRead
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        dispatchC,
+        rasterC,
+        generatedVertex,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        rasterC,
+        dispatchD,
+        generatedVertex,
+        Graphics::GpuTaskHazardType::WriteAfterRead
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        dispatchD,
+        rasterD,
+        generatedVertex,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        rasterD,
+        depthWarp,
+        coverage,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+
+    const Graphics::GpuTaskId tasks[] = {
+        pre,
+        stream,
+        clear,
+        dispatchA,
+        rasterA,
+        dispatchB,
+        rasterB,
+        dispatchC,
+        rasterC,
+        dispatchD,
+        rasterD,
+        depthWarp,
+    };
+    ASSERT_EQ(analysis.topologicalOrder().size(), LengthOf(tasks));
+    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex)
+        EXPECT_EQ(analysis.topologicalOrder()[taskIndex], tasks[taskIndex]);
+    for(const Graphics::GpuTaskId task : tasks){
+        const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
+        ASSERT_NE(assignment, nullptr);
+        EXPECT_EQ(assignment->queue, queue.id);
+        EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
+    }
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(pre);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    for(const Graphics::GpuTaskId task : tasks)
+        EXPECT_EQ(packet, compiledGraph.packetForTask(task));
+    EXPECT_TRUE(compiledGraph.tasksSharePacket(pre, depthWarp));
+    for(usize taskIndex = 0u; taskIndex + 1u < LengthOf(tasks); ++taskIndex)
+        EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(tasks[taskIndex], tasks[taskIndex + 1u]));
+    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPacket.queue, queue.id);
+    EXPECT_EQ(compiledPacket.dependencyCount, 0u);
+    ASSERT_EQ(compiledPacket.taskCount, LengthOf(tasks));
+    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    ASSERT_NE(packetTasks, nullptr);
+    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex)
+        EXPECT_EQ(packetTasks[taskIndex], tasks[taskIndex]);
+
+    const auto hasBufferTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+                && barrier.sourceQueue == queue.id
+                && barrier.destinationQueue == queue.id
+            )
+                return true;
+        }
+        return false;
+    };
+    const auto hasBufferUav = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        for(u32 barrierIndex = 0u; compiledTask && barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferUav
+                && barrier.resource == resource
+                && barrier.before == Graphics::ResourceStates::UnorderedAccess
+                && barrier.after == Graphics::ResourceStates::UnorderedAccess
+                && barrier.sourceQueue == queue.id
+                && barrier.destinationQueue == queue.id
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasBufferTransition(
+        stream,
+        materialStream,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::CopyDest
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        clear,
+        coverage,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::CopyDest
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        dispatchA,
+        materialStream,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::ShaderResource
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        dispatchA,
+        generatedVertex,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        rasterA,
+        generatedVertex,
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::VertexBuffer
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        rasterA,
+        coverage,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        dispatchB,
+        generatedVertex,
+        Graphics::ResourceStates::VertexBuffer,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        rasterB,
+        generatedVertex,
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::VertexBuffer
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        dispatchC,
+        generatedVertex,
+        Graphics::ResourceStates::VertexBuffer,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        rasterC,
+        generatedVertex,
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::VertexBuffer
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        dispatchD,
+        generatedVertex,
+        Graphics::ResourceStates::VertexBuffer,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        rasterD,
+        generatedVertex,
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::VertexBuffer
+    ));
+    EXPECT_TRUE(hasBufferUav(depthWarp, coverage));
+}
+
+
 // A CSG-only Occupancy stream follows the graph-owned interval Combine with its final immutable CSG upload and
 // target clear.  Its alias-free producer must keep all four StorageImage inputs in UAV state, publish both distinct
 // generated-vertex buffers, and remain immediately before the Occupancy raster in AVBOIT Pre's FrontierSafe packet.

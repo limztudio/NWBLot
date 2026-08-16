@@ -956,13 +956,13 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
 
 
 // A persistent generated-vertex buffer normally forces local dispatch/raster interleaving. This deliberately
-// narrow graph-owned case accepts two or three regular draws that share one retained buffer and descriptor slot,
-// so serial callbacks can preserve the original D(A) -> R(A) -> ... ordering without batching producers.
+// narrow graph-owned case can retain up to four regular draws that share one buffer and descriptor slot, so each
+// consumer can explicitly opt into its supported D(A) -> R(A) -> ... ordering without batching producers.
 struct RegularSharedComputeEmulationGraphPlan{
     static constexpr usize s_MinDrawCount = 2u;
-    static constexpr usize s_MaxDrawCount = 3u;
+    static constexpr usize s_StorageMaxDrawCount = 4u;
 
-    MaterialPassDrawItem drawItems[s_MaxDrawCount] = {};
+    MaterialPassDrawItem drawItems[s_StorageMaxDrawCount] = {};
     Core::BufferHandle outputBuffer;
     u32 outputHeapSlot = 0u;
     usize drawCount = 0u;
@@ -979,12 +979,15 @@ struct RegularSharedComputeEmulationGraphPlan{
 
     [[nodiscard]] bool capture(
         RendererMeshSystem& meshSystem,
-        const MaterialPassDrawItems& sourceDrawItems
+        const MaterialPassDrawItems& sourceDrawItems,
+        const usize allowedMaxDrawCount
     ){
         reset();
         if(
-            sourceDrawItems.computeDrawItems.size() < s_MinDrawCount
-            || sourceDrawItems.computeDrawItems.size() > s_MaxDrawCount
+            allowedMaxDrawCount < s_MinDrawCount
+            || allowedMaxDrawCount > s_StorageMaxDrawCount
+            || sourceDrawItems.computeDrawItems.size() < s_MinDrawCount
+            || sourceDrawItems.computeDrawItems.size() > allowedMaxDrawCount
         )
             return false;
 
@@ -2985,10 +2988,10 @@ struct AvboitOccupancyComputeEmulationGraphTask{
 };
 
 
-// Two or three regular AVBOIT Occupancy draws sharing one generated-vertex buffer cannot batch their generators
-// ahead of rasterization. Keep the original D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C)] stream as explicit
-// primary-Graphics callbacks so the compiler owns every alternating UAV/VertexBuffer boundary before the existing
-// Depth-Warp successor.
+// Two, three, or four regular AVBOIT Occupancy draws sharing one generated-vertex buffer cannot batch their
+// generators ahead of rasterization. Keep the original D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) ->
+// R(D)] stream as explicit primary-Graphics callbacks so the compiler owns every alternating UAV/VertexBuffer
+// boundary before the existing Depth-Warp successor.
 struct AvboitOccupancySharedComputeEmulationGraphTask{
     enum class Phase : u8{
         Generate,
@@ -6692,7 +6695,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
     // A persistent generated-vertex buffer is normally a local dispatch/raster bridge. Handle the small alias
     // classes explicitly: two or three regular opaque compute items sharing one frozen output and heap slot.
-    // Opaque CSG remains out of scope so no CSG producer/raster phase can observe this alternation.
+    // Opaque CSG remains out of scope so no CSG producer/raster phase can observe this alternation. Keep this
+    // consumer at three while Occupancy separately proves the four-draw extension below.
     ECSRenderDetail::RegularSharedComputeEmulationGraphPlan opaqueSharedComputeEmulationPlan;
     const bool opaqueSharedComputeEmulationPlanCaptured =
         !hasOpaqueCsgFrameWork
@@ -6700,7 +6704,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         && gbufferPayload.materialFrameStatesGraphOwned
         && gbufferPayload.materialGeometryStatesGraphOwned
         && gbufferMaterialSampledTexturesCollected
-        && opaqueSharedComputeEmulationPlan.capture(m_meshSystem, opaqueDrawItems.regular)
+        && opaqueSharedComputeEmulationPlan.capture(m_meshSystem, opaqueDrawItems.regular, 3u)
     ;
     const bool opaqueSharedComputeEmulationOutputStatesGraphOwned =
         opaqueSharedComputeEmulationPlanCaptured
@@ -13261,9 +13265,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     occupancyCsgFrameData
                 )
             ;
-            // The unsplit all-compute two- or three-draw case can preserve one shared generated output only as an
-            // explicit D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C)] sequence. Keep mesh and CSG work out of this
-            // narrow slice so the aggregate Occupancy callback is never partially replayed around its phases.
+            // The unsplit all-compute two-, three-, or four-draw case can preserve one shared generated output only
+            // as an explicit D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) -> R(D)] sequence. Keep mesh and
+            // CSG work out of this narrow slice so the aggregate Occupancy callback is never partially replayed
+            // around its phases.
             occupancySharedComputeEmulationPlanCaptured = !splitAvboitStages
                 && !occupancyRegularComputeEmulationPlanCaptured
                 && occupancyDrawItems.regular.meshDrawItems.empty()
@@ -13272,10 +13277,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 && occupancyMaterialSampledTexturesCollected
                 && occupancySharedComputeEmulationPlan.capture(
                     m_meshSystem,
-                    occupancyDrawItems.regular
+                    occupancyDrawItems.regular,
+                    4u
                 )
                 && occupancySharedComputeEmulationPlan.drawCount >= 2u
-                && occupancySharedComputeEmulationPlan.drawCount <= 3u
+                && occupancySharedComputeEmulationPlan.drawCount <= 4u
             ;
             NWB_ASSERT(
                 !(occupancyRegularComputeEmulationPlanCaptured && occupancyCsgComputeEmulationPlanCaptured)
@@ -13889,6 +13895,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Name("render.avboit.occupancy.shared_compute_emulation_raster_b"),
             Name("render.avboit.occupancy.shared_compute_emulation_generate_c"),
             Name("render.avboit.occupancy.shared_compute_emulation_raster_c"),
+            Name("render.avboit.occupancy.shared_compute_emulation_generate_d"),
+            Name("render.avboit.occupancy.shared_compute_emulation_raster_d"),
         };
         const AStringView occupancySharedComputeEmulationPhaseMarkers[] = {
             "AVBOIT Occupancy Shared Compute Emulation Generate A",
@@ -13897,6 +13905,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             "AVBOIT Occupancy Shared Compute Emulation Raster B",
             "AVBOIT Occupancy Shared Compute Emulation Generate C",
             "AVBOIT Occupancy Shared Compute Emulation Raster C",
+            "AVBOIT Occupancy Shared Compute Emulation Generate D",
+            "AVBOIT Occupancy Shared Compute Emulation Raster D",
         };
         const usize occupancySharedComputeEmulationPhaseCount =
             occupancySharedComputeEmulationPlan.drawCount * 2u
@@ -13904,6 +13914,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         NWB_ASSERT(
             occupancySharedComputeEmulationPlan.drawCount == 2u
             || occupancySharedComputeEmulationPlan.drawCount == 3u
+            || occupancySharedComputeEmulationPlan.drawCount == 4u
         );
         NWB_ASSERT(
             occupancySharedComputeEmulationPhaseCount
@@ -14370,7 +14381,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 && extinctionDrawItems.csg.empty()
                 && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
                 && extinctionMaterialSampledTexturesCollected
-                && extinctionSharedComputeEmulationPlan.capture(m_meshSystem, extinctionDrawItems.regular)
+                && extinctionSharedComputeEmulationPlan.capture(m_meshSystem, extinctionDrawItems.regular, 3u)
                 && extinctionSharedComputeEmulationPlan.drawCount >= 2u
                 && extinctionSharedComputeEmulationPlan.drawCount <= 3u
             ;
@@ -15296,7 +15307,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 && accumulationMaterialSampledTexturesCollected
                 && accumulationSharedComputeEmulationPlan.capture(
                     m_meshSystem,
-                    accumulationDrawItems.regular
+                    accumulationDrawItems.regular,
+                    3u
                 )
                 && accumulationSharedComputeEmulationPlan.drawCount >= 2u
                 && accumulationSharedComputeEmulationPlan.drawCount <= 3u

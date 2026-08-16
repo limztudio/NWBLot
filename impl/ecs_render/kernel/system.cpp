@@ -1838,15 +1838,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         return false;
     }();
-    // A split Accumulation measurement spans the generator and raster consumer. Require their exact packet order
-    // so the graph, rather than a callback-local transition, owns the output UAV-to-VertexBuffer handoff before
-    // the following graph-owned attachment finalizer.
+    // Accumulation's measurement spans the generator and raster consumer. Require their exact packet order so the
+    // graph, rather than a callback-local transition, owns the output UAV-to-VertexBuffer handoff before the
+    // following graph-owned attachment finalizer. The unsplit route additionally keeps this chain in AVBOIT Pre's
+    // single accepting Graphics packet and timing endpoint.
     const bool avboitAccumulationComputeEmulationMerged = [&](){
         if(!m_deferredAvboitAccumulationComputeEmulationTask.valid())
             return true;
         if(
-            !avboitUsesAsyncCompute
-            || !m_deferredAvboitAccumulationStreamTask.valid()
+            !m_deferredAvboitAccumulationStreamTask.valid()
             || !avboitAccumulationComputeEmulationPacket.valid()
             || !avboitAccumulationPacket.valid()
             || !avboitAccumulationComputeEmulationQueue
@@ -1861,6 +1861,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredAvboitAccumulationStreamTask,
                 m_deferredAvboitAccumulationComputeEmulationTask
             )
+            || (!avboitUsesAsyncCompute && (
+                !avboitPrePacket.valid()
+                || !avboitPreQueue
+                || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
+                || !m_deferredLightingCompiledGraph.tasksSharePacket(
+                    m_deferredAvboitPreTask,
+                    m_deferredAvboitAccumulationComputeEmulationTask
+                )
+            ))
         )
             return false;
         const Core::GpuSubmissionPacket& packet = m_deferredLightingCompiledGraph.packet(
@@ -1877,16 +1886,22 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 || packetTasks[taskIndex + 1u] != m_deferredAvboitAccumulationTask
             )
                 continue;
-            if(!m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitAccumulationStreamTask,
-                m_deferredAvboitAccumulationComputeEmulationTask
-            ))
-                return true;
-            for(usize streamTaskIndex = 0u; streamTaskIndex < taskIndex; ++streamTaskIndex){
-                if(packetTasks[streamTaskIndex] == m_deferredAvboitAccumulationStreamTask)
+            const auto hasPrecedingTask = [&](const Core::GpuTaskId task){
+                if(!task.valid())
                     return true;
-            }
-            return false;
+                if(!m_deferredLightingCompiledGraph.tasksSharePacket(
+                    task,
+                    m_deferredAvboitAccumulationComputeEmulationTask
+                ))
+                    return true;
+                for(usize predecessorIndex = 0u; predecessorIndex < taskIndex; ++predecessorIndex){
+                    if(packetTasks[predecessorIndex] == task)
+                        return true;
+                }
+                return false;
+            };
+            return hasPrecedingTask(m_deferredAvboitAccumulationStreamTask)
+                && (avboitUsesAsyncCompute || hasPrecedingTask(m_deferredAvboitPreTask));
         }
         return false;
     }();

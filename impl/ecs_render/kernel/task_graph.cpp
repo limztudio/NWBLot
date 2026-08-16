@@ -14169,9 +14169,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             avboitAccumulationPayload.accumulationPhasePrepared = true;
             accumulationStreamsUploaded = true;
             // This is intentionally available only after the final immutable Accumulation upload. The direct
-            // AVBOIT callback still owns shared outputs, CSG compute, unsplit stages, and any late mismatch.
-            accumulationComputeEmulationPlanCaptured = splitAvboitStages
-                && accumulationDrawItems.csg.computeDrawItems.empty()
+            // AVBOIT callback still owns shared outputs, CSG compute, and any late mismatch.
+            accumulationComputeEmulationPlanCaptured = accumulationDrawItems.csg.computeDrawItems.empty()
                 && avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
                 && accumulationMaterialSampledTexturesCollected
                 && avboitAccumulationComputeEmulationPayload.plan.capture(

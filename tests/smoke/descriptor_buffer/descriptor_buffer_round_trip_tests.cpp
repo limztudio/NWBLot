@@ -4791,6 +4791,404 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowPrepareSoftwareBvhBuildSta
 }
 
 
+// Pure-software prepared mesh builds graph-own every typed sentinel clear. A rebuild clears sort keys, parent
+// links, and the shared visit counter; a following refit clears that counter again only after the rebuild callback
+// has consumed it. The native callbacks here are state probes, so the capture proves the real built-ins and values
+// while the compiler owns each CopyDest -> UAV / terminal SRV handoff.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPureSoftwareBvhSentinelClearChainRecordsWithoutNativeBridge){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const auto makeBuildStateBuffer = [&device]{
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setCanHaveUAVs(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const BufferHandle position = makeBuildStateBuffer();
+    const BufferHandle index = makeBuildStateBuffer();
+    const BufferHandle node = makeBuildStateBuffer();
+    const BufferHandle parent = makeBuildStateBuffer();
+    const BufferHandle sortKeys = makeBuildStateBuffer();
+    const BufferHandle sortPayload = makeBuildStateBuffer();
+    const BufferHandle visitCounter = makeBuildStateBuffer();
+    ASSERT_NE(position.get(), nullptr);
+    ASSERT_NE(index.get(), nullptr);
+    ASSERT_NE(node.get(), nullptr);
+    ASSERT_NE(parent.get(), nullptr);
+    ASSERT_NE(sortKeys.get(), nullptr);
+    ASSERT_NE(sortPayload.get(), nullptr);
+    ASSERT_NE(visitCounter.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importBuildState = [&graph](const BufferHandle& buffer, const Name identity, const AStringView label){
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Buffer)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const GpuGraphResourceId positionResource = importBuildState(
+        position,
+        Name("tests/descriptor_buffer/pure_sw_bvh_position"),
+        "Pure SW-BVH Position"
+    );
+    const GpuGraphResourceId indexResource = importBuildState(
+        index,
+        Name("tests/descriptor_buffer/pure_sw_bvh_index"),
+        "Pure SW-BVH Index"
+    );
+    const GpuGraphResourceId nodeResource = importBuildState(
+        node,
+        Name("tests/descriptor_buffer/pure_sw_bvh_node"),
+        "Pure SW-BVH Node"
+    );
+    const GpuGraphResourceId parentResource = importBuildState(
+        parent,
+        Name("tests/descriptor_buffer/pure_sw_bvh_parent"),
+        "Pure SW-BVH Parent"
+    );
+    const GpuGraphResourceId sortKeysResource = importBuildState(
+        sortKeys,
+        Name("tests/descriptor_buffer/pure_sw_bvh_sort_keys"),
+        "Pure SW-BVH Sort Keys"
+    );
+    const GpuGraphResourceId sortPayloadResource = importBuildState(
+        sortPayload,
+        Name("tests/descriptor_buffer/pure_sw_bvh_sort_payload"),
+        "Pure SW-BVH Sort Payload"
+    );
+    const GpuGraphResourceId visitCounterResource = importBuildState(
+        visitCounter,
+        Name("tests/descriptor_buffer/pure_sw_bvh_visit_counter"),
+        "Pure SW-BVH Visit Counter"
+    );
+    ASSERT_TRUE(positionResource.valid());
+    ASSERT_TRUE(indexResource.valid());
+    ASSERT_TRUE(nodeResource.valid());
+    ASSERT_TRUE(parentResource.valid());
+    ASSERT_TRUE(sortKeysResource.valid());
+    ASSERT_TRUE(sortPayloadResource.valid());
+    ASSERT_TRUE(visitCounterResource.valid());
+
+    const GpuQueueRequest clearQueue{
+        GpuQueueCapability::Transfer,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const GpuQueueRequest buildQueue{
+        static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+        ),
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint clearScheduling;
+    clearScheduling.cost = GpuTaskCostHint::Tiny;
+    clearScheduling.allowPacketMerge = true;
+    const auto addClear = [&](
+        const Name identity,
+        const AStringView label,
+        const GpuGraphResourceId destination,
+        const u32 value,
+        const GpuTaskId* dependencies,
+        const usize dependencyCount,
+        const bool mergeWithPrevious
+    ){
+        GpuTaskSchedulingHint scheduling = clearScheduling;
+        scheduling.mergeWithPrevious = mergeWithPrevious;
+        GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(clearQueue)
+            .setScheduling(scheduling)
+            .setDependencies(dependencies, dependencyCount)
+        ;
+        return graph.addClearBufferTask(
+            desc,
+            GpuClearBufferTaskDesc{
+                .destination = destination,
+                .clearValue = value,
+            }
+        );
+    };
+    constexpr u32 invalidNode = Limit<u32>::s_Max;
+    const GpuTaskId rebuildKeysClear = addClear(
+        Name("tests/descriptor_buffer/pure_sw_bvh_rebuild_keys_clear"),
+        "Pure SW-BVH Rebuild Keys Clear",
+        sortKeysResource,
+        invalidNode,
+        nullptr,
+        0u,
+        false
+    );
+    ASSERT_TRUE(rebuildKeysClear.valid());
+    const GpuTaskId rebuildParentClear = addClear(
+        Name("tests/descriptor_buffer/pure_sw_bvh_rebuild_parent_clear"),
+        "Pure SW-BVH Rebuild Parent Clear",
+        parentResource,
+        invalidNode,
+        &rebuildKeysClear,
+        1u,
+        true
+    );
+    ASSERT_TRUE(rebuildParentClear.valid());
+    const GpuTaskId rebuildCounterClear = addClear(
+        Name("tests/descriptor_buffer/pure_sw_bvh_rebuild_counter_clear"),
+        "Pure SW-BVH Rebuild Counter Clear",
+        visitCounterResource,
+        0u,
+        &rebuildParentClear,
+        1u,
+        true
+    );
+    ASSERT_TRUE(rebuildCounterClear.valid());
+
+    const GpuTaskResourceUse buildUses[] = {
+        { .resource = positionResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
+        { .resource = indexResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
+        { .resource = nodeResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
+        { .resource = parentResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
+        { .resource = sortKeysResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
+        { .resource = sortPayloadResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
+        { .resource = visitCounterResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
+    };
+    GpuTaskSchedulingHint buildScheduling;
+    buildScheduling.cost = GpuTaskCostHint::Large;
+    buildScheduling.allowPacketMerge = true;
+    buildScheduling.mergeWithPrevious = true;
+    GpuTaskDesc rebuildDesc;
+    rebuildDesc
+        .setIdentity(Name("tests/descriptor_buffer/pure_sw_bvh_rebuild"))
+        .setMarkerLabel("Pure SW-BVH Rebuild")
+        .setQueue(buildQueue)
+        .setScheduling(buildScheduling)
+        .setDependencies(&rebuildCounterClear, 1u)
+        .setResourceUses(buildUses, LengthOf(buildUses))
+    ;
+    bool rebuildRecorded = false;
+    const GpuTaskId rebuild = graph.addTask<NativePacketPrefixTask>(
+        rebuildDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = sortKeys.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .additionalBuffer = parent.get(),
+            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
+            .recorded = &rebuildRecorded,
+        }
+    );
+    ASSERT_TRUE(rebuild.valid());
+    const GpuTaskId refitCounterClear = addClear(
+        Name("tests/descriptor_buffer/pure_sw_bvh_refit_counter_clear"),
+        "Pure SW-BVH Refit Counter Clear",
+        visitCounterResource,
+        0u,
+        &rebuild,
+        1u,
+        true
+    );
+    ASSERT_TRUE(refitCounterClear.valid());
+    GpuTaskDesc refitDesc;
+    refitDesc
+        .setIdentity(Name("tests/descriptor_buffer/pure_sw_bvh_refit"))
+        .setMarkerLabel("Pure SW-BVH Refit")
+        .setQueue(buildQueue)
+        .setScheduling(buildScheduling)
+        .setDependencies(&refitCounterClear, 1u)
+        .setResourceUses(buildUses, LengthOf(buildUses))
+    ;
+    bool refitRecorded = false;
+    const GpuTaskId refit = graph.addTask<NativePacketPrefixTask>(
+        refitDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = visitCounter.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .recorded = &refitRecorded,
+        }
+    );
+    ASSERT_TRUE(refit.valid());
+
+    const GpuTaskResourceUse shadowPrepareUses[] = {
+        { .resource = nodeResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::ReadWrite },
+        { .resource = parentResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
+        { .resource = sortKeysResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
+        { .resource = sortPayloadResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
+        { .resource = visitCounterResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
+    };
+    GpuTaskDesc shadowPrepareDesc;
+    shadowPrepareDesc
+        .setIdentity(Name("tests/descriptor_buffer/pure_sw_bvh_shadow_prepare"))
+        .setMarkerLabel("Pure SW-BVH Shadow Preparation")
+        .setQueue(buildQueue)
+        .setScheduling(buildScheduling)
+        .setDependencies(&refit, 1u)
+        .setResourceUses(shadowPrepareUses, LengthOf(shadowPrepareUses))
+    ;
+    bool shadowPrepareRecorded = false;
+    QueueSubmissionToken acceptedToken;
+    const GpuTaskId shadowPrepare = graph.addTask<NativePacketPrefixTask>(
+        shadowPrepareDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = node.get(),
+            .expectedState = ResourceStates::ShaderResource,
+            .recorded = &shadowPrepareRecorded,
+            .acceptedToken = &acceptedToken,
+        }
+    );
+    ASSERT_TRUE(shadowPrepare.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/pure_sw_bvh_sentinel_chain_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(shadowPrepare);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(rebuildKeysClear), packet);
+    EXPECT_EQ(compiledGraph.packetForTask(rebuildParentClear), packet);
+    EXPECT_EQ(compiledGraph.packetForTask(rebuildCounterClear), packet);
+    EXPECT_EQ(compiledGraph.packetForTask(rebuild), packet);
+    EXPECT_EQ(compiledGraph.packetForTask(refitCounterClear), packet);
+    EXPECT_EQ(compiledGraph.packetForTask(refit), packet);
+    const GpuTaskId expectedTasks[] = {
+        rebuildKeysClear,
+        rebuildParentClear,
+        rebuildCounterClear,
+        rebuild,
+        refitCounterClear,
+        refit,
+        shadowPrepare,
+    };
+    const GpuSubmissionPacket& packetDesc = compiledGraph.packet(packet);
+    ASSERT_EQ(packetDesc.taskCount, LengthOf(expectedTasks));
+    const GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    ASSERT_NE(packetTasks, nullptr);
+    for(usize taskIndex = 0u; taskIndex < LengthOf(expectedTasks); ++taskIndex)
+        EXPECT_EQ(packetTasks[taskIndex], expectedTasks[taskIndex]);
+
+    const auto hasTransition = [&](
+        const GpuTaskId task,
+        const GpuGraphResourceId resource,
+        const ResourceStates::Mask before,
+        const ResourceStates::Mask after
+    ){
+        const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        if(!compiledTask || (compiledTask->prologueBarrierCount != 0u && !barriers))
+            return false;
+        for(usize barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTransition(rebuild, sortKeysResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransition(rebuild, parentResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransition(rebuild, visitCounterResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransition(refitCounterClear, visitCounterResource, ResourceStates::UnorderedAccess, ResourceStates::CopyDest));
+    EXPECT_TRUE(hasTransition(refit, visitCounterResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransition(shadowPrepare, nodeResource, ResourceStates::UnorderedAccess, ResourceStates::ShaderResource));
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuCommandIrCapture commandIrCapture(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket,
+        &commandIrCapture
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(rebuildRecorded);
+    EXPECT_TRUE(refitRecorded);
+    EXPECT_TRUE(shadowPrepareRecorded);
+    ASSERT_EQ(commandIrCapture.recordCount(), 4u);
+    const GpuTaskId expectedClearTasks[] = {
+        rebuildKeysClear,
+        rebuildParentClear,
+        rebuildCounterClear,
+        refitCounterClear,
+    };
+    const u32 expectedClearValues[] = { invalidNode, invalidNode, 0u, 0u };
+    for(usize recordIndex = 0u; recordIndex < LengthOf(expectedClearTasks); ++recordIndex){
+        const GpuCommandIrBuiltinTaskRecord* const clearRecord = commandIrCapture.recordAt(recordIndex);
+        ASSERT_NE(clearRecord, nullptr);
+        EXPECT_EQ(clearRecord->opcode, GpuCommandIrOpcode::ClearBuffer);
+        EXPECT_EQ(clearRecord->task, expectedClearTasks[recordIndex]);
+        EXPECT_EQ(clearRecord->packet, packet);
+        EXPECT_EQ(clearRecord->uintClearValue, UIntColor(expectedClearValues[recordIndex]));
+    }
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    ASSERT_NE(finalState, nullptr);
+    auto stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getBufferState(node.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(stateProbe->getBufferState(parent.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(stateProbe->getBufferState(sortKeys.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(stateProbe->getBufferState(sortPayload.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(stateProbe->getBufferState(visitCounter.get()), ResourceStates::UnorderedAccess);
+    stateProbe->close();
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(acceptedToken.valid());
+    const QueueSubmissionToken packetToken = transaction.packetToken(packet);
+    ASSERT_TRUE(packetToken.valid());
+    EXPECT_EQ(acceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(acceptedToken.value, packetToken.value);
+    EXPECT_EQ(acceptedToken.physicalQueueIndex, packetToken.physicalQueueIndex);
+    EXPECT_EQ(acceptedToken.deviceGeneration, packetToken.deviceGeneration);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Prepared BLAS work with no software-BVH tail in the aggregate Shadow Preparation callback has its frozen
 // position/index inputs observe graph-owned AccelStructBuildInput before recording, and the graph-owned
 // normalizer publishes ShaderResource afterward without either callback issuing a native state change.

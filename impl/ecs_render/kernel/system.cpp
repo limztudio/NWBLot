@@ -238,6 +238,8 @@ void RendererSystem::invalidateResources(){
     m_sceneBvhInstancesUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
+    m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
+    m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
     m_deferredShadowPrepareHybridSoftwareTailTask = {};
     m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
@@ -253,6 +255,8 @@ void RendererSystem::invalidateResources(){
     m_graphicsPrefixSceneShadingSetupReady = false;
     m_deferredLightingTaskGraphValid = false;
     m_deferredShadowPrepareTask = {};
+    m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
+    m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
     m_deferredShadowPrepareHybridSoftwareTailTask = {};
     m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_deferredShadowVisibilityOpaqueTask = {};
@@ -1005,6 +1009,24 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId shadowPreparePacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredShadowPrepareTask
     );
+    // Pure-software per-mesh typed clears and their native compute callbacks are part of the same accepting Shadow
+    // Preparation packet. The semantic range still starts at Shadow Preparation, so a split would otherwise omit
+    // recorded predecessor work and allow CPU topology publication without its sentinel/compute chain.
+    const bool shadowPrepareSoftwareBvhBuildsMerged =
+        !m_deferredShadowPrepareSoftwareBvhBuildFirstTask.valid()
+            ? !m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid()
+            : (
+                m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid()
+                && m_deferredLightingCompiledGraph.tasksSharePacket(
+                    m_deferredShadowPrepareTask,
+                    m_deferredShadowPrepareSoftwareBvhBuildFirstTask
+                )
+                && m_deferredLightingCompiledGraph.tasksSharePacket(
+                    m_deferredShadowPrepareTask,
+                    m_deferredShadowPrepareSoftwareBvhBuildLastTask
+                )
+            )
+    ;
     // The optional hybrid tail records real work, but preserves the former aggregate callback's acceptance and
     // fallback boundary by remaining in this exact first Graphics packet.
     const bool shadowPrepareHybridSoftwareTailMerged =
@@ -1840,6 +1862,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         !m_deferredLightingTaskGraphValid
         || !m_deferredShadowPrepareTask.valid()
         || !shadowPreparePacket.valid()
+        || !shadowPrepareSoftwareBvhBuildsMerged
         || !shadowPrepareHybridSoftwareTailMerged
         || !shadowPrepareAccelStructFinalizeMerged
         || !deferredBindlessSlotsUploadMergedIntoShadowPreparePacket
@@ -2307,6 +2330,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_graphicsPrefixTask.valid()
         && m_deferredShadowPrepareTask.valid()
         && shadowPreparePacket.valid()
+        && shadowPrepareSoftwareBvhBuildsMerged
         && shadowPrepareHybridSoftwareTailMerged
         && shadowPrepareAccelStructFinalizeMerged
         && graphicsPrefixPacket.valid()

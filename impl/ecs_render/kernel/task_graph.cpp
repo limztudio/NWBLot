@@ -108,6 +108,7 @@ struct ShadowPrepareGraphTask{
         bool meshBlasBuildsGraphOwned = false;
         bool meshBlasGeometryBuildInputStatesGraphOwned = false;
         bool meshSwBvhBuildsGraphOwned = false;
+        bool preparedMeshSwBvhBuildsRecordedByGraph = false;
         bool deferHybridSoftwareTail = false;
     };
 
@@ -138,6 +139,7 @@ struct ShadowPrepareGraphTask{
                 payload.meshBlasBuildsGraphOwned,
                 payload.meshBlasGeometryBuildInputStatesGraphOwned,
                 payload.meshSwBvhBuildsGraphOwned,
+                payload.preparedMeshSwBvhBuildsRecordedByGraph,
                 payload.deferHybridSoftwareTail
             )
         ;
@@ -183,6 +185,32 @@ struct ShadowPrepareGraphTask{
         if(payload.targets)
             payload.targets->bindless.slotsUploaded = payload.deferredBindlessSlotsWereUploaded;
         renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();
+    }
+};
+
+
+// Pure-software preparation shares scratch between every frozen mesh build. Keep each typed sentinel setup next to
+// its matching compute callback so a later mesh cannot clear a prior mesh's sort/payload rendezvous state.
+struct ShadowPrepareSoftwareBvhBuildGraphTask{
+    struct Payload{
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+        PreparedMeshSwBvhBuild build;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.raytracingSystem || !payload.timingTicket)
+            return false;
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        return payload.raytracingSystem->recordPreparedMeshSwBvhBuildAfterGraphClears(
+            commandList,
+            payload.build
+        );
     }
 };
 
@@ -2362,6 +2390,8 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     using namespace __hidden_renderer_task_graph;
 
     m_deferredShadowPrepareTask = {};
+    m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
+    m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
     m_deferredShadowPrepareHybridSoftwareTailTask = {};
     m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_deferredBindlessSlotsUploadTask = {};
@@ -2872,8 +2902,25 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         )
     ;
     bool meshSwBvhInputStatesGraphOwned = hybridSoftwareTailInputStatesCandidate;
+    // The pure-software route has no accepted hardware fallback. It can therefore move each frozen operation's
+    // private sentinel setup into graph built-ins, while the hybrid route deliberately retains its conditional
+    // native transaction until its fallback boundary is separately modeled.
+    const bool pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate =
+        meshSwBvhBuildsGraphOwned
+        && !m_raytracingSystem.shadowVisibilityHardwareSupported()
+    ;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+    struct PreparedMeshSwBvhGraphResources{
+        PreparedMeshSwBvhBuild build;
+        Core::GpuGraphResourceId position;
+        Core::GpuGraphResourceId triangleIndex;
+        Core::GpuGraphResourceId node;
+        Core::GpuGraphResourceId parent;
+        Core::GpuGraphResourceId sortKeys;
+        Core::GpuGraphResourceId sortPayload;
+        Core::GpuGraphResourceId visitCounter;
+    };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceSetUse, Core::Alloc::ScratchArena> resourceSetUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accelStructFinalizeResourceUses{ scratchArena };
@@ -2881,6 +2928,9 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hybridSoftwareTailInputResources{ scratchArena };
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> shadowPrepareTraceGeometryResources{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hybridSoftwareTailResourceUses{ scratchArena };
+    Vector<PreparedMeshSwBvhGraphResources, Core::Alloc::ScratchArena> pureSoftwareMeshSwBvhGraphResources{
+        scratchArena
+    };
     resourceUses.reserve(
         19u
         + shadowTraceGeometryResourceCount
@@ -2897,6 +2947,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     hybridSoftwareTailInputResources.reserve(preparedMeshSwBvhBuilds.size() * 2u);
     shadowPrepareTraceGeometryResources.reserve(shadowTraceGeometryResourceCount);
     hybridSoftwareTailResourceUses.reserve(preparedMeshSwBvhBuilds.size() * 2u);
+    pureSoftwareMeshSwBvhGraphResources.reserve(preparedMeshSwBvhBuilds.size());
     // Shadow Preparation owns each preflight input's post-transition packet boundary. This deliberately supersedes
     // preceding immutable uploads as graph producers, so later Compute readers wait on this first Graphics packet
     // rather than forcing FrontierSafe packetization to split an upload away from its accepting consumer.
@@ -3201,11 +3252,167 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         return false;
     }
 
+    bool pureSoftwareMeshSwBvhBuildsGraphOwned = pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate;
+    if(pureSoftwareMeshSwBvhBuildsGraphOwned){
+        for(const PreparedMeshSwBvhBuild& build : preparedMeshSwBvhBuilds){
+            const PreparedMeshSwBvhGraphResources resources{
+                .build = build,
+                .position = m_deferredLightingTaskGraph.findImportedBuffer(build.positionBuffer),
+                .triangleIndex = m_deferredLightingTaskGraph.findImportedBuffer(build.triangleIndexBuffer),
+                .node = m_deferredLightingTaskGraph.findImportedBuffer(build.nodeBuffer),
+                .parent = m_deferredLightingTaskGraph.findImportedBuffer(build.parentBuffer),
+                .sortKeys = m_deferredLightingTaskGraph.findImportedBuffer(build.sortKeysBuffer),
+                .sortPayload = m_deferredLightingTaskGraph.findImportedBuffer(build.sortPayloadBuffer),
+                .visitCounter = m_deferredLightingTaskGraph.findImportedBuffer(build.visitCounterBuffer),
+            };
+            if(
+                !resources.position.valid()
+                || !resources.triangleIndex.valid()
+                || !resources.node.valid()
+                || !resources.parent.valid()
+                || !resources.sortKeys.valid()
+                || !resources.sortPayload.valid()
+                || !resources.visitCounter.valid()
+            ){
+                // Keep the established aggregate direct path if a future preflight leaves any frozen operation
+                // without an exact graph identity. Never mix a partial typed-clear chain with native sentinels.
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: pure software BVH build is missing graph resources; retaining aggregate compatibility recorder"));
+                pureSoftwareMeshSwBvhBuildsGraphOwned = false;
+                pureSoftwareMeshSwBvhGraphResources.clear();
+                break;
+            }
+            pureSoftwareMeshSwBvhGraphResources.push_back(resources);
+        }
+    }
+
+    if(pureSoftwareMeshSwBvhBuildsGraphOwned){
+        // Every operation shares sort keys, payload, and visit-counter scratch. Its built-in clears must therefore
+        // remain immediately adjacent to its compute callback, and the entire chain must remain in Shadow
+        // Preparation's accepting Graphics packet despite later Compute consumers of the final traversal state.
+        Core::GpuTaskSchedulingHint clearScheduling;
+        clearScheduling.cost = Core::GpuTaskCostHint::Tiny;
+        clearScheduling.forceSubmissionBoundary = false;
+        clearScheduling.allowPacketMerge = true;
+        clearScheduling.mergeWithPrevious = true;
+        clearScheduling.allowMergeAcrossConsumerFrontier = true;
+        Core::GpuTaskSchedulingHint buildScheduling = clearScheduling;
+        buildScheduling.cost = Core::GpuTaskCostHint::Large;
+
+        Core::GpuTaskId buildDependency = shadowPrepareDependency;
+        const auto addPureSoftwareBvhClear = [&](
+            const Name identity,
+            const AStringView label,
+            const Core::GpuGraphResourceId destination,
+            const u32 clearValue
+        ){
+            Core::GpuTaskDesc clearDesc;
+            clearDesc
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setQueue(GraphicsUploadQueueRequest())
+                .setScheduling(clearScheduling)
+                .setDependencies(&buildDependency, 1u)
+            ;
+            return m_deferredLightingTaskGraph.addClearBufferTask(
+                clearDesc,
+                Core::GpuClearBufferTaskDesc{
+                    .destination = destination,
+                    .clearValue = clearValue,
+                }
+            );
+        };
+        const auto appendPureSoftwareBvhClear = [&](const Core::GpuTaskId clearTask){
+            if(!clearTask.valid())
+                return false;
+            if(!m_deferredShadowPrepareSoftwareBvhBuildFirstTask.valid())
+                m_deferredShadowPrepareSoftwareBvhBuildFirstTask = clearTask;
+            buildDependency = clearTask;
+            return true;
+        };
+
+        for(const PreparedMeshSwBvhGraphResources& resources : pureSoftwareMeshSwBvhGraphResources){
+            const PreparedMeshSwBvhBuild& build = resources.build;
+            if(!build.performRefit){
+                if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(
+                    DeriveName(build.meshName, AStringView(":shadow_prepare_sw_bvh_keys_clear")),
+                    "Shadow Prepare SW-BVH Sort-Key Clear",
+                    resources.sortKeys,
+                    BvhNodeIndex::Invalid
+                ))
+                    || !appendPureSoftwareBvhClear(addPureSoftwareBvhClear(
+                        DeriveName(build.meshName, AStringView(":shadow_prepare_sw_bvh_parent_clear")),
+                        "Shadow Prepare SW-BVH Parent Clear",
+                        resources.parent,
+                        BvhNodeIndex::Invalid
+                    ))
+                ){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH sentinel clears"));
+                    return false;
+                }
+            }
+            if(!appendPureSoftwareBvhClear(addPureSoftwareBvhClear(
+                DeriveName(build.meshName, AStringView(":shadow_prepare_sw_bvh_counter_clear")),
+                "Shadow Prepare SW-BVH Counter Clear",
+                resources.visitCounter,
+                0u
+            ))){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH counter clear"));
+                return false;
+            }
+
+            const Core::GpuTaskResourceUse buildResourceUses[]{
+                ReadUse(resources.position, Core::ResourceStates::ShaderResource),
+                ReadUse(resources.triangleIndex, Core::ResourceStates::ShaderResource),
+                ReadWriteUse(resources.node, Core::ResourceStates::UnorderedAccess),
+                ReadWriteUse(resources.parent, Core::ResourceStates::UnorderedAccess),
+                ReadWriteUse(resources.sortKeys, Core::ResourceStates::UnorderedAccess),
+                ReadWriteUse(resources.sortPayload, Core::ResourceStates::UnorderedAccess),
+                ReadWriteUse(resources.visitCounter, Core::ResourceStates::UnorderedAccess),
+            };
+            Core::GpuTaskDesc buildDesc;
+            buildDesc
+                .setIdentity(DeriveName(build.meshName, AStringView(":shadow_prepare_sw_bvh_build")))
+                .setMarkerLabel("Shadow Prepare SW-BVH Build")
+                .setQueue(GraphicsComputeQueueRequest())
+                .setScheduling(buildScheduling)
+                .setDependencies(&buildDependency, 1u)
+                .setResourceUses(buildResourceUses, LengthOf(buildResourceUses))
+            ;
+            const Core::GpuTaskId buildTask = m_deferredLightingTaskGraph.addTask<
+                ECSRenderDetail::ShadowPrepareSoftwareBvhBuildGraphTask
+            >(
+                buildDesc,
+                ECSRenderDetail::ShadowPrepareSoftwareBvhBuildGraphTask::Payload{
+                    .raytracingSystem = &m_raytracingSystem,
+                    .build = build,
+                    .timingTicket = &timingTicket,
+                }
+            );
+            if(!buildTask.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare pure software BVH build callback"));
+                return false;
+            }
+            buildDependency = buildTask;
+            m_deferredShadowPrepareSoftwareBvhBuildLastTask = buildTask;
+        }
+        if(
+            !m_deferredShadowPrepareSoftwareBvhBuildFirstTask.valid()
+            || !m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid()
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: pure software BVH graph chain has no task bounds"));
+            return false;
+        }
+        shadowPrepareDependency = buildDependency;
+    }
+
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
     scheduling.mergeWithPrevious = true;
+    // A pure-software per-mesh chain is an explicit immediate predecessor of this semantic endpoint. Retain the
+    // complete accepting packet even when later trace consumers form a FrontierSafe consumer frontier.
+    scheduling.allowMergeAcrossConsumerFrontier = pureSoftwareMeshSwBvhBuildsGraphOwned;
     const Core::GpuTaskId* const dependencies = &shadowPrepareDependency;
     constexpr usize dependencyCount = 1u;
     Core::GpuTaskDesc desc;
@@ -3235,6 +3442,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .meshBlasBuildsGraphOwned = meshBlasBuildsGraphOwned,
             .meshBlasGeometryBuildInputStatesGraphOwned = meshBlasGeometryBuildInputStatesGraphOwned,
             .meshSwBvhBuildsGraphOwned = meshSwBvhBuildsGraphOwned,
+            .preparedMeshSwBvhBuildsRecordedByGraph = pureSoftwareMeshSwBvhBuildsGraphOwned,
             .deferHybridSoftwareTail = hybridSoftwareTailGraphOwned,
         }
     );
@@ -7486,6 +7694,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_sceneBvhInstancesUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
+    m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
+    m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
     m_deferredShadowPrepareHybridSoftwareTailTask = {};
     m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};

@@ -106,6 +106,10 @@ bool RendererRayTracingSystem::shadowVisibilityResourcesPreflighted()const noexc
     return m_shadowVisibilityResourcesPreflighted;
 }
 
+bool RendererRayTracingSystem::shadowVisibilityHardwareSupported()const noexcept{
+    return m_shadowVisibilityHardwareSupported;
+}
+
 bool RendererRayTracingSystem::shadowVisibilitySoftwareResourcesPreflighted()const noexcept{
     return m_shadowVisibilityTraceResourcesPreflighted
         && (!m_shadowVisibilityHardwareSupported || m_shadowVisibilityHybridResourcesPreflighted)
@@ -1589,6 +1593,7 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     const bool meshBlasBuildsGraphOwned,
     const bool meshBlasGeometryBuildInputStatesGraphOwned,
     const bool meshSwBvhBuildsGraphOwned,
+    const bool preparedMeshSwBvhBuildsRecordedByGraph,
     const bool deferHybridSoftwareTail
 ){
     outBackendReady = false;
@@ -1721,8 +1726,10 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
 
     const bool meshSwBvhReady = meshSwBvhBuildsGraphOwned
         // Pure software Shadow Preparation has no preceding hardware BLAS producer. Its frozen position/index
-        // inputs are already declared as ShaderResource by this graph task before the callback records.
-        ? recordPreparedMeshSwBvhBuilds(commandList, meshSwBvhBuildsGraphOwned)
+        // inputs are declared as ShaderResource by the graph. When per-operation typed clears and compute tasks
+        // already recorded in this same accepting packet, retain only the existing scene-BVH/material tail here.
+        ? (preparedMeshSwBvhBuildsRecordedByGraph
+            || recordPreparedMeshSwBvhBuilds(commandList, meshSwBvhBuildsGraphOwned))
         : buildPendingMeshSwBvh(commandList)
     ;
     if(!meshSwBvhReady){

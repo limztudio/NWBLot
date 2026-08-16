@@ -218,6 +218,7 @@ public:
         bool meshBlasBuildsGraphOwned = false,
         bool meshBlasGeometryBuildInputStatesGraphOwned = false,
         bool meshSwBvhBuildsGraphOwned = false,
+        bool preparedMeshSwBvhBuildsRecordedByGraph = false,
         bool deferHybridSoftwareTail = false
     );
     // The hybrid HW-to-SW continuation stays in the accepting Shadow Preparation packet, but records after the
@@ -235,6 +236,7 @@ public:
         bool meshSwBvhInputStatesGraphOwned = false
     );
     [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept;
+    [[nodiscard]] bool shadowVisibilityHardwareSupported()const noexcept;
     [[nodiscard]] bool shadowVisibilitySoftwareResourcesPreflighted()const noexcept;
     [[nodiscard]] bool hybridShadowVisibilityResourcesPreflighted()const noexcept;
     void discardPreflightShadowVisibilityResources()noexcept;
@@ -325,6 +327,13 @@ public:
     // their optional software tail preserves its narrow direct compatibility fallback.
     [[nodiscard]] bool preparedMeshSwBvhBuildsReady()const noexcept;
     [[nodiscard]] const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds()const noexcept;
+    // The pure-software Shadow Preparation packet records each frozen build after graph-owned typed sentinel
+    // clears.  Revalidate this immutable snapshot immediately before its native compute sequence; any miss rejects
+    // the shared packet so the existing acceptance callback cannot publish partial topology.
+    [[nodiscard]] bool recordPreparedMeshSwBvhBuildAfterGraphClears(
+        Core::CommandList& commandList,
+        const PreparedMeshSwBvhBuild& build
+    );
     void confirmPreparedMeshSwBvhBuilds()noexcept;
     void releaseRayTraceMaterialContextHeapHandles();
     void releaseSwBvhScratchHeapHandles();
@@ -895,6 +904,13 @@ private:
         Core::CommandList& commandList,
         bool meshSwBvhInputStatesGraphOwned
     );
+    [[nodiscard]] bool preparedMeshSwBvhBuildMatchesCurrent(const PreparedMeshSwBvhBuild& build);
+    [[nodiscard]] bool recordPreparedMeshSwBvhBuild(
+        Core::CommandList& commandList,
+        const PreparedMeshSwBvhBuild& build,
+        bool meshSwBvhInputStatesGraphOwned,
+        bool sentinelClearsGraphOwned
+    );
     [[nodiscard]] bool preparedMeshSwBvhBuildProducesTopology(const MeshResources& mesh)const noexcept;
     void clearPreparedMeshSwBvhBuilds()noexcept;
     [[nodiscard]] bool prepareSurfelResources(DeferredFrameTargets& targets);
@@ -1190,9 +1206,9 @@ private:
     [[nodiscard]] bool ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
     [[nodiscard]] bool meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle);
     [[nodiscard]] bool buildMeshSwBvh(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, const SIMDVector aabbMin, const SIMDVector aabbMax, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
-    [[nodiscard]] bool buildMeshSwBvhPrepared(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, const SIMDVector aabbMin, const SIMDVector aabbMax, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle);
+    [[nodiscard]] bool buildMeshSwBvhPrepared(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, const SIMDVector aabbMin, const SIMDVector aabbMax, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle, bool sentinelClearsGraphOwned = false);
     [[nodiscard]] bool refitMeshSwBvh(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle& nodeHeapHandle, Core::GpuDescriptorHandle& parentHeapHandle);
-    [[nodiscard]] bool refitMeshSwBvhPrepared(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle);
+    [[nodiscard]] bool refitMeshSwBvhPrepared(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle, bool sentinelClearsGraphOwned = false);
     [[nodiscard]] bool updateMeshSwBvh(Core::CommandList& commandList, MeshResources& meshResources);
     [[nodiscard]] bool ensureSceneBvhBuffers(u32 instanceCount);
     [[nodiscard]] bool ensureRayTraceMaterialContextSlotsBuffer();

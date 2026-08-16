@@ -428,6 +428,10 @@ private:
     // both history acceptance and the external completion wait for the prior-frame images.
     Core::GpuTaskId m_deferredLaggedLightingHistorySlotsUploadTask;
     Core::GpuTaskId m_deferredShadowPrepareTask;
+    // Pure-software prepared per-mesh builds lower their typed sentinel clears and native compute callbacks before
+    // Shadow Preparation's existing scene-build/acceptance endpoint. Both bounds must remain in that same packet.
+    Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildFirstTask;
+    Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildLastTask;
     // Hybrid HW-to-SW preparation retains its opaque fallback inside the accepting Shadow Preparation packet, but
     // records the software continuation as a separate packet-local callback so its bridge can be lowered next.
     Core::GpuTaskId m_deferredShadowPrepareHybridSoftwareTailTask;

@@ -439,6 +439,82 @@ bool RendererMaterialSystem::findMaterialSurfaceInfo(const Core::Assets::AssetRe
     return true;
 }
 
+bool RendererMaterialSystem::gatherPreparedMaterialPassSampledTextures(
+    const MaterialPassDrawItems* const* const drawItemSets,
+    const usize drawItemSetCount,
+    Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& outTextures
+){
+    outTextures.clear();
+    if(drawItemSetCount != 0u && !drawItemSets)
+        return false;
+
+    RendererMaterialResourceState& resources = materialState().m_resourceState;
+    const auto appendDrawItem = [&](const MaterialPassDrawItem& drawItem){
+        const auto foundMaterial = materialState().m_surfaceInfos.find(drawItem.pipelineKey.material);
+        if(foundMaterial == materialState().m_surfaceInfos.end())
+            return false;
+
+        const MaterialSurfaceInfo& materialInfo = foundMaterial.value();
+        if(!materialInfo.resourceReferencesResolved)
+            return false;
+
+        for(const MaterialResourceReference& resourceReference : materialInfo.resourceReferences){
+            switch(resourceReference.resourceKind){
+            case MaterialResourceKind::SampledImage2D:{
+                if(
+                    resourceReference.resourceSource != MaterialResourceSource::Asset
+                    || !resourceReference.textureAsset.valid()
+                )
+                    return false;
+
+                const auto foundTexture = resources.textureAssetCache.find(resourceReference.textureAsset.name());
+                if(foundTexture == resources.textureAssetCache.end() || !foundTexture.value())
+                    return false;
+
+                const TextureGpuResource& textureResource = *foundTexture.value();
+                if(
+                    !textureResource.valid()
+                    || textureResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage
+                    || !textureResource.texture
+                )
+                    return false;
+
+                bool alreadyCollected = false;
+                for(const Core::TextureHandle& existing : outTextures){
+                    if(existing.get() == textureResource.texture.get()){
+                        alreadyCollected = true;
+                        break;
+                    }
+                }
+                if(!alreadyCollected)
+                    outTextures.push_back(textureResource.texture);
+                break;
+            }
+            case MaterialResourceKind::Sampler:
+                break;
+            default:
+                return false;
+            }
+        }
+        return true;
+    };
+
+    for(usize drawItemSetIndex = 0u; drawItemSetIndex < drawItemSetCount; ++drawItemSetIndex){
+        const MaterialPassDrawItems* const drawItems = drawItemSets[drawItemSetIndex];
+        if(!drawItems)
+            return false;
+        for(const MaterialPassDrawItem& drawItem : drawItems->meshDrawItems){
+            if(!appendDrawItem(drawItem))
+                return false;
+        }
+        for(const MaterialPassDrawItem& drawItem : drawItems->computeDrawItems){
+            if(!appendDrawItem(drawItem))
+                return false;
+        }
+    }
+    return true;
+}
+
 bool RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){
     bool hasTransparentRenderers = false;
     auto rendererView = world().view<RendererComponent>();

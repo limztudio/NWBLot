@@ -10769,6 +10769,149 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialGeometryEntryStatesReuse
 }
 
 
+// Material sampled textures are selected through global heap slots just like geometry. A preflight producer may
+// import one under its own identity, so the prepared material set must reuse that typed texture and establish the
+// ShaderResource state before native material code can sample the descriptor.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialSampledTextureEntryStatesReusePreflightImport){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto texture = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(texture.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId preflightTextureResource = graph.importTexture(
+        texture,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/material_sampled_texture_preflight"))
+            .setMarkerLabel("Preflight Material Sampled Texture")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(preflightTextureResource.valid());
+    const GpuGraphResourceId materialSampledTextureResource = graph.findImportedTexture(texture);
+    ASSERT_TRUE(materialSampledTextureResource.valid());
+    EXPECT_EQ(materialSampledTextureResource, preflightTextureResource);
+
+    const GpuGraphResourceSetId materialSampledTextureSet = graph.importResourceSet(
+        GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/material_sampled_texture_set"))
+            .setMarkerLabel("Material Sampled Texture Set")
+            .setMembers(&materialSampledTextureResource, 1u)
+    );
+    ASSERT_TRUE(materialSampledTextureSet.valid());
+    const GpuTaskResourceSetUse materialSetUses[] = {
+        GpuTaskResourceSetUse{
+            .resourceSet = materialSampledTextureSet,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint materialScheduling;
+    materialScheduling.cost = GpuTaskCostHint::Medium;
+    materialScheduling.forceSubmissionBoundary = true;
+    materialScheduling.allowPacketMerge = false;
+    GpuTaskDesc materialDesc;
+    materialDesc
+        .setIdentity(Name("tests/descriptor_buffer/material_sampled_texture_entry"))
+        .setMarkerLabel("Material Sampled Texture Entry")
+        .setQueue(graphicsQueue)
+        .setScheduling(materialScheduling)
+        .setResourceSetUses(materialSetUses, LengthOf(materialSetUses))
+    ;
+    ResourceStates::Mask observedTextureState = ResourceStates::Unknown;
+    bool materialRecorded = false;
+    const GpuTaskId materialTask = graph.addTask<NativePacketExternalFinalTextureProbeTask>(
+        materialDesc,
+        NativePacketExternalFinalTextureProbeTask::Payload{
+            .texture = texture.get(),
+            .observedState = &observedTextureState,
+            .recorded = &materialRecorded,
+        }
+    );
+    ASSERT_TRUE(materialTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/material_sampled_texture_entry_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuSubmissionPacketId materialPacket = compiledGraph.packetForTask(materialTask);
+    ASSERT_TRUE(materialPacket.valid());
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuCompiledTask* const compiledMaterial = compiledGraph.findTask(materialTask);
+    ASSERT_NE(compiledMaterial, nullptr);
+    ASSERT_EQ(compiledMaterial->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledMaterial->prologueBarrierCount, 1u);
+    const GpuCompiledBarrier* const materialBarrier = compiledGraph.taskPrologueBarriers(materialTask);
+    ASSERT_NE(materialBarrier, nullptr);
+    EXPECT_EQ(materialBarrier[0].type, GpuCompiledBarrierType::TextureTransition);
+    EXPECT_EQ(materialBarrier[0].resource, materialSampledTextureResource);
+    EXPECT_EQ(materialBarrier[0].before, ResourceStates::Common);
+    EXPECT_EQ(materialBarrier[0].after, ResourceStates::ShaderResource);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(materialRecorded);
+    EXPECT_EQ(observedTextureState, ResourceStates::ShaderResource);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(materialPacket).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Prepared transparent CSG Pre writes peel and receiver-event StorageImage aliases, then graph-owned Span builds
 // receiver spans before Combine writes four removed-interval aliases. Span, Combine, Clear, and Occupancy must all
 // see graph-lowered state without reissuing native setup; check the first and last slices on a real Vulkan packet.

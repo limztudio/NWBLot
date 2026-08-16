@@ -154,6 +154,14 @@ public:
     [[nodiscard]] bool materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems);
     [[nodiscard]] bool meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool computeMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems);
+    // Resolves the exact persistent sampled textures selected by frozen prepared draw streams. It never creates
+    // assets or descriptors: a missing or unresolved cached resource makes the collection unavailable so callers
+    // can retain their existing compatibility route.
+    [[nodiscard]] bool gatherPreparedMaterialPassSampledTextures(
+        const MaterialPassDrawItems* const* drawItemSets,
+        usize drawItemSetCount,
+        Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& outTextures
+    );
     [[nodiscard]] bool prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems);
     [[nodiscard]] bool prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);

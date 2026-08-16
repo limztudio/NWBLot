@@ -1390,6 +1390,21 @@ namespace __hidden_renderer_task_graph{
     };
 }
 
+// Material raster callbacks may first generate vertices with a compute-emulation dispatch, then issue ordinary
+// Graphics work. They must stay on the primary Graphics transport, but their declaration must include both command
+// capabilities so debug recording can reject a genuinely incompatible route rather than the valid emulation path.
+[[nodiscard]] static Core::GpuQueueRequest GraphicsComputeQueueRequest(){
+    return Core::GpuQueueRequest{
+        static_cast<Core::GpuQueueCapability::Mask>(
+            static_cast<u8>(Core::GpuQueueCapability::Graphics)
+            | static_cast<u8>(Core::GpuQueueCapability::Compute)
+        ),
+        Core::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+}
+
 // A tiny setup dispatch can otherwise be rerouted to Graphics while its large Compute consumer selects the dedicated
 // Compute transport. Use this only for work that must merge into that consumer's packet, so both requests select the
 // same physical queue whenever a Compute transport is available.
@@ -2094,6 +2109,58 @@ struct DeferredPresentGraphTask{
     members.reserve(resourceUses.size());
     for(const Core::GpuTaskResourceUse& use : resourceUses)
         members.push_back(use.resource);
+
+    outResourceSet = graph.importResourceSet(
+        Core::GpuGraphResourceSetDesc{}
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setMembers(members.data(), members.size())
+    );
+    return outResourceSet.valid();
+}
+
+// Material constants select persistent sampled textures through global heap slots. The prepared draw stream is the
+// only authoritative CPU-side enumeration at declaration time, so retain its exact resolved texture handles in an
+// immutable graph set just as we do mesh geometry. Reuse an earlier typed import when a preflight producer already
+// chose its identity; otherwise use the asset texture's stable name and one common material-texture label.
+[[nodiscard]] static bool GatherPreparedMaterialSampledTextureResourceSet(
+    RendererMaterialSystem& materialSystem,
+    Core::GpuTaskGraph& graph,
+    const MaterialPassDrawItems* const* const drawItemSets,
+    const usize drawItemSetCount,
+    Core::Alloc::ScratchArena& scratchArena,
+    const Name& identity,
+    const AStringView label,
+    Core::GpuGraphResourceSetId& outResourceSet
+){
+    outResourceSet = {};
+    Vector<Core::TextureHandle, Core::Alloc::ScratchArena> sampledTextures{ scratchArena };
+    if(!materialSystem.gatherPreparedMaterialPassSampledTextures(
+        drawItemSets,
+        drawItemSetCount,
+        sampledTextures
+    ))
+        return false;
+
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> members{ scratchArena };
+    members.reserve(sampledTextures.size());
+    for(const Core::TextureHandle& texture : sampledTextures){
+        Core::GpuGraphResourceId resource = graph.findImportedTexture(texture);
+        if(!resource.valid()){
+            const Name textureIdentity = texture->getDescription().name;
+            if(!textureIdentity)
+                return false;
+            resource = graph.importTexture(
+                texture,
+                TextureResourceDesc(textureIdentity, "Prepared Material Sampled Texture")
+            );
+        }
+        if(!resource.valid())
+            return false;
+        members.push_back(resource);
+    }
+    if(members.empty())
+        return true;
 
     outResourceSet = graph.importResourceSet(
         Core::GpuGraphResourceSetDesc{}
@@ -4061,6 +4128,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgReceiverSpanResourceUses{ gbufferResourceScratch };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgIntervalCombineResourceUses{ gbufferResourceScratch };
     Core::GpuGraphResourceSetId gbufferMaterialGeometrySet;
+    Core::GpuGraphResourceSetId gbufferMaterialSampledTextureSet;
     const MaterialPassDrawItems* const gbufferMaterialGeometryDrawSets[] = {
         &opaqueDrawItems.regular,
         &opaqueDrawItems.csgReceiverSurface,
@@ -4083,6 +4151,20 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     ;
     if(gbufferUsesMaterialGeometry && !gbufferPayload.materialGeometryStatesGraphOwned)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque material geometry states"));
+    const bool gbufferMaterialSampledTexturesCollected = gbufferUsesMaterialGeometry
+        && GatherPreparedMaterialSampledTextureResourceSet(
+            m_materialSystem,
+            m_deferredLightingTaskGraph,
+            gbufferMaterialGeometryDrawSets,
+            LengthOf(gbufferMaterialGeometryDrawSets),
+            gbufferResourceScratch,
+            Name("render.graphics_prefix.gbuffer.material_sampled_textures"),
+            "Opaque Material Sampled Textures",
+            gbufferMaterialSampledTextureSet
+        )
+    ;
+    if(gbufferUsesMaterialGeometry && !gbufferMaterialSampledTexturesCollected)
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque material sampled textures"));
     gbufferResourceUses.reserve((hasOpaqueDrawItems ? 7u : 5u) + (hasCsgFrameGpuWork ? 5u : 0u) + (hasOpaqueCsgFrameWork ? 5u : 0u));
     gbufferResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
     if(hasOpaqueDrawItems){
@@ -4203,6 +4285,18 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         .requiredState = Core::ResourceStates::ShaderResource,
         .access = Core::GpuTaskResourceAccess::Read,
     };
+    const Core::GpuTaskResourceSetUse gbufferMaterialSampledTextureSetUse{
+        .resourceSet = gbufferMaterialSampledTextureSet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
+    Core::GpuTaskResourceSetUse gbufferMaterialResourceSetUses[2u] = {};
+    usize gbufferMaterialResourceSetUseCount = 0u;
+    if(gbufferPayload.materialGeometryStatesGraphOwned)
+        gbufferMaterialResourceSetUses[gbufferMaterialResourceSetUseCount++] = gbufferMaterialGeometrySetUse;
+    if(gbufferMaterialSampledTextureSet.valid())
+        gbufferMaterialResourceSetUses[gbufferMaterialResourceSetUseCount++] = gbufferMaterialSampledTextureSetUse;
     Core::GpuTaskSchedulingHint gbufferScheduling;
     gbufferScheduling.cost = Core::GpuTaskCostHint::Medium;
     gbufferScheduling.forceSubmissionBoundary = false;
@@ -4212,13 +4306,13 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     gbufferDesc
         .setIdentity(Name("render.graphics_prefix.gbuffer"))
         .setMarkerLabel("Opaque G-Buffer")
-        .setQueue(GraphicsQueueRequest())
+        .setQueue(GraphicsComputeQueueRequest())
         .setScheduling(gbufferScheduling)
         .setDependencies(&csgIntervalClearTask, 1u)
         .setResourceUses(gbufferResourceUses.data(), gbufferResourceUses.size())
         .setResourceSetUses(
-            gbufferPayload.materialGeometryStatesGraphOwned ? &gbufferMaterialGeometrySetUse : nullptr,
-            gbufferPayload.materialGeometryStatesGraphOwned ? 1u : 0u
+            gbufferMaterialResourceSetUseCount != 0u ? gbufferMaterialResourceSetUses : nullptr,
+            gbufferMaterialResourceSetUseCount
         )
     ;
     m_graphicsPrefixGbufferTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::GbufferGraphTask>(
@@ -4287,6 +4381,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             csgIntervalSampleResourceScratch
         };
         Core::GpuGraphResourceSetId csgIntervalSampleMaterialGeometrySet;
+        Core::GpuGraphResourceSetId csgIntervalSampleMaterialSampledTextureSet;
         const MaterialPassDrawItems* const csgIntervalSampleMaterialGeometryDrawSets[] = { &opaqueDrawItems.csg };
         const bool csgIntervalSampleUsesMaterialGeometry = !opaqueDrawItems.csg.empty();
         csgIntervalSamplePayload.materialGeometryStatesGraphOwned = csgIntervalSampleUsesMaterialGeometry
@@ -4303,6 +4398,20 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         ;
         if(csgIntervalSampleUsesMaterialGeometry && !csgIntervalSamplePayload.materialGeometryStatesGraphOwned)
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque CSG material geometry states"));
+        const bool csgIntervalSampleMaterialSampledTexturesCollected = csgIntervalSampleUsesMaterialGeometry
+            && GatherPreparedMaterialSampledTextureResourceSet(
+                m_materialSystem,
+                m_deferredLightingTaskGraph,
+                csgIntervalSampleMaterialGeometryDrawSets,
+                LengthOf(csgIntervalSampleMaterialGeometryDrawSets),
+                csgIntervalSampleResourceScratch,
+                Name("render.graphics_prefix.csg_interval_sample.material_sampled_textures"),
+                "Opaque CSG Material Sampled Textures",
+                csgIntervalSampleMaterialSampledTextureSet
+            )
+        ;
+        if(csgIntervalSampleUsesMaterialGeometry && !csgIntervalSampleMaterialSampledTexturesCollected)
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque CSG material sampled textures"));
         csgIntervalSampleResourceUses.reserve(
             1u
             + (hasOpaqueDrawItems ? 2u : 0u)
@@ -4352,6 +4461,22 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             .requiredState = Core::ResourceStates::ShaderResource,
             .access = Core::GpuTaskResourceAccess::Read,
         };
+        const Core::GpuTaskResourceSetUse csgIntervalSampleMaterialSampledTextureSetUse{
+            .resourceSet = csgIntervalSampleMaterialSampledTextureSet,
+            .range = {},
+            .requiredState = Core::ResourceStates::ShaderResource,
+            .access = Core::GpuTaskResourceAccess::Read,
+        };
+        Core::GpuTaskResourceSetUse csgIntervalSampleMaterialResourceSetUses[2u] = {};
+        usize csgIntervalSampleMaterialResourceSetUseCount = 0u;
+        if(csgIntervalSamplePayload.materialGeometryStatesGraphOwned){
+            csgIntervalSampleMaterialResourceSetUses[csgIntervalSampleMaterialResourceSetUseCount++] =
+                csgIntervalSampleMaterialGeometrySetUse;
+        }
+        if(csgIntervalSampleMaterialSampledTextureSet.valid()){
+            csgIntervalSampleMaterialResourceSetUses[csgIntervalSampleMaterialResourceSetUseCount++] =
+                csgIntervalSampleMaterialSampledTextureSetUse;
+        }
 
         Core::GpuTaskSchedulingHint csgIntervalSampleScheduling;
         csgIntervalSampleScheduling.cost = Core::GpuTaskCostHint::Medium;
@@ -4362,13 +4487,15 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         csgIntervalSampleDesc
             .setIdentity(Name("render.graphics_prefix.csg_interval_sample"))
             .setMarkerLabel("Opaque CSG Interval Sample")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(csgIntervalSampleScheduling)
             .setDependencies(&m_graphicsPrefixCsgIntervalCombineTask, 1u)
             .setResourceUses(csgIntervalSampleResourceUses.data(), csgIntervalSampleResourceUses.size())
             .setResourceSetUses(
-                csgIntervalSamplePayload.materialGeometryStatesGraphOwned ? &csgIntervalSampleMaterialGeometrySetUse : nullptr,
-                csgIntervalSamplePayload.materialGeometryStatesGraphOwned ? 1u : 0u
+                csgIntervalSampleMaterialResourceSetUseCount != 0u
+                    ? csgIntervalSampleMaterialResourceSetUses
+                    : nullptr,
+                csgIntervalSampleMaterialResourceSetUseCount
             )
         ;
         m_graphicsPrefixCsgIntervalSampleTask = m_deferredLightingTaskGraph.addTask<
@@ -6544,7 +6671,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             initializationDesc
                 .setIdentity(Name("render.surfel_gi.initialize"))
                 .setMarkerLabel("Surfel GI Initialize")
-                .setQueue(ComputeQueueRequest())
+                .setQueue(ComputeTransferQueueRequest())
                 .setScheduling(initializationScheduling)
                 .setDependencies(&surfelGiDependency, 1u)
                 .setExternalDependencies(surfelGiExternalDependencies, surfelGiExternalDependencyCount)
@@ -9587,7 +9714,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         avboitClearDesc
             .setIdentity(Name("render.avboit.clear"))
             .setMarkerLabel("AVBOIT Clear")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(avboitClearScheduling)
             .setDependencies(&occupancyUploadTask, 1u)
             .setResourceUses(avboitClearResourceUses, LengthOf(avboitClearResourceUses))

@@ -1169,6 +1169,18 @@ GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const 
     return resource;
 }
 
+GpuGraphResourceId GpuTaskGraph::findImportedTexture(const TextureHandle& texture)const noexcept{
+    if(!texture)
+        return {};
+
+    for(usize resourceIndex = 0u; resourceIndex < m_resources.size(); ++resourceIndex){
+        const GpuGraphResourceNode& resource = m_resources[resourceIndex];
+        if(resource.type == GpuGraphResourceType::Texture && resource.texture.get() == texture.get())
+            return GpuGraphResourceId{ static_cast<u32>(resourceIndex), m_generation };
+    }
+    return {};
+}
+
 GpuGraphResourceId GpuTaskGraph::findImportedBuffer(const BufferHandle& buffer)const noexcept{
     if(!buffer)
         return {};

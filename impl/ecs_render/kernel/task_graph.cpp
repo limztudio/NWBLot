@@ -1405,6 +1405,32 @@ namespace __hidden_renderer_task_graph{
     };
 }
 
+// These callbacks dispatch Compute work but form one ordered packet with the graphics prefix and subsequent
+// deferred passes. Keep the physical primary-Graphics route while declaring the command capability they use.
+[[nodiscard]] static Core::GpuQueueRequest GraphicsPreferredComputeQueueRequest(){
+    return Core::GpuQueueRequest{
+        Core::GpuQueueCapability::Compute,
+        Core::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+}
+
+// Hybrid shadow preparation's software tail dispatches its per-mesh BVH work and may emit small direct buffer
+// writes while restoring the established hardware fallback. It still belongs in the accepting primary-Graphics
+// packet, but needs both capabilities declared for debug recording to validate the real callback.
+[[nodiscard]] static Core::GpuQueueRequest GraphicsComputeUploadQueueRequest(){
+    return Core::GpuQueueRequest{
+        static_cast<Core::GpuQueueCapability::Mask>(
+            static_cast<u8>(Core::GpuQueueCapability::Transfer)
+            | static_cast<u8>(Core::GpuQueueCapability::Compute)
+        ),
+        Core::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+}
+
 // A tiny setup dispatch can otherwise be rerouted to Graphics while its large Compute consumer selects the dedicated
 // Compute transport. Use this only for work that must merge into that consumer's packet, so both requests select the
 // same physical queue whenever a Compute transport is available.
@@ -3153,7 +3179,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         hybridSoftwareTailDesc
             .setIdentity(Name("render.shadow_prepare.hybrid_software_tail"))
             .setMarkerLabel("Shadow Preparation Hybrid Software Tail")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsComputeUploadQueueRequest())
             .setScheduling(hybridSoftwareTailScheduling)
             .setDependencies(&m_deferredShadowPrepareTask, 1u)
             .setResourceUses(hybridSoftwareTailResourceUses.data(), hybridSoftwareTailResourceUses.size())
@@ -8478,7 +8504,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             accumulatorDecayDesc
                 .setIdentity(Name("render.hardware_caustics.accumulator_decay"))
                 .setMarkerLabel("Hardware Caustics Accumulator Decay")
-                .setQueue(GraphicsQueueRequest())
+                .setQueue(GraphicsPreferredComputeQueueRequest())
                 .setScheduling(accumulatorDecayScheduling)
                 .setDependencies(&causticsDependency, 1u)
                 .setResourceUses(accumulatorDecayUses, LengthOf(accumulatorDecayUses))
@@ -8510,7 +8536,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwarePhotonDesc
             .setIdentity(Name("render.hardware_caustics.photons"))
             .setMarkerLabel("Hardware Caustic Photons")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsPreferredComputeQueueRequest())
             .setScheduling(hardwareCausticsScheduling)
             .setDependencies(&causticsDependency, 1u)
             .setResourceUses(hardwarePhotonResourceUses.data(), hardwarePhotonResourceUses.size())
@@ -8544,7 +8570,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwareGeometryDesc
             .setIdentity(Name("render.hardware_caustics.geometry_downsample"))
             .setMarkerLabel("Hardware Caustics Geometry Downsample")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsPreferredComputeQueueRequest())
             .setScheduling(hardwareGeometryScheduling)
             .setDependencies(&m_deferredCausticPhotonTask, 1u)
             .setResourceUses(hardwareGeometryResourceUses.data(), hardwareGeometryResourceUses.size())
@@ -8569,7 +8595,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwareResolvePrepareDesc
             .setIdentity(Name("render.hardware_caustics.resolve_prepare"))
             .setMarkerLabel("Hardware Caustics Resolve Prepare")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsPreferredComputeQueueRequest())
             .setScheduling(hardwareResolvePrepareScheduling)
             .setDependencies(&m_deferredCausticGeometryTask, 1u)
             .setResourceUses(hardwareResolvePrepareResourceUses.data(), hardwareResolvePrepareResourceUses.size())
@@ -8592,7 +8618,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwareResolveWaveletDesc
             .setIdentity(Name("render.hardware_caustics.resolve_wavelet"))
             .setMarkerLabel("Hardware Caustics Resolve Wavelet")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsPreferredComputeQueueRequest())
             .setScheduling(hardwareResolveWaveletScheduling)
             .setDependencies(&m_deferredCausticResolvePrepareTask, 1u)
             .setResourceUses(hardwareResolveWaveletResourceUses.data(), hardwareResolveWaveletResourceUses.size())
@@ -8615,7 +8641,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwareResolveSecondWaveletDesc
             .setIdentity(Name("render.hardware_caustics.resolve_second_wavelet"))
             .setMarkerLabel("Hardware Caustics Resolve Second Wavelet")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsPreferredComputeQueueRequest())
             .setScheduling(hardwareResolveSecondWaveletScheduling)
             .setDependencies(&m_deferredCausticResolveWaveletTask, 1u)
             .setResourceUses(
@@ -8641,7 +8667,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwareResolveThirdWaveletDesc
             .setIdentity(Name("render.hardware_caustics.resolve_third_wavelet"))
             .setMarkerLabel("Hardware Caustics Resolve Third Wavelet")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsPreferredComputeQueueRequest())
             .setScheduling(hardwareResolveThirdWaveletScheduling)
             .setDependencies(&m_deferredCausticResolveSecondWaveletTask, 1u)
             .setResourceUses(
@@ -8667,7 +8693,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwareResolveFourthWaveletDesc
             .setIdentity(Name("render.hardware_caustics.resolve_fourth_wavelet"))
             .setMarkerLabel("Hardware Caustics Resolve Fourth Wavelet")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsPreferredComputeQueueRequest())
             .setScheduling(hardwareResolveFourthWaveletScheduling)
             .setDependencies(&m_deferredCausticResolveThirdWaveletTask, 1u)
             .setResourceUses(
@@ -8693,7 +8719,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwareResolveFifthWaveletDesc
             .setIdentity(Name("render.hardware_caustics.resolve_fifth_wavelet"))
             .setMarkerLabel("Hardware Caustics Resolve Fifth Wavelet")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsPreferredComputeQueueRequest())
             .setScheduling(hardwareResolveFifthWaveletScheduling)
             .setDependencies(&m_deferredCausticResolveFourthWaveletTask, 1u)
             .setResourceUses(
@@ -8719,7 +8745,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwareResolveUpsampleDesc
             .setIdentity(Name("render.hardware_caustics.resolve_upsample"))
             .setMarkerLabel("Hardware Caustics Resolve Upsample")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsPreferredComputeQueueRequest())
             .setScheduling(hardwareResolveUpsampleScheduling)
             .setDependencies(&m_deferredCausticResolveFifthWaveletTask, 1u)
             .setResourceUses(hardwareResolveUpsampleResourceUses.data(), hardwareResolveUpsampleResourceUses.size())
@@ -8775,6 +8801,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::GpuTaskId transparentCsgUploadTask = m_graphicsPrefixTask;
     Core::Alloc::ScratchArena transparentCsgMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
     Core::GpuGraphResourceSetId transparentCsgMaterialGeometrySet;
+    Core::GpuGraphResourceSetId transparentCsgMaterialSampledTextureSet;
     const bool hasTransparentCsgFrameWork = hasTransparentRenderers
         && (csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork)
     ;
@@ -8847,6 +8874,24 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             );
             if(!avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared transparent CSG material geometry states"));
+            const bool transparentCsgMaterialSampledTexturesCollected =
+                avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned
+                && GatherPreparedMaterialSampledTextureResourceSet(
+                    m_materialSystem,
+                    m_deferredLightingTaskGraph,
+                    transparentCsgMaterialGeometryDrawSets,
+                    LengthOf(transparentCsgMaterialGeometryDrawSets),
+                    transparentCsgMaterialGeometryScratch,
+                    Name("render.avboit.intervals.transparent_csg_material_sampled_textures"),
+                    "Transparent CSG Material Sampled Textures",
+                    transparentCsgMaterialSampledTextureSet
+                )
+            ;
+            if(
+                avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned
+                && !transparentCsgMaterialSampledTexturesCollected
+            )
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared transparent CSG material sampled textures"));
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(transparentCsgInstanceData);
 #if defined(NWB_DEBUG)
@@ -9109,7 +9154,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         transparentCsgIntervalClearDesc
             .setIdentity(Name("render.avboit.transparent_csg.interval_clear"))
             .setMarkerLabel("Transparent CSG Interval Clear")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(transparentCsgIntervalClearScheduling)
             .setDependencies(&transparentCsgUploadTask, 1u)
             .setResourceUses(
@@ -9187,6 +9232,22 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .requiredState = Core::ResourceStates::ShaderResource,
         .access = Core::GpuTaskResourceAccess::Read,
     };
+    const Core::GpuTaskResourceSetUse transparentCsgMaterialSampledTextureSetUse{
+        .resourceSet = transparentCsgMaterialSampledTextureSet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
+    Core::GpuTaskResourceSetUse transparentCsgMaterialResourceSetUses[2u] = {};
+    usize transparentCsgMaterialResourceSetUseCount = 0u;
+    if(avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned){
+        transparentCsgMaterialResourceSetUses[transparentCsgMaterialResourceSetUseCount++] =
+            transparentCsgMaterialGeometrySetUse;
+    }
+    if(transparentCsgMaterialSampledTextureSet.valid()){
+        transparentCsgMaterialResourceSetUses[transparentCsgMaterialResourceSetUseCount++] =
+            transparentCsgMaterialSampledTextureSetUse;
+    }
     avboitIntervalResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer, true));
     avboitIntervalResourceUses.push_back(ReadUse(avboitMaterialDomain));
     avboitIntervalResourceUses.push_back(ReadWriteUse(avboitCsgDomain, Core::ResourceStates::ShaderResource));
@@ -9200,15 +9261,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitIntervalDesc
         .setIdentity(Name("render.avboit.intervals"))
         .setMarkerLabel("Transparent CSG Intervals")
-        .setQueue(GraphicsQueueRequest())
+        .setQueue(GraphicsComputeQueueRequest())
         .setScheduling(avboitIntervalScheduling)
         .setDependencies(&transparentCsgUploadTask, 1u)
         .setResourceUses(avboitIntervalResourceUses.data(), avboitIntervalResourceUses.size())
         .setResourceSetUses(
-            avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned
-                ? &transparentCsgMaterialGeometrySetUse
-                : nullptr,
-            avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned ? 1u : 0u
+            transparentCsgMaterialResourceSetUseCount != 0u ? transparentCsgMaterialResourceSetUses : nullptr,
+            transparentCsgMaterialResourceSetUseCount
         )
     ;
     const bool avboitCsgReceiverSpanGraphOwned =
@@ -9353,7 +9412,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         avboitIntervalSpanDesc
             .setIdentity(Name("render.avboit.transparent_csg.receiver_span"))
             .setMarkerLabel("Transparent CSG Receiver Span")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(avboitIntervalSpanScheduling)
             .setDependencies(&m_deferredAvboitPreTask, 1u)
             .setResourceUses(
@@ -9383,7 +9442,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         avboitIntervalCombineDesc
             .setIdentity(Name("render.avboit.transparent_csg.interval_combine"))
             .setMarkerLabel("Transparent CSG Interval Combine")
-            .setQueue(GraphicsQueueRequest())
+            .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(avboitIntervalCombineScheduling)
             .setDependencies(&avboitIntervalCompletionTask, 1u)
             .setResourceUses(
@@ -9417,6 +9476,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     bool occupancyCsgStreamsUploaded = false;
     Core::Alloc::ScratchArena occupancyMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
     Core::GpuGraphResourceSetId occupancyMaterialGeometrySet;
+    Core::GpuGraphResourceSetId occupancyMaterialSampledTextureSet;
     if(hasTransparentRenderers){
         Core::Alloc::ScratchArena occupancyUploadScratch(RendererArenaScope::s_TaskGraphArena);
         MaterialPassDrawItemPartitions occupancyDrawItems{ occupancyUploadScratch };
@@ -9481,6 +9541,24 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             );
             if(!avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT occupancy material geometry states"));
+            const bool occupancyMaterialSampledTexturesCollected =
+                avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
+                && GatherPreparedMaterialSampledTextureResourceSet(
+                    m_materialSystem,
+                    m_deferredLightingTaskGraph,
+                    occupancyMaterialGeometryDrawSets,
+                    LengthOf(occupancyMaterialGeometryDrawSets),
+                    occupancyMaterialGeometryScratch,
+                    Name("render.avboit.occupancy.material_sampled_textures"),
+                    "AVBOIT Occupancy Material Sampled Textures",
+                    occupancyMaterialSampledTextureSet
+                )
+            ;
+            if(
+                avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
+                && !occupancyMaterialSampledTexturesCollected
+            )
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT occupancy material sampled textures"));
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(occupancyInstanceData);
 #if defined(NWB_DEBUG)
@@ -9819,6 +9897,18 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .requiredState = Core::ResourceStates::ShaderResource,
         .access = Core::GpuTaskResourceAccess::Read,
     };
+    const Core::GpuTaskResourceSetUse occupancyMaterialSampledTextureSetUse{
+        .resourceSet = occupancyMaterialSampledTextureSet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
+    Core::GpuTaskResourceSetUse occupancyMaterialResourceSetUses[2u] = {};
+    usize occupancyMaterialResourceSetUseCount = 0u;
+    if(avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned)
+        occupancyMaterialResourceSetUses[occupancyMaterialResourceSetUseCount++] = occupancyMaterialGeometrySetUse;
+    if(occupancyMaterialSampledTextureSet.valid())
+        occupancyMaterialResourceSetUses[occupancyMaterialResourceSetUseCount++] = occupancyMaterialSampledTextureSetUse;
     avboitPreResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer, true));
     avboitPreResourceUses.push_back(ReadUse(avboitMaterialDomain));
     avboitPreResourceUses.push_back(ReadUse(avboitCsgDomain, Core::ResourceStates::ShaderResource));
@@ -9832,15 +9922,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitOccupancyDesc
         .setIdentity(Name("render.avboit.pre"))
         .setMarkerLabel(splitAvboitStages ? "AVBOIT Pre" : "AVBOIT")
-        .setQueue(GraphicsQueueRequest())
+        .setQueue(GraphicsComputeQueueRequest())
         .setScheduling(avboitOccupancyScheduling)
         .setDependencies(&avboitClearTask, 1u)
         .setResourceUses(avboitPreResourceUses.data(), avboitPreResourceUses.size())
         .setResourceSetUses(
-            avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
-                ? &occupancyMaterialGeometrySetUse
-                : nullptr,
-            avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned ? 1u : 0u
+            occupancyMaterialResourceSetUseCount != 0u ? occupancyMaterialResourceSetUses : nullptr,
+            occupancyMaterialResourceSetUseCount
         )
     ;
     m_deferredAvboitOccupancyTask = m_deferredLightingTaskGraph.addTask<AvboitOccupancyGraphTask>(
@@ -9909,6 +9997,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     bool extinctionCsgStreamsUploaded = false;
     Core::Alloc::ScratchArena extinctionMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
     Core::GpuGraphResourceSetId extinctionMaterialGeometrySet;
+    Core::GpuGraphResourceSetId extinctionMaterialSampledTextureSet;
         Core::Alloc::ScratchArena extinctionUploadScratch(RendererArenaScope::s_TaskGraphArena);
         MaterialPassDrawItemPartitions extinctionDrawItems{ extinctionUploadScratch };
         InstanceGpuDataVector extinctionInstanceData{ extinctionUploadScratch };
@@ -9972,6 +10061,24 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             );
             if(!avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT extinction material geometry states"));
+            const bool extinctionMaterialSampledTexturesCollected =
+                avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
+                && GatherPreparedMaterialSampledTextureResourceSet(
+                    m_materialSystem,
+                    m_deferredLightingTaskGraph,
+                    extinctionMaterialGeometryDrawSets,
+                    LengthOf(extinctionMaterialGeometryDrawSets),
+                    extinctionMaterialGeometryScratch,
+                    Name("render.avboit.extinction.material_sampled_textures"),
+                    "AVBOIT Extinction Material Sampled Textures",
+                    extinctionMaterialSampledTextureSet
+                )
+            ;
+            if(
+                avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
+                && !extinctionMaterialSampledTexturesCollected
+            )
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT extinction material sampled textures"));
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(extinctionInstanceData);
 #if defined(NWB_DEBUG)
@@ -10272,6 +10379,18 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .requiredState = Core::ResourceStates::ShaderResource,
         .access = Core::GpuTaskResourceAccess::Read,
     };
+    const Core::GpuTaskResourceSetUse extinctionMaterialSampledTextureSetUse{
+        .resourceSet = extinctionMaterialSampledTextureSet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
+    Core::GpuTaskResourceSetUse extinctionMaterialResourceSetUses[2u] = {};
+    usize extinctionMaterialResourceSetUseCount = 0u;
+    if(avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned)
+        extinctionMaterialResourceSetUses[extinctionMaterialResourceSetUseCount++] = extinctionMaterialGeometrySetUse;
+    if(extinctionMaterialSampledTextureSet.valid())
+        extinctionMaterialResourceSetUses[extinctionMaterialResourceSetUseCount++] = extinctionMaterialSampledTextureSetUse;
     extinctionResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     extinctionResourceUses.push_back(ReadUse(avboitMaterialDomain));
     extinctionResourceUses.push_back(ReadUse(avboitCsgDomain));
@@ -10285,15 +10404,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     extinctionDesc
         .setIdentity(Name("render.avboit.extinction"))
         .setMarkerLabel("AVBOIT Extinction")
-        .setQueue(GraphicsQueueRequest())
+        .setQueue(GraphicsComputeQueueRequest())
         .setScheduling(avboitExtinctionScheduling)
         .setDependencies(&extinctionUploadTask, 1u)
         .setResourceUses(extinctionResourceUses.data(), extinctionResourceUses.size())
         .setResourceSetUses(
-            avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
-                ? &extinctionMaterialGeometrySetUse
-                : nullptr,
-            avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned ? 1u : 0u
+            extinctionMaterialResourceSetUseCount != 0u ? extinctionMaterialResourceSetUses : nullptr,
+            extinctionMaterialResourceSetUseCount
         )
     ;
     m_deferredAvboitExtinctionTask = m_deferredLightingTaskGraph.addTask<AvboitExtinctionGraphTask>(
@@ -10361,6 +10478,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     bool accumulationCsgStreamsUploaded = false;
     Core::Alloc::ScratchArena accumulationMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
     Core::GpuGraphResourceSetId accumulationMaterialGeometrySet;
+    Core::GpuGraphResourceSetId accumulationMaterialSampledTextureSet;
     {
         Core::Alloc::ScratchArena accumulationUploadScratch(RendererArenaScope::s_TaskGraphArena);
         MaterialPassDrawItemPartitions accumulationDrawItems{ accumulationUploadScratch };
@@ -10425,6 +10543,24 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             );
             if(!avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT accumulation material geometry states"));
+            const bool accumulationMaterialSampledTexturesCollected =
+                avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
+                && GatherPreparedMaterialSampledTextureResourceSet(
+                    m_materialSystem,
+                    m_deferredLightingTaskGraph,
+                    accumulationMaterialGeometryDrawSets,
+                    LengthOf(accumulationMaterialGeometryDrawSets),
+                    accumulationMaterialGeometryScratch,
+                    Name("render.avboit.accumulation.material_sampled_textures"),
+                    "AVBOIT Accumulation Material Sampled Textures",
+                    accumulationMaterialSampledTextureSet
+                )
+            ;
+            if(
+                avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
+                && !accumulationMaterialSampledTexturesCollected
+            )
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT accumulation material sampled textures"));
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(accumulationInstanceData);
 #if defined(NWB_DEBUG)
@@ -10717,6 +10853,22 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .requiredState = Core::ResourceStates::ShaderResource,
         .access = Core::GpuTaskResourceAccess::Read,
     };
+    const Core::GpuTaskResourceSetUse accumulationMaterialSampledTextureSetUse{
+        .resourceSet = accumulationMaterialSampledTextureSet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
+    Core::GpuTaskResourceSetUse accumulationMaterialResourceSetUses[2u] = {};
+    usize accumulationMaterialResourceSetUseCount = 0u;
+    if(avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned){
+        accumulationMaterialResourceSetUses[accumulationMaterialResourceSetUseCount++] =
+            accumulationMaterialGeometrySetUse;
+    }
+    if(accumulationMaterialSampledTextureSet.valid()){
+        accumulationMaterialResourceSetUses[accumulationMaterialResourceSetUseCount++] =
+            accumulationMaterialSampledTextureSetUse;
+    }
     accumulationResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     accumulationResourceUses.push_back(ReadUse(avboitMaterialDomain));
     accumulationResourceUses.push_back(ReadUse(avboitCsgDomain));
@@ -10730,15 +10882,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     accumulationDesc
         .setIdentity(Name("render.avboit.accumulation"))
         .setMarkerLabel("AVBOIT Accumulation")
-        .setQueue(GraphicsQueueRequest())
+        .setQueue(GraphicsComputeQueueRequest())
         .setScheduling(avboitAccumulationScheduling)
         .setDependencies(&accumulationUploadTask, 1u)
         .setResourceUses(accumulationResourceUses.data(), accumulationResourceUses.size())
         .setResourceSetUses(
-            avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
-                ? &accumulationMaterialGeometrySetUse
-                : nullptr,
-            avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned ? 1u : 0u
+            accumulationMaterialResourceSetUseCount != 0u ? accumulationMaterialResourceSetUses : nullptr,
+            accumulationMaterialResourceSetUseCount
         )
     ;
     m_deferredAvboitAccumulationTask = m_deferredLightingTaskGraph.addTask<AvboitAccumulationGraphTask>(

@@ -247,6 +247,7 @@ void RendererSystem::invalidateResources(){
     m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixOpaqueComputeEmulationTask = {};
+    m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixCsgReceiverSpanTask = {};
     m_graphicsPrefixCsgIntervalCombineTask = {};
@@ -546,6 +547,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixOpaqueComputeEmulationTask = {};
+    m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixCsgReceiverSpanTask = {};
     m_graphicsPrefixCsgIntervalCombineTask = {};
@@ -1139,6 +1141,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixOpaqueComputeEmulationTask)
             : Core::GpuSubmissionPacketId{}
     ;
+    const Core::GpuSubmissionPacketId graphicsPrefixOpaqueCsgReceiverComputeEmulationPacket =
+        m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuSubmissionPacketId graphicsPrefixCsgIntervalClearFirstPacket =
         m_graphicsPrefixCsgIntervalClearFirstTask.valid()
             ? m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixCsgIntervalClearFirstTask)
@@ -1291,6 +1298,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? m_deferredLightingCompiledGraph.queueInfoForTask(m_graphicsPrefixOpaqueComputeEmulationTask)
             : nullptr
     ;
+    const Core::GpuPhysicalQueueInfo* const graphicsPrefixOpaqueCsgReceiverComputeEmulationQueue =
+        m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask.valid()
+            ? m_deferredLightingCompiledGraph.queueInfoForTask(m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask)
+            : nullptr
+    ;
     bool graphicsPrefixPacketsAreGraphics = graphicsPrefixTimingBindingsValid;
     for(usize prefixTaskIndex = 0u;
         graphicsPrefixPacketsAreGraphics && prefixTaskIndex < graphicsPrefixTimingTicketCount;
@@ -1326,6 +1338,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             )
             && graphicsPrefixOpaqueComputeEmulationQueue
             && graphicsPrefixOpaqueComputeEmulationQueue->queueClass == Core::CommandQueue::Graphics
+        )
+    ;
+    // Receiver-surface CSG can independently retain the compatibility path, but when its alias-free producer is
+    // declared it must share G-buffer's primary Graphics packet for the same compiler-owned UAV-to-VertexBuffer
+    // handoff and semantic prefix range.
+    const bool graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged =
+        !m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask.valid()
+        || (
+            graphicsPrefixOpaqueCsgReceiverComputeEmulationPacket.valid()
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask,
+                m_graphicsPrefixGbufferTask
+            )
+            && graphicsPrefixOpaqueCsgReceiverComputeEmulationQueue
+            && graphicsPrefixOpaqueCsgReceiverComputeEmulationQueue->queueClass == Core::CommandQueue::Graphics
         )
     ;
     // The opaque CSG work-region clear keeps its original one-range timing scope in first/last typed primitives.
@@ -1938,6 +1965,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !graphicsPrefixPacketsAreGraphics
         || !graphicsPrefixDeferredClearBundleMerged
         || !graphicsPrefixOpaqueComputeEmulationMerged
+        || !graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged
         || !graphicsPrefixCsgIntervalClearBundleMerged
         || !graphicsPrefixQueue
         || graphicsPrefixQueue->queueClass != Core::CommandQueue::Graphics
@@ -2377,6 +2405,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && graphicsPrefixPacket.valid()
         && graphicsPrefixDeferredClearBundleMerged
         && graphicsPrefixOpaqueComputeEmulationMerged
+        && graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged
         && shadowPrepareStateBindingsReady
         && deferredRecorder.recordTaskRangeInReadyFrontiers(
             m_deferredLightingTaskGraph,
@@ -2706,6 +2735,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && graphicsPrefixPacket.valid()
         && graphicsPrefixDeferredClearBundleMerged
         && graphicsPrefixOpaqueComputeEmulationMerged
+        && graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged
         && m_deferredShadowVisibilityTask.valid()
         && shadowVisibilityPacket.valid()
         && shadowVisibilityPreparedTasksMerged
@@ -3684,6 +3714,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && graphicsPrefixPacket.valid()
             && graphicsPrefixDeferredClearBundleMerged
             && graphicsPrefixOpaqueComputeEmulationMerged
+            && graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged
             && graphicsPrefixWorkPacketRange.valid()
             && shadowPrepareThroughPrefixPacketRange.valid()
             && shadowPreparePrefixTimingTicketsValid

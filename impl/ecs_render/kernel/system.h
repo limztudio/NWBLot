@@ -111,6 +111,7 @@ namespace ECSRenderDetail{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
     };
     struct OpaqueRegularComputeEmulationGraphTask;
+    struct OpaqueCsgReceiverComputeEmulationGraphTask;
     struct GbufferGraphTask;
 };
 
@@ -130,6 +131,7 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend struct ECSRenderDetail::MeshViewUploadCommitGraphTask;
     friend struct ECSRenderDetail::SceneShadingSetupGraphTask;
     friend struct ECSRenderDetail::OpaqueRegularComputeEmulationGraphTask;
+    friend struct ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask;
     friend struct ECSRenderDetail::GbufferGraphTask;
     friend struct ECSRenderDetail::CsgReceiverSpanBuildGraphTask;
     friend struct ECSRenderDetail::CsgIntervalCombineGraphTask;
@@ -454,6 +456,8 @@ private:
     // producer must share G-buffer's existing primary-Graphics packet for the graph-owned UAV-to-VertexBuffer
     // handoff to remain inside the semantic prefix range.
     Core::GpuTaskId m_graphicsPrefixOpaqueComputeEmulationTask;
+    // Receiver-surface CSG has its own readiness gate but needs the same packet-local output handoff.
+    Core::GpuTaskId m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask;
     Core::GpuTaskId m_graphicsPrefixGbufferTask;
     Core::GpuTaskId m_graphicsPrefixCsgReceiverSpanTask;
     Core::GpuTaskId m_graphicsPrefixCsgIntervalCombineTask;

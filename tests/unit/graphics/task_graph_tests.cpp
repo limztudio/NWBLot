@@ -4370,6 +4370,222 @@ TEST(GpuTaskGraph, MergesGraphicsComputeUavProducerIntoGraphicsVertexBufferConsu
 }
 
 
+// Receiver-surface CSG generation must happen after its CSG setup but before G-buffer's later raster consumer. The
+// graph owns both the CSG CopyDest->UAV preparation and the generated-vertex UAV->VertexBuffer handoff in one
+// primary-Graphics packet; the receiver-event image itself remains a G-buffer raster output.
+TEST(GpuTaskGraph, MergesOpaqueCsgReceiverComputeProducerIntoGbufferPacket){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId csgReceiverEvent = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/csg_receiver_event"),
+        "CSG Receiver Event",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    const Graphics::GpuGraphResourceId csgClipContext = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/csg_clip_context"),
+        "CSG Clip Context",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    const Graphics::GpuGraphResourceId generatedVertexBuffer = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/csg_receiver_generated_vertex"),
+        "CSG Receiver Generated Vertex",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    ASSERT_TRUE(csgReceiverEvent.valid());
+    ASSERT_TRUE(csgClipContext.valid());
+    ASSERT_TRUE(generatedVertexBuffer.valid());
+
+    const Graphics::GpuQueueRequest graphicsComputeQueue{
+        QueueCapabilities(
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueueCapability::Compute
+        ),
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint clearScheduling;
+    clearScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    clearScheduling.overlapPreferred = false;
+    clearScheduling.avoidQueueCrossing = true;
+    clearScheduling.forceSubmissionBoundary = false;
+    clearScheduling.allowPacketMerge = true;
+    clearScheduling.mergeWithPrevious = false;
+    const Graphics::GpuTaskResourceUse clearUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = csgReceiverEvent,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskId csgClear = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/csg_receiver_clear"))
+            .setMarkerLabel("CSG Receiver Clear")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(clearScheduling)
+            .setResourceUses(clearUses, LengthOf(clearUses))
+    );
+    ASSERT_TRUE(csgClear.valid());
+
+    Graphics::GpuTaskSchedulingHint producerScheduling = clearScheduling;
+    producerScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    producerScheduling.mergeWithPrevious = true;
+    producerScheduling.allowMergeAcrossConsumerFrontier = true;
+    const Graphics::GpuTaskResourceUse producerUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = csgClipContext,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = generatedVertexBuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskId producer = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/csg_receiver_compute_emulation"))
+            .setMarkerLabel("CSG Receiver Compute Emulation")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(producerScheduling)
+            .setDependencies(&csgClear, 1u)
+            .setResourceUses(producerUses, LengthOf(producerUses))
+    );
+    ASSERT_TRUE(producer.valid());
+
+    Graphics::GpuTaskSchedulingHint gbufferScheduling = producerScheduling;
+    const Graphics::GpuTaskResourceUse gbufferUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = csgReceiverEvent,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = generatedVertexBuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::VertexBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuTaskId gbuffer = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/csg_receiver_gbuffer"))
+            .setMarkerLabel("CSG Receiver G-buffer")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(gbufferScheduling)
+            .setDependencies(&producer, 1u)
+            .setResourceUses(gbufferUses, LengthOf(gbufferUses))
+    );
+    ASSERT_TRUE(gbuffer.valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    EXPECT_TRUE(analysis.hasExplicitEdge(csgClear, producer));
+    EXPECT_TRUE(analysis.hasExplicitEdge(producer, gbuffer));
+    EXPECT_TRUE(analysis.hasInferredEdge(csgClear, gbuffer));
+    EXPECT_TRUE(analysis.hasInferredEdge(producer, gbuffer));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        csgClear,
+        gbuffer,
+        csgReceiverEvent,
+        Graphics::GpuTaskHazardType::WriteAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        producer,
+        gbuffer,
+        generatedVertexBuffer,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(csgClear);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(packet, compiledGraph.packetForTask(producer));
+    EXPECT_EQ(packet, compiledGraph.packetForTask(gbuffer));
+    EXPECT_TRUE(compiledGraph.tasksSharePacket(csgClear, gbuffer));
+    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPacket.queue, queue.id);
+    ASSERT_EQ(compiledPacket.taskCount, 3u);
+    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    ASSERT_NE(packetTasks, nullptr);
+    EXPECT_EQ(packetTasks[0u], csgClear);
+    EXPECT_EQ(packetTasks[1u], producer);
+    EXPECT_EQ(packetTasks[2u], gbuffer);
+
+    const auto hasTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        if(!compiledTask)
+            return false;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        for(usize barrierIndex = 0u; barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTransition(
+        csgClear,
+        csgReceiverEvent,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::CopyDest
+    ));
+    EXPECT_TRUE(hasTransition(
+        producer,
+        csgClipContext,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::ConstantBuffer
+    ));
+    EXPECT_TRUE(hasTransition(
+        producer,
+        generatedVertexBuffer,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasTransition(
+        gbuffer,
+        csgReceiverEvent,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasTransition(
+        gbuffer,
+        generatedVertexBuffer,
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::VertexBuffer
+    ));
+}
+
+
 TEST(GpuTaskGraph, KeepsAvboitUploadSequenceOutOfHardwareCausticsPacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

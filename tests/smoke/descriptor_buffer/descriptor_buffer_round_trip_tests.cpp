@@ -16152,6 +16152,295 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedComputeEmulationGeneratedVertexH
 }
 
 
+// CSG receiver-surface compute generation consumes graph-owned clip data, then G-buffer owns the receiver-event
+// raster output and the generated vertex-buffer handoff. This records all three callbacks in one real primary
+// Graphics packet without either callback performing a native state transition.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverComputeHandoffMergesWithGbuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto receiverEvent = device.createBuffer(
+        BufferDesc()
+            .setDebugName(Name("tests/descriptor_buffer/csg_receiver_event"))
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::Exclusive)
+    );
+    auto csgClipContext = device.createBuffer(
+        BufferDesc()
+            .setDebugName(Name("tests/descriptor_buffer/csg_clip_context"))
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::Exclusive)
+    );
+    auto generatedVertex = device.createBuffer(
+        BufferDesc()
+            .setDebugName(Name("tests/descriptor_buffer/csg_receiver_generated_vertex"))
+            .setByteSize(3u * 4u * sizeof(f32))
+            .setStructStride(4u * sizeof(f32))
+            .setCanHaveUAVs(true)
+            .setCanHaveRawViews(true)
+            .setIsVertexBuffer(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::Exclusive)
+    );
+    ASSERT_NE(receiverEvent.get(), nullptr);
+    ASSERT_NE(csgClipContext.get(), nullptr);
+    ASSERT_NE(generatedVertex.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importBuffer = [&graph](const BufferHandle& buffer, const AStringView markerLabel){
+        const BufferDesc& description = buffer->getDescription();
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(description.debugName)
+                .setMarkerLabel(markerLabel)
+                .setType(GpuGraphResourceType::Buffer)
+                .setInitialState(description.initialState)
+                .setQueueSharing(description.queueSharing)
+        );
+    };
+    const GpuGraphResourceId receiverEventResource = importBuffer(receiverEvent, "CSG Receiver Event");
+    const GpuGraphResourceId csgClipContextResource = importBuffer(csgClipContext, "CSG Clip Context");
+    const GpuGraphResourceId generatedVertexResource = importBuffer(generatedVertex, "CSG Receiver Generated Vertex");
+    ASSERT_TRUE(receiverEventResource.valid());
+    ASSERT_TRUE(csgClipContextResource.valid());
+    ASSERT_TRUE(generatedVertexResource.valid());
+
+    const GpuQueueRequest graphicsComputeQueue{
+        static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+        ),
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint clearScheduling;
+    clearScheduling.cost = GpuTaskCostHint::Tiny;
+    clearScheduling.overlapPreferred = false;
+    clearScheduling.avoidQueueCrossing = true;
+    clearScheduling.forceSubmissionBoundary = false;
+    clearScheduling.allowPacketMerge = true;
+    clearScheduling.mergeWithPrevious = false;
+    const GpuTaskResourceUse clearUses[] = {
+        GpuTaskResourceUse{
+            .resource = receiverEventResource,
+            .range = {},
+            .requiredState = ResourceStates::CopyDest,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    bool clearObservedCopyDest = false;
+    QueueSubmissionToken clearAcceptedToken;
+    const GpuTaskId clearTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/csg_receiver_clear"))
+            .setMarkerLabel("CSG Receiver Clear")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(clearScheduling)
+            .setResourceUses(clearUses, LengthOf(clearUses)),
+        NativePacketPrefixTask::Payload{
+            .buffer = receiverEvent.get(),
+            .expectedState = ResourceStates::CopyDest,
+            .recorded = &clearObservedCopyDest,
+            .acceptedToken = &clearAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(clearTask.valid());
+
+    GpuTaskSchedulingHint producerScheduling = clearScheduling;
+    producerScheduling.cost = GpuTaskCostHint::Medium;
+    producerScheduling.mergeWithPrevious = true;
+    producerScheduling.allowMergeAcrossConsumerFrontier = true;
+    const GpuTaskResourceUse producerUses[] = {
+        GpuTaskResourceUse{
+            .resource = csgClipContextResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = generatedVertexResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    bool producerObservedUnorderedAccess = false;
+    QueueSubmissionToken producerAcceptedToken;
+    const GpuTaskId producerTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/csg_receiver_compute_emulation"))
+            .setMarkerLabel("CSG Receiver Compute Emulation")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(producerScheduling)
+            .setDependencies(&clearTask, 1u)
+            .setResourceUses(producerUses, LengthOf(producerUses)),
+        NativePacketPrefixTask::Payload{
+            .buffer = generatedVertex.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .recorded = &producerObservedUnorderedAccess,
+            .acceptedToken = &producerAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(producerTask.valid());
+
+    GpuTaskSchedulingHint gbufferScheduling = producerScheduling;
+    const GpuTaskResourceUse gbufferUses[] = {
+        GpuTaskResourceUse{
+            .resource = receiverEventResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = generatedVertexResource,
+            .range = {},
+            .requiredState = ResourceStates::VertexBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    bool gbufferObservedVertexBuffer = false;
+    QueueSubmissionToken gbufferAcceptedToken;
+    const GpuTaskId gbufferTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/csg_receiver_gbuffer"))
+            .setMarkerLabel("CSG Receiver G-buffer")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(gbufferScheduling)
+            .setDependencies(&producerTask, 1u)
+            .setResourceUses(gbufferUses, LengthOf(gbufferUses)),
+        NativePacketPrefixTask::Payload{
+            .buffer = generatedVertex.get(),
+            .expectedState = ResourceStates::VertexBuffer,
+            .recorded = &gbufferObservedVertexBuffer,
+            .acceptedToken = &gbufferAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(gbufferTask.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    ASSERT_TRUE(primaryGraphicsQueue.valid());
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/csg_receiver_compute_emulation_scratch"));
+    GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, frontierOptions));
+    EXPECT_TRUE(analysis.hasExplicitEdge(clearTask, producerTask));
+    EXPECT_TRUE(analysis.hasExplicitEdge(producerTask, gbufferTask));
+    EXPECT_TRUE(analysis.hasInferredEdge(clearTask, gbufferTask));
+    EXPECT_TRUE(analysis.hasInferredEdge(producerTask, gbufferTask));
+
+    const GpuTaskQueueAssignment* const clearAssignment = assignments.find(clearTask);
+    const GpuTaskQueueAssignment* const producerAssignment = assignments.find(producerTask);
+    const GpuTaskQueueAssignment* const gbufferAssignment = assignments.find(gbufferTask);
+    ASSERT_NE(clearAssignment, nullptr);
+    ASSERT_NE(producerAssignment, nullptr);
+    ASSERT_NE(gbufferAssignment, nullptr);
+    EXPECT_EQ(clearAssignment->queue, primaryGraphicsQueue);
+    EXPECT_EQ(producerAssignment->queue, primaryGraphicsQueue);
+    EXPECT_EQ(gbufferAssignment->queue, primaryGraphicsQueue);
+    EXPECT_EQ(clearAssignment->queueClass, CommandQueue::Graphics);
+    EXPECT_EQ(producerAssignment->queueClass, CommandQueue::Graphics);
+    EXPECT_EQ(gbufferAssignment->queueClass, CommandQueue::Graphics);
+
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(clearTask);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledGraph.packetForTask(producerTask));
+    EXPECT_EQ(packet, compiledGraph.packetForTask(gbufferTask));
+    EXPECT_TRUE(compiledGraph.tasksSharePacket(clearTask, gbufferTask));
+    ASSERT_EQ(compiledGraph.packet(packet).taskCount, 3u);
+    const GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    ASSERT_NE(packetTasks, nullptr);
+    EXPECT_EQ(packetTasks[0u], clearTask);
+    EXPECT_EQ(packetTasks[1u], producerTask);
+    EXPECT_EQ(packetTasks[2u], gbufferTask);
+
+    const auto hasTransition = [&](const GpuTaskId task, const GpuGraphResourceId resource, const ResourceStates::Mask before, const ResourceStates::Mask after){
+        const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        if(!compiledTask)
+            return false;
+        const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        for(usize barrierIndex = 0u; barriers && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTransition(clearTask, receiverEventResource, ResourceStates::Common, ResourceStates::CopyDest));
+    EXPECT_TRUE(hasTransition(producerTask, csgClipContextResource, ResourceStates::Common, ResourceStates::ConstantBuffer));
+    EXPECT_TRUE(hasTransition(producerTask, generatedVertexResource, ResourceStates::Common, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransition(gbufferTask, receiverEventResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransition(gbufferTask, generatedVertexResource, ResourceStates::UnorderedAccess, ResourceStates::VertexBuffer));
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+    EXPECT_TRUE(clearObservedCopyDest);
+    EXPECT_TRUE(producerObservedUnorderedAccess);
+    EXPECT_TRUE(gbufferObservedVertexBuffer);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    ASSERT_NE(finalState, nullptr);
+    auto stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getBufferState(receiverEvent.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(stateProbe->getBufferState(generatedVertex.get()), ResourceStates::VertexBuffer);
+    stateProbe->close();
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken packetToken = transaction.packetToken(packet);
+    ASSERT_TRUE(packetToken.valid());
+    ASSERT_TRUE(clearAcceptedToken.valid());
+    ASSERT_TRUE(producerAcceptedToken.valid());
+    ASSERT_TRUE(gbufferAcceptedToken.valid());
+    EXPECT_EQ(clearAcceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(clearAcceptedToken.value, packetToken.value);
+    EXPECT_EQ(producerAcceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(producerAcceptedToken.value, packetToken.value);
+    EXPECT_EQ(gbufferAcceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(gbufferAcceptedToken.value, packetToken.value);
+    ASSERT_TRUE(device.waitForIdle());
+}
+
+
 // Active-pose skinning must not rely on a native UAV/SRV bridge between deformation and bounds/repack. This native
 // packet smoke models the exact three graph tasks: deformation writes skinned position/normal/tangent, post-dispatch
 // reads position/normal while writing bounds/attributes, and the finalizer publishes every generated buffer as SRV.

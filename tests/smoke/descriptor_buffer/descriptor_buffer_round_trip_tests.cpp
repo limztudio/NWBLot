@@ -16351,6 +16351,269 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
 }
 
 
+// The adaptive software-shadow route combines two typed buffer clears, a getter-only UAV traversal callback, and
+// a stats readback in one selected Compute/Graphics packet.  This is the native counterpart of the compiler
+// packet proof: it verifies that graph-built primitives establish the callback's states, preserve command order,
+// and publish the copy token only after the containing packet accepts.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAdaptiveShadowPrimitiveChainRecordsAndPublishesReadback){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const auto makeScratchBuffer = [&device](const CpuAccessMode::Enum cpuAccess){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(sizeof(u32) * 4u)
+                .setInitialState(ResourceStates::Common)
+                .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+                .setCpuAccess(cpuAccess)
+        );
+    };
+    const BufferHandle edgeStats = makeScratchBuffer(CpuAccessMode::Read);
+    const BufferHandle edgeCounter = makeScratchBuffer(CpuAccessMode::Read);
+    const BufferHandle statsReadback = makeScratchBuffer(CpuAccessMode::Read);
+    ASSERT_NE(edgeStats.get(), nullptr);
+    ASSERT_NE(edgeCounter.get(), nullptr);
+    ASSERT_NE(statsReadback.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importBuffer = [&graph](const BufferHandle& buffer, const Name identity, const AStringView label){
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Buffer)
+        );
+    };
+    const GpuGraphResourceId edgeStatsResource = importBuffer(
+        edgeStats,
+        Name("tests/descriptor_buffer/adaptive_shadow_edge_stats"),
+        "Adaptive Shadow Edge Statistics"
+    );
+    const GpuGraphResourceId edgeCounterResource = importBuffer(
+        edgeCounter,
+        Name("tests/descriptor_buffer/adaptive_shadow_edge_counter"),
+        "Adaptive Shadow Edge Counter"
+    );
+    const GpuGraphResourceId statsReadbackResource = importBuffer(
+        statsReadback,
+        Name("tests/descriptor_buffer/adaptive_shadow_stats_readback"),
+        "Adaptive Shadow Statistics Readback"
+    );
+    ASSERT_TRUE(edgeStatsResource.valid());
+    ASSERT_TRUE(edgeCounterResource.valid());
+    ASSERT_TRUE(statsReadbackResource.valid());
+
+    const GpuQueueRequest computeTransferQueue{
+        static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        GpuQueuePreference::Compute,
+        true,
+        false,
+    };
+    GpuTaskSchedulingHint firstPrimitiveScheduling;
+    firstPrimitiveScheduling.cost = GpuTaskCostHint::Tiny;
+    firstPrimitiveScheduling.allowPacketMerge = true;
+    GpuTaskDesc statsClearDesc;
+    statsClearDesc
+        .setIdentity(Name("tests/descriptor_buffer/adaptive_shadow_stats_clear"))
+        .setMarkerLabel("Adaptive Shadow Statistics Clear")
+        .setQueue(computeTransferQueue)
+        .setScheduling(firstPrimitiveScheduling)
+    ;
+    const GpuTaskId statsClear = graph.addClearBufferTask(
+        statsClearDesc,
+        GpuClearBufferTaskDesc{
+            .destination = edgeStatsResource,
+            .clearValue = 0u,
+        }
+    );
+    ASSERT_TRUE(statsClear.valid());
+
+    GpuTaskSchedulingHint chainedScheduling = firstPrimitiveScheduling;
+    chainedScheduling.mergeWithPrevious = true;
+    GpuTaskDesc counterClearDesc;
+    counterClearDesc
+        .setIdentity(Name("tests/descriptor_buffer/adaptive_shadow_counter_clear"))
+        .setMarkerLabel("Adaptive Shadow Counter Clear")
+        .setQueue(computeTransferQueue)
+        .setScheduling(chainedScheduling)
+        .setDependencies(&statsClear, 1u)
+    ;
+    const GpuTaskId counterClear = graph.addClearBufferTask(
+        counterClearDesc,
+        GpuClearBufferTaskDesc{
+            .destination = edgeCounterResource,
+            .clearValue = 0u,
+        }
+    );
+    ASSERT_TRUE(counterClear.valid());
+
+    const GpuTaskResourceUse shadowUses[] = {
+        {
+            .resource = edgeStatsResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+        {
+            .resource = edgeCounterResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    GpuTaskDesc shadowDesc;
+    shadowDesc
+        .setIdentity(Name("tests/descriptor_buffer/adaptive_shadow_visibility"))
+        .setMarkerLabel("Adaptive Shadow Visibility")
+        .setQueue(computeTransferQueue)
+        .setScheduling(chainedScheduling)
+        .setDependencies(&counterClear, 1u)
+        .setResourceUses(shadowUses, LengthOf(shadowUses))
+    ;
+    bool shadowRecorded = false;
+    const GpuTaskId shadow = graph.addTask<NativePacketPrefixTask>(
+        shadowDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = edgeStats.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .additionalBuffer = edgeCounter.get(),
+            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
+            .recorded = &shadowRecorded,
+        }
+    );
+    ASSERT_TRUE(shadow.valid());
+
+    const GpuCopyBufferTaskRegion statsReadbackRegion{
+        .source = edgeStatsResource,
+        .destination = statsReadbackResource,
+        .dataSizeBytes = sizeof(u32) * 4u,
+    };
+    GpuTaskSchedulingHint statsCopyScheduling = chainedScheduling;
+    statsCopyScheduling.allowMergeAcrossConsumerFrontier = true;
+    GpuTaskDesc statsCopyDesc;
+    statsCopyDesc
+        .setIdentity(Name("tests/descriptor_buffer/adaptive_shadow_stats_readback"))
+        .setMarkerLabel("Adaptive Shadow Statistics Readback")
+        .setQueue(computeTransferQueue)
+        .setScheduling(statsCopyScheduling)
+        .setDependencies(&shadow, 1u)
+    ;
+    QueueSubmissionToken statsReadbackAcceptedToken;
+    const GpuTaskId statsCopy = graph.addCopyBufferTask(
+        statsCopyDesc,
+        GpuCopyBufferTaskDesc{
+            .regions = &statsReadbackRegion,
+            .regionCount = 1u,
+            .acceptedToken = &statsReadbackAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(statsCopy.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/adaptive_shadow_primitives_scratch"));
+    GpuTaskGraphCompileOptions compileOptions;
+    compileOptions.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions));
+    const GpuSubmissionPacketId shadowPacket = compiledGraph.packetForTask(shadow);
+    ASSERT_TRUE(shadowPacket.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(statsClear), shadowPacket);
+    EXPECT_EQ(compiledGraph.packetForTask(counterClear), shadowPacket);
+    EXPECT_EQ(compiledGraph.packetForTask(statsCopy), shadowPacket);
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    ASSERT_EQ(compiledGraph.packet(shadowPacket).taskCount, 4u);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    GpuCommandIrCapture commandIrCapture(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        nullptr,
+        &commandIrCapture
+    ));
+    EXPECT_TRUE(shadowRecorded);
+    ASSERT_EQ(commandIrCapture.recordCount(), 3u);
+    const GpuCommandIrBuiltinTaskRecord* const statsClearCapture = commandIrCapture.recordAt(0u);
+    const GpuCommandIrBuiltinTaskRecord* const counterClearCapture = commandIrCapture.recordAt(1u);
+    const GpuCommandIrBuiltinTaskRecord* const statsCopyCapture = commandIrCapture.recordAt(2u);
+    ASSERT_NE(statsClearCapture, nullptr);
+    ASSERT_NE(counterClearCapture, nullptr);
+    ASSERT_NE(statsCopyCapture, nullptr);
+    EXPECT_EQ(statsClearCapture->opcode, GpuCommandIrOpcode::ClearBuffer);
+    EXPECT_EQ(statsClearCapture->task, statsClear);
+    EXPECT_EQ(statsClearCapture->destination, edgeStatsResource);
+    EXPECT_EQ(counterClearCapture->opcode, GpuCommandIrOpcode::ClearBuffer);
+    EXPECT_EQ(counterClearCapture->task, counterClear);
+    EXPECT_EQ(counterClearCapture->destination, edgeCounterResource);
+    EXPECT_EQ(statsCopyCapture->opcode, GpuCommandIrOpcode::CopyBuffer);
+    EXPECT_EQ(statsCopyCapture->task, statsCopy);
+    EXPECT_EQ(statsCopyCapture->source, edgeStatsResource);
+    EXPECT_EQ(statsCopyCapture->destination, statsReadbackResource);
+    EXPECT_EQ(statsCopyCapture->dataSizeBytes, statsReadbackRegion.dataSizeBytes);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(shadowPacket);
+    ASSERT_NE(finalState, nullptr);
+    const CommandListHandle stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getBufferState(edgeStats.get()), ResourceStates::CopySource);
+    EXPECT_EQ(stateProbe->getBufferState(statsReadback.get()), ResourceStates::CopyDest);
+    stateProbe->close();
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken shadowToken = transaction.taskToken(compiledGraph, shadow);
+    ASSERT_TRUE(shadowToken.valid());
+    EXPECT_TRUE(statsReadbackAcceptedToken.valid());
+    EXPECT_EQ(statsReadbackAcceptedToken.queue, shadowToken.queue);
+    EXPECT_EQ(statsReadbackAcceptedToken.value, shadowToken.value);
+    ASSERT_TRUE(device.waitForIdle());
+
+    const u32* const readbackWords = static_cast<const u32*>(device.mapBuffer(statsReadback.get(), CpuAccessMode::Read));
+    ASSERT_NE(readbackWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < 4u; ++wordIndex)
+        EXPECT_EQ(readbackWords[wordIndex], 0u);
+    device.unmapBuffer(statsReadback.get());
+}
+
+
 TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTextureHooksDiscardOnPacketRecordFailure){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto texture = device.createTexture(

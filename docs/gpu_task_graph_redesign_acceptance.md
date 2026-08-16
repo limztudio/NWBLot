@@ -103,8 +103,12 @@ can receive an unconditional final sign-off.
   callbacks no longer restate their graph-owned first-wavelet output or tail input/visibility states; transparent
   resolve timing begins in temporal merge when active and the terminal resolve tail retains the timing, acceptance,
   recovery, history-publication, and output-state endpoint. Direct or
-  minimal callers retain native setup by default; the preflight-failure `CopyDest` clear, adaptive/hybrid
-  compatibility routes, and later intra-task soft/hybrid UAV fences remain native ownership.
+  minimal callers retain native setup by default. On the normal adaptive fallback, declaration freezes the private
+  compact/stat-snapshot plan and the graph records typed stats/counter clears before Shadow Visibility plus its
+  optional stats readback after it in the same Compute/Graphics packet; the diagnostic tick and readback handoff
+  publish only after that callback records adaptive work and the shared packet accepts. The preflight-failure
+  `CopyDest` clear, other adaptive/hybrid compatibility transitions, and later intra-task soft/hybrid UAV fences
+  remain native ownership.
 - The normal deferred Software Caustics task now consumes graph-declared descriptor-visible shared inputs: sampled
   world/depth textures, bindless/scene/material/mesh constant buffers, emission and frozen software-BVH traversal
   streams, plus scene/material/light buffers. Its depth use is `ShaderResource`, matching the bindless sampled-image
@@ -540,6 +544,7 @@ can receive an unconditional final sign-off.
 | Semantic task pre-submit hook: deferred presentation | passed; the task-based submitter resolves a one-shot native hook from the declared terminal presentation task and attaches it to that task's exact compiler packet. The renderer still validates the resolved terminal packet's physical queue before claiming the swap-chain binary signal, while the hook itself no longer mirrors packet IDs. The real-Vulkan smoke rejects out-of-range and duplicate task hook bindings before native submission, then proves an in-range task hook resolves to the exact packet by rejecting its conflict with a packet compatibility binding. Generic packet hooks remain a narrow compatibility/testing API. `nwb_ecs_render` rebuilt; graph tests passed 87/87, descriptor smoke passed 115 with 12 expected topology skips, and ECS graphics passed 18/18. |
 | Semantic task final-state snapshots: shared deferred lifecycle | passed; `GpuRecordedGraph` now validates the current compiler output and resolves final native state snapshots from declared task IDs. Shadow Prepare, Graphics Prefix, Shadow Visibility, Software/Hardware Caustics, Surfel GI, Lighting, the late counter readback/history tails, and runtime skinning no longer mirror compiler packet IDs merely to retain recorded final state. The real-Vulkan timing smoke verifies split task lookups equal their resolved packet snapshots and rejects invalid tasks and an unrelated compiled graph. The packet accessor remains a compatibility/testing API. `nwb_ecs_render` rebuilt; graph tests passed 87/87, descriptor smoke passed 115 with 12 expected topology skips, and ECS graphics passed 18/18. |
 | Semantic task topology validation: deferred renderer and recovery | passed; `GpuCompiledGraph` now resolves same-packet, compiler-order, queue-routing, and accepted-frontier checks from declared task IDs, while `GpuGraphSubmissionTransaction` can reject unaccepted work by task. Dynamic Prefix timing coalescing, Shadow/AVBOIT merge guards, skinning’s primary-Graphics check, terminal queue checks, and deferred recovery/readback revocation no longer rebuild packet topology in renderer code. Graph tests passed 87/87, descriptor smoke passed 115 with 12 expected topology skips, and ECS graphics passed 18/18. |
+| Graph-owned adaptive software-shadow primitive chain: renderer build, task-graph unit, descriptor-buffer smoke, and ECS graphics | passed; the normal adaptive fallback freezes its compact/stat-snapshot plan during declaration, declares typed stats/counter `CopyDest` clears before the monolithic Shadow Visibility callback, and optionally declares a stats `CopySource` to readback `CopyDest` tail. The full chain shares the selected Compute/Graphics packet, so the callback consumes compiler-lowered UAV states and accepts the frozen tick/readback handoff only when adaptive work actually records and that packet accepts. Rejected and no-producer routes retain rollback/no-publication behavior, while direct compatibility callers retain native primitives. The compiler proof asserts exact chain order and `CopyDest`-to-UAV-to-`CopySource` barriers under FrontierSafe; the real-Vulkan smoke records two clears and the copy in IR order, observes both UAV inputs in a getter-only callback, verifies the accepted token/final states, and maps the zeroed readback. `nwb_ecs_render` rebuilt; graph tests passed 90/90, descriptor smoke passed 117 with 13 expected topology skips, and ECS graphics passed 18/18. |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -630,8 +635,10 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    fallback context, software-only and hybrid scene-BVH pairs
    and healthy hybrid software traversal tables, software-only and hybrid per-mesh SW-BVH build/refit,
    opaque and healthy hybrid hardware TLAS, and opaque and hybrid hardware BLAS build/refit transactions are acceptance-safe
-   graph-owned preparation work; other specialized descriptor/resource updates still retain direct native recording
-   or submission. The graph
+   graph-owned preparation work. The normal adaptive software-shadow stats/counter clear and optional stats
+   readback are now typed graph primitives in the Shadow Visibility packet; their private CPU mirror only publishes
+   when the adaptive callback records and that shared packet accepts. Other specialized descriptor/resource updates
+   still retain direct native recording or submission. The graph
    therefore does not yet authoritatively own all frame work and state retirement.
 
 3. **Packet scheduling and recording completion (partially addressed).** Explicit merging remains the renderer

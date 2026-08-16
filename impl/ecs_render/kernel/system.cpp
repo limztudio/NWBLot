@@ -261,6 +261,9 @@ void RendererSystem::invalidateResources(){
     m_deferredShadowVisibilityTransparentTraceTask = {};
     m_deferredShadowVisibilityTransparentTemporalMergeTask = {};
     m_deferredShadowVisibilityTransparentFirstWaveletTask = {};
+    m_deferredShadowVisibilityAdaptiveStatsClearTask = {};
+    m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
+    m_deferredShadowVisibilityAdaptiveStatsReadbackTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
@@ -548,6 +551,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredShadowVisibilityTransparentTraceTask = {};
     m_deferredShadowVisibilityTransparentTemporalMergeTask = {};
     m_deferredShadowVisibilityTransparentFirstWaveletTask = {};
+    m_deferredShadowVisibilityAdaptiveStatsClearTask = {};
+    m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
+    m_deferredShadowVisibilityAdaptiveStatsReadbackTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
@@ -1171,6 +1177,26 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             )
         )
     ;
+    // The adaptive clear/copy primitives deliberately keep the original Shadow Visibility acceptance endpoint.
+    // A split would leave part of the chain outside its semantic record/submit range and would make the frozen
+    // diagnostic state observable before the traversal packet accepts.
+    const bool shadowVisibilityAdaptivePrimitivesMerged =
+        (!m_deferredShadowVisibilityAdaptiveStatsClearTask.valid()
+            || m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredShadowVisibilityTask,
+                m_deferredShadowVisibilityAdaptiveStatsClearTask
+            ))
+        && (!m_deferredShadowVisibilityAdaptiveCounterClearTask.valid()
+            || m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredShadowVisibilityTask,
+                m_deferredShadowVisibilityAdaptiveCounterClearTask
+            ))
+        && (!m_deferredShadowVisibilityAdaptiveStatsReadbackTask.valid()
+            || m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredShadowVisibilityTask,
+                m_deferredShadowVisibilityAdaptiveStatsReadbackTask
+            ))
+    ;
     const Core::GpuSubmissionPacketId softwareCausticsPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredSoftwareCausticsTask
     );
@@ -1744,6 +1770,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredShadowVisibilityTask.valid()
         || !shadowVisibilityPacket.valid()
         || !shadowVisibilityPreparedTasksMerged
+        || !shadowVisibilityAdaptivePrimitivesMerged
         || !shadowVisibilityQueue
         || (!hardwareShadowSupported && (
             !m_deferredSoftwareCausticsTask.valid()
@@ -2502,6 +2529,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredShadowVisibilityTask.valid()
         && shadowVisibilityPacket.valid()
         && shadowVisibilityPreparedTasksMerged
+        && shadowVisibilityAdaptivePrimitivesMerged
         && (hardwareShadowSupported || (
             m_deferredSoftwareCausticsTask.valid()
             && softwareCausticsPacket.valid()
@@ -3538,6 +3566,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredShadowVisibilityTask.valid()
             && shadowVisibilityPacket.valid()
             && shadowVisibilityPreparedTasksMerged
+            && shadowVisibilityAdaptivePrimitivesMerged
             && shadowEffectsPacketRange.valid()
             && shadowEffectsPacketRange.packetCount == shadowEffectsTimingTicketCount
             && (hardwareShadowSupported || (

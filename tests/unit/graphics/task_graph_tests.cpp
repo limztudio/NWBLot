@@ -6556,6 +6556,313 @@ TEST(GpuTaskGraph, PlansGraphOwnedSoftTransparentTraceEntryStates){
 }
 
 
+// Adaptive software-shadow diagnostics keep their primitive clear/copy operations in the semantic Shadow
+// Visibility packet.  The real renderer freezes the compact/snapshot decision before declaration; this compiler
+// fixture pins the full snapshot+compact chain and its CopyDest -> UAV -> CopySource lowering.
+TEST(GpuTaskGraph, MergesGraphOwnedAdaptiveShadowPrimitivesIntoShadowVisibilityPacket){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    constexpr Graphics::ResourceQueueSharing::Mask queueSharing =
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    ;
+    const Graphics::GpuGraphResourceId edgeStats = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/adaptive_shadow_edge_stats"),
+        "Adaptive Shadow Edge Statistics",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId edgeCounter = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/adaptive_shadow_edge_counter"),
+        "Adaptive Shadow Edge Counter",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId statsReadback = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/adaptive_shadow_edge_stats_readback"),
+        "Adaptive Shadow Edge Statistics Readback",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId shadowVisibility = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/adaptive_shadow_visibility"),
+        "Adaptive Shadow Visibility",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    ASSERT_TRUE(edgeStats.valid());
+    ASSERT_TRUE(edgeCounter.valid());
+    ASSERT_TRUE(statsReadback.valid());
+    ASSERT_TRUE(shadowVisibility.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeTransferRequest{
+        QueueCapabilities(
+            Graphics::GpuQueueCapability::Compute,
+            Graphics::GpuQueueCapability::Transfer
+        ),
+        Graphics::GpuQueuePreference::Compute,
+        true,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint prefixScheduling;
+    prefixScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    prefixScheduling.forceSubmissionBoundary = true;
+    prefixScheduling.allowPacketMerge = false;
+    Graphics::GpuTaskDesc prefixDesc;
+    prefixDesc
+        .setIdentity(Name("tests/task_graph/adaptive_shadow_prefix"))
+        .setMarkerLabel("Adaptive Shadow Prefix")
+        .setQueue(graphicsRequest)
+        .setScheduling(prefixScheduling)
+    ;
+    const Graphics::GpuTaskId prefix = graph.addTask(prefixDesc);
+    ASSERT_TRUE(prefix.valid());
+
+    Graphics::GpuTaskSchedulingHint primitiveScheduling;
+    primitiveScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    primitiveScheduling.allowPacketMerge = true;
+    const Graphics::GpuTaskResourceUse statsClearUses[] = {
+        {
+            .resource = edgeStats,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc statsClearDesc;
+    statsClearDesc
+        .setIdentity(Name("tests/task_graph/adaptive_shadow_stats_clear"))
+        .setMarkerLabel("Adaptive Shadow Statistics Clear")
+        .setQueue(computeTransferRequest)
+        .setScheduling(primitiveScheduling)
+        .setDependencies(&prefix, 1u)
+        .setResourceUses(statsClearUses, LengthOf(statsClearUses))
+    ;
+    const Graphics::GpuTaskId statsClear = graph.addTask(statsClearDesc);
+    ASSERT_TRUE(statsClear.valid());
+
+    Graphics::GpuTaskSchedulingHint counterClearScheduling = primitiveScheduling;
+    counterClearScheduling.mergeWithPrevious = true;
+    const Graphics::GpuTaskResourceUse counterClearUses[] = {
+        {
+            .resource = edgeCounter,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc counterClearDesc;
+    counterClearDesc
+        .setIdentity(Name("tests/task_graph/adaptive_shadow_counter_clear"))
+        .setMarkerLabel("Adaptive Shadow Counter Clear")
+        .setQueue(computeTransferRequest)
+        .setScheduling(counterClearScheduling)
+        .setDependencies(&statsClear, 1u)
+        .setResourceUses(counterClearUses, LengthOf(counterClearUses))
+    ;
+    const Graphics::GpuTaskId counterClear = graph.addTask(counterClearDesc);
+    ASSERT_TRUE(counterClear.valid());
+
+    Graphics::GpuTaskSchedulingHint shadowScheduling;
+    shadowScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    shadowScheduling.allowPacketMerge = true;
+    shadowScheduling.mergeWithPrevious = true;
+    const Graphics::GpuTaskResourceUse shadowUses[] = {
+        {
+            .resource = edgeStats,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        {
+            .resource = edgeCounter,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        {
+            .resource = shadowVisibility,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc shadowDesc;
+    shadowDesc
+        .setIdentity(Name("tests/task_graph/adaptive_shadow_visibility"))
+        .setMarkerLabel("Adaptive Shadow Visibility")
+        .setQueue(computeTransferRequest)
+        .setScheduling(shadowScheduling)
+        .setDependencies(&counterClear, 1u)
+        .setResourceUses(shadowUses, LengthOf(shadowUses))
+    ;
+    const Graphics::GpuTaskId shadow = graph.addTask(shadowDesc);
+    ASSERT_TRUE(shadow.valid());
+
+    Graphics::GpuTaskSchedulingHint statsReadbackScheduling = primitiveScheduling;
+    statsReadbackScheduling.mergeWithPrevious = true;
+    statsReadbackScheduling.allowMergeAcrossConsumerFrontier = true;
+    const Graphics::GpuTaskResourceUse statsReadbackUses[] = {
+        {
+            .resource = edgeStats,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopySource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = statsReadback,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc statsReadbackDesc;
+    statsReadbackDesc
+        .setIdentity(Name("tests/task_graph/adaptive_shadow_stats_readback"))
+        .setMarkerLabel("Adaptive Shadow Statistics Readback")
+        .setQueue(computeTransferRequest)
+        .setScheduling(statsReadbackScheduling)
+        .setDependencies(&shadow, 1u)
+        .setResourceUses(statsReadbackUses, LengthOf(statsReadbackUses))
+    ;
+    const Graphics::GpuTaskId statsCopy = graph.addTask(statsReadbackDesc);
+    ASSERT_TRUE(statsCopy.valid());
+
+    Graphics::GpuTaskSchedulingHint lightingScheduling;
+    lightingScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    lightingScheduling.forceSubmissionBoundary = true;
+    lightingScheduling.allowPacketMerge = false;
+    const Graphics::GpuTaskResourceUse lightingUses[] = {
+        {
+            .resource = shadowVisibility,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskDesc lightingDesc;
+    lightingDesc
+        .setIdentity(Name("tests/task_graph/adaptive_shadow_lighting"))
+        .setMarkerLabel("Adaptive Shadow Lighting")
+        .setQueue(graphicsRequest)
+        .setScheduling(lightingScheduling)
+        .setDependencies(&shadow, 1u)
+        .setResourceUses(lightingUses, LengthOf(lightingUses))
+    ;
+    const Graphics::GpuTaskId lighting = graph.addTask(lightingDesc);
+    ASSERT_TRUE(lighting.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+
+    const Graphics::GpuSubmissionPacketId statsClearPacket = compiledGraph.packetForTask(statsClear);
+    const Graphics::GpuSubmissionPacketId counterClearPacket = compiledGraph.packetForTask(counterClear);
+    const Graphics::GpuSubmissionPacketId shadowPacket = compiledGraph.packetForTask(shadow);
+    const Graphics::GpuSubmissionPacketId statsCopyPacket = compiledGraph.packetForTask(statsCopy);
+    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
+    ASSERT_TRUE(shadowPacket.valid());
+    EXPECT_EQ(statsClearPacket, shadowPacket);
+    EXPECT_EQ(counterClearPacket, shadowPacket);
+    EXPECT_EQ(statsCopyPacket, shadowPacket);
+    EXPECT_NE(lightingPacket, shadowPacket);
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    const Graphics::GpuSubmissionPacketRange shadowRange = compiledGraph.packetRangeForTasks(shadow, shadow);
+    ASSERT_TRUE(shadowRange.valid());
+    EXPECT_EQ(shadowRange.packetCount, 1u);
+    EXPECT_EQ(shadowRange.first, shadowPacket);
+    const Graphics::GpuSubmissionPacket& shadowPacketDesc = compiledGraph.packet(shadowPacket);
+    ASSERT_EQ(shadowPacketDesc.taskCount, 4u);
+    const Graphics::GpuTaskId* const shadowPacketTasks = compiledGraph.packetTasks(shadowPacket);
+    ASSERT_NE(shadowPacketTasks, nullptr);
+    EXPECT_EQ(shadowPacketTasks[0u], statsClear);
+    EXPECT_EQ(shadowPacketTasks[1u], counterClear);
+    EXPECT_EQ(shadowPacketTasks[2u], shadow);
+    EXPECT_EQ(shadowPacketTasks[3u], statsCopy);
+
+    const auto hasBufferTransition = [&](
+        const Graphics::GpuTaskId task,
+        const Graphics::GpuGraphResourceId resource,
+        const Graphics::ResourceStates::Mask before,
+        const Graphics::ResourceStates::Mask after
+    ){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        if(!compiledTask)
+            return false;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        if(!barriers)
+            return false;
+        for(usize barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == resource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasBufferTransition(
+        statsClear,
+        edgeStats,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::CopyDest
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        counterClear,
+        edgeCounter,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::CopyDest
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        shadow,
+        edgeStats,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        shadow,
+        edgeCounter,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        statsCopy,
+        edgeStats,
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::CopySource
+    ));
+    EXPECT_TRUE(hasBufferTransition(
+        statsCopy,
+        statsReadback,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::CopyDest
+    ));
+}
+
+
 // Prepared soft-transparent shadows split opaque production, first wavelet, resolve tail, transparent trace,
 // transparent first wavelet, and terminal resolve tail without adding an effects submission. The compiler owns all
 // sampled handoffs and both first-wavelet-to-tail transitions.

@@ -435,6 +435,12 @@ private:
     Core::GpuTaskId m_deferredShadowVisibilityTransparentTraceTask;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentTemporalMergeTask;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentFirstWaveletTask;
+    // Adaptive software-shadow scratch work is graph-declared around the retained monolithic visibility callback.
+    // Every valid ID must share that callback's semantic packet so timing, recovery, and CPU readback acceptance
+    // retain the original single Shadow Visibility endpoint.
+    Core::GpuTaskId m_deferredShadowVisibilityAdaptiveStatsClearTask;
+    Core::GpuTaskId m_deferredShadowVisibilityAdaptiveCounterClearTask;
+    Core::GpuTaskId m_deferredShadowVisibilityAdaptiveStatsReadbackTask;
     Core::GpuTaskId m_deferredShadowVisibilityTask;
     Core::GpuTaskId m_deferredSoftwareCausticsTask;
     // Both hardware and software caustics use this typed black-output clear. The selected producer must share its

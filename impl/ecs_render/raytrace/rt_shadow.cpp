@@ -683,6 +683,8 @@ struct ShadowVisibilityGraphTask{
         const bool* prepared = nullptr;
         bool hardwareShadowSupported = false;
         bool graphEntryStatesOwned = false;
+        GraphOwnedAdaptiveShadowPrimitivePlan graphOwnedAdaptivePrimitives;
+        mutable bool adaptiveRouteRecorded = false;
     };
 
     [[nodiscard]] static bool record(
@@ -690,6 +692,7 @@ struct ShadowVisibilityGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
+        payload.adaptiveRouteRecorded = false;
         if(
             !payload.raytracingSystem
             || !payload.graphics
@@ -697,6 +700,12 @@ struct ShadowVisibilityGraphTask{
             || !payload.timingTicket
         )
             return false;
+
+        GraphOwnedAdaptiveShadowPrimitivePlan adaptivePrimitives = payload.graphOwnedAdaptivePrimitives;
+        adaptivePrimitives.adaptiveRouteRecorded = &payload.adaptiveRouteRecorded;
+        const GraphOwnedAdaptiveShadowPrimitivePlan* const graphOwnedAdaptivePrimitives =
+            adaptivePrimitives.enabled ? &adaptivePrimitives : nullptr
+        ;
 
         const Core::GpuPhysicalQueueInfo* const queue = context.graph.queueInfo(context.queue);
         if(!queue)
@@ -730,7 +739,12 @@ struct ShadowVisibilityGraphTask{
                     commandList,
                     *payload.targets,
                     true,
-                    payload.graphEntryStatesOwned
+                    payload.graphEntryStatesOwned,
+                    false,
+                    nullptr,
+                    false,
+                    false,
+                    graphOwnedAdaptivePrimitives
                 ))
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow pass failed"));
             }
@@ -740,7 +754,12 @@ struct ShadowVisibilityGraphTask{
                 commandList,
                 *payload.targets,
                 false,
-                payload.graphEntryStatesOwned
+                payload.graphEntryStatesOwned,
+                false,
+                nullptr,
+                false,
+                false,
+                graphOwnedAdaptivePrimitives
             );
         }
         // Retain all-lit visibility when no shadow producer records.
@@ -755,11 +774,21 @@ struct ShadowVisibilityGraphTask{
     }
 
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        if(payload.raytracingSystem)
+        if(!payload.raytracingSystem)
+            return;
+        if(payload.graphOwnedAdaptivePrimitives.enabled){
+            payload.raytracingSystem->confirmGraphOwnedAdaptiveShadowPrimitiveSubmission(
+                payload.graphOwnedAdaptivePrimitives,
+                payload.adaptiveRouteRecorded,
+                token
+            );
+        }
+        else
             payload.raytracingSystem->confirmShadowVisibilitySubmission(token);
     }
 
     static void discarded(Payload& payload){
+        payload.adaptiveRouteRecorded = false;
         if(payload.raytracingSystem)
             payload.raytracingSystem->discardSoftShadowTemporalHistory();
     }
@@ -1794,7 +1823,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
     const bool* const prepared,
     const bool hardwareShadowSupported,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    const bool graphEntryStatesOwned
+    const bool graphEntryStatesOwned,
+    const GraphOwnedAdaptiveShadowPrimitivePlan graphOwnedAdaptivePrimitives
 ){
     return graph.addTask<__hidden_shadow_visibility_task::ShadowVisibilityGraphTask>(
         desc,
@@ -1806,6 +1836,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
             .prepared = prepared,
             .hardwareShadowSupported = hardwareShadowSupported,
             .graphEntryStatesOwned = graphEntryStatesOwned,
+            .graphOwnedAdaptivePrimitives = graphOwnedAdaptivePrimitives,
         }
     );
 }
@@ -1828,7 +1859,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     const bool splitSoftTransparentFold,
     u32* const opaqueFrameIndex,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
-    const bool splitOpaqueSoftResolve
+    const bool splitOpaqueSoftResolve,
+    const GraphOwnedAdaptiveShadowPrimitivePlan* const graphOwnedAdaptivePrimitives
 ){
     NWB_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
     // Hybrid mode folds transparent software transmittance onto the hardware opaque mask.
@@ -2041,15 +2073,29 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     // Fallback transparent fold; it is mutually exclusive with the soft path.
     if(!softTransparentRan && rayTracingState().m_swShadowAdaptiveEnabled){
         // Compacted mode traces only classified edge records; stats are sampled asynchronously.
-        const bool compact = rayTracingState().m_swShadowCompactEnabled;
-        const u32 tick = rayTracingState().m_swShadowEdgeStatsTick++;
-        const bool snapshot =
-            rayTracingState().m_swShadowEdgeStatsEnabled
-            && !rayTracingState().m_swShadowEdgeStatsPending
-            && (tick % s_SwShadowEdgeStatsPeriod == 0u)
+        const bool graphOwnsAdaptivePrimitives =
+            graphOwnedAdaptivePrimitives && graphOwnedAdaptivePrimitives->enabled
         ;
+        const bool compact = graphOwnsAdaptivePrimitives
+            ? graphOwnedAdaptivePrimitives->compact
+            : rayTracingState().m_swShadowCompactEnabled
+        ;
+        const u32 tick = graphOwnsAdaptivePrimitives
+            ? graphOwnedAdaptivePrimitives->statsTick
+            : rayTracingState().m_swShadowEdgeStatsTick++
+        ;
+        const bool snapshot = graphOwnsAdaptivePrimitives
+            ? graphOwnedAdaptivePrimitives->captureStatsSnapshot
+            : (
+                rayTracingState().m_swShadowEdgeStatsEnabled
+                && !rayTracingState().m_swShadowEdgeStatsPending
+                && (tick % s_SwShadowEdgeStatsPeriod == 0u)
+            )
+        ;
+        if(graphOwnsAdaptivePrimitives && graphOwnedAdaptivePrimitives->adaptiveRouteRecorded)
+            *graphOwnedAdaptivePrimitives->adaptiveRouteRecorded = true;
 
-        if(snapshot){
+        if(snapshot && !graphOwnsAdaptivePrimitives){
             commandList.clearBufferUInt(rayTracingState().m_swShadowEdgeStatsBuffer.get(), 0u);
             commandList.setBufferState(rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
@@ -2077,7 +2123,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             // The append list is bounded by this frame's reset counter.
             commandList.setEnableUavBarriersForBuffer(rayTracingState().m_swShadowEdgeCounterBuffer.get(), true);
             commandList.setEnableUavBarriersForBuffer(rayTracingState().m_swShadowEdgeListBuffer.get(), true);
-            commandList.clearBufferUInt(rayTracingState().m_swShadowEdgeCounterBuffer.get(), 0u);
+            if(!graphOwnsAdaptivePrimitives)
+                commandList.clearBufferUInt(rayTracingState().m_swShadowEdgeCounterBuffer.get(), 0u);
             commandList.setBufferState(rayTracingState().m_swShadowEdgeCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.setBufferState(rayTracingState().m_swShadowEdgeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.setBufferState(rayTracingState().m_swShadowIndirectArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
@@ -2156,7 +2203,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
         }
 
-        if(snapshot){
+        if(snapshot && !graphOwnsAdaptivePrimitives){
             // Readback is delayed until its submission completes.
             commandList.setBufferState(rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::ResourceStates::CopySource);
             commandList.commitBarriers();

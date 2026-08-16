@@ -53,6 +53,36 @@ void RendererRayTracingSystem::confirmShadowVisibilitySubmission(const Core::Que
     rayTracingState().m_swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
 }
 
+void RendererRayTracingSystem::confirmGraphOwnedAdaptiveShadowPrimitiveSubmission(
+    const GraphOwnedAdaptiveShadowPrimitivePlan& plan,
+    const bool adaptiveRouteRecorded,
+    const Core::QueueSubmissionToken& submissionToken
+){
+    if(
+        !plan.enabled
+        || !adaptiveRouteRecorded
+        || !submissionToken.valid()
+        || !submissionToken.hasPhysicalQueueIdentity()
+    )
+        return;
+
+    // The graph-owned clear/copy primitives can record before a later renderer callback discovers that its
+    // producer is unavailable.  Advance the diagnostic timeline only when that callback actually took the
+    // adaptive route and its shared packet accepted.
+    rayTracingState().m_swShadowEdgeStatsTick = plan.statsTick + 1u;
+    if(!plan.captureStatsSnapshot)
+        return;
+
+    rayTracingState().m_swShadowEdgeStatsPending = true;
+    rayTracingState().m_swShadowEdgeStatsPendingTick = plan.statsTick;
+    rayTracingState().m_swShadowEdgeStatsPendingSubmissionID = submissionToken.value;
+    rayTracingState().m_swShadowEdgeStatsPendingSubmissionPhysicalQueue = Core::GpuPhysicalQueueId{
+        submissionToken.physicalQueueIndex,
+        submissionToken.deviceGeneration,
+    };
+    rayTracingState().m_swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

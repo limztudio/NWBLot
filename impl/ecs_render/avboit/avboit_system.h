@@ -80,10 +80,13 @@ public:
         bool occupancyCsgClipBufferStatesGraphOwned = false,
         bool occupancyMaterialFrameStatesGraphOwned = false,
         bool occupancyMaterialGeometryStatesGraphOwned = false,
-        // The split AVBOIT graph can generate alias-free regular emulation vertices in the preceding producer.
-        // CSG, shared-output, direct, and unsplit paths leave this false and retain local dispatch/raster work.
+        // The graph can generate alias-free regular emulation vertices in the preceding producer.
+        // Shared-output and direct paths leave this false and retain local dispatch/raster work.
         bool occupancyComputeEmulationOutputStatesGraphOwned = false,
-        Optional<Core::GpuTimingMeasure>* occupancyComputeEmulationTiming = nullptr
+        Optional<Core::GpuTimingMeasure>* occupancyComputeEmulationTiming = nullptr,
+        // A distinct frozen CSG-only producer may own the same handoff. It remains separate from the regular flag
+        // so mixed CSG streams keep their compatibility interleaving.
+        bool occupancyCsgComputeEmulationOutputStatesGraphOwned = false
     );
     void renderAvboitPostOccupancyPasses(
         Core::CommandList& commandList,

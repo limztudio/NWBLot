@@ -244,7 +244,8 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     const bool materialFrameStatesGraphOwned,
     const bool materialGeometryStatesGraphOwned,
     const bool emulationOutputEntryStateGraphOwned,
-    Optional<Core::GpuTimingMeasure>* const emulationOutputTiming
+    Optional<Core::GpuTimingMeasure>* const emulationOutputTiming,
+    const bool csgEmulationOutputEntryStateGraphOwned
 ){
     const auto discardEmulationOutputTiming = [emulationOutputTiming](){
         if(!emulationOutputTiming || !emulationOutputTiming->has_value())
@@ -266,7 +267,11 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
 
     // The graph producer creates this measurement before its dispatches. Without it, the producer intentionally
     // recorded no output, so a raster-only consumer must not read a stale generated-vertex buffer.
-    if(emulationOutputEntryStateGraphOwned && (
+    const bool emulationOutputStatesGraphOwned =
+        emulationOutputEntryStateGraphOwned
+        || csgEmulationOutputEntryStateGraphOwned
+    ;
+    if(emulationOutputStatesGraphOwned && (
         !emulationOutputTiming
         || !emulationOutputTiming->has_value()
     ))
@@ -289,6 +294,10 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     const bool csgDrawResourcesReady = csgResourcesReady
         && (drawItems.csg.empty() || materialPassDrawResourcesReady(drawItems.csg))
     ;
+    if(csgEmulationOutputEntryStateGraphOwned && !csgDrawResourcesReady){
+        discardEmulationOutputTiming();
+        return;
+    }
 
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
@@ -305,8 +314,8 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         materialGeometryStatesGraphOwned,
         emulationOutputEntryStateGraphOwned
     };
-    // The graph-owned handoff is deliberately regular-only. Preserve an unrelated CSG stream's local interleaving
-    // even if a future caller elects to split only the regular phase.
+    // CSG may opt in only through its own frozen alias-free producer. This remains separate from the regular flag
+    // so mixed streams cannot suppress the local interleaving required by an unowned CSG output.
     const MaterialPassDrawContext csgDrawContext{
         commandList,
         framebuffer,
@@ -318,7 +327,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         csgClipBufferStatesGraphOwned,
         materialFrameStatesGraphOwned,
         materialGeometryStatesGraphOwned,
-        false
+        csgEmulationOutputEntryStateGraphOwned
     };
     const auto recordPreparedDraws = [&](){
         if(regularDrawResourcesReady)
@@ -326,7 +335,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         if(csgDrawResourcesReady)
             renderMaterialPassDrawItems(csgDrawContext, drawItems.csg);
     };
-    if(emulationOutputEntryStateGraphOwned){
+    if(emulationOutputStatesGraphOwned){
         recordPreparedDraws();
         emulationOutputTiming->value().finishTiming(commandList);
         emulationOutputTiming->reset();

@@ -545,7 +545,8 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
     const bool occupancyMaterialFrameStatesGraphOwned,
     const bool occupancyMaterialGeometryStatesGraphOwned,
     const bool occupancyComputeEmulationOutputStatesGraphOwned,
-    Optional<Core::GpuTimingMeasure>* const occupancyComputeEmulationTiming
+    Optional<Core::GpuTimingMeasure>* const occupancyComputeEmulationTiming,
+    const bool occupancyCsgComputeEmulationOutputStatesGraphOwned
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -582,7 +583,8 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
                 occupancyMaterialFrameStatesGraphOwned,
                 occupancyMaterialGeometryStatesGraphOwned,
                 occupancyComputeEmulationOutputStatesGraphOwned,
-                occupancyComputeEmulationTiming
+                occupancyComputeEmulationTiming,
+                occupancyCsgComputeEmulationOutputStatesGraphOwned
             );
         }
     }

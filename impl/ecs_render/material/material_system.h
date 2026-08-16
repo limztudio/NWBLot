@@ -87,7 +87,10 @@ public:
         bool emulationOutputEntryStateGraphOwned = false,
         // The producer opens this established pass measure before its dispatches; the prepared raster closes it.
         // A missing measure means the producer intentionally no-op'd, so this consumer must not raster stale data.
-        Optional<Core::GpuTimingMeasure>* emulationOutputTiming = nullptr
+        Optional<Core::GpuTimingMeasure>* emulationOutputTiming = nullptr,
+        // AVBOIT may instead freeze a CSG-only alias-free producer. Keep this separate from the regular handoff so
+        // a mixed CSG stream cannot accidentally suppress its required local dispatch/raster interleaving.
+        bool csgEmulationOutputEntryStateGraphOwned = false
     );
     [[nodiscard]] bool prepareMaterialPassResources(
         Core::Framebuffer* framebuffer,

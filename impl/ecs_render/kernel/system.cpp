@@ -293,6 +293,7 @@ void RendererSystem::invalidateResources(){
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
+    m_deferredAvboitClearFirstTask = {};
     m_deferredAvboitClearTask = {};
     m_deferredAvboitPreTask = {};
     m_deferredAvboitCsgReceiverSpanTask = {};
@@ -583,6 +584,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
+    m_deferredAvboitClearFirstTask = {};
     m_deferredAvboitClearTask = {};
     m_deferredAvboitPreTask = {};
     m_deferredAvboitCsgReceiverSpanTask = {};
@@ -868,6 +870,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Optional<Core::GpuTimingMeasure> causticResolveTiming;
     const bool clearAvboitTargets = hasTransparentRenderers || m_avboitState.m_targetsNeedClear;
     Core::GpuTimingSubmissionTicket avboitPreTimingTicket(m_graphics.gpuTiming());
+    Optional<Core::GpuTimingMeasure> avboitClearTiming;
+    ECSRenderDetail::AvboitClearTimingRecordState avboitClearTimingState{
+        .graphics = &m_graphics,
+        .timing = &avboitClearTiming,
+        .timingTicket = &avboitPreTimingTicket,
+    };
     // Prepared transparent CSG begins this interval in AVBOIT Pre and closes it in its graph-owned Combine callback.
     Optional<Core::GpuTimingMeasure> transparentCsgIntervalsTiming;
     Core::GpuTimingSubmissionTicket avboitDepthWarpTimingTicket(m_graphics.gpuTiming());
@@ -902,6 +910,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &asyncPrefixTimingSpansOnePacket,
         asyncFinalTiming,
         avboitPreTimingTicket,
+        avboitClearTimingState,
         transparentCsgIntervalsTiming,
         avboitDepthWarpTimingTicket,
         avboitExtinctionTimingTicket,
@@ -946,6 +955,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             &asyncPrefixTimingSpansOnePacket,
             asyncFinalTiming,
             avboitPreTimingTicket,
+            avboitClearTimingState,
             transparentCsgIntervalsTiming,
             avboitDepthWarpTimingTicket,
             avboitExtinctionTimingTicket,
@@ -1242,7 +1252,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredAvboitPreTask
     );
     const bool avboitPrePacketContainsClear = !clearAvboitTargets || (
-        m_deferredAvboitClearTask.valid()
+        m_deferredAvboitClearFirstTask.valid()
+        && m_deferredAvboitClearTask.valid()
+        && m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredAvboitPreTask,
+            m_deferredAvboitClearFirstTask
+        )
         && m_deferredLightingCompiledGraph.tasksSharePacket(
             m_deferredAvboitPreTask,
             m_deferredAvboitClearTask

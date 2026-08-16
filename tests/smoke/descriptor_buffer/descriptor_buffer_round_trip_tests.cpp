@@ -5048,7 +5048,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCoverageStateReco
     ASSERT_TRUE(coverageResource.valid());
 
     const GpuQueueRequest graphicsQueue{
-        GpuQueueCapability::Graphics,
+        // AVBOIT's clear stays on the primary Graphics transport, while the typed graph primitive advertises
+        // the Transfer capability required by its native fill operation.
+        GpuQueueCapability::Transfer,
         GpuQueuePreference::Graphics,
         false,
         false,
@@ -5057,29 +5059,18 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCoverageStateReco
     clearScheduling.cost = GpuTaskCostHint::Tiny;
     clearScheduling.forceSubmissionBoundary = false;
     clearScheduling.allowPacketMerge = true;
-    const GpuTaskResourceUse clearUses[] = {
-        GpuTaskResourceUse{
-            .resource = coverageResource,
-            .range = {},
-            .requiredState = ResourceStates::CopyDest,
-            .access = GpuTaskResourceAccess::Write,
-        },
-    };
     GpuTaskDesc clearDesc;
     clearDesc
         .setIdentity(Name("tests/descriptor_buffer/avboit_clear"))
         .setMarkerLabel("AVBOIT Clear")
         .setQueue(graphicsQueue)
         .setScheduling(clearScheduling)
-        .setResourceUses(clearUses, LengthOf(clearUses))
     ;
-    bool clearRecorded = false;
-    const GpuTaskId clearTask = graph.addTask<NativePacketPrefixTask>(
+    const GpuTaskId clearTask = graph.addClearBufferTask(
         clearDesc,
-        NativePacketPrefixTask::Payload{
-            .buffer = coverage.get(),
-            .expectedState = ResourceStates::CopyDest,
-            .recorded = &clearRecorded,
+        GpuClearBufferTaskDesc{
+            .destination = coverageResource,
+            .clearValue = 0u,
         }
     );
     ASSERT_TRUE(clearTask.valid());
@@ -5199,6 +5190,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCoverageStateReco
     EXPECT_EQ(tailBarrier[0].after, ResourceStates::UnorderedAccess);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuCommandIrCapture commandIrCapture(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
     GpuSubmissionPacketId failedPacket;
     ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
@@ -5208,11 +5200,19 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCoverageStateReco
         nullptr,
         0u,
         recordedGraph,
-        &failedPacket
+        &failedPacket,
+        &commandIrCapture
     )) << "failed packet " << failedPacket.index;
-    EXPECT_TRUE(clearRecorded);
     EXPECT_TRUE(occupancyRecorded);
     EXPECT_TRUE(tailRecorded);
+    ASSERT_EQ(commandIrCapture.recordCount(), 1u);
+    const GpuCommandIrBuiltinTaskRecord* const clearCapture = commandIrCapture.recordAt(0u);
+    ASSERT_NE(clearCapture, nullptr);
+    EXPECT_EQ(clearCapture->opcode, GpuCommandIrOpcode::ClearBuffer);
+    EXPECT_EQ(clearCapture->task, clearTask);
+    EXPECT_EQ(clearCapture->packet, packet);
+    EXPECT_EQ(clearCapture->destination, coverageResource);
+    EXPECT_EQ(clearCapture->uintClearValue, UIntColor(0u));
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);

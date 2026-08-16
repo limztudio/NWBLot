@@ -201,13 +201,6 @@ void RendererAvboitSystem::clearAvboitTargets(Core::CommandList& commandList, Av
     __hidden_avboit::ClearAvboitTargetValues(commandList, targets);
 }
 
-void RendererAvboitSystem::clearGraphOwnedAvboitTargets(Core::CommandList& commandList, AvboitFrameTargets& targets){
-    NWB_ASSERT(targets.valid());
-
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_AvboitClear, graphics().getDevice(), commandList);
-    __hidden_avboit::ClearAvboitTargetValues(commandList, targets);
-}
-
 bool RendererAvboitSystem::prepareAvboitPassResources(
     DeferredFrameTargets& targets,
     const CsgFrameState& csgFrameState

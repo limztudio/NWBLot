@@ -12061,6 +12061,191 @@ TEST(GpuTaskGraph, PlansAvboitCoverageClearAndTailUavDependencies){
 }
 
 
+// AVBOIT clears four textures and five u32 buffers in a strict native order before occupancy.  The renderer uses
+// typed clear built-ins; this compiler fixture mirrors their one-resource CopyDest declarations so a change cannot
+// split, reorder, or hide any part of the nine-clear chain before the shared UAV consumer.
+TEST(GpuTaskGraph, KeepsAvboitTypedClearChainWithOccupancy){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId lowRaster = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_clear_low_raster"),
+        "AVBOIT Low Raster"
+    );
+    const Graphics::GpuGraphResourceId accumColor = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_clear_accum_color"),
+        "AVBOIT Accumulation Color"
+    );
+    const Graphics::GpuGraphResourceId accumExtinction = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_clear_accum_extinction"),
+        "AVBOIT Accumulation Extinction"
+    );
+    const Graphics::GpuGraphResourceId coverage = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/avboit_clear_coverage"),
+        "AVBOIT Coverage"
+    );
+    const Graphics::GpuGraphResourceId depthWarp = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/avboit_clear_depth_warp"),
+        "AVBOIT Depth Warp"
+    );
+    const Graphics::GpuGraphResourceId control = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/avboit_clear_control"),
+        "AVBOIT Control"
+    );
+    const Graphics::GpuGraphResourceId extinction = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/avboit_clear_extinction"),
+        "AVBOIT Extinction"
+    );
+    const Graphics::GpuGraphResourceId extinctionOverflow = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/avboit_clear_extinction_overflow"),
+        "AVBOIT Extinction Overflow"
+    );
+    const Graphics::GpuGraphResourceId transmittance = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/avboit_clear_transmittance"),
+        "AVBOIT Transmittance"
+    );
+    const Graphics::GpuGraphResourceId clearResources[] = {
+        lowRaster,
+        accumColor,
+        accumExtinction,
+        coverage,
+        depthWarp,
+        control,
+        extinction,
+        extinctionOverflow,
+        transmittance,
+    };
+    for(const Graphics::GpuGraphResourceId& resource : clearResources)
+        ASSERT_TRUE(resource.valid());
+
+    const Graphics::GpuQueueRequest graphicsTransferQueue{
+        Graphics::GpuQueueCapability::Transfer,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskId previousClear;
+    const auto appendClear = [&graph, &previousClear, &graphicsTransferQueue](
+        const Name identity,
+        const AStringView label,
+        const Graphics::GpuGraphResourceId resource
+    ){
+        const Graphics::GpuTaskResourceUse clearUses[] = {
+            Graphics::GpuTaskResourceUse{
+                .resource = resource,
+                .range = {},
+                .requiredState = Graphics::ResourceStates::CopyDest,
+                .access = Graphics::GpuTaskResourceAccess::Write,
+            },
+        };
+        Graphics::GpuTaskSchedulingHint scheduling;
+        scheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+        scheduling.forceSubmissionBoundary = false;
+        scheduling.allowPacketMerge = true;
+        scheduling.mergeWithPrevious = previousClear.valid();
+        Graphics::GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(graphicsTransferQueue)
+            .setScheduling(scheduling)
+            .setDependencies(previousClear.valid() ? &previousClear : nullptr, previousClear.valid() ? 1u : 0u)
+            .setResourceUses(clearUses, LengthOf(clearUses))
+        ;
+        previousClear = graph.addTask(desc);
+        return previousClear;
+    };
+    const Graphics::GpuTaskId clearTasks[] = {
+        appendClear(Name("tests/task_graph/avboit_typed_clear_low_raster"), "AVBOIT Clear Low Raster", lowRaster),
+        appendClear(Name("tests/task_graph/avboit_typed_clear_accum_color"), "AVBOIT Clear Accumulation Color", accumColor),
+        appendClear(Name("tests/task_graph/avboit_typed_clear_accum_extinction"), "AVBOIT Clear Accumulation Extinction", accumExtinction),
+        appendClear(Name("tests/task_graph/avboit_typed_clear_coverage"), "AVBOIT Clear Coverage", coverage),
+        appendClear(Name("tests/task_graph/avboit_typed_clear_depth_warp"), "AVBOIT Clear Depth Warp", depthWarp),
+        appendClear(Name("tests/task_graph/avboit_typed_clear_control"), "AVBOIT Clear Control", control),
+        appendClear(Name("tests/task_graph/avboit_typed_clear_extinction"), "AVBOIT Clear Extinction", extinction),
+        appendClear(Name("tests/task_graph/avboit_typed_clear_extinction_overflow"), "AVBOIT Clear Extinction Overflow", extinctionOverflow),
+        appendClear(Name("tests/task_graph/avboit_typed_clear_transmittance"), "AVBOIT Clear Transmittance", transmittance),
+    };
+    for(const Graphics::GpuTaskId& task : clearTasks)
+        ASSERT_TRUE(task.valid());
+
+    Graphics::GpuTaskResourceUse occupancyUses[LengthOf(clearResources)] = {};
+    for(usize resourceIndex = 0u; resourceIndex < LengthOf(clearResources); ++resourceIndex){
+        occupancyUses[resourceIndex].resource = clearResources[resourceIndex];
+        occupancyUses[resourceIndex].requiredState = Graphics::ResourceStates::UnorderedAccess;
+        occupancyUses[resourceIndex].access = Graphics::GpuTaskResourceAccess::ReadWrite;
+    }
+    Graphics::GpuTaskSchedulingHint occupancyScheduling;
+    occupancyScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    occupancyScheduling.forceSubmissionBoundary = false;
+    occupancyScheduling.allowPacketMerge = true;
+    occupancyScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskDesc occupancyDesc;
+    occupancyDesc
+        .setIdentity(Name("tests/task_graph/avboit_typed_clear_occupancy"))
+        .setMarkerLabel("AVBOIT Occupancy")
+        .setQueue(graphicsTransferQueue)
+        .setScheduling(occupancyScheduling)
+        .setDependencies(&previousClear, 1u)
+        .setResourceUses(occupancyUses, LengthOf(occupancyUses))
+    ;
+    const Graphics::GpuTaskId occupancy = graph.addTask(occupancyDesc);
+    ASSERT_TRUE(occupancy.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(occupancy);
+    ASSERT_TRUE(packet.valid());
+    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    ASSERT_EQ(compiledPacket.taskCount, LengthOf(clearTasks) + 1u);
+    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    ASSERT_NE(packetTasks, nullptr);
+    for(usize taskIndex = 0u; taskIndex < LengthOf(clearTasks); ++taskIndex){
+        EXPECT_EQ(packetTasks[taskIndex], clearTasks[taskIndex]);
+        EXPECT_TRUE(compiledGraph.tasksSharePacket(clearTasks[taskIndex], occupancy));
+    }
+    EXPECT_EQ(packetTasks[LengthOf(clearTasks)], occupancy);
+
+    const Graphics::GpuCompiledTask* const compiledOccupancy = compiledGraph.findTask(occupancy);
+    ASSERT_NE(compiledOccupancy, nullptr);
+    ASSERT_EQ(compiledOccupancy->prologueBarrierCount, LengthOf(clearResources));
+    const Graphics::GpuCompiledBarrier* const occupancyBarriers = compiledGraph.taskPrologueBarriers(occupancy);
+    ASSERT_NE(occupancyBarriers, nullptr);
+    for(const Graphics::GpuGraphResourceId& resource : clearResources){
+        bool foundTransition = false;
+        for(usize barrierIndex = 0u; barrierIndex < compiledOccupancy->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = occupancyBarriers[barrierIndex];
+            if(
+                barrier.resource == resource
+                && barrier.before == Graphics::ResourceStates::CopyDest
+                && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            ){
+                foundTransition = true;
+                break;
+            }
+        }
+        EXPECT_TRUE(foundTransition);
+    }
+}
+
+
 // AVBOIT accumulation ends a Graphics raster pass, while Deferred Composite may run on a dedicated Compute queue.
 // Keep its color attachments and read-only depth handoff in a mergeable Graphics finalizer so following packets
 // only consume ShaderResource state.

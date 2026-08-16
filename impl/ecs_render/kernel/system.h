@@ -95,6 +95,13 @@ namespace ECSRenderDetail{
         Optional<Core::GpuTimingMeasure>* timing = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
     };
+    // AVBOIT's typed target-clear chain starts/ends one timing scope from its first/last texture clear, preserving
+    // the original measurement while the nine values record as individual graph built-ins.
+    struct AvboitClearTimingRecordState{
+        Core::Graphics* graphics = nullptr;
+        Optional<Core::GpuTimingMeasure>* timing = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+    };
     struct GbufferGraphTask;
 };
 
@@ -324,6 +331,7 @@ private:
         const bool* asyncPrefixTimingSpansOnePacket,
         Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
         Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
+        ECSRenderDetail::AvboitClearTimingRecordState& avboitClearTimingState,
         Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTiming,
         Core::GpuTimingSubmissionTicket& avboitDepthWarpTimingTicket,
         Core::GpuTimingSubmissionTicket& avboitExtinctionTimingTicket,
@@ -484,7 +492,9 @@ private:
     // A rare diagnostic tail: it depends on GI but records/submits after Present on Transfer when available.
     Core::GpuTaskId m_deferredSurfelGiCounterReadbackTask;
     Core::GpuTaskId m_deferredHardwareCausticsTask;
-    // The normal graph path keeps this CopyDest clear in AVBOIT Pre's timed Graphics packet.
+    // The normal graph path keeps its serial first/last typed CopyDest clear tasks in AVBOIT Pre's timed Graphics
+    // packet. Their pair proves the whole nine-clear chain stays at the established semantic endpoint.
+    Core::GpuTaskId m_deferredAvboitClearFirstTask;
     Core::GpuTaskId m_deferredAvboitClearTask;
     Core::GpuTaskId m_deferredAvboitPreTask;
     // Prepared transparent CSG split: receiver-span and interval-combine retain the AVBOIT-pre packet so phase-

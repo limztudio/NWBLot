@@ -15302,9 +15302,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     accumulationCsgFrameData
                 )
             ;
-            // The unsplit all-compute two- or three-draw case can preserve one shared generated output only as an
-            // explicit D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C)] sequence. Keep mesh and CSG work out of this
-            // narrow slice so the aggregate accumulation callback is never partially replayed around its phases.
+            // The unsplit all-compute two-, three-, or four-draw case can preserve one shared generated output only
+            // as an explicit D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) -> R(D)] sequence. Keep mesh and
+            // CSG work out of this narrow slice so the aggregate accumulation callback is never partially replayed
+            // around its phases.
             accumulationSharedComputeEmulationPlanCaptured = !splitAvboitStages
                 && !accumulationRegularComputeEmulationPlanCaptured
                 && accumulationDrawItems.regular.meshDrawItems.empty()
@@ -15314,10 +15315,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 && accumulationSharedComputeEmulationPlan.capture(
                     m_meshSystem,
                     accumulationDrawItems.regular,
-                    3u
+                    4u
                 )
                 && accumulationSharedComputeEmulationPlan.drawCount >= 2u
-                && accumulationSharedComputeEmulationPlan.drawCount <= 3u
+                && accumulationSharedComputeEmulationPlan.drawCount <= 4u
             ;
             NWB_ASSERT(
                 !(accumulationRegularComputeEmulationPlanCaptured && accumulationCsgComputeEmulationPlanCaptured)
@@ -15790,6 +15791,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Name("render.avboit.accumulation.shared_compute_emulation_raster_b"),
             Name("render.avboit.accumulation.shared_compute_emulation_generate_c"),
             Name("render.avboit.accumulation.shared_compute_emulation_raster_c"),
+            Name("render.avboit.accumulation.shared_compute_emulation_generate_d"),
+            Name("render.avboit.accumulation.shared_compute_emulation_raster_d"),
         };
         const AStringView accumulationSharedComputeEmulationPhaseMarkers[] = {
             "AVBOIT Accumulation Shared Compute Emulation Generate A",
@@ -15798,6 +15801,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             "AVBOIT Accumulation Shared Compute Emulation Raster B",
             "AVBOIT Accumulation Shared Compute Emulation Generate C",
             "AVBOIT Accumulation Shared Compute Emulation Raster C",
+            "AVBOIT Accumulation Shared Compute Emulation Generate D",
+            "AVBOIT Accumulation Shared Compute Emulation Raster D",
         };
         const usize accumulationSharedComputeEmulationPhaseCount =
             accumulationSharedComputeEmulationPlan.drawCount * 2u
@@ -15805,6 +15810,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         NWB_ASSERT(
             accumulationSharedComputeEmulationPlan.drawCount == 2u
             || accumulationSharedComputeEmulationPlan.drawCount == 3u
+            || accumulationSharedComputeEmulationPlan.drawCount == 4u
         );
         NWB_ASSERT(
             accumulationSharedComputeEmulationPhaseCount

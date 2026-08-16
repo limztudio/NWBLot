@@ -556,7 +556,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
     // Flat per-triangle-corner shadow/caustic trace attribute buffer, indexed as primitive*3+corner in lockstep
     // with the reconstructed triangle index buffer above. SEEDED from the BIND-POSE streams (uv0 is pose-invariant;
     // normal is the rest normal); for an actively-skinned mesh the normal half is then OVERWRITTEN per frame from the
-    // deformed normals by the repack compute pass (repack_normals_cs.slang, dispatchRepackNormals), so RT traces bend
+    // deformed normals by the graph-owned repack compute pass (repack_normals_cs.slang), so RT traces bend
     // on the live pose while preserving raster hard/soft edge semantics. Both shadow backends read it as a
     // ByteAddressBuffer, so it carries a raw view; canHaveUavs lets the repack pass write it as a raw UAV in place.
     if(uploaded){

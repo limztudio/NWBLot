@@ -219,34 +219,6 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
     return true;
 }
 
-bool MeshSkinningSystem::uploadRuntimeResourceBindlessSlots(
-    Core::CommandList& commandList,
-    RuntimeResources& resources,
-    bool& outUploadRecorded
-){
-    outUploadRecorded = false;
-    if(!resources.bindlessResourceSlotsBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: missing runtime bindless slot buffer"));
-        return false;
-    }
-
-    if(!resources.bindlessResourceSlotsUploaded){
-        commandList.setBufferState(resources.bindlessResourceSlotsBuffer.get(), Core::ResourceStates::CopyDest);
-        commandList.commitBarriers();
-        commandList.writeBuffer(
-            resources.bindlessResourceSlotsBuffer.get(),
-            &resources.bindlessResourceSlots,
-            sizeof(resources.bindlessResourceSlots)
-        );
-        outUploadRecorded = true;
-    }
-    // Graph-owned selector blobs publish automatic/Common. Whether the immutable graph upload or this legacy
-    // fallback supplied the bytes, the native compute continuation owns the final descriptor-visible transition.
-    commandList.setBufferState(resources.bindlessResourceSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.commitBarriers();
-    return true;
-}
-
 bool MeshSkinningSystem::ensureRuntimeResources(
     MeshSkinningRuntimeInstance& instance,
     const RuntimePayloadViews& payloadViews,

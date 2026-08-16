@@ -227,23 +227,6 @@ private:
         [[nodiscard]] bool hasActiveSkin()const{ return skinInfluenceCount != 0u && jointPaletteCount != 0u; }
     };
 
-    // The graph-owned no-active-skin copy is accepted before the legacy bounds command list opens.  Retain the
-    // exact buffer generation so that recording can only skip its native duplicate when the runtime mesh has not
-    // changed between graph declaration and dispatch.
-    struct GraphOwnedRestCopyPlan{
-        RuntimeMeshHandle handle;
-        u32 editRevision = 0u;
-        Core::BufferHandle restPositionBuffer;
-        Core::BufferHandle restNormalBuffer;
-        Core::BufferHandle restTangentBuffer;
-        Core::BufferHandle skinnedPositionBuffer;
-        Core::BufferHandle skinnedNormalBuffer;
-        Core::BufferHandle skinnedTangentBuffer;
-        usize positionBytes = 0u;
-        usize normalBytes = 0u;
-        usize tangentBytes = 0u;
-    };
-
     // The graph tasks retain only immutable per-mesh dispatch inputs. They resolve imported buffers and pipelines
     // from graph-owned IDs while recording, then publish the dirty-state and selector-residency commit only after
     // the containing primary-Graphics packet is accepted.
@@ -325,13 +308,6 @@ private:
     [[nodiscard]] bool ensureSkinningPipeline();
     [[nodiscard]] bool ensureBoundsPipeline();
     [[nodiscard]] bool ensureRepackPipeline();
-    [[nodiscard]] bool dispatchRuntimeMesh(
-        Core::CommandList& commandList,
-        MeshSkinningRuntimeInstance& instance,
-        const SkeletonJointPaletteComponent* jointPalette,
-        const SkeletonPoseComponent* skeletonPose,
-        MeshSkinningSubmissionCommit& outCommit
-    );
     // Declares all frame-local skinning work as one graph-owned primary-Graphics packet: immutable palette/selector
     // uploads and rest-stream copies feed deformation, bounds/repack, and final-state stages whose accepted task
     // commits dirty-state changes.
@@ -341,8 +317,6 @@ private:
         const SkeletonJointPaletteComponent* jointPalette,
         const SkeletonPoseComponent* skeletonPose
     );
-    [[nodiscard]] bool copyRestToSkinned(Core::CommandList& commandList, MeshSkinningRuntimeInstance& instance);
-    [[nodiscard]] bool hasGraphOwnedRestCopyPlan(const MeshSkinningRuntimeInstance& instance)const;
     [[nodiscard]] bool recordGraphOwnedSkinningDeformation(
         const GraphOwnedSkinningDispatchPlan& plan,
         Core::CommandList& commandList,
@@ -354,7 +328,6 @@ private:
         const Core::GpuTaskRecordContext& context
     );
     void confirmGraphOwnedSkinningDispatch(const GraphOwnedSkinningDispatchPlan& plan)noexcept;
-    void transitionGraphCopiedRestStreams(Core::CommandList& commandList, MeshSkinningRuntimeInstance& instance)const;
     [[nodiscard]] static bool resolveRestToSkinnedCopyByteCounts(
         const MeshSkinningRuntimeInstance& instance,
         usize& outPositionBytes,
@@ -364,16 +337,6 @@ private:
     void collectLiveSkinningStateBuffers(Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outBuffers)const;
     [[nodiscard]] bool replaceAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state);
     [[nodiscard]] bool mergeAcceptedSkinningState(const Core::CommandListResourceStateHandoff& state);
-    [[nodiscard]] bool dispatchMeshletBounds(
-        Core::CommandList& commandList,
-        MeshSkinningRuntimeInstance& instance,
-        const RuntimeResources& resources
-    );
-    [[nodiscard]] bool dispatchRepackNormals(
-        Core::CommandList& commandList,
-        MeshSkinningRuntimeInstance& instance,
-        const RuntimeResources& resources
-    );
     [[nodiscard]] bool ensureRuntimeResources(
         MeshSkinningRuntimeInstance& instance,
         const RuntimePayloadViews& payloadViews,
@@ -381,11 +344,6 @@ private:
         bool& outResourcesRebuilt
     );
     [[nodiscard]] bool createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources);
-    [[nodiscard]] bool uploadRuntimeResourceBindlessSlots(
-        Core::CommandList& commandList,
-        RuntimeResources& resources,
-        bool& outUploadRecorded
-    );
     void releaseRuntimeResourceBindlessHeapHandles(RuntimeResources& resources);
     void pruneRuntimeResources();
 
@@ -400,7 +358,6 @@ private:
     MeshSkinningRuntimeCache m_runtimeMeshCache;
 
     HashMap<u64, RuntimeResources, Hasher<u64>, EqualTo<u64>, Core::Alloc::GlobalArena> m_runtimeResources;
-    Vector<GraphOwnedRestCopyPlan, Core::Alloc::GlobalArena> m_graphOwnedRestCopyPlans;
     // The graph-runtime cache retains only accepted live skinning resources between graph generations.
     Core::GpuPersistentResourceStateCache m_acceptedSkinningState;
     Core::BindingLayoutHandle m_skinningBindingLayout;

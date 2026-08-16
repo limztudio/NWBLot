@@ -349,7 +349,6 @@ MeshSkinningSystem::MeshSkinningSystem(
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_runtimeMeshCache(arena, graphics, assetManager)
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), arena)
-    , m_graphOwnedRestCopyPlans(arena)
     , m_acceptedSkinningState(arena)
 {
     writeAccess<SkinnedMeshBindingComponent>();
@@ -510,8 +509,6 @@ bool MeshSkinningSystem::containsRuntimeMesh(const Name& meshKey, const u64 vers
 }
 
 bool MeshSkinningSystem::submitFrameSkinningGraph(){
-    m_graphOwnedRestCopyPlans.clear();
-
     auto& device = m_graphics.getDevice();
     const Core::GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
     if(!topology.queues || topology.queueCount == 0u){
@@ -1198,7 +1195,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         return false;
     }
 
-    const Core::QueueSubmissionToken skinningToken = transaction.packetToken(terminalPacket);
+    const Core::QueueSubmissionToken skinningToken = transaction.taskToken(compiledGraph, terminalTask);
     if(!skinningToken.valid() || !skinningToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning submission lost its Graphics queue identity"));
         return false;
@@ -1240,7 +1237,6 @@ void MeshSkinningSystem::pruneRuntimeResources(){
 
 void MeshSkinningSystem::invalidateResources(){
     m_acceptedSkinningState.reset();
-    m_graphOwnedRestCopyPlans.clear();
     for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end(); ++it)
         releaseRuntimeResourceBindlessHeapHandles(it.value());
     m_runtimeResources.clear();

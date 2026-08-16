@@ -40,6 +40,7 @@ struct GpuTaskGraphTaskView{
     usize dependencyCount = 0u;
     const GpuExternalCompletionId* externalDependencies = nullptr;
     usize externalDependencyCount = 0u;
+    // Declaration-supplied sources point to immutable graph-owned snapshots.
     const GpuTaskExternalStateSource* externalStateSources = nullptr;
     usize externalStateSourceCount = 0u;
     const GpuTaskResourceUse* resourceUses = nullptr;
@@ -390,6 +391,7 @@ private:
     [[nodiscard]] bool appendMarkerLabel(AStringView text, u32& outOffset, u32& outSize);
     [[nodiscard]] AStringView markerLabel(u32 offset, u32 size)const;
     void destroyTaskPayloads()noexcept;
+    void destroyTaskStateSnapshots()noexcept;
     void destroyResourceStateSnapshots()noexcept;
 
 
@@ -399,6 +401,7 @@ private:
     GraphicsVector<GpuTaskId> m_dependencies;
     GraphicsVector<GpuExternalCompletionId> m_externalDependencies;
     GraphicsVector<GpuTaskExternalStateSource> m_externalStateSources;
+    GraphicsVector<CommandListResourceStateHandoff*> m_externalStateSnapshots;
     GraphicsVector<GpuTaskResourceUse> m_resourceUses;
     GraphicsVector<GpuGraphResourceNode> m_resources;
     GraphicsVector<GpuGraphResourceSetNode> m_resourceSets;

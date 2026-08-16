@@ -513,6 +513,7 @@ can receive an unconditional final sign-off.
 | Shadow Prepare acceleration-structure finalizer resource-set adoption: renderer build, task-graph unit, descriptor-buffer smoke, and ECS graphics | passed; the frozen TLAS/BLAS typed-and-backing aliases now form one immutable `Read AccelStructRead` set. Expansion preserves the accepting Graphics packet and each compiler-lowered `AccelStructWrite` to `AccelStructRead` handoff; an unavailable set retains the individual-declaration route. Focused compiler and real-Vulkan mixed accel-structure/backing-buffer probes passed; graph tests passed 87/87, descriptor smoke passed 114 tests with 12 expected topology skips, and ECS graphics passed 18/18. |
 | Shadow Prepare BLAS geometry build-input resource-set adoption: renderer build, task-graph unit, descriptor-buffer smoke, and ECS graphics | passed; each frozen prepared BLAS position/index pair now forms one immutable `ReadWrite AccelStructBuildInput` set on Shadow Preparation. Expansion preserves the compiler-lowered source-to-build-input boundary, stays in the accepting Graphics packet, and feeds the verified later hybrid-tail SRV set; an unavailable set retains individual declarations. Focused compiler and real-Vulkan position/index plus typed/backing finalizer probes passed; graph tests passed 87/87, descriptor smoke passed 114 tests with 12 expected topology skips, and ECS graphics passed 18/18. |
 | Graph-owned imported initial-owner state snapshots: task-graph unit and descriptor-buffer smoke | passed; typed imported texture/buffer ownership declarations now deep-copy their native release-state handoff into graph-owned arena storage. The original producer handoff can be reset before late packet recording, while repeated typed imports still require the same declaration source identity and malformed invalid sources retain their established record-time diagnostic. The real Vulkan cross-queue smoke verifies the graph snapshot remains valid after its producer handoff is released; its execution is topology-gated when no distinct Compute family is available. |
+| Graph-owned task-declared state snapshots: task-graph unit and descriptor-buffer smoke | passed; task declarations now deep-copy each external native state source into graph-owned arena storage. The producer-side handoff can be reset immediately after task creation while late recording still filters the immutable snapshot through the task's declared resources. The real Vulkan late-history-tail proof releases the original source before compilation and recording, then observes the retained `CopySource` state; explicit task-anchored late bindings remain separate and late-bound. Graph tests passed 87/87, descriptor smoke passed 114 tests with 12 expected topology skips, and ECS graphics passed 18/18. |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -566,6 +567,9 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    recording. The compiler attaches that completion to the first consumer and rejects a token that does not identify
    the declared source physical queue.
    Broader external-destination routing remains an open contract.
+   Task-declared external state sources likewise capture immutable graph-owned snapshots at declaration, so accepted
+   cross-frame producer handoffs may be released before recording. Explicit task-anchored late bindings remain an
+   incremental compatibility bridge because their sources do not exist until an earlier packet records.
    The transparent AVBOIT interval producer, occupancy, extinction, and
    accumulation phases now freeze and publish their own per-write-point material/CSG streams, preserving the shared
    interval sample state across the low-resolution raster passes. Current and lagged deferred bindless selectors,
@@ -587,7 +591,7 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    worker-affined command-buffer leases: each ready-frontier packet receives the current logical worker identity,
    while Vulkan recycles its one-buffer command pool only to that worker after the physical queue timeline retires
    it. Serial/direct recording retains the default lease. All other packets, command-IR capture, legacy
-   packet-specific external-state overrides, declaration-owned external state sources, and task-anchored late
+   packet-specific external-state overrides, graph-owned declaration state snapshots, and task-anchored late
    external-state bindings retain serial recording. The latter resolves a semantic task ID to its current compiled
    packet, so post-prefix sources can retire physical packet selection incrementally while the legacy override
    bridge remains available.

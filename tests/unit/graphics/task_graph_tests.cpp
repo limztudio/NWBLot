@@ -537,6 +537,7 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
 
     dependencies[0] = {};
     externalStateSources[0].states = nullptr;
+    externalStateSource.reset();
     uses[0].resource = {};
     markerLabel[0] = 'X';
     const Graphics::GpuTaskGraphTaskView stored = graph.taskAt(task.index);
@@ -544,7 +545,9 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     ASSERT_EQ(stored.externalStateSourceCount, 1u);
     ASSERT_EQ(stored.resourceUseCount, 1u);
     EXPECT_EQ(stored.dependencies[0], predecessor);
-    EXPECT_EQ(stored.externalStateSources[0].states, &externalStateSource);
+    ASSERT_NE(stored.externalStateSources[0].states, nullptr);
+    EXPECT_NE(stored.externalStateSources[0].states, &externalStateSource);
+    EXPECT_FALSE(stored.externalStateSources[0].states->valid());
     EXPECT_EQ(stored.resourceUses[0].resource, resource);
     EXPECT_EQ(stored.markerLabel, AStringView("Stack Marker"));
     EXPECT_TRUE(stored.hasPayload);

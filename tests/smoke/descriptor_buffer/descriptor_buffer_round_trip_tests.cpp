@@ -17134,6 +17134,17 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         }
     );
     ASSERT_TRUE(historyTask.valid());
+    const GpuTaskGraphTaskView historyTaskView = graph.taskAt(historyTask.index);
+    ASSERT_EQ(historyTaskView.externalStateSourceCount, 1u);
+    ASSERT_NE(historyTaskView.externalStateSources, nullptr);
+    ASSERT_NE(historyTaskView.externalStateSources[0u].states, nullptr);
+    EXPECT_NE(historyTaskView.externalStateSources[0u].states, &sourceState);
+    EXPECT_TRUE(historyTaskView.externalStateSources[0u].states->valid());
+    // The late history task owns an immutable graph snapshot. The closed producer command list remains submitable
+    // after its caller-side handoff is released, and late packet recording must still receive CopySource.
+    sourceState.reset();
+    EXPECT_FALSE(sourceState.valid());
+    EXPECT_TRUE(graph.taskAt(historyTask.index).externalStateSources[0u].states->valid());
 
     const GpuPhysicalQueueInfo queue{
         .id = BackendQueueId(device, CommandQueue::Graphics),

@@ -571,6 +571,7 @@ GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
     , m_dependencies(arena)
     , m_externalDependencies(arena)
     , m_externalStateSources(arena)
+    , m_externalStateSnapshots(arena)
     , m_resourceUses(arena)
     , m_resources(arena)
     , m_resourceSets(arena)
@@ -584,6 +585,7 @@ GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
 
 GpuTaskGraph::~GpuTaskGraph(){
     destroyTaskPayloads();
+    destroyTaskStateSnapshots();
     destroyResourceStateSnapshots();
 }
 
@@ -1367,6 +1369,7 @@ GpuExternalCompletionId GpuTaskGraph::importExternalCompletion(const GpuExternal
 
 void GpuTaskGraph::reset(){
     destroyTaskPayloads();
+    destroyTaskStateSnapshots();
     destroyResourceStateSnapshots();
     m_tasks.clear();
     m_dependencies.clear();
@@ -1879,10 +1882,36 @@ GpuTaskId GpuTaskGraph::appendTask(
         expandedResourceUseCount += resourceSet.memberCount;
     }
 
+    // Task declarations previously retained a borrowed native handoff until late packet recording. Capture each
+    // source when the graph accepts the declaration instead, preserving an invalid source as invalid so its
+    // established record-time diagnostic remains intact for malformed legacy callers.
+    GraphicsVector<CommandListResourceStateHandoff*> externalStateSnapshots(m_arena);
+    externalStateSnapshots.reserve(desc.externalStateSourceCount);
+    const auto destroyExternalStateSnapshots = [&]{
+        for(CommandListResourceStateHandoff* const states : externalStateSnapshots)
+            DestroyArenaObject(m_arena, states);
+    };
+    for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
+        const CommandListResourceStateHandoff* const source = desc.externalStateSources[sourceIndex].states;
+        CommandListResourceStateHandoff* const snapshot = NewArenaObject<CommandListResourceStateHandoff>(m_arena, m_arena);
+        if(!snapshot){
+            destroyExternalStateSnapshots();
+            return {};
+        }
+        if(source->valid() && !snapshot->copyFrom(*source)){
+            DestroyArenaObject(m_arena, snapshot);
+            destroyExternalStateSnapshots();
+            return {};
+        }
+        externalStateSnapshots.push_back(snapshot);
+    }
+
     u32 markerLabelOffset = 0u;
     u32 markerLabelSize = 0u;
-    if(!appendMarkerLabel(desc.markerLabel, markerLabelOffset, markerLabelSize))
+    if(!appendMarkerLabel(desc.markerLabel, markerLabelOffset, markerLabelSize)){
+        destroyExternalStateSnapshots();
         return {};
+    }
 
     GpuTaskNode task;
     task.identity = desc.identity;
@@ -1908,8 +1937,13 @@ GpuTaskId GpuTaskGraph::appendTask(
         m_dependencies.push_back(desc.dependencies[dependencyIndex]);
     for(usize dependencyIndex = 0u; dependencyIndex < desc.externalDependencyCount; ++dependencyIndex)
         m_externalDependencies.push_back(desc.externalDependencies[dependencyIndex]);
-    for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex)
-        m_externalStateSources.push_back(desc.externalStateSources[sourceIndex]);
+    m_externalStateSources.reserve(m_externalStateSources.size() + desc.externalStateSourceCount);
+    m_externalStateSnapshots.reserve(m_externalStateSnapshots.size() + desc.externalStateSourceCount);
+    for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
+        const CommandListResourceStateHandoff* const snapshot = externalStateSnapshots[sourceIndex];
+        m_externalStateSources.push_back(GpuTaskExternalStateSource{ .states = snapshot });
+        m_externalStateSnapshots.push_back(externalStateSnapshots[sourceIndex]);
+    }
     for(usize useIndex = 0u; useIndex < desc.resourceUseCount; ++useIndex)
         m_resourceUses.push_back(desc.resourceUses[useIndex]);
     for(usize resourceSetUseIndex = 0u; resourceSetUseIndex < desc.resourceSetUseCount; ++resourceSetUseIndex){
@@ -2132,6 +2166,12 @@ void GpuTaskGraph::destroyTaskPayloads()noexcept{
         task.payload = nullptr;
         task.destroyPayload = nullptr;
     }
+}
+
+void GpuTaskGraph::destroyTaskStateSnapshots()noexcept{
+    for(CommandListResourceStateHandoff* const states : m_externalStateSnapshots)
+        DestroyArenaObject(m_arena, states);
+    m_externalStateSnapshots.clear();
 }
 
 void GpuTaskGraph::destroyResourceStateSnapshots()noexcept{

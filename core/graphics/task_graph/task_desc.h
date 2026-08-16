@@ -23,10 +23,11 @@ class GpuCompiledGraph;
 class CommandListResourceStateHandoff;
 struct GpuTaskRecordContext;
 
-// A declaration-owned native state snapshot from work outside the graph's ordinary internal packet edges.  The
-// source must remain valid through recording; the recorder filters it through this task's declared resources before
-// opening the packet command list.  This is the migration path for accepted cross-frame state until every producer
-// becomes an in-graph packet, and avoids renderer-owned packet-specific record overrides.
+// A declaration-owned native state snapshot from work outside the graph's ordinary internal packet edges. The graph
+// captures it in graph-owned storage when it accepts the task declaration, then filters that immutable snapshot
+// through the task's declared resources before opening the packet command list. The producer may release its
+// original handoff after task creation. This is the migration path for accepted cross-frame state until every
+// producer becomes an in-graph packet, and avoids renderer-owned packet-specific record overrides.
 struct GpuTaskExternalStateSource{
     const CommandListResourceStateHandoff* states = nullptr;
 };

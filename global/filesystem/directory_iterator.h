@@ -158,7 +158,12 @@ private:
         for(const Entry& entry : directory){
             this->m_entries.push_back(entry);
             ErrorCode directoryError;
-            if(IsDirectory(entry.path(), directoryError)){
+            const bool isDirectory = IsDirectoryNoFollow(entry.path(), directoryError);
+            if(directoryError){
+                outError = directoryError;
+                return;
+            }
+            if(isDirectory){
                 collect(entry.path(), outError);
                 if(outError)
                     return;

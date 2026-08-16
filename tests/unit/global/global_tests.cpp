@@ -18,6 +18,7 @@
 #include <global/containers.h>
 #include <global/cpu_topology.h>
 #include <global/diagnostics.h>
+#include <global/filesystem/directory_iterator.h>
 #include <global/filesystem/operations.h>
 #include <global/filesystem/path.h>
 #include <global/filesystem/utility.h>
@@ -42,6 +43,7 @@
 
 #if defined(NWB_PLATFORM_LINUX)
 #include <sched.h>
+#include <unistd.h>
 #endif
 
 
@@ -870,6 +872,37 @@ TEST(Global, FilesystemUtilityHelpers){
 
     EXPECT_TRUE(RemoveAllIfExists(root, error));
 }
+
+#if defined(NWB_PLATFORM_LINUX)
+TEST(Global, RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks){
+    NWB::Tests::TestArena<> testArena;
+    const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/recursive_directory_iterator_links");
+    const Path<NWB::Core::Alloc::GlobalArena> regularFile = root / "regular.txt";
+    const Path<NWB::Core::Alloc::GlobalArena> directoryLink = root / "self";
+
+    ErrorCode error;
+    ASSERT_TRUE(EnsureEmptyDirectory(root, error));
+    ASSERT_TRUE(WriteTextFile(regularFile, AStringView("regular")));
+    ASSERT_EQ(::symlink(".", directoryLink.c_str()), 0);
+
+    EXPECT_TRUE(IsDirectory(directoryLink, error));
+    EXPECT_FALSE(error);
+    EXPECT_FALSE(IsDirectoryNoFollow(directoryLink, error));
+    EXPECT_FALSE(error);
+
+    RecursiveDirectoryIterator directory(root, error);
+    ASSERT_FALSE(error);
+
+    usize entryCount = 0u;
+    for(const auto& entry : directory){
+        EXPECT_FALSE(entry.path().empty());
+        ++entryCount;
+    }
+    EXPECT_EQ(entryCount, 2u);
+
+    EXPECT_TRUE(RemoveAllIfExists(root, error));
+}
+#endif
 
 TEST(Global, FilesystemVolumeSegmentNaming){
     EXPECT_TRUE(ValidVolumeName("graphics"));

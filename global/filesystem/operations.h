@@ -332,6 +332,22 @@ template<typename ArenaT>
     SetLastSystemError(outError);
     return false;
 }
+
+template<typename ArenaT>
+[[nodiscard]] inline bool LStatPath(const Path<ArenaT>& path, struct stat& outStat, ErrorCode& outError)noexcept{
+    if(lstat(path.c_str(), &outStat) == 0){
+        ClearError(outError);
+        return true;
+    }
+
+    if(errno == ENOENT || errno == ENOTDIR){
+        ClearError(outError);
+        return false;
+    }
+
+    SetLastSystemError(outError);
+    return false;
+}
 #endif
 
 
@@ -362,6 +378,20 @@ template<typename ArenaT>
 #else
     struct stat pathStat;
     return GlobalFilesystemDetail::StatPath(path, pathStat, outError) && S_ISDIR(pathStat.st_mode);
+#endif
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline bool IsDirectoryNoFollow(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
+#if defined(NWB_PLATFORM_WINDOWS)
+    const DWORD attributes = GlobalFilesystemDetail::FileAttributes(path, outError);
+    return attributes != INVALID_FILE_ATTRIBUTES
+        && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u
+        && (attributes & FILE_ATTRIBUTE_REPARSE_POINT) == 0u
+    ;
+#else
+    struct stat pathStat;
+    return GlobalFilesystemDetail::LStatPath(path, pathStat, outError) && S_ISDIR(pathStat.st_mode);
 #endif
 }
 

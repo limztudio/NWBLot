@@ -1719,14 +1719,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitAccumulationComputeEmulationTask)
             : nullptr
     ;
-    // A split Occupancy measurement spans the generator and raster consumer. Require the exact Pre-packet order
-    // so graph declarations, rather than a callback-local transition, own the output UAV-to-VertexBuffer handoff.
+    // Occupancy's measurement spans the generator and raster consumer. Require the exact Pre-packet order so
+    // graph declarations, rather than a callback-local transition, own the output UAV-to-VertexBuffer handoff on
+    // both the split and unsplit AVBOIT routes.
     const bool avboitOccupancyComputeEmulationMerged = [&](){
         if(!m_deferredAvboitOccupancyComputeEmulationTask.valid())
             return true;
         if(
-            !avboitUsesAsyncCompute
-            || !m_deferredAvboitOccupancyStreamTask.valid()
+            !m_deferredAvboitOccupancyStreamTask.valid()
             || !avboitOccupancyComputeEmulationPacket.valid()
             || !avboitPrePacket.valid()
             || !avboitOccupancyComputeEmulationQueue

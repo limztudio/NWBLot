@@ -12780,10 +12780,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             );
             avboitOccupancyPayload.occupancyPhasePrepared = true;
             avboitOccupancyPayload.occupancyStreamsUploaded = true;
-            // This intentionally remains split, regular, and alias-free. The aggregate Occupancy callback retains
-            // CSG compute, shared outputs, unsplit AVBOIT, and every late mismatch on its established local bridge.
-            occupancyComputeEmulationPlanCaptured = splitAvboitStages
-                && occupancyDrawItems.csg.computeDrawItems.empty()
+            // This is intentionally regular and alias-free. The aggregate Occupancy callback retains CSG compute,
+            // shared outputs, and every late mismatch on its established local bridge.
+            occupancyComputeEmulationPlanCaptured = occupancyDrawItems.csg.computeDrawItems.empty()
                 && avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
                 && occupancyMaterialSampledTexturesCollected
                 && avboitOccupancyComputeEmulationPayload.plan.capture(

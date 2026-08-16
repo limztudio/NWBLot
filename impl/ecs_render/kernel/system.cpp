@@ -1156,6 +1156,22 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         graphicsPrefixCsgIntervalSamplePacket,
         graphicsPrefixPacket,
     };
+    const Core::GpuTaskId graphicsPrefixTimingTasks[graphicsPrefixTimingTicketCount] = {
+        m_graphicsPrefixMeshViewSetupTask,
+        m_graphicsPrefixSceneShadingSetupTask,
+        m_graphicsPrefixDeferredClearTask,
+        m_graphicsPrefixGbufferTask,
+        m_graphicsPrefixCsgReceiverSpanTask.valid()
+            ? m_graphicsPrefixCsgReceiverSpanTask
+            : m_graphicsPrefixGbufferTask,
+        m_graphicsPrefixCsgIntervalCombineTask.valid()
+            ? m_graphicsPrefixCsgIntervalCombineTask
+            : m_graphicsPrefixGbufferTask,
+        m_graphicsPrefixCsgIntervalSampleTask.valid()
+            ? m_graphicsPrefixCsgIntervalSampleTask
+            : m_graphicsPrefixGbufferTask,
+        m_graphicsPrefixTask,
+    };
     bool graphicsPrefixTimingBindingsValid = true;
     usize graphicsPrefixUniquePacketCount = 0u;
     for(usize prefixTaskIndex = 0u; prefixTaskIndex < graphicsPrefixTimingTicketCount; ++prefixTaskIndex){
@@ -3424,13 +3440,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     {
         Core::Alloc::ScratchArena shadowPreparePrefixScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter shadowPreparePrefixSubmitter(device);
-        Core::GpuTaskGraphPacketTimingTicket shadowPreparePrefixTimingTickets[
+        Core::GpuTaskGraphTaskTimingTicket shadowPreparePrefixTimingTickets[
             1u + graphicsPrefixTimingTicketCount
         ] = {};
         usize shadowPreparePrefixTimingTicketCount = 0u;
         shadowPreparePrefixTimingTickets[shadowPreparePrefixTimingTicketCount++] =
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = shadowPreparePacket,
+            Core::GpuTaskGraphTaskTimingTicket{
+                .task = m_deferredShadowPrepareTask,
                 .timingTicket = &shadowPrepareTimingTicket,
             }
         ;
@@ -3440,6 +3456,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ++prefixTaskIndex
         ){
             const Core::GpuSubmissionPacketId packet = graphicsPrefixTaskPackets[prefixTaskIndex];
+            const Core::GpuTaskId task = graphicsPrefixTimingTasks[prefixTaskIndex];
             bool packetAlreadyTimed = false;
             for(usize earlierTaskIndex = 0u; earlierTaskIndex < prefixTaskIndex; ++earlierTaskIndex){
                 if(packet == graphicsPrefixTaskPackets[earlierTaskIndex]){
@@ -3449,13 +3466,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             }
             if(packetAlreadyTimed)
                 continue;
-            if(!packet.valid() || !graphicsPrefixTimingTickets[prefixTaskIndex]){
+            if(!packet.valid() || !task.valid() || !graphicsPrefixTimingTickets[prefixTaskIndex]){
                 shadowPreparePrefixTimingTicketsValid = false;
                 break;
             }
             shadowPreparePrefixTimingTickets[shadowPreparePrefixTimingTicketCount++] =
-                Core::GpuTaskGraphPacketTimingTicket{
-                    .packet = packet,
+                Core::GpuTaskGraphTaskTimingTicket{
+                    .task = task,
                     .timingTicket = graphicsPrefixTimingTickets[prefixTaskIndex],
                 }
             ;
@@ -3570,7 +3587,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && prefixTimingAcceptance.shadowPrepareStateReady
             && shadowPreparePrefixTimingTicketCount == 1u + graphicsPrefixUniquePacketCount
             && shadowPrepareThroughPrefixPacketRange.packetCount >= shadowPreparePrefixTimingTicketCount
-            && shadowPreparePrefixSubmitter.submitPacketRangeInCompileOrder(
+            && shadowPreparePrefixSubmitter.submitPacketRangeInCompileOrderFromTasks(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,

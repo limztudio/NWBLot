@@ -281,6 +281,7 @@ void RendererSystem::invalidateResources(){
     m_deferredCausticResolveUpsampleTask = {};
     m_deferredCausticProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
+    m_deferredSurfelGiInitializationLifecycleTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
     m_deferredSurfelGiAgeFreeTask = {};
@@ -572,6 +573,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredCausticResolveUpsampleTask = {};
     m_deferredCausticProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
+    m_deferredSurfelGiInitializationLifecycleTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
     m_deferredSurfelGiAgeFreeTask = {};
@@ -1384,6 +1386,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId surfelGiPreparationPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredSurfelGiPreparationTask
     );
+    const Core::GpuSubmissionPacketId surfelGiInitializationLifecyclePacket =
+        m_deferredSurfelGiInitializationLifecycleTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredSurfelGiInitializationLifecycleTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuSubmissionPacketId surfelGiSnapshotCopyPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredSurfelGiSnapshotCopyTask
     );
@@ -1523,6 +1530,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && surfelGiTraceBuildArgsPacket == surfelGiPacket
             && surfelGiTracePacket == surfelGiPacket
             && surfelGiResolvePacket == surfelGiPacket
+        )
+    ;
+    // Persistent first-use initialization has four typed clear tasks followed by a resource-free lifecycle task.
+    // The range/state anchor stays on the first clear, so require the lifecycle tail to share its packet before
+    // accepting the normal graph path; otherwise an accepted clear could be omitted from that semantic prefix.
+    const bool surfelGiInitializationLifecycleMergedIntoPreparationPacket =
+        !m_deferredSurfelGiInitializationLifecycleTask.valid()
+        || (
+            m_deferredSurfelGiPreparationTask.valid()
+            && surfelGiPreparationPacket.valid()
+            && surfelGiInitializationLifecyclePacket.valid()
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredSurfelGiPreparationTask,
+                m_deferredSurfelGiInitializationLifecycleTask
+            )
         )
     ;
     // Both caustic routes retain a black output on a no-producer frame. Keep the typed clear in the selected
@@ -1819,6 +1841,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredSurfelGiIrradianceClearTask.valid()
         || !surfelGiOutputClearMergedIntoGiPacket
         || !surfelGiPreparedPrefixMergedIntoGiPacket
+        || !surfelGiInitializationLifecycleMergedIntoPreparationPacket
         || !surfelGiPacket.valid()
         || !surfelGiQueue
         || (m_deferredSurfelGiSnapshotCopyTask.valid() && (

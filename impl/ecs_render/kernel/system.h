@@ -475,10 +475,13 @@ private:
     Core::GpuTaskId m_deferredCausticResolveFifthWaveletTask;
     Core::GpuTaskId m_deferredCausticResolveUpsampleTask;
     bool m_deferredCausticProducerDispatched = false;
-    // The typed output clear plus optional initialize/copy prefix form Surfel GI's graph-owned setup. Age/free,
-    // the per-frame cell-head clear, hash build, Spawn, trace-build-args, trace, resolve, and upsample work stay in
-    // the same semantic effects packet so the compiler owns each handoff without changing the effects endpoint.
+    // The typed output clear plus optional persistent-initialization clear chain/copy prefix form Surfel GI's
+    // graph-owned setup. The lifecycle task publishes the initialization only after all four typed clears in its
+    // packet accept. Age/free, the per-frame cell-head clear, hash build, Spawn, trace-build-args, trace, resolve,
+    // and upsample work stay in the same semantic effects packet so the compiler owns each handoff without changing
+    // the effects endpoint.
     Core::GpuTaskId m_deferredSurfelGiPreparationTask;
+    Core::GpuTaskId m_deferredSurfelGiInitializationLifecycleTask;
     Core::GpuTaskId m_deferredSurfelGiSnapshotCopyTask;
     Core::GpuTaskId m_deferredSurfelGiIrradianceClearTask;
     Core::GpuTaskId m_deferredSurfelGiAgeFreeTask;

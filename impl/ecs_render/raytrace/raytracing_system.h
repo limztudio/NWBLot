@@ -660,12 +660,15 @@ public:
     [[nodiscard]] bool hasHwCausticWork()const noexcept;
     [[nodiscard]] bool hasSurfelWork()const noexcept;
     [[nodiscard]] bool needsSurfelResourceInitialization()const noexcept;
-    [[nodiscard]] Core::GpuTaskId declareSurfelResourceInitializationTask(
+    // Typed graph clear primitives own the persistent-buffer writes. This resource-free task only records and
+    // publishes their CPU lifecycle after the shared producer packet has accepted.
+    [[nodiscard]] Core::GpuTaskId declareSurfelResourceInitializationLifecycleTask(
         Core::GpuTaskGraph& graph,
-        const Core::GpuTaskDesc& desc,
-        bool graphEntryStatesOwned = false
+        const Core::GpuTaskDesc& desc
     );
-    // Clear ownership commits only after the producer packet accepts.
+    [[nodiscard]] bool recordSurfelResourceInitializationLifecycle()noexcept;
+    // Clear ownership commits only after the producer packet accepts; direct compatibility callers use the same
+    // lifecycle methods around their retained native clear sequence.
     void finalizeSurfelResourceInitialization();
     void discardSurfelResourceInitialization();
     [[nodiscard]] Core::GpuTaskId declareSurfelGiAgeFreeTask(
@@ -769,7 +772,7 @@ public:
 
 
 private:
-    struct SurfelGiInitializationGraphTask;
+    struct SurfelGiInitializationLifecycleGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowVisibilityOpaqueGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowVisibilityOpaqueFirstWaveletGraphTask;
     friend struct __hidden_shadow_visibility_task::ShadowVisibilityOpaqueResolveTailGraphTask;

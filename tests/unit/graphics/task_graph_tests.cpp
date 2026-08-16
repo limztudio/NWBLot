@@ -10178,13 +10178,14 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
 }
 
 
-// Surfel initialization is a graph task in its own right. The callback only clears four persistent buffers, so the
-// graph must lower their inherited UAV state to CopyDest before recording begins and leave that state for snapshot.
+// Surfel initialization is four serial typed buffer clears followed by a CPU-lifecycle tail. The metadata-only
+// fixture mirrors that shape so the compiler must lower each inherited UAV state to CopyDest, keep the complete
+// chain in one initialization packet, and leave its final state for a later dedicated-Transfer snapshot.
 TEST(GpuTaskGraph, PlansGraphOwnedSurfelInitializationEntryStates){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     constexpr Graphics::ResourceQueueSharing::Mask queueSharing =
-        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+        Graphics::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer
     ;
     const Graphics::GpuGraphResourceId pool = AddBufferMetadata(
         graph,
@@ -10214,10 +10215,26 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelInitializationEntryStates){
         Graphics::ResourceStates::Common,
         queueSharing
     );
+    const Graphics::GpuGraphResourceId poolSnapshot = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_initialize_pool_snapshot"),
+        "Surfel Pool Snapshot",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId cellHeadsSnapshot = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/surfel_initialize_cell_heads_snapshot"),
+        "Surfel Cell Heads Snapshot",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
     ASSERT_TRUE(pool.valid());
     ASSERT_TRUE(cellHeads.valid());
     ASSERT_TRUE(counter.valid());
     ASSERT_TRUE(freeList.valid());
+    ASSERT_TRUE(poolSnapshot.valid());
+    ASSERT_TRUE(cellHeadsSnapshot.valid());
 
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
@@ -10225,9 +10242,15 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelInitializationEntryStates){
         false,
         false,
     };
-    const Graphics::GpuQueueRequest computeRequest{
-        Graphics::GpuQueueCapability::Compute,
+    const Graphics::GpuQueueRequest computeTransferRequest{
+        Graphics::GpuQueueCapability::Transfer,
         Graphics::GpuQueuePreference::Compute,
+        true,
+        false,
+    };
+    const Graphics::GpuQueueRequest transferRequest{
+        Graphics::GpuQueueCapability::Transfer,
+        Graphics::GpuQueuePreference::Transfer,
         true,
         true,
     };
@@ -10253,27 +10276,104 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelInitializationEntryStates){
     const Graphics::GpuTaskId prefix = graph.addTask(prefixDesc);
     ASSERT_TRUE(prefix.valid());
 
-    const Graphics::GpuTaskResourceUse initializeUses[] = {
-        { .resource = pool, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
-        { .resource = cellHeads, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
-        { .resource = counter, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
-        { .resource = freeList, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+    Graphics::GpuTaskSchedulingHint firstClearScheduling;
+    firstClearScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    firstClearScheduling.allowPacketMerge = true;
+    Graphics::GpuTaskSchedulingHint chainedClearScheduling = firstClearScheduling;
+    chainedClearScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    chainedClearScheduling.mergeWithPrevious = true;
+    chainedClearScheduling.allowMergeAcrossConsumerFrontier = true;
+    const auto addInitializationClear = [&](
+        const Name& identity,
+        const AStringView label,
+        const Graphics::GpuGraphResourceId resource,
+        const Graphics::GpuTaskId dependency,
+        const Graphics::GpuTaskSchedulingHint& scheduling
+    ){
+        const Graphics::GpuTaskResourceUse clearUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc clearDesc;
+        clearDesc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(computeTransferRequest)
+            .setScheduling(scheduling)
+            .setDependencies(&dependency, 1u)
+            .setResourceUses(&clearUse, 1u)
+        ;
+        return graph.addTask(clearDesc);
     };
-    Graphics::GpuTaskDesc initializeDesc;
-    initializeDesc
-        .setIdentity(Name("tests/task_graph/graph_owned_surfel_initialize"))
-        .setMarkerLabel("Surfel GI Initialize")
-        .setQueue(computeRequest)
-        .setScheduling(boundaryScheduling)
-        .setDependencies(&prefix, 1u)
-        .setResourceUses(initializeUses, LengthOf(initializeUses))
+    const Graphics::GpuTaskId poolClear = addInitializationClear(
+        Name("tests/task_graph/surfel_initialize_pool_clear"),
+        "Surfel GI Initialize Pool Clear",
+        pool,
+        prefix,
+        firstClearScheduling
+    );
+    ASSERT_TRUE(poolClear.valid());
+    const Graphics::GpuTaskId cellHeadClear = addInitializationClear(
+        Name("tests/task_graph/surfel_initialize_cell_head_clear"),
+        "Surfel GI Initialize Cell-Head Clear",
+        cellHeads,
+        poolClear,
+        chainedClearScheduling
+    );
+    ASSERT_TRUE(cellHeadClear.valid());
+    const Graphics::GpuTaskId counterClear = addInitializationClear(
+        Name("tests/task_graph/surfel_initialize_counter_clear"),
+        "Surfel GI Initialize Counter Clear",
+        counter,
+        cellHeadClear,
+        chainedClearScheduling
+    );
+    ASSERT_TRUE(counterClear.valid());
+    const Graphics::GpuTaskId freeListClear = addInitializationClear(
+        Name("tests/task_graph/surfel_initialize_free_list_clear"),
+        "Surfel GI Initialize Free-List Clear",
+        freeList,
+        counterClear,
+        chainedClearScheduling
+    );
+    ASSERT_TRUE(freeListClear.valid());
+    Graphics::GpuTaskDesc lifecycleDesc;
+    lifecycleDesc
+        .setIdentity(Name("tests/task_graph/surfel_initialize_lifecycle"))
+        .setMarkerLabel("Surfel GI Initialize Lifecycle")
+        .setQueue(computeTransferRequest)
+        .setScheduling(chainedClearScheduling)
+        .setDependencies(&freeListClear, 1u)
     ;
-    const Graphics::GpuTaskId initialize = graph.addTask(initializeDesc);
-    ASSERT_TRUE(initialize.valid());
+    const Graphics::GpuTaskId lifecycle = graph.addTask(lifecycleDesc);
+    ASSERT_TRUE(lifecycle.valid());
+
+    // Model the normal graph's immutable pool/cell snapshot on its distinct Transfer-preferred transport. Its
+    // cross-queue RAW edges are the consumer frontier the clear/lifecycle chain must explicitly retain.
+    const Graphics::GpuTaskResourceUse snapshotUses[] = {
+        { .resource = pool, .range = {}, .requiredState = Graphics::ResourceStates::CopySource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = poolSnapshot, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+        { .resource = cellHeads, .range = {}, .requiredState = Graphics::ResourceStates::CopySource, .access = Graphics::GpuTaskResourceAccess::Read },
+        { .resource = cellHeadsSnapshot, .range = {}, .requiredState = Graphics::ResourceStates::CopyDest, .access = Graphics::GpuTaskResourceAccess::Write },
+    };
+    Graphics::GpuTaskDesc snapshotDesc;
+    snapshotDesc
+        .setIdentity(Name("tests/task_graph/surfel_initialize_snapshot"))
+        .setMarkerLabel("Surfel GI Snapshot")
+        .setQueue(transferRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&lifecycle, 1u)
+        .setResourceUses(snapshotUses, LengthOf(snapshotUses))
+    ;
+    const Graphics::GpuTaskId snapshot = graph.addTask(snapshotDesc);
+    ASSERT_TRUE(snapshot.valid());
 
     const Graphics::GpuPhysicalQueueInfo queues[] = {
         GraphicsQueue(),
         DedicatedComputeQueue(),
+        DedicatedTransferQueue(),
     };
     const Graphics::GpuTaskGraphQueueTopology topology{
         .queues = queues,
@@ -10282,61 +10382,95 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelInitializationEntryStates){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
     ASSERT_TRUE(HasInferredHazard(
         analysis,
         prefix,
-        initialize,
+        poolClear,
         pool,
         Graphics::GpuTaskHazardType::WriteAfterWrite
     ));
+    ASSERT_TRUE(HasInferredHazard(
+        analysis,
+        poolClear,
+        snapshot,
+        pool,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    ASSERT_TRUE(HasInferredHazard(
+        analysis,
+        cellHeadClear,
+        snapshot,
+        cellHeads,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
 
-    const Graphics::GpuTaskQueueAssignment* const initializeAssignment = assignments.find(initialize);
-    ASSERT_NE(initializeAssignment, nullptr);
-    EXPECT_EQ(initializeAssignment->queueClass, Graphics::CommandQueue::Compute);
+    const Graphics::GpuTaskQueueAssignment* const poolClearAssignment = assignments.find(poolClear);
+    ASSERT_NE(poolClearAssignment, nullptr);
+    EXPECT_EQ(poolClearAssignment->queueClass, Graphics::CommandQueue::Compute);
+    const Graphics::GpuTaskQueueAssignment* const snapshotAssignment = assignments.find(snapshot);
+    ASSERT_NE(snapshotAssignment, nullptr);
+    EXPECT_EQ(snapshotAssignment->queueClass, Graphics::CommandQueue::Transfer);
     const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
-    const Graphics::GpuSubmissionPacketId initializePacket = compiledGraph.packetForTask(initialize);
+    const Graphics::GpuSubmissionPacketId initializePacket = compiledGraph.packetForTask(poolClear);
+    const Graphics::GpuSubmissionPacketId snapshotPacket = compiledGraph.packetForTask(snapshot);
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(initializePacket.valid());
+    ASSERT_TRUE(snapshotPacket.valid());
     EXPECT_NE(prefixPacket, initializePacket);
-    const Graphics::GpuCompiledTask* const compiledInitialize = compiledGraph.findTask(initialize);
-    ASSERT_NE(compiledInitialize, nullptr);
-    const Graphics::GpuPacketStateSeed* const initializeSeeds = compiledGraph.taskPrologueStateSeeds(initialize);
-    ASSERT_NE(initializeSeeds, nullptr);
-    const auto hasInitializeSeed = [&](const Graphics::GpuGraphResourceId resource){
-        for(usize seedIndex = 0u; seedIndex < compiledInitialize->prologueStateSeedCount; ++seedIndex){
-            if(
-                initializeSeeds[seedIndex].resource == resource
-                && initializeSeeds[seedIndex].sourcePacket == prefixPacket
-            )
-                return true;
-        }
-        return false;
-    };
-    EXPECT_TRUE(hasInitializeSeed(pool));
-    EXPECT_TRUE(hasInitializeSeed(cellHeads));
-    EXPECT_TRUE(hasInitializeSeed(counter));
-    EXPECT_TRUE(hasInitializeSeed(freeList));
+    EXPECT_NE(initializePacket, snapshotPacket);
+    EXPECT_EQ(compiledGraph.packetForTask(cellHeadClear), initializePacket);
+    EXPECT_EQ(compiledGraph.packetForTask(counterClear), initializePacket);
+    EXPECT_EQ(compiledGraph.packetForTask(freeListClear), initializePacket);
+    EXPECT_EQ(compiledGraph.packetForTask(lifecycle), initializePacket);
+    ASSERT_EQ(compiledGraph.packet(initializePacket).taskCount, 5u);
+    const Graphics::GpuTaskId* const initializeTasks = compiledGraph.packetTasks(initializePacket);
+    ASSERT_NE(initializeTasks, nullptr);
+    EXPECT_EQ(initializeTasks[0u], poolClear);
+    EXPECT_EQ(initializeTasks[1u], cellHeadClear);
+    EXPECT_EQ(initializeTasks[2u], counterClear);
+    EXPECT_EQ(initializeTasks[3u], freeListClear);
+    EXPECT_EQ(initializeTasks[4u], lifecycle);
+    ASSERT_EQ(compiledGraph.packet(snapshotPacket).taskCount, 1u);
+    EXPECT_EQ(compiledGraph.packetTasks(snapshotPacket)[0u], snapshot);
 
-    const Graphics::GpuCompiledBarrier* const initializeBarriers = compiledGraph.taskPrologueBarriers(initialize);
-    ASSERT_NE(initializeBarriers, nullptr);
-    const auto hasInitializeBarrier = [&](const Graphics::GpuGraphResourceId resource){
-        for(usize barrierIndex = 0u; barrierIndex < compiledInitialize->prologueBarrierCount; ++barrierIndex){
-            const Graphics::GpuCompiledBarrier& barrier = initializeBarriers[barrierIndex];
-            if(
-                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
-                && barrier.resource == resource
-                && barrier.before == Graphics::ResourceStates::UnorderedAccess
-                && barrier.after == Graphics::ResourceStates::CopyDest
-            )
-                return true;
+    const auto expectsInitializeTransition = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        ASSERT_NE(compiledTask, nullptr);
+        const Graphics::GpuPacketStateSeed* const seeds = compiledGraph.taskPrologueStateSeeds(task);
+        ASSERT_NE(seeds, nullptr);
+        bool seededFromPrefix = false;
+        for(usize seedIndex = 0u; seedIndex < compiledTask->prologueStateSeedCount; ++seedIndex){
+            seededFromPrefix = seededFromPrefix
+                || (
+                    seeds[seedIndex].resource == resource
+                    && seeds[seedIndex].sourcePacket == prefixPacket
+                )
+            ;
         }
-        return false;
+        EXPECT_TRUE(seededFromPrefix);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        ASSERT_NE(barriers, nullptr);
+        bool transitioned = false;
+        for(usize barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            transitioned = transitioned
+                || (
+                    barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                    && barrier.resource == resource
+                    && barrier.before == Graphics::ResourceStates::UnorderedAccess
+                    && barrier.after == Graphics::ResourceStates::CopyDest
+                )
+            ;
+        }
+        EXPECT_TRUE(transitioned);
     };
-    EXPECT_TRUE(hasInitializeBarrier(pool));
-    EXPECT_TRUE(hasInitializeBarrier(cellHeads));
-    EXPECT_TRUE(hasInitializeBarrier(counter));
-    EXPECT_TRUE(hasInitializeBarrier(freeList));
+    expectsInitializeTransition(poolClear, pool);
+    expectsInitializeTransition(cellHeadClear, cellHeads);
+    expectsInitializeTransition(counterClear, counter);
+    expectsInitializeTransition(freeListClear, freeList);
     ASSERT_EQ(compiledGraph.packet(initializePacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(initializePacket)[0u].producer, prefixPacket);
 }

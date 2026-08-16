@@ -1670,8 +1670,9 @@ struct NativePacketCausticResolveTimingCloseProbeTask{
 };
 
 
-// Surfel resource initialization records only clears. Its graph packet must therefore establish the four CopyDest
-// states before this getter-only callback runs, without relying on the native clear body to repeat them.
+// Surfel's typed resource clears are followed by a resource-free lifecycle callback. Its graph packet must establish
+// all four CopyDest states before that callback runs, and the callback may only publish initialization after the
+// shared packet accepts.
 struct NativePacketSurfelInitializationEntryProbeTask{
     struct Payload{
         Buffer* pool = nullptr;
@@ -1679,6 +1680,8 @@ struct NativePacketSurfelInitializationEntryProbeTask{
         Buffer* counter = nullptr;
         Buffer* freeList = nullptr;
         bool* recorded = nullptr;
+        bool* needsClear = nullptr;
+        bool* clearPending = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -1699,7 +1702,23 @@ struct NativePacketSurfelInitializationEntryProbeTask{
         ;
         if(payload.recorded)
             *payload.recorded = ready;
+        if(ready && payload.clearPending)
+            *payload.clearPending = true;
         return ready;
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        static_cast<void>(token);
+        if(payload.clearPending && *payload.clearPending){
+            *payload.clearPending = false;
+            if(payload.needsClear)
+                *payload.needsClear = false;
+        }
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.clearPending)
+            *payload.clearPending = false;
     }
 };
 
@@ -9343,8 +9362,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFive
 }
 
 
-// The Surfel initialization packet must enter with all four persistent buffers in CopyDest. This callback is
-// getter-only, so the test proves the graph prologue handles the complete batch before native clear commands run.
+// First-use Surfel initialization is four typed buffer clears followed by a resource-free lifecycle callback. This
+// real-Vulkan probe verifies each `UAV -> CopyDest` entry transition, serial command-IR sequence, accepted CPU
+// publication, and rejection retry behavior without a native clear bridge.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesRecordWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto makeStorageBuffer = [&device](){
@@ -9353,6 +9373,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
                 .setByteSize(256u)
                 .setCanHaveRawViews(true)
                 .setCanHaveUAVs(true)
+                .setCpuAccess(CpuAccessMode::Read)
                 .setInitialState(ResourceStates::Common)
         );
     };
@@ -9406,11 +9427,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
         false,
         false,
     };
-    const GpuQueueRequest computeQueue{
-        GpuQueueCapability::Compute,
+    const GpuQueueRequest computeTransferQueue{
+        static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
         GpuQueuePreference::Compute,
         true,
-        true,
+        false,
     };
     GpuTaskSchedulingHint boundaryScheduling;
     boundaryScheduling.cost = GpuTaskCostHint::Medium;
@@ -9442,33 +9466,100 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
     );
     ASSERT_TRUE(prefixTask.valid());
 
-    const GpuTaskResourceUse initializeUses[] = {
-        { .resource = poolResource, .range = {}, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write },
-        { .resource = cellHeadsResource, .range = {}, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write },
-        { .resource = counterResource, .range = {}, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write },
-        { .resource = freeListResource, .range = {}, .requiredState = ResourceStates::CopyDest, .access = GpuTaskResourceAccess::Write },
-    };
-    GpuTaskDesc initializeDesc;
-    initializeDesc
-        .setIdentity(Name("tests/descriptor_buffer/graph_owned_surfel_initialize"))
-        .setMarkerLabel("Surfel GI Initialize")
-        .setQueue(computeQueue)
-        .setScheduling(boundaryScheduling)
+    GpuTaskSchedulingHint firstClearScheduling;
+    firstClearScheduling.cost = GpuTaskCostHint::Medium;
+    firstClearScheduling.allowPacketMerge = true;
+    GpuTaskSchedulingHint chainedClearScheduling = firstClearScheduling;
+    chainedClearScheduling.cost = GpuTaskCostHint::Tiny;
+    chainedClearScheduling.mergeWithPrevious = true;
+    chainedClearScheduling.allowMergeAcrossConsumerFrontier = true;
+    GpuTaskDesc poolClearDesc;
+    poolClearDesc
+        .setIdentity(Name("tests/descriptor_buffer/surfel_initialize_pool_clear"))
+        .setMarkerLabel("Surfel GI Initialize Pool Clear")
+        .setQueue(computeTransferQueue)
+        .setScheduling(firstClearScheduling)
         .setDependencies(&prefixTask, 1u)
-        .setResourceUses(initializeUses, LengthOf(initializeUses))
+    ;
+    const GpuTaskId poolClearTask = graph.addClearBufferTask(
+        poolClearDesc,
+        GpuClearBufferTaskDesc{
+            .destination = poolResource,
+            .clearValue = 0u,
+        }
+    );
+    ASSERT_TRUE(poolClearTask.valid());
+    const auto addChainedClear = [&](
+        const Name& identity,
+        const AStringView label,
+        const GpuGraphResourceId destination,
+        const u32 clearValue,
+        const GpuTaskId dependency
+    ){
+        GpuTaskDesc clearDesc;
+        clearDesc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(computeTransferQueue)
+            .setScheduling(chainedClearScheduling)
+            .setDependencies(&dependency, 1u)
+        ;
+        return graph.addClearBufferTask(
+            clearDesc,
+            GpuClearBufferTaskDesc{
+                .destination = destination,
+                .clearValue = clearValue,
+            }
+        );
+    };
+    const GpuTaskId cellHeadClearTask = addChainedClear(
+        Name("tests/descriptor_buffer/surfel_initialize_cell_head_clear"),
+        "Surfel GI Initialize Cell-Head Clear",
+        cellHeadsResource,
+        0xffffffffu,
+        poolClearTask
+    );
+    ASSERT_TRUE(cellHeadClearTask.valid());
+    const GpuTaskId counterClearTask = addChainedClear(
+        Name("tests/descriptor_buffer/surfel_initialize_counter_clear"),
+        "Surfel GI Initialize Counter Clear",
+        counterResource,
+        0u,
+        cellHeadClearTask
+    );
+    ASSERT_TRUE(counterClearTask.valid());
+    const GpuTaskId freeListClearTask = addChainedClear(
+        Name("tests/descriptor_buffer/surfel_initialize_free_list_clear"),
+        "Surfel GI Initialize Free-List Clear",
+        freeListResource,
+        0u,
+        counterClearTask
+    );
+    ASSERT_TRUE(freeListClearTask.valid());
+    GpuTaskDesc lifecycleDesc;
+    lifecycleDesc
+        .setIdentity(Name("tests/descriptor_buffer/surfel_initialize_lifecycle"))
+        .setMarkerLabel("Surfel GI Initialize Lifecycle")
+        .setQueue(computeTransferQueue)
+        .setScheduling(chainedClearScheduling)
+        .setDependencies(&freeListClearTask, 1u)
     ;
     bool initializeRecorded = false;
-    const GpuTaskId initializeTask = graph.addTask<NativePacketSurfelInitializationEntryProbeTask>(
-        initializeDesc,
+    bool initializationNeedsClear = true;
+    bool initializationClearPending = false;
+    const GpuTaskId initializeLifecycleTask = graph.addTask<NativePacketSurfelInitializationEntryProbeTask>(
+        lifecycleDesc,
         NativePacketSurfelInitializationEntryProbeTask::Payload{
             .pool = pool.get(),
             .cellHeads = cellHeads.get(),
             .counter = counter.get(),
             .freeList = freeList.get(),
             .recorded = &initializeRecorded,
+            .needsClear = &initializationNeedsClear,
+            .clearPending = &initializationClearPending,
         }
     );
-    ASSERT_TRUE(initializeTask.valid());
+    ASSERT_TRUE(initializeLifecycleTask.valid());
 
     const GpuPhysicalQueueInfo queue{
         .id = BackendQueueId(device, CommandQueue::Graphics),
@@ -9494,16 +9585,34 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
     ASSERT_EQ(compiledGraph.packetCount(), 2u);
     const GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefixTask);
-    const GpuSubmissionPacketId initializePacket = compiledGraph.packetForTask(initializeTask);
+    const GpuSubmissionPacketId initializePacket = compiledGraph.packetForTask(poolClearTask);
     ASSERT_TRUE(prefixPacket.valid());
     ASSERT_TRUE(initializePacket.valid());
-    const GpuCompiledTask* const compiledInitialize = compiledGraph.findTask(initializeTask);
-    ASSERT_NE(compiledInitialize, nullptr);
-    const GpuCompiledBarrier* const initializeBarriers = compiledGraph.taskPrologueBarriers(initializeTask);
-    ASSERT_NE(initializeBarriers, nullptr);
-    const auto hasInitializeTransition = [&](const GpuGraphResourceId resource){
-        for(u32 barrierIndex = 0u; barrierIndex < compiledInitialize->prologueBarrierCount; ++barrierIndex){
-            const GpuCompiledBarrier& barrier = initializeBarriers[barrierIndex];
+    EXPECT_EQ(compiledGraph.packetForTask(cellHeadClearTask), initializePacket);
+    EXPECT_EQ(compiledGraph.packetForTask(counterClearTask), initializePacket);
+    EXPECT_EQ(compiledGraph.packetForTask(freeListClearTask), initializePacket);
+    EXPECT_EQ(compiledGraph.packetForTask(initializeLifecycleTask), initializePacket);
+    ASSERT_EQ(compiledGraph.packet(initializePacket).taskCount, 5u);
+    const GpuTaskId* const initializeTasks = compiledGraph.packetTasks(initializePacket);
+    ASSERT_NE(initializeTasks, nullptr);
+    EXPECT_EQ(initializeTasks[0u], poolClearTask);
+    EXPECT_EQ(initializeTasks[1u], cellHeadClearTask);
+    EXPECT_EQ(initializeTasks[2u], counterClearTask);
+    EXPECT_EQ(initializeTasks[3u], freeListClearTask);
+    EXPECT_EQ(initializeTasks[4u], initializeLifecycleTask);
+    const auto hasInitializeTransition = [&](const GpuTaskId task, const GpuGraphResourceId resource){
+        const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        if(!compiledTask){
+            ADD_FAILURE() << "missing compiled Surfel initialization clear task";
+            return false;
+        }
+        const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        if(!barriers){
+            ADD_FAILURE() << "missing Surfel initialization clear prologue barriers";
+            return false;
+        }
+        for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
                 barrier.resource == resource
                 && barrier.before == ResourceStates::UnorderedAccess
@@ -9513,16 +9622,38 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
         }
         return false;
     };
-    EXPECT_TRUE(hasInitializeTransition(poolResource));
-    EXPECT_TRUE(hasInitializeTransition(cellHeadsResource));
-    EXPECT_TRUE(hasInitializeTransition(counterResource));
-    EXPECT_TRUE(hasInitializeTransition(freeListResource));
+    EXPECT_TRUE(hasInitializeTransition(poolClearTask, poolResource));
+    EXPECT_TRUE(hasInitializeTransition(cellHeadClearTask, cellHeadsResource));
+    EXPECT_TRUE(hasInitializeTransition(counterClearTask, counterResource));
+    EXPECT_TRUE(hasInitializeTransition(freeListClearTask, freeListResource));
     ASSERT_EQ(compiledGraph.packet(initializePacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(initializePacket)[0u].producer, prefixPacket);
 
-    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
     GpuSubmissionPacketId failedPacket;
+    GpuGraphSubmissionTransaction rejectedTransaction(DescriptorBufferRoundTripTest::arena());
+    rejectedTransaction.reset(compiledGraph);
+    GpuRecordedGraph rejectedRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        rejectedRecordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(prefixAttempted);
+    EXPECT_TRUE(initializeRecorded);
+    EXPECT_TRUE(initializationNeedsClear);
+    EXPECT_TRUE(initializationClearPending);
+    rejectedTransaction.discardUnaccepted(graph, compiledGraph);
+    EXPECT_TRUE(initializationNeedsClear);
+    EXPECT_FALSE(initializationClearPending);
+
+    initializeRecorded = false;
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuCommandIrCapture commandIrCapture(DescriptorBufferRoundTripTest::arena());
     ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -9530,10 +9661,36 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
         nullptr,
         0u,
         recordedGraph,
-        &failedPacket
+        &failedPacket,
+        &commandIrCapture
     )) << "failed packet " << failedPacket.index;
-    EXPECT_TRUE(prefixAttempted);
     EXPECT_TRUE(initializeRecorded);
+    EXPECT_TRUE(initializationClearPending);
+    ASSERT_EQ(commandIrCapture.recordCount(), 4u);
+    const GpuCommandIrBuiltinTaskRecord* const poolClearCapture = commandIrCapture.recordAt(0u);
+    const GpuCommandIrBuiltinTaskRecord* const cellHeadClearCapture = commandIrCapture.recordAt(1u);
+    const GpuCommandIrBuiltinTaskRecord* const counterClearCapture = commandIrCapture.recordAt(2u);
+    const GpuCommandIrBuiltinTaskRecord* const freeListClearCapture = commandIrCapture.recordAt(3u);
+    ASSERT_NE(poolClearCapture, nullptr);
+    ASSERT_NE(cellHeadClearCapture, nullptr);
+    ASSERT_NE(counterClearCapture, nullptr);
+    ASSERT_NE(freeListClearCapture, nullptr);
+    EXPECT_EQ(poolClearCapture->opcode, GpuCommandIrOpcode::ClearBuffer);
+    EXPECT_EQ(poolClearCapture->task, poolClearTask);
+    EXPECT_EQ(poolClearCapture->destination, poolResource);
+    EXPECT_EQ(poolClearCapture->uintClearValue, UIntColor(0u));
+    EXPECT_EQ(cellHeadClearCapture->opcode, GpuCommandIrOpcode::ClearBuffer);
+    EXPECT_EQ(cellHeadClearCapture->task, cellHeadClearTask);
+    EXPECT_EQ(cellHeadClearCapture->destination, cellHeadsResource);
+    EXPECT_EQ(cellHeadClearCapture->uintClearValue, UIntColor(0xffffffffu));
+    EXPECT_EQ(counterClearCapture->opcode, GpuCommandIrOpcode::ClearBuffer);
+    EXPECT_EQ(counterClearCapture->task, counterClearTask);
+    EXPECT_EQ(counterClearCapture->destination, counterResource);
+    EXPECT_EQ(counterClearCapture->uintClearValue, UIntColor(0u));
+    EXPECT_EQ(freeListClearCapture->opcode, GpuCommandIrOpcode::ClearBuffer);
+    EXPECT_EQ(freeListClearCapture->task, freeListClearTask);
+    EXPECT_EQ(freeListClearCapture->destination, freeListResource);
+    EXPECT_EQ(freeListClearCapture->uintClearValue, UIntColor(0u));
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
@@ -9551,7 +9708,20 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
         scratchArena
     ));
     EXPECT_TRUE(transaction.packetToken(initializePacket).valid());
+    EXPECT_FALSE(initializationNeedsClear);
+    EXPECT_FALSE(initializationClearPending);
     EXPECT_TRUE(device.waitForIdle());
+    const auto expectsClearValue = [&device](const BufferHandle& buffer, const u32 value){
+        const u32* const words = static_cast<const u32*>(device.mapBuffer(buffer.get(), CpuAccessMode::Read));
+        ASSERT_NE(words, nullptr);
+        for(usize wordIndex = 0u; wordIndex < 256u / sizeof(u32); ++wordIndex)
+            EXPECT_EQ(words[wordIndex], value);
+        device.unmapBuffer(buffer.get());
+    };
+    expectsClearValue(pool, 0u);
+    expectsClearValue(cellHeads, 0xffffffffu);
+    expectsClearValue(counter, 0u);
+    expectsClearValue(freeList, 0u);
 }
 
 

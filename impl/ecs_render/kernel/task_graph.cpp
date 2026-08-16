@@ -6550,6 +6550,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     using namespace __hidden_renderer_task_graph;
 
     m_deferredSurfelGiPreparationTask = {};
+    m_deferredSurfelGiInitializationLifecycleTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
     m_deferredSurfelGiAgeFreeTask = {};
@@ -6883,9 +6884,11 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     ;
     const usize surfelGiExternalDependencyCount = surfelCounterReadbackCompletion.valid() ? 1u : 0u;
 
-    // A fresh persistent field must clear before the snapshot reads it. Once initialized, the two fixed regions
-    // become one Transfer-preferred graph task; compiler declarations own CopySource/CopyDest transitions and any
-    // Compute/Transfer/Graphics handoff.
+    // A fresh persistent field must clear before the snapshot reads it. The four typed clear primitives and their
+    // resource-free lifecycle tail form one Compute-preferred, Transfer-capable graph packet; the lifecycle task
+    // publishes its CPU
+    // mirror only after every clear recorded and that packet accepts. Once initialized, the two fixed regions become
+    // one graph-owned copy task; compiler declarations own every CopySource/CopyDest transition and handoff.
     Core::GpuTaskId surfelGiDependency = effectsTask;
     if(hasSurfelWork){
         if(
@@ -6901,36 +6904,108 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         }
 
         if(m_raytracingSystem.needsSurfelResourceInitialization()){
-            const Core::GpuTaskResourceUse initializationResourceUses[] = {
-                WriteUse(surfelPool, Core::ResourceStates::CopyDest),
-                WriteUse(surfelCellHead, Core::ResourceStates::CopyDest),
-                WriteUse(surfelCounter, Core::ResourceStates::CopyDest),
-                WriteUse(surfelFreeList, Core::ResourceStates::CopyDest),
-            };
             Core::GpuTaskSchedulingHint initializationScheduling;
             initializationScheduling.cost = Core::GpuTaskCostHint::Medium;
-            initializationScheduling.forceSubmissionBoundary = true;
-            initializationScheduling.allowPacketMerge = false;
-            Core::GpuTaskDesc initializationDesc;
-            initializationDesc
-                .setIdentity(Name("render.surfel_gi.initialize"))
-                .setMarkerLabel("Surfel GI Initialize")
+            // Explicit merging keeps the first clear as a new packet under the renderer's FrontierSafe policy, then
+            // lets its serial successors share that packet. Do not force a boundary here: that would also forbid the
+            // following typed clears from joining their own initialization packet.
+            initializationScheduling.allowPacketMerge = true;
+            Core::GpuTaskDesc poolClearDesc;
+            poolClearDesc
+                .setIdentity(Name("render.surfel_gi.initialize_pool_clear"))
+                .setMarkerLabel("Surfel GI Initialize Pool Clear")
                 .setQueue(ComputeTransferQueueRequest())
                 .setScheduling(initializationScheduling)
                 .setDependencies(&surfelGiDependency, 1u)
                 .setExternalDependencies(surfelGiExternalDependencies, surfelGiExternalDependencyCount)
-                .setResourceUses(initializationResourceUses, LengthOf(initializationResourceUses))
             ;
-            m_deferredSurfelGiPreparationTask = m_raytracingSystem.declareSurfelResourceInitializationTask(
-                m_deferredLightingTaskGraph,
-                initializationDesc,
-                true
+            m_deferredSurfelGiPreparationTask = m_deferredLightingTaskGraph.addClearBufferTask(
+                poolClearDesc,
+                Core::GpuClearBufferTaskDesc{
+                    .destination = surfelPool,
+                    .clearValue = 0u,
+                }
             );
             if(!m_deferredSurfelGiPreparationTask.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI initialization task"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI pool initialization clear"));
                 return false;
             }
-            surfelGiDependency = m_deferredSurfelGiPreparationTask;
+
+            Core::GpuTaskSchedulingHint chainedInitializationScheduling = initializationScheduling;
+            chainedInitializationScheduling.cost = Core::GpuTaskCostHint::Tiny;
+            chainedInitializationScheduling.mergeWithPrevious = true;
+            // The subsequent snapshot can route to a dedicated Transfer queue and therefore creates a consumer
+            // frontier for the first two clears. Every tail is an explicit immediate successor, so retain the
+            // complete initialization chain in its single accepted packet rather than splitting before that wait.
+            chainedInitializationScheduling.allowMergeAcrossConsumerFrontier = true;
+            Core::GpuTaskId initializationDependency = m_deferredSurfelGiPreparationTask;
+            const auto addInitializationClear = [&](
+                const Name& identity,
+                const AStringView label,
+                const Core::GpuGraphResourceId destination,
+                const u32 clearValue
+            ){
+                Core::GpuTaskDesc clearDesc;
+                clearDesc
+                    .setIdentity(identity)
+                    .setMarkerLabel(label)
+                    .setQueue(ComputeTransferQueueRequest())
+                    .setScheduling(chainedInitializationScheduling)
+                    .setDependencies(&initializationDependency, 1u)
+                ;
+                const Core::GpuTaskId clearTask = m_deferredLightingTaskGraph.addClearBufferTask(
+                    clearDesc,
+                    Core::GpuClearBufferTaskDesc{
+                        .destination = destination,
+                        .clearValue = clearValue,
+                    }
+                );
+                if(clearTask.valid())
+                    initializationDependency = clearTask;
+                return clearTask;
+            };
+            if(
+                !addInitializationClear(
+                    Name("render.surfel_gi.initialize_cell_head_clear"),
+                    "Surfel GI Initialize Cell-Head Clear",
+                    surfelCellHead,
+                    NWB_SURFEL_CELL_INVALID
+                ).valid()
+                || !addInitializationClear(
+                    Name("render.surfel_gi.initialize_counter_clear"),
+                    "Surfel GI Initialize Counter Clear",
+                    surfelCounter,
+                    0u
+                ).valid()
+                || !addInitializationClear(
+                    Name("render.surfel_gi.initialize_free_list_clear"),
+                    "Surfel GI Initialize Free-List Clear",
+                    surfelFreeList,
+                    0u
+                ).valid()
+            ){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI initialization clears"));
+                return false;
+            }
+
+            Core::GpuTaskDesc initializationLifecycleDesc;
+            initializationLifecycleDesc
+                .setIdentity(Name("render.surfel_gi.initialize_lifecycle"))
+                .setMarkerLabel("Surfel GI Initialize Lifecycle")
+                .setQueue(ComputeTransferQueueRequest())
+                .setScheduling(chainedInitializationScheduling)
+                .setDependencies(&initializationDependency, 1u)
+            ;
+            m_deferredSurfelGiInitializationLifecycleTask =
+                m_raytracingSystem.declareSurfelResourceInitializationLifecycleTask(
+                    m_deferredLightingTaskGraph,
+                    initializationLifecycleDesc
+                );
+            if(!m_deferredSurfelGiInitializationLifecycleTask.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI initialization lifecycle"));
+                return false;
+            }
+            surfelGiDependency = m_deferredSurfelGiInitializationLifecycleTask;
         }
 
         const Core::GpuCopyBufferTaskRegion snapshotRegions[] = {
@@ -7376,6 +7451,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredCausticResolveUpsampleTask = {};
     m_deferredCausticProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
+    m_deferredSurfelGiInitializationLifecycleTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
     m_deferredSurfelGiAgeFreeTask = {};

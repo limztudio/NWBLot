@@ -490,10 +490,12 @@ struct SurfelGiGraphTask{
 };
 
 
-struct RendererRayTracingSystem::SurfelGiInitializationGraphTask{
+// The typed clear primitives own the four persistent-buffer writes. Keep this tiny final task so the renderer's
+// CPU mirror still becomes pending only after every clear recorded, and becomes initialized only after their shared
+// packet accepts.
+struct RendererRayTracingSystem::SurfelGiInitializationLifecycleGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
-        bool graphEntryStatesOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -501,12 +503,10 @@ struct RendererRayTracingSystem::SurfelGiInitializationGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
+        static_cast<void>(commandList);
         static_cast<void>(context);
         return payload.raytracingSystem
-            && payload.raytracingSystem->initializeSurfelResources(
-                commandList,
-                payload.graphEntryStatesOwned
-            );
+            && payload.raytracingSystem->recordSurfelResourceInitializationLifecycle();
     }
 
     static void discarded(Payload& payload){
@@ -1243,8 +1243,7 @@ bool RendererRayTracingSystem::initializeSurfelResources(
     commandList.clearBufferUInt(cellHead, NWB_SURFEL_CELL_INVALID);
     commandList.clearBufferUInt(counter, 0u);
     commandList.clearBufferUInt(freeList, 0u);   // contents cosmetic; counter FREE_TOP=0 is what marks it empty
-    rayTracingState().m_surfelResourcesClearPending = true;
-    return true;
+    return recordSurfelResourceInitializationLifecycle();
 }
 
 bool RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targets){
@@ -1322,6 +1321,14 @@ void RendererRayTracingSystem::finalizeSurfelResourceInitialization(){
 
     rayTracingState().m_surfelResourcesClearPending = false;
     rayTracingState().m_surfelResourcesNeedClear = false;
+}
+
+bool RendererRayTracingSystem::recordSurfelResourceInitializationLifecycle()noexcept{
+    if(!rayTracingState().m_surfelResourcesNeedClear)
+        return false;
+
+    rayTracingState().m_surfelResourcesClearPending = true;
+    return true;
 }
 
 void RendererRayTracingSystem::discardSurfelResourceInitialization(){
@@ -1484,16 +1491,14 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
 }
 
 
-Core::GpuTaskId RendererRayTracingSystem::declareSurfelResourceInitializationTask(
+Core::GpuTaskId RendererRayTracingSystem::declareSurfelResourceInitializationLifecycleTask(
     Core::GpuTaskGraph& graph,
-    const Core::GpuTaskDesc& desc,
-    const bool graphEntryStatesOwned
+    const Core::GpuTaskDesc& desc
 ){
-    return graph.addTask<SurfelGiInitializationGraphTask>(
+    return graph.addTask<SurfelGiInitializationLifecycleGraphTask>(
         desc,
-        SurfelGiInitializationGraphTask::Payload{
+        SurfelGiInitializationLifecycleGraphTask::Payload{
             .raytracingSystem = this,
-            .graphEntryStatesOwned = graphEntryStatesOwned,
         }
     );
 }

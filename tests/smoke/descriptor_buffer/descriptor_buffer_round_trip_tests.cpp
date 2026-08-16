@@ -353,6 +353,8 @@ struct WorkerAffinedPacketTask{
     struct Payload{
         Latch* recordingStarted = nullptr;
         u32* observedWorkerIndex = nullptr;
+        Buffer* expectedBuffer = nullptr;
+        ResourceStates::Mask expectedBufferState = ResourceStates::Unknown;
     };
 
     [[nodiscard]] static bool record(
@@ -360,7 +362,12 @@ struct WorkerAffinedPacketTask{
         CommandList& commandList,
         const GpuTaskRecordContext&
     ){
-        if(!payload.recordingStarted || !payload.observedWorkerIndex)
+        if(
+            !payload.recordingStarted
+            || !payload.observedWorkerIndex
+            || !payload.expectedBuffer
+            || commandList.getBufferState(payload.expectedBuffer) != payload.expectedBufferState
+        )
             return false;
         *payload.observedWorkerIndex = commandList.getDescription().recordingWorkerIndex;
         payload.recordingStarted->count_down();
@@ -13377,7 +13384,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRecordsIndependentGra
 }
 
 
-TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedCommandArenaLeases){
+TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedCommandArenaLeasesForGraphStateSources){
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto createBuffer = [&device]{
         return device.createBuffer(
@@ -13391,6 +13398,33 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedComm
     auto secondBuffer = createBuffer();
     ASSERT_NE(firstBuffer.get(), nullptr);
     ASSERT_NE(secondBuffer.get(), nullptr);
+
+    CommandListResourceStateHandoff firstSourceState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff secondSourceState(DescriptorBufferRoundTripTest::arena());
+    const CommandListHandle firstSourceProducer = device.createCommandList();
+    const CommandListHandle secondSourceProducer = device.createCommandList();
+    ASSERT_NE(firstSourceProducer.get(), nullptr);
+    ASSERT_NE(secondSourceProducer.get(), nullptr);
+    firstSourceProducer->open();
+    firstSourceProducer->setBufferState(firstBuffer.get(), ResourceStates::CopyDest);
+    firstSourceProducer->close(&firstSourceState);
+    secondSourceProducer->open();
+    secondSourceProducer->setBufferState(secondBuffer.get(), ResourceStates::CopyDest);
+    secondSourceProducer->close(&secondSourceState);
+    ASSERT_TRUE(firstSourceState.valid());
+    ASSERT_TRUE(secondSourceState.valid());
+    CommandList* const sourceProducerLists[] = {
+        firstSourceProducer.get(),
+        secondSourceProducer.get(),
+    };
+    bool sourceProducersSubmitted = false;
+    EXPECT_GT(device.executeCommandLists(
+        sourceProducerLists,
+        LengthOf(sourceProducerLists),
+        CommandQueue::Graphics,
+        &sourceProducersSubmitted
+    ), 0u);
+    ASSERT_TRUE(sourceProducersSubmitted);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importBuffer = [&graph](const BufferHandle& buffer, const Name& identity, const AStringView label){
@@ -13424,6 +13458,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedComm
     const auto addTask = [&](const Name& identity,
         const AStringView label,
         const GpuGraphResourceId resource,
+        const GpuTaskExternalStateSource* const externalStateSources,
         Latch& recordingStarted,
         u32& observedWorkerIndex
     ){
@@ -13445,6 +13480,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedComm
                 false,
             })
             .setScheduling(scheduling)
+            .setExternalStateSources(externalStateSources, 1u)
             .setResourceUses(uses, LengthOf(uses))
         ;
         return graph.addTask<WorkerAffinedPacketTask>(
@@ -13452,6 +13488,8 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedComm
             WorkerAffinedPacketTask::Payload{
                 .recordingStarted = &recordingStarted,
                 .observedWorkerIndex = &observedWorkerIndex,
+                .expectedBuffer = graph.bufferForResource(resource),
+                .expectedBufferState = ResourceStates::CopyDest,
             }
         );
     };
@@ -13459,10 +13497,17 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedComm
     Latch recordingStarted(2);
     u32 firstWorkerIndex = 0u;
     u32 secondWorkerIndex = 0u;
+    const GpuTaskExternalStateSource firstExternalStateSources[] = {
+        GpuTaskExternalStateSource{ .states = &firstSourceState },
+    };
+    const GpuTaskExternalStateSource secondExternalStateSources[] = {
+        GpuTaskExternalStateSource{ .states = &secondSourceState },
+    };
     const GpuTaskId firstTask = addTask(
         Name("tests/descriptor_buffer/worker_affined_first_task"),
         "Worker-Affined First Task",
         firstResource,
+        firstExternalStateSources,
         recordingStarted,
         firstWorkerIndex
     );
@@ -13470,11 +13515,24 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedComm
         Name("tests/descriptor_buffer/worker_affined_second_task"),
         "Worker-Affined Second Task",
         secondResource,
+        secondExternalStateSources,
         recordingStarted,
         secondWorkerIndex
     );
     ASSERT_TRUE(firstTask.valid());
     ASSERT_TRUE(secondTask.valid());
+    const GpuTaskGraphTaskView firstTaskView = graph.taskAt(firstTask.index);
+    const GpuTaskGraphTaskView secondTaskView = graph.taskAt(secondTask.index);
+    ASSERT_EQ(firstTaskView.externalStateSourceCount, 1u);
+    ASSERT_EQ(secondTaskView.externalStateSourceCount, 1u);
+    ASSERT_NE(firstTaskView.externalStateSources, nullptr);
+    ASSERT_NE(secondTaskView.externalStateSources, nullptr);
+    EXPECT_NE(firstTaskView.externalStateSources[0u].states, &firstSourceState);
+    EXPECT_NE(secondTaskView.externalStateSources[0u].states, &secondSourceState);
+    firstSourceState.reset();
+    secondSourceState.reset();
+    EXPECT_TRUE(firstTaskView.externalStateSources[0u].states->valid());
+    EXPECT_TRUE(secondTaskView.externalStateSources[0u].states->valid());
 
     const GpuPhysicalQueueInfo graphicsQueue{
         .id = BackendQueueId(device, CommandQueue::Graphics),

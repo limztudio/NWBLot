@@ -514,6 +514,7 @@ can receive an unconditional final sign-off.
 | Shadow Prepare BLAS geometry build-input resource-set adoption: renderer build, task-graph unit, descriptor-buffer smoke, and ECS graphics | passed; each frozen prepared BLAS position/index pair now forms one immutable `ReadWrite AccelStructBuildInput` set on Shadow Preparation. Expansion preserves the compiler-lowered source-to-build-input boundary, stays in the accepting Graphics packet, and feeds the verified later hybrid-tail SRV set; an unavailable set retains individual declarations. Focused compiler and real-Vulkan position/index plus typed/backing finalizer probes passed; graph tests passed 87/87, descriptor smoke passed 114 tests with 12 expected topology skips, and ECS graphics passed 18/18. |
 | Graph-owned imported initial-owner state snapshots: task-graph unit and descriptor-buffer smoke | passed; typed imported texture/buffer ownership declarations now deep-copy their native release-state handoff into graph-owned arena storage. The original producer handoff can be reset before late packet recording, while repeated typed imports still require the same declaration source identity and malformed invalid sources retain their established record-time diagnostic. The real Vulkan cross-queue smoke verifies the graph snapshot remains valid after its producer handoff is released; its execution is topology-gated when no distinct Compute family is available. |
 | Graph-owned task-declared state snapshots: task-graph unit and descriptor-buffer smoke | passed; task declarations now deep-copy each external native state source into graph-owned arena storage. The producer-side handoff can be reset immediately after task creation while late recording still filters the immutable snapshot through the task's declared resources. The real Vulkan late-history-tail proof releases the original source before compilation and recording, then observes the retained `CopySource` state; explicit task-anchored late bindings remain separate and late-bound. Graph tests passed 87/87, descriptor smoke passed 114 tests with 12 expected topology skips, and ECS graphics passed 18/18. |
+| Opt-in worker recording for graph-owned task state snapshots: descriptor-buffer smoke | passed; an explicitly opt-in ready frontier may now record a task with declaration-captured immutable state on a worker, using the ordinary per-packet scratch and worker-affined command arena. Raw record-descriptor sources and semantic late task bindings remain serial. The real Vulkan probe submits two source producers, resets both caller-side handoffs after declaration, then proves both independent worker-recorded tasks receive their copied `CopyDest` state and distinct nonzero worker leases. Graph tests passed 87/87, descriptor smoke passed 114 tests with 12 expected topology skips, and ECS graphics passed 18/18. |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -590,11 +591,11 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    ready-frontier recorder is implemented for explicit opt-in packets, with isolated per-packet state scratch and
    worker-affined command-buffer leases: each ready-frontier packet receives the current logical worker identity,
    while Vulkan recycles its one-buffer command pool only to that worker after the physical queue timeline retires
-   it. Serial/direct recording retains the default lease. All other packets, command-IR capture, legacy
-   packet-specific external-state overrides, graph-owned declaration state snapshots, and task-anchored late
-   external-state bindings retain serial recording. The latter resolves a semantic task ID to its current compiled
-   packet, so post-prefix sources can retire physical packet selection incrementally while the legacy override
-   bridge remains available.
+   it. Serial/direct recording retains the default lease. Graph-owned declaration state snapshots may use worker
+   recording only when every packet task explicitly opts in; command-IR capture, legacy packet-specific
+   external-state overrides, and task-anchored late external-state bindings remain serial. The latter resolves a
+   semantic task ID to its current compiled packet, so post-prefix sources can retire physical packet selection
+   incrementally while the legacy override bridge remains available.
 
 4. **Generic recovery and invalidation proof.** The accepted-token transaction is sound for the exercised paths,
    stale imported completion tokens have graph and native-submission rejection coverage, and recording/transaction

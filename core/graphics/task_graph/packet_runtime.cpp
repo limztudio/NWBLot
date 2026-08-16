@@ -896,8 +896,9 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         return true;
     };
     const auto packetAllowsParallelRecording = [&](const GpuNativePacketRecordDesc& desc){
-        // External state sources still bridge work outside the compiler's internal packet edges. Preserve serial
-        // recording rather than assuming an unexpressed producer is safe to read in a worker frontier.
+        // Raw record-descriptor sources and late task bindings still bridge work outside the compiler's internal
+        // packet edges. Preserve serial recording for those runtime inputs. Task-declared sources are immutable
+        // graph-owned snapshots, so an explicitly opted-in task may safely consume them on a worker frontier.
         if(desc.externalStateSourceCount != 0u)
             return false;
 
@@ -912,10 +913,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             return false;
         for(u32 taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
             const GpuTaskGraphTaskView task = graph.taskAt(tasks[taskIndex].index);
-            if(
-                !task.scheduling.allowParallelRecording
-                || task.externalStateSourceCount != 0u
-            )
+            if(!task.scheduling.allowParallelRecording)
                 return false;
         }
         return true;

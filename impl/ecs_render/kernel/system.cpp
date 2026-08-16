@@ -247,6 +247,8 @@ void RendererSystem::invalidateResources(){
     m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixOpaqueComputeEmulationTask = {};
+    for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
+        task = {};
     m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixCsgReceiverSpanTask = {};
@@ -547,6 +549,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixOpaqueComputeEmulationTask = {};
+    for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
+        task = {};
     m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixCsgReceiverSpanTask = {};
@@ -868,6 +872,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::Gbuffer
         )],
     };
+    // The exact shared-output opaque pair spans G-buffer's mesh prelude and four graph callbacks. Keep its
+    // measurement alive through graph declaration, recording, submission, and rejection just like CSG intervals.
+    Optional<Core::GpuTimingMeasure> opaqueRegularSharedComputeEmulationTiming;
     Core::GpuTimingSubmissionTicket shadowVisibilityTimingTicket(m_graphics.gpuTiming());
     // The prepared soft-transparent route spans opaque resolve across its first-wavelet and tail callbacks, and
     // begins transparent resolve in temporal merge when active (otherwise its first wavelet). The terminal fold
@@ -932,6 +939,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredClearTiming,
         deferredClearTimingState,
         opaqueCsgIntervalClearTimingState,
+        opaqueRegularSharedComputeEmulationTiming,
         shadowPrepareTimingTicket,
         graphicsPrefixTimingTickets,
         &asyncPrefixTimingSpansOnePacket,
@@ -979,6 +987,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             deferredClearTiming,
             deferredClearTimingState,
             opaqueCsgIntervalClearTimingState,
+            opaqueRegularSharedComputeEmulationTiming,
             shadowPrepareTimingTicket,
             graphicsPrefixTimingTickets,
             &asyncPrefixTimingSpansOnePacket,
@@ -1141,6 +1150,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixOpaqueComputeEmulationTask)
             : Core::GpuSubmissionPacketId{}
     ;
+    const Core::GpuSubmissionPacketId graphicsPrefixOpaqueSharedComputeEmulationPacket =
+        m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u].valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(
+                m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u]
+            )
+            : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuSubmissionPacketId graphicsPrefixOpaqueCsgReceiverComputeEmulationPacket =
         m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask.valid()
             ? m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask)
@@ -1298,6 +1314,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? m_deferredLightingCompiledGraph.queueInfoForTask(m_graphicsPrefixOpaqueComputeEmulationTask)
             : nullptr
     ;
+    const Core::GpuPhysicalQueueInfo* const graphicsPrefixOpaqueSharedComputeEmulationQueue =
+        m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u].valid()
+            ? m_deferredLightingCompiledGraph.queueInfoForTask(
+                m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u]
+            )
+            : nullptr
+    ;
     const Core::GpuPhysicalQueueInfo* const graphicsPrefixOpaqueCsgReceiverComputeEmulationQueue =
         m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask.valid()
             ? m_deferredLightingCompiledGraph.queueInfoForTask(m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask)
@@ -1340,6 +1363,74 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && graphicsPrefixOpaqueComputeEmulationQueue->queueClass == Core::CommandQueue::Graphics
         )
     ;
+    // A shared persistent generated-vertex output cannot be reduced to an endpoint coalescing check: each of the
+    // four alternating callbacks must remain in exact packet order, or a later local dispatch/raster bridge could
+    // silently return. Keep the G-buffer prelude before the contiguous D(A) -> R(A) -> D(B) -> R(B) run.
+    const bool graphicsPrefixOpaqueSharedComputeEmulationMerged = [&](){
+        const bool firstPhaseDeclared = m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u].valid();
+        if(!firstPhaseDeclared){
+            for(const Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks){
+                if(task.valid())
+                    return false;
+            }
+            return true;
+        }
+        if(
+            !graphicsPrefixOpaqueSharedComputeEmulationPacket.valid()
+            || !graphicsPrefixOpaqueSharedComputeEmulationQueue
+            || graphicsPrefixOpaqueSharedComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
+            || !m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_graphicsPrefixGbufferTask,
+                m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u]
+            )
+        )
+            return false;
+        for(const Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks){
+            const Core::GpuPhysicalQueueInfo* const queue = m_deferredLightingCompiledGraph.queueInfoForTask(task);
+            if(
+                !task.valid()
+                || !queue
+                || queue->queueClass != Core::CommandQueue::Graphics
+                || !m_deferredLightingCompiledGraph.tasksSharePacket(
+                    m_graphicsPrefixGbufferTask,
+                    task
+                )
+            )
+                return false;
+        }
+        const Core::GpuSubmissionPacket& packet = m_deferredLightingCompiledGraph.packet(
+            graphicsPrefixOpaqueSharedComputeEmulationPacket
+        );
+        const Core::GpuTaskId* const packetTasks = m_deferredLightingCompiledGraph.packetTasks(
+            graphicsPrefixOpaqueSharedComputeEmulationPacket
+        );
+        if(!packetTasks || packet.taskCount < LengthOf(m_graphicsPrefixOpaqueSharedComputeEmulationTasks))
+            return false;
+        for(usize firstPhaseIndex = 0u;
+            firstPhaseIndex + LengthOf(m_graphicsPrefixOpaqueSharedComputeEmulationTasks) <= packet.taskCount;
+            ++firstPhaseIndex
+        ){
+            bool matchesSequence = true;
+            for(usize phaseIndex = 0u;
+                phaseIndex < LengthOf(m_graphicsPrefixOpaqueSharedComputeEmulationTasks);
+                ++phaseIndex
+            ){
+                if(packetTasks[firstPhaseIndex + phaseIndex]
+                    == m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex])
+                    continue;
+                matchesSequence = false;
+                break;
+            }
+            if(!matchesSequence)
+                continue;
+            for(usize taskIndex = 0u; taskIndex < firstPhaseIndex; ++taskIndex){
+                if(packetTasks[taskIndex] == m_graphicsPrefixGbufferTask)
+                    return true;
+            }
+            return false;
+        }
+        return false;
+    }();
     // Receiver-surface CSG can independently retain the compatibility path, but when its alias-free producer is
     // declared it must share G-buffer's primary Graphics packet for the same compiler-owned UAV-to-VertexBuffer
     // handoff and semantic prefix range.
@@ -1965,6 +2056,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !graphicsPrefixPacketsAreGraphics
         || !graphicsPrefixDeferredClearBundleMerged
         || !graphicsPrefixOpaqueComputeEmulationMerged
+        || !graphicsPrefixOpaqueSharedComputeEmulationMerged
         || !graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged
         || !graphicsPrefixCsgIntervalClearBundleMerged
         || !graphicsPrefixQueue
@@ -2238,6 +2330,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             transparentCsgIntervalsTiming->discardTiming();
             transparentCsgIntervalsTiming.reset();
         }
+        if(opaqueRegularSharedComputeEmulationTiming){
+            opaqueRegularSharedComputeEmulationTiming->discardTiming();
+            opaqueRegularSharedComputeEmulationTiming.reset();
+        }
         frameTimingTransaction.discard();
         discardTimingTickets();
         discardUnacceptedGraphPackets();
@@ -2405,6 +2501,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && graphicsPrefixPacket.valid()
         && graphicsPrefixDeferredClearBundleMerged
         && graphicsPrefixOpaqueComputeEmulationMerged
+        && graphicsPrefixOpaqueSharedComputeEmulationMerged
         && graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged
         && shadowPrepareStateBindingsReady
         && deferredRecorder.recordTaskRangeInReadyFrontiers(
@@ -2735,6 +2832,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && graphicsPrefixPacket.valid()
         && graphicsPrefixDeferredClearBundleMerged
         && graphicsPrefixOpaqueComputeEmulationMerged
+        && graphicsPrefixOpaqueSharedComputeEmulationMerged
         && graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged
         && m_deferredShadowVisibilityTask.valid()
         && shadowVisibilityPacket.valid()
@@ -3714,6 +3812,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && graphicsPrefixPacket.valid()
             && graphicsPrefixDeferredClearBundleMerged
             && graphicsPrefixOpaqueComputeEmulationMerged
+            && graphicsPrefixOpaqueSharedComputeEmulationMerged
             && graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged
             && graphicsPrefixWorkPacketRange.valid()
             && shadowPrepareThroughPrefixPacketRange.valid()

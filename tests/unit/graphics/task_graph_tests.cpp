@@ -4370,6 +4370,212 @@ TEST(GpuTaskGraph, MergesGraphicsComputeUavProducerIntoGraphicsVertexBufferConsu
 }
 
 
+// Two opaque compute-emulation items can intentionally reuse one persistent generated-vertex buffer only when
+// each dispatch is followed by its own raster consumer.  Keep the serial alias handoff graph-owned: batching both
+// dispatches ahead of raster would overwrite A before R(A) executes.
+TEST(GpuTaskGraph, MergesSharedOpaqueComputeEmulationDispatchRasterPairsIntoOnePacket){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId generatedVertexBuffer = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/shared_generated_vertex_buffer"),
+        "Shared Generated Vertex Buffer",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    ASSERT_TRUE(generatedVertexBuffer.valid());
+
+    const Graphics::GpuQueueRequest graphicsComputeQueue{
+        QueueCapabilities(
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueueCapability::Compute
+        ),
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest graphicsRasterQueue{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint dispatchScheduling;
+    dispatchScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    dispatchScheduling.overlapPreferred = false;
+    dispatchScheduling.avoidQueueCrossing = true;
+    dispatchScheduling.forceSubmissionBoundary = false;
+    dispatchScheduling.allowPacketMerge = true;
+    dispatchScheduling.mergeWithPrevious = false;
+    const Graphics::GpuTaskResourceUse dispatchUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = generatedVertexBuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskResourceUse rasterUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = generatedVertexBuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::VertexBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuTaskId dispatchA = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/shared_opaque_compute_dispatch_a"))
+            .setMarkerLabel("Shared Opaque Compute Dispatch A")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(dispatchScheduling)
+            .setResourceUses(dispatchUses, LengthOf(dispatchUses))
+    );
+    ASSERT_TRUE(dispatchA.valid());
+
+    Graphics::GpuTaskSchedulingHint pairTailScheduling = dispatchScheduling;
+    pairTailScheduling.mergeWithPrevious = true;
+    // Every callback is an explicit immediate successor, so the complete alias sequence must stay in G-buffer's
+    // one accepting Graphics packet even under the conservative FrontierSafe policy.
+    pairTailScheduling.allowMergeAcrossConsumerFrontier = true;
+    const Graphics::GpuTaskId rasterADependencies[] = { dispatchA };
+    const Graphics::GpuTaskId rasterA = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/shared_opaque_compute_raster_a"))
+            .setMarkerLabel("Shared Opaque Compute Raster A")
+            .setQueue(graphicsRasterQueue)
+            .setScheduling(pairTailScheduling)
+            .setDependencies(rasterADependencies, LengthOf(rasterADependencies))
+            .setResourceUses(rasterUses, LengthOf(rasterUses))
+    );
+    ASSERT_TRUE(rasterA.valid());
+
+    const Graphics::GpuTaskId dispatchBDependencies[] = { rasterA };
+    const Graphics::GpuTaskId dispatchB = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/shared_opaque_compute_dispatch_b"))
+            .setMarkerLabel("Shared Opaque Compute Dispatch B")
+            .setQueue(graphicsComputeQueue)
+            .setScheduling(pairTailScheduling)
+            .setDependencies(dispatchBDependencies, LengthOf(dispatchBDependencies))
+            .setResourceUses(dispatchUses, LengthOf(dispatchUses))
+    );
+    ASSERT_TRUE(dispatchB.valid());
+
+    const Graphics::GpuTaskId rasterBDependencies[] = { dispatchB };
+    const Graphics::GpuTaskId rasterB = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/shared_opaque_compute_raster_b"))
+            .setMarkerLabel("Shared Opaque Compute Raster B")
+            .setQueue(graphicsRasterQueue)
+            .setScheduling(pairTailScheduling)
+            .setDependencies(rasterBDependencies, LengthOf(rasterBDependencies))
+            .setResourceUses(rasterUses, LengthOf(rasterUses))
+    );
+    ASSERT_TRUE(rasterB.valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    EXPECT_TRUE(analysis.hasExplicitEdge(dispatchA, rasterA));
+    EXPECT_TRUE(analysis.hasExplicitEdge(rasterA, dispatchB));
+    EXPECT_TRUE(analysis.hasExplicitEdge(dispatchB, rasterB));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        dispatchA,
+        rasterA,
+        generatedVertexBuffer,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        dispatchA,
+        dispatchB,
+        generatedVertexBuffer,
+        Graphics::GpuTaskHazardType::WriteAfterWrite
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        rasterA,
+        dispatchB,
+        generatedVertexBuffer,
+        Graphics::GpuTaskHazardType::WriteAfterRead
+    ));
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        dispatchB,
+        rasterB,
+        generatedVertexBuffer,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+    ASSERT_EQ(analysis.topologicalOrder().size(), 4u);
+    EXPECT_EQ(analysis.topologicalOrder()[0u], dispatchA);
+    EXPECT_EQ(analysis.topologicalOrder()[1u], rasterA);
+    EXPECT_EQ(analysis.topologicalOrder()[2u], dispatchB);
+    EXPECT_EQ(analysis.topologicalOrder()[3u], rasterB);
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+
+    const Graphics::GpuTaskQueueAssignment* const dispatchAAssignment = assignments.find(dispatchA);
+    const Graphics::GpuTaskQueueAssignment* const rasterAAssignment = assignments.find(rasterA);
+    const Graphics::GpuTaskQueueAssignment* const dispatchBAssignment = assignments.find(dispatchB);
+    const Graphics::GpuTaskQueueAssignment* const rasterBAssignment = assignments.find(rasterB);
+    ASSERT_NE(dispatchAAssignment, nullptr);
+    ASSERT_NE(rasterAAssignment, nullptr);
+    ASSERT_NE(dispatchBAssignment, nullptr);
+    ASSERT_NE(rasterBAssignment, nullptr);
+    EXPECT_EQ(dispatchAAssignment->queue, queue.id);
+    EXPECT_EQ(rasterAAssignment->queue, queue.id);
+    EXPECT_EQ(dispatchBAssignment->queue, queue.id);
+    EXPECT_EQ(rasterBAssignment->queue, queue.id);
+
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(dispatchA);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterA));
+    EXPECT_EQ(packet, compiledGraph.packetForTask(dispatchB));
+    EXPECT_EQ(packet, compiledGraph.packetForTask(rasterB));
+    EXPECT_TRUE(compiledGraph.tasksSharePacket(dispatchA, rasterB));
+    const Graphics::GpuSubmissionPacket& compiledPacket = compiledGraph.packet(packet);
+    EXPECT_EQ(compiledPacket.queue, queue.id);
+    EXPECT_EQ(compiledPacket.dependencyCount, 0u);
+    ASSERT_EQ(compiledPacket.taskCount, 4u);
+    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    ASSERT_NE(packetTasks, nullptr);
+    EXPECT_EQ(packetTasks[0u], dispatchA);
+    EXPECT_EQ(packetTasks[1u], rasterA);
+    EXPECT_EQ(packetTasks[2u], dispatchB);
+    EXPECT_EQ(packetTasks[3u], rasterB);
+
+    const auto expectTransition = [&](const Graphics::GpuTaskId task, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        ASSERT_NE(compiledTask, nullptr);
+        ASSERT_EQ(compiledTask->prologueBarrierCount, 1u);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        ASSERT_NE(barriers, nullptr);
+        const Graphics::GpuCompiledBarrier& barrier = barriers[0u];
+        EXPECT_EQ(barrier.type, Graphics::GpuCompiledBarrierType::BufferTransition);
+        EXPECT_EQ(barrier.resource, generatedVertexBuffer);
+        EXPECT_EQ(barrier.before, before);
+        EXPECT_EQ(barrier.after, after);
+        EXPECT_EQ(barrier.sourceQueue, queue.id);
+        EXPECT_EQ(barrier.destinationQueue, queue.id);
+    };
+    expectTransition(dispatchA, Graphics::ResourceStates::Common, Graphics::ResourceStates::UnorderedAccess);
+    expectTransition(rasterA, Graphics::ResourceStates::UnorderedAccess, Graphics::ResourceStates::VertexBuffer);
+    expectTransition(dispatchB, Graphics::ResourceStates::VertexBuffer, Graphics::ResourceStates::UnorderedAccess);
+    expectTransition(rasterB, Graphics::ResourceStates::UnorderedAccess, Graphics::ResourceStates::VertexBuffer);
+}
+
+
 // Receiver-surface CSG generation must happen after its CSG setup but before G-buffer's later raster consumer. The
 // graph owns both the CSG CopyDest->UAV preparation and the generated-vertex UAV->VertexBuffer handoff in one
 // primary-Graphics packet; the receiver-event image itself remains a G-buffer raster output.

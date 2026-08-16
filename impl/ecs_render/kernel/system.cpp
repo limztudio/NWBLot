@@ -3105,13 +3105,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             .context = &deferredLightingAcceptance,
             .invoke = acceptDeferredLightingPacket,
         };
-        const Core::GpuTaskGraphPacketTimingTicket deferredLightingCompositeTimingTickets[] = {
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = deferredLightingPacket,
+        const Core::GpuTaskGraphTaskTimingTicket deferredLightingCompositeTimingTickets[] = {
+            Core::GpuTaskGraphTaskTimingTicket{
+                .task = m_deferredLightingTask,
                 .timingTicket = &deferredLightingTimingTicket,
             },
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = deferredCompositePacket,
+            Core::GpuTaskGraphTaskTimingTicket{
+                .task = m_deferredCompositeTask,
                 .timingTicket = &deferredCompositeTimingTicket,
             },
         };
@@ -3133,7 +3133,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && deferredCompositePacket.valid()
             && deferredLightingCompositePacketRange.valid()
             && deferredLightingCompositePacketRange.packetCount == LengthOf(deferredLightingCompositeTimingTickets)
-            && deferredSubmitter.submitPacketRangeInCompileOrder(
+            && deferredSubmitter.submitPacketRangeInCompileOrderFromTasks(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
@@ -3178,9 +3178,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const auto submitDeferredPresent = [&]() -> bool {
         Core::Alloc::ScratchArena presentScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter deferredPresentSubmitter(device);
-        const Core::GpuTaskGraphPacketTimingTicket deferredPresentTimingTickets[] = {
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = deferredPresentPacket,
+        const Core::GpuTaskGraphTaskTimingTicket deferredPresentTimingTickets[] = {
+            Core::GpuTaskGraphTaskTimingTicket{
+                .task = m_deferredPresentTask,
                 .timingTicket = &deferredPresentTimingTicket,
             },
         };
@@ -3209,7 +3209,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         };
         const bool deferredPresentationAccepted =
             terminalPresentationReady
-            && deferredPresentSubmitter.submitPacketRangeInCompileOrder(
+            && deferredPresentSubmitter.submitPacketRangeInCompileOrderFromTasks(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,

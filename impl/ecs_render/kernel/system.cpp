@@ -319,6 +319,7 @@ void RendererSystem::invalidateResources(){
     m_deferredAvboitExtinctionTask = {};
     m_deferredAvboitIntegrationTask = {};
     m_deferredAvboitAccumulationStreamTask = {};
+    m_deferredAvboitAccumulationComputeEmulationTask = {};
     m_deferredAvboitAccumulationTask = {};
     m_deferredAvboitAccumulationFinalizeTask = {};
     m_deferredLightingTask = {};
@@ -621,6 +622,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredAvboitExtinctionTask = {};
     m_deferredAvboitIntegrationTask = {};
     m_deferredAvboitAccumulationStreamTask = {};
+    m_deferredAvboitAccumulationComputeEmulationTask = {};
     m_deferredAvboitAccumulationTask = {};
     m_deferredAvboitAccumulationFinalizeTask = {};
     m_deferredLightingTask = {};
@@ -927,6 +929,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Optional<Core::GpuTimingMeasure> avboitOccupancyComputeEmulationTiming;
     // The split Extinction handoff starts this interval in its compute producer and closes it in the raster consumer.
     Optional<Core::GpuTimingMeasure> avboitExtinctionComputeEmulationTiming;
+    // The split Accumulation handoff starts this interval in its compute producer and closes it in the raster consumer.
+    Optional<Core::GpuTimingMeasure> avboitAccumulationComputeEmulationTiming;
     Core::GpuTimingSubmissionTicket avboitDepthWarpTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket avboitExtinctionTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket avboitIntegrationTimingTicket(m_graphics.gpuTiming());
@@ -967,6 +971,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         transparentCsgIntervalsTiming,
         avboitOccupancyComputeEmulationTiming,
         avboitExtinctionComputeEmulationTiming,
+        avboitAccumulationComputeEmulationTiming,
         avboitDepthWarpTimingTicket,
         avboitExtinctionTimingTicket,
         avboitIntegrationTimingTicket,
@@ -1018,6 +1023,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             transparentCsgIntervalsTiming,
             avboitOccupancyComputeEmulationTiming,
             avboitExtinctionComputeEmulationTiming,
+            avboitAccumulationComputeEmulationTiming,
             avboitDepthWarpTimingTicket,
             avboitExtinctionTimingTicket,
             avboitIntegrationTimingTicket,
@@ -1652,6 +1658,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitExtinctionComputeEmulationTask)
             : Core::GpuSubmissionPacketId{}
     ;
+    const Core::GpuSubmissionPacketId avboitAccumulationComputeEmulationPacket =
+        m_deferredAvboitAccumulationComputeEmulationTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitAccumulationComputeEmulationTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
     const bool avboitExtinctionPacketContainsStreams = !m_deferredAvboitExtinctionStreamTask.valid()
         || m_deferredLightingCompiledGraph.tasksSharePacket(
             m_deferredAvboitExtinctionTask,
@@ -1703,6 +1714,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitIntegrationTask);
     const Core::GpuPhysicalQueueInfo* const avboitAccumulationQueue =
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitAccumulationTask);
+    const Core::GpuPhysicalQueueInfo* const avboitAccumulationComputeEmulationQueue =
+        m_deferredAvboitAccumulationComputeEmulationTask.valid()
+            ? m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitAccumulationComputeEmulationTask)
+            : nullptr
+    ;
     // A split Occupancy measurement spans the generator and raster consumer. Require the exact Pre-packet order
     // so graph declarations, rather than a callback-local transition, own the output UAV-to-VertexBuffer handoff.
     const bool avboitOccupancyComputeEmulationMerged = [&](){
@@ -1816,6 +1832,58 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 return true;
             for(usize streamTaskIndex = 0u; streamTaskIndex < taskIndex; ++streamTaskIndex){
                 if(packetTasks[streamTaskIndex] == m_deferredAvboitExtinctionStreamTask)
+                    return true;
+            }
+            return false;
+        }
+        return false;
+    }();
+    // A split Accumulation measurement spans the generator and raster consumer. Require their exact packet order
+    // so the graph, rather than a callback-local transition, owns the output UAV-to-VertexBuffer handoff before
+    // the following graph-owned attachment finalizer.
+    const bool avboitAccumulationComputeEmulationMerged = [&](){
+        if(!m_deferredAvboitAccumulationComputeEmulationTask.valid())
+            return true;
+        if(
+            !avboitUsesAsyncCompute
+            || !m_deferredAvboitAccumulationStreamTask.valid()
+            || !avboitAccumulationComputeEmulationPacket.valid()
+            || !avboitAccumulationPacket.valid()
+            || !avboitAccumulationComputeEmulationQueue
+            || !avboitAccumulationQueue
+            || avboitAccumulationComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
+            || avboitAccumulationQueue->queueClass != Core::CommandQueue::Graphics
+            || !m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredAvboitAccumulationComputeEmulationTask,
+                m_deferredAvboitAccumulationTask
+            )
+            || !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
+                m_deferredAvboitAccumulationStreamTask,
+                m_deferredAvboitAccumulationComputeEmulationTask
+            )
+        )
+            return false;
+        const Core::GpuSubmissionPacket& packet = m_deferredLightingCompiledGraph.packet(
+            avboitAccumulationComputeEmulationPacket
+        );
+        const Core::GpuTaskId* const packetTasks = m_deferredLightingCompiledGraph.packetTasks(
+            avboitAccumulationComputeEmulationPacket
+        );
+        if(!packetTasks || packet.taskCount < 2u)
+            return false;
+        for(usize taskIndex = 0u; taskIndex + 2u <= packet.taskCount; ++taskIndex){
+            if(
+                packetTasks[taskIndex] != m_deferredAvboitAccumulationComputeEmulationTask
+                || packetTasks[taskIndex + 1u] != m_deferredAvboitAccumulationTask
+            )
+                continue;
+            if(!m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredAvboitAccumulationStreamTask,
+                m_deferredAvboitAccumulationComputeEmulationTask
+            ))
+                return true;
+            for(usize streamTaskIndex = 0u; streamTaskIndex < taskIndex; ++streamTaskIndex){
+                if(packetTasks[streamTaskIndex] == m_deferredAvboitAccumulationStreamTask)
                     return true;
             }
             return false;
@@ -2364,6 +2432,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !avboitOccupancyComputeEmulationMerged
         || !avboitExtinctionPacketContainsStreams
         || !avboitExtinctionComputeEmulationMerged
+        || !avboitAccumulationComputeEmulationMerged
         || !avboitAccumulationPacketContainsStreams
         || !avboitAccumulationPacketContainsFinalizer
         || (hasTransparentRenderers && (
@@ -2569,6 +2638,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(avboitExtinctionComputeEmulationTiming){
             avboitExtinctionComputeEmulationTiming->discardTiming();
             avboitExtinctionComputeEmulationTiming.reset();
+        }
+        if(avboitAccumulationComputeEmulationTiming){
+            avboitAccumulationComputeEmulationTiming->discardTiming();
+            avboitAccumulationComputeEmulationTiming.reset();
         }
         if(opaqueRegularSharedComputeEmulationTiming){
             opaqueRegularSharedComputeEmulationTiming->discardTiming();
@@ -3110,6 +3183,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && avboitOccupancyComputeEmulationMerged
         && avboitExtinctionPacketContainsStreams
         && avboitExtinctionComputeEmulationMerged
+        && avboitAccumulationComputeEmulationMerged
         && avboitAccumulationPacketContainsStreams
         && avboitAccumulationPacketContainsFinalizer
         && (!hasTransparentRenderers || (
@@ -3384,7 +3458,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const auto submitAvboitLightingAndComposite = [&]() -> bool {
         Core::Alloc::ScratchArena deferredScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter deferredSubmitter(device);
-        Core::GpuTaskGraphTaskTimingTicket avboitTimingTickets[6u] = {};
+        Core::GpuTaskGraphTaskTimingTicket avboitTimingTickets[7u] = {};
         usize avboitTimingTicketCount = 0u;
         const auto appendAvboitTimingTicket = [&avboitTimingTickets, &avboitTimingTicketCount](
             const Core::GpuTaskId task,
@@ -3408,6 +3482,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             }
             appendAvboitTimingTicket(m_deferredAvboitExtinctionTask, &avboitExtinctionTimingTicket);
             appendAvboitTimingTicket(m_deferredAvboitIntegrationTask, &avboitIntegrationTimingTicket);
+            if(m_deferredAvboitAccumulationComputeEmulationTask.valid()){
+                // Both callbacks resolve to one packet and deliberately share the one Accumulation timing ticket.
+                appendAvboitTimingTicket(
+                    m_deferredAvboitAccumulationComputeEmulationTask,
+                    &avboitAccumulationTimingTicket
+                );
+            }
             appendAvboitTimingTicket(m_deferredAvboitAccumulationTask, &avboitAccumulationTimingTicket);
         }
         const usize avboitPacketExpectedCount = avboitUsesAsyncCompute ? 5u : 1u;
@@ -3423,6 +3504,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && avboitOccupancyComputeEmulationMerged
             && avboitExtinctionPacketContainsStreams
             && avboitExtinctionComputeEmulationMerged
+            && avboitAccumulationComputeEmulationMerged
             && avboitAccumulationPacketContainsStreams
             && avboitAccumulationPacketContainsFinalizer
             && (!hasTransparentRenderers || (

@@ -156,7 +156,9 @@ public:
         bool accumulationCsgIntervalSampleImageStatesGraphOwned = false,
         bool accumulationCsgClipBufferStatesGraphOwned = false,
         bool accumulationMaterialFrameStatesGraphOwned = false,
-        bool accumulationMaterialGeometryStatesGraphOwned = false
+        bool accumulationMaterialGeometryStatesGraphOwned = false,
+        bool accumulationComputeEmulationOutputStatesGraphOwned = false,
+        Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr
     );
     void renderAvboitPasses(
         Core::CommandList& commandList,

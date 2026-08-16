@@ -121,6 +121,7 @@ namespace ECSRenderDetail{
 namespace __hidden_renderer_task_graph{
     struct AvboitOccupancyComputeEmulationGraphTask;
     struct AvboitExtinctionComputeEmulationGraphTask;
+    struct AvboitAccumulationComputeEmulationGraphTask;
 }
 
 
@@ -144,6 +145,7 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend struct ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask;
     friend struct __hidden_renderer_task_graph::AvboitOccupancyComputeEmulationGraphTask;
     friend struct __hidden_renderer_task_graph::AvboitExtinctionComputeEmulationGraphTask;
+    friend struct __hidden_renderer_task_graph::AvboitAccumulationComputeEmulationGraphTask;
     friend struct ECSRenderDetail::GbufferGraphTask;
     friend struct ECSRenderDetail::CsgReceiverSpanBuildGraphTask;
     friend struct ECSRenderDetail::CsgIntervalCombineGraphTask;
@@ -366,6 +368,7 @@ private:
         Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTiming,
         Optional<Core::GpuTimingMeasure>& avboitOccupancyComputeEmulationTiming,
         Optional<Core::GpuTimingMeasure>& avboitExtinctionComputeEmulationTiming,
+        Optional<Core::GpuTimingMeasure>& avboitAccumulationComputeEmulationTiming,
         Core::GpuTimingSubmissionTicket& avboitDepthWarpTimingTicket,
         Core::GpuTimingSubmissionTicket& avboitExtinctionTimingTicket,
         Core::GpuTimingSubmissionTicket& avboitIntegrationTimingTicket,
@@ -583,6 +586,9 @@ private:
     // The accumulation phase owns another immutable stream after integration. It must remain in the final
     // accumulation packet so a rejected/retried recording cannot publish only its upload prefix.
     Core::GpuTaskId m_deferredAvboitAccumulationStreamTask;
+    // The optional alias-free regular producer stays immediately before Accumulation so the generated-vertex
+    // handoff and its cross-callback timing interval share the terminal Graphics packet and finalizer.
+    Core::GpuTaskId m_deferredAvboitAccumulationComputeEmulationTask;
     Core::GpuTaskId m_deferredAvboitAccumulationTask;
     // A no-op Graphics task that returns accumulation color outputs and read-only deferred depth to sampled state.
     Core::GpuTaskId m_deferredAvboitAccumulationFinalizeTask;

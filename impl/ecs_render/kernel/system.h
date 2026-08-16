@@ -575,8 +575,8 @@ private:
     Core::GpuTaskId m_deferredAvboitOccupancyComputeEmulationTask;
     Core::GpuTaskId m_deferredAvboitOccupancyTask;
     Core::GpuTaskId m_deferredAvboitDepthWarpTask;
-    // The optional alias-free regular producer must remain in Extinction's selected Graphics packet so its
-    // cross-callback material timing interval and generated-vertex handoff share the consumer's token.
+    // The optional alias-free regular or CSG-only producer must remain in Extinction's selected Graphics packet so
+    // its cross-callback material timing interval and generated-vertex handoff share the consumer's token.
     Core::GpuTaskId m_deferredAvboitExtinctionComputeEmulationTask;
     // The final immutable extinction upload, when that phase has visible draws. It must live in the native
     // extinction packet so rejected/retried packet recording cannot publish only a partial phase stream.

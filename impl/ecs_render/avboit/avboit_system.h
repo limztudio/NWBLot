@@ -140,7 +140,10 @@ public:
         bool extinctionMaterialFrameStatesGraphOwned = false,
         bool extinctionMaterialGeometryStatesGraphOwned = false,
         bool extinctionComputeEmulationOutputStatesGraphOwned = false,
-        Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr
+        Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr,
+        // A distinct frozen CSG-only producer may own this handoff. Keep it separate from the regular flag so
+        // mixed CSG streams retain their local dispatch/raster interleaving.
+        bool extinctionCsgComputeEmulationOutputStatesGraphOwned = false
     );
     void renderAvboitAccumulatePass(
         Core::CommandList& commandList,

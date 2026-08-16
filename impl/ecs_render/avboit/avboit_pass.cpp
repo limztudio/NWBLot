@@ -635,7 +635,8 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
     const bool extinctionMaterialFrameStatesGraphOwned,
     const bool extinctionMaterialGeometryStatesGraphOwned,
     const bool extinctionComputeEmulationOutputStatesGraphOwned,
-    Optional<Core::GpuTimingMeasure>* const extinctionComputeEmulationTiming
+    Optional<Core::GpuTimingMeasure>* const extinctionComputeEmulationTiming,
+    const bool extinctionCsgComputeEmulationOutputStatesGraphOwned
 ){
     NWB_ASSERT(avboitTargets.valid());
 
@@ -660,7 +661,8 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
                 extinctionMaterialFrameStatesGraphOwned,
                 extinctionMaterialGeometryStatesGraphOwned,
                 extinctionComputeEmulationOutputStatesGraphOwned,
-                extinctionComputeEmulationTiming
+                extinctionComputeEmulationTiming,
+                extinctionCsgComputeEmulationOutputStatesGraphOwned
             );
         }
     }

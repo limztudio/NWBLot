@@ -1202,9 +1202,9 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
 
 
 // Pairwise-distinct CSG compute emulation retains the complete frozen CSG stream and generated-vertex targets.
-// Opaque interval-sample and CSG-only AVBOIT Occupancy each place its producer directly before the matching raster,
-// so aliases with prior phase outputs are harmless; only aliases inside this frozen CSG stream could overwrite a
-// generated buffer before its own raster consumes it.
+// Opaque interval-sample and CSG-only AVBOIT Occupancy or Extinction each place their producer directly before the
+// matching raster, so aliases with prior phase outputs are harmless; only aliases inside this frozen CSG stream
+// could overwrite a generated buffer before its own raster consumes it.
 struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
     using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
     using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
@@ -3104,8 +3104,9 @@ struct AvboitDepthWarpGraphTask{
 };
 
 
-// Extinction's regular compute-emulation stream is independently frozen after the prior AVBOIT phase uploads.
-// Only alias-free outputs can move to this producer; the existing Extinction callback remains the raster endpoint.
+// Extinction's alias-free compute-emulation stream is independently frozen after the prior AVBOIT phase uploads.
+// The regular and CSG-only variants are mutually exclusive: the existing Extinction callback remains the shared
+// raster endpoint, while mixed or shared-output streams retain the established local bridge.
 struct AvboitExtinctionComputeEmulationGraphTask{
     struct Payload{
         RendererSystem* renderer = nullptr;
@@ -3113,14 +3114,19 @@ struct AvboitExtinctionComputeEmulationGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* extinctionTiming = nullptr;
         ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan plan;
+        ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan csgPlan;
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
         bool materialDrawBuffersUploaded = false;
+        bool csgFrameBuffersUploaded = false;
+        bool csgIntervalSampleImageStatesGraphOwned = false;
+        bool csgClipBufferStatesGraphOwned = false;
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : plan(arena)
+            , csgPlan(arena)
         {}
     };
 
@@ -3142,14 +3148,18 @@ struct AvboitExtinctionComputeEmulationGraphTask{
             || !payload.targets
             || !payload.timingTicket
             || !payload.extinctionTiming
-            || !payload.plan.captured
+            || (!payload.plan.captured && !payload.csgPlan.captured)
+            || payload.plan.captured == payload.csgPlan.captured
         )
             return false;
 
         RendererSystem& renderer = *payload.renderer;
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        const bool csgComputeEmulation = payload.csgPlan.captured;
         if(
-            !payload.plan.matches(renderer.meshSystem())
+            !(csgComputeEmulation
+                ? payload.csgPlan.matches(renderer.meshSystem())
+                : payload.plan.matches(renderer.meshSystem()))
             || !payload.materialDrawBuffersUploaded
             || !renderer.materialSystem().materialPassDrawBuffersReady(
                 payload.instanceCount,
@@ -3160,11 +3170,24 @@ struct AvboitExtinctionComputeEmulationGraphTask{
 
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
         MaterialPassDrawItems drawItems{ scratchArena };
-        payload.plan.materialize(drawItems);
+        CsgFrameGpuData csgFrameData{ scratchArena };
+        if(csgComputeEmulation)
+            payload.csgPlan.materialize(drawItems, csgFrameData);
+        else
+            payload.plan.materialize(drawItems);
         // The following raster task is deliberately graph-owned and cannot safely fall back to its local bridge.
         // Reject a late material/pipeline loss so the packet is discarded and the next frame re-preflights instead
         // of accepting an all-or-nothing Extinction phase with stale generated vertices.
-        if(!renderer.materialSystem().materialPassDrawResourcesReady(drawItems))
+        if(
+            !renderer.materialSystem().materialPassDrawResourcesReady(drawItems)
+            || (csgComputeEmulation && (
+                !payload.csgFrameBuffersUploaded
+                || !payload.csgIntervalSampleImageStatesGraphOwned
+                || !payload.csgClipBufferStatesGraphOwned
+                || !csgFrameData.hasWork()
+                || !renderer.csgSystem().csgFrameBuffersReady(csgFrameData)
+            ))
+        )
             return false;
         if(payload.extinctionTiming->has_value())
             return false;
@@ -3190,8 +3213,8 @@ struct AvboitExtinctionComputeEmulationGraphTask{
             &payload.targets->avboit,
             viewportState,
             false,
-            false,
-            false,
+            csgComputeEmulation && payload.csgIntervalSampleImageStatesGraphOwned,
+            csgComputeEmulation && payload.csgClipBufferStatesGraphOwned,
             payload.materialFrameStatesGraphOwned,
             payload.materialGeometryStatesGraphOwned,
             true,
@@ -3217,6 +3240,7 @@ struct AvboitExtinctionGraphTask{
         bool extinctionMaterialFrameStatesGraphOwned = false;
         bool extinctionMaterialGeometryStatesGraphOwned = false;
         bool extinctionComputeEmulationOutputStatesGraphOwned = false;
+        bool extinctionCsgComputeEmulationOutputStatesGraphOwned = false;
         Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr;
         bool hasTransparentRenderers = false;
         bool splitStages = false;
@@ -3237,7 +3261,8 @@ struct AvboitExtinctionGraphTask{
             || !payload.targets
             || !payload.csgFrameState
             || !payload.timingTicket
-            || (payload.extinctionComputeEmulationOutputStatesGraphOwned
+            || ((payload.extinctionComputeEmulationOutputStatesGraphOwned
+                    || payload.extinctionCsgComputeEmulationOutputStatesGraphOwned)
                 && !payload.extinctionComputeEmulationTiming)
         )
             return false;
@@ -3273,7 +3298,8 @@ struct AvboitExtinctionGraphTask{
                 payload.extinctionMaterialFrameStatesGraphOwned,
                 payload.extinctionMaterialGeometryStatesGraphOwned,
                 payload.extinctionComputeEmulationOutputStatesGraphOwned,
-                payload.extinctionComputeEmulationTiming
+                payload.extinctionComputeEmulationTiming,
+                payload.extinctionCsgComputeEmulationOutputStatesGraphOwned
             );
             // The unsplit graph recorded Depth Warp in its preceding packet-local task, leaving this callback's
             // producer/raster pair contiguous while retaining the native Extinction -> Integration order.
@@ -13403,7 +13429,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::GpuTaskId extinctionUploadTask = avboitDepthWarpCompletionTask;
     bool extinctionStreamsUploaded = false;
     bool extinctionCsgStreamsUploaded = false;
-    bool extinctionComputeEmulationPlanCaptured = false;
+    bool extinctionRegularComputeEmulationPlanCaptured = false;
+    bool extinctionCsgComputeEmulationPlanCaptured = false;
     bool extinctionMaterialSampledTexturesCollected = false;
     Core::Alloc::ScratchArena extinctionMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
     Core::GpuGraphResourceSetId extinctionMaterialGeometrySet;
@@ -13676,9 +13703,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             );
             avboitExtinctionPayload.extinctionPhasePrepared = true;
             extinctionStreamsUploaded = true;
-            // This is intentionally available only after the final immutable Extinction upload. The direct
-            // AVBOIT callback still owns shared outputs, CSG compute, and any late mismatch.
-            extinctionComputeEmulationPlanCaptured = extinctionDrawItems.csg.computeDrawItems.empty()
+            // A phase may graph-own exactly one alias-free compute stream. Mixed regular/CSG work and any shared
+            // output retain the established local interleaving because a single producer/raster handoff cannot
+            // preserve their per-draw overwrite order.
+            extinctionRegularComputeEmulationPlanCaptured = extinctionDrawItems.csg.computeDrawItems.empty()
                 && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
                 && extinctionMaterialSampledTexturesCollected
                 && avboitExtinctionComputeEmulationPayload.plan.capture(
@@ -13686,6 +13714,18 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     extinctionDrawItems.regular
                 )
             ;
+            extinctionCsgComputeEmulationPlanCaptured = extinctionDrawItems.regular.computeDrawItems.empty()
+                && extinctionCsgStreamsUploaded
+                && avboitIntervalOutputsGraphOwned
+                && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
+                && extinctionMaterialSampledTexturesCollected
+                && avboitExtinctionComputeEmulationPayload.csgPlan.capture(
+                    m_meshSystem,
+                    extinctionDrawItems.csg,
+                    extinctionCsgFrameData
+                )
+            ;
+            NWB_ASSERT(!(extinctionRegularComputeEmulationPlanCaptured && extinctionCsgComputeEmulationPlanCaptured));
         }
         else{
             // Preserve graph ownership even when a transparent frame has no ready extinction draws: native recording
@@ -13729,17 +13769,33 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     ;
     Core::GpuGraphResourceSetId extinctionComputeEmulationOutputSet;
     Core::Alloc::ScratchArena extinctionComputeEmulationResourceScratch(RendererArenaScope::s_TaskGraphArena);
-    const bool extinctionComputeEmulationOutputStatesGraphOwned =
-        extinctionComputeEmulationPlanCaptured
-        && GatherAvboitAliasFreeComputeEmulationResourceSet(
+    const bool extinctionComputeEmulationPlanCaptured =
+        extinctionRegularComputeEmulationPlanCaptured
+        || extinctionCsgComputeEmulationPlanCaptured
+    ;
+    bool extinctionComputeEmulationOutputStatesGraphOwned = false;
+    if(extinctionRegularComputeEmulationPlanCaptured){
+        extinctionComputeEmulationOutputStatesGraphOwned = GatherAvboitAliasFreeComputeEmulationResourceSet(
             m_deferredLightingTaskGraph,
             avboitExtinctionComputeEmulationPayload.plan,
             extinctionComputeEmulationResourceScratch,
             Name("render.avboit.extinction.compute_emulation.outputs"),
             "AVBOIT Extinction Compute Emulation Outputs",
             extinctionComputeEmulationOutputSet
-        )
-    ;
+        );
+    }
+    else if(extinctionCsgComputeEmulationPlanCaptured){
+        extinctionComputeEmulationOutputStatesGraphOwned =
+            GatherOpaqueCsgIntervalSampleComputeEmulationResourceSet(
+                m_deferredLightingTaskGraph,
+                avboitExtinctionComputeEmulationPayload.csgPlan,
+                extinctionComputeEmulationResourceScratch,
+                Name("render.avboit.extinction.csg_compute_emulation.outputs"),
+                "AVBOIT Extinction CSG Compute Emulation Outputs",
+                extinctionComputeEmulationOutputSet
+            )
+        ;
+    }
     if(
         extinctionComputeEmulationPlanCaptured
         && !extinctionComputeEmulationOutputStatesGraphOwned
@@ -13749,7 +13805,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ));
     }
     avboitExtinctionPayload.extinctionComputeEmulationOutputStatesGraphOwned =
-        extinctionComputeEmulationOutputStatesGraphOwned;
+        extinctionRegularComputeEmulationPlanCaptured
+        && extinctionComputeEmulationOutputStatesGraphOwned
+    ;
+    avboitExtinctionPayload.extinctionCsgComputeEmulationOutputStatesGraphOwned =
+        extinctionCsgComputeEmulationPlanCaptured
+        && extinctionComputeEmulationOutputStatesGraphOwned
+    ;
     avboitExtinctionPayload.extinctionComputeEmulationTiming =
         extinctionComputeEmulationOutputStatesGraphOwned
             ? &avboitExtinctionComputeEmulationTiming
@@ -13878,6 +13940,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         avboitExtinctionComputeEmulationPayload.instanceCount = extinctionInstanceData.size();
         avboitExtinctionComputeEmulationPayload.materialTypedByteCount = extinctionMaterialTypedBytes.size();
         avboitExtinctionComputeEmulationPayload.materialDrawBuffersUploaded = extinctionStreamsUploaded;
+        avboitExtinctionComputeEmulationPayload.csgFrameBuffersUploaded = extinctionCsgStreamsUploaded;
+        avboitExtinctionComputeEmulationPayload.csgIntervalSampleImageStatesGraphOwned =
+            extinctionCsgIntervalSampleImageStatesGraphOwned;
+        avboitExtinctionComputeEmulationPayload.csgClipBufferStatesGraphOwned =
+            extinctionCsgClipBufferStatesGraphOwned;
         avboitExtinctionComputeEmulationPayload.materialFrameStatesGraphOwned =
             avboitExtinctionPayload.extinctionMaterialFrameStatesGraphOwned;
         avboitExtinctionComputeEmulationPayload.materialGeometryStatesGraphOwned =
@@ -13886,7 +13953,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionComputeEmulationResourceUses{
             extinctionResourceScratch
         };
-        extinctionComputeEmulationResourceUses.reserve(4u);
+        extinctionComputeEmulationResourceUses.reserve(
+            4u + (extinctionCsgComputeEmulationPlanCaptured ? 8u : 0u)
+        );
         extinctionComputeEmulationResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
         extinctionComputeEmulationResourceUses.push_back(
             ReadUse(materialInstances, Core::ResourceStates::ShaderResource)
@@ -13897,6 +13966,40 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         extinctionComputeEmulationResourceUses.push_back(
             ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer)
         );
+        if(extinctionCsgComputeEmulationPlanCaptured){
+            extinctionComputeEmulationResourceUses.push_back(
+                ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource)
+            );
+            extinctionComputeEmulationResourceUses.push_back(
+                ReadUse(csgCutters, Core::ResourceStates::ShaderResource)
+            );
+            extinctionComputeEmulationResourceUses.push_back(
+                ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer)
+            );
+            extinctionComputeEmulationResourceUses.push_back(
+                ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer)
+            );
+            extinctionComputeEmulationResourceUses.push_back(ReadTextureUse(
+                csgRemovedIntervalDepth,
+                csgRemovedIntervalSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ));
+            extinctionComputeEmulationResourceUses.push_back(ReadTextureUse(
+                csgRemovedIntervalCapNormal,
+                csgRemovedIntervalSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ));
+            extinctionComputeEmulationResourceUses.push_back(ReadTextureUse(
+                csgRemovedIntervalData,
+                csgRemovedIntervalSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ));
+            extinctionComputeEmulationResourceUses.push_back(ReadTextureUse(
+                csgRemovedIntervalCount,
+                csgRemovedIntervalCountSubresources,
+                Core::ResourceStates::UnorderedAccess
+            ));
+        }
         Core::GpuTaskResourceSetUse extinctionComputeEmulationResourceSetUses[3u] = {};
         usize extinctionComputeEmulationResourceSetUseCount = 0u;
         extinctionComputeEmulationResourceSetUses[extinctionComputeEmulationResourceSetUseCount++] =
@@ -13918,8 +14021,12 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         extinctionComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
         Core::GpuTaskDesc extinctionComputeEmulationDesc;
         extinctionComputeEmulationDesc
-            .setIdentity(Name("render.avboit.extinction.compute_emulation"))
-            .setMarkerLabel("AVBOIT Extinction Compute Emulation")
+            .setIdentity(extinctionCsgComputeEmulationPlanCaptured
+                ? Name("render.avboit.extinction.csg_compute_emulation")
+                : Name("render.avboit.extinction.compute_emulation"))
+            .setMarkerLabel(extinctionCsgComputeEmulationPlanCaptured
+                ? "AVBOIT Extinction CSG Compute Emulation"
+                : "AVBOIT Extinction Compute Emulation")
             .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(extinctionComputeEmulationScheduling)
             .setDependencies(&extinctionDependency, 1u)

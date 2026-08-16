@@ -1574,12 +1574,16 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderFromTasks(
     const GpuTaskGraphPacketSubmissionHook* const submissionHooks,
     const usize submissionHookCount,
     const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
-    const usize taskAcceptedCallbackCount
+    const usize taskAcceptedCallbackCount,
+    const GpuTaskGraphTaskSubmissionHook* const taskSubmissionHooks,
+    const usize taskSubmissionHookCount
 )const{
     if(
         !compiledGraph.validFor(graph)
         || !compiledGraph.validPacketRange(range)
         || (taskTimingTicketCount != 0u && !taskTimingTickets)
+        || (submissionHookCount != 0u && !submissionHooks)
+        || (taskSubmissionHookCount != 0u && !taskSubmissionHooks)
     )
         return false;
 
@@ -1626,6 +1630,44 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderFromTasks(
         }
     }
 
+    Vector<GpuTaskGraphPacketSubmissionHook, Alloc::ScratchArena> packetSubmissionHooks{ scratchArena };
+    packetSubmissionHooks.reserve(submissionHookCount + taskSubmissionHookCount);
+    for(usize hookIndex = 0u; hookIndex < submissionHookCount; ++hookIndex)
+        packetSubmissionHooks.push_back(submissionHooks[hookIndex]);
+    for(usize bindingIndex = 0u; bindingIndex < taskSubmissionHookCount; ++bindingIndex){
+        const GpuTaskGraphTaskSubmissionHook& binding = taskSubmissionHooks[bindingIndex];
+        if(
+            !binding.hook.valid()
+            || !graph.validTask(binding.task)
+            || !compiledGraph.findTask(binding.task)
+        )
+            return false;
+
+        for(usize previousBindingIndex = 0u; previousBindingIndex < bindingIndex; ++previousBindingIndex){
+            if(taskSubmissionHooks[previousBindingIndex].task == binding.task)
+                return false;
+        }
+
+        const GpuSubmissionPacketId packet = compiledGraph.packetForTask(binding.task);
+        if(
+            !packet.valid()
+            || packet.index < range.first.index
+            || static_cast<usize>(packet.index) >= static_cast<usize>(range.first.index) + range.packetCount
+        )
+            return false;
+
+        for(const GpuTaskGraphPacketSubmissionHook& existing : packetSubmissionHooks){
+            // A native submission can emit one unambiguous one-shot signal. Do not silently choose a packet
+            // compatibility binding over a semantic target, or two merged semantic targets over each other.
+            if(existing.packet == packet)
+                return false;
+        }
+        packetSubmissionHooks.push_back(GpuTaskGraphPacketSubmissionHook{
+            .packet = packet,
+            .hook = binding.hook,
+        });
+    }
+
     return submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -1639,8 +1681,8 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderFromTasks(
         scratchArena,
         outFailedPacket,
         acceptedCallback,
-        submissionHooks,
-        submissionHookCount,
+        packetSubmissionHooks.data(),
+        packetSubmissionHooks.size(),
         taskAcceptedCallbacks,
         taskAcceptedCallbackCount
     );
@@ -1664,7 +1706,9 @@ bool GpuTaskGraphSubmitter::submitTaskRangeInCompileOrderFromTasks(
     const GpuTaskGraphPacketSubmissionHook* const submissionHooks,
     const usize submissionHookCount,
     const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
-    const usize taskAcceptedCallbackCount
+    const usize taskAcceptedCallbackCount,
+    const GpuTaskGraphTaskSubmissionHook* const taskSubmissionHooks,
+    const usize taskSubmissionHookCount
 )const{
     return submitPacketRangeInCompileOrderFromTasks(
         graph,
@@ -1682,7 +1726,9 @@ bool GpuTaskGraphSubmitter::submitTaskRangeInCompileOrderFromTasks(
         submissionHooks,
         submissionHookCount,
         taskAcceptedCallbacks,
-        taskAcceptedCallbackCount
+        taskAcceptedCallbackCount,
+        taskSubmissionHooks,
+        taskSubmissionHookCount
     );
 }
 

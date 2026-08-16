@@ -3264,9 +3264,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? m_graphics.claimFramePresentationSignal()
             : Core::QueueSubmissionPreSubmitHook{}
         ;
-        const Core::GpuTaskGraphPacketSubmissionHook terminalPresentationSubmissionHooks[] = {
-            Core::GpuTaskGraphPacketSubmissionHook{
-                .packet = terminalPresentationPacket,
+        const Core::GpuTaskGraphTaskSubmissionHook terminalPresentationSubmissionHooks[] = {
+            Core::GpuTaskGraphTaskSubmissionHook{
+                .task = terminalPresentationTask,
                 .hook = framePresentationSignal,
             },
         };
@@ -3286,6 +3286,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 presentScratchArena,
                 nullptr,
                 nullptr,
+                nullptr,
+                0u,
+                nullptr,
+                0u,
                 framePresentationSignal.valid() ? terminalPresentationSubmissionHooks : nullptr,
                 framePresentationSignal.valid() ? LengthOf(terminalPresentationSubmissionHooks) : 0u
             )

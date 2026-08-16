@@ -16586,6 +16586,101 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     ));
     EXPECT_EQ(hookObserver.invocationCount, 0u);
 
+    const GpuTaskGraphTaskSubmissionHook outsideRangeTaskSubmissionHook[] = {
+        GpuTaskGraphTaskSubmissionHook{
+            .task = writer,
+            .hook = rejectedHook,
+        },
+    };
+    EXPECT_FALSE(submitter.submitTaskRangeInCompileOrderFromTasks(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        reader,
+        reader,
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena,
+        nullptr,
+        &acceptedCallback,
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        outsideRangeTaskSubmissionHook,
+        LengthOf(outsideRangeTaskSubmissionHook)
+    ));
+    EXPECT_EQ(hookObserver.invocationCount, 0u);
+
+    const GpuTaskGraphTaskSubmissionHook readerTaskSubmissionHook[] = {
+        GpuTaskGraphTaskSubmissionHook{
+            .task = reader,
+            .hook = rejectedHook,
+        },
+    };
+    const GpuTaskGraphTaskSubmissionHook duplicateTaskSubmissionHooks[] = {
+        readerTaskSubmissionHook[0],
+        readerTaskSubmissionHook[0],
+    };
+    EXPECT_FALSE(submitter.submitTaskRangeInCompileOrderFromTasks(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        reader,
+        reader,
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena,
+        nullptr,
+        &acceptedCallback,
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        duplicateTaskSubmissionHooks,
+        LengthOf(duplicateTaskSubmissionHooks)
+    ));
+    EXPECT_EQ(hookObserver.invocationCount, 0u);
+
+    // The target task resolves to the reader's exact native packet. The semantic binding must therefore conflict
+    // with the packet compatibility binding before either hook reaches native submission. The headless fixture
+    // cannot safely manufacture a binary semaphore, so this pre-submit validation is the native-safe proof.
+    const GpuTaskGraphPacketSubmissionHook readerPacketSubmissionHook[] = {
+        GpuTaskGraphPacketSubmissionHook{
+            .packet = readerPacket,
+            .hook = rejectedHook,
+        },
+    };
+    EXPECT_FALSE(submitter.submitTaskRangeInCompileOrderFromTasks(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        reader,
+        reader,
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena,
+        nullptr,
+        &acceptedCallback,
+        readerPacketSubmissionHook,
+        LengthOf(readerPacketSubmissionHook),
+        nullptr,
+        0u,
+        readerTaskSubmissionHook,
+        LengthOf(readerTaskSubmissionHook)
+    ));
+    EXPECT_EQ(hookObserver.invocationCount, 0u);
+    EXPECT_FALSE(transaction.packetToken(readerPacket).valid());
+
     acceptanceObserver.continueSubmission = true;
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,

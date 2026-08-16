@@ -3357,9 +3357,9 @@ struct AvboitExtinctionComputeEmulationGraphTask{
 };
 
 
-// Two regular Extinction draws targeting one persistent generated-vertex buffer must retain the native
-// D(A) -> R(A) -> D(B) -> R(B) order.  Each phase is graph-visible so the compiler lowers the alternating
-// UAV/VertexBuffer states before the common typed Integration tail consumes the packed Extinction outputs.
+// Two or three regular Extinction draws targeting one persistent generated-vertex buffer must retain their native
+// D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C)] order. Each phase is graph-visible so the compiler lowers the
+// alternating UAV/VertexBuffer states before the common typed Integration tail consumes the packed outputs.
 struct AvboitExtinctionSharedComputeEmulationGraphTask{
     enum class Phase : u8{
         Generate,
@@ -14356,7 +14356,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
                 && extinctionMaterialSampledTexturesCollected
                 && extinctionSharedComputeEmulationPlan.capture(m_meshSystem, extinctionDrawItems.regular)
-                && extinctionSharedComputeEmulationPlan.drawCount == 2u
+                && extinctionSharedComputeEmulationPlan.drawCount >= 2u
+                && extinctionSharedComputeEmulationPlan.drawCount <= 3u
             ;
             if(extinctionSharedComputeEmulationPlanCaptured){
                 extinctionSharedComputeEmulationInstanceCount = extinctionInstanceData.size();
@@ -14818,15 +14819,25 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Name("render.avboit.extinction.shared_compute_emulation_raster_a"),
             Name("render.avboit.extinction.shared_compute_emulation_generate_b"),
             Name("render.avboit.extinction.shared_compute_emulation_raster_b"),
+            Name("render.avboit.extinction.shared_compute_emulation_generate_c"),
+            Name("render.avboit.extinction.shared_compute_emulation_raster_c"),
         };
         const AStringView extinctionSharedComputeEmulationPhaseMarkers[] = {
             "AVBOIT Extinction Shared Compute Emulation Generate A",
             "AVBOIT Extinction Shared Compute Emulation Raster A",
             "AVBOIT Extinction Shared Compute Emulation Generate B",
             "AVBOIT Extinction Shared Compute Emulation Raster B",
+            "AVBOIT Extinction Shared Compute Emulation Generate C",
+            "AVBOIT Extinction Shared Compute Emulation Raster C",
         };
-        constexpr usize extinctionSharedComputeEmulationPhaseCount = 4u;
-        NWB_ASSERT(extinctionSharedComputeEmulationPlan.drawCount == 2u);
+        const usize extinctionSharedComputeEmulationPhaseCount =
+            extinctionSharedComputeEmulationPlan.drawCount * 2u
+        ;
+        NWB_ASSERT(
+            extinctionSharedComputeEmulationPlan.drawCount == 2u
+            || extinctionSharedComputeEmulationPlan.drawCount == 3u
+        );
+        NWB_ASSERT(extinctionSharedComputeEmulationPhaseCount <= LengthOf(extinctionSharedComputeEmulationPhaseIdentities));
         Core::GpuTaskId extinctionSharedComputeEmulationDependency = extinctionDependency;
         for(usize phaseIndex = 0u;
             phaseIndex < extinctionSharedComputeEmulationPhaseCount;

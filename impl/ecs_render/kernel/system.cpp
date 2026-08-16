@@ -2133,7 +2133,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return true;
         }
         if(
-            phaseCount != 4u
+            (phaseCount != 4u && phaseCount != 6u)
             || m_deferredAvboitExtinctionComputeEmulationTask.valid()
             || !m_deferredAvboitExtinctionStreamTask.valid()
             || !avboitExtinctionSharedComputeEmulationPacket.valid()
@@ -2178,6 +2178,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     task
                 )
             )
+                return false;
+        }
+        for(usize phaseIndex = phaseCount;
+            phaseIndex < LengthOf(m_deferredAvboitExtinctionSharedComputeEmulationTasks);
+            ++phaseIndex
+        ){
+            if(m_deferredAvboitExtinctionSharedComputeEmulationTasks[phaseIndex].valid())
                 return false;
         }
         const Core::GpuSubmissionPacket& packet = m_deferredLightingCompiledGraph.packet(

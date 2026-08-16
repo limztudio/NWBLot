@@ -2970,7 +2970,6 @@ struct AvboitOccupancyGraphTask{
         const CsgFrameState* csgFrameState = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool hasTransparentRenderers = false;
-        bool splitStages = false;
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot occupancySnapshot;
         bool occupancyPhasePrepared = false;
         bool occupancyStreamsUploaded = false;
@@ -3234,40 +3233,25 @@ struct AvboitExtinctionGraphTask{
             preparedExtinctionMaterialTypedByteCount = payload.extinctionSnapshot.materialTypedByteCount;
         }
         if(payload.hasTransparentRenderers){
-            if(payload.splitStages){
-                payload.avboitSystem->renderAvboitExtinctionPass(
-                    commandList,
-                    payload.targets->avboit,
-                    *payload.csgFrameState,
-                    preparedExtinctionDrawItems,
-                    preparedExtinctionCsgFrameData,
-                    preparedExtinctionInstanceCount,
-                    preparedExtinctionMaterialTypedByteCount,
-                    payload.extinctionCsgIntervalSampleImageStatesGraphOwned,
-                    payload.extinctionCsgClipBufferStatesGraphOwned,
-                    payload.extinctionMaterialFrameStatesGraphOwned,
-                    payload.extinctionMaterialGeometryStatesGraphOwned,
-                    payload.extinctionComputeEmulationOutputStatesGraphOwned,
-                    payload.extinctionComputeEmulationTiming
-                );
-            }
-            else{
-                payload.avboitSystem->renderAvboitPostOccupancyPreAccumulationPasses(
-                    commandList,
-                    *payload.targets,
-                    *payload.csgFrameState,
-                    preparedExtinctionDrawItems,
-                    preparedExtinctionCsgFrameData,
-                    preparedExtinctionInstanceCount,
-                    preparedExtinctionMaterialTypedByteCount,
-                    payload.extinctionCsgIntervalSampleImageStatesGraphOwned,
-                    payload.extinctionCsgClipBufferStatesGraphOwned,
-                    payload.extinctionMaterialFrameStatesGraphOwned,
-                    payload.extinctionMaterialGeometryStatesGraphOwned,
-                    payload.extinctionComputeEmulationOutputStatesGraphOwned,
-                    payload.extinctionComputeEmulationTiming
-                );
-            }
+            payload.avboitSystem->renderAvboitExtinctionPass(
+                commandList,
+                payload.targets->avboit,
+                *payload.csgFrameState,
+                preparedExtinctionDrawItems,
+                preparedExtinctionCsgFrameData,
+                preparedExtinctionInstanceCount,
+                preparedExtinctionMaterialTypedByteCount,
+                payload.extinctionCsgIntervalSampleImageStatesGraphOwned,
+                payload.extinctionCsgClipBufferStatesGraphOwned,
+                payload.extinctionMaterialFrameStatesGraphOwned,
+                payload.extinctionMaterialGeometryStatesGraphOwned,
+                payload.extinctionComputeEmulationOutputStatesGraphOwned,
+                payload.extinctionComputeEmulationTiming
+            );
+            // The unsplit graph recorded Depth Warp in its preceding packet-local task, leaving this callback's
+            // producer/raster pair contiguous while retaining the native Extinction -> Integration order.
+            if(!payload.splitStages)
+                payload.avboitSystem->dispatchAvboitIntegration(commandList, payload.targets->avboit);
         }
         return true;
     }
@@ -12502,7 +12486,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitOccupancyPayload.csgFrameState = &csgFrameState;
     avboitOccupancyPayload.timingTicket = &avboitPreTimingTicket;
     avboitOccupancyPayload.hasTransparentRenderers = hasTransparentRenderers;
-    avboitOccupancyPayload.splitStages = splitAvboitStages;
 
     Core::GpuTaskId occupancyUploadTask = avboitIntervalCompletionTask;
     bool occupancyCsgStreamsUploaded = false;
@@ -13221,6 +13204,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitComputeScheduling.cost = Core::GpuTaskCostHint::Medium;
     avboitComputeScheduling.forceSubmissionBoundary = true;
     avboitComputeScheduling.allowPacketMerge = false;
+    Core::GpuTaskId avboitDepthWarpCompletionTask = m_deferredAvboitOccupancyTask;
     if(splitAvboitStages){
         const Core::GpuTaskResourceUse depthWarpResourceUses[] = {
             ReadUse(avboitCoverage),
@@ -13250,6 +13234,47 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
             return;
         }
+        avboitDepthWarpCompletionTask = m_deferredAvboitDepthWarpTask;
+    }
+    else if(hasTransparentRenderers){
+        // Keep Depth Warp as a distinct Graphics task even on the one-packet route. Occupancy writes coverage via
+        // UAV descriptors, and this explicit successor lets the compiler lower the required same-UAV ordering
+        // before Depth Warp reads it. The following immutable Extinction upload can then feed a producer directly
+        // into its raster consumer without an unrelated callback in between.
+        const Core::GpuTaskResourceUse unsplitDepthWarpResourceUses[] = {
+            ReadUse(avboitCoverage, Core::ResourceStates::UnorderedAccess),
+            ReadWriteUse(avboitDepthWarp, Core::ResourceStates::UnorderedAccess),
+            ReadWriteUse(avboitControl, Core::ResourceStates::UnorderedAccess),
+            ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+        };
+        Core::GpuTaskSchedulingHint unsplitDepthWarpScheduling;
+        unsplitDepthWarpScheduling.cost = Core::GpuTaskCostHint::Medium;
+        unsplitDepthWarpScheduling.forceSubmissionBoundary = false;
+        unsplitDepthWarpScheduling.allowPacketMerge = true;
+        unsplitDepthWarpScheduling.mergeWithPrevious = true;
+        unsplitDepthWarpScheduling.allowMergeAcrossConsumerFrontier = true;
+        const Core::GpuTaskId occupancyDependency[] = { m_deferredAvboitOccupancyTask };
+        Core::GpuTaskDesc unsplitDepthWarpDesc;
+        unsplitDepthWarpDesc
+            .setIdentity(Name("render.avboit.depth_warp"))
+            .setMarkerLabel("AVBOIT Depth Warp")
+            .setQueue(GraphicsComputeQueueRequest())
+            .setScheduling(unsplitDepthWarpScheduling)
+            .setDependencies(occupancyDependency, LengthOf(occupancyDependency))
+            .setResourceUses(unsplitDepthWarpResourceUses, LengthOf(unsplitDepthWarpResourceUses))
+        ;
+        avboitDepthWarpCompletionTask = m_deferredLightingTaskGraph.addTask<AvboitDepthWarpGraphTask>(
+            unsplitDepthWarpDesc,
+            AvboitDepthWarpGraphTask::Payload{
+                .avboitSystem = &m_avboitSystem,
+                .targets = &deferredTargets.avboit,
+                .timingTicket = &avboitPreTimingTicket,
+            }
+        );
+        if(!avboitDepthWarpCompletionTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare one-packet AVBOIT depth-warp graph task"));
+            return;
+        }
     }
 
     if(hasTransparentRenderers){
@@ -13267,10 +13292,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitExtinctionPayload.hasTransparentRenderers = hasTransparentRenderers;
     avboitExtinctionPayload.splitStages = splitAvboitStages;
 
-    Core::GpuTaskId extinctionUploadTask = splitAvboitStages
-        ? m_deferredAvboitDepthWarpTask
-        : m_deferredAvboitOccupancyTask
-    ;
+    Core::GpuTaskId extinctionUploadTask = avboitDepthWarpCompletionTask;
     bool extinctionStreamsUploaded = false;
     bool extinctionCsgStreamsUploaded = false;
     bool extinctionComputeEmulationPlanCaptured = false;
@@ -13547,9 +13569,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             avboitExtinctionPayload.extinctionPhasePrepared = true;
             extinctionStreamsUploaded = true;
             // This is intentionally available only after the final immutable Extinction upload. The direct
-            // AVBOIT callback still owns shared outputs, CSG compute, unsplit stages, and any late mismatch.
-            extinctionComputeEmulationPlanCaptured = splitAvboitStages
-                && extinctionDrawItems.csg.computeDrawItems.empty()
+            // AVBOIT callback still owns shared outputs, CSG compute, and any late mismatch.
+            extinctionComputeEmulationPlanCaptured = extinctionDrawItems.csg.computeDrawItems.empty()
                 && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
                 && extinctionMaterialSampledTexturesCollected
                 && avboitExtinctionComputeEmulationPayload.plan.capture(
@@ -13642,17 +13663,16 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         extinctionResourceUses.push_back(ReadWriteUse(avboitExtinctionOverflow, Core::ResourceStates::UnorderedAccess));
     }
     else{
-        // This tail owns depth warp, extinction, and integration on the one Graphics AVBOIT packet. The following
-        // accumulation task owns its separately frozen raster stream and render-target transition.
+        // A preceding packet-local Graphics task owns Depth Warp. This tail keeps Extinction immediately after its
+        // optional producer, then records Integration before the separately frozen Accumulation stream.
         extinctionResourceUses.push_back(ReadUse(albedo));
         extinctionResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource, true));
         extinctionResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
         extinctionResourceUses.push_back(ReadUse(depth));
         extinctionResourceUses.push_back(ReadWriteUse(avboitLowRaster, Core::ResourceStates::RenderTarget));
         extinctionResourceUses.push_back(ReadWriteUse(avboitTransmittance, Core::ResourceStates::UnorderedAccess));
-        extinctionResourceUses.push_back(ReadWriteUse(avboitCoverage, Core::ResourceStates::UnorderedAccess));
-        extinctionResourceUses.push_back(ReadWriteUse(avboitDepthWarp, Core::ResourceStates::UnorderedAccess));
-        extinctionResourceUses.push_back(ReadWriteUse(avboitControl, Core::ResourceStates::UnorderedAccess));
+        extinctionResourceUses.push_back(ReadUse(avboitDepthWarp));
+        extinctionResourceUses.push_back(ReadUse(avboitControl));
         extinctionResourceUses.push_back(ReadWriteUse(avboitExtinction, Core::ResourceStates::UnorderedAccess));
         extinctionResourceUses.push_back(ReadWriteUse(avboitExtinctionOverflow, Core::ResourceStates::UnorderedAccess));
     }

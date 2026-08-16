@@ -1787,14 +1787,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         return false;
     }();
-    // A split Extinction measurement spans the generator and raster consumer. Require their exact packet order so
-    // the graph, rather than a callback-local transition, owns the output UAV-to-VertexBuffer handoff.
+    // Extinction's measurement spans the generator and raster consumer. Require their exact packet order so the
+    // graph, rather than a callback-local transition, owns the output UAV-to-VertexBuffer handoff on both routes.
     const bool avboitExtinctionComputeEmulationMerged = [&](){
         if(!m_deferredAvboitExtinctionComputeEmulationTask.valid())
             return true;
         if(
-            !avboitUsesAsyncCompute
-            || !m_deferredAvboitExtinctionStreamTask.valid()
+            !m_deferredAvboitExtinctionStreamTask.valid()
             || !avboitExtinctionComputeEmulationPacket.valid()
             || !avboitExtinctionPacket.valid()
             || !avboitExtinctionComputeEmulationQueue
@@ -1809,6 +1808,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredAvboitExtinctionStreamTask,
                 m_deferredAvboitExtinctionComputeEmulationTask
             )
+            || (!avboitUsesAsyncCompute && (
+                !avboitPrePacket.valid()
+                || !avboitPreQueue
+                || !avboitOccupancyQueue
+                || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
+                || avboitOccupancyQueue->queueClass != Core::CommandQueue::Graphics
+                || !m_deferredLightingCompiledGraph.tasksSharePacket(
+                    m_deferredAvboitPreTask,
+                    m_deferredAvboitExtinctionComputeEmulationTask
+                )
+                || !m_deferredLightingCompiledGraph.tasksSharePacket(
+                    m_deferredAvboitOccupancyTask,
+                    m_deferredAvboitExtinctionComputeEmulationTask
+                )
+            ))
         )
             return false;
         const Core::GpuSubmissionPacket& packet = m_deferredLightingCompiledGraph.packet(
@@ -1825,16 +1839,25 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 || packetTasks[taskIndex + 1u] != m_deferredAvboitExtinctionTask
             )
                 continue;
-            if(!m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitExtinctionStreamTask,
-                m_deferredAvboitExtinctionComputeEmulationTask
-            ))
-                return true;
-            for(usize streamTaskIndex = 0u; streamTaskIndex < taskIndex; ++streamTaskIndex){
-                if(packetTasks[streamTaskIndex] == m_deferredAvboitExtinctionStreamTask)
+            const auto hasPrecedingTask = [&](const Core::GpuTaskId task){
+                if(!task.valid())
                     return true;
-            }
-            return false;
+                if(!m_deferredLightingCompiledGraph.tasksSharePacket(
+                    task,
+                    m_deferredAvboitExtinctionComputeEmulationTask
+                ))
+                    return true;
+                for(usize predecessorIndex = 0u; predecessorIndex < taskIndex; ++predecessorIndex){
+                    if(packetTasks[predecessorIndex] == task)
+                        return true;
+                }
+                return false;
+            };
+            return hasPrecedingTask(m_deferredAvboitExtinctionStreamTask)
+                && (avboitUsesAsyncCompute || (
+                    hasPrecedingTask(m_deferredAvboitPreTask)
+                    && hasPrecedingTask(m_deferredAvboitOccupancyTask)
+                ));
         }
         return false;
     }();

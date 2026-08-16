@@ -4962,6 +4962,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     m_deferredShadowVisibilityAdaptiveStatsClearTask = {};
     m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
     m_deferredShadowVisibilityAdaptiveStatsReadbackTask = {};
+    m_deferredShadowVisibilityAllLitClearTask = {};
     m_deferredShadowVisibilityTask = {};
     if(
         !deferredTargets.valid()
@@ -5917,20 +5918,48 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         }
     }
 
+    // Preparedness is established while Shadow Prepare records, after this graph is declared.  The normal
+    // monolithic path therefore begins with an unconditional all-lit clear: real shadow producers overwrite it,
+    // while a missing producer retains the same white fallback without a callback-local native state bridge.
+    // Keep this typed Transfer primitive on the same selected Compute/Graphics packet as Shadow Visibility.
+    Core::GpuTaskSchedulingHint allLitClearScheduling;
+    allLitClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
+    allLitClearScheduling.forceSubmissionBoundary = false;
+    allLitClearScheduling.allowPacketMerge = true;
+    allLitClearScheduling.mergeWithPrevious = adaptivePrimitivePrecedesVisibility;
+    Core::GpuTaskDesc allLitClearDesc;
+    allLitClearDesc
+        .setIdentity(Name("render.shadow_visibility.all_lit_clear"))
+        .setMarkerLabel("Shadow Visibility All-Lit Clear")
+        .setQueue(ComputeTransferPacketQueueRequest())
+        .setScheduling(allLitClearScheduling)
+        .setDependencies(&shadowVisibilityDependency, 1u)
+    ;
+    m_deferredShadowVisibilityAllLitClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
+        allLitClearDesc,
+        Core::GpuClearTextureTaskDesc{
+            .destination = shadowVisibility,
+            .subresources = ECSRenderDetail::s_ShadowVisibilitySubresources,
+            .valueType = Core::GpuClearTextureTaskValueType::Float,
+            .floatValue = Core::Color(1.f, 1.f, 1.f, 1.f),
+        }
+    );
+    if(!m_deferredShadowVisibilityAllLitClearTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned all-lit shadow-visibility clear"));
+        return false;
+    }
+    shadowVisibilityDependency = m_deferredShadowVisibilityAllLitClearTask;
+
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
-    scheduling.forceSubmissionBoundary = !graphOwnedAdaptivePrimitives.enabled;
-    scheduling.allowPacketMerge = graphOwnedAdaptivePrimitives.enabled;
-    scheduling.mergeWithPrevious = graphOwnedAdaptivePrimitives.enabled;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.shadow_visibility"))
         .setMarkerLabel("Shadow Visibility")
-        .setQueue(
-            graphOwnedAdaptivePrimitives.enabled
-                ? ComputeTransferPacketQueueRequest()
-                : ComputeQueueRequest()
-        )
+        .setQueue(ComputeTransferPacketQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(&shadowVisibilityDependency, 1u)
         .setResourceUses(resourceUses.data(), resourceUses.size())
@@ -5946,6 +5975,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         &m_preparedShadowVisibilityReady,
         hardwareShadowSupported,
         timingTicket,
+        true,
         true,
         graphOwnedAdaptivePrimitives
     );
@@ -7718,6 +7748,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredShadowVisibilityAdaptiveStatsClearTask = {};
     m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
     m_deferredShadowVisibilityAdaptiveStatsReadbackTask = {};
+    m_deferredShadowVisibilityAllLitClearTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};

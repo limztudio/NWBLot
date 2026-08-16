@@ -17410,6 +17410,298 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAdaptiveShadowPrimitiveChainReco
 }
 
 
+// The monolithic Shadow Visibility callback cannot know during declaration whether Shadow Prepare will produce a
+// route. Its preceding typed white clear therefore supplies the normal all-lit fallback, while the getter-only
+// callback observes the compiler-owned CopyDest -> UAV handoff and a later lighting callback observes UAV -> SRV.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityAllLitClearRecordsBeforeMonolithicCallback){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const BufferHandle constants = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setIsConstantBuffer(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    constexpr u32 shadowLayerCount = 3u;
+    const TextureHandle shadowVisibility = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setArraySize(shadowLayerCount)
+            .setDimension(TextureDimension::Texture2DArray)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    ASSERT_NE(constants.get(), nullptr);
+    ASSERT_NE(shadowVisibility.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId constantsResource = graph.importBuffer(
+        constants,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/monolithic_shadow_visibility_constants"))
+            .setMarkerLabel("Monolithic Shadow Visibility Constants")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId shadowVisibilityResource = graph.importTexture(
+        shadowVisibility,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/monolithic_shadow_visibility"))
+            .setMarkerLabel("Monolithic Shadow Visibility")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(constantsResource.valid());
+    ASSERT_TRUE(shadowVisibilityResource.valid());
+
+    const GpuQueueRequest computeTransferQueue{
+        static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        GpuQueuePreference::Compute,
+        true,
+        false,
+    };
+    const TextureSubresourceSet shadowSubresources(0u, 1u, 0u, shadowLayerCount);
+    GpuTaskSchedulingHint clearScheduling;
+    clearScheduling.cost = GpuTaskCostHint::Tiny;
+    clearScheduling.allowPacketMerge = true;
+    GpuTaskDesc clearDesc;
+    clearDesc
+        .setIdentity(Name("tests/descriptor_buffer/monolithic_shadow_visibility_all_lit_clear"))
+        .setMarkerLabel("Shadow Visibility All-Lit Clear")
+        .setQueue(computeTransferQueue)
+        .setScheduling(clearScheduling)
+    ;
+    const GpuTaskId allLitClear = graph.addClearTextureTask(
+        clearDesc,
+        GpuClearTextureTaskDesc{
+            .destination = shadowVisibilityResource,
+            .subresources = shadowSubresources,
+            .valueType = GpuClearTextureTaskValueType::Float,
+            .floatValue = Color(1.f, 1.f, 1.f, 1.f),
+        }
+    );
+    ASSERT_TRUE(allLitClear.valid());
+
+    const GpuTaskResourceUse shadowUses[] = {
+        {
+            .resource = constantsResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = shadowVisibilityResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    GpuTaskSchedulingHint shadowScheduling;
+    shadowScheduling.cost = GpuTaskCostHint::Large;
+    shadowScheduling.allowPacketMerge = true;
+    shadowScheduling.mergeWithPrevious = true;
+    GpuTaskDesc shadowDesc;
+    shadowDesc
+        .setIdentity(Name("tests/descriptor_buffer/monolithic_shadow_visibility"))
+        .setMarkerLabel("Monolithic Shadow Visibility")
+        .setQueue(computeTransferQueue)
+        .setScheduling(shadowScheduling)
+        .setDependencies(&allLitClear, 1u)
+        .setResourceUses(shadowUses, LengthOf(shadowUses))
+    ;
+    bool shadowRecorded = false;
+    const GpuTaskId shadowTask = graph.addTask<NativePacketPrefixTask>(
+        shadowDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = constants.get(),
+            .expectedState = ResourceStates::ConstantBuffer,
+            .texture = shadowVisibility.get(),
+            .expectedTextureState = ResourceStates::UnorderedAccess,
+            .recorded = &shadowRecorded,
+        }
+    );
+    ASSERT_TRUE(shadowTask.valid());
+
+    const GpuTaskResourceUse lightingUses[] = {
+        {
+            .resource = constantsResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        {
+            .resource = shadowVisibilityResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskSchedulingHint lightingScheduling;
+    lightingScheduling.cost = GpuTaskCostHint::Large;
+    lightingScheduling.forceSubmissionBoundary = true;
+    lightingScheduling.allowPacketMerge = false;
+    GpuTaskDesc lightingDesc;
+    lightingDesc
+        .setIdentity(Name("tests/descriptor_buffer/monolithic_shadow_visibility_lighting"))
+        .setMarkerLabel("Monolithic Shadow Lighting")
+        .setQueue(computeTransferQueue)
+        .setScheduling(lightingScheduling)
+        .setDependencies(&shadowTask, 1u)
+        .setResourceUses(lightingUses, LengthOf(lightingUses))
+    ;
+    bool lightingRecorded = false;
+    const GpuTaskId lightingTask = graph.addTask<NativePacketPrefixTask>(
+        lightingDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = constants.get(),
+            .expectedState = ResourceStates::ConstantBuffer,
+            .texture = shadowVisibility.get(),
+            .expectedTextureState = ResourceStates::ShaderResource,
+            .recorded = &lightingRecorded,
+        }
+    );
+    ASSERT_TRUE(lightingTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/monolithic_shadow_all_lit_clear_scratch"));
+    GpuTaskGraphCompileOptions compileOptions;
+    compileOptions.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions));
+
+    const GpuSubmissionPacketId clearPacket = compiledGraph.packetForTask(allLitClear);
+    const GpuSubmissionPacketId shadowPacket = compiledGraph.packetForTask(shadowTask);
+    const GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lightingTask);
+    ASSERT_TRUE(clearPacket.valid());
+    ASSERT_TRUE(shadowPacket.valid());
+    ASSERT_TRUE(lightingPacket.valid());
+    EXPECT_EQ(clearPacket, shadowPacket);
+    EXPECT_NE(lightingPacket, shadowPacket);
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    ASSERT_EQ(compiledGraph.packet(shadowPacket).taskCount, 2u);
+    const GpuTaskId* const shadowPacketTasks = compiledGraph.packetTasks(shadowPacket);
+    ASSERT_NE(shadowPacketTasks, nullptr);
+    EXPECT_EQ(shadowPacketTasks[0u], allLitClear);
+    EXPECT_EQ(shadowPacketTasks[1u], shadowTask);
+
+    const auto hasTextureTransition = [&](
+        const GpuTaskId task,
+        const ResourceStates::Mask before,
+        const ResourceStates::Mask after
+    ){
+        const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        if(!compiledTask)
+            return false;
+        const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        if(!barriers)
+            return false;
+        for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == shadowVisibilityResource
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTextureTransition(allLitClear, ResourceStates::Common, ResourceStates::CopyDest));
+    EXPECT_TRUE(hasTextureTransition(shadowTask, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTextureTransition(lightingTask, ResourceStates::UnorderedAccess, ResourceStates::ShaderResource));
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    GpuCommandIrCapture commandIrCapture(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        nullptr,
+        &commandIrCapture
+    ));
+    EXPECT_TRUE(shadowRecorded);
+    EXPECT_TRUE(lightingRecorded);
+    ASSERT_EQ(commandIrCapture.recordCount(), 1u);
+    const GpuCommandIrBuiltinTaskRecord* const clearCapture = commandIrCapture.recordAt(0u);
+    ASSERT_NE(clearCapture, nullptr);
+    EXPECT_EQ(clearCapture->opcode, GpuCommandIrOpcode::ClearTexture);
+    EXPECT_EQ(clearCapture->task, allLitClear);
+    EXPECT_EQ(clearCapture->packet, shadowPacket);
+    EXPECT_EQ(clearCapture->destination, shadowVisibilityResource);
+    EXPECT_EQ(clearCapture->destinationSubresources, shadowSubresources);
+    EXPECT_EQ(clearCapture->clearTextureValueType, GpuClearTextureTaskValueType::Float);
+    EXPECT_EQ(clearCapture->floatClearValue, Color(1.f, 1.f, 1.f, 1.f));
+
+    const CommandListResourceStateHandoff* const shadowFinalState = recordedGraph.packetFinalStateSeed(shadowPacket);
+    const CommandListResourceStateHandoff* const lightingFinalState = recordedGraph.packetFinalStateSeed(lightingPacket);
+    ASSERT_NE(shadowFinalState, nullptr);
+    ASSERT_NE(lightingFinalState, nullptr);
+    const CommandListHandle stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(shadowFinalState);
+    EXPECT_EQ(
+        stateProbe->getTextureSubresourceState(shadowVisibility.get(), shadowLayerCount - 1u, 0u),
+        ResourceStates::UnorderedAccess
+    );
+    stateProbe->close();
+    stateProbe->open(lightingFinalState);
+    EXPECT_EQ(
+        stateProbe->getTextureSubresourceState(shadowVisibility.get(), shadowLayerCount - 1u, 0u),
+        ResourceStates::ShaderResource
+    );
+    stateProbe->close();
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken shadowToken = transaction.taskToken(compiledGraph, shadowTask);
+    const QueueSubmissionToken lightingToken = transaction.taskToken(compiledGraph, lightingTask);
+    ASSERT_TRUE(shadowToken.valid());
+    ASSERT_TRUE(lightingToken.valid());
+    EXPECT_NE(shadowToken.value, lightingToken.value);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTextureHooksDiscardOnPacketRecordFailure){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto texture = device.createTexture(

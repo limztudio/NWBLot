@@ -6967,6 +6967,205 @@ TEST(GpuTaskGraph, MergesGraphOwnedAdaptiveShadowPrimitivesIntoShadowVisibilityP
 }
 
 
+// The retained monolithic Shadow Visibility callback receives an unconditional typed white clear because its
+// producer readiness is only known while the earlier Shadow Prepare packet records.  Keep the clear and callback
+// in one effects packet so the compiler, rather than the callback, lowers CopyDest -> UAV before a later lighting
+// read transitions the output to ShaderResource.
+TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPacket){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    constexpr Graphics::ResourceQueueSharing::Mask queueSharing =
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    ;
+    const Graphics::GpuGraphResourceId shadowVisibility = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/monolithic_shadow_visibility_all_lit"),
+        "Monolithic Shadow Visibility",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    ASSERT_TRUE(shadowVisibility.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeTransferRequest{
+        QueueCapabilities(
+            Graphics::GpuQueueCapability::Compute,
+            Graphics::GpuQueueCapability::Transfer
+        ),
+        Graphics::GpuQueuePreference::Compute,
+        true,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint prefixScheduling;
+    prefixScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    prefixScheduling.forceSubmissionBoundary = true;
+    prefixScheduling.allowPacketMerge = false;
+    Graphics::GpuTaskDesc prefixDesc;
+    prefixDesc
+        .setIdentity(Name("tests/task_graph/monolithic_shadow_visibility_prefix"))
+        .setMarkerLabel("Monolithic Shadow Prefix")
+        .setQueue(graphicsRequest)
+        .setScheduling(prefixScheduling)
+    ;
+    const Graphics::GpuTaskId prefix = graph.addTask(prefixDesc);
+    ASSERT_TRUE(prefix.valid());
+
+    Graphics::GpuTaskSchedulingHint clearScheduling;
+    clearScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    clearScheduling.allowPacketMerge = true;
+    const Graphics::GpuTaskResourceUse allLitClearUses[] = {
+        {
+            .resource = shadowVisibility,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc allLitClearDesc;
+    allLitClearDesc
+        .setIdentity(Name("tests/task_graph/monolithic_shadow_visibility_all_lit_clear"))
+        .setMarkerLabel("Shadow Visibility All-Lit Clear")
+        .setQueue(computeTransferRequest)
+        .setScheduling(clearScheduling)
+        .setDependencies(&prefix, 1u)
+        .setResourceUses(allLitClearUses, LengthOf(allLitClearUses))
+    ;
+    const Graphics::GpuTaskId allLitClear = graph.addTask(allLitClearDesc);
+    ASSERT_TRUE(allLitClear.valid());
+
+    Graphics::GpuTaskSchedulingHint shadowScheduling;
+    shadowScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    shadowScheduling.allowPacketMerge = true;
+    shadowScheduling.mergeWithPrevious = true;
+    const Graphics::GpuTaskResourceUse shadowUses[] = {
+        {
+            .resource = shadowVisibility,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    Graphics::GpuTaskDesc shadowDesc;
+    shadowDesc
+        .setIdentity(Name("tests/task_graph/monolithic_shadow_visibility"))
+        .setMarkerLabel("Shadow Visibility")
+        .setQueue(computeTransferRequest)
+        .setScheduling(shadowScheduling)
+        .setDependencies(&allLitClear, 1u)
+        .setResourceUses(shadowUses, LengthOf(shadowUses))
+    ;
+    const Graphics::GpuTaskId shadow = graph.addTask(shadowDesc);
+    ASSERT_TRUE(shadow.valid());
+
+    Graphics::GpuTaskSchedulingHint lightingScheduling = prefixScheduling;
+    const Graphics::GpuTaskResourceUse lightingUses[] = {
+        {
+            .resource = shadowVisibility,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskDesc lightingDesc;
+    lightingDesc
+        .setIdentity(Name("tests/task_graph/monolithic_shadow_visibility_lighting"))
+        .setMarkerLabel("Monolithic Shadow Lighting")
+        .setQueue(graphicsRequest)
+        .setScheduling(lightingScheduling)
+        .setDependencies(&shadow, 1u)
+        .setResourceUses(lightingUses, LengthOf(lightingUses))
+    ;
+    const Graphics::GpuTaskId lighting = graph.addTask(lightingDesc);
+    ASSERT_TRUE(lighting.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+
+    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId clearPacket = compiledGraph.packetForTask(allLitClear);
+    const Graphics::GpuSubmissionPacketId shadowPacket = compiledGraph.packetForTask(shadow);
+    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
+    ASSERT_TRUE(prefixPacket.valid());
+    ASSERT_TRUE(clearPacket.valid());
+    ASSERT_TRUE(shadowPacket.valid());
+    ASSERT_TRUE(lightingPacket.valid());
+    EXPECT_NE(prefixPacket, shadowPacket);
+    EXPECT_EQ(clearPacket, shadowPacket);
+    EXPECT_NE(lightingPacket, shadowPacket);
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    const Graphics::GpuSubmissionPacketRange shadowRange = compiledGraph.packetRangeForTasks(shadow, shadow);
+    ASSERT_TRUE(shadowRange.valid());
+    EXPECT_EQ(shadowRange.packetCount, 1u);
+    EXPECT_EQ(shadowRange.first, shadowPacket);
+    const Graphics::GpuSubmissionPacket& shadowPacketDesc = compiledGraph.packet(shadowPacket);
+    ASSERT_EQ(shadowPacketDesc.taskCount, 2u);
+    const Graphics::GpuTaskId* const shadowPacketTasks = compiledGraph.packetTasks(shadowPacket);
+    ASSERT_NE(shadowPacketTasks, nullptr);
+    EXPECT_EQ(shadowPacketTasks[0u], allLitClear);
+    EXPECT_EQ(shadowPacketTasks[1u], shadow);
+
+    const auto hasTextureTransition = [&](
+        const Graphics::GpuTaskId task,
+        const Graphics::ResourceStates::Mask before,
+        const Graphics::ResourceStates::Mask after
+    ){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        if(!compiledTask)
+            return false;
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        if(!barriers)
+            return false;
+        for(usize barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == shadowVisibility
+                && barrier.before == before
+                && barrier.after == after
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasTextureTransition(
+        allLitClear,
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::CopyDest
+    ));
+    EXPECT_TRUE(hasTextureTransition(
+        shadow,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::UnorderedAccess
+    ));
+    EXPECT_TRUE(hasTextureTransition(
+        lighting,
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::ShaderResource
+    ));
+    ASSERT_EQ(compiledGraph.packet(shadowPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(shadowPacket)[0u].producer, prefixPacket);
+    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(lightingPacket)[0u].producer, shadowPacket);
+}
+
+
 // Prepared soft-transparent shadows split opaque production, first wavelet, resolve tail, transparent trace,
 // transparent first wavelet, and terminal resolve tail without adding an effects submission. The compiler owns all
 // sampled handoffs and both first-wavelet-to-tail transitions.

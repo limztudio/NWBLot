@@ -357,6 +357,7 @@ public:
         bool hardwareShadowSupported,
         Core::GpuTimingSubmissionTicket& timingTicket,
         bool graphEntryStatesOwned = false,
+        bool graphOwnsAllLitVisibilityClear = false,
         GraphOwnedAdaptiveShadowPrimitivePlan graphOwnedAdaptivePrimitives = {}
     );
     // A prepared soft-transparent frame splits opaque soft visibility from its transparent fold while retaining one

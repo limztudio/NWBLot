@@ -683,6 +683,7 @@ struct ShadowVisibilityGraphTask{
         const bool* prepared = nullptr;
         bool hardwareShadowSupported = false;
         bool graphEntryStatesOwned = false;
+        bool graphOwnsAllLitVisibilityClear = false;
         GraphOwnedAdaptiveShadowPrimitivePlan graphOwnedAdaptivePrimitives;
         mutable bool adaptiveRouteRecorded = false;
     };
@@ -762,8 +763,10 @@ struct ShadowVisibilityGraphTask{
                 graphOwnedAdaptivePrimitives
             );
         }
-        // Retain all-lit visibility when no shadow producer records.
-        if(!shadowVisibilityWritten)
+        // The retained monolithic graph path always records a typed white clear immediately before this callback.
+        // A producer overwrites it; a no-producer/preflight-failure path leaves its all-lit result intact. Direct
+        // compatibility callers and split soft-shadow fallback callbacks retain their local native clear.
+        if(!shadowVisibilityWritten && !payload.graphOwnsAllLitVisibilityClear)
             payload.raytracingSystem->clearShadowVisibility(commandList, *payload.targets);
 
         if(asyncTiming){
@@ -1824,6 +1827,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
     const bool hardwareShadowSupported,
     Core::GpuTimingSubmissionTicket& timingTicket,
     const bool graphEntryStatesOwned,
+    const bool graphOwnsAllLitVisibilityClear,
     const GraphOwnedAdaptiveShadowPrimitivePlan graphOwnedAdaptivePrimitives
 ){
     return graph.addTask<__hidden_shadow_visibility_task::ShadowVisibilityGraphTask>(
@@ -1836,6 +1840,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
             .prepared = prepared,
             .hardwareShadowSupported = hardwareShadowSupported,
             .graphEntryStatesOwned = graphEntryStatesOwned,
+            .graphOwnsAllLitVisibilityClear = graphOwnsAllLitVisibilityClear,
             .graphOwnedAdaptivePrimitives = graphOwnedAdaptivePrimitives,
         }
     );

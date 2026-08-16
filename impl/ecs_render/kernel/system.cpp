@@ -268,6 +268,7 @@ void RendererSystem::invalidateResources(){
     m_deferredShadowVisibilityAdaptiveStatsClearTask = {};
     m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
     m_deferredShadowVisibilityAdaptiveStatsReadbackTask = {};
+    m_deferredShadowVisibilityAllLitClearTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
@@ -560,6 +561,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredShadowVisibilityAdaptiveStatsClearTask = {};
     m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
     m_deferredShadowVisibilityAdaptiveStatsReadbackTask = {};
+    m_deferredShadowVisibilityAllLitClearTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
@@ -1239,6 +1241,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             )
         )
     ;
+    // The normal monolithic callback relies on the preceding typed all-lit clear. Keep that clear in its semantic
+    // packet so task-range recording/submission still encloses the CopyDest -> UAV handoff. Prepared split-soft
+    // frames deliberately retain their native fallback clear and therefore must not declare this primitive.
+    const bool shadowVisibilityAllLitClearMerged = m_deferredShadowVisibilityOpaqueTask.valid()
+        ? !m_deferredShadowVisibilityAllLitClearTask.valid()
+        : m_deferredShadowVisibilityAllLitClearTask.valid()
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredShadowVisibilityTask,
+                m_deferredShadowVisibilityAllLitClearTask
+            )
+    ;
     // The adaptive clear/copy primitives deliberately keep the original Shadow Visibility acceptance endpoint.
     // A split would leave part of the chain outside its semantic record/submit range and would make the frozen
     // diagnostic state observable before the traversal packet accepts.
@@ -1904,6 +1917,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredShadowVisibilityTask.valid()
         || !shadowVisibilityPacket.valid()
         || !shadowVisibilityPreparedTasksMerged
+        || !shadowVisibilityAllLitClearMerged
         || !shadowVisibilityAdaptivePrimitivesMerged
         || !shadowVisibilityQueue
         || (!hardwareShadowSupported && (
@@ -2666,6 +2680,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredShadowVisibilityTask.valid()
         && shadowVisibilityPacket.valid()
         && shadowVisibilityPreparedTasksMerged
+        && shadowVisibilityAllLitClearMerged
         && shadowVisibilityAdaptivePrimitivesMerged
         && (hardwareShadowSupported || (
             m_deferredSoftwareCausticsTask.valid()
@@ -3703,6 +3718,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredShadowVisibilityTask.valid()
             && shadowVisibilityPacket.valid()
             && shadowVisibilityPreparedTasksMerged
+            && shadowVisibilityAllLitClearMerged
             && shadowVisibilityAdaptivePrimitivesMerged
             && shadowEffectsPacketRange.valid()
             && shadowEffectsPacketRange.packetCount == shadowEffectsTimingTicketCount

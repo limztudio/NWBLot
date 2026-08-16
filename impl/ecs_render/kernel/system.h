@@ -468,6 +468,10 @@ private:
     Core::GpuTaskId m_deferredShadowVisibilityAdaptiveStatsClearTask;
     Core::GpuTaskId m_deferredShadowVisibilityAdaptiveCounterClearTask;
     Core::GpuTaskId m_deferredShadowVisibilityAdaptiveStatsReadbackTask;
+    // The retained monolithic route always clears visibility to all-lit immediately before its callback. The clear
+    // must share that semantic packet so its CopyDest -> UAV handoff and the existing acceptance endpoint stay
+    // graph-owned.
+    Core::GpuTaskId m_deferredShadowVisibilityAllLitClearTask;
     Core::GpuTaskId m_deferredShadowVisibilityTask;
     Core::GpuTaskId m_deferredSoftwareCausticsTask;
     // Both hardware and software caustics use this typed black-output clear. The selected producer must share its

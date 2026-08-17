@@ -646,6 +646,29 @@ The latest local command-IR evidence is under
 checked-in performance claim. The profile is a CPU probe for `CopyBuffer` only; it does not justify persistent
 runtime IR templates or general direct-Vulkan IR replay.
 
+## Version-controlled evidence waivers
+
+### W-ASYNC-001 — frame-lagged async-lighting target-hardware evidence
+
+- **Deferred requirement:** collect a target-scene, dedicated-Compute-only Vulkan A/B for the opt-in one-frame-lagged
+  lighting path: accepted lifecycle logs, validation-clean pixel comparison against the current-frame path, and
+  GPU timing/critical-path evidence sufficient to make a rollout/default-policy decision.
+- **Reason:** the available AMD BC-250 (RADV GFX1013) adapter has no dedicated Compute-only family. The live
+  `frame-lagged-async-lighting` runner therefore returns its intentional `77` topology skip after the renderer
+  accepts the Graphics fallback; its launcher/parser/lifecycle self-tests pass. This is evidence that the harness
+  rejects a non-async route, not evidence that the dedicated-Compute path is performant or pixel-equivalent.
+- **Affected behavior and safe fallback:** `RendererSystem::frameLaggedAsyncLightingEnabled` remains disabled by
+  default. When the option is requested but no dedicated AsyncCompute lane is available, the renderer retains the
+  current-frame Graphics route and the harness reports a skip; no Graphics-route result may be presented as async
+  evidence.
+- **Crash policy:** a process crash, including a pre-topology `SIGSEGV`, is a test failure and must be diagnosed
+  before the target-hardware run is retried. It is not a valid skip and does not expand this waiver. The current
+  recorded run reaches the intentional topology skip rather than preserving such a crash as evidence.
+- **Removal condition:** run `python launcher.py frame-lagged-async-lighting` on a dedicated-Compute-only target
+  adapter; retain the lifecycle, validation, pixel-comparison, and profiler/timestamp artifacts under
+  `.cozter/out/ab-results/`; then update this audit with the measurements and explicitly decide whether the feature
+  remains default-disabled, is promoted behind availability gating, or is retired.
+
 ## Open criteria preventing strict final acceptance
 
 These are substantive scope gaps, not failures hidden by the hardware waiver.

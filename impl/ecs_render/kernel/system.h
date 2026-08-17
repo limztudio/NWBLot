@@ -55,6 +55,32 @@ class Shader;
 class Mesh;
 
 namespace ECSRenderDetail{
+    // Shared-output compute emulation alternates one generate and one raster phase for every retained regular
+    // draw. Keep the supported range centralized because graph declaration, fixed task storage, and packet
+    // validation all depend on the same narrow contract.
+    inline constexpr usize s_SharedComputeEmulationPhasesPerDraw = 2u;
+    inline constexpr usize s_SharedComputeEmulationMinimumDrawCount = 2u;
+    inline constexpr usize s_SharedComputeEmulationMaximumDrawCount = 4u;
+    inline constexpr usize s_SharedComputeEmulationMinimumPhaseCount =
+        s_SharedComputeEmulationMinimumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
+    inline constexpr usize s_SharedComputeEmulationMaximumPhaseCount =
+        s_SharedComputeEmulationMaximumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
+
+    [[nodiscard]] inline constexpr bool IsSupportedSharedComputeEmulationDrawCount(const usize drawCount)noexcept{
+        return drawCount >= s_SharedComputeEmulationMinimumDrawCount
+            && drawCount <= s_SharedComputeEmulationMaximumDrawCount;
+    }
+
+    [[nodiscard]] inline constexpr usize SharedComputeEmulationPhaseCountForDrawCount(const usize drawCount)noexcept{
+        return drawCount * s_SharedComputeEmulationPhasesPerDraw;
+    }
+
+    [[nodiscard]] inline constexpr bool IsSupportedSharedComputeEmulationPhaseCount(const usize phaseCount)noexcept{
+        return phaseCount >= s_SharedComputeEmulationMinimumPhaseCount
+            && phaseCount <= s_SharedComputeEmulationMaximumPhaseCount
+            && (phaseCount % s_SharedComputeEmulationPhasesPerDraw) == 0u;
+    }
+
 #if defined(NWB_DEBUG)
     struct MaterialTypedInstanceRangeVector;
 #endif
@@ -490,7 +516,9 @@ private:
     // so runtime validation can prove the strict D(A) -> R(A) -> ... packet order, rather than merely proving
     // that the two endpoint callbacks coalesced. The active prefix holds four, six, or eight phases for two, three,
     // or four draws.
-    Core::GpuTaskId m_graphicsPrefixOpaqueSharedComputeEmulationTasks[8u] = {};
+    Core::GpuTaskId m_graphicsPrefixOpaqueSharedComputeEmulationTasks[
+        ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount
+    ] = {};
     usize m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
     // Receiver-surface CSG has its own readiness gate but needs the same packet-local output handoff.
     Core::GpuTaskId m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask;
@@ -584,7 +612,9 @@ private:
     // Compute dependency.
     Core::GpuTaskId m_deferredAvboitOccupancyStreamTask;
     Core::GpuTaskId m_deferredAvboitOccupancyComputeEmulationTask;
-    Core::GpuTaskId m_deferredAvboitOccupancySharedComputeEmulationTasks[8u] = {};
+    Core::GpuTaskId m_deferredAvboitOccupancySharedComputeEmulationTasks[
+        ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount
+    ] = {};
     usize m_deferredAvboitOccupancySharedComputeEmulationTaskCount = 0u;
     Core::GpuTaskId m_deferredAvboitOccupancyTask;
     Core::GpuTaskId m_deferredAvboitDepthWarpTask;
@@ -592,7 +622,9 @@ private:
     // phases must remain in Extinction's selected Graphics packet so their material timing interval and
     // generated-vertex handoff share the consumer's token.
     Core::GpuTaskId m_deferredAvboitExtinctionComputeEmulationTask;
-    Core::GpuTaskId m_deferredAvboitExtinctionSharedComputeEmulationTasks[8u] = {};
+    Core::GpuTaskId m_deferredAvboitExtinctionSharedComputeEmulationTasks[
+        ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount
+    ] = {};
     usize m_deferredAvboitExtinctionSharedComputeEmulationTaskCount = 0u;
     // The final immutable extinction upload, when that phase has visible draws. It must live in the native
     // extinction packet so rejected/retried packet recording cannot publish only a partial phase stream.
@@ -608,7 +640,9 @@ private:
     Core::GpuTaskId m_deferredAvboitAccumulationComputeEmulationTask;
     // A narrowly accepted two-, three-, or four-draw shared-output regular stream retains every alternating D/R
     // phase so the runtime can prove exact packet order instead of accepting only its two endpoints.
-    Core::GpuTaskId m_deferredAvboitAccumulationSharedComputeEmulationTasks[8u] = {};
+    Core::GpuTaskId m_deferredAvboitAccumulationSharedComputeEmulationTasks[
+        ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount
+    ] = {};
     usize m_deferredAvboitAccumulationSharedComputeEmulationTaskCount = 0u;
     Core::GpuTaskId m_deferredAvboitAccumulationTask;
     // A no-op Graphics task that returns accumulation color outputs and read-only deferred depth to sampled state.

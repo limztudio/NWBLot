@@ -1000,10 +1000,7 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
 // narrow graph-owned case can retain up to four regular draws that share one buffer and descriptor slot, so each
 // consumer can explicitly opt into its supported D(A) -> R(A) -> ... ordering without batching producers.
 struct RegularSharedComputeEmulationGraphPlan{
-    static constexpr usize s_MinDrawCount = 2u;
-    static constexpr usize s_StorageMaxDrawCount = 4u;
-
-    MaterialPassDrawItem drawItems[s_StorageMaxDrawCount] = {};
+    MaterialPassDrawItem drawItems[s_SharedComputeEmulationMaximumDrawCount] = {};
     Core::BufferHandle outputBuffer;
     u32 outputHeapSlot = 0u;
     usize drawCount = 0u;
@@ -1025,9 +1022,8 @@ struct RegularSharedComputeEmulationGraphPlan{
     ){
         reset();
         if(
-            allowedMaxDrawCount < s_MinDrawCount
-            || allowedMaxDrawCount > s_StorageMaxDrawCount
-            || sourceDrawItems.computeDrawItems.size() < s_MinDrawCount
+            !IsSupportedSharedComputeEmulationDrawCount(allowedMaxDrawCount)
+            || sourceDrawItems.computeDrawItems.size() < s_SharedComputeEmulationMinimumDrawCount
             || sourceDrawItems.computeDrawItems.size() > allowedMaxDrawCount
         )
             return false;
@@ -6785,7 +6781,11 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         && gbufferPayload.materialFrameStatesGraphOwned
         && gbufferPayload.materialGeometryStatesGraphOwned
         && gbufferMaterialSampledTexturesCollected
-        && opaqueSharedComputeEmulationPlan.capture(m_meshSystem, opaqueDrawItems.regular, 4u)
+        && opaqueSharedComputeEmulationPlan.capture(
+            m_meshSystem,
+            opaqueDrawItems.regular,
+            ECSRenderDetail::s_SharedComputeEmulationMaximumDrawCount
+        )
     ;
     const bool opaqueSharedComputeEmulationOutputStatesGraphOwned =
         opaqueSharedComputeEmulationPlanCaptured
@@ -7348,12 +7348,9 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             "Opaque Shared Compute Emulation Generate D",
             "Opaque Shared Compute Emulation Raster D",
         };
-        const usize opaqueSharedComputeEmulationPhaseCount = opaqueSharedComputeEmulationPlan.drawCount * 2u;
-        if(
-            opaqueSharedComputeEmulationPhaseCount != 4u
-            && opaqueSharedComputeEmulationPhaseCount != 6u
-            && opaqueSharedComputeEmulationPhaseCount != 8u
-        ){
+        const usize opaqueSharedComputeEmulationPhaseCount =
+            ECSRenderDetail::SharedComputeEmulationPhaseCountForDrawCount(opaqueSharedComputeEmulationPlan.drawCount);
+        if(!ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(opaqueSharedComputeEmulationPhaseCount)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid shared opaque compute-emulation phase count"));
             return false;
         }
@@ -7362,14 +7359,15 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             phaseIndex < opaqueSharedComputeEmulationPhaseCount;
             ++phaseIndex
         ){
-            const bool isRasterPhase = phaseIndex % 2u != 0u;
+            const bool isRasterPhase =
+                phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
             m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex] =
                 addOpaqueSharedComputeEmulationPhase(
                     opaqueSharedComputeEmulationPhaseIdentities[phaseIndex],
                     opaqueSharedComputeEmulationPhaseMarkers[phaseIndex],
                     opaqueSharedComputeEmulationDependency,
                     isRasterPhase ? OpaqueSharedPhase::Raster : OpaqueSharedPhase::Generate,
-                    phaseIndex / 2u,
+                    phaseIndex / ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw,
                     phaseIndex + 1u == opaqueSharedComputeEmulationPhaseCount,
                     isRasterPhase
                         ? opaqueSharedComputeEmulationRasterResourceUses
@@ -13446,10 +13444,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 && occupancySharedComputeEmulationPlan.capture(
                     m_meshSystem,
                     occupancyDrawItems.regular,
-                    4u
+                    ECSRenderDetail::s_SharedComputeEmulationMaximumDrawCount
                 )
-                && occupancySharedComputeEmulationPlan.drawCount >= 2u
-                && occupancySharedComputeEmulationPlan.drawCount <= 4u
+                && ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(
+                    occupancySharedComputeEmulationPlan.drawCount
+                )
             ;
             NWB_ASSERT(
                 !(occupancyRegularComputeEmulationPlanCaptured && occupancyCsgComputeEmulationPlanCaptured)
@@ -14077,13 +14076,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             "AVBOIT Occupancy Shared Compute Emulation Raster D",
         };
         const usize occupancySharedComputeEmulationPhaseCount =
-            occupancySharedComputeEmulationPlan.drawCount * 2u
+            ECSRenderDetail::SharedComputeEmulationPhaseCountForDrawCount(
+                occupancySharedComputeEmulationPlan.drawCount
+            )
         ;
-        NWB_ASSERT(
-            occupancySharedComputeEmulationPlan.drawCount == 2u
-            || occupancySharedComputeEmulationPlan.drawCount == 3u
-            || occupancySharedComputeEmulationPlan.drawCount == 4u
-        );
+        NWB_ASSERT(ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(
+            occupancySharedComputeEmulationPlan.drawCount
+        ));
         NWB_ASSERT(
             occupancySharedComputeEmulationPhaseCount
             <= LengthOf(occupancySharedComputeEmulationPhaseIdentities)
@@ -14093,14 +14092,15 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             phaseIndex < occupancySharedComputeEmulationPhaseCount;
             ++phaseIndex
         ){
-            const bool isRasterPhase = phaseIndex % 2u != 0u;
+            const bool isRasterPhase =
+                phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
             m_deferredAvboitOccupancySharedComputeEmulationTasks[phaseIndex] =
                 addOccupancySharedComputeEmulationPhase(
                     occupancySharedComputeEmulationPhaseIdentities[phaseIndex],
                     occupancySharedComputeEmulationPhaseMarkers[phaseIndex],
                     occupancySharedComputeEmulationDependency,
                     isRasterPhase ? OccupancySharedPhase::Raster : OccupancySharedPhase::Generate,
-                    phaseIndex / 2u,
+                    phaseIndex / ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw,
                     phaseIndex == 0u,
                     phaseIndex + 1u == occupancySharedComputeEmulationPhaseCount,
                     isRasterPhase
@@ -14550,9 +14550,14 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 && extinctionDrawItems.csg.empty()
                 && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
                 && extinctionMaterialSampledTexturesCollected
-                && extinctionSharedComputeEmulationPlan.capture(m_meshSystem, extinctionDrawItems.regular, 4u)
-                && extinctionSharedComputeEmulationPlan.drawCount >= 2u
-                && extinctionSharedComputeEmulationPlan.drawCount <= 4u
+                && extinctionSharedComputeEmulationPlan.capture(
+                    m_meshSystem,
+                    extinctionDrawItems.regular,
+                    ECSRenderDetail::s_SharedComputeEmulationMaximumDrawCount
+                )
+                && ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(
+                    extinctionSharedComputeEmulationPlan.drawCount
+                )
             ;
             if(extinctionSharedComputeEmulationPlanCaptured){
                 extinctionSharedComputeEmulationInstanceCount = extinctionInstanceData.size();
@@ -15030,27 +15035,28 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             "AVBOIT Extinction Shared Compute Emulation Raster D",
         };
         const usize extinctionSharedComputeEmulationPhaseCount =
-            extinctionSharedComputeEmulationPlan.drawCount * 2u
+            ECSRenderDetail::SharedComputeEmulationPhaseCountForDrawCount(
+                extinctionSharedComputeEmulationPlan.drawCount
+            )
         ;
-        NWB_ASSERT(
-            extinctionSharedComputeEmulationPlan.drawCount == 2u
-            || extinctionSharedComputeEmulationPlan.drawCount == 3u
-            || extinctionSharedComputeEmulationPlan.drawCount == 4u
-        );
+        NWB_ASSERT(ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(
+            extinctionSharedComputeEmulationPlan.drawCount
+        ));
         NWB_ASSERT(extinctionSharedComputeEmulationPhaseCount <= LengthOf(extinctionSharedComputeEmulationPhaseIdentities));
         Core::GpuTaskId extinctionSharedComputeEmulationDependency = extinctionDependency;
         for(usize phaseIndex = 0u;
             phaseIndex < extinctionSharedComputeEmulationPhaseCount;
             ++phaseIndex
         ){
-            const bool isRasterPhase = phaseIndex % 2u != 0u;
+            const bool isRasterPhase =
+                phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
             m_deferredAvboitExtinctionSharedComputeEmulationTasks[phaseIndex] =
                 addExtinctionSharedComputeEmulationPhase(
                     extinctionSharedComputeEmulationPhaseIdentities[phaseIndex],
                     extinctionSharedComputeEmulationPhaseMarkers[phaseIndex],
                     extinctionSharedComputeEmulationDependency,
                     isRasterPhase ? ExtinctionSharedPhase::Raster : ExtinctionSharedPhase::Generate,
-                    phaseIndex / 2u,
+                    phaseIndex / ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw,
                     phaseIndex == 0u,
                     phaseIndex + 1u == extinctionSharedComputeEmulationPhaseCount,
                     isRasterPhase
@@ -15484,10 +15490,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 && accumulationSharedComputeEmulationPlan.capture(
                     m_meshSystem,
                     accumulationDrawItems.regular,
-                    4u
+                    ECSRenderDetail::s_SharedComputeEmulationMaximumDrawCount
                 )
-                && accumulationSharedComputeEmulationPlan.drawCount >= 2u
-                && accumulationSharedComputeEmulationPlan.drawCount <= 4u
+                && ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(
+                    accumulationSharedComputeEmulationPlan.drawCount
+                )
             ;
             NWB_ASSERT(
                 !(accumulationRegularComputeEmulationPlanCaptured && accumulationCsgComputeEmulationPlanCaptured)
@@ -15974,13 +15981,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             "AVBOIT Accumulation Shared Compute Emulation Raster D",
         };
         const usize accumulationSharedComputeEmulationPhaseCount =
-            accumulationSharedComputeEmulationPlan.drawCount * 2u
+            ECSRenderDetail::SharedComputeEmulationPhaseCountForDrawCount(
+                accumulationSharedComputeEmulationPlan.drawCount
+            )
         ;
-        NWB_ASSERT(
-            accumulationSharedComputeEmulationPlan.drawCount == 2u
-            || accumulationSharedComputeEmulationPlan.drawCount == 3u
-            || accumulationSharedComputeEmulationPlan.drawCount == 4u
-        );
+        NWB_ASSERT(ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(
+            accumulationSharedComputeEmulationPlan.drawCount
+        ));
         NWB_ASSERT(
             accumulationSharedComputeEmulationPhaseCount
             <= LengthOf(accumulationSharedComputeEmulationPhaseIdentities)
@@ -15990,14 +15997,15 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             phaseIndex < accumulationSharedComputeEmulationPhaseCount;
             ++phaseIndex
         ){
-            const bool isRasterPhase = phaseIndex % 2u != 0u;
+            const bool isRasterPhase =
+                phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
             m_deferredAvboitAccumulationSharedComputeEmulationTasks[phaseIndex] =
                 addAccumulationSharedComputeEmulationPhase(
                     accumulationSharedComputeEmulationPhaseIdentities[phaseIndex],
                     accumulationSharedComputeEmulationPhaseMarkers[phaseIndex],
                     accumulationSharedComputeEmulationDependency,
                     isRasterPhase ? AccumulationSharedPhase::Raster : AccumulationSharedPhase::Generate,
-                    phaseIndex / 2u,
+                    phaseIndex / ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw,
                     phaseIndex == 0u,
                     phaseIndex + 1u == accumulationSharedComputeEmulationPhaseCount,
                     isRasterPhase

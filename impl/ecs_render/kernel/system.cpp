@@ -21,6 +21,41 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_renderer_system{
+
+
+// Packet-range checks below encode the fixed semantic topology of the renderer graph. Keep the counts named so
+// validation does not silently drift when a task is added to one of those ranges.
+inline constexpr usize s_SinglePacketCount = 1u;
+inline constexpr usize s_SoftwareShadowEffectsPacketCount = 2u;
+inline constexpr usize s_SurfelGiMergedPreparationAndCopyPacketCount = 2u;
+inline constexpr usize s_SurfelGiSeparatePreparationAndCopyPacketCount = 3u;
+inline constexpr usize s_AvboitAsyncComputePacketCount = 5u;
+inline constexpr usize s_DeferredLightingCompositePacketCount = 2u;
+inline constexpr usize s_PresentationOverlayPacketCount = 1u;
+
+// These fixed arrays describe the maximum number of independently retained sources/tickets that the graph binds
+// for each semantic packet. They are capacities, not a runtime packet-count assumption.
+inline constexpr usize s_ShadowVisibilityStateSourceCapacity = 3u;
+inline constexpr usize s_SoftwareCausticsStateSourceCapacity = 3u;
+inline constexpr usize s_SurfelGiStateSourceCapacity = 4u;
+inline constexpr usize s_SingleStateSourceCapacity = 1u;
+inline constexpr usize s_SinglePacketStateBindingCapacity = 1u;
+inline constexpr usize s_SingleExternalCompletionTokenCapacity = 1u;
+inline constexpr usize s_DeferredPacketStateBindingCapacity = 8u;
+inline constexpr usize s_AvboitTimingTicketCapacity = 7u;
+inline constexpr usize s_LaggedLightingHistoryStateSourceCapacity = 3u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 RendererSystem::RendererSystem(
     Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
@@ -1398,7 +1433,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             }
             return true;
         }
-        if(phaseCount != 4u && phaseCount != 6u && phaseCount != 8u)
+        if(!ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(phaseCount))
             return false;
         if(
             !graphicsPrefixOpaqueSharedComputeEmulationQueue
@@ -1768,7 +1803,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return true;
         }
         if(
-            (phaseCount != 4u && phaseCount != 6u && phaseCount != 8u)
+            !ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(phaseCount)
             || m_deferredAvboitOccupancyComputeEmulationTask.valid()
             || !m_deferredAvboitOccupancyStreamTask.valid()
             || !m_deferredAvboitClearTask.valid()
@@ -1913,7 +1948,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return true;
         }
         if(
-            (phaseCount != 4u && phaseCount != 6u && phaseCount != 8u)
+            !ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(phaseCount)
             || m_deferredAvboitExtinctionComputeEmulationTask.valid()
             || !m_deferredAvboitExtinctionStreamTask.valid()
             || !taskIsCompiled(m_deferredAvboitExtinctionTask)
@@ -2048,7 +2083,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return true;
         }
         if(
-            (phaseCount != 4u && phaseCount != 6u && phaseCount != 8u)
+            !ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(phaseCount)
             || m_deferredAvboitAccumulationComputeEmulationTask.valid()
             || !m_deferredAvboitAccumulationStreamTask.valid()
             || !taskIsCompiled(m_deferredAvboitAccumulationTask)
@@ -2365,12 +2400,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.packetRangeForTasks(surfelGiFirstTask, m_deferredSurfelGiTask);
     const usize expectedSurfelGiPacketCount = m_deferredSurfelGiSnapshotCopyTask.valid()
         ? (m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredSurfelGiPreparationTask,
-                m_deferredSurfelGiSnapshotCopyTask
-            )
-            ? 2u
-            : 3u)
-        : 1u
+            m_deferredSurfelGiPreparationTask,
+            m_deferredSurfelGiSnapshotCopyTask
+        )
+            ? __hidden_renderer_system::s_SurfelGiMergedPreparationAndCopyPacketCount
+            : __hidden_renderer_system::s_SurfelGiSeparatePreparationAndCopyPacketCount)
+        : __hidden_renderer_system::s_SinglePacketCount
     ;
     const Core::GpuSubmissionPacketRange hardwareCausticsPacketRange =
         m_deferredLightingCompiledGraph.packetRangeForTasks(
@@ -2411,15 +2446,20 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredShadowPrepareTask,
             m_deferredFrameRecoveryTask
         );
-    const usize expectedAvboitPacketCount = avboitUsesAsyncCompute ? 5u : 1u;
-    const usize expectedDeferredTailPacketCount = 1u
-        + (m_deferredSurfelGiCounterReadbackTask.valid() ? 1u : 0u)
-        + (captureLaggedLightingHistory ? 1u : 0u)
+    const usize expectedAvboitPacketCount = avboitUsesAsyncCompute
+        ? __hidden_renderer_system::s_AvboitAsyncComputePacketCount
+        : __hidden_renderer_system::s_SinglePacketCount;
+    const usize expectedDeferredTailPacketCount = __hidden_renderer_system::s_SinglePacketCount
+        + (m_deferredSurfelGiCounterReadbackTask.valid()
+            ? __hidden_renderer_system::s_SinglePacketCount
+            : 0u)
+        + (captureLaggedLightingHistory ? __hidden_renderer_system::s_SinglePacketCount : 0u)
     ;
     // A presentation contributor may declare graph-owned setup uploads between Deferred Present and its terminal
     // Graphics overlay.  The renderer still requires the scene Present endpoint and (when requested) one final
     // overlay packet, while the compiler owns the exact number and routing of the intervening uploads.
-    const usize minimumTerminalPresentationPacketCount = m_deferredPresentationOverlayRequired ? 2u : 1u;
+    const usize minimumTerminalPresentationPacketCount = __hidden_renderer_system::s_SinglePacketCount
+        + (m_deferredPresentationOverlayRequired ? __hidden_renderer_system::s_PresentationOverlayPacketCount : 0u);
     const auto discardGraphicsPrefixTimingTickets = [&graphicsPrefixOwnedTimingTickets](){
         for(Core::GpuTimingSubmissionTicket* const timingTicket : graphicsPrefixOwnedTimingTickets)
             timingTicket->discard();
@@ -2615,28 +2655,31 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || deferredPresentQueue->id != primaryGraphicsQueue
         || terminalPresentationQueue->id != primaryGraphicsQueue
         || !shadowPreparePacketRange.valid()
-        || shadowPreparePacketRange.packetCount != 1u
+        || shadowPreparePacketRange.packetCount != __hidden_renderer_system::s_SinglePacketCount
         || !graphicsPrefixWorkPacketRange.valid()
         || graphicsPrefixWorkPacketRange.packetCount < graphicsPrefixUniquePacketCount
         || !graphicsPrefixPacketRange.valid()
-        || graphicsPrefixPacketRange.packetCount != 1u
+        || graphicsPrefixPacketRange.packetCount != __hidden_renderer_system::s_SinglePacketCount
         || !shadowPrepareThroughPrefixPacketRange.valid()
         || shadowPrepareThroughPrefixPacketRange.packetCount
             != shadowPreparePacketRange.packetCount + graphicsPrefixWorkPacketRange.packetCount
         || !shadowEffectsPacketRange.valid()
-        || shadowEffectsPacketRange.packetCount != (hardwareShadowSupported ? 1u : 2u)
+        || shadowEffectsPacketRange.packetCount != (hardwareShadowSupported
+            ? __hidden_renderer_system::s_SinglePacketCount
+            : __hidden_renderer_system::s_SoftwareShadowEffectsPacketCount)
         || !surfelGiPacketRange.valid()
         || surfelGiPacketRange.packetCount != expectedSurfelGiPacketCount
         || (hardwareShadowSupported && (
             !hardwareCausticsPacketRange.valid()
-            || hardwareCausticsPacketRange.packetCount != 1u
+            || hardwareCausticsPacketRange.packetCount != __hidden_renderer_system::s_SinglePacketCount
         ))
         || !avboitPacketRange.valid()
         || avboitPacketRange.packetCount != expectedAvboitPacketCount
         || !deferredLightingCompositePacketRange.valid()
-        || deferredLightingCompositePacketRange.packetCount != 2u
+        || deferredLightingCompositePacketRange.packetCount
+            != __hidden_renderer_system::s_DeferredLightingCompositePacketCount
         || !deferredPresentPacketRange.valid()
-        || deferredPresentPacketRange.packetCount != 1u
+        || deferredPresentPacketRange.packetCount != __hidden_renderer_system::s_SinglePacketCount
         || !terminalPresentationPacketRange.valid()
         || terminalPresentationPacketRange.packetCount < minimumTerminalPresentationPacketCount
         || !effectsThroughPresentationPacketRange.valid()
@@ -2883,7 +2926,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ;
     }
 
-    Core::GpuExternalPacketStateSource shadowPrepareStateSources[1] = {};
+    Core::GpuExternalPacketStateSource shadowPrepareStateSources[
+        __hidden_renderer_system::s_SingleStateSourceCapacity
+    ] = {};
     usize shadowPrepareStateSourceCount = 0u;
     if(shadowPreparePriorStateReady && shadowPreparePriorStateCandidate.valid()){
         if(!appendDeclaredStateSource(
@@ -2895,7 +2940,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             shadowPrepareStateSourceCount = 0u;
         }
     }
-    Core::GpuTaskPacketStateBinding shadowPrepareStateBindings[1] = {};
+    Core::GpuTaskPacketStateBinding shadowPrepareStateBindings[
+        __hidden_renderer_system::s_SinglePacketStateBindingCapacity
+    ] = {};
     usize shadowPrepareStateBindingCount = 0u;
     const bool shadowPrepareStateBindingsReady = shadowPrepareStateSourceCount == 0u
         || appendTaskPacketStateBinding(
@@ -2996,7 +3043,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    Core::GpuExternalPacketStateSource shadowVisibilityStateSources[3] = {};
+    Core::GpuExternalPacketStateSource shadowVisibilityStateSources[
+        __hidden_renderer_system::s_ShadowVisibilityStateSourceCapacity
+    ] = {};
     usize shadowVisibilityStateSourceCount = 0u;
     bool shadowVisibilityStateSourcesReady = appendDeclaredStateSource(
         shadowVisibilityStateSources,
@@ -3025,7 +3074,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ;
     }
 
-    Core::GpuExternalPacketStateSource softwareCausticsStateSources[3] = {};
+    Core::GpuExternalPacketStateSource softwareCausticsStateSources[
+        __hidden_renderer_system::s_SoftwareCausticsStateSourceCapacity
+    ] = {};
     usize softwareCausticsStateSourceCount = 0u;
     bool softwareCausticsStateSourcesReady = appendDeclaredStateSource(
         softwareCausticsStateSources,
@@ -3059,7 +3110,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // Shadow Visibility, optional Software Caustics, and each Surfel-GI packet record after Prefix in compiler
     // order. The snapshot packet needs the same persistent source as the final compute task, while compiler
     // prologue seeds replace only the regions produced by an in-graph initialization or copy packet.
-    Core::GpuExternalPacketStateSource surfelGiStateSources[4] = {};
+    Core::GpuExternalPacketStateSource surfelGiStateSources[
+        __hidden_renderer_system::s_SurfelGiStateSourceCapacity
+    ] = {};
     usize surfelGiStateSourceCount = 0u;
     bool surfelGiStateSourcesReady = appendDeclaredStateSource(
         surfelGiStateSources,
@@ -3106,7 +3159,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             .states = graphicsPrefixFinalStateSeed,
         },
     };
-    Core::GpuExternalPacketStateSource deferredLightingStateSources[1] = {};
+    Core::GpuExternalPacketStateSource deferredLightingStateSources[
+        __hidden_renderer_system::s_SingleStateSourceCapacity
+    ] = {};
     usize deferredLightingStateSourceCount = 0u;
     const bool deferredLightingStateSourcesReady = appendDeclaredStateSource(
         deferredLightingStateSources,
@@ -3114,7 +3169,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredLightingStateSourceCount,
         graphicsPrefixFinalStateSeed
     );
-    Core::GpuExternalPacketStateSource hardwareCausticsStateSources[1] = {};
+    Core::GpuExternalPacketStateSource hardwareCausticsStateSources[
+        __hidden_renderer_system::s_SingleStateSourceCapacity
+    ] = {};
     usize hardwareCausticsStateSourceCount = 0u;
     const bool hardwareCausticsStateSourcesReady =
         !hardwareShadowSupported
@@ -3125,7 +3182,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             graphicsPrefixFinalStateSeed
         )
     ;
-    Core::GpuExternalPacketStateSource deferredCompositeStateSources[1] = {};
+    Core::GpuExternalPacketStateSource deferredCompositeStateSources[
+        __hidden_renderer_system::s_SingleStateSourceCapacity
+    ] = {};
     usize deferredCompositeStateSourceCount = 0u;
     const bool deferredCompositeStateSourcesReady = appendDeclaredStateSource(
         deferredCompositeStateSources,
@@ -3137,7 +3196,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // graph task rather than the packet selected by this compilation; the recorder resolves the current packet and
     // retains the established packet-wide resource filtering. This lets packetization evolve without rebuilding a
     // renderer-owned packet override table.
-    Core::GpuTaskPacketStateBinding deferredStateBindings[8] = {};
+    Core::GpuTaskPacketStateBinding deferredStateBindings[
+        __hidden_renderer_system::s_DeferredPacketStateBindingCapacity
+    ] = {};
     usize deferredStateBindingCount = 0u;
     bool deferredStateBindingsReady = appendTaskPacketStateBinding(
         deferredStateBindings,
@@ -3529,7 +3590,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const auto submitAvboitLightingAndComposite = [&]() -> bool {
         Core::Alloc::ScratchArena deferredScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter deferredSubmitter(device);
-        Core::GpuTaskGraphTaskTimingTicket avboitTimingTickets[7u] = {};
+        Core::GpuTaskGraphTaskTimingTicket avboitTimingTickets[
+            __hidden_renderer_system::s_AvboitTimingTicketCapacity
+        ] = {};
         usize avboitTimingTicketCount = 0u;
         const auto appendAvboitTimingTicket = [&avboitTimingTickets, &avboitTimingTicketCount](
             const Core::GpuTaskId task,
@@ -3562,7 +3625,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             }
             appendAvboitTimingTicket(m_deferredAvboitAccumulationTask, &avboitAccumulationTimingTicket);
         }
-        const usize avboitPacketExpectedCount = avboitUsesAsyncCompute ? 5u : 1u;
+        const usize avboitPacketExpectedCount = avboitUsesAsyncCompute
+            ? __hidden_renderer_system::s_AvboitAsyncComputePacketCount
+            : __hidden_renderer_system::s_SinglePacketCount;
         const bool avboitPacketsAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredAvboitPreTask.valid()
@@ -3655,7 +3720,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
 
         // Prefix and all current-frame producers are internal. Active lagged Lighting alone imports prior history.
-        Core::GpuTaskGraphExternalCompletionToken deferredLightingCompletionTokens[1] = {};
+        Core::GpuTaskGraphExternalCompletionToken deferredLightingCompletionTokens[
+            __hidden_renderer_system::s_SingleExternalCompletionTokenCapacity
+        ] = {};
         usize deferredLightingCompletionCount = 0u;
         if(laggedAsyncLightingSchedule){
             deferredLightingCompletionTokens[deferredLightingCompletionCount++] = {
@@ -3914,7 +3981,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const auto submitDeferredSurfelGi = [&]() -> bool {
         Core::Alloc::ScratchArena surfelGiScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter surfelGiSubmitter(device);
-        Core::GpuTaskGraphExternalCompletionToken surfelGiCompletionTokens[1] = {};
+        Core::GpuTaskGraphExternalCompletionToken surfelGiCompletionTokens[
+            __hidden_renderer_system::s_SingleExternalCompletionTokenCapacity
+        ] = {};
         usize surfelGiCompletionTokenCount = 0u;
         if(m_deferredSurfelGiCounterReadbackCompletion.valid()){
             surfelGiCompletionTokens[surfelGiCompletionTokenCount++] = {
@@ -4414,7 +4483,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return;
 
         if(hardwareShadowSupported){
-            Core::GpuTaskGraphExternalCompletionToken hardwareCausticsCompletionTokens[1] = {};
+            Core::GpuTaskGraphExternalCompletionToken hardwareCausticsCompletionTokens[
+                __hidden_renderer_system::s_SingleExternalCompletionTokenCapacity
+            ] = {};
             usize hardwareCausticsCompletionCount = 0u;
             if(laggedAsyncLightingSchedule){
                 hardwareCausticsCompletionTokens[hardwareCausticsCompletionCount++] = {
@@ -4702,7 +4773,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? m_causticIrradianceLightingState.source()
             : m_causticIrradianceReturnState.source()
         ;
-        Core::GpuExternalPacketStateSource historyCopyStateSources[3] = {};
+        Core::GpuExternalPacketStateSource historyCopyStateSources[
+            __hidden_renderer_system::s_LaggedLightingHistoryStateSourceCapacity
+        ] = {};
         usize historyCopyStateSourceCount = 0u;
         const bool historyCopyStateSourcesReady =
             appendDeclaredStateSource(

@@ -28,6 +28,13 @@ inline constexpr u8 s_ValidQueueCapabilityMask =
     | static_cast<u8>(GpuQueueCapability::Graphics)
 ;
 
+// These weights intentionally grow by cost class rather than representing measured durations. They keep the
+// deterministic least-loaded queue tie-breaker biased toward reserving a lane for larger graph tasks.
+inline constexpr u64 s_TinyTaskQueueCostWeight = 1u;
+inline constexpr u64 s_SmallTaskQueueCostWeight = 2u;
+inline constexpr u64 s_MediumTaskQueueCostWeight = 4u;
+inline constexpr u64 s_LargeTaskQueueCostWeight = 8u;
+
 [[nodiscard]] static bool HasCapabilities(
     const GpuQueueCapability::Mask available,
     const GpuQueueCapability::Mask required
@@ -219,10 +226,10 @@ inline constexpr u8 s_ValidQueueCapabilityMask =
 
 [[nodiscard]] static u64 QueueCostWeight(const GpuTaskCostHint::Enum cost)noexcept{
     switch(cost){
-    case GpuTaskCostHint::Tiny: return 1u;
-    case GpuTaskCostHint::Small: return 2u;
-    case GpuTaskCostHint::Medium: return 4u;
-    case GpuTaskCostHint::Large: return 8u;
+    case GpuTaskCostHint::Tiny: return s_TinyTaskQueueCostWeight;
+    case GpuTaskCostHint::Small: return s_SmallTaskQueueCostWeight;
+    case GpuTaskCostHint::Medium: return s_MediumTaskQueueCostWeight;
+    case GpuTaskCostHint::Large: return s_LargeTaskQueueCostWeight;
     default: return 0u;
     }
 }

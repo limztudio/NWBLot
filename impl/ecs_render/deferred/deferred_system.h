@@ -52,8 +52,6 @@ public:
         const ECSRenderDetail::SceneShadingGpuData& sceneShadingState,
         bool sceneShadingUploadRequired
     );
-    // Retained only for compatibility render paths that do not have a graph-owning renderer.
-    [[nodiscard]] bool updateSceneShadingBuffer(Core::CommandList& commandList, f32 fallbackAspectRatio);
     [[nodiscard]] bool createDeferredLightingResources();
     [[nodiscard]] bool createDeferredLightingPipeline();
     [[nodiscard]] Core::GpuTaskId declareDeferredLightingTask(

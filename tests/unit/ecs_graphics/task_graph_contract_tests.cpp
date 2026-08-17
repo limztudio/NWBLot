@@ -492,6 +492,28 @@ TEST(EcsGraphics, SplitAvboitComputePacketsPermitCrossFamilyRouting){
 }
 
 
+// Scene-light and shading constants are prepared before graph declaration and published from accepted graph work.
+// The previous direct compatibility writer had no callers, so keep it retired instead of letting an unreachable
+// native state/submit bridge silently return to the deferred subsystem.
+TEST(EcsGraphics, DeferredSceneShadingUploadsHaveNoNativeCompatibilityDispatcher){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString deferredHeaderSource;
+    AString deferredLightingSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.h", deferredHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_lighting.cpp", deferredLightingSource));
+    const AStringView deferredHeader(deferredHeaderSource.data(), deferredHeaderSource.size());
+    const AStringView deferredLighting(deferredLightingSource.data(), deferredLightingSource.size());
+
+    EXPECT_TRUE(ContainsText(deferredHeader, "prepareSceneShadingBufferUploads"));
+    EXPECT_TRUE(ContainsText(deferredHeader, "confirmSceneShadingBufferUploads"));
+    EXPECT_FALSE(ContainsText(deferredHeader, "updateSceneShadingBuffer"));
+    EXPECT_FALSE(ContainsText(deferredLighting, "updateSceneShadingBuffer"));
+    EXPECT_FALSE(ContainsText(deferredLighting, "commandList.writeBuffer("));
+}
+
+
 // The current renderer has exactly two runtime-selected sampled-image domains: material Texture2D assets (shared
 // by raster and ray-trace surface dispatch) and ImGui textures.  A new domain must not silently rely on a global
 // descriptor slot: keep the supported domain small and require each one to retain handles before graph declaration.

@@ -311,55 +311,6 @@ void RendererDeferredSystem::confirmSceneShadingBufferUploads(
     }
 }
 
-bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){
-    ECSRenderDetail::SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS];
-    ECSRenderDetail::SceneShadingGpuData sceneShadingState;
-    u32 lightCount = 0u;
-    bool lightUploadRequired = false;
-    bool sceneShadingUploadRequired = false;
-    if(!prepareSceneShadingBufferUploads(
-        fallbackAspectRatio,
-        lightData,
-        LengthOf(lightData),
-        lightCount,
-        lightUploadRequired,
-        sceneShadingState,
-        sceneShadingUploadRequired
-    ))
-        return false;
-
-    if(lightUploadRequired){
-        commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::CopyDest);
-        commandList.commitBarriers();
-        commandList.writeBuffer(
-            deferredState().m_lightBuffer.get(),
-            lightData,
-            static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData)
-        );
-        commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.commitBarriers();
-    }
-    if(sceneShadingUploadRequired){
-        commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::CopyDest);
-        commandList.commitBarriers();
-        commandList.writeBuffer(
-            deferredState().m_sceneShadingBuffer.get(),
-            &sceneShadingState,
-            sizeof(sceneShadingState)
-        );
-        commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.commitBarriers();
-    }
-    confirmSceneShadingBufferUploads(
-        lightData,
-        lightCount,
-        lightUploadRequired,
-        sceneShadingState,
-        sceneShadingUploadRequired
-    );
-    return true;
-}
-
 bool RendererDeferredSystem::renderDeferredLighting(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,

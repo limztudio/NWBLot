@@ -744,6 +744,43 @@ TEST(EcsGraphics, ShadowMaterialContextHasNoDeadNativeBulkUploader){
 }
 
 
+// The remaining renderer native writes are intentional compatibility boundaries, not normal prepared-frame
+// uploads. Keep their small, named surface fixed so future work must either graph-own a new writer or document it.
+TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString swBvhSource;
+    AString shadowSource;
+    AString uiSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", shadowSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
+    const AStringView swBvh(swBvhSource.data(), swBvhSource.size());
+    const AStringView shadow(shadowSource.data(), shadowSource.size());
+    const AStringView ui(uiSource.data(), uiSource.size());
+
+    // Frozen hybrid plans normally use graph blobs. These six writes exist only behind the retained stale-plan
+    // rebuild/restore route, whose direct retry disables later material consumers when it cannot remain tracked.
+    EXPECT_EQ(CountText(swBvh, "writeBuffer("), 6u);
+    EXPECT_TRUE(ContainsText(swBvh, "if(shadowMaterialContextBatchGraphOwned){"));
+    EXPECT_TRUE(ContainsText(swBvh, "graph-owned HW shadow material context unexpectedly reused a native cache"));
+    EXPECT_TRUE(ContainsText(swBvh, "graph-owned SW shadow material context unexpectedly reused a native cache"));
+    EXPECT_TRUE(ContainsText(swBvh, "recordPreparedHybridHardwareMaterialContextFallback"));
+
+    // Adaptive statistics use graph primitives on the normal prepared route. The one direct copy remains only for
+    // a compatibility invocation that did not supply that frozen plan.
+    EXPECT_EQ(CountText(shadow, "copyBuffer("), 1u);
+    EXPECT_TRUE(ContainsText(shadow, "if(snapshot && !graphOwnsAdaptivePrimitives)"));
+
+    // UI’s one direct submission is the documented availability fallback after both standalone graph attempts
+    // reject; its retained live draw bytes are never a normal renderer-owned overlay update.
+    EXPECT_EQ(CountText(ui, "executeCommandLists("), 1u);
+    EXPECT_TRUE(ContainsText(ui, "standalone legacy ImGui graph presentation failed; retaining direct raster fallback"));
+    EXPECT_TRUE(ContainsText(ui, "direct ImGui fallback submission was rejected; retaining frame for retry"));
+}
+
+
 // The current renderer has exactly two runtime-selected sampled-image domains: material Texture2D assets (shared
 // by raster and ray-trace surface dispatch) and ImGui textures.  A new domain must not silently rely on a global
 // descriptor slot: keep the supported domain small and require each one to retain handles before graph declaration.

@@ -29,6 +29,24 @@ static bool ContainsText(const AStringView text, const AStringView expected){
     return text.find(expected) != AStringView::npos;
 }
 
+// A graph task may not retain a prepared material callback if its dynamic geometry or sampled-image collection
+// failed. Keep this source-level contract narrow: the graph builder must leave the current frame for the native
+// compatibility path before it can compile a callback with an undeclared bindless access.
+static bool ContainsBeforeClosingBrace(
+    const AStringView text,
+    const AStringView anchor,
+    const AStringView expected
+){
+    const usize anchorOffset = text.find(anchor);
+    if(anchorOffset == AStringView::npos)
+        return false;
+    const usize closingBraceOffset = text.find("}", anchorOffset);
+    if(closingBraceOffset == AStringView::npos)
+        return false;
+    const usize expectedOffset = text.find(expected, anchorOffset);
+    return expectedOffset != AStringView::npos && expectedOffset < closingBraceOffset;
+}
+
 static TestPath RepoRoot(TestArena& testArena){
     return TestPath(testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path().lexically_normal();
 }
@@ -147,6 +165,78 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     EXPECT_TRUE(ContainsText(
         rayTracingSystem,
         "hybrid hardware material-context fallback retried directly; caustics and surfel GI are disabled this frame"
+    ));
+}
+
+
+TEST(EcsGraphics, PreparedMaterialGraphDeclarationsFailClosedWhenResourceSetsAreIncomplete){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    EXPECT_TRUE(ContainsBeforeClosingBrace(
+        taskGraph,
+        "could not declare prepared opaque material geometry states",
+        "return false;"
+    ));
+    EXPECT_TRUE(ContainsBeforeClosingBrace(
+        taskGraph,
+        "could not declare prepared opaque material sampled textures",
+        "return false;"
+    ));
+    EXPECT_TRUE(ContainsBeforeClosingBrace(
+        taskGraph,
+        "could not declare prepared opaque CSG material geometry states",
+        "return false;"
+    ));
+    EXPECT_TRUE(ContainsBeforeClosingBrace(
+        taskGraph,
+        "could not declare prepared opaque CSG material sampled textures",
+        "return false;"
+    ));
+
+    EXPECT_TRUE(ContainsBeforeClosingBrace(
+        taskGraph,
+        "could not declare prepared transparent CSG material geometry states",
+        "return;"
+    ));
+    EXPECT_TRUE(ContainsBeforeClosingBrace(
+        taskGraph,
+        "could not declare prepared transparent CSG material sampled textures",
+        "return;"
+    ));
+    EXPECT_TRUE(ContainsBeforeClosingBrace(
+        taskGraph,
+        "could not declare prepared AVBOIT occupancy material geometry states",
+        "return;"
+    ));
+    EXPECT_TRUE(ContainsBeforeClosingBrace(
+        taskGraph,
+        "could not declare prepared AVBOIT occupancy material sampled textures",
+        "return;"
+    ));
+    EXPECT_TRUE(ContainsBeforeClosingBrace(
+        taskGraph,
+        "could not declare prepared AVBOIT extinction material geometry states",
+        "return;"
+    ));
+    EXPECT_TRUE(ContainsBeforeClosingBrace(
+        taskGraph,
+        "could not declare prepared AVBOIT extinction material sampled textures",
+        "return;"
+    ));
+    EXPECT_TRUE(ContainsBeforeClosingBrace(
+        taskGraph,
+        "could not declare prepared AVBOIT accumulation material geometry states",
+        "return;"
+    ));
+    EXPECT_TRUE(ContainsBeforeClosingBrace(
+        taskGraph,
+        "could not declare prepared AVBOIT accumulation material sampled textures",
+        "return;"
     ));
 }
 

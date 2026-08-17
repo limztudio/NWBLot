@@ -6648,8 +6648,13 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             gbufferMaterialGeometrySet
         )
     ;
-    if(gbufferUsesMaterialGeometry && !gbufferPayload.materialGeometryStatesGraphOwned)
+    if(gbufferUsesMaterialGeometry && !gbufferPayload.materialGeometryStatesGraphOwned){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque material geometry states"));
+        // A prepared material callback selects these mesh buffers through frozen heap slots.  Do not let the
+        // graph record it with an undeclared dynamic resource set; the caller will retain the direct compatibility
+        // path for this frame instead.
+        return false;
+    }
     const bool gbufferMaterialSampledTexturesCollected = gbufferUsesMaterialGeometry
         && GatherPreparedMaterialSampledTextureResourceSet(
             m_materialSystem,
@@ -6662,8 +6667,10 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             gbufferMaterialSampledTextureSet
         )
     ;
-    if(gbufferUsesMaterialGeometry && !gbufferMaterialSampledTexturesCollected)
+    if(gbufferUsesMaterialGeometry && !gbufferMaterialSampledTexturesCollected){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque material sampled textures"));
+        return false;
+    }
 
     // A generated-vertex buffer is persistent per mesh, so pulling every compute dispatch ahead of raster would be
     // wrong when multiple frozen draw items select the same output. The plan deliberately enables only the fully
@@ -7379,8 +7386,10 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
                 csgIntervalSampleMaterialGeometrySet
             )
         ;
-        if(csgIntervalSampleUsesMaterialGeometry && !csgIntervalSamplePayload.materialGeometryStatesGraphOwned)
+        if(csgIntervalSampleUsesMaterialGeometry && !csgIntervalSamplePayload.materialGeometryStatesGraphOwned){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque CSG material geometry states"));
+            return false;
+        }
         const bool csgIntervalSampleMaterialSampledTexturesCollected = csgIntervalSampleUsesMaterialGeometry
             && GatherPreparedMaterialSampledTextureResourceSet(
                 m_materialSystem,
@@ -7393,8 +7402,10 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
                 csgIntervalSampleMaterialSampledTextureSet
             )
         ;
-        if(csgIntervalSampleUsesMaterialGeometry && !csgIntervalSampleMaterialSampledTexturesCollected)
+        if(csgIntervalSampleUsesMaterialGeometry && !csgIntervalSampleMaterialSampledTexturesCollected){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque CSG material sampled textures"));
+            return false;
+        }
 
         // The CSG interval-sample material stream has a different placement from both regular opaque and receiver
         // CSG work: Combine has already completed, and the following Sample callback rasterizes immediately. That
@@ -12428,8 +12439,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 "Transparent CSG Material Geometry",
                 transparentCsgMaterialGeometrySet
             );
-            if(!avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned)
+            if(!avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared transparent CSG material geometry states"));
+                return;
+            }
             const bool transparentCsgMaterialSampledTexturesCollected =
                 avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned
                 && GatherPreparedMaterialSampledTextureResourceSet(
@@ -12443,11 +12456,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     transparentCsgMaterialSampledTextureSet
                 )
             ;
-            if(
-                avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned
-                && !transparentCsgMaterialSampledTexturesCollected
-            )
+            if(!transparentCsgMaterialSampledTexturesCollected){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared transparent CSG material sampled textures"));
+                return;
+            }
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(transparentCsgInstanceData);
 #if defined(NWB_DEBUG)
@@ -13139,8 +13151,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 "AVBOIT Occupancy Material Geometry",
                 occupancyMaterialGeometrySet
             );
-            if(!avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned)
+            if(!avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT occupancy material geometry states"));
+                return;
+            }
             occupancyMaterialSampledTexturesCollected =
                 avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
                 && GatherPreparedMaterialSampledTextureResourceSet(
@@ -13154,11 +13168,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     occupancyMaterialSampledTextureSet
                 )
             ;
-            if(
-                avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
-                && !occupancyMaterialSampledTexturesCollected
-            )
+            if(!occupancyMaterialSampledTexturesCollected){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT occupancy material sampled textures"));
+                return;
+            }
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(occupancyInstanceData);
 #if defined(NWB_DEBUG)
@@ -14249,8 +14262,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 "AVBOIT Extinction Material Geometry",
                 extinctionMaterialGeometrySet
             );
-            if(!avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned)
+            if(!avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT extinction material geometry states"));
+                return;
+            }
             extinctionMaterialSampledTexturesCollected =
                 avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
                 && GatherPreparedMaterialSampledTextureResourceSet(
@@ -14264,11 +14279,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     extinctionMaterialSampledTextureSet
                 )
             ;
-            if(
-                avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
-                && !extinctionMaterialSampledTexturesCollected
-            )
+            if(!extinctionMaterialSampledTexturesCollected){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT extinction material sampled textures"));
+                return;
+            }
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(extinctionInstanceData);
 #if defined(NWB_DEBUG)
@@ -15176,8 +15190,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 "AVBOIT Accumulation Material Geometry",
                 accumulationMaterialGeometrySet
             );
-            if(!avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned)
+            if(!avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT accumulation material geometry states"));
+                return;
+            }
             accumulationMaterialSampledTexturesCollected =
                 avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
                 && GatherPreparedMaterialSampledTextureResourceSet(
@@ -15191,11 +15207,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     accumulationMaterialSampledTextureSet
                 )
             ;
-            if(
-                avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
-                && !accumulationMaterialSampledTexturesCollected
-            )
+            if(!accumulationMaterialSampledTexturesCollected){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT accumulation material sampled textures"));
+                return;
+            }
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(accumulationInstanceData);
 #if defined(NWB_DEBUG)

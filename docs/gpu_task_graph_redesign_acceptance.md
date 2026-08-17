@@ -409,6 +409,7 @@ can receive an unconditional final sign-off.
 | `descriptor_buffer_tests` | 67 passed; 9 expected skips because this host has no dedicated Compute-only or Transfer-only family |
 | Project policy checks (`return_value_handling`, test `std::` use, interop containers) | passed |
 | Command-IR and Transfer A/B launcher/runner self-tests | passed |
+| Immutable renderer-baseline launcher/runner self-tests | passed; the test-owned `python launcher.py renderer-baseline <profile>` workflow captures a source-revisioned BMP, immutable checksum manifest, frozen scene settings, and validation log for opaque textured, AVBOIT, static/skinned CSG, soft-shadow, caustic, surfel-GI, and stress scenes. A later candidate can compare only against a matching profile/environment/settle-duration/validation-mode baseline and writes an amplified diff plus threshold report. No target-scene baseline artifact is claimed by this infrastructure-only check. |
 | Async-render lifecycle evidence: frame-lagged and M4 harnesses | passed with topology-gated execution; their parser/launcher self-tests pass, and freshly rebuilt Vulkan runs on AMD BC-250 (RADV GFX1013) each return the intentional `77` skip because no dedicated Compute-only family exists. This confirms that neither workflow silently treats the Graphics fallback as asynchronous coverage; it does not replace the still-required target-GPU timing/pixel evidence or change the default-disabled rollout policy. |
 | Command-IR profile, 4,096 records, Vulkan validation | passed; capture remained allocation-free and direct `CopyBuffer` replay was 3.63% faster than `Core::CommandList` replay |
 | Physical queue identity follow-up: graph unit binary | 37/37 passed |
@@ -867,8 +868,10 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    on an independent late Graphics recovery submission. The qualified-hardware execution remains topology-gated:
    this adapter correctly skips it because it has no dedicated Transfer-only family.
 
-5. **Final parity and performance evidence.** There is no immutable current baseline, legacy-to-graph pixel parity
-   corpus, or complete bindless-domain audit. The graph now provides immutable exact-resource-set expansion, and opaque G-buffer plus CSG interval sampling and the transparent interval producer plus AVBOIT occupancy, extinction, and accumulation phases declare both prepared material geometry and sampled-texture assets; Hardware Caustics attributes, Shadow Prepare trace, software-BVH build state, BLAS geometry build inputs, hybrid-tail inputs, and acceleration-structure finalization, Post-G-Buffer Normalize, and the Software Caustics, Shadow Visibility, and Surfel GI trace-geometry consumers adopt it across
+5. **Final parity and performance evidence.** The test-owned `renderer-baseline` workflow can now create an immutable,
+   source-revisioned current-renderer baseline and compare a later candidate only when its profile, frozen
+   environment, settle duration, and validation mode match. No target-scene baseline artifact or general
+   legacy-to-graph pixel-parity corpus has yet been collected. The graph now provides immutable exact-resource-set expansion, and opaque G-buffer plus CSG interval sampling and the transparent interval producer plus AVBOIT occupancy, extinction, and accumulation phases declare both prepared material geometry and sampled-texture assets; Hardware Caustics attributes, Shadow Prepare trace, software-BVH build state, BLAS geometry build inputs, hybrid-tail inputs, and acceleration-structure finalization, Post-G-Buffer Normalize, and the Software Caustics, Shadow Visibility, and Surfel GI trace-geometry consumers adopt it across
    prepared material and traversal geometry. The shared shadow material-context preflight now also freezes each
    generated surface dispatcher's bindless sampled textures, and Shadow Visibility, Software/Hardware Caustics, and
    Surfel GI declare that exact immutable read set. Every prepared raster-material consumer now fails graph

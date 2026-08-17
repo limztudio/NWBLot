@@ -1,0 +1,37 @@
+# Immutable renderer baselines
+
+This test-owned workflow captures a current renderer image as an immutable reference, then compares a later
+renderer capture against that reference without adding a production feature switch or reviving retired renderer
+paths. It is the first prerequisite for the redesign's broader legacy-to-graph parity corpus: a known-good revision
+and its capture metadata are preserved before a candidate revision is evaluated.
+
+Capture a reference from the repository root:
+
+```text
+python launcher.py renderer-baseline transparent-avboit
+python launcher.py renderer-baseline static-csg
+python launcher.py renderer-baseline skinned-csg
+python launcher.py renderer-baseline stress
+```
+
+Each run builds only its selected smoke target and writes `baseline.bmp`, `runtime.log`, and `manifest.json` under
+`.cozter/out/ab-results/renderer-baseline/<profile>/<timestamp>/`. The manifest records the source revision,
+executable checksum, frozen environment, capture settings, and image checksum. Baseline creation refuses a dirty
+source worktree, and an existing artifact directory is never overwritten.
+
+Compare a later build against an existing reference:
+
+```text
+python launcher.py renderer-baseline transparent-avboit -- \
+  --reference-dir .cozter/out/ab-results/renderer-baseline/transparent-avboit/<timestamp> \
+  --maximum-mean-abs 2.0 --maximum-changed-fraction 0.02
+```
+
+The candidate directory receives `candidate.bmp`, `difference.bmp`, `comparison.json`, and its own capture manifest.
+Without thresholds the comparison is report-only; `--require-exact` is suitable only for deterministic paths. A
+reference with a different profile, frozen environment, or GPU-validation mode is rejected rather than silently
+compared.
+
+Available profiles cover opaque sampled images, transparent AVBOIT, static/skinned CSG, soft shadows, caustics,
+surfel GI, and the skinned stress scene. Frame-lagged async lighting and dedicated-Transfer evidence retain their
+separate topology-gated workflows because a Graphics fallback is not equivalent evidence.

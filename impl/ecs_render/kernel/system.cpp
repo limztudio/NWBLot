@@ -1083,6 +1083,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || m_deferredLightingCompiledGraph.taskPrecedesInSamePacket(optionalTask, consumerTask)
         ;
     };
+    const auto taskIsCompiled = [&](const Core::GpuTaskId task){
+        return m_deferredLightingCompiledGraph.findTask(task) != nullptr;
+    };
     // Pure-software per-mesh typed clears and their native compute callbacks are part of the same accepting Shadow
     // Preparation packet. The semantic range still starts at Shadow Preparation, so a split would otherwise omit
     // recorded predecessor work and allow CPU topology publication without its sentinel/compute chain.
@@ -2169,95 +2172,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         avboitAccumulationComputeEmulationMerged
         && avboitAccumulationSharedComputeEmulationMerged
     ;
-    const Core::GpuSubmissionPacketId hardwareCausticsPacket = m_deferredLightingCompiledGraph.packetForTask(
-        m_deferredHardwareCausticsTask
-    );
-    const Core::GpuSubmissionPacketId causticPhotonPacket = m_deferredCausticPhotonTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticPhotonTask)
-        : Core::GpuSubmissionPacketId{}
+    const Core::GpuTaskId causticsTask = hardwareShadowSupported
+        ? m_deferredHardwareCausticsTask
+        : m_deferredSoftwareCausticsTask
     ;
-    const Core::GpuSubmissionPacketId causticGeometryPacket = m_deferredCausticGeometryTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticGeometryTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId causticResolvePreparePacket = m_deferredCausticResolvePrepareTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticResolvePrepareTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId causticResolveWaveletPacket = m_deferredCausticResolveWaveletTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticResolveWaveletTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId causticResolveSecondWaveletPacket = m_deferredCausticResolveSecondWaveletTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticResolveSecondWaveletTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId causticResolveThirdWaveletPacket = m_deferredCausticResolveThirdWaveletTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticResolveThirdWaveletTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId causticResolveFourthWaveletPacket = m_deferredCausticResolveFourthWaveletTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticResolveFourthWaveletTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId causticResolveFifthWaveletPacket = m_deferredCausticResolveFifthWaveletTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticResolveFifthWaveletTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId causticResolveUpsamplePacket = m_deferredCausticResolveUpsampleTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticResolveUpsampleTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId causticIrradianceClearPacket = m_deferredLightingCompiledGraph.packetForTask(
-        m_deferredCausticIrradianceClearTask
-    );
-    const Core::GpuSubmissionPacketId surfelGiPreparationPacket = m_deferredLightingCompiledGraph.packetForTask(
-        m_deferredSurfelGiPreparationTask
-    );
-    const Core::GpuSubmissionPacketId surfelGiInitializationLifecyclePacket =
-        m_deferredSurfelGiInitializationLifecycleTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredSurfelGiInitializationLifecycleTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId surfelGiSnapshotCopyPacket = m_deferredLightingCompiledGraph.packetForTask(
-        m_deferredSurfelGiSnapshotCopyTask
-    );
-    const Core::GpuSubmissionPacketId surfelGiIrradianceClearPacket = m_deferredLightingCompiledGraph.packetForTask(
-        m_deferredSurfelGiIrradianceClearTask
-    );
-    const Core::GpuSubmissionPacketId surfelGiAgeFreePacket = m_deferredSurfelGiAgeFreeTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredSurfelGiAgeFreeTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId surfelGiCellHeadClearPacket = m_deferredSurfelGiCellHeadClearTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredSurfelGiCellHeadClearTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId surfelGiHashBuildPacket = m_deferredSurfelGiHashBuildTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredSurfelGiHashBuildTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId surfelGiSpawnPacket = m_deferredSurfelGiSpawnTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredSurfelGiSpawnTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId surfelGiTraceBuildArgsPacket = m_deferredSurfelGiTraceBuildArgsTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredSurfelGiTraceBuildArgsTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId surfelGiTracePacket = m_deferredSurfelGiTraceTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredSurfelGiTraceTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId surfelGiResolvePacket = m_deferredSurfelGiResolveTask.valid()
-        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredSurfelGiResolveTask)
-        : Core::GpuSubmissionPacketId{}
-    ;
-    const Core::GpuSubmissionPacketId surfelGiPacket = m_deferredLightingCompiledGraph.packetForTask(
-        m_deferredSurfelGiTask
-    );
-    const Core::GpuSubmissionPacketId surfelGiCounterReadbackPacket =
-        m_deferredLightingCompiledGraph.packetForTask(m_deferredSurfelGiCounterReadbackTask);
     const Core::GpuSubmissionPacketId deferredLightingPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredLightingTask
     );
@@ -2317,9 +2235,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // hidden submission or record an output write outside the acceptance/timing endpoint it protects.
     const bool surfelGiOutputClearMergedIntoGiPacket =
         m_deferredSurfelGiIrradianceClearTask.valid()
-        && surfelGiIrradianceClearPacket.valid()
-        && surfelGiPacket.valid()
-        && surfelGiIrradianceClearPacket == surfelGiPacket
+        && m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredSurfelGiIrradianceClearTask,
+            m_deferredSurfelGiTask
+        )
     ;
     // A prepared Surfel GI frame splits age/free, its per-frame cell-head reset, hash build, Spawn, trace-build-
     // args, trace, and resolve from the final upsample. Every callback must still share the semantic GI packet,
@@ -2343,21 +2262,34 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredSurfelGiTraceBuildArgsTask.valid()
             && m_deferredSurfelGiTraceTask.valid()
             && m_deferredSurfelGiResolveTask.valid()
-            && surfelGiAgeFreePacket.valid()
-            && surfelGiCellHeadClearPacket.valid()
-            && surfelGiHashBuildPacket.valid()
-            && surfelGiSpawnPacket.valid()
-            && surfelGiTraceBuildArgsPacket.valid()
-            && surfelGiTracePacket.valid()
-            && surfelGiResolvePacket.valid()
-            && surfelGiPacket.valid()
-            && surfelGiAgeFreePacket == surfelGiPacket
-            && surfelGiCellHeadClearPacket == surfelGiPacket
-            && surfelGiHashBuildPacket == surfelGiPacket
-            && surfelGiSpawnPacket == surfelGiPacket
-            && surfelGiTraceBuildArgsPacket == surfelGiPacket
-            && surfelGiTracePacket == surfelGiPacket
-            && surfelGiResolvePacket == surfelGiPacket
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredSurfelGiAgeFreeTask,
+                m_deferredSurfelGiTask
+            )
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredSurfelGiCellHeadClearTask,
+                m_deferredSurfelGiTask
+            )
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredSurfelGiHashBuildTask,
+                m_deferredSurfelGiTask
+            )
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredSurfelGiSpawnTask,
+                m_deferredSurfelGiTask
+            )
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredSurfelGiTraceBuildArgsTask,
+                m_deferredSurfelGiTask
+            )
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredSurfelGiTraceTask,
+                m_deferredSurfelGiTask
+            )
+            && m_deferredLightingCompiledGraph.tasksSharePacket(
+                m_deferredSurfelGiResolveTask,
+                m_deferredSurfelGiTask
+            )
         )
     ;
     // Persistent first-use initialization has four typed clear tasks followed by a resource-free lifecycle task.
@@ -2367,128 +2299,115 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         !m_deferredSurfelGiInitializationLifecycleTask.valid()
         || (
             m_deferredSurfelGiPreparationTask.valid()
-            && surfelGiPreparationPacket.valid()
-            && surfelGiInitializationLifecyclePacket.valid()
             && m_deferredLightingCompiledGraph.tasksSharePacket(
                 m_deferredSurfelGiPreparationTask,
                 m_deferredSurfelGiInitializationLifecycleTask
             )
         )
     ;
-    // Both caustic routes retain a black output on a no-producer frame. Keep the typed clear in the selected
-    // producer packet so effects timing, acceptance, and the lagged-history wait still protect the first write.
-    const Core::GpuSubmissionPacketId causticsPacket = hardwareShadowSupported
-        ? hardwareCausticsPacket
-        : softwareCausticsPacket
-    ;
+    // Both caustic routes retain a black output on a no-producer frame. Keep the typed clear with the selected
+    // semantic producer task so effects timing, acceptance, and the lagged-history wait still protect the first
+    // write without mirroring its compiler packet.
     // Photon, geometry, resolve prepare, five wavelets, upsample, and timing close are distinct callbacks so the
     // compiler can lower their immutable and ping-pong UAV-to-SRV handoffs. They remain one semantic
     // submission: clear acceptance, timing, and all dependent effects keep the established packet endpoint.
     const bool causticPhotonMergedIntoCausticsPacket =
         m_deferredCausticPhotonTask.valid()
-        && causticPhotonPacket.valid()
-        && causticsPacket.valid()
-        && causticPhotonPacket == causticsPacket
+        && m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredCausticPhotonTask,
+            causticsTask
+        )
     ;
     const bool causticGeometryMergedIntoCausticsPacket =
         m_deferredCausticGeometryTask.valid()
-        && causticGeometryPacket.valid()
-        && causticsPacket.valid()
-        && causticGeometryPacket == causticsPacket
+        && m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredCausticGeometryTask,
+            causticsTask
+        )
     ;
     const bool causticResolvePrepareMergedIntoCausticsPacket =
         m_deferredCausticResolvePrepareTask.valid()
-        && causticResolvePreparePacket.valid()
-        && causticsPacket.valid()
-        && causticResolvePreparePacket == causticsPacket
+        && m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredCausticResolvePrepareTask,
+            causticsTask
+        )
     ;
     const bool causticResolveWaveletMergedIntoCausticsPacket =
         m_deferredCausticResolveWaveletTask.valid()
-        && causticResolveWaveletPacket.valid()
-        && causticsPacket.valid()
-        && causticResolveWaveletPacket == causticsPacket
+        && m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredCausticResolveWaveletTask,
+            causticsTask
+        )
     ;
     const bool causticResolveSecondWaveletMergedIntoCausticsPacket =
         m_deferredCausticResolveSecondWaveletTask.valid()
-        && causticResolveSecondWaveletPacket.valid()
-        && causticsPacket.valid()
-        && causticResolveSecondWaveletPacket == causticsPacket
+        && m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredCausticResolveSecondWaveletTask,
+            causticsTask
+        )
     ;
     const bool causticResolveThirdWaveletMergedIntoCausticsPacket =
         m_deferredCausticResolveThirdWaveletTask.valid()
-        && causticResolveThirdWaveletPacket.valid()
-        && causticsPacket.valid()
-        && causticResolveThirdWaveletPacket == causticsPacket
+        && m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredCausticResolveThirdWaveletTask,
+            causticsTask
+        )
     ;
     const bool causticResolveFourthWaveletMergedIntoCausticsPacket =
         m_deferredCausticResolveFourthWaveletTask.valid()
-        && causticResolveFourthWaveletPacket.valid()
-        && causticsPacket.valid()
-        && causticResolveFourthWaveletPacket == causticsPacket
+        && m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredCausticResolveFourthWaveletTask,
+            causticsTask
+        )
     ;
     const bool causticResolveFifthWaveletMergedIntoCausticsPacket =
         m_deferredCausticResolveFifthWaveletTask.valid()
-        && causticResolveFifthWaveletPacket.valid()
-        && causticsPacket.valid()
-        && causticResolveFifthWaveletPacket == causticsPacket
+        && m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredCausticResolveFifthWaveletTask,
+            causticsTask
+        )
     ;
     const bool causticResolveUpsampleMergedIntoCausticsPacket =
         m_deferredCausticResolveUpsampleTask.valid()
-        && causticResolveUpsamplePacket.valid()
-        && causticsPacket.valid()
-        && causticResolveUpsamplePacket == causticsPacket
+        && m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredCausticResolveUpsampleTask,
+            causticsTask
+        )
     ;
     const bool causticIrradianceClearMergedIntoCausticsPacket =
         m_deferredCausticIrradianceClearTask.valid()
-        && causticIrradianceClearPacket.valid()
-        && causticsPacket.valid()
-        && causticIrradianceClearPacket == causticsPacket
+        && m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredCausticIrradianceClearTask,
+            causticsTask
+        )
     ;
     // Non-temporal accumulation resets every frame through a typed graph clear before its selected producer. The
     // producer commits the matching CPU reset only after that shared packet accepts.
-    const Core::GpuSubmissionPacketId causticAccumulatorNonTemporalClearPacket =
-        m_deferredCausticAccumulatorNonTemporalClearTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticAccumulatorNonTemporalClearTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
     const bool causticAccumulatorNonTemporalClearMergedIntoCausticsPacket =
         !m_deferredCausticAccumulatorNonTemporalClearTask.valid()
-        || (
-            causticAccumulatorNonTemporalClearPacket.valid()
-            && causticsPacket.valid()
-            && causticAccumulatorNonTemporalClearPacket == causticsPacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredCausticAccumulatorNonTemporalClearTask,
+            causticsTask
         )
     ;
     // A fresh temporal accumulator is zeroed by a typed graph clear before its selected producer. Like the
     // irradiance clear, it must remain in that producer packet so the accepted callback is the sole publisher of
     // the initialized mirror and no hidden submission can write the accumulator.
-    const Core::GpuSubmissionPacketId causticAccumulatorBootstrapClearPacket =
-        m_deferredCausticAccumulatorBootstrapClearTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticAccumulatorBootstrapClearTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
     const bool causticAccumulatorBootstrapClearMergedIntoCausticsPacket =
         !m_deferredCausticAccumulatorBootstrapClearTask.valid()
-        || (
-            causticAccumulatorBootstrapClearPacket.valid()
-            && causticsPacket.valid()
-            && causticAccumulatorBootstrapClearPacket == causticsPacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredCausticAccumulatorBootstrapClearTask,
+            causticsTask
         )
     ;
     // A warm temporal accumulator decays in the same selected caustics packet.  If it split, the photon timing
     // scope could span an unsubmitted packet and the compiler-owned UAV dependency would no longer protect the
     // following atomic producer.
-    const Core::GpuSubmissionPacketId causticAccumulatorDecayPacket =
-        m_deferredCausticAccumulatorDecayTask.valid()
-            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticAccumulatorDecayTask)
-            : Core::GpuSubmissionPacketId{}
-    ;
     const bool causticAccumulatorDecayMergedIntoCausticsPacket =
         !m_deferredCausticAccumulatorDecayTask.valid()
-        || (
-            causticAccumulatorDecayPacket.valid()
-            && causticsPacket.valid()
-            && causticAccumulatorDecayPacket == causticsPacket
+        || m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredCausticAccumulatorDecayTask,
+            causticsTask
         )
     ;
     // Keep every recording and submission span derived from semantic task endpoints. Compiler packet identities
@@ -2677,26 +2596,26 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !surfelGiOutputClearMergedIntoGiPacket
         || !surfelGiPreparedPrefixMergedIntoGiPacket
         || !surfelGiInitializationLifecycleMergedIntoPreparationPacket
-        || !surfelGiPacket.valid()
+        || !taskIsCompiled(m_deferredSurfelGiTask)
         || !surfelGiQueue
         || (m_deferredSurfelGiSnapshotCopyTask.valid() && (
             !m_deferredSurfelGiPreparationTask.valid()
-            || !surfelGiPreparationPacket.valid()
+            || !taskIsCompiled(m_deferredSurfelGiPreparationTask)
             || !surfelGiPreparationQueue
-            || !surfelGiSnapshotCopyPacket.valid()
+            || !taskIsCompiled(m_deferredSurfelGiSnapshotCopyTask)
             || !surfelGiSnapshotCopyQueue
             || (static_cast<u8>(surfelGiSnapshotCopyQueue->capabilities)
                 & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
         ))
         || (m_deferredSurfelGiCounterReadbackTask.valid() && (
-            !surfelGiCounterReadbackPacket.valid()
+            !taskIsCompiled(m_deferredSurfelGiCounterReadbackTask)
             || !surfelGiCounterReadbackQueue
             || (static_cast<u8>(surfelGiCounterReadbackQueue->capabilities)
                 & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
         ))
         || (hardwareShadowSupported && (
             !m_deferredHardwareCausticsTask.valid()
-            || !hardwareCausticsPacket.valid()
+            || !taskIsCompiled(m_deferredHardwareCausticsTask)
             || !hardwareCausticsQueue
             || hardwareCausticsQueue->queueClass != Core::CommandQueue::Graphics
         ))
@@ -3444,15 +3363,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && softwareCausticsPacket.valid()
         ))
         && m_deferredSurfelGiTask.valid()
-        && surfelGiPacket.valid()
+        && taskIsCompiled(m_deferredSurfelGiTask)
         && (!m_deferredSurfelGiSnapshotCopyTask.valid() || (
             m_deferredSurfelGiPreparationTask.valid()
-            && surfelGiPreparationPacket.valid()
-            && surfelGiSnapshotCopyPacket.valid()
+            && taskIsCompiled(m_deferredSurfelGiPreparationTask)
+            && taskIsCompiled(m_deferredSurfelGiSnapshotCopyTask)
         ))
         && (!hardwareShadowSupported || (
             m_deferredHardwareCausticsTask.valid()
-            && hardwareCausticsPacket.valid()
+            && taskIsCompiled(m_deferredHardwareCausticsTask)
         ))
         && m_deferredAvboitPreTask.valid()
         && m_deferredAvboitOccupancyTask.valid()
@@ -4217,11 +4136,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredSurfelGiTask.valid()
             && (!m_deferredSurfelGiCounterReadbackCompletion.valid()
                 || surfelCounterReadbackCompletionToken.valid())
-            && surfelGiPacket.valid()
+            && taskIsCompiled(m_deferredSurfelGiTask)
             && (!m_deferredSurfelGiSnapshotCopyTask.valid() || (
                 m_deferredSurfelGiPreparationTask.valid()
-                && surfelGiPreparationPacket.valid()
-                && surfelGiSnapshotCopyPacket.valid()
+                && taskIsCompiled(m_deferredSurfelGiPreparationTask)
+                && taskIsCompiled(m_deferredSurfelGiSnapshotCopyTask)
             ))
             && surfelGiPacketRange.valid()
             && surfelGiPacketRange.packetCount == expectedSurfelGiPacketCount
@@ -4686,7 +4605,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredLightingTaskGraphValid
                 && m_deferredHardwareCausticsTask.valid()
                 && (!laggedAsyncLightingSchedule || m_deferredLightingHistoryCompletion.valid())
-                && hardwareCausticsPacket.valid()
+                && taskIsCompiled(m_deferredHardwareCausticsTask)
                 && hardwareCausticsPacketRange.valid()
                 && hardwareCausticsPacketRange.packetCount == LengthOf(hardwareCausticsTimingTickets)
                 && hardwareCausticsSubmitter.submitTaskRangeInCompileOrderFromTasks(

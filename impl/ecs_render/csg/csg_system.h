@@ -89,11 +89,6 @@ public:
         const CsgFrameGpuData& csgFrameData,
         CsgIntervalSampleStateGpuData& outState
     )const;
-    [[nodiscard]] bool uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
-    // Retained for transparent/legacy native paths. The opaque deferred graph instead snapshots this descriptor
-    // indirection during declaration and uploads the captured bytes through its graph task chain.
-    [[nodiscard]] bool uploadCsgFrameContextSlots(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
-    [[nodiscard]] bool uploadCsgIntervalSampleState(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
     void setCsgClipBufferStates(Core::CommandList& commandList);
     [[nodiscard]] bool resolveCsgReceiverClipDrawInfo(
         const CsgFrameReceiverLookup& receiverLookup,

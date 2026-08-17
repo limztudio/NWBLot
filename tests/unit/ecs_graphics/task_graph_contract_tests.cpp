@@ -514,6 +514,76 @@ TEST(EcsGraphics, DeferredSceneShadingUploadsHaveNoNativeCompatibilityDispatcher
 }
 
 
+// AVBOIT's normal path rejects an uncaptured transparent phase before recording. Its last aggregate native
+// dispatcher therefore had no caller and only kept mutable mesh/material/CSG writes reachable in dead code.
+// Keep that bridge retired so every supported transparent phase starts from its declaration-time graph snapshot.
+TEST(EcsGraphics, AvboitMaterialUploadsHaveNoNativeCompatibilityDispatcher){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString avboitHeaderSource;
+    AString avboitSource;
+    AString materialHeaderSource;
+    AString materialPassSource;
+    AString materialResourcesSource;
+    AString meshHeaderSource;
+    AString meshViewSource;
+    AString csgHeaderSource;
+    AString csgResourcesSource;
+    AString csgIntervalSource;
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_system.h", avboitHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_pass.cpp", avboitSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_system.h", materialHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass.cpp", materialPassSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass_resources.cpp", materialResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_system.h", meshHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_view.cpp", meshViewSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_system.h", csgHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_resources.cpp", csgResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_interval_peel.cpp", csgIntervalSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+
+    const AStringView avboitHeader(avboitHeaderSource.data(), avboitHeaderSource.size());
+    const AStringView avboit(avboitSource.data(), avboitSource.size());
+    const AStringView materialHeader(materialHeaderSource.data(), materialHeaderSource.size());
+    const AStringView materialPass(materialPassSource.data(), materialPassSource.size());
+    const AStringView materialResources(materialResourcesSource.data(), materialResourcesSource.size());
+    const AStringView meshHeader(meshHeaderSource.data(), meshHeaderSource.size());
+    const AStringView meshView(meshViewSource.data(), meshViewSource.size());
+    const AStringView csgHeader(csgHeaderSource.data(), csgHeaderSource.size());
+    const AStringView csgResources(csgResourcesSource.data(), csgResourcesSource.size());
+    const AStringView csgInterval(csgIntervalSource.data(), csgIntervalSource.size());
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    EXPECT_FALSE(ContainsText(avboitHeader, "renderAvboitPasses"));
+    EXPECT_FALSE(ContainsText(avboitHeader, "renderAvboitPreDepthWarpPasses"));
+    EXPECT_FALSE(ContainsText(avboitHeader, "renderAvboitPostOccupancyPasses"));
+    EXPECT_FALSE(ContainsText(avboitHeader, "buildTransparentCsgIntervals"));
+    EXPECT_FALSE(ContainsText(avboit, "renderAvboitPasses"));
+    EXPECT_FALSE(ContainsText(avboit, "renderAvboitPreDepthWarpPasses"));
+    EXPECT_FALSE(ContainsText(avboit, "renderAvboitPostOccupancyPasses"));
+    EXPECT_FALSE(ContainsText(avboit, "buildTransparentCsgIntervals"));
+
+    EXPECT_FALSE(ContainsText(materialHeader, "renderMaterialPass("));
+    EXPECT_FALSE(ContainsText(materialHeader, "uploadMaterialPassDrawBuffers"));
+    EXPECT_FALSE(ContainsText(materialPass, "renderMaterialPass("));
+    EXPECT_FALSE(ContainsText(materialResources, "commandList.writeBuffer("));
+    EXPECT_FALSE(ContainsText(meshHeader, "updateMeshViewBuffer"));
+    EXPECT_FALSE(ContainsText(meshView, "commandList.writeBuffer("));
+    EXPECT_FALSE(ContainsText(csgHeader, "uploadCsgFrameBuffers"));
+    EXPECT_FALSE(ContainsText(csgHeader, "uploadCsgIntervalSampleState"));
+    EXPECT_FALSE(ContainsText(csgResources, "commandList.writeBuffer("));
+    EXPECT_FALSE(ContainsText(csgInterval, "commandList.writeBuffer("));
+
+    EXPECT_TRUE(ContainsText(taskGraph, "TransparentMaterialPassGraphSnapshot"));
+    EXPECT_TRUE(ContainsText(taskGraph, "if(payload.hasTransparentRenderers && (!payload.occupancyPhasePrepared || !payload.occupancySnapshot.captured))"));
+    EXPECT_TRUE(ContainsText(taskGraph, "if(payload.hasTransparentRenderers && (!payload.extinctionPhasePrepared || !payload.extinctionSnapshot.captured))"));
+    EXPECT_TRUE(ContainsText(taskGraph, "if(payload.hasTransparentRenderers && (!payload.accumulationPhasePrepared || !payload.accumulationSnapshot.captured))"));
+    EXPECT_TRUE(ContainsText(taskGraph, "addUploadBufferTask("));
+}
+
+
 // The current renderer has exactly two runtime-selected sampled-image domains: material Texture2D assets (shared
 // by raster and ray-trace surface dispatch) and ImGui textures.  A new domain must not silently rely on a global
 // descriptor slot: keep the supported domain small and require each one to retain handles before graph declaration.

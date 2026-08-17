@@ -2847,7 +2847,6 @@ struct AvboitPreGraphTask{
     struct Payload{
         RendererAvboitSystem* avboitSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
-        const CsgFrameState* csgFrameState = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* transparentCsgIntervalsTiming = nullptr;
         bool hasTransparentRenderers = false;
@@ -2874,7 +2873,7 @@ struct AvboitPreGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.avboitSystem || !payload.targets || !payload.csgFrameState || !payload.timingTicket)
+        if(!payload.avboitSystem || !payload.targets || !payload.timingTicket)
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
@@ -2899,7 +2898,6 @@ struct AvboitPreGraphTask{
             payload.avboitSystem->renderAvboitTransparentCsgIntervals(
                 commandList,
                 *payload.targets,
-                *payload.csgFrameState,
                 preparedTransparentCsgReceiverSurfaceDrawItems,
                 preparedTransparentCsgFrameData,
                 preparedTransparentCsgInstanceCount,
@@ -3188,7 +3186,6 @@ struct AvboitOccupancyGraphTask{
     struct Payload{
         RendererAvboitSystem* avboitSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
-        const CsgFrameState* csgFrameState = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool hasTransparentRenderers = false;
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot occupancySnapshot;
@@ -3216,7 +3213,6 @@ struct AvboitOccupancyGraphTask{
         if(
             !payload.avboitSystem
             || !payload.targets
-            || !payload.csgFrameState
             || !payload.timingTicket
             || ((payload.occupancyComputeEmulationOutputStatesGraphOwned
                     || payload.occupancyCsgComputeEmulationOutputStatesGraphOwned)
@@ -3245,7 +3241,6 @@ struct AvboitOccupancyGraphTask{
             payload.avboitSystem->renderAvboitOccupancyPass(
                 commandList,
                 *payload.targets,
-                *payload.csgFrameState,
                 preparedOccupancyDrawItems,
                 preparedOccupancyCsgFrameData,
                 preparedOccupancyInstanceCount,
@@ -3557,7 +3552,6 @@ struct AvboitExtinctionGraphTask{
     struct Payload{
         RendererAvboitSystem* avboitSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
-        const CsgFrameState* csgFrameState = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot extinctionSnapshot;
         bool extinctionPhasePrepared = false;
@@ -3584,7 +3578,6 @@ struct AvboitExtinctionGraphTask{
         if(
             !payload.avboitSystem
             || !payload.targets
-            || !payload.csgFrameState
             || !payload.timingTicket
             || ((payload.extinctionComputeEmulationOutputStatesGraphOwned
                     || payload.extinctionCsgComputeEmulationOutputStatesGraphOwned)
@@ -3613,7 +3606,6 @@ struct AvboitExtinctionGraphTask{
             payload.avboitSystem->renderAvboitExtinctionPass(
                 commandList,
                 payload.targets->avboit,
-                *payload.csgFrameState,
                 preparedExtinctionDrawItems,
                 preparedExtinctionCsgFrameData,
                 preparedExtinctionInstanceCount,
@@ -3922,7 +3914,6 @@ struct AvboitAccumulationGraphTask{
     struct Payload{
         RendererAvboitSystem* avboitSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
-        const CsgFrameState* csgFrameState = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot accumulationSnapshot;
         bool accumulationPhasePrepared = false;
@@ -3950,7 +3941,6 @@ struct AvboitAccumulationGraphTask{
         if(
             !payload.avboitSystem
             || !payload.targets
-            || !payload.csgFrameState
             || !payload.timingTicket
             || ((payload.accumulationComputeEmulationOutputStatesGraphOwned
                     || payload.accumulationCsgComputeEmulationOutputStatesGraphOwned)
@@ -3979,7 +3969,6 @@ struct AvboitAccumulationGraphTask{
             payload.avboitSystem->renderAvboitAccumulatePass(
                 commandList,
                 *payload.targets,
-                *payload.csgFrameState,
                 preparedAccumulationDrawItems,
                 preparedAccumulationCsgFrameData,
                 preparedAccumulationInstanceCount,
@@ -12473,7 +12462,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload avboitCsgIntervalCombinePayload{ m_arena };
     avboitPrePayload.avboitSystem = &m_avboitSystem;
     avboitPrePayload.targets = &deferredTargets;
-    avboitPrePayload.csgFrameState = &csgFrameState;
     avboitPrePayload.timingTicket = &avboitPreTimingTicket;
     avboitPrePayload.transparentCsgIntervalsTiming = &transparentCsgIntervalsTiming;
     avboitPrePayload.hasTransparentRenderers = hasTransparentRenderers;
@@ -13189,7 +13177,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     AvboitOccupancyComputeEmulationGraphTask::Payload avboitOccupancyComputeEmulationPayload{ m_arena };
     avboitOccupancyPayload.avboitSystem = &m_avboitSystem;
     avboitOccupancyPayload.targets = &deferredTargets;
-    avboitOccupancyPayload.csgFrameState = &csgFrameState;
     avboitOccupancyPayload.timingTicket = &avboitPreTimingTicket;
     avboitOccupancyPayload.hasTransparentRenderers = hasTransparentRenderers;
 
@@ -14304,7 +14291,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     AvboitExtinctionComputeEmulationGraphTask::Payload avboitExtinctionComputeEmulationPayload{ m_arena };
     avboitExtinctionPayload.avboitSystem = &m_avboitSystem;
     avboitExtinctionPayload.targets = &deferredTargets;
-    avboitExtinctionPayload.csgFrameState = &csgFrameState;
     avboitExtinctionPayload.timingTicket = splitAvboitStages
         ? &avboitExtinctionTimingTicket
         : &avboitPreTimingTicket
@@ -15236,7 +15222,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     AvboitAccumulationComputeEmulationGraphTask::Payload avboitAccumulationComputeEmulationPayload{ m_arena };
     avboitAccumulationPayload.avboitSystem = &m_avboitSystem;
     avboitAccumulationPayload.targets = &deferredTargets;
-    avboitAccumulationPayload.csgFrameState = &csgFrameState;
     avboitAccumulationPayload.timingTicket = splitAvboitStages
         ? &avboitAccumulationTimingTicket
         : &avboitPreTimingTicket

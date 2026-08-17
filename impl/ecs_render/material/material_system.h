@@ -52,14 +52,6 @@ public:
     [[nodiscard]] bool hasTransparentRenderers(RendererResourceLookupMode::Enum lookupMode);
     void logMaterialRenderPathDecision(const Name& materialKey, RenderPath::Enum renderPath, bool meshSupported);
     [[nodiscard]] bool createComputeEmulationResources();
-    void renderMaterialPass(
-        Core::CommandList& commandList,
-        Core::Framebuffer* framebuffer,
-        MaterialPipelinePass::Enum pass,
-        bool transparent,
-        const CsgFrameState& csgFrameState,
-        const AvboitFrameTargets* avboitTargets
-    );
     // Graph-owned draw streams are already gathered, patched, and uploaded before native recording. This consumer
     // deliberately performs no mutable mesh-view or material/CSG buffer updates.
     void renderPreparedMaterialPass(
@@ -228,20 +220,9 @@ public:
         usize instanceCount,
         usize materialTypedByteCount
     )const;
-    // The CSG context descriptor is selected through every instance's retained heap-slot lane.  Graph declaration
-    // patches the immutable upload copy before the packet is recorded; the legacy direct upload path shares this
-    // helper so both routes keep the exact same instance ABI.
+    // The CSG context descriptor is selected through every instance's retained heap-slot lane. Graph declaration
+    // patches the immutable upload copy before the packet is recorded so every prepared phase keeps the same ABI.
     void prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData);
-    [[nodiscard]] bool uploadInstanceBuffer(Core::CommandList& commandList, InstanceGpuDataVector& instanceData);
-    [[nodiscard]] bool uploadMaterialTypedBuffer(Core::CommandList& commandList, const MaterialTypedByteDataVector& materialTypedBytes);
-    [[nodiscard]] bool uploadMaterialPassDrawBuffers(
-        Core::CommandList& commandList,
-        InstanceGpuDataVector& instanceData,
-#if defined(NWB_DEBUG)
-        const ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
-#endif
-        const MaterialTypedByteDataVector& materialTypedBytes
-    );
     [[nodiscard]] bool findMaterialPassDrawItemResources(
         const MaterialPassDrawItem& drawItem,
         MeshResources*& outMesh,

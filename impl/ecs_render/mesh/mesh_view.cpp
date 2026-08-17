@@ -60,23 +60,6 @@ void RendererMeshSystem::confirmMeshViewBufferUpload(const ECSRenderDetail::Mesh
     drawState().m_meshViewGpuDataValid = true;
 }
 
-bool RendererMeshSystem::updateMeshViewBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){
-    ECSRenderDetail::MeshViewGpuData viewState;
-    bool uploadRequired = false;
-    if(!prepareMeshViewBufferUpload(fallbackAspectRatio, viewState, uploadRequired))
-        return false;
-    if(!uploadRequired)
-        return true;
-
-    commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(drawState().m_meshViewBuffer.get(), &viewState, sizeof(viewState));
-    commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.commitBarriers();
-    confirmMeshViewBufferUpload(viewState);
-    return true;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

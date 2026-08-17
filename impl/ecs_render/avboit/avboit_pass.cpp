@@ -247,100 +247,6 @@ bool RendererAvboitSystem::prepareAvboitPassResources(
     ;
 }
 
-void RendererAvboitSystem::buildTransparentCsgIntervals(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const CsgFrameState& csgFrameState
-){
-    if(!targets.framebuffer)
-        return;
-    if(!csgFrameState.hasTransparentStaticWork && !csgFrameState.hasTransparentSkinnedWork)
-        return;
-
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_TransparentCsgIntervals, graphics().getDevice(), commandList);
-
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TransparentCsgIntervalArena);
-    MaterialPassDrawItemPartitions drawItems{scratchArena};
-    InstanceGpuDataVector instanceData{scratchArena};
-    CsgFrameGpuData csgFrameData{scratchArena};
-#if defined(NWB_DEBUG)
-    ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{scratchArena};
-#endif
-    MaterialTypedByteDataVector materialTypedBytes{scratchArena};
-
-    m_renderer.materialSystem().gatherMaterialPassDrawItems(
-        targets.framebuffer.get(),
-        MaterialPipelinePass::CsgReceiverSurface,
-        true,
-        csgFrameState,
-        drawItems,
-        instanceData,
-        csgFrameData,
-#if defined(NWB_DEBUG)
-        materialTypedRanges,
-#endif
-        materialTypedBytes,
-        RendererResourceLookupMode::PreparedOnly
-    );
-    if(drawItems.csgReceiverSurface.empty() || !csgFrameData.hasWork())
-        return;
-
-    m_renderer.m_deferredSystem.clearCsgIntervalTargets(
-        commandList,
-        targets,
-        csgFrameData.workRegion.resolveRect(targets.width, targets.height)
-    );
-
-    const bool drawBuffersReady = m_renderer.materialSystem().materialPassDrawBuffersReady(instanceData, materialTypedBytes);
-    const bool csgResourcesReady = m_renderer.csgSystem().csgFrameBuffersReady(csgFrameData);
-    const bool receiverSurfaceDrawResourcesReady =
-        m_renderer.materialSystem().materialPassDrawResourcesReady(drawItems.csgReceiverSurface)
-    ;
-    if(!drawBuffersReady || !csgResourcesReady || !receiverSurfaceDrawResourcesReady)
-        return;
-
-    if(!m_renderer.materialSystem().uploadMaterialPassDrawBuffers(
-        commandList,
-        instanceData,
-#if defined(NWB_DEBUG)
-        materialTypedRanges,
-#endif
-        materialTypedBytes
-    ))
-        return;
-    if(!m_renderer.csgSystem().uploadCsgFrameBuffers(commandList, csgFrameData))
-        return;
-    if(!m_renderer.csgSystem().uploadCsgIntervalSampleState(commandList, targets, csgFrameData))
-        return;
-
-    const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(targets.framebuffer->getFramebufferInfo());
-    if(!m_renderer.meshSystem().updateMeshViewBuffer(commandList, meshViewAspectRatio))
-        return;
-
-    Core::ViewportState viewportState;
-    viewportState
-        .addViewport(targets.framebuffer->getFramebufferInfo().getViewport())
-        .addScissorRect(csgFrameData.workRegion.resolveRect(targets.width, targets.height))
-    ;
-
-    m_renderer.csgSystem().dispatchCsgIntervalPeels(commandList, targets, csgFrameData);
-
-    const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
-        commandList,
-        targets.framebuffer.get(),
-        MaterialPipelinePass::CsgReceiverSurface,
-        nullptr,
-        viewportState
-    };
-    m_renderer.materialSystem().renderMaterialPassDrawItems(
-        csgReceiverSurfaceDrawContext,
-        drawItems.csgReceiverSurface
-    );
-
-    m_renderer.csgSystem().dispatchCsgReceiverSpanBuild(commandList, targets, csgFrameData);
-    m_renderer.csgSystem().dispatchCsgIntervalCombine(commandList, targets, csgFrameData);
-}
-
 void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
@@ -487,7 +393,6 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
 void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const CsgFrameState& csgFrameState,
     const MaterialPassDrawItems* const preparedTransparentCsgReceiverSurfaceDrawItems,
     const CsgFrameGpuData* const preparedTransparentCsgFrameData,
     const usize preparedTransparentCsgInstanceCount,
@@ -527,14 +432,11 @@ void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
             );
         }
     }
-    else
-        buildTransparentCsgIntervals(commandList, targets, csgFrameState);
 }
 
 void RendererAvboitSystem::renderAvboitOccupancyPass(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const CsgFrameState& csgFrameState,
     const MaterialPassDrawItemPartitions* const preparedOccupancyDrawItems,
     const CsgFrameGpuData* const preparedOccupancyCsgFrameData,
     const usize preparedOccupancyInstanceCount,
@@ -588,44 +490,12 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
             );
         }
     }
-    else{
-        m_renderer.materialSystem().renderMaterialPass(
-            commandList,
-            avboitTargets.lowFramebuffer.get(),
-            MaterialPipelinePass::AvboitOccupancy,
-            true,
-            csgFrameState,
-            &avboitTargets
-        );
-    }
     commandList.endRenderPass();
-}
-
-void RendererAvboitSystem::renderAvboitPreDepthWarpPasses(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const CsgFrameState& csgFrameState,
-    const MaterialPassDrawItems* const preparedTransparentCsgReceiverSurfaceDrawItems,
-    const CsgFrameGpuData* const preparedTransparentCsgFrameData,
-    const usize preparedTransparentCsgInstanceCount,
-    const usize preparedTransparentCsgMaterialTypedByteCount
-){
-    renderAvboitTransparentCsgIntervals(
-        commandList,
-        targets,
-        csgFrameState,
-        preparedTransparentCsgReceiverSurfaceDrawItems,
-        preparedTransparentCsgFrameData,
-        preparedTransparentCsgInstanceCount,
-        preparedTransparentCsgMaterialTypedByteCount
-    );
-    renderAvboitOccupancyPass(commandList, targets, csgFrameState);
 }
 
 void RendererAvboitSystem::renderAvboitExtinctionPass(
     Core::CommandList& commandList,
     AvboitFrameTargets& avboitTargets,
-    const CsgFrameState& csgFrameState,
     const MaterialPassDrawItemPartitions* const preparedExtinctionDrawItems,
     const CsgFrameGpuData* const preparedExtinctionCsgFrameData,
     const usize preparedExtinctionInstanceCount,
@@ -666,23 +536,12 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
             );
         }
     }
-    else{
-        m_renderer.materialSystem().renderMaterialPass(
-            commandList,
-            avboitTargets.lowFramebuffer.get(),
-            MaterialPipelinePass::AvboitExtinction,
-            true,
-            csgFrameState,
-            &avboitTargets
-        );
-    }
     commandList.endRenderPass();
 }
 
 void RendererAvboitSystem::renderAvboitAccumulatePass(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const CsgFrameState& csgFrameState,
     const MaterialPassDrawItemPartitions* const preparedAccumulationDrawItems,
     const CsgFrameGpuData* const preparedAccumulationCsgFrameData,
     const usize preparedAccumulationInstanceCount,
@@ -725,16 +584,6 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
             );
         }
     }
-    else{
-        m_renderer.materialSystem().renderMaterialPass(
-            commandList,
-            avboitTargets.accumulationFramebuffer.get(),
-            MaterialPipelinePass::AvboitAccumulate,
-            true,
-            csgFrameState,
-            &avboitTargets
-        );
-    }
     commandList.endRenderPass();
 
     // Deferred composite is a Compute pass. The normal graph lowers the two accumulation attachment and read-only
@@ -757,87 +606,6 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
             Core::ResourceStates::ShaderResource
         );
     }
-}
-
-void RendererAvboitSystem::renderAvboitPostOccupancyPreAccumulationPasses(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const CsgFrameState& csgFrameState,
-    const MaterialPassDrawItemPartitions* const preparedExtinctionDrawItems,
-    const CsgFrameGpuData* const preparedExtinctionCsgFrameData,
-    const usize preparedExtinctionInstanceCount,
-    const usize preparedExtinctionMaterialTypedByteCount,
-    const bool extinctionCsgIntervalSampleImageStatesGraphOwned,
-    const bool extinctionCsgClipBufferStatesGraphOwned,
-    const bool extinctionMaterialFrameStatesGraphOwned,
-    const bool extinctionMaterialGeometryStatesGraphOwned,
-    const bool extinctionComputeEmulationOutputStatesGraphOwned,
-    Optional<Core::GpuTimingMeasure>* const extinctionComputeEmulationTiming
-){
-    AvboitFrameTargets& avboitTargets = targets.avboit;
-    NWB_ASSERT(avboitTargets.valid());
-    NWB_ASSERT(avboitState().m_depthWarpPipeline);
-    NWB_ASSERT(avboitState().m_integratePipeline);
-
-    dispatchAvboitDepthWarp(commandList, avboitTargets);
-    renderAvboitExtinctionPass(
-        commandList,
-        avboitTargets,
-        csgFrameState,
-        preparedExtinctionDrawItems,
-        preparedExtinctionCsgFrameData,
-        preparedExtinctionInstanceCount,
-        preparedExtinctionMaterialTypedByteCount,
-        extinctionCsgIntervalSampleImageStatesGraphOwned,
-        extinctionCsgClipBufferStatesGraphOwned,
-        extinctionMaterialFrameStatesGraphOwned,
-        extinctionMaterialGeometryStatesGraphOwned,
-        extinctionComputeEmulationOutputStatesGraphOwned,
-        extinctionComputeEmulationTiming
-    );
-    dispatchAvboitIntegration(commandList, avboitTargets);
-}
-
-void RendererAvboitSystem::renderAvboitPostOccupancyPasses(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const CsgFrameState& csgFrameState,
-    const MaterialPassDrawItemPartitions* const preparedExtinctionDrawItems,
-    const CsgFrameGpuData* const preparedExtinctionCsgFrameData,
-    const usize preparedExtinctionInstanceCount,
-    const usize preparedExtinctionMaterialTypedByteCount
-){
-    renderAvboitPostOccupancyPreAccumulationPasses(
-        commandList,
-        targets,
-        csgFrameState,
-        preparedExtinctionDrawItems,
-        preparedExtinctionCsgFrameData,
-        preparedExtinctionInstanceCount,
-        preparedExtinctionMaterialTypedByteCount
-    );
-    renderAvboitAccumulatePass(commandList, targets, csgFrameState);
-}
-
-void RendererAvboitSystem::renderAvboitPasses(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const CsgFrameState& csgFrameState,
-    const MaterialPassDrawItems* const preparedTransparentCsgReceiverSurfaceDrawItems,
-    const CsgFrameGpuData* const preparedTransparentCsgFrameData,
-    const usize preparedTransparentCsgInstanceCount,
-    const usize preparedTransparentCsgMaterialTypedByteCount
-){
-    renderAvboitPreDepthWarpPasses(
-        commandList,
-        targets,
-        csgFrameState,
-        preparedTransparentCsgReceiverSurfaceDrawItems,
-        preparedTransparentCsgFrameData,
-        preparedTransparentCsgInstanceCount,
-        preparedTransparentCsgMaterialTypedByteCount
-    );
-    renderAvboitPostOccupancyPasses(commandList, targets, csgFrameState);
 }
 
 void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets){

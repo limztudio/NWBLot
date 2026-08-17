@@ -188,30 +188,6 @@ bool RendererCsgSystem::prepareCsgIntervalSampleStateData(
     return true;
 }
 
-bool RendererCsgSystem::uploadCsgIntervalSampleState(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const CsgFrameGpuData& csgFrameData
-){
-    if(!csgFrameData.hasWork())
-        return true;
-    if(!csgState().m_intervalSampleStateBuffer)
-        return false;
-    NWB_ASSERT(m_renderer.meshSystem().meshFrameHeapHandlesReady());
-
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgSampleStateUpload, graphics().getDevice(), commandList);
-
-    CsgIntervalSampleStateGpuData state;
-    if(!prepareCsgIntervalSampleStateData(targets, csgFrameData, state))
-        return false;
-    commandList.setBufferState(csgState().m_intervalSampleStateBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(csgState().m_intervalSampleStateBuffer.get(), &state, sizeof(state));
-    commandList.setBufferState(csgState().m_intervalSampleStateBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.commitBarriers();
-    return true;
-}
-
 void RendererCsgSystem::invalidateCsgIntervalPeelPipelines(){
     // Target descriptors are target-generation heap entries, not pipeline-local descriptor objects. Pipelines remain reusable
     // across target replacement; CreateIntervalCapFillPipeline refreshes its framebuffer-dependent variant.

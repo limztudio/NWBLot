@@ -47,8 +47,6 @@ public:
         bool& outUploadRequired
     )const;
     void confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState);
-    // Retained only for compatibility render paths that do not have a graph-owning renderer.
-    [[nodiscard]] bool updateMeshViewBuffer(Core::CommandList& commandList, f32 fallbackAspectRatio);
     [[nodiscard]] bool createMeshFrameHeapHandles();
     [[nodiscard]] bool meshFrameHeapHandlesReady()const;
     void populateMeshFrameHeapSlots(ECSRenderDetail::MeshFrameHeapSlots& outSlots)const;

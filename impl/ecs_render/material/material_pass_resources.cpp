@@ -270,65 +270,6 @@ void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(InstanceGpuDa
         instance.geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT] = csgContextHeapSlot;
 }
 
-bool RendererMaterialSystem::uploadInstanceBuffer(Core::CommandList& commandList, InstanceGpuDataVector& instanceData){
-    if(instanceData.empty())
-        return true;
-    NWB_ASSERT(drawState().m_instanceBuffer);
-    NWB_ASSERT(drawState().m_instanceBufferCapacity >= instanceData.size());
-
-    prepareMaterialPassInstanceUploadData(instanceData);
-
-#if defined(NWB_DEBUG)
-    if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: instance data upload size overflows"));
-        return false;
-    }
-#endif
-
-    commandList.setBufferState(drawState().m_instanceBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(drawState().m_instanceBuffer.get(), instanceData.data(), instanceData.size() * sizeof(InstanceGpuData));
-    commandList.setBufferState(drawState().m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.commitBarriers();
-    return true;
-}
-
-bool RendererMaterialSystem::uploadMaterialTypedBuffer(
-    Core::CommandList& commandList,
-    const MaterialTypedByteDataVector& materialTypedBytes
-){
-    usize uploadBytes = 0u;
-    if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes, uploadBytes))
-        return false;
-    NWB_ASSERT(drawState().m_materialTypedBuffer);
-    NWB_ASSERT(drawState().m_materialTypedBufferCapacity >= uploadBytes);
-
-    commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(drawState().m_materialTypedBuffer.get(), materialTypedBytes.data(), uploadBytes);
-    commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.commitBarriers();
-    return true;
-}
-
-bool RendererMaterialSystem::uploadMaterialPassDrawBuffers(
-    Core::CommandList& commandList,
-    InstanceGpuDataVector& instanceData,
-#if defined(NWB_DEBUG)
-    const ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
-#endif
-    const MaterialTypedByteDataVector& materialTypedBytes
-){
-#if defined(NWB_DEBUG)
-    NWB_ASSERT(instanceData.size() == materialTypedRanges.size());
-    ECSRenderDetail::AssertMaterialTypedUploadRanges(materialTypedRanges, materialTypedBytes);
-#endif
-
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MaterialUpload, graphics().getDevice(), commandList);
-
-    return uploadInstanceBuffer(commandList, instanceData) && uploadMaterialTypedBuffer(commandList, materialTypedBytes);
-}
-
 bool RendererMaterialSystem::findMaterialPassDrawItemResources(
     const MaterialPassDrawItem& drawItem,
     MeshResources*& outMesh,

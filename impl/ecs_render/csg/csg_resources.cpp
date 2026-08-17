@@ -705,51 +705,6 @@ bool RendererCsgSystem::prepareCsgClipContextSlotData(
     return true;
 }
 
-bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData){
-    if(!csgFrameData.hasWork())
-        return true;
-    NWB_ASSERT(csgFrameBuffersReady(csgFrameData));
-    NWB_ASSERT(deferredState().m_targets.bindless.slotsBufferDescriptor.valid());
-
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgUpload, graphics().getDevice(), commandList);
-
-    commandList.setBufferState(csgState().m_receiverRangeBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.setBufferState(csgState().m_cutterBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(
-        csgState().m_receiverRangeBuffer.get(),
-        csgFrameData.receiverRanges.data(),
-        csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData)
-    );
-    commandList.writeBuffer(
-        csgState().m_cutterBuffer.get(),
-        csgFrameData.cutters.data(),
-        csgFrameData.cutters.size() * sizeof(CsgCutterGpuData)
-    );
-    return uploadCsgFrameContextSlots(commandList, csgFrameData);
-}
-
-bool RendererCsgSystem::uploadCsgFrameContextSlots(
-    Core::CommandList& commandList,
-    const CsgFrameGpuData& csgFrameData
-){
-    if(!csgFrameData.hasWork())
-        return true;
-    NWB_ASSERT(csgFrameBuffersReady(csgFrameData));
-    NWB_ASSERT(deferredState().m_targets.bindless.slotsBufferDescriptor.valid());
-
-    CsgClipContextSlots contextSlots;
-    if(!prepareCsgClipContextSlotData(csgFrameData, contextSlots))
-        return false;
-
-    commandList.setBufferState(csgState().m_clipContextSlotsBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(csgState().m_clipContextSlotsBuffer.get(), &contextSlots, sizeof(contextSlots));
-    setCsgClipBufferStates(commandList);
-    commandList.commitBarriers();
-    return true;
-}
-
 void RendererCsgSystem::setCsgClipBufferStates(Core::CommandList& commandList){
     commandList.setBufferState(csgState().m_receiverRangeBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(csgState().m_cutterBuffer.get(), Core::ResourceStates::ShaderResource);

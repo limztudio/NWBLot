@@ -55,13 +55,69 @@ constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
     return queueBit != 0u && (static_cast<u8>(sharing) & queueBit) != 0u;
 }
 
+struct SetupUploadSameClassRouting{
+    GpuPhysicalQueueId primaryQueue;
+    bool enabled = false;
+    bool crossesQueueFamily = false;
+};
+
+// Public setup calls compile an isolated graph. Ordinary load balancing therefore has no previous packet to make an
+// auxiliary queue attractive, so opt in only when a compatible alternate physical transport actually exists and the
+// payload is large enough to amortize its readiness bridge. The compiler keeps the final choice deterministic.
+[[nodiscard]] static SetupUploadSameClassRouting ResolveSetupUploadSameClassRouting(
+    GraphicsBackend::Device& device,
+    const CommandQueue::Enum uploadQueue,
+    const usize uploadBytes
+)noexcept{
+    SetupUploadSameClassRouting result;
+    if(uploadBytes < s_TransferPreferredUploadMinimumBytes)
+        return result;
+
+    result.primaryQueue = device.getPrimaryPhysicalQueue(uploadQueue);
+    const GpuPhysicalQueueInfo* const primaryInfo = device.getPhysicalQueueInfo(result.primaryQueue);
+    if(!primaryInfo)
+        return result;
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueInfo* alternateInfo = nullptr;
+    const u8 requiredCapabilities = static_cast<u8>(GpuQueueCapability::Transfer);
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+        if(
+            candidate.id == result.primaryQueue
+            || candidate.queueClass != uploadQueue
+            || (static_cast<u8>(candidate.capabilities) & requiredCapabilities) != requiredCapabilities
+            || (alternateInfo && candidate.id.index >= alternateInfo->id.index)
+        )
+            continue;
+        alternateInfo = &candidate;
+    }
+    if(!alternateInfo)
+        return result;
+
+    result.enabled = true;
+    result.crossesQueueFamily = alternateInfo->familyIndex != primaryInfo->familyIndex;
+    return result;
+}
+
 // The public setup descriptors predate physical Transfer transport. When an upload moves away from Graphics, retain
 // the descriptor's declared consumers and add the producer family. An otherwise-exclusive setup resource keeps its
 // established Graphics consumer contract, which lets the returned handle remain immediately usable by legacy code.
 [[nodiscard]] static ResourceQueueSharing::Mask ResolveSetupUploadQueueSharing(
     const ResourceQueueSharing::Mask requestedSharing,
-    const CommandQueue::Enum uploadQueue
+    const CommandQueue::Enum uploadQueue,
+    const bool crossFamilySameClassRouting = false
 )noexcept{
+    if(crossFamilySameClassRouting){
+        const ResourceQueueSharing::Mask baseSharing = requestedSharing == ResourceQueueSharing::Exclusive
+            ? QueueSharingBitForQueue(uploadQueue)
+            : requestedSharing
+        ;
+        return static_cast<ResourceQueueSharing::Mask>(
+            static_cast<u8>(baseSharing) | static_cast<u8>(QueueSharingBitForQueue(uploadQueue))
+        );
+    }
+
     if(uploadQueue == CommandQueue::Graphics)
         return requestedSharing;
 
@@ -136,7 +192,11 @@ constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
     return request;
 }
 
-[[nodiscard]] static GpuTaskSchedulingHint SetupUploadGraphScheduling(const usize byteCount)noexcept{
+[[nodiscard]] static GpuTaskSchedulingHint SetupUploadGraphScheduling(
+    const usize byteCount,
+    const bool sameClassRouting = false,
+    const bool crossFamilySameClassRouting = false
+)noexcept{
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = byteCount >= s_TransferPreferredUploadMinimumBytes
         ? GpuTaskCostHint::Large
@@ -145,6 +205,9 @@ constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
     // A public setup call returns one accepted producer token, so retain a distinct explicit packet.
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
+    scheduling.allowSameClassQueueRouting = sameClassRouting;
+    scheduling.preferNonPrimarySameClassQueue = sameClassRouting;
+    scheduling.allowCrossFamilySameClassQueueRouting = crossFamilySameClassRouting;
     return scheduling;
 }
 
@@ -182,7 +245,8 @@ struct SetupUploadReadinessBridgeGraphTask{
     GraphicsBackend::Device& device,
     const ResourceQueueSharing::Mask queueSharing,
     const CommandQueue::Enum uploadQueue,
-    const GpuTaskId uploadTask
+    const GpuTaskId uploadTask,
+    const bool bridgePrimaryUploadQueue = false
 ){
     if(!uploadTask.valid())
         return {};
@@ -193,14 +257,7 @@ struct SetupUploadReadinessBridgeGraphTask{
         CommandQueue::Compute,
         CommandQueue::Transfer,
     };
-    for(const CommandQueue::Enum consumerQueue : consumerQueues){
-        if(
-            consumerQueue == uploadQueue
-            || !QueueSharingIncludesQueue(queueSharing, consumerQueue)
-            || !device.getQueue(consumerQueue)
-        )
-            continue;
-
+    const auto appendBridge = [&graph, uploadTask, &terminalTask](const CommandQueue::Enum consumerQueue){
         GpuTaskSchedulingHint scheduling = SetupUploadGraphScheduling(0u);
         scheduling.overlapPreferred = false;
         GpuTaskDesc bridgeDesc;
@@ -216,9 +273,24 @@ struct SetupUploadReadinessBridgeGraphTask{
             SetupUploadReadinessBridgeGraphTask::Payload{}
         );
         if(!bridgeTask.valid())
-            return {};
+            return false;
         terminalTask = bridgeTask;
+        return true;
+    };
+    for(const CommandQueue::Enum consumerQueue : consumerQueues){
+        if(
+            consumerQueue == uploadQueue
+            || !QueueSharingIncludesQueue(queueSharing, consumerQueue)
+            || !device.getQueue(consumerQueue)
+        )
+            continue;
+        if(!appendBridge(consumerQueue))
+            return {};
     }
+    // Append this last so the synchronous standalone caller can verify that the returned-handle bridge resolved to
+    // the exact primary physical upload queue even when the descriptor names additional consumer classes.
+    if(bridgePrimaryUploadQueue && (!device.getQueue(uploadQueue) || !appendBridge(uploadQueue)))
+        return {};
     return terminalTask;
 }
 
@@ -300,24 +372,28 @@ template<typename DeclareTask>
     const ResourceQueueSharing::Mask queueSharing,
     const CommandQueue::Enum uploadQueue,
     DeclareTask&& declareTask,
-    QueueSubmissionToken& outUploadToken
+    QueueSubmissionToken& outUploadToken,
+    const bool bridgePrimaryUploadQueue = false,
+    const GpuPhysicalQueueId requiredTerminalQueue = {}
 ){
     outUploadToken = {};
     QueueSubmissionToken terminalToken;
     if(!SubmitGraphOwnedStandaloneTask(
         device,
         graphArena,
-        [&device, queueSharing, uploadQueue, &declareTask](GpuTaskGraph& graph){
+        [&device, queueSharing, uploadQueue, bridgePrimaryUploadQueue, &declareTask](GpuTaskGraph& graph){
             const GpuTaskId uploadTask = declareTask(graph);
             return DeclareSetupUploadReadinessBridgeTasks(
                 graph,
                 device,
                 queueSharing,
                 uploadQueue,
-                uploadTask
+                uploadTask,
+                bridgePrimaryUploadQueue
             );
         },
-        terminalToken
+        terminalToken,
+        requiredTerminalQueue
     ))
         return false;
 
@@ -1458,10 +1534,14 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
         desc.dataSize,
         desc.bufferDesc.initialState != ResourceStates::Unknown
     );
+    const __hidden_graphics::SetupUploadSameClassRouting sameClassRouting =
+        __hidden_graphics::ResolveSetupUploadSameClassRouting(device, uploadQueue, desc.dataSize)
+    ;
     BufferDesc uploadDesc = desc.bufferDesc;
     uploadDesc.queueSharing = __hidden_graphics::ResolveSetupUploadQueueSharing(
         uploadDesc.queueSharing,
-        uploadQueue
+        uploadQueue,
+        sameClassRouting.crossesQueueFamily
     );
     BufferHandle buffer = device.createBuffer(uploadDesc);
     if(!buffer){
@@ -1475,7 +1555,7 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
         m_allocator.getObjectArena(),
         uploadDesc.queueSharing,
         uploadQueue,
-        [&buffer, &desc, &uploadDesc, uploadQueue, &uploadToken](GpuTaskGraph& graph){
+        [&buffer, &desc, &uploadDesc, uploadQueue, sameClassRouting, &uploadToken](GpuTaskGraph& graph){
             const GpuGraphResourceId destination = graph.importBuffer(
                 buffer,
                 GpuGraphResourceDesc{}
@@ -1498,7 +1578,11 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
                 .setIdentity(Name("graphics.setup_buffer.upload"))
                 .setMarkerLabel("Setup Buffer Upload")
                 .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue))
-                .setScheduling(__hidden_graphics::SetupUploadGraphScheduling(desc.dataSize))
+                .setScheduling(__hidden_graphics::SetupUploadGraphScheduling(
+                    desc.dataSize,
+                    sameClassRouting.enabled,
+                    sameClassRouting.crossesQueueFamily
+                ))
             ;
             return graph.addUploadBufferTask(
                 uploadTaskDesc,
@@ -1511,7 +1595,9 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
                 }
             );
         },
-        uploadToken
+        uploadToken,
+        sameClassRouting.enabled,
+        sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
     );
     if(!submitted){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit graph-owned setup buffer upload '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
@@ -1539,10 +1625,14 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
         desc.uploadDataSize,
         desc.textureDesc.initialState != ResourceStates::Unknown
     );
+    const __hidden_graphics::SetupUploadSameClassRouting sameClassRouting =
+        __hidden_graphics::ResolveSetupUploadSameClassRouting(device, uploadQueue, desc.uploadDataSize)
+    ;
     TextureDesc uploadDesc = desc.textureDesc;
     uploadDesc.queueSharing = __hidden_graphics::ResolveSetupUploadQueueSharing(
         uploadDesc.queueSharing,
-        uploadQueue
+        uploadQueue,
+        sameClassRouting.crossesQueueFamily
     );
     TextureHandle texture = device.createTexture(uploadDesc);
     if(!texture){
@@ -1556,7 +1646,7 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
         m_allocator.getObjectArena(),
         uploadDesc.queueSharing,
         uploadQueue,
-        [&texture, &desc, &uploadDesc, uploadQueue, &uploadToken](GpuTaskGraph& graph){
+        [&texture, &desc, &uploadDesc, uploadQueue, sameClassRouting, &uploadToken](GpuTaskGraph& graph){
             const GpuGraphResourceId destination = graph.importTexture(
                 texture,
                 GpuGraphResourceDesc{}
@@ -1575,7 +1665,11 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
                 .setIdentity(Name("graphics.setup_texture.upload"))
                 .setMarkerLabel("Setup Texture Upload")
                 .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue))
-                .setScheduling(__hidden_graphics::SetupUploadGraphScheduling(desc.uploadDataSize))
+                .setScheduling(__hidden_graphics::SetupUploadGraphScheduling(
+                    desc.uploadDataSize,
+                    sameClassRouting.enabled,
+                    sameClassRouting.crossesQueueFamily
+                ))
             ;
             return graph.addUploadTextureTask(
                 uploadTaskDesc,
@@ -1591,7 +1685,9 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
                 }
             );
         },
-        uploadToken
+        uploadToken,
+        sameClassRouting.enabled,
+        sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
     );
     if(!submitted){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit graph-owned setup texture upload '{}'"), StringConvert(desc.textureDesc.name.c_str()));

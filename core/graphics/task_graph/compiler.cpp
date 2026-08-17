@@ -244,7 +244,8 @@ inline constexpr u64 s_LargeTaskQueueCostWeight = 8u;
     const GpuTaskGraphQueueTopology& topology,
     const GpuPhysicalQueueInfo& baseQueue,
     const GpuQueueCapability::Mask requiredCapabilities,
-    const bool allowCrossFamilyRouting
+    const bool allowCrossFamilyRouting,
+    const bool preferNonPrimaryQueue
 )noexcept{
     const GpuPhysicalQueueInfo* result = nullptr;
     u64 resultLoad = Limit<u64>::s_Max;
@@ -271,7 +272,16 @@ inline constexpr u64 s_LargeTaskQueueCostWeight = 8u;
             const u64 cost = QueueCostWeight(graph.taskAt(assignedTask.index).scheduling.cost);
             load = load > Limit<u64>::s_Max - cost ? Limit<u64>::s_Max : load + cost;
         }
-        if(!result || load < resultLoad || (load == resultLoad && IsBetterQueue(candidate, result))){
+        const bool candidateIsNonPrimary = candidate.id != baseQueue.id;
+        const bool resultIsNonPrimary = result && result->id != baseQueue.id;
+        bool winsEqualLoad = IsBetterQueue(candidate, result);
+        if(preferNonPrimaryQueue && candidateIsNonPrimary != resultIsNonPrimary)
+            winsEqualLoad = candidateIsNonPrimary;
+        if(
+            !result
+            || load < resultLoad
+            || (load == resultLoad && winsEqualLoad)
+        ){
             result = &candidate;
             resultLoad = load;
         }
@@ -1094,7 +1104,8 @@ bool GpuTaskGraphCompiler::assignQueues(
                 topology,
                 *selectedQueue,
                 task.queue.requiredCapabilities,
-                task.scheduling.allowCrossFamilySameClassQueueRouting
+                task.scheduling.allowCrossFamilySameClassQueueRouting,
+                task.scheduling.preferNonPrimarySameClassQueue
             ))
                 selectedQueue = balancedQueue;
         }

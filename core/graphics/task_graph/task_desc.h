@@ -73,6 +73,10 @@ struct GpuTaskSchedulingHint{
     // and Vulkan family. The default retains the current one-transport-per-class behavior; callers that opt in
     // accept explicit timeline waits when a producer and consumer land on different queues in that family.
     bool allowSameClassQueueRouting = false;
+    // When same-class routing finds an equal-cost alternative, prefer a non-primary physical queue. This remains
+    // opt-in because broad CommandQueue callers retain the primary transport by default; upload/offload work can
+    // use it to create real overlap even when it is the first task in an otherwise-empty standalone graph.
+    bool preferNonPrimarySameClassQueue = false;
     // Extends the same-class opt-in to a physical queue from another Vulkan family. This remains separately opt-in
     // because exclusive resource uses cross that boundary through compiler-owned release/acquire ownership pairs.
     // It has no effect unless allowSameClassQueueRouting is also set.

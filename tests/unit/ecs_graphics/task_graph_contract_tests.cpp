@@ -341,7 +341,12 @@ TEST(EcsGraphics, SetupUploadReadinessBridgeRemainsGraphOwned){
     ASSERT_NE(timingResetOffset, AStringView::npos);
     const AStringView setupUpload = graphics.substr(setupUploadOffset, timingResetOffset - setupUploadOffset);
     EXPECT_TRUE(ContainsText(setupUpload, "DeclareSetupUploadReadinessBridgeTasks"));
+    EXPECT_TRUE(ContainsText(setupUpload, "bridgePrimaryUploadQueue"));
+    EXPECT_TRUE(ContainsText(setupUpload, "requiredTerminalQueue"));
     EXPECT_FALSE(ContainsText(setupUpload, "executeCommandLists"));
+    EXPECT_TRUE(ContainsText(graphics, "ResolveSetupUploadSameClassRouting"));
+    EXPECT_TRUE(ContainsText(graphics, "preferNonPrimarySameClassQueue"));
+    EXPECT_TRUE(ContainsText(graphics, "sameClassRouting.enabled ? sameClassRouting.primaryQueue"));
 }
 
 

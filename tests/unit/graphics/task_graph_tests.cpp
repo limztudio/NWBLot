@@ -2548,6 +2548,85 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
 }
 
 
+// An isolated graph has no earlier packet load, so an explicit offload policy must still select the registered
+// auxiliary queue deterministically. A following ordinary same-class task remains primary, which is the exact
+// readiness bridge large synchronous setup uploads require before they return a public resource handle.
+TEST(GpuTaskGraph, RoutesIsolatedOffloadToAuxiliaryAndReturnsPrimaryBridge){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuQueueRequest graphicsRequest;
+    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Transfer;
+    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+    graphicsRequest.allowFallback = false;
+    graphicsRequest.compilerMayOverridePreference = false;
+
+    Graphics::GpuTaskSchedulingHint uploadScheduling;
+    uploadScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    uploadScheduling.allowSameClassQueueRouting = true;
+    uploadScheduling.preferNonPrimarySameClassQueue = true;
+    uploadScheduling.allowCrossFamilySameClassQueueRouting = true;
+    Graphics::GpuTaskDesc uploadDesc;
+    uploadDesc
+        .setIdentity(Name("tests/task_graph/isolated_same_class_offload"))
+        .setMarkerLabel("Isolated Same Class Offload")
+        .setQueue(graphicsRequest)
+        .setScheduling(uploadScheduling)
+    ;
+    const Graphics::GpuTaskId upload = graph.addTask(uploadDesc);
+    ASSERT_TRUE(upload.valid());
+
+    Graphics::GpuTaskSchedulingHint bridgeScheduling;
+    bridgeScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    bridgeScheduling.overlapPreferred = false;
+    bridgeScheduling.forceSubmissionBoundary = true;
+    bridgeScheduling.allowPacketMerge = false;
+    const Graphics::GpuTaskId bridgeDependencies[] = { upload };
+    Graphics::GpuTaskDesc bridgeDesc;
+    bridgeDesc
+        .setIdentity(Name("tests/task_graph/isolated_same_class_primary_bridge"))
+        .setMarkerLabel("Isolated Same Class Primary Bridge")
+        .setQueue(graphicsRequest)
+        .setScheduling(bridgeScheduling)
+        .setDependencies(bridgeDependencies, LengthOf(bridgeDependencies))
+    ;
+    const Graphics::GpuTaskId bridge = graph.addTask(bridgeDesc);
+    ASSERT_TRUE(bridge.valid());
+
+    Graphics::GpuPhysicalQueueInfo auxiliaryGraphicsQueue = GraphicsQueue(1u);
+    auxiliaryGraphicsQueue.familyIndex = 3u;
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        auxiliaryGraphicsQueue,
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
+
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuTaskQueueAssignment* const uploadAssignment = assignments.find(upload);
+    const Graphics::GpuTaskQueueAssignment* const bridgeAssignment = assignments.find(bridge);
+    ASSERT_NE(uploadAssignment, nullptr);
+    ASSERT_NE(bridgeAssignment, nullptr);
+    EXPECT_EQ(uploadAssignment->queue, auxiliaryGraphicsQueue.id);
+    EXPECT_EQ(uploadAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+    EXPECT_EQ(bridgeAssignment->queue, queues[0u].id);
+
+    const Graphics::GpuSubmissionPacketId uploadPacket = compiledGraph.packetForTask(upload);
+    const Graphics::GpuSubmissionPacketId bridgePacket = compiledGraph.packetForTask(bridge);
+    ASSERT_TRUE(uploadPacket.valid());
+    ASSERT_TRUE(bridgePacket.valid());
+    ASSERT_EQ(compiledGraph.packet(bridgePacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(bridgePacket)[0u].producer, uploadPacket);
+}
+
+
 TEST(GpuTaskGraph, RetainsSameFamilyRoutingWithoutCrossFamilyOptIn){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

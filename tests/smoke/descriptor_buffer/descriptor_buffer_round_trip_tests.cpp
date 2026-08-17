@@ -38680,6 +38680,106 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSetupBufferUsesDedicatedTransfer
 }
 
 
+// A standalone setup graph has no pre-existing packet load, so a large explicitly Graphics-routed upload may offload
+// to an auxiliary Graphics transport only when it also inserts the primary-Graphics readiness packet before
+// returning the public handle. The following direct primary copy deliberately carries no explicit wait token.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSetupBufferUsesAuxiliaryGraphicsAndBridgesPrimaryReadiness){
+    HeadlessGraphicsScope multiQueueScope;
+    ASSERT_TRUE(multiQueueScope.setTransferQueueEnabled(false));
+    ASSERT_TRUE(multiQueueScope.setSameClassMultiQueueEnabled(true));
+    ASSERT_TRUE(multiQueueScope.setCrossFamilySameClassQueueRoutingEnabled(true));
+    if(!multiQueueScope.initialize())
+        GTEST_SKIP() << "Same-class setup upload routing: no usable headless Vulkan device on this host.";
+
+    auto& graphics = multiQueueScope.graphics();
+    auto& device = graphics.getDevice();
+    const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueInfo* const primaryGraphicsInfo = device.getPhysicalQueueInfo(primaryGraphicsQueue);
+    ASSERT_NE(primaryGraphicsInfo, nullptr);
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueInfo* auxiliaryGraphicsInfo = nullptr;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+        if(
+            candidate.queueClass != CommandQueue::Graphics
+            || candidate.id == primaryGraphicsQueue
+            || (auxiliaryGraphicsInfo && candidate.id.index >= auxiliaryGraphicsInfo->id.index)
+        )
+            continue;
+        auxiliaryGraphicsInfo = &candidate;
+    }
+    if(!auxiliaryGraphicsInfo)
+        GTEST_SKIP() << "Same-class setup upload routing: adapter exposes only one Graphics transport.";
+
+    static constexpr usize s_UploadByteSize = 1024u * 1024u;
+    static constexpr usize s_UploadWordCount = s_UploadByteSize / sizeof(u32);
+    Vector<u32, Alloc::GlobalArena> uploadWords(multiQueueScope.arena());
+    uploadWords.resize(s_UploadWordCount);
+    for(usize wordIndex = 0u; wordIndex < s_UploadWordCount; ++wordIndex)
+        uploadWords[wordIndex] = 0x51ed270bu * static_cast<u32>(wordIndex) + 0x8d1c79f3u;
+
+    QueueSubmissionToken uploadToken;
+    Graphics::BufferSetupDesc setupDesc;
+    setupDesc.bufferDesc = BufferDesc()
+        .setByteSize(s_UploadByteSize)
+        .setInitialState(ResourceStates::Common)
+    ;
+    setupDesc.data = uploadWords.data();
+    setupDesc.dataSize = s_UploadByteSize;
+    setupDesc.queue = CommandQueue::Graphics;
+    setupDesc.acceptedToken = &uploadToken;
+    const BufferHandle source = graphics.setupBuffer(setupDesc);
+    ASSERT_NE(source.get(), nullptr);
+    ASSERT_TRUE(uploadToken.valid());
+    ASSERT_TRUE(uploadToken.matchesPhysicalQueue(
+        auxiliaryGraphicsInfo->id.index,
+        auxiliaryGraphicsInfo->id.deviceGeneration
+    ));
+    EXPECT_EQ(uploadToken.queue, CommandQueue::Graphics);
+    EXPECT_EQ(
+        source->getDescription().queueSharing,
+        auxiliaryGraphicsInfo->familyIndex != primaryGraphicsInfo->familyIndex
+            ? ResourceQueueSharing::Graphics
+            : ResourceQueueSharing::Exclusive
+    );
+
+    const BufferHandle destination = device.createBuffer(
+        BufferDesc()
+            .setByteSize(s_UploadByteSize)
+            .setInitialState(ResourceStates::Common)
+            .setCpuAccess(CpuAccessMode::Read)
+    );
+    ASSERT_NE(destination.get(), nullptr);
+
+    auto primaryCopy = device.createCommandList();
+    ASSERT_NE(primaryCopy.get(), nullptr);
+    primaryCopy->open();
+    primaryCopy->copyBuffer(destination.get(), 0u, source.get(), 0u, s_UploadByteSize);
+    primaryCopy->close();
+
+    CommandList* primaryCopyLists[] = { primaryCopy.get() };
+    const QueueSubmissionToken primaryCopyToken = device.executeCommandLists(
+        primaryCopyLists,
+        LengthOf(primaryCopyLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(primaryCopyToken.valid());
+    ASSERT_TRUE(primaryCopyToken.matchesPhysicalQueue(
+        primaryGraphicsQueue.index,
+        primaryGraphicsQueue.deviceGeneration
+    ));
+    ASSERT_TRUE(device.waitForIdle());
+
+    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    ASSERT_NE(copiedWords, nullptr);
+    const usize sampledWords[] = { 0u, s_UploadWordCount / 2u, s_UploadWordCount - 1u };
+    for(const usize wordIndex : sampledWords)
+        EXPECT_EQ(copiedWords[wordIndex], uploadWords[wordIndex]);
+    device.unmapBuffer(destination.get());
+}
+
+
 // If no dedicated Transfer family exists, automatic sizeable setup uploads must still choose a real transport: a
 // dedicated Compute queue when one is available, otherwise the established Graphics path. The accepted token makes
 // this routing observable without exposing a backend-specific queue object through the public setup API.

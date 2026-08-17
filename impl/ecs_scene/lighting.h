@@ -51,13 +51,18 @@ NWB_IMPL_SCENE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct alignas(SIMDVector) SceneLight{
+struct alignas(Float4) SceneLight{
     // xyz = world position (point/spot); w = spot inner cone cosine.
-    SIMDVector position = s_SIMDIdentityR3;
+    Float4 position = Float4(0.0f, 0.0f, 0.0f, 1.0f);
     // Directional: normalized direction toward the light. Spot: normalized emission axis. w = spot outer cone cosine.
-    SIMDVector direction = VectorSet(0.0f, 0.0f, -1.0f, 1.0f);
+    Float4 direction = Float4(0.0f, 0.0f, -1.0f, 1.0f);
     // xyz = color, w = intensity.
-    SIMDVector colorIntensity = s_SIMDOne;
+    Float4 colorIntensity = Float4(
+        LightDefaults::s_WhiteColorComponent,
+        LightDefaults::s_WhiteColorComponent,
+        LightDefaults::s_WhiteColorComponent,
+        LightDefaults::s_Intensity
+    );
     f32 range = 0.0f;
     // Soft-shadow source size (see LightComponent): directional angular radius (radians) / punctual source radius (world units).
     f32 angularRadius = LightDefaults::s_DirectionalAngularRadius;
@@ -69,7 +74,7 @@ struct alignas(SIMDVector) SceneLight{
 
 static_assert(IsStandardLayout_V<SceneLight>, "SceneLight must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<SceneLight>, "SceneLight must stay cheap to pass through scene preparation");
-static_assert(alignof(SceneLight) >= alignof(SIMDVector), "SceneLight must keep calculation vectors aligned");
+static_assert(alignof(SceneLight) >= alignof(Float4), "SceneLight must keep storage vectors aligned");
 
 
 // Fallback used when a world declares no lights: a single neutral directional light aimed along the view.

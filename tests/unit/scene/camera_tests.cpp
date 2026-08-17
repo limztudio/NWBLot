@@ -42,24 +42,25 @@ TEST(Scene, CameraProjectionHelpers){
         VectorReplicate(1.5f),
         projection
     ));
-    EXPECT_GT(VectorGetX(projection.projectionParams), 0.0f);
-    EXPECT_GT(VectorGetY(projection.projectionParams), 0.0f);
-    EXPECT_GT(VectorGetZ(projection.projectionParams), 0.0f);
-    EXPECT_LT(VectorGetW(projection.projectionParams), 0.0f);
+    const SIMDVector projectionParams = LoadFloat(projection.projectionParams);
+    EXPECT_GT(VectorGetX(projectionParams), 0.0f);
+    EXPECT_GT(VectorGetY(projectionParams), 0.0f);
+    EXPECT_GT(VectorGetZ(projectionParams), 0.0f);
+    EXPECT_LT(VectorGetW(projectionParams), 0.0f);
     const f32 depthRange = camera.farPlane() - camera.nearPlane();
-    EXPECT_FLOAT_EQ(VectorGetX(projection.projectionParams), 1.0f / (VectorGetX(tanHalfFov) * camera.aspectRatio()));
-    EXPECT_FLOAT_EQ(VectorGetY(projection.projectionParams), 1.0f / VectorGetX(tanHalfFov));
-    EXPECT_FLOAT_EQ(VectorGetZ(projection.projectionParams), camera.farPlane() / depthRange);
-    EXPECT_FLOAT_EQ(VectorGetW(projection.projectionParams), -(camera.nearPlane() * camera.farPlane()) / depthRange);
-    EXPECT_TRUE(NWB::Impl::Scene::CameraProjectionValid(projection));
-    EXPECT_EQ(VectorGetX(projection.aspectRatio), 2.0f);
-    EXPECT_GT(VectorGetX(projection.tanHalfVerticalFov), 0.0f);
-    EXPECT_EQ(VectorGetX(projection.nearPlane), camera.nearPlane());
-    EXPECT_EQ(VectorGetX(projection.farPlane), camera.farPlane());
+    EXPECT_FLOAT_EQ(VectorGetX(projectionParams), 1.0f / (VectorGetX(tanHalfFov) * camera.aspectRatio()));
+    EXPECT_FLOAT_EQ(VectorGetY(projectionParams), 1.0f / VectorGetX(tanHalfFov));
+    EXPECT_FLOAT_EQ(VectorGetZ(projectionParams), camera.farPlane() / depthRange);
+    EXPECT_FLOAT_EQ(VectorGetW(projectionParams), -(camera.nearPlane() * camera.farPlane()) / depthRange);
+    EXPECT_TRUE(NWB::Impl::Scene::CameraProjectionStorageValid(projection));
+    EXPECT_EQ(projection.aspectRatio, 2.0f);
+    EXPECT_GT(projection.tanHalfVerticalFov, 0.0f);
+    EXPECT_EQ(projection.nearPlane, camera.nearPlane());
+    EXPECT_EQ(projection.farPlane, camera.farPlane());
 
     const NWB::Impl::Scene::CameraProjection defaultProjection = NWB::Impl::Scene::BuildDefaultCameraProjection(1.5f);
-    EXPECT_TRUE(NWB::Impl::Scene::CameraProjectionValid(defaultProjection));
-    EXPECT_EQ(VectorGetX(defaultProjection.aspectRatio), 1.5f);
+    EXPECT_TRUE(NWB::Impl::Scene::CameraProjectionStorageValid(defaultProjection));
+    EXPECT_EQ(defaultProjection.aspectRatio, 1.5f);
 
     camera.setNearPlane(0.0f);
     EXPECT_FALSE(NWB::Impl::Scene::CameraClipRangeValid(VectorReplicate(camera.nearPlane()), VectorReplicate(camera.farPlane())));
@@ -72,7 +73,7 @@ TEST(Scene, CameraProjectionHelpers){
         projection
     ));
     const NWB::Impl::Scene::CameraProjection emptyProjection{};
-    EXPECT_FALSE(NWB::Impl::Scene::CameraProjectionValid(emptyProjection));
+    EXPECT_FALSE(NWB::Impl::Scene::CameraProjectionStorageValid(emptyProjection));
 
     camera = NWB::Impl::Scene::CameraComponent{};
     camera.setNearPlane(2.0f);

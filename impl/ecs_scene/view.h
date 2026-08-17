@@ -17,16 +17,17 @@ NWB_IMPL_SCENE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct alignas(SIMDVector) SceneViewBasis{
-    SIMDVector right = s_SIMDIdentityR0;
-    SIMDVector up = s_SIMDIdentityR1;
-    SIMDVector forward = s_SIMDIdentityR2;
-    SIMDVector positionDepthBias = s_SIMDZero;
+struct alignas(Float4) SceneViewBasis{
+    // Persistent view-basis storage. Calculation helpers use SIMDVector values before writing this boundary.
+    Float4 right = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    Float4 up = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    Float4 forward = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    Float4 positionDepthBias = Float4(0.0f, 0.0f, 0.0f, 0.0f);
 };
 
 static_assert(IsStandardLayout_V<SceneViewBasis>, "SceneViewBasis must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<SceneViewBasis>, "SceneViewBasis must stay cheap to pass by value");
-static_assert(alignof(SceneViewBasis) >= alignof(SIMDVector), "SceneViewBasis must keep calculation vectors aligned");
+static_assert(alignof(SceneViewBasis) >= alignof(Float4), "SceneViewBasis must keep storage vectors aligned");
 
 
 [[nodiscard]] SceneViewBasis BuildDefaultSceneViewBasis();

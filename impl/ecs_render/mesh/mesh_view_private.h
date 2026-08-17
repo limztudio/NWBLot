@@ -153,12 +153,17 @@ inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 f
         projection = cameraView.projection;
     }
 
-    const SIMDVector positionDepthBias = viewBasis.positionDepthBias;
-    const SIMDVector right = VectorSetW(viewBasis.right, 0.0f);
-    const SIMDVector up = VectorSetW(viewBasis.up, 0.0f);
-    const SIMDVector forward = VectorSetW(viewBasis.forward, 0.0f);
+    const SIMDVector positionDepthBias = LoadFloat(viewBasis.positionDepthBias);
+    const SIMDVector right = VectorSetW(LoadFloat(viewBasis.right), 0.0f);
+    const SIMDVector up = VectorSetW(LoadFloat(viewBasis.up), 0.0f);
+    const SIMDVector forward = VectorSetW(LoadFloat(viewBasis.forward), 0.0f);
+    const SIMDVector projectionParams = LoadFloat(projection.projectionParams);
+    const SIMDVector tanHalfVerticalFov = VectorReplicate(projection.tanHalfVerticalFov);
+    const SIMDVector aspectRatio = VectorReplicate(projection.aspectRatio);
+    const SIMDVector nearPlane = VectorReplicate(projection.nearPlane);
+    const SIMDVector farPlane = VectorReplicate(projection.farPlane);
 
-    const SIMDMatrix worldToClip = BuildWorldToClipMatrix(positionDepthBias, right, up, forward, projection.projectionParams);
+    const SIMDMatrix worldToClip = BuildWorldToClipMatrix(positionDepthBias, right, up, forward, projectionParams);
     StoreFloat(worldToClip, &state.worldToClip);
 
     SIMDVector determinant;
@@ -175,10 +180,10 @@ inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 f
         right,
         up,
         forward,
-        projection.tanHalfVerticalFov,
-        VectorMultiply(projection.tanHalfVerticalFov, projection.aspectRatio),
-        projection.nearPlane,
-        projection.farPlane
+        tanHalfVerticalFov,
+        VectorMultiply(tanHalfVerticalFov, aspectRatio),
+        nearPlane,
+        farPlane
     );
     StoreFloat(cameraPosition, &state.cameraPosition);
     for(usize planeIndex = 0u; planeIndex < NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT; ++planeIndex)

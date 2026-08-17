@@ -182,8 +182,8 @@ TEST(Scene, SceneCameraResolution){
     EXPECT_EQ(fallbackCameraView.entity, firstCameraEntity.id());
     EXPECT_EQ(fallbackCameraView.transform, firstTransform);
     EXPECT_EQ(fallbackCameraView.camera, firstCamera);
-    EXPECT_GT(VectorGetX(fallbackCameraView.projection.projectionParams), 0.0f);
-    EXPECT_GT(VectorGetX(fallbackCameraView.projection.tanHalfVerticalFov), 0.0f);
+    EXPECT_GT(VectorGetX(LoadFloat(fallbackCameraView.projection.projectionParams)), 0.0f);
+    EXPECT_GT(fallbackCameraView.projection.tanHalfVerticalFov, 0.0f);
 
     auto activeCameraEntity = testWorld.world.createEntity();
     auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
@@ -194,8 +194,8 @@ TEST(Scene, SceneCameraResolution){
     EXPECT_EQ(requestedCameraView.entity, secondCameraEntity.id());
     EXPECT_EQ(requestedCameraView.transform, secondTransform);
     EXPECT_EQ(requestedCameraView.camera, secondCamera);
-    EXPECT_GT(VectorGetY(requestedCameraView.projection.projectionParams), 0.0f);
-    EXPECT_EQ(VectorGetX(requestedCameraView.projection.aspectRatio), 1.0f);
+    EXPECT_GT(VectorGetY(LoadFloat(requestedCameraView.projection.projectionParams)), 0.0f);
+    EXPECT_EQ(requestedCameraView.projection.aspectRatio, 1.0f);
 
     NWB::Impl::Scene::SceneCameraView invalidProjectionView = requestedCameraView;
     invalidProjectionView.projection = NWB::Impl::Scene::CameraProjection{};

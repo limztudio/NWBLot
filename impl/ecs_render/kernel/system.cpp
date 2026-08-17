@@ -2119,9 +2119,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? m_deferredHardwareCausticsTask
         : m_deferredSoftwareCausticsTask
     ;
-    const Core::GpuSubmissionPacketId deferredLightingPacket = m_deferredLightingCompiledGraph.packetForTask(
-        m_deferredLightingTask
-    );
     // Deferred Lighting's submission range starts at the Lighting packet. A fresh history-selector upload must
     // compile into that exact packet, or it would be recorded but omitted from its external wait and acceptance.
     const bool laggedLightingHistorySlotsUploadMergedIntoLightingPacket =
@@ -2131,26 +2128,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLaggedLightingHistorySlotsUploadTask
         )
     ;
-    const Core::GpuSubmissionPacketId deferredCompositePacket = m_deferredLightingCompiledGraph.packetForTask(
-        m_deferredCompositeTask
-    );
-    const Core::GpuSubmissionPacketId deferredPresentPacket = m_deferredLightingCompiledGraph.packetForTask(
-        m_deferredPresentTask
-    );
-    const Core::GpuSubmissionPacketId deferredPresentationOverlayPacket =
-        m_deferredLightingCompiledGraph.packetForTask(m_deferredPresentationOverlayTask);
     const Core::GpuTaskId terminalPresentationTask = m_deferredPresentationOverlayTask.valid()
         ? m_deferredPresentationOverlayTask
         : m_deferredPresentTask
     ;
-    const Core::GpuSubmissionPacketId terminalPresentationPacket = deferredPresentationOverlayPacket.valid()
-        ? deferredPresentationOverlayPacket
-        : deferredPresentPacket
-    ;
-    const Core::GpuSubmissionPacketId deferredLaggedLightingHistoryPacket =
-        m_deferredLightingCompiledGraph.packetForTask(m_deferredLaggedLightingHistoryTask);
-    const Core::GpuSubmissionPacketId deferredFrameRecoveryPacket =
-        m_deferredLightingCompiledGraph.packetForTask(m_deferredFrameRecoveryTask);
+    // Presentation is the sole renderer policy that still needs the exact compiler packet: it owns the binary
+    // swap-chain signal. All ordinary record/submit readiness below resolves through semantic task anchors.
+    const Core::GpuSubmissionPacketId terminalPresentationPacket =
+        m_deferredLightingCompiledGraph.packetForTask(terminalPresentationTask);
     const Core::GpuPhysicalQueueInfo* const deferredLightingQueue =
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredLightingTask);
     const Core::GpuPhysicalQueueInfo* const deferredCompositeQueue =
@@ -2619,19 +2604,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && !surfelCounterReadbackCompletionToken.valid())
         || (captureLaggedLightingHistory && (
             !m_deferredLaggedLightingHistoryTask.valid()
-            || !deferredLaggedLightingHistoryPacket.valid()
+            || !taskIsCompiled(m_deferredLaggedLightingHistoryTask)
             || !deferredLaggedLightingHistoryQueue
             || (static_cast<u8>(deferredLaggedLightingHistoryQueue->capabilities)
                 & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
         ))
         || (laggedAsyncLightingSchedule && !m_deferredLightingHistoryCompletion.valid())
-        || !deferredLightingPacket.valid()
+        || !taskIsCompiled(m_deferredLightingTask)
         || !laggedLightingHistorySlotsUploadMergedIntoLightingPacket
-        || !deferredCompositePacket.valid()
-        || !deferredPresentPacket.valid()
-        || (m_deferredPresentationOverlayRequired && !deferredPresentationOverlayPacket.valid())
+        || !taskIsCompiled(m_deferredCompositeTask)
+        || !taskIsCompiled(m_deferredPresentTask)
+        || (m_deferredPresentationOverlayRequired && !taskIsCompiled(m_deferredPresentationOverlayTask))
         || !terminalPresentationPacket.valid()
-        || !deferredFrameRecoveryPacket.valid()
+        || !taskIsCompiled(m_deferredFrameRecoveryTask)
         || !deferredLightingQueue
         || !deferredCompositeQueue
         || !deferredPresentQueue
@@ -3358,19 +3343,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredPresentTask.valid()
         && (!m_deferredPresentationOverlayRequired || (
             m_deferredPresentationOverlayTask.valid()
-            && deferredPresentationOverlayPacket.valid()
+            && taskIsCompiled(m_deferredPresentationOverlayTask)
         ))
         && m_deferredFrameRecoveryTask.valid()
         && (!captureLaggedLightingHistory || (
             m_deferredLaggedLightingHistoryTask.valid()
-            && deferredLaggedLightingHistoryPacket.valid()
+            && taskIsCompiled(m_deferredLaggedLightingHistoryTask)
         ))
         && (!laggedAsyncLightingSchedule || m_deferredLightingHistoryCompletion.valid())
-        && deferredLightingPacket.valid()
-        && deferredCompositePacket.valid()
-        && deferredPresentPacket.valid()
+        && taskIsCompiled(m_deferredLightingTask)
+        && taskIsCompiled(m_deferredCompositeTask)
+        && taskIsCompiled(m_deferredPresentTask)
         && terminalPresentationPacket.valid()
-        && deferredFrameRecoveryPacket.valid()
+        && taskIsCompiled(m_deferredFrameRecoveryTask)
         && deferredFrameRecoveryQueue
         && effectsThroughPresentationPacketRange.valid()
     ;
@@ -3820,8 +3805,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredCompositeTask.valid()
             && (!laggedAsyncLightingSchedule || m_deferredLightingHistoryCompletion.valid())
             && laggedLightingHistorySlotsUploadMergedIntoLightingPacket
-            && deferredLightingPacket.valid()
-            && deferredCompositePacket.valid()
+            && taskIsCompiled(m_deferredLightingTask)
+            && taskIsCompiled(m_deferredCompositeTask)
             && deferredLightingCompositePacketRange.valid()
             && deferredLightingCompositePacketRange.packetCount == LengthOf(deferredLightingCompositeTimingTickets)
             && deferredSubmitter.submitTaskRangeInCompileOrderFromTasks(
@@ -3892,7 +3877,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredSurfelGiTask.valid()
             && m_deferredCompositeTask.valid()
             && (!m_deferredPresentationOverlayRequired || m_deferredPresentationOverlayTask.valid())
-            && deferredPresentPacket.valid()
+            && taskIsCompiled(m_deferredPresentTask)
             && terminalPresentationPacket.valid()
             && terminalPresentationPacketRange.valid()
             && terminalPresentationPacketRange.packetCount >= LengthOf(deferredPresentTimingTickets)
@@ -4812,7 +4797,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             !finalPresentationSubmissionToken.valid()
             || !m_deferredLightingTaskGraphValid
             || !m_deferredLaggedLightingHistoryTask.valid()
-            || !deferredLaggedLightingHistoryPacket.valid()
+            || !taskIsCompiled(m_deferredLaggedLightingHistoryTask)
             || !deferredLaggedLightingHistoryQueue
             || (static_cast<u8>(deferredLaggedLightingHistoryQueue->capabilities)
                 & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u

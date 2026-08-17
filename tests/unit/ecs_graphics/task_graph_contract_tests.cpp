@@ -29,6 +29,21 @@ static bool ContainsText(const AStringView text, const AStringView expected){
     return text.find(expected) != AStringView::npos;
 }
 
+static usize CountText(const AStringView text, const AStringView expected){
+    if(expected.empty())
+        return 0u;
+    usize count = 0u;
+    usize offset = 0u;
+    while(offset < text.size()){
+        const usize found = text.find(expected, offset);
+        if(found == AStringView::npos)
+            break;
+        ++count;
+        offset = found + expected.size();
+    }
+    return count;
+}
+
 static TestPath RepoRoot(TestArena& testArena){
     return TestPath(testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path().lexically_normal();
 }
@@ -106,6 +121,27 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
     EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId avboitExtinctionPacket"));
     EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId avboitIntegrationPacket"));
     EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId avboitAccumulationPacket"));
+}
+
+
+// The exact terminal packet is retained solely for the swap-chain binary signal. Every other normal renderer
+// readiness check uses a declared task anchor or a semantic task range.
+TEST(EcsGraphics, OnlyTerminalPresentationRetainsAPacketIdentity){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", systemSource));
+    const AStringView system(systemSource.data(), systemSource.size());
+
+    EXPECT_EQ(CountText(system, "packetForTask("), 1u);
+    EXPECT_TRUE(ContainsText(system, "packetForTask(terminalPresentationTask)"));
+    EXPECT_TRUE(ContainsText(system, "terminalPresentationPacket"));
+    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId deferredLightingPacket"));
+    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId deferredCompositePacket"));
+    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId deferredPresentPacket"));
+    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId deferredLaggedLightingHistoryPacket"));
+    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId deferredFrameRecoveryPacket"));
 }
 
 

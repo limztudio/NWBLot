@@ -1895,7 +1895,14 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
     commandList->close();
     if(success){
         Core::CommandList* commandLists[] = { commandList };
-        device.executeCommandLists(commandLists, 1);
+        bool submitted = false;
+        device.executeCommandLists(commandLists, 1, Core::CommandQueue::Graphics, &submitted);
+        if(!submitted){
+            // This path exists only after both standalone graph attempts rejected.  A native rejection must preserve
+            // the live ImGui frame and graph snapshot so the next UI tick can retry instead of dropping the overlay.
+            NWB_LOGGER_WARNING(NWB_TEXT("UiSystem: direct ImGui fallback submission was rejected; retaining frame for retry"));
+            return;
+        }
         m_frameStarted = false;
         m_frameFinished = false;
         m_taskGraphPresentationPrepared = false;

@@ -37311,6 +37311,34 @@ TEST_F(DescriptorBufferRoundTripTest, ImguiTextureUploadBatchCommitsOnlyAfterAcc
 }
 
 
+// The last-resort ImGui raster path reuses its command list after a rejected native submission. Verify that Device
+// returns the rejected buffer to the queue and accepts a newly recorded retry on that same direct command-list owner.
+TEST_F(DescriptorBufferRoundTripTest, DirectCommandListCanRetryAfterRejectedSubmission){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    auto commandList = device.createCommandList();
+    ASSERT_NE(commandList.get(), nullptr);
+    commandList->open();
+    commandList->close();
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+
+    CommandList* commandLists[] = { commandList.get() };
+    bool submitted = true;
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    device.executeCommandLists(commandLists, 1u, CommandQueue::Graphics, &submitted);
+    EXPECT_FALSE(submitted);
+    EXPECT_FALSE(commandList->hasCommandBuffer());
+
+    commandList->open();
+    commandList->close();
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+    submitted = false;
+    device.executeCommandLists(commandLists, 1u, CommandQueue::Graphics, &submitted);
+    ASSERT_TRUE(submitted);
+    ASSERT_TRUE(device.waitForIdle());
+}
+
+
 // The async renderer records its Graphics-prefix timestamp before it knows whether the pre-recorded final packet will
 // submit. Reject that final submit after the prefix is accepted, then use a tiny Graphics recovery packet to complete
 // the query without publishing a misleading partial render.frame sample. A following valid transaction proves the

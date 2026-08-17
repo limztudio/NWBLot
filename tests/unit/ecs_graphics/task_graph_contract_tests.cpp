@@ -60,6 +60,30 @@ TEST(EcsGraphics, EffectsTopologyUsesSemanticTaskAnchors){
 }
 
 
+// Prefix and shadow record spans are task-addressed. The renderer can still query the compiler for the exact
+// terminal presentation packet elsewhere, but ordinary readiness and merge validation must not mirror packet IDs.
+TEST(EcsGraphics, PrefixAndShadowTopologyUsesSemanticTaskAnchors){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", systemSource));
+    const AStringView system(systemSource.data(), systemSource.size());
+
+    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredShadowPrepareTask)"));
+    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_graphicsPrefixTask)"));
+    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_graphicsPrefixDeferredClearFirstTask)"));
+    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredShadowVisibilityTask)"));
+    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredSoftwareCausticsTask)"));
+    EXPECT_TRUE(ContainsText(system, "tasksSharePacket(\n            m_graphicsPrefixDeferredClearFirstTask"));
+
+    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId shadowPreparePacket"));
+    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId graphicsPrefixPacket"));
+    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId shadowVisibilityPacket"));
+    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId softwareCausticsPacket"));
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

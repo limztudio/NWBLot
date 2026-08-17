@@ -681,6 +681,25 @@ runtime IR templates or general direct-Vulkan IR replay.
   `.cozter/out/ab-results/`; then update this audit with the measurements and explicitly decide whether the feature
   remains default-disabled, is promoted behind availability gating, or is retired.
 
+### W-TRANSFER-001 — dedicated-Transfer setup-upload evidence
+
+- **Deferred requirement:** collect the Phase 10 target-hardware A/B for large graph-owned setup uploads: the
+  explicit-Graphics baseline and automatic Transfer-preferred arm must run on the same adapter with a distinct
+  Transfer-only family, verify the exact producer/readiness topology, and include an external GPU-profiler trace
+  covering copy-engine overlap and bandwidth.
+- **Reason:** the available AMD BC-250 (RADV GFX1013) adapter exposes no dedicated Transfer-only family. The live
+  `python launcher.py transfer-queue` run on 2026-08-18 returned its intentional `77`
+  `dedicated_transfer_family_unavailable` skip after the Graphics control completed correctly. Its ignored result
+  bundle is `.cozter/out/ab-results/transfer-queue/20260818_020109/`; host completion throughput is explicitly not
+  GPU-copy bandwidth evidence.
+- **Affected behavior and safe fallback:** public setup uploads retain their existing automatic route and select a
+  valid Graphics/Compute transport when a dedicated Transfer-only family is unavailable. The skip does not present
+  that fallback as Transfer evidence and does not alter the default routing policy.
+- **Removal condition:** run `python launcher.py transfer-queue` (and the texture variant) on a dedicated-Transfer
+  target adapter, attach the paired external profiler report with `--external-profiler-report`, retain the route,
+  validation, JSON, and trace artifacts under `.cozter/out/ab-results/`, then update this audit with the reviewed
+  bandwidth/copy-engine findings and an explicit policy decision.
+
 ## Open criteria preventing strict final acceptance
 
 These are substantive scope gaps, not failures hidden by the hardware waiver.

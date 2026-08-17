@@ -419,6 +419,7 @@ can receive an unconditional final sign-off.
 | Ready-frontier recording follow-up: graph-unit binary | 43/43 passed, including deterministic compiler-derived frontier depth |
 | Ready-frontier recording follow-up: descriptor-buffer smoke binary | 72 passed; 9 expected skips because this host has no dedicated Compute-only or Transfer-only family; two independent immutable uploads recorded through a worker frontier and submitted in compiler order |
 | Ready-frontier recording follow-up: `nwb_ecs_ui` and `nwb_ecs_render` | passed |
+| Worker-sharded native command arena follow-up: graph unit and descriptor-buffer smoke | passed; explicit nonzero ready-frontier worker leases now allocate from one growable Vulkan command-pool shard per physical queue/worker pair, while each tracked buffer remains timeline-retired and reusable only by that worker. Default/direct lease zero keeps a private pool because unregistered compatibility callers may record from unrelated threads. The real Vulkan worker-frontier test holds two Graphics packets on distinct workers concurrently, and the full smoke also covers rejection, garbage collection, and device recreation. `graphics_task_graph_tests` passed 132/132; descriptor smoke passed 150 with 21 expected topology skips. |
 | Same-class Graphics routing follow-up: graph-unit binary | 45/45 passed, including deterministic opt-in balancing, same-family state planning, duplicate native queue rejection, and stale recording/transaction recreation |
 | Same-class Graphics routing follow-up: descriptor-buffer smoke binary | 72 passed; 10 expected skips. The added real-Vulkan route skipped because this adapter exposes only one Graphics queue; the existing 9 skips lack dedicated Compute-only or Transfer-only families |
 | Cross-family same-class Graphics routing follow-up: graph-unit binary | 124/124 passed, including default same-family retention plus deterministic explicit cross-family routing and exclusive Buffer ownership release/acquire planning |
@@ -801,11 +802,12 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    successor only after confirming that the preceding packet has no cross-queue consumer frontier; existing
    `FrontierSafe` splitting and explicit consumer-frontier overrides remain intact. The compiler-derived native
    ready-frontier recorder is implemented for explicit opt-in packets, with isolated per-packet state scratch and
-   worker-affined command-buffer leases: each ready-frontier packet receives the current logical worker identity,
-   while Vulkan recycles its one-buffer command pool only to that worker after the physical queue timeline retires
-   it. Periodic Device garbage collection now performs that completed-timeline sweep without waiting for another
-   command-list acquire, releasing retained resources while preserving the worker lease. Serial/direct recording
-   retains the default lease. Graph-owned declaration state snapshots may use worker
+   worker-affined command-buffer leases: each nonzero ready-frontier worker receives a queue-owned Vulkan command
+   pool shard, which grows command buffers as needed and returns each completed buffer only to that same worker
+   after the physical queue timeline retires it. Default/direct lease zero retains a private pool because
+   compatibility callers are not registered to a single recording worker. Periodic Device garbage collection now
+   performs that completed-timeline sweep without waiting for another command-list acquire, releasing retained
+   resources while preserving the worker lease. Graph-owned declaration state snapshots may use worker
    recording only when every packet task explicitly opts in; command-IR capture, legacy packet-specific
    external-state overrides, and task-anchored late external-state bindings remain serial. The latter resolves a
    semantic task ID to its current compiled packet, so post-prefix sources can retire physical packet selection

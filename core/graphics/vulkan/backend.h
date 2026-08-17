@@ -712,7 +712,12 @@ class TrackedCommandBuffer final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 public:
-    TrackedCommandBuffer(const VulkanContext& context, u32 queueFamilyIndex);
+    TrackedCommandBuffer(
+        const VulkanContext& context,
+        u32 queueFamilyIndex,
+        VkCommandPool commandPool,
+        bool ownsCommandPool
+    );
     ~TrackedCommandBuffer();
 
 
@@ -723,6 +728,7 @@ private:
 private:
     VkCommandBuffer m_cmdBuf = VK_NULL_HANDLE;
     VkCommandPool m_cmdPool = VK_NULL_HANDLE;
+    bool m_ownsCmdPool = false;
 
     Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_referencedResources;
     Vector<BufferHandle, Alloc::GlobalArena> m_referencedStagingBuffers;
@@ -730,8 +736,8 @@ private:
 
     u64 m_recordingID = 0;
     u64 m_submissionID = 0;
-    // Native command pools are worker-affined through CommandListParameters. Recycled buffers retain this identity
-    // until their queue timeline retires them, so simultaneous graph recorders never open the same Vulkan pool.
+    // Explicit graph-worker leases own one queue-local Vulkan pool each. Recycled buffers retain that identity
+    // until the queue timeline retires them; default/direct lease zero instead keeps its private pool.
     u32 m_recordingWorkerIndex = 0u;
 
     const VulkanContext& m_context;
@@ -753,7 +759,6 @@ public:
 
 
 public:
-    [[nodiscard]] TrackedCommandBufferPtr createCommandBuffer(u32 recordingWorkerIndex = 0u);
     [[nodiscard]] TrackedCommandBufferPtr getOrCreateCommandBuffer(u32 recordingWorkerIndex = 0u);
 
     void addWaitSemaphore(VkSemaphore semaphore, u64 value);
@@ -783,9 +788,19 @@ public:
 
 
 private:
+    struct WorkerCommandArena{
+        u32 recordingWorkerIndex = 0u;
+        VkCommandPool commandPool = VK_NULL_HANDLE;
+    };
+
     // Requires m_mutex. Releases native command-buffer resource/staging references only after the queue timeline
     // has completed their submission, then preserves each worker-affine lease in the reusable pool.
     void collectCompletedCommandBuffers();
+    // Default/direct lease zero stays private per command buffer because external callers may record it from
+    // unrelated threads. Explicit graph workers use one Vulkan pool shard per physical queue and worker index.
+    [[nodiscard]] TrackedCommandBufferPtr createCommandBuffer(u32 recordingWorkerIndex);
+    [[nodiscard]] VkCommandPool getOrCreateWorkerCommandPool(u32 recordingWorkerIndex);
+    void destroyWorkerCommandArenas();
     void clearPendingSemaphores();
     void recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf);
 
@@ -813,6 +828,7 @@ private:
 
     List<TrackedCommandBufferPtr, Alloc::GlobalArena> m_commandBuffersInFlight;
     List<TrackedCommandBufferPtr, Alloc::GlobalArena> m_commandBuffersPool;
+    Vector<WorkerCommandArena, Alloc::GlobalArena> m_workerCommandArenas;
 };
 
 

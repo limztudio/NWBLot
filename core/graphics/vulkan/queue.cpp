@@ -17,22 +17,39 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, u32 queueFamilyIndex)
+TrackedCommandBuffer::TrackedCommandBuffer(
+    const VulkanContext& context,
+    const u32 queueFamilyIndex,
+    const VkCommandPool commandPool,
+    const bool ownsCommandPool
+)
     : RefCounter<GraphicsResource>(context.threadPool)
+    , m_cmdPool(commandPool)
+    , m_ownsCmdPool(ownsCommandPool)
     , m_referencedResources(context.objectArena)
     , m_referencedStagingBuffers(context.objectArena)
     , m_referencedDescriptorHeaps(context.objectArena)
     , m_context(context)
 {
-    auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
-    poolInfo.queueFamilyIndex = queueFamilyIndex;
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+    if(m_ownsCmdPool){
+        auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
+        poolInfo.queueFamilyIndex = queueFamilyIndex;
+        poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
 
-    const VkResult createResult = vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &m_cmdPool);
-    if(createResult != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create command pool: {}"), ResultToString(createResult));
-        m_cmdPool = VK_NULL_HANDLE;
-        m_cmdBuf = VK_NULL_HANDLE;
+        const VkResult createResult = vkCreateCommandPool(
+            m_context.device,
+            &poolInfo,
+            m_context.allocationCallbacks,
+            &m_cmdPool
+        );
+        if(createResult != VK_SUCCESS){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create private command pool: {}"), ResultToString(createResult));
+            m_cmdPool = VK_NULL_HANDLE;
+            return;
+        }
+    }
+    else if(m_cmdPool == VK_NULL_HANDLE){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot allocate a command buffer without a worker command pool."));
         return;
     }
 
@@ -45,21 +62,24 @@ TrackedCommandBuffer::TrackedCommandBuffer(const VulkanContext& context, u32 que
     if(allocateResult != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate command buffer: {}"), ResultToString(allocateResult));
         m_cmdBuf = VK_NULL_HANDLE;
-        vkDestroyCommandPool(m_context.device, m_cmdPool, m_context.allocationCallbacks);
+        if(m_ownsCmdPool)
+            vkDestroyCommandPool(m_context.device, m_cmdPool, m_context.allocationCallbacks);
         m_cmdPool = VK_NULL_HANDLE;
+        m_ownsCmdPool = false;
     }
 }
 
 TrackedCommandBuffer::~TrackedCommandBuffer(){
-    if(m_cmdBuf){
+    if(m_cmdBuf && m_cmdPool){
         vkFreeCommandBuffers(m_context.device, m_cmdPool, 1, &m_cmdBuf);
         m_cmdBuf = VK_NULL_HANDLE;
     }
 
-    if(m_cmdPool){
+    if(m_ownsCmdPool && m_cmdPool){
         vkDestroyCommandPool(m_context.device, m_cmdPool, m_context.allocationCallbacks);
-        m_cmdPool = VK_NULL_HANDLE;
     }
+    m_cmdPool = VK_NULL_HANDLE;
+    m_ownsCmdPool = false;
 
     clearTrackedReferences();
 }
@@ -100,6 +120,7 @@ Queue::Queue(
     , m_lastFinishedID(0)
     , m_commandBuffersInFlight(context.objectArena)
     , m_commandBuffersPool(context.objectArena)
+    , m_workerCommandArenas(context.objectArena)
 {
     auto timelineInfo = VulkanDetail::MakeVkStruct<VkSemaphoreTypeCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO);
     timelineInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
@@ -128,6 +149,7 @@ Queue::~Queue(){
 
     m_commandBuffersInFlight.clear();
     m_commandBuffersPool.clear();
+    destroyWorkerCommandArenas();
 
     if(m_trackingSemaphore){
         vkDestroySemaphore(m_context.device, m_trackingSemaphore, m_context.allocationCallbacks);
@@ -135,8 +157,70 @@ Queue::~Queue(){
     }
 }
 
+VkCommandPool Queue::getOrCreateWorkerCommandPool(const u32 recordingWorkerIndex){
+    NWB_ASSERT(recordingWorkerIndex != 0u);
+    if(recordingWorkerIndex == 0u)
+        return VK_NULL_HANDLE;
+
+    for(const WorkerCommandArena& arena : m_workerCommandArenas){
+        if(arena.recordingWorkerIndex == recordingWorkerIndex)
+            return arena.commandPool;
+    }
+
+    auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
+    poolInfo.queueFamilyIndex = m_queueFamilyIndex;
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+
+    VkCommandPool commandPool = VK_NULL_HANDLE;
+    const VkResult createResult = vkCreateCommandPool(
+        m_context.device,
+        &poolInfo,
+        m_context.allocationCallbacks,
+        &commandPool
+    );
+    if(createResult != VK_SUCCESS){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to create command pool for physical queue {} worker {}: {}"),
+            m_physicalQueue.index,
+            recordingWorkerIndex,
+            ResultToString(createResult)
+        );
+        return VK_NULL_HANDLE;
+    }
+
+    m_workerCommandArenas.push_back(WorkerCommandArena{
+        .recordingWorkerIndex = recordingWorkerIndex,
+        .commandPool = commandPool,
+    });
+    return commandPool;
+}
+
+void Queue::destroyWorkerCommandArenas(){
+    for(WorkerCommandArena& arena : m_workerCommandArenas){
+        if(arena.commandPool){
+            vkDestroyCommandPool(m_context.device, arena.commandPool, m_context.allocationCallbacks);
+            arena.commandPool = VK_NULL_HANDLE;
+        }
+    }
+    m_workerCommandArenas.clear();
+}
+
 TrackedCommandBufferPtr Queue::createCommandBuffer(const u32 recordingWorkerIndex){
-    auto* cmdBuf = NewArenaObject<TrackedCommandBuffer>(m_context.objectArena, m_context, m_queueFamilyIndex);
+    const bool usesWorkerArena = recordingWorkerIndex != 0u;
+    const VkCommandPool commandPool = usesWorkerArena
+        ? getOrCreateWorkerCommandPool(recordingWorkerIndex)
+        : VK_NULL_HANDLE
+    ;
+    if(usesWorkerArena && commandPool == VK_NULL_HANDLE)
+        return nullptr;
+
+    auto* cmdBuf = NewArenaObject<TrackedCommandBuffer>(
+        m_context.objectArena,
+        m_context,
+        m_queueFamilyIndex,
+        commandPool,
+        !usesWorkerArena
+    );
     if(!cmdBuf->m_cmdBuf){
         DestroyArenaObject(m_context.objectArena, cmdBuf);
         return nullptr;

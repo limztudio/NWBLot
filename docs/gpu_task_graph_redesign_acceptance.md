@@ -698,9 +698,10 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    resources permit the exact same selected auxiliary class, but their overlay/standalone completion remains primary
    Graphics. Shadow Visibility, Software Caustics, Surfel GI, and Hardware Caustics are the fourth through seventh
    bounded adopters: each graph-owned effect chain may choose a same-family auxiliary transport in its selected
-   queue class, then preserves that physical queue across each direct successor. None of these effects yet opts into
-   a cross-family route; that ownership/performance decision and broader dynamic routing policy remain open, along
-   with target-scene performance evidence.
+   queue class, then preserves that physical queue across each direct successor. Software Caustics additionally
+   opts into the device-wide cross-family route: concurrent resources use their declared sharing families, while the
+   compiler emits paired ownership transfers for exclusive crossings. The remaining effects, broader dynamic policy,
+   and target-scene performance evidence remain open.
 
 2. **Complete graph ownership.** Renderer code still controls high-level recording/submission sequencing and holds
    legacy state-handoff data, but the shared deferred renderer now gives the task runtime semantic task endpoints

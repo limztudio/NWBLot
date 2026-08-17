@@ -774,7 +774,9 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    ready-frontier recorder is implemented for explicit opt-in packets, with isolated per-packet state scratch and
    worker-affined command-buffer leases: each ready-frontier packet receives the current logical worker identity,
    while Vulkan recycles its one-buffer command pool only to that worker after the physical queue timeline retires
-   it. Serial/direct recording retains the default lease. Graph-owned declaration state snapshots may use worker
+   it. Periodic Device garbage collection now performs that completed-timeline sweep without waiting for another
+   command-list acquire, releasing retained resources while preserving the worker lease. Serial/direct recording
+   retains the default lease. Graph-owned declaration state snapshots may use worker
    recording only when every packet task explicitly opts in; command-IR capture, legacy packet-specific
    external-state overrides, and task-anchored late external-state bindings remain serial. The latter resolves a
    semantic task ID to its current compiled packet, so post-prefix sources can retire physical packet selection

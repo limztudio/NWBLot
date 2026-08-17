@@ -1566,6 +1566,7 @@ void Device::runGarbageCollection(){
         if(queue){
             ScopedLock lock(queue->m_mutex);
             queue->updateLastFinishedID();
+            queue->collectCompletedCommandBuffers();
         }
     }
     m_gpuDescriptorHeap.collectRetired();

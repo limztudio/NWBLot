@@ -20,6 +20,7 @@
 
 #include <global/global.h>
 #include <global/unique_ptr.h>
+#include <global/thread.h>
 #include <core/common/module.h>
 #include <core/alloc/general.h>
 #include <core/alloc/thread.h>
@@ -37336,6 +37337,45 @@ TEST_F(DescriptorBufferRoundTripTest, DirectCommandListCanRetryAfterRejectedSubm
     device.executeCommandLists(commandLists, 1u, CommandQueue::Graphics, &submitted);
     ASSERT_TRUE(submitted);
     ASSERT_TRUE(device.waitForIdle());
+}
+
+
+// Queue completion must release a direct command list's retained resource during periodic device GC, even when no
+// later command-list acquire or explicit wait-for-idle happens to trigger the same queue sweep.
+TEST_F(DescriptorBufferRoundTripTest, GarbageCollectionRetiresCompletedCommandBufferResources){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(u32) * 4u)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(buffer);
+    auto retainedBuffer = buffer;
+
+    auto commandList = device.createCommandList();
+    ASSERT_TRUE(commandList);
+    commandList->open();
+    commandList->clearBufferUInt(buffer.get(), 0u);
+    commandList->close();
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+
+    CommandList* commandLists[] = { commandList.get() };
+    const QueueSubmissionToken token = device.executeCommandLists(
+        commandLists,
+        1u,
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(token.valid());
+    buffer.reset();
+    ASSERT_EQ(retainedBuffer->getReferenceCount(), 2u);
+
+    for(u32 retry = 0u; retry < 5000u && retainedBuffer->getReferenceCount() != 1u; ++retry){
+        device.runGarbageCollection();
+        SleepMS(1u);
+    }
+    EXPECT_EQ(retainedBuffer->getReferenceCount(), 1u)
+        << "periodic device GC did not retire the completed command-buffer resource reference";
 }
 
 

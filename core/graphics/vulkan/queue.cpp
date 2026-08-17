@@ -151,16 +151,7 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(const u32 recordingWorke
     ScopedLock lock(m_mutex);
 
     updateLastFinishedID();
-
-    auto it = m_commandBuffersInFlight.begin();
-    while(it != m_commandBuffersInFlight.end()){
-        TrackedCommandBuffer* cmdBuf = it->get();
-        if(cmdBuf->m_submissionID > m_lastFinishedID)
-            break;
-
-        recycleCommandBuffer(Move(*it));
-        it = m_commandBuffersInFlight.erase(it);
-    }
+    collectCompletedCommandBuffers();
 
     auto available = m_commandBuffersPool.end();
     for(auto it = m_commandBuffersPool.begin(); it != m_commandBuffersPool.end(); ++it){
@@ -189,6 +180,18 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(const u32 recordingWorke
     }
 
     return createCommandBuffer(recordingWorkerIndex);
+}
+
+void Queue::collectCompletedCommandBuffers(){
+    auto it = m_commandBuffersInFlight.begin();
+    while(it != m_commandBuffersInFlight.end()){
+        TrackedCommandBuffer* cmdBuf = it->get();
+        if(cmdBuf->m_submissionID > m_lastFinishedID)
+            break;
+
+        recycleCommandBuffer(Move(*it));
+        it = m_commandBuffersInFlight.erase(it);
+    }
 }
 
 void Queue::addWaitSemaphore(VkSemaphore semaphore, u64 value){
@@ -458,10 +461,7 @@ void Queue::waitForIdle(){
     }
     if(res == VK_SUCCESS){
         m_lastFinishedID = m_lastSubmittedID;
-
-        for(auto& tracked : m_commandBuffersInFlight)
-            recycleCommandBuffer(Move(tracked));
-        m_commandBuffersInFlight.clear();
+        collectCompletedCommandBuffers();
     }
 }
 

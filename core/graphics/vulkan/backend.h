@@ -783,6 +783,9 @@ public:
 
 
 private:
+    // Requires m_mutex. Releases native command-buffer resource/staging references only after the queue timeline
+    // has completed their submission, then preserves each worker-affine lease in the reusable pool.
+    void collectCompletedCommandBuffers();
     void clearPendingSemaphores();
     void recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf);
 

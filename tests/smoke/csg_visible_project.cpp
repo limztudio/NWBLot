@@ -245,7 +245,7 @@ static void ApplyCutterTransform(
 class CsgVisibleSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static void applyFeatureOverrides(NWB::ProjectRuntimeContext& context){
-#if defined(NWB_CSG_VISIBLE_FORCE_MESHLET_EMULATION) && (!defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES))
+#if defined(NWB_CSG_VISIBLE_FORCE_MESHLET_EMULATION) && !defined(NWB_FINAL)
         context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::Meshlets, true);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: forced Meshlets feature off for compute-emulation smoke"));
 #else
@@ -273,7 +273,7 @@ private:
 
     void destroyWorld(){
         DestroySmokeRenderWorld(m_context, m_world);
-#if defined(NWB_CSG_VISIBLE_FORCE_MESHLET_EMULATION) && (!defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES))
+#if defined(NWB_CSG_VISIBLE_FORCE_MESHLET_EMULATION) && !defined(NWB_FINAL)
         m_context.graphics.setFeatureSupportDisabledForTesting(NWB::Core::Feature::Meshlets, false);
 #endif
     }

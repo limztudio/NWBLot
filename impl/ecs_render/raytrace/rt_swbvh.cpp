@@ -1491,7 +1491,7 @@ bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallba
     const usize sourceMaterialTypedByteCount
 ){
     m_preparedHybridHardwareFallbackRecorded = false;
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
     if(m_forceHybridHardwareFallbackSnapshotStaleForTesting){
         m_forceHybridHardwareFallbackSnapshotStaleForTesting = false;
         m_expectHybridHardwareFallbackDirectRetryForTesting = true;
@@ -1590,7 +1590,7 @@ bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallba
     commandList.commitBarriers();
     m_preparedHybridHardwareFallbackRecorded = true;
     bool reportHybridHardwareFallbackRestore = true;
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
     if(m_forceHybridSceneTraversalFallbackEveryFrameForTesting){
         reportHybridHardwareFallbackRestore = !m_reportedHybridHardwareFallbackRestoreLoopForTesting;
         m_reportedHybridHardwareFallbackRestoreLoopForTesting = true;

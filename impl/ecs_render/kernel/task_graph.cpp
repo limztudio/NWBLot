@@ -7918,7 +7918,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         && softwareTraceGeometryResourceCount != 0u
     ;
     bool graphOwnedSoftTransparentFoldEnabled = true;
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
     graphOwnedSoftTransparentFoldEnabled = m_graphOwnedSoftTransparentShadowFoldEnabledForTesting;
     if(
         preparedSoftTransparentFoldCandidate

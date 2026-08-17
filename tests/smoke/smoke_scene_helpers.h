@@ -130,7 +130,7 @@ struct SmokeRenderSystems{
 }
 
 inline void DisableSmokeRayTracingForTesting(ProjectRuntimeContext& context){
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
     context.graphics.setFeatureSupportDisabledForTesting(Core::Feature::RayTracingAccelStruct, true);
     context.graphics.setFeatureSupportDisabledForTesting(Core::Feature::RayTracingPipeline, true);
     context.graphics.setFeatureSupportDisabledForTesting(Core::Feature::RayQuery, true);

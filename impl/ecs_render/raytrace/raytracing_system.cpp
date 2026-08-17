@@ -909,7 +909,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(const bool rest
     return true;
 }
 
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
 void RendererRayTracingSystem::forceHybridSceneTraversalFallbackForTesting()noexcept{
     m_forceHybridSceneTraversalFallbackForTesting = true;
 }
@@ -2008,7 +2008,7 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
             && m_shadowVisibilityHybridPipelinePreflighted
         ;
         bool forceHybridSceneTraversalFallback = false;
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
         forceHybridSceneTraversalFallback =
             hybridSceneTraversalGraphOwned
             && (
@@ -2060,7 +2060,7 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
         ;
         if(swReady){
             rayTracingState().m_hybridTransparentShadowReady = true;
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
             if(m_expectHybridSceneTraversalRecoveryForTesting){
                 m_expectHybridSceneTraversalRecoveryForTesting = false;
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test hybrid software traversal recovered"));
@@ -2069,7 +2069,7 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
         }
         else{
             bool reportHybridTraversalFailure = true;
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
             if(m_forceHybridSceneTraversalFallbackEveryFrameForTesting){
                 reportHybridTraversalFailure = !m_reportedHybridSceneTraversalFallbackLoopFailureForTesting;
                 m_reportedHybridSceneTraversalFallbackLoopFailureForTesting = true;
@@ -2100,7 +2100,7 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
                 const bool restoredDirectHardwareContext =
                     !restoredFrozenHardwareContext
                     && buildSceneTlas(commandList, scratchArena, false);
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
                 if(m_expectHybridHardwareFallbackDirectRetryForTesting){
                     m_expectHybridHardwareFallbackDirectRetryForTesting = false;
                     if(restoredDirectHardwareContext)

@@ -2517,7 +2517,7 @@ public:
 public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType);
     [[nodiscard]] Queue* getQueue(const GpuPhysicalQueueId& queue);
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
     // Test-only validated-submit seams exercise production cleanup and retain the exact submission-local waits
     // received by Device after graph/runtime assembly.
     void rejectNextSubmissionForTesting(CommandQueue::Enum queue);
@@ -2538,7 +2538,7 @@ public:
 private:
     [[nodiscard]] bool registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc);
     void configureLegacyQueueContext();
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
     [[nodiscard]] bool consumeSubmissionRejectionForTesting(CommandQueue::Enum queue);
     void captureSubmissionWaitTokensForTesting(
         const GpuPhysicalQueueId& executionQueue,
@@ -2678,7 +2678,7 @@ private:
     // Only block-compressed entries are populated; all are resolved before the device is exposed.
     Array<FormatSupport::Mask, static_cast<usize>(Format::kCount)> m_compressedFormatSupport = {};
 
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
     Array<Atomic<u32>, static_cast<u32>(CommandQueue::kCount)> m_submissionRejectionsForTesting = {};
     Atomic<bool> m_submissionWaitCaptureArmedForTesting = false;
     mutable Futex m_submissionWaitTokensForTestingMutex;

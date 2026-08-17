@@ -381,7 +381,7 @@ u64 Queue::submit(
     submitInfo.signalSemaphoreInfoCount = static_cast<uint32_t>(signalInfos.size());
     submitInfo.pSignalSemaphoreInfos = signalInfos.data();
 
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
     if(m_device.consumeSubmissionRejectionForTesting(m_queueID)){
         // Match the real vkQueueSubmit2 rejection path exactly: the detached command buffers return to this queue's
         // pool, the tentative timeline value is rolled back, and Device::executeCommandLists performs its normal

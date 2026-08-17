@@ -297,7 +297,7 @@ private:
 
         // Force ray-tracing emulation so the software shadow path runs even on RT-capable hardware; for caustic-focused
         // builds this also A/Bs the SW caustic producer against the hardware ray-traced producer.
-#if defined(NWB_TRANSPARENT_MULTI_FORCE_RT_EMULATION) && (!defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES))
+#if defined(NWB_TRANSPARENT_MULTI_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
         NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
 #endif
 
@@ -479,7 +479,7 @@ public:
             NWB_TEXT("TransparentMultiSmokeProject failed to create all scene entities")
         );
 
-#if (defined(NWB_TRANSPARENT_MULTI_FORCE_HYBRID_TRAVERSAL_FALLBACK) || defined(NWB_TRANSPARENT_MULTI_FORCE_HYBRID_HARDWARE_FALLBACK_STALE)) && (!defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES))
+#if (defined(NWB_TRANSPARENT_MULTI_FORCE_HYBRID_TRAVERSAL_FALLBACK) || defined(NWB_TRANSPARENT_MULTI_FORCE_HYBRID_HARDWARE_FALLBACK_STALE)) && !defined(NWB_FINAL)
         auto* const rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>();
         NWB_FATAL_ASSERT_MSG(rendererSystem, NWB_TEXT("TransparentMultiSmokeProject renderer system disappeared"));
 #if defined(NWB_TRANSPARENT_MULTI_FORCE_HYBRID_TRAVERSAL_FALLBACK)

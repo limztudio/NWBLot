@@ -71,7 +71,7 @@ struct DiagnosticPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
 namespace DiagnosticCaptureTestHookStage{
     enum Enum : u8{
         AfterGuardLoad,

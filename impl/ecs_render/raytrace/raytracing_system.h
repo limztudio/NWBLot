@@ -348,7 +348,7 @@ public:
         Core::GpuUploadBlobId& outInstanceBlob
     )const;
     void confirmPreparedSceneBvhUploads()noexcept;
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
     // One-shot test seam for the healthy hybrid tail. It models a traversal-table miss whose direct revalidation also
     // cannot record, so Shadow Preparation must retain the opaque-HW fallback without accepting stale SW state.
     void forceHybridSceneTraversalFallbackForTesting()noexcept;
@@ -1355,7 +1355,7 @@ private:
     u64 m_preparedSceneSwBvhTransformMutationVersion = 0u;
     u64 m_preparedSceneSwBvhMaterialMutationVersion = 0u;
     bool m_preparedSceneSwBvhReady = false;
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
     bool m_forceHybridSceneTraversalFallbackForTesting = false;
     bool m_forceHybridSceneTraversalFallbackEveryFrameForTesting = false;
     bool m_expectHybridSceneTraversalRecoveryForTesting = false;

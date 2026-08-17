@@ -82,3 +82,17 @@ add_test(
         "${CMAKE_CURRENT_LIST_DIR}/no_hidden_namespaces_in_headers.py"
         --self-test
 )
+add_test(
+    NAME nwb_test_feature_override_boundary
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/test_feature_override_boundary.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_test_feature_override_boundary_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/test_feature_override_boundary.py"
+        --self-test
+)

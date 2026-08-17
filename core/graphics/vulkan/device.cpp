@@ -208,7 +208,7 @@ Device::Device(const DeviceDesc& desc)
     , m_pipelineCacheVolumeName(m_context.objectArena)
     , m_physicalQueues(m_context.objectArena)
     , m_physicalQueueInfos(m_context.objectArena)
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
     , m_submissionWaitTokensForTesting(m_context.objectArena)
 #endif
     , m_uploadManager(*this, s_DefaultUploadChunkSize, 0, false)
@@ -895,7 +895,7 @@ bool Device::matchesPhysicalQueueIdentity(const GpuPhysicalQueueId& queue)const 
     return getPhysicalQueueInfo(queue) != nullptr;
 }
 
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
 
 void Device::rejectNextSubmissionForTesting(const CommandQueue::Enum queue){
     const u32 index = static_cast<u32>(queue);
@@ -1214,7 +1214,7 @@ QueueSubmissionToken Device::executeCommandLists(
         localSignalCount = 1u;
     }
 
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
     // An explicitly armed test seam retains the uncollapsed graph/runtime token edge list at the final Device
     // boundary. This is intentionally after every validation branch so tests can distinguish an accepted submit
     // from an invalid descriptor without adding recurring debug-submit allocations.

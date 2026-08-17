@@ -115,7 +115,7 @@ RendererSystem::RendererSystem(
 RendererSystem::~RendererSystem(){}
 
 
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
 void RendererSystem::forceHybridSceneTraversalFallbackForTesting()noexcept{
     m_raytracingSystem.forceHybridSceneTraversalFallbackForTesting();
 }

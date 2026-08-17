@@ -628,7 +628,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePhysicalQueueRegistryDrivesExactSubm
     EXPECT_TRUE(token.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
     EXPECT_EQ(token.queue, CommandQueue::Graphics);
 
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
     // The recovery proof reads the same Device-boundary capture below. Exercise it on the always-available
     // Graphics transport too, so the test seam itself remains live on hosts without a dedicated Transfer family.
     auto waitConsumer = nativeDevice.createCommandList(parameters);
@@ -36929,7 +36929,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQuer
 }
 
 
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
 
 // The graph-owned reset task must publish query-pool availability only from packet acceptance. A rejected reset is
 // followed by a dynamic-rendering timing scope, which cannot reset the pool itself; the next accepted preamble must
@@ -37261,7 +37261,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
 }
 
 
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
 
 // Texture uploads must leave ImGui's create/update status pending if the Vulkan submission is rejected. The next
 // recording batch then retries the request and commits its status only after the device accepts that retry.
@@ -39130,6 +39130,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
 
 
 TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAcceptsTerminalCompletion){
+#if defined(NWB_FINAL)
+    GTEST_SKIP() << "standalone graph rejection coverage requires test submission overrides";
+#else
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
     const GpuPhysicalQueueId graphicsQueue = BackendQueueId(device, CommandQueue::Graphics);
@@ -39199,6 +39202,7 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAc
     EXPECT_TRUE(accepted);
     EXPECT_FALSE(acceptedDiscarded);
     EXPECT_TRUE(device.waitForIdle());
+#endif
 }
 
 
@@ -40653,7 +40657,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversCausticSurfelAndSh
 }
 
 
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
 
 // Exercise the four-submission shadow topology's rejection boundaries with the same pre-Vulkan injection seam used
 // by RendererSystem. Prefix and shadow rejections leave no ownership handoff; effects/final rejections repair the
@@ -42207,7 +42211,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetiredAndDoubleFreed
 // that command buffer is unsubmitted, becomes reclaimable when a rejected submission abandons it, and follows the
 // accepted queue token through completion on the normal path.
 TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBufferSubmissionAndAbandonment){
-#if defined(NWB_FINAL) && !defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if defined(NWB_FINAL)
     GTEST_SKIP() << "descriptor-heap rejection coverage requires test submission overrides";
 #else
     auto& device = DescriptorBufferRoundTripTest::device();

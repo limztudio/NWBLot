@@ -267,7 +267,7 @@ public:
         resetLaggedLightingHistoryTracking();
     }
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept{ return m_frameLaggedAsyncLightingEnabled; }
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
     // Test-only proxy; keep the ray-tracing subsystem itself private to ordinary renderer callers.
     void forceHybridSceneTraversalFallbackForTesting()noexcept;
     void forceHybridSceneTraversalFallbackEveryFrameForTesting()noexcept;
@@ -731,7 +731,7 @@ private:
     bool m_preparedHasTransparentRenderers = false;
     bool m_preparedShadowVisibilityResourcesValid = false;
     bool m_preparedShadowVisibilityReady = false;
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
     bool m_graphOwnedSoftTransparentShadowFoldEnabledForTesting = true;
     bool m_graphOwnedSoftTransparentShadowFoldBenchmarkForTesting = false;
     bool m_reportedGraphOwnedSoftTransparentShadowFoldBenchmarkForTesting = false;

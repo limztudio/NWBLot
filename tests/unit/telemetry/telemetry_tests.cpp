@@ -32,7 +32,7 @@ static void ExistingDiagnosticCallback(const DiagnosticEventRecord&)noexcept{
     ++s_ExistingDiagnosticCallbackCount;
 }
 
-#if defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
 static AtomicFlag s_DiagnosticCaptureGuardLoaded;
 static AtomicFlag s_DiagnosticCaptureRelease;
 static AtomicFlag s_DiagnosticCaptureGuardDestructionWaiting;
@@ -626,7 +626,7 @@ TEST(Telemetry, DiagnosticCaptureGuardDoesNotReplaceExistingCallback){
     EXPECT_EQ(recorder.eventCount(), 0u);
 }
 
-#if defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
 TEST(Telemetry, DiagnosticCaptureGuardDestructionWaitsForActiveCallback){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);

@@ -179,7 +179,7 @@ private:
 
         // Force ray-tracing emulation so the SOFTWARE shadow path runs even on RT-capable hardware -- the A/B sibling of
         // the hardware path. Default OFF: the demo runs the hardware (hybrid) path.
-#if defined(NWB_STRESS_TEST_FORCE_RT_EMULATION) && (!defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES))
+#if defined(NWB_STRESS_TEST_FORCE_RT_EMULATION) && !defined(NWB_FINAL)
         NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
 #endif
 
@@ -367,7 +367,7 @@ public:
             NWB_TEXT("StressTestSmokeProject failed to create all scene entities")
         );
 
-#if defined(NWB_SOFT_TRANSPARENT_SHADOW_FOLD_BENCHMARK) && (!defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES))
+#if defined(NWB_SOFT_TRANSPARENT_SHADOW_FOLD_BENCHMARK) && !defined(NWB_FINAL)
         auto* const rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>();
         NWB_FATAL_ASSERT_MSG(rendererSystem, NWB_TEXT("StressTestSmokeProject renderer system disappeared"));
 #if defined(NWB_SOFT_TRANSPARENT_SHADOW_FOLD_MONOLITHIC_BENCHMARK)
@@ -381,7 +381,7 @@ public:
             NWB_TEXT("StressTestSmokeProject: enabled graph-owned soft-transparent shadow-fold benchmark")
         );
 #endif
-#elif defined(NWB_HYBRID_SHADOW_BOUNDARY_FALLBACK_BENCHMARK) && (!defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES))
+#elif defined(NWB_HYBRID_SHADOW_BOUNDARY_FALLBACK_BENCHMARK) && !defined(NWB_FINAL)
         auto* const rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>();
         NWB_FATAL_ASSERT_MSG(rendererSystem, NWB_TEXT("StressTestSmokeProject renderer system disappeared"));
         rendererSystem->forceHybridSceneTraversalFallbackEveryFrameForTesting();

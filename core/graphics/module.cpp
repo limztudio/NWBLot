@@ -1964,7 +1964,7 @@ Graphics::CoopVectorSupport Graphics::queryCoopVecSupport()const{
 }
 
 bool Graphics::queryFeatureSupport(const Feature::Enum feature, void* featureInfo, const usize featureInfoSize)const{
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
     if((m_disabledFeatureSupportMask & BitMask<u64>(static_cast<u32>(feature))) != 0u)
         return false;
 #endif
@@ -1986,7 +1986,7 @@ u32 Graphics::queryWaveLaneCount()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+#if !defined(NWB_FINAL)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -180,7 +180,7 @@ private:
         Core::GpuTaskId previousTask,
         Vector<Core::GpuTaskId, Core::Alloc::ScratchArena>& outTasks
     );
-    [[nodiscard]] bool submitLegacyTextureRequests(ImDrawData& drawData);
+    [[nodiscard]] bool submitPreparedLegacyTextureUploads(ImDrawData& drawData);
     [[nodiscard]] bool prepareTextureRequests(ImDrawData& drawData);
     [[nodiscard]] bool createOrRefreshTexture(ImTextureData& textureData);
     [[nodiscard]] Core::GpuGraphResourceId importTaskGraphTexture(

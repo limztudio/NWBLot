@@ -573,6 +573,11 @@ bool UiSystem::prepareFrameResources(Core::Framebuffer* framebuffer, const bool 
     if(drawData->TotalVtxCount <= 0 || drawData->TotalIdxCount <= 0)
         return true;
 
+    // The renderer can abandon a graph after graph-owned preparation. Keep the direct fallback command list ready
+    // before that declaration so render() only records against prepared persistent resources.
+    if(!ensureRenderCommandList())
+        return false;
+
     if(graphOwnsUploads && !prepareTaskGraphDrawUploads(*drawData))
         return false;
 
@@ -1451,14 +1456,9 @@ void UiSystem::confirmTaskGraphPresentationSubmission()noexcept{
     clearTaskGraphDrawSnapshot();
 }
 
-bool UiSystem::submitLegacyTextureRequests(ImDrawData& drawData){
-    if(!__hidden_ui::HasTextureRequests(drawData))
-        return true;
-
-    if(!prepareTextureRequests(drawData)){
-        m_textureUploadBatch.reset();
-        return false;
-    }
+bool UiSystem::submitPreparedLegacyTextureUploads(ImDrawData& drawData){
+    // prepareFrameResources() has already created/refreshed every requested texture and its descriptor. The direct
+    // fallback only submits the retained upload requests after a renderer-owned graph did not consume them.
     if(!__hidden_ui::HasPendingTextureUploads(drawData))
         return true;
 
@@ -1513,8 +1513,8 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
     }
 
     // Custom callbacks cannot be represented by an immutable graph payload. Their raster path remains direct, but
-    // requested texture updates have already moved to their own standalone graph transaction.
-    if(!submitLegacyTextureRequests(*drawData))
+    // requested textures and descriptors were already prepared before render.
+    if(!submitPreparedLegacyTextureUploads(*drawData))
         return;
 
     if(!m_pipeline)
@@ -1527,9 +1527,11 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    if(!ensureRenderCommandList())
-        return;
     Core::CommandList* commandList = m_renderCommandList.get();
+    if(!commandList){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: render command list was not prepared"));
+        return;
+    }
     NWB_ASSERT(commandList);
 
     commandList->open();

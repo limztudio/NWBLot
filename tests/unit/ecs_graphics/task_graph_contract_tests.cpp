@@ -213,7 +213,7 @@ TEST(EcsGraphics, UiLegacyTextureFallbackUsesStandaloneGraphUpload){
     EXPECT_TRUE(ContainsText(ui, "Standalone ImGui Presentation Back Buffer"));
     EXPECT_TRUE(ContainsText(ui, "if(prepareTaskGraphPresentation(framebuffer))"));
 
-    const usize legacySubmitOffset = ui.find("bool UiSystem::submitLegacyTextureRequests");
+    const usize legacySubmitOffset = ui.find("bool UiSystem::submitPreparedLegacyTextureUploads");
     const usize renderOffset = ui.find("void UiSystem::render", legacySubmitOffset);
     ASSERT_NE(legacySubmitOffset, AStringView::npos);
     ASSERT_NE(renderOffset, AStringView::npos);
@@ -221,6 +221,7 @@ TEST(EcsGraphics, UiLegacyTextureFallbackUsesStandaloneGraphUpload){
     EXPECT_TRUE(ContainsText(legacySubmit, "m_graphics.submitStandaloneTaskGraph"));
     EXPECT_FALSE(ContainsText(legacySubmit, "executeCommandLists"));
     EXPECT_FALSE(ContainsText(legacySubmit, "createCommandList"));
+    EXPECT_FALSE(ContainsText(legacySubmit, "prepareTextureRequests"));
     EXPECT_FALSE(ContainsText(ui, "m_prepareCommandList"));
     EXPECT_FALSE(ContainsText(uiTextures, "recordTextureUpload"));
     EXPECT_TRUE(ContainsText(uiTextures, "if(previousTask.valid())"));
@@ -236,12 +237,24 @@ TEST(EcsGraphics, UiLegacyTextureFallbackUsesStandaloneGraphUpload){
     EXPECT_FALSE(ContainsText(presentationDeclare, "|| !previousTask.valid()"));
     EXPECT_TRUE(ContainsText(presentationDeclare, "if(previousTask.valid())"));
 
-    const AStringView renderBody = ui.substr(renderOffset);
-    const usize standalonePresentationOffset = renderBody.find("submitStandaloneTaskGraphPresentation(framebuffer)");
-    const usize directTextureFallbackOffset = renderBody.find("submitLegacyTextureRequests(*drawData)");
+    const AStringView presentationRenderBody = ui.substr(renderOffset);
+    const usize standalonePresentationOffset = presentationRenderBody.find("submitStandaloneTaskGraphPresentation(framebuffer)");
+    const usize directTextureFallbackOffset = presentationRenderBody.find("submitPreparedLegacyTextureUploads(*drawData)");
     ASSERT_NE(standalonePresentationOffset, AStringView::npos);
     ASSERT_NE(directTextureFallbackOffset, AStringView::npos);
     EXPECT_LT(standalonePresentationOffset, directTextureFallbackOffset);
+
+    const usize prepareFrameOffset = ui.find("bool UiSystem::prepareFrameResources");
+    const usize snapshotClearOffset = ui.find("void UiSystem::clearTaskGraphDrawSnapshot", prepareFrameOffset);
+    const usize resizeOffset = ui.find("void UiSystem::backBufferResizing", renderOffset);
+    ASSERT_NE(prepareFrameOffset, AStringView::npos);
+    ASSERT_NE(snapshotClearOffset, AStringView::npos);
+    ASSERT_NE(resizeOffset, AStringView::npos);
+    const AStringView prepareFrame = ui.substr(prepareFrameOffset, snapshotClearOffset - prepareFrameOffset);
+    const AStringView directRenderBody = ui.substr(renderOffset, resizeOffset - renderOffset);
+    EXPECT_TRUE(ContainsText(prepareFrame, "ensureRenderCommandList()"));
+    EXPECT_FALSE(ContainsText(directRenderBody, "ensureRenderCommandList()"));
+    EXPECT_FALSE(ContainsText(directRenderBody, "prepareTextureRequests"));
 }
 
 

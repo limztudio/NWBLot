@@ -294,6 +294,8 @@ TEST(EcsGraphics, UiLegacyFallbackUsesStandaloneGraphs){
     ASSERT_NE(renderOffset, AStringView::npos);
     const AStringView legacySubmit = ui.substr(legacySubmitOffset, renderOffset - legacySubmitOffset);
     EXPECT_TRUE(ContainsText(legacySubmit, "m_graphics.submitStandaloneTaskGraph"));
+    EXPECT_TRUE(ContainsText(legacySubmit, "getPrimaryPhysicalQueue(Core::CommandQueue::Graphics)"));
+    EXPECT_TRUE(ContainsText(legacySubmit, "submissionToken,\n        graphicsQueue"));
     EXPECT_FALSE(ContainsText(legacySubmit, "executeCommandLists"));
     EXPECT_FALSE(ContainsText(legacySubmit, "createCommandList"));
     EXPECT_FALSE(ContainsText(legacySubmit, "prepareTextureRequests"));

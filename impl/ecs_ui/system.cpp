@@ -1797,13 +1797,23 @@ bool UiSystem::submitPreparedLegacyTextureUploads(ImDrawData& drawData){
     if(!__hidden_ui::HasPendingTextureUploads(drawData))
         return true;
 
+    const Core::GpuPhysicalQueueId graphicsQueue =
+        m_graphics.getDevice().getPrimaryPhysicalQueue(Core::CommandQueue::Graphics)
+    ;
+    if(!graphicsQueue.valid()){
+        m_textureUploadBatch.complete(false);
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: primary Graphics queue is unavailable for standalone ImGui texture completion"));
+        return false;
+    }
+
     Core::QueueSubmissionToken submissionToken;
     const bool submitted = m_graphics.submitStandaloneTaskGraph(
         this,
         [](void* const userData, Core::GpuTaskGraph& graph){
             return static_cast<UiSystem*>(userData)->declareStandaloneTextureUploadGraph(graph);
         },
-        submissionToken
+        submissionToken,
+        graphicsQueue
     );
     if(!submitted || !submissionToken.valid()){
         // Compilation/recording failure can occur before the completion task is available to discard this batch.

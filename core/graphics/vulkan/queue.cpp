@@ -419,7 +419,12 @@ u64 Queue::submit(
         return m_lastSubmittedID;
     }
 
-    const QueueSubmissionToken submissionToken{ m_queueID, submissionID };
+    const QueueSubmissionToken submissionToken{
+        .queue = m_queueID,
+        .value = submissionID,
+        .physicalQueueIndex = m_physicalQueue.index,
+        .deviceGeneration = m_physicalQueue.deviceGeneration,
+    };
     for(auto& tracked : trackedBuffers){
         for(GpuDescriptorHeap* heap : tracked->m_referencedDescriptorHeaps){
             if(heap)

@@ -194,8 +194,14 @@ void GpuDescriptorHeap::submitCommandBufferUse(
     TrackedCommandBuffer& commandBuffer,
     const QueueSubmissionToken submissionToken
 ){
-    if(!submissionToken.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap received an invalid command-buffer submission token."));
+    if(
+        !submissionToken.valid()
+        || !submissionToken.hasPhysicalQueueIdentity()
+        || !m_device.matchesPhysicalQueueIdentity(
+            GpuPhysicalQueueId{ submissionToken.physicalQueueIndex, submissionToken.deviceGeneration }
+        )
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap received an invalid physical command-buffer submission token."));
         return;
     }
 
@@ -220,34 +226,55 @@ void GpuDescriptorHeap::discardCommandBufferUse(TrackedCommandBuffer& commandBuf
 }
 
 void GpuDescriptorHeap::collectRetired(){
-    constexpr u32 s_QueueCount = static_cast<u32>(CommandQueue::kCount);
-    bool requiresCompletionQuery[s_QueueCount] = {};
-    u64 completedValues[s_QueueCount] = {};
+    struct QueueCompletion{
+        GpuPhysicalQueueId queue;
+        u64 value = 0u;
+    };
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_DescriptorBindingArena);
+    Vector<QueueCompletion, Alloc::ScratchArena> completions(scratchArena);
 
     {
         ScopedLock lock(m_mutex);
+        completions.reserve(m_heapUses.size());
         for(const HeapUse& heapUse : m_heapUses){
-            if(!heapUse.submissionToken.valid())
+            const QueueSubmissionToken& token = heapUse.submissionToken;
+            if(!token.valid() || !token.hasPhysicalQueueIdentity())
                 continue;
 
-            const u32 queueIndex = static_cast<u32>(heapUse.submissionToken.queue);
-            if(queueIndex < s_QueueCount)
-                requiresCompletionQuery[queueIndex] = true;
+            const GpuPhysicalQueueId queue{ token.physicalQueueIndex, token.deviceGeneration };
+            bool alreadyTracked = false;
+            for(const QueueCompletion& completion : completions){
+                if(completion.queue == queue){
+                    alreadyTracked = true;
+                    break;
+                }
+            }
+            if(!alreadyTracked)
+                completions.push_back(QueueCompletion{
+                    .queue = queue,
+                    .value = 0u,
+                });
         }
     }
 
-    for(u32 queueIndex = 0u; queueIndex < s_QueueCount; ++queueIndex){
-        if(requiresCompletionQuery[queueIndex])
-            completedValues[queueIndex] = m_device.queueGetCompletedInstance(static_cast<CommandQueue::Enum>(queueIndex));
-    }
+    for(QueueCompletion& completion : completions)
+        completion.value = m_device.queueGetCompletedInstance(completion.queue);
 
     ScopedLock lock(m_mutex);
     const auto heapUseComplete = [&](const HeapUse& heapUse) -> bool {
-        if(!heapUse.submissionToken.valid())
+        const QueueSubmissionToken& token = heapUse.submissionToken;
+        if(!token.valid())
             return heapUse.commandBuffer == nullptr;
 
-        const u32 queueIndex = static_cast<u32>(heapUse.submissionToken.queue);
-        return queueIndex < s_QueueCount && completedValues[queueIndex] >= heapUse.submissionToken.value;
+        if(!token.hasPhysicalQueueIdentity())
+            return false;
+
+        const GpuPhysicalQueueId queue{ token.physicalQueueIndex, token.deviceGeneration };
+        for(const QueueCompletion& completion : completions){
+            if(completion.queue == queue)
+                return completion.value >= token.value;
+        }
+        return false;
     };
 
     usize keptRetired = 0u;

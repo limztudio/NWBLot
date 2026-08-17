@@ -42402,6 +42402,120 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
 }
 
 
+// Descriptor retirement follows the exact physical queue that bound the heap. A same-family auxiliary Graphics
+// queue has its own timeline, so querying the primary Graphics timeline must not retain its completed descriptor.
+TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksAuxiliaryGraphicsQueueCompletion){
+    HeadlessGraphicsScope multiQueueScope;
+    ASSERT_TRUE(multiQueueScope.setSameClassMultiQueueEnabled(true));
+    if(!multiQueueScope.initialize())
+        GTEST_SKIP() << "Descriptor-heap auxiliary Graphics retirement: no usable headless Vulkan device on this host.";
+
+    auto& device = multiQueueScope.graphics().getDevice();
+    if(!device.getDescriptorBufferManager().isEnabled())
+        GTEST_SKIP() << "Descriptor-heap auxiliary Graphics retirement: VK_EXT_descriptor_buffer is unavailable on this device.";
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const u32 primaryGraphicsFamily = device.getQueueFamilyIndex(primaryGraphicsQueue);
+    const GpuPhysicalQueueInfo* auxiliaryGraphicsQueue = nullptr;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+        if(
+            candidate.queueClass == CommandQueue::Graphics
+            && candidate.id != primaryGraphicsQueue
+            && candidate.familyIndex == primaryGraphicsFamily
+            && (static_cast<u8>(candidate.capabilities) & static_cast<u8>(GpuQueueCapability::Compute)) != 0u
+        ){
+            auxiliaryGraphicsQueue = &candidate;
+            break;
+        }
+    }
+    if(!auxiliaryGraphicsQueue)
+        GTEST_SKIP() << "Descriptor-heap auxiliary Graphics retirement: adapter exposes no same-family Graphics queue.";
+
+    GraphicsBackend::GpuDescriptorHeap heap(device);
+    GpuDescriptorHeapDesc heapDesc;
+    heapDesc
+        .setResourceCapacity(2u)
+        .setSamplerCapacity(1u)
+        .setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
+    ;
+    ASSERT_TRUE(heap.initialize(heapDesc));
+
+    ShaderDesc shaderDesc(multiQueueScope.arena());
+    shaderDesc
+        .setShaderType(ShaderType::Compute)
+        .setDebugName(Name{"tests/descriptor_buffer/auxiliary_graphics_heap_retirement"})
+    ;
+    auto shader = device.createShader(
+        shaderDesc,
+        s_DescriptorHeapRetirementComputeSpirv,
+        sizeof(s_DescriptorHeapRetirementComputeSpirv)
+    );
+    ASSERT_TRUE(shader);
+
+    ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(shader)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
+    ;
+    auto pipeline = device.createComputePipeline(pipelineDesc);
+    ASSERT_TRUE(pipeline);
+
+    auto storageBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(4096u)
+            .setStructStride(16u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(storageBuffer);
+
+    const GpuDescriptorHandle handle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(handle.valid());
+    ASSERT_TRUE(heap.write(handle, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
+    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u);
+
+    CommandListParameters parameters;
+    parameters.setPhysicalQueue(auxiliaryGraphicsQueue->id);
+    auto commandList = device.createCommandList(parameters);
+    ASSERT_TRUE(commandList);
+    commandList->open();
+    heap.bindCompute(*commandList, *pipeline);
+    commandList->close();
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+
+    heap.free(handle);
+    heap.collectRetired();
+    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u)
+        << "an unsubmitted auxiliary command buffer lost its descriptor resource";
+
+    CommandList* commandLists[] = { commandList.get() };
+    const QueueSubmissionToken submissionToken = device.executeCommandLists(
+        commandLists,
+        1u,
+        auxiliaryGraphicsQueue->id,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(submissionToken.valid());
+    ASSERT_TRUE(submissionToken.matchesPhysicalQueue(
+        auxiliaryGraphicsQueue->id.index,
+        auxiliaryGraphicsQueue->id.deviceGeneration
+    ));
+    ASSERT_TRUE(device.waitForIdle());
+
+    heap.collectRetired();
+    EXPECT_EQ(storageBuffer->getReferenceCount(), 1u)
+        << "descriptor retirement queried the primary Graphics timeline instead of the auxiliary physical queue";
+
+    const GpuDescriptorHandle recycled = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(recycled.valid());
+    EXPECT_EQ(recycled.slot(), handle.slot());
+}
+
+
 // AVBOIT's material and compute passes share one push-only local layout. Their target-generation slot payload is a
 // global UniformBuffer descriptor, all work buffers are global StorageBuffer descriptors, and the writable
 // transmittance volume is a global StorageImage descriptor. Exercise the shared local shape and material heap

@@ -652,7 +652,9 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
 1. **End-to-end physical queue identity (partially addressed).** Vulkan now assigns every accepted
    `QueueSubmissionToken` a concrete queue index and device generation. Graph recording, packet acceptance, and
    imported completion bindings require that identity; the renderer and native smoke topologies obtain it from the
-   Device; and a token from a retired device is rejected at the native submission boundary. An opt-in second
+   Device; and a token from a retired device is rejected at the native submission boundary. Descriptor-heap
+   quarantine now retains and queries that same exact physical token, so an auxiliary same-class queue cannot be
+   mistaken for the primary timeline during descriptor retirement. An opt-in second
    Graphics queue from the same Vulkan family is now registered, explicitly selected graph packets route to it
    deterministically, and same-family state handoffs use exact physical timeline waits without a spurious ownership
    barrier. A separately enabled alternate Graphics-, dedicated Compute-, or dedicated Transfer-capable family may

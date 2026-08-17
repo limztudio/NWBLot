@@ -417,6 +417,28 @@ TEST(EcsGraphics, SurfelGiPermitsOptInCrossFamilyComputeRouting){
 }
 
 
+// Hardware Caustics is a separate Graphics-capable effect chain. Its clear and every independently created
+// temporal-accumulator prefix must carry the explicit cross-family opt-in so copied photon/resolve schedules
+// retain one selected physical Graphics queue without making a windowed present eligible for that queue.
+TEST(EcsGraphics, HardwareCausticsPermitsOptInCrossFamilyGraphicsRouting){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    const usize lightingOffset = taskGraph.find("void RendererSystem::buildDeferredLightingTaskGraph");
+    ASSERT_NE(lightingOffset, AStringView::npos);
+    const AStringView lighting = taskGraph.substr(lightingOffset);
+
+    EXPECT_TRUE(ContainsText(lighting, "EnableCrossFamilyComputeEffectRouting(hardwareScheduling)"));
+    EXPECT_TRUE(ContainsText(lighting, "EnableCrossFamilyComputeEffectRouting(irradianceClearScheduling)"));
+    EXPECT_TRUE(ContainsText(lighting, "EnableCrossFamilyComputeEffectRouting(accumulatorBootstrapClearScheduling)"));
+    EXPECT_TRUE(ContainsText(lighting, "EnableCrossFamilyComputeEffectRouting(accumulatorDecayScheduling)"));
+}
+
+
 // The current renderer has exactly two runtime-selected sampled-image domains: material Texture2D assets (shared
 // by raster and ray-trace surface dispatch) and ImGui textures.  A new domain must not silently rely on a global
 // descriptor slot: keep the supported domain small and require each one to retain handles before graph declaration.

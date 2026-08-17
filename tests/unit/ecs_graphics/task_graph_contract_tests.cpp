@@ -26,7 +26,13 @@ using TestArena = NWB::Tests::TestArena<TaskGraphContractTestArenaTag>;
 
 
 static bool ContainsText(const AStringView text, const AStringView expected){
-    return text.find(expected) != AStringView::npos;
+    AString normalized;
+    normalized.reserve(text.size());
+    for(const char ch : text){
+        if(ch != '\r')
+            normalized += ch;
+    }
+    return AStringView(normalized.data(), normalized.size()).find(expected) != AStringView::npos;
 }
 
 static usize CountText(const AStringView text, const AStringView expected){

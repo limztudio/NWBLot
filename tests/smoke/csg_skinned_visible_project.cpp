@@ -267,11 +267,11 @@ private:
             boneToModel = MatrixMultiply(LoadFloat(skeleton->joints()[parentIndex].localBindPose), boneToModel);
 
         // The bone origin in model space is the translation column (M*v convention); receiver scale is 1.
-        return VectorSet(
-            VectorGetW(boneToModel.v[0]),
-            VectorGetW(boneToModel.v[1]),
-            VectorGetW(boneToModel.v[2]),
-            0.0f
+        return VectorMergeX(
+            VectorSplatW(boneToModel.v[0]),
+            VectorSplatW(boneToModel.v[1]),
+            VectorSplatW(boneToModel.v[2]),
+            VectorZero()
         );
     }
 

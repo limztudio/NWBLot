@@ -714,22 +714,36 @@ bool UiSystem::prepareTaskGraphDrawUploads(ImDrawData& drawData){
                 return false;
             }
 
-            const f32 clipMinX = Max(
-                (drawCommand.ClipRect.x - drawData.DisplayPos.x) * drawData.FramebufferScale.x,
-                0.0f
+            const SIMDVector clipRect = VectorMultiply(
+                VectorSubtract(
+                    VectorSet(drawCommand.ClipRect.x, drawCommand.ClipRect.y, drawCommand.ClipRect.z, drawCommand.ClipRect.w),
+                    VectorSet(drawData.DisplayPos.x, drawData.DisplayPos.y, drawData.DisplayPos.x, drawData.DisplayPos.y)
+                ),
+                VectorSet(
+                    drawData.FramebufferScale.x,
+                    drawData.FramebufferScale.y,
+                    drawData.FramebufferScale.x,
+                    drawData.FramebufferScale.y
+                )
             );
-            const f32 clipMinY = Max(
-                (drawCommand.ClipRect.y - drawData.DisplayPos.y) * drawData.FramebufferScale.y,
-                0.0f
+            // Preserve ImGui's asymmetric clip bounds: lower-bound min lanes and upper-bound max lanes.
+            const SIMDVector clampedClipRect = VectorSelect(
+                VectorMin(
+                    clipRect,
+                    VectorSet(
+                        static_cast<f32>(framebufferWidth),
+                        static_cast<f32>(framebufferHeight),
+                        static_cast<f32>(framebufferWidth),
+                        static_cast<f32>(framebufferHeight)
+                    )
+                ),
+                VectorMax(clipRect, s_SIMDZero),
+                s_SIMDMaskXY
             );
-            const f32 clipMaxX = Min(
-                (drawCommand.ClipRect.z - drawData.DisplayPos.x) * drawData.FramebufferScale.x,
-                static_cast<f32>(framebufferWidth)
-            );
-            const f32 clipMaxY = Min(
-                (drawCommand.ClipRect.w - drawData.DisplayPos.y) * drawData.FramebufferScale.y,
-                static_cast<f32>(framebufferHeight)
-            );
+            const f32 clipMinX = VectorGetX(clampedClipRect);
+            const f32 clipMinY = VectorGetY(clampedClipRect);
+            const f32 clipMaxX = VectorGetZ(clampedClipRect);
+            const f32 clipMaxY = VectorGetW(clampedClipRect);
             if(clipMaxX <= clipMinX || clipMaxY <= clipMinY)
                 continue;
 

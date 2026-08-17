@@ -196,15 +196,18 @@ static void BuildAnimatedJointMatrix(
         0.0f,
         0.0f
     ));
-    const f32 amount = VectorGetX(waves);
-    const f32 secondary = VectorGetY(waves);
-    const f32 angle = amount * (baseAngle + static_cast<f32>((seed >> 16u) % 5u) * angleJitter);
-
-    SIMDMatrix matrix = MatrixRotationRollPitchYaw(
-        angle * (0.18f + static_cast<f32>((seed >> 3u) & 3u) * 0.035f),
-        angle * (0.58f + static_cast<f32>((seed >> 6u) & 3u) * 0.04f),
-        secondary * (rollBase + static_cast<f32>((seed >> 9u) & 3u) * rollJitter)
+    const SIMDVector angle = VectorScale(
+        VectorSplatX(waves),
+        baseAngle + static_cast<f32>((seed >> 16u) % 5u) * angleJitter
     );
+    const SIMDVector rotationAngles = VectorMergeX(
+        VectorScale(angle, 0.18f + static_cast<f32>((seed >> 3u) & 3u) * 0.035f),
+        VectorScale(angle, 0.58f + static_cast<f32>((seed >> 6u) & 3u) * 0.04f),
+        VectorScale(VectorSplatY(waves), rollBase + static_cast<f32>((seed >> 9u) & 3u) * rollJitter),
+        VectorZero()
+    );
+
+    SIMDMatrix matrix = MatrixRotationRollPitchYawFromVector(rotationAngles);
     matrix = MatrixMultiply(bindJoint, matrix);
     if(!MatrixIsInvertibleAffine(
         matrix,

@@ -437,6 +437,24 @@ TEST(Math, CollisionBuildersKeepIntermediateValuesSimd){
     EXPECT_TRUE(NearlyEqual3(LoadFloat(corners[3]), 12.0f, 18.0f, 31.0f));
     EXPECT_TRUE(NearlyEqual3(LoadFloat(corners[4]), 14.0f, 26.0f, 32.0f));
     EXPECT_TRUE(NearlyEqual3(LoadFloat(corners[7]), 14.0f, 16.0f, 32.0f));
+
+    const BoundingFrustum projectionFrustum(MatrixPerspectiveFovLH(s_PI * 0.5f, 2.0f, 1.0f, 101.0f));
+    EXPECT_TRUE(NearlyEqual(projectionFrustum.rightSlope, 2.0f));
+    EXPECT_TRUE(NearlyEqual(projectionFrustum.leftSlope, -2.0f));
+    EXPECT_TRUE(NearlyEqual(projectionFrustum.topSlope, 1.0f));
+    EXPECT_TRUE(NearlyEqual(projectionFrustum.bottomSlope, -1.0f));
+    EXPECT_TRUE(NearlyEqual(projectionFrustum.nearPlane, 1.0f));
+    EXPECT_NEAR(projectionFrustum.farPlane, 101.0f, 0.001f);
+
+    BoundingFrustum uniformScaleFrustum;
+    frustum.transform(uniformScaleFrustum, 2.0f, QuaternionIdentity(), VectorZero());
+    EXPECT_TRUE(NearlyEqual(uniformScaleFrustum.nearPlane, 2.0f));
+    EXPECT_TRUE(NearlyEqual(uniformScaleFrustum.farPlane, 4.0f));
+
+    BoundingFrustum nonUniformScaleFrustum;
+    frustum.transform(nonUniformScaleFrustum, MatrixScaling(2.0f, 3.0f, 4.0f));
+    EXPECT_TRUE(NearlyEqual(nonUniformScaleFrustum.nearPlane, 4.0f));
+    EXPECT_TRUE(NearlyEqual(nonUniformScaleFrustum.farPlane, 8.0f));
 }
 
 TEST(Math, HalfFloatScalarConversion){
@@ -553,6 +571,7 @@ TEST(Math, AffineMatrixQueriesAndDualQuaternion){
     const SIMDMatrix translation = MatrixTranslation(1.0f, 2.0f, 3.0f);
     EXPECT_TRUE(MatrixIsAffine(translation, s_AffineEpsilon));
     EXPECT_TRUE(NearlyEqual(MatrixLinearDeterminant(translation), 1.0f));
+    EXPECT_TRUE(NearlyEqual4(MatrixLinearDeterminantV(translation), 1.0f, 1.0f, 1.0f, 1.0f));
     EXPECT_TRUE(MatrixIsInvertibleAffine(translation, s_AffineEpsilon, s_DeterminantEpsilon));
     EXPECT_TRUE(MatrixIsRigidAffine(translation, s_AffineEpsilon, s_RigidEpsilon));
 
@@ -570,8 +589,16 @@ TEST(Math, AffineMatrixQueriesAndDualQuaternion){
 
     const SIMDMatrix scaled = MatrixScaling(2.0f, 3.0f, 4.0f);
     EXPECT_TRUE(NearlyEqual(MatrixLinearDeterminant(scaled), 24.0f));
+    EXPECT_TRUE(NearlyEqual4(MatrixLinearDeterminantV(scaled), 24.0f, 24.0f, 24.0f, 24.0f));
     EXPECT_TRUE(MatrixIsInvertibleAffine(scaled, s_AffineEpsilon, s_DeterminantEpsilon));
     EXPECT_FALSE(MatrixIsRigidAffine(scaled, s_AffineEpsilon, s_RigidEpsilon));
+
+    const SIMDMatrix nearSingular = MatrixScaling(1.0f, 1.0f, s_DeterminantEpsilon * 0.5f);
+    EXPECT_FALSE(MatrixIsInvertibleAffine(nearSingular, s_AffineEpsilon, s_DeterminantEpsilon));
+
+    const SIMDMatrix overflowed = MatrixScaling(s_MaxF32, s_MaxF32, s_MaxF32);
+    EXPECT_TRUE(MatrixIsAffine(overflowed, s_AffineEpsilon));
+    EXPECT_FALSE(MatrixIsInvertibleAffine(overflowed, s_AffineEpsilon, s_DeterminantEpsilon));
 
     SIMDMatrix nonAffine = MatrixIdentity();
     nonAffine.v[3] = VectorZero();

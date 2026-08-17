@@ -304,7 +304,7 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     if(!Vector3TryNormalize(ToVector(tangent), outputTangent))
         return false;
 
-    f32 sign = 1.0f;
+    SIMDVector sign = s_SIMDOne;
     if(mesh.vertex_bitangent.exists){
         ufbx_vec3 bitangent = ufbx_get_vertex_vec3(&mesh.vertex_bitangent, cornerIndex);
         if(options.bakeTransforms && (wantsSkinning || mesh.skinned_is_local))
@@ -314,11 +314,11 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
         if(Vector3TryNormalize(ToVector(bitangent), outputBitangent)){
             const SIMDVector tangentSpaceBitangent = Vector3Cross(normal, outputTangent);
             const SIMDVector bitangentDot = Vector3Dot(tangentSpaceBitangent, outputBitangent);
-            sign = VectorGetX(bitangentDot) < 0.0f ? -1.0f : 1.0f;
+            sign = VectorSelect(s_SIMDOne, s_SIMDNegativeOne, VectorLess(bitangentDot, VectorZero()));
         }
     }
 
-    outTangent = VectorSetW(outputTangent, sign);
+    outTangent = VectorSelect(outputTangent, sign, s_SIMDMaskW);
     return true;
 }
 

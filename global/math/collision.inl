@@ -1788,7 +1788,8 @@ inline void SIMDCALL BoundingFrustum::transform(BoundingFrustum& outFrustum, con
     }
 
     const SIMDVector absScale = VectorAbs(scale);
-    const f32 maxScale = VectorGetX(CollisionDetail::Vector3MaxComponent(absScale));
+    const SIMDVector maxScale = CollisionDetail::Vector3MaxComponent(absScale);
+    const SIMDVector scaledPlanes = VectorMultiply(VectorSet(nearPlane, farPlane, 0.0f, 0.0f), maxScale);
     const SIMDVector originVector = Vector3Transform(LoadFloat(origin), matrix);
     const SIMDVector orientationVector = QuaternionNormalize(QuaternionMultiply(LoadFloat(orientation), rotation));
     StoreFloat(VectorSetW(originVector, 0.0f), &outFrustum.origin);
@@ -1797,8 +1798,8 @@ inline void SIMDCALL BoundingFrustum::transform(BoundingFrustum& outFrustum, con
     outFrustum.leftSlope = leftSlope;
     outFrustum.topSlope = topSlope;
     outFrustum.bottomSlope = bottomSlope;
-    outFrustum.nearPlane = nearPlane * maxScale;
-    outFrustum.farPlane = farPlane * maxScale;
+    outFrustum.nearPlane = VectorGetX(scaledPlanes);
+    outFrustum.farPlane = VectorGetY(scaledPlanes);
 }
 
 inline void SIMDCALL BoundingFrustum::transform(
@@ -1809,14 +1810,18 @@ inline void SIMDCALL BoundingFrustum::transform(
 )const noexcept{
     const SIMDVector originVector = VectorAdd(Vector3Rotate(VectorScale(LoadFloat(origin), scale), rotation), translation);
     const SIMDVector orientationVector = QuaternionNormalize(QuaternionMultiply(LoadFloat(orientation), rotation));
+    const SIMDVector scaledPlanes = VectorMultiply(
+        VectorSet(nearPlane, farPlane, 0.0f, 0.0f),
+        VectorAbs(VectorReplicate(scale))
+    );
     StoreFloat(VectorSetW(originVector, 0.0f), &outFrustum.origin);
     StoreFloat(orientationVector, &outFrustum.orientation);
     outFrustum.rightSlope = rightSlope;
     outFrustum.leftSlope = leftSlope;
     outFrustum.topSlope = topSlope;
     outFrustum.bottomSlope = bottomSlope;
-    outFrustum.nearPlane = nearPlane * Abs(scale);
-    outFrustum.farPlane = farPlane * Abs(scale);
+    outFrustum.nearPlane = VectorGetX(scaledPlanes);
+    outFrustum.farPlane = VectorGetY(scaledPlanes);
 }
 
 inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{
@@ -2081,25 +2086,38 @@ inline void SIMDCALL BoundingFrustum::createFromMatrix(
     outFrustum.origin = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     outFrustum.orientation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
 
-    const f32 m00 = VectorGetX(projection.v[0]);
-    const f32 m11 = VectorGetY(projection.v[1]);
-    const f32 m02 = VectorGetZ(projection.v[0]);
-    const f32 m12 = VectorGetZ(projection.v[1]);
-    const f32 m22 = VectorGetZ(projection.v[2]);
-    const f32 m23 = VectorGetW(projection.v[2]);
+    const SIMDVector m00 = VectorSplatX(projection.v[0]);
+    const SIMDVector m11 = VectorSplatY(projection.v[1]);
+    const SIMDVector m02 = VectorSplatZ(projection.v[0]);
+    const SIMDVector m12 = VectorSplatZ(projection.v[1]);
+    const SIMDVector slopes = VectorDivide(
+        VectorMergeX(
+            VectorSubtract(s_SIMDOne, m02),
+            VectorSubtract(s_SIMDNegativeOne, m02),
+            VectorSubtract(s_SIMDOne, m12),
+            VectorSubtract(s_SIMDNegativeOne, m12)
+        ),
+        VectorMergeX(m00, m00, m11, m11)
+    );
+    outFrustum.rightSlope = VectorGetX(slopes);
+    outFrustum.leftSlope = VectorGetY(slopes);
+    outFrustum.topSlope = VectorGetZ(slopes);
+    outFrustum.bottomSlope = VectorGetW(slopes);
 
-    outFrustum.rightSlope = (1.0f - m02) / m00;
-    outFrustum.leftSlope = (-1.0f - m02) / m00;
-    outFrustum.topSlope = (1.0f - m12) / m11;
-    outFrustum.bottomSlope = (-1.0f - m12) / m11;
-
-    if(rightHandedCoordinates){
-        outFrustum.nearPlane = m23 / m22;
-        outFrustum.farPlane = m23 / (m22 + 1.0f);
-    }else{
-        outFrustum.nearPlane = -m23 / m22;
-        outFrustum.farPlane = m23 / (1.0f - m22);
-    }
+    const SIMDVector m22 = VectorSplatZ(projection.v[2]);
+    const SIMDVector m23 = VectorSplatW(projection.v[2]);
+    const SIMDVector planeDistances = rightHandedCoordinates
+        ? VectorDivide(
+            VectorMergeX(m23, m23, VectorZero(), VectorZero()),
+            VectorMergeX(m22, VectorAdd(m22, s_SIMDOne), s_SIMDOne, s_SIMDOne)
+        )
+        : VectorDivide(
+            VectorMergeX(VectorNegate(m23), m23, VectorZero(), VectorZero()),
+            VectorMergeX(m22, VectorSubtract(s_SIMDOne, m22), s_SIMDOne, s_SIMDOne)
+        )
+    ;
+    outFrustum.nearPlane = VectorGetX(planeDistances);
+    outFrustum.farPlane = VectorGetY(planeDistances);
 }
 
 

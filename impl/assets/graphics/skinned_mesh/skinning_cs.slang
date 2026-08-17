@@ -95,13 +95,47 @@ float3 nwbSkinnedMeshTransformDualQuaternionPosition(const float4 real, const fl
     return rotatedPosition + translation;
 }
 
-bool nwbSkinnedMeshApplyLinearSkin(const uint skinIndex, inout float3 position, inout float3 normal, inout float4 tangent){
+bool nwbSkinnedMeshApplyLinearSkinPosition(const uint skinIndex, inout float3 position){
     const uint jointCount = nwbSkinnedMeshJointCount();
     if(skinIndex >= nwbSkinnedMeshSkinCount() || jointCount == 0u)
         return true;
 
     const NwbSkinnedMeshSkinInfluence skin = nwbSkinnedMeshHeapSkinInfluences(g_NwbSkinnedMeshBindlessResources.streamSlots2.z)[skinIndex];
     float3 skinnedPosition = float3(0.0);
+    float totalWeight = 0.0;
+    // Preserve the legacy influence filter: position skinning formerly passed this normal to the normal-matrix check.
+    const float3 influenceValidationNormal = float3(0.0, 0.0, 1.0);
+
+    for(uint influenceIndex = 0u; influenceIndex < NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT; ++influenceIndex){
+        const float weight = skin.weight[influenceIndex];
+        const uint jointId = skin.joint[influenceIndex];
+        if(abs(weight) <= NWB_SKINNED_MESH_EPSILON || jointId >= jointCount)
+            continue;
+
+        const float4x4 jointMatrix = nwbSkinnedMeshLoadJointMatrix(jointId);
+        const float3x3 jointMatrix3 = float3x3(jointMatrix);
+        float3 transformedValidationNormal = float3(0.0);
+        if(!nwbSkinnedMeshTransformJointNormal(jointMatrix3, influenceValidationNormal, transformedValidationNormal))
+            continue;
+
+        skinnedPosition += weight * mul(jointMatrix, float4(position, 1.0)).xyz;
+        totalWeight += weight;
+    }
+
+    if(abs(totalWeight) <= NWB_SKINNED_MESH_EPSILON)
+        return true;
+
+    const float inverseTotalWeight = 1.0 / totalWeight;
+    position = skinnedPosition * inverseTotalWeight;
+    return true;
+}
+
+bool nwbSkinnedMeshApplyLinearSkinFrame(const uint skinIndex, inout float3 normal, inout float4 tangent){
+    const uint jointCount = nwbSkinnedMeshJointCount();
+    if(skinIndex >= nwbSkinnedMeshSkinCount() || jointCount == 0u)
+        return true;
+
+    const NwbSkinnedMeshSkinInfluence skin = nwbSkinnedMeshHeapSkinInfluences(g_NwbSkinnedMeshBindlessResources.streamSlots2.z)[skinIndex];
     float3 skinnedNormal = float3(0.0);
     float3 skinnedTangent = float3(0.0);
     float totalWeight = 0.0;
@@ -118,7 +152,6 @@ bool nwbSkinnedMeshApplyLinearSkin(const uint skinIndex, inout float3 position, 
         if(!nwbSkinnedMeshTransformJointNormal(jointMatrix3, normal, transformedNormal))
             continue;
 
-        skinnedPosition += weight * mul(jointMatrix, float4(position, 1.0)).xyz;
         skinnedNormal += weight * transformedNormal;
         skinnedTangent += weight * mul(jointMatrix3, tangent.xyz);
         totalWeight += weight;
@@ -128,20 +161,26 @@ bool nwbSkinnedMeshApplyLinearSkin(const uint skinIndex, inout float3 position, 
         return true;
 
     const float inverseTotalWeight = 1.0 / totalWeight;
-    position = skinnedPosition * inverseTotalWeight;
     normal = skinnedNormal * inverseTotalWeight;
     tangent.xyz = skinnedTangent * inverseTotalWeight;
     return true;
 }
 
-bool nwbSkinnedMeshApplyDualQuaternionSkin(const uint skinIndex, inout float3 position, inout float3 normal, inout float4 tangent){
+bool nwbSkinnedMeshBuildDualQuaternionSkin(
+    const uint skinIndex,
+    out bool hasSkin,
+    out float4 blendedReal,
+    out float4 blendedDual
+){
+    hasSkin = false;
+    blendedReal = float4(0.0);
+    blendedDual = float4(0.0);
+
     const uint jointCount = nwbSkinnedMeshJointCount();
     if(skinIndex >= nwbSkinnedMeshSkinCount() || jointCount == 0u)
         return true;
 
     const NwbSkinnedMeshSkinInfluence skin = nwbSkinnedMeshHeapSkinInfluences(g_NwbSkinnedMeshBindlessResources.streamSlots2.z)[skinIndex];
-    float4 blendedReal = float4(0.0);
-    float4 blendedDual = float4(0.0);
     float4 referenceReal = float4(0.0);
     bool hasReference = false;
     float totalWeight = 0.0;
@@ -177,16 +216,50 @@ bool nwbSkinnedMeshApplyDualQuaternionSkin(const uint skinIndex, inout float3 po
     if(!nwbSkinnedMeshNormalizeDualQuaternion(blendedReal, blendedDual))
         return false;
 
+    hasSkin = true;
+    return true;
+}
+
+bool nwbSkinnedMeshApplyDualQuaternionSkinPosition(const uint skinIndex, inout float3 position){
+    bool hasSkin = false;
+    float4 blendedReal = float4(0.0);
+    float4 blendedDual = float4(0.0);
+    if(!nwbSkinnedMeshBuildDualQuaternionSkin(skinIndex, hasSkin, blendedReal, blendedDual))
+        return false;
+    if(!hasSkin)
+        return true;
+
     position = nwbSkinnedMeshTransformDualQuaternionPosition(blendedReal, blendedDual, position);
+    return true;
+}
+
+bool nwbSkinnedMeshApplyDualQuaternionSkinFrame(const uint skinIndex, inout float3 normal, inout float4 tangent){
+    bool hasSkin = false;
+    float4 blendedReal = float4(0.0);
+    float4 blendedDual = float4(0.0);
+    if(!nwbSkinnedMeshBuildDualQuaternionSkin(skinIndex, hasSkin, blendedReal, blendedDual))
+        return false;
+    if(!hasSkin)
+        return true;
+
     normal = nwbRotateVectorByQuaternion(normal, blendedReal);
     tangent.xyz = nwbRotateVectorByQuaternion(tangent.xyz, blendedReal);
     return true;
 }
 
-void nwbSkinnedMeshApplySkin(const uint skinIndex, inout float3 position, inout float3 normal, inout float4 tangent){
+void nwbSkinnedMeshApplySkinPosition(const uint skinIndex, inout float3 position){
     const bool skinApplied = nwbSkinnedMeshSkinningMode() == NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION
-        ? nwbSkinnedMeshApplyDualQuaternionSkin(skinIndex, position, normal, tangent)
-        : nwbSkinnedMeshApplyLinearSkin(skinIndex, position, normal, tangent)
+        ? nwbSkinnedMeshApplyDualQuaternionSkinPosition(skinIndex, position)
+        : nwbSkinnedMeshApplyLinearSkinPosition(skinIndex, position)
+    ;
+    if(!skinApplied)
+        return;
+}
+
+void nwbSkinnedMeshApplySkinFrame(const uint skinIndex, inout float3 normal, inout float4 tangent){
+    const bool skinApplied = nwbSkinnedMeshSkinningMode() == NWB_SKINNED_MESH_SKINNING_MODE_DUAL_QUATERNION
+        ? nwbSkinnedMeshApplyDualQuaternionSkinFrame(skinIndex, normal, tangent)
+        : nwbSkinnedMeshApplyLinearSkinFrame(skinIndex, normal, tangent)
     ;
     if(!skinApplied)
         return;
@@ -209,10 +282,8 @@ void nwbSkinnedMeshSkinPosition(
         true
     );
     float3 position = nwbMeshLoadPosition(nwbSkinnedMeshHeapPositions(g_NwbSkinnedMeshBindlessResources.streamSlots0.x)[positionRef.position]);
-    float3 normal = float3(0.0, 0.0, 1.0);
-    float4 tangent = float4(1.0, 0.0, 0.0, 1.0);
     const float3 preSkinPosition = position;
-    nwbSkinnedMeshApplySkin(positionRef.skin, position, normal, tangent);
+    nwbSkinnedMeshApplySkinPosition(positionRef.skin, position);
     if(!nwbFiniteFloat3(position))
         position = preSkinPosition;
 
@@ -232,7 +303,6 @@ void nwbSkinnedMeshSkinAttribute(
     );
     const uint attributeId = attributeRef.normal;
 
-    float3 position = float3(0.0);
     float3 normal = nwbMeshLoadHalf4(nwbSkinnedMeshHeapHalf4s(g_NwbSkinnedMeshBindlessResources.streamSlots0.z)[attributeId]).xyz;
     float4 tangent = nwbMeshLoadHalf4(nwbSkinnedMeshHeapHalf4s(g_NwbSkinnedMeshBindlessResources.streamSlots1.x)[attributeId]);
     const float3 restNormal = normal;
@@ -241,7 +311,7 @@ void nwbSkinnedMeshSkinAttribute(
     nwbOrthonormalizeFrame(normal, tangent, restNormal, restTangent);
     const float3 preSkinNormal = normal;
     const float4 preSkinTangent = tangent;
-    nwbSkinnedMeshApplySkin(nwbSkinnedMeshHeapUints(g_NwbSkinnedMeshBindlessResources.streamSlots2.y)[attributeId], position, normal, tangent);
+    nwbSkinnedMeshApplySkinFrame(nwbSkinnedMeshHeapUints(g_NwbSkinnedMeshBindlessResources.streamSlots2.y)[attributeId], normal, tangent);
     if(!nwbFiniteFloat3(normal))
         normal = preSkinNormal;
     if(!nwbFiniteFloat4(tangent))

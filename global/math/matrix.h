@@ -455,8 +455,8 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
     basisAsRows.v[3] = s_SIMDIdentityR3;
 
     SIMDMatrix rotationMatrix = MatrixTranspose(basisAsRows);
-    f32 determinant = VectorGetX(MatrixDeterminant(rotationMatrix));
-    if(determinant < 0.0f){
+    SIMDVector determinant = MatrixDeterminant(rotationMatrix);
+    if(Vector4Less(determinant, VectorZero())){
         scale = VectorSetByIndex(scale, -VectorGetByIndex(scale, a), a);
         basis[a] = VectorNegate(basis[a]);
 
@@ -464,12 +464,14 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
         basisAsRows.v[1] = basis[1];
         basisAsRows.v[2] = basis[2];
         rotationMatrix = MatrixTranspose(basisAsRows);
-        determinant = -determinant;
+        determinant = VectorNegate(determinant);
     }
 
-    determinant -= 1.0f;
-    determinant *= determinant;
-    if(SIMDMatrixDetail::s_MatrixDecomposeEpsilon < determinant)
+    const SIMDVector determinantError = VectorSubtract(determinant, s_SIMDOne);
+    if(Vector4Greater(
+        VectorMultiply(determinantError, determinantError),
+        VectorReplicate(SIMDMatrixDetail::s_MatrixDecomposeEpsilon)
+    ))
         return false;
 
     *outScale = scale;
@@ -491,11 +493,15 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
     ;
 }
 
-[[nodiscard]] NWB_INLINE f32 SIMDCALL MatrixLinearDeterminant(const SIMDMatrix& matrix)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVector SIMDCALL MatrixLinearDeterminantV(const SIMDMatrix& matrix)noexcept{
     const SIMDVector row0 = VectorSetW(matrix.v[0], 0.0f);
     const SIMDVector row1 = VectorSetW(matrix.v[1], 0.0f);
     const SIMDVector row2 = VectorSetW(matrix.v[2], 0.0f);
-    return VectorGetX(Vector3Dot(row0, Vector3Cross(row1, row2)));
+    return Vector3Dot(row0, Vector3Cross(row1, row2));
+}
+
+[[nodiscard]] NWB_INLINE f32 SIMDCALL MatrixLinearDeterminant(const SIMDMatrix& matrix)noexcept{
+    return VectorGetX(MatrixLinearDeterminantV(matrix));
 }
 
 [[nodiscard]] NWB_INLINE bool SIMDCALL MatrixIsInvertibleAffine(
@@ -506,8 +512,9 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
     if(!MatrixIsAffine(matrix, affineEpsilon))
         return false;
 
-    const f32 determinant = MatrixLinearDeterminant(matrix);
-    return IsFinite(determinant) && Abs(determinant) > determinantEpsilon;
+    const SIMDVector determinant = MatrixLinearDeterminantV(matrix);
+    return VectorIsFinite(determinant, VectorComponentMask::s_XYZW)
+        && Vector4Greater(VectorAbs(determinant), VectorReplicate(determinantEpsilon));
 }
 
 [[nodiscard]] NWB_INLINE bool SIMDCALL MatrixIsRigidAffine(

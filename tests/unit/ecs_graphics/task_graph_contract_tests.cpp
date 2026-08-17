@@ -439,6 +439,33 @@ TEST(EcsGraphics, HardwareCausticsPermitsOptInCrossFamilyGraphicsRouting){
 }
 
 
+// Shadow Visibility has both a fully split soft-transparent route and a retained monolithic compatibility route.
+// Each graph-owned chain may choose an alternate Compute family, while its direct successors retain that physical
+// queue and the explicit primary-Graphics presentation guard remains outside this effect.
+TEST(EcsGraphics, ShadowVisibilityPermitsOptInCrossFamilyComputeRouting){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    const usize shadowOffset = taskGraph.find("bool RendererSystem::declareDeferredShadowVisibilityTask");
+    const usize softwareCausticsOffset = taskGraph.find("bool RendererSystem::declareDeferredSoftwareCausticsTask", shadowOffset);
+    ASSERT_NE(shadowOffset, AStringView::npos);
+    ASSERT_NE(softwareCausticsOffset, AStringView::npos);
+    ASSERT_LT(shadowOffset, softwareCausticsOffset);
+    const AStringView shadowVisibility = taskGraph.substr(shadowOffset, softwareCausticsOffset - shadowOffset);
+
+    EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(opaqueScheduling)"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(tailScheduling)"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(primitiveScheduling)"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(allLitClearScheduling)"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(scheduling)"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(statsReadbackScheduling)"));
+}
+
+
 // The current renderer has exactly two runtime-selected sampled-image domains: material Texture2D assets (shared
 // by raster and ray-trace surface dispatch) and ImGui textures.  A new domain must not silently rely on a global
 // descriptor slot: keep the supported domain small and require each one to retain handles before graph declaration.

@@ -260,7 +260,7 @@ TEST(EcsGraphics, SceneBvhTransparentSubtreeClassificationPropagatesToRoot){
     indices.push_back(1u);
     indices.push_back(2u);
     NodeVector nodes{ scratchArena };
-    const u32 root = NWB::Impl::__hidden_raytracing_system::BuildSceneBvhNode(
+    const u32 root = NWB::Impl::RayTracingDetail::BuildSceneBvhNode(
         indices.data(),
         0u,
         static_cast<u32>(indices.size()),

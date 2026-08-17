@@ -436,7 +436,7 @@ inline constexpr f32 s_SwShadowSceneBoundsRelativePadding = 0.10f;
 
 
 // Cross-TU ray-tracing helpers.
-namespace __hidden_raytracing_system{
+namespace RayTracingDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

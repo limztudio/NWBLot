@@ -18,7 +18,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_shadow_visibility_task{
+namespace RayTracingShadowVisibilityTaskDetail{
 
 
 // A prepared soft-transparent frame records opaque production, opaque resolve, transparent trace, and terminal
@@ -815,7 +815,7 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buf
         return false;
     }
 
-    if(!__hidden_raytracing_system::EnsureHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
+    if(!RayTracingDetail::EnsureHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material context buffer in the descriptor heap"));
         return false;
     }
@@ -830,7 +830,7 @@ bool RendererRayTracingSystem::replaceRayTraceMaterialContextHeapHandle(Core::Bu
         return false;
     }
 
-    if(!__hidden_raytracing_system::ReplaceHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
+    if(!RayTracingDetail::ReplaceHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to replace ray-trace material-context heap descriptor"));
         return false;
     }
@@ -918,7 +918,7 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsHeapHandle(){
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(
         !heap.isInitialized()
-        || !__hidden_raytracing_system::EnsureHeapBuffer(
+        || !RayTracingDetail::EnsureHeapBuffer(
             heap,
             *rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(),
             Core::GpuDescriptorClass::UniformBuffer,
@@ -1142,7 +1142,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(
         !heap.isInitialized()
-        || !__hidden_raytracing_system::ReplaceHeapBuffer(
+        || !RayTracingDetail::ReplaceHeapBuffer(
             heap,
             *edgeListBuffer.get(),
             Core::GpuDescriptorClass::StorageBuffer,
@@ -1179,9 +1179,9 @@ bool RendererRayTracingSystem::renderShadowVisibility(
         !heap.isInitialized()
         || !rayTracingState().m_tlasHeapHandle.valid()
         || !targets.bindless.valid()
-        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
-        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
-        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
+        || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
+        || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
+        || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow trace heap resources are incomplete"));
         return false;
@@ -1348,9 +1348,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
     const bool graphEntryStatesOwned,
     const bool graphOwnsOpaqueTemporalMergeEntryStates
 ){
-    return graph.addTask<__hidden_shadow_visibility_task::ShadowVisibilityOpaqueGraphTask>(
+    return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueGraphTask>(
         desc,
-        __hidden_shadow_visibility_task::ShadowVisibilityOpaqueGraphTask::Payload{
+        RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueGraphTask::Payload{
             .raytracingSystem = this,
             .graphics = &graphics(),
             .targets = &targets,
@@ -1381,9 +1381,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWave
     const bool graphEntryStatesOwned,
     const bool graphOwnsOpaqueTemporalMergeEntryStates
 ){
-    return graph.addTask<__hidden_shadow_visibility_task::ShadowVisibilityOpaqueFirstWaveletGraphTask>(
+    return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueFirstWaveletGraphTask>(
         desc,
-        __hidden_shadow_visibility_task::ShadowVisibilityOpaqueFirstWaveletGraphTask::Payload{
+        RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueFirstWaveletGraphTask::Payload{
             .raytracingSystem = this,
             .graphics = &graphics(),
             .targets = &targets,
@@ -1438,9 +1438,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTa
     const bool hardwareShadowSupported,
     const bool graphEntryStatesOwned
 ){
-    return graph.addTask<__hidden_shadow_visibility_task::ShadowVisibilityOpaqueResolveTailGraphTask>(
+    return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueResolveTailGraphTask>(
         desc,
-        __hidden_shadow_visibility_task::ShadowVisibilityOpaqueResolveTailGraphTask::Payload{
+        RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueResolveTailGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
             .timingTicket = &timingTicket,
@@ -1717,9 +1717,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTemporalMe
     const bool graphEntryStatesOwned,
     const bool graphOwnsTransparentTemporalMergeEntryStates
 ){
-    return graph.addTask<__hidden_shadow_visibility_task::ShadowTransparentSoftTemporalMergeGraphTask>(
+    return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTemporalMergeGraphTask>(
         desc,
-        __hidden_shadow_visibility_task::ShadowTransparentSoftTemporalMergeGraphTask::Payload{
+        RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTemporalMergeGraphTask::Payload{
             .raytracingSystem = this,
             .graphics = &graphics(),
             .targets = &targets,
@@ -1747,9 +1747,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFirstWavel
     const bool graphOwnsTransparentWaveletInputBoundary,
     const bool startsTransparentResolveTiming
 ){
-    return graph.addTask<__hidden_shadow_visibility_task::ShadowTransparentSoftFirstWaveletGraphTask>(
+    return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFirstWaveletGraphTask>(
         desc,
-        __hidden_shadow_visibility_task::ShadowTransparentSoftFirstWaveletGraphTask::Payload{
+        RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFirstWaveletGraphTask::Payload{
             .raytracingSystem = this,
             .graphics = &graphics(),
             .targets = &targets,
@@ -1778,9 +1778,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
     const u32* const opaqueFrameIndex,
     const bool graphEntryStatesOwned
 ){
-    return graph.addTask<__hidden_shadow_visibility_task::ShadowTransparentSoftFoldGraphTask>(
+    return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFoldGraphTask>(
         desc,
-        __hidden_shadow_visibility_task::ShadowTransparentSoftFoldGraphTask::Payload{
+        RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFoldGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
             .timingTicket = &timingTicket,
@@ -1805,9 +1805,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTraceTask(
     bool* const transparentTraceProduced,
     const bool graphEntryStatesOwned
 ){
-    return graph.addTask<__hidden_shadow_visibility_task::ShadowTransparentSoftTraceGraphTask>(
+    return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTraceGraphTask>(
         desc,
-        __hidden_shadow_visibility_task::ShadowTransparentSoftTraceGraphTask::Payload{
+        RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTraceGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
             .timingTicket = &timingTicket,
@@ -1830,9 +1830,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
     const bool graphOwnsAllLitVisibilityClear,
     const GraphOwnedAdaptiveShadowPrimitivePlan graphOwnedAdaptivePrimitives
 ){
-    return graph.addTask<__hidden_shadow_visibility_task::ShadowVisibilityGraphTask>(
+    return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityGraphTask>(
         desc,
-        __hidden_shadow_visibility_task::ShadowVisibilityGraphTask::Payload{
+        RayTracingShadowVisibilityTaskDetail::ShadowVisibilityGraphTask::Payload{
             .raytracingSystem = this,
             .graphics = &graphics(),
             .targets = &targets,
@@ -1883,16 +1883,16 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     if(
         !heap.isInitialized()
         || !targets.bindless.valid()
-        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
-        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_shadowMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
-        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
-        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.shadowCoarseTransmittanceStorage, Core::GpuDescriptorClass::StorageImage)
-        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
-        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.transparentSoftHalfStorage, Core::GpuDescriptorClass::StorageImage)
-        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_swShadowEdgeStatsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_swShadowEdgeCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_swShadowEdgeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_swShadowIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
+        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_shadowMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
+        || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
+        || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowCoarseTransmittanceStorage, Core::GpuDescriptorClass::StorageImage)
+        || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
+        || !RayTracingDetail::IsHeapHandle(targets.bindless.transparentSoftHalfStorage, Core::GpuDescriptorClass::StorageImage)
+        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_swShadowEdgeStatsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_swShadowEdgeCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_swShadowEdgeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_swShadowIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software-shadow heap resources are incomplete"));
         return false;
@@ -2527,9 +2527,9 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
     }
 
     const bool heapResourcesReady =
-        __hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowEdgeStatsHeapHandle)
-        && __hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowEdgeCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowEdgeCounterHeapHandle)
-        && __hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowIndirectArgsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowIndirectArgsHeapHandle)
+        RayTracingDetail::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowEdgeStatsHeapHandle)
+        && RayTracingDetail::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowEdgeCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowEdgeCounterHeapHandle)
+        && RayTracingDetail::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowIndirectArgsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowIndirectArgsHeapHandle)
     ;
     if(!heapResourcesReady){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register software-shadow work buffers in the descriptor heap"));

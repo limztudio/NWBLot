@@ -20,7 +20,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_logger_crash_symbolicate{
+namespace LoggerCrashSymbolicateDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -259,7 +259,7 @@ static void AppendVisibleCallstack(CrashReportText& outReport, const AStringView
 
 
 CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config){
-    namespace Symbolicate = __hidden_logger_crash_symbolicate;
+    namespace Symbolicate = LoggerCrashSymbolicateDetail;
 
     CrashReportText detailReport{arena};
     detailReport.reserve(Symbolicate::s_CrashReportReserveBytes);

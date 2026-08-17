@@ -126,7 +126,7 @@ void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTracingIn
         return true;
     }
 
-    if(!__hidden_raytracing_system::RegisterHeapBuffer(
+    if(!RayTracingDetail::RegisterHeapBuffer(
         heap,
         buffer,
         Core::GpuDescriptorClass::StorageBuffer,
@@ -169,7 +169,7 @@ void BeginMeshHeapHandleGather(
 }
 
 [[nodiscard]] bool IsStorageBufferHeapHandle(const Core::GpuDescriptorHandle handle){
-    return __hidden_raytracing_system::IsHeapHandle(handle, Core::GpuDescriptorClass::StorageBuffer);
+    return RayTracingDetail::IsHeapHandle(handle, Core::GpuDescriptorClass::StorageBuffer);
 }
 
 // Recording is not allowed to register a new descriptor after the shared graph has frozen resource identities.
@@ -192,7 +192,7 @@ void BeginMeshHeapHandleGather(
 }
 
 [[nodiscard]] bool IsAccelStructHeapHandle(const Core::GpuDescriptorHandle handle){
-    return __hidden_raytracing_system::IsHeapHandle(handle, Core::GpuDescriptorClass::AccelStruct);
+    return RayTracingDetail::IsHeapHandle(handle, Core::GpuDescriptorClass::AccelStruct);
 }
 
 template<typename RayTracingState>
@@ -269,7 +269,7 @@ template<typename RayTracingState>
     Core::Buffer& buffer,
     Core::GpuDescriptorHandle& outHandle
 ){
-    return __hidden_raytracing_system::RegisterHeapBuffer(
+    return RayTracingDetail::RegisterHeapBuffer(
         heap,
         buffer,
         Core::GpuDescriptorClass::StorageBuffer,
@@ -1063,7 +1063,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
 
         MeshResources* mesh = nullptr;
         RenderableMeshDesc resolvedMesh;
-        const bool meshReady = __hidden_raytracing_system::ResolveRenderableMeshResources(
+        const bool meshReady = RayTracingDetail::ResolveRenderableMeshResources(
             *meshSystem,
             m_renderer.meshSystem(),
             entity,
@@ -1155,7 +1155,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
                 materialConstantByteOffset
             ))
                 return false;
-            instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, materialConstantByteOffset, meshInstanceIndex);
+            instanceMaterial = RayTracingDetail::ResolveInstanceShadowMaterial(*materialInfo, materialConstantByteOffset, meshInstanceIndex);
         }
         instanceMaterial.indexSlot = rayTracingState().m_shadowMeshIndexHandles[meshSlot].slot();
         instanceMaterial.attributeSlot = rayTracingState().m_shadowMeshAttributeHandles[meshSlot].slot();
@@ -1622,7 +1622,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
 
         MeshResources* mesh = nullptr;
         RenderableMeshDesc resolvedMesh;
-        const bool meshReady = __hidden_raytracing_system::ResolveRenderableMeshResources(
+        const bool meshReady = RayTracingDetail::ResolveRenderableMeshResources(
             *meshSystem,
             m_renderer.meshSystem(),
             entity,
@@ -1739,7 +1739,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         SIMDVector worldMax{};
         if(!AabbTests::Transform(objectToWorld, localMin, localMax, worldMin, worldMax))
             continue;
-        __hidden_raytracing_system::InflateSwShadowSceneBounds(worldMin, worldMax);
+        RayTracingDetail::InflateSwShadowSceneBounds(worldMin, worldMax);
 
         SceneSwBvhInstanceGpu instance;
         StoreFloat(worldToObject, &instance.worldToObject);
@@ -1770,7 +1770,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                 materialConstantByteOffset
             ))
                 return false;
-            instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, materialConstantByteOffset, meshInstanceIndex);
+            instanceMaterial = RayTracingDetail::ResolveInstanceShadowMaterial(*materialInfo, materialConstantByteOffset, meshInstanceIndex);
         }
         instanceMaterial.indexSlot = rayTracingState().m_swShadowMeshIndexHandles[meshSlot].slot();
         instanceMaterial.attributeSlot = rayTracingState().m_swShadowMeshAttributeHandles[meshSlot].slot();
@@ -1858,7 +1858,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         instanceLeafCost.reserve(instanceCount);
         for(u32 i = 0u; i < instanceCount; ++i)
             instanceLeafCost.push_back(instances[i].primitiveCount);
-        __hidden_raytracing_system::BuildSceneBvhNode(
+        RayTracingDetail::BuildSceneBvhNode(
             indices.data(),
             0u,
             instanceCount,
@@ -2151,9 +2151,9 @@ void RendererRayTracingSystem::releaseSwBvhScratchHeapHandles(){
     auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(heap.isInitialized()){
-        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_bvhSortKeysHeapHandle);
-        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_bvhSortPayloadHeapHandle);
-        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_bvhVisitCounterHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_bvhSortKeysHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_bvhSortPayloadHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_bvhVisitCounterHeapHandle);
         return;
     }
     rayTracingState().m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::invalid();
@@ -2246,8 +2246,8 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
             || (!rayTracingState().m_bvhSortPayloadHeapHandle.valid()
                 && !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *rayTracingState().m_bvhSortPayloadBuffer.get(), acquiredPayload))
         ){
-            __hidden_raytracing_system::RetireHeapHandle(heap, acquiredKeys);
-            __hidden_raytracing_system::RetireHeapHandle(heap, acquiredPayload);
+            RayTracingDetail::RetireHeapHandle(heap, acquiredKeys);
+            RayTracingDetail::RetireHeapHandle(heap, acquiredPayload);
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register existing BVH sort scratch in the descriptor heap"));
             return false;
         }
@@ -2298,14 +2298,14 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
         !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *keysBuffer.get(), keysHeapHandle)
         || !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *payloadBuffer.get(), payloadHeapHandle)
     ){
-        __hidden_raytracing_system::RetireHeapHandle(heap, keysHeapHandle);
-        __hidden_raytracing_system::RetireHeapHandle(heap, payloadHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, keysHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, payloadHeapHandle);
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register BVH sort scratch in the descriptor heap"));
         return false;
     }
 
-    __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_bvhSortKeysHeapHandle);
-    __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_bvhSortPayloadHeapHandle);
+    RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_bvhSortKeysHeapHandle);
+    RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_bvhSortPayloadHeapHandle);
     rayTracingState().m_bvhSortKeysBuffer = Move(keysBuffer);
     rayTracingState().m_bvhSortPayloadBuffer = Move(payloadBuffer);
     rayTracingState().m_bvhSortKeysHeapHandle = keysHeapHandle;
@@ -2465,7 +2465,7 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
             rayTracingState().m_bvhVisitCounterHeapHandle = acquired;
             return true;
         }
-        __hidden_raytracing_system::RetireHeapHandle(heap, acquired);
+        RayTracingDetail::RetireHeapHandle(heap, acquired);
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register existing BVH visit counter in the descriptor heap"));
         return false;
     }
@@ -2497,7 +2497,7 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
         return false;
     }
 
-    __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_bvhVisitCounterHeapHandle);
+    RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_bvhVisitCounterHeapHandle);
     rayTracingState().m_bvhVisitCounterBuffer = Move(counterBuffer);
     rayTracingState().m_bvhVisitCounterHeapHandle = counterHeapHandle;
     rayTracingState().m_bvhBuildCapacity = capacity;
@@ -2529,8 +2529,8 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
             (!nodeHeapHandle.valid() && !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *nodeBuffer.get(), acquiredNode))
             || (!parentHeapHandle.valid() && !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *parentBuffer.get(), acquiredParent))
         ){
-            __hidden_raytracing_system::RetireHeapHandle(heap, acquiredNode);
-            __hidden_raytracing_system::RetireHeapHandle(heap, acquiredParent);
+            RayTracingDetail::RetireHeapHandle(heap, acquiredNode);
+            RayTracingDetail::RetireHeapHandle(heap, acquiredParent);
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register existing per-mesh BVH storage in the descriptor heap"));
             return false;
         }
@@ -2586,8 +2586,8 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
         !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *newNodeBuffer.get(), newNodeHeapHandle)
         || !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *newParentBuffer.get(), newParentHeapHandle)
     ){
-        __hidden_raytracing_system::RetireHeapHandle(heap, newNodeHeapHandle);
-        __hidden_raytracing_system::RetireHeapHandle(heap, newParentHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, newNodeHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, newParentHeapHandle);
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register per-mesh BVH storage in the descriptor heap"));
         return false;
     }

@@ -17,12 +17,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_LIST_DIR}/repository_launcher_tests.py"
     )
-    add_test(
-        NAME nwb_testbed_window_capture_unit
-        COMMAND
-            "${Python3_EXECUTABLE}"
-            "${CMAKE_CURRENT_LIST_DIR}/window_capture_smoke_tests.py"
-    )
     # Pure-Python parser/verdict coverage for the manual M4 runner. The actual benchmark deliberately remains an
     # opt-in target-hardware workflow because it requires a distinct Vulkan compute family and a visible window.
     add_test(

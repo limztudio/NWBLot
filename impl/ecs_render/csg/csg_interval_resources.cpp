@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_csg_interval_peel{
+namespace CsgIntervalDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -185,7 +185,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     if(!createCsgIntervalSampleStateBuffer())
         return false;
 
-    if(!__hidden_csg_interval_peel::CreateCsgIntervalBindingLayout(
+    if(!CsgIntervalDetail::CreateCsgIntervalBindingLayout(
         arena(),
         device,
         csgState().m_intervalPeelBindingLayout,
@@ -195,7 +195,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         return false;
     }
 
-    if(!__hidden_csg_interval_peel::CreateCsgIntervalBindingLayout(
+    if(!CsgIntervalDetail::CreateCsgIntervalBindingLayout(
         arena(),
         device,
         csgState().m_receiverSpanBuildBindingLayout,
@@ -205,7 +205,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         return false;
     }
 
-    if(!__hidden_csg_interval_peel::CreateCsgIntervalBindingLayout(
+    if(!CsgIntervalDetail::CreateCsgIntervalBindingLayout(
         arena(),
         device,
         csgState().m_intervalCombineBindingLayout,
@@ -264,7 +264,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         }
     }
 
-    if(!__hidden_csg_interval_peel::CreateIntervalPeelPipeline(
+    if(!CsgIntervalDetail::CreateIntervalPeelPipeline(
         device,
         csgState().m_intervalPeelPipeline,
         csgState().m_intervalPeelComputeShader,
@@ -274,7 +274,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         return false;
     }
 
-    if(!__hidden_csg_interval_peel::CreateReceiverSpanBuildPipeline(
+    if(!CsgIntervalDetail::CreateReceiverSpanBuildPipeline(
         device,
         csgState().m_receiverSpanBuildPipeline,
         csgState().m_receiverSpanBuildComputeShader,
@@ -284,7 +284,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         return false;
     }
 
-    if(!__hidden_csg_interval_peel::CreateIntervalCombinePipeline(
+    if(!CsgIntervalDetail::CreateIntervalCombinePipeline(
         device,
         csgState().m_intervalCombinePipeline,
         csgState().m_intervalCombineComputeShader,
@@ -294,7 +294,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         return false;
     }
 
-    if(capFillRequired && !__hidden_csg_interval_peel::CreateIntervalCapFillPipeline(
+    if(capFillRequired && !CsgIntervalDetail::CreateIntervalCapFillPipeline(
         device,
         csgState().m_intervalCapFillPipeline,
         deferredState().m_compositeVertexShader,

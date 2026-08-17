@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_resource_names{
+namespace SkinningResourceNamesDetail{
 inline constexpr AStringView s_RuntimePrefix = ":runtime_";
 inline constexpr AStringView s_RevisionSeparator = "_revision_";
 inline constexpr AStringView s_OwnerSeparator = "_";
@@ -42,18 +42,18 @@ inline constexpr AStringView s_OwnerSeparator = "_";
         return suffix;
 
     suffix.reserve(
-        __hidden_resource_names::s_RuntimePrefix.size()
+        SkinningResourceNamesDetail::s_RuntimePrefix.size()
         + ownerText.size()
-        + __hidden_resource_names::s_RevisionSeparator.size()
+        + SkinningResourceNamesDetail::s_RevisionSeparator.size()
         + revisionText.size()
-        + __hidden_resource_names::s_OwnerSeparator.size()
+        + SkinningResourceNamesDetail::s_OwnerSeparator.size()
         + label.size()
     );
-    suffix += __hidden_resource_names::s_RuntimePrefix;
+    suffix += SkinningResourceNamesDetail::s_RuntimePrefix;
     suffix.append(ownerText.data(), ownerText.size());
-    suffix += __hidden_resource_names::s_RevisionSeparator;
+    suffix += SkinningResourceNamesDetail::s_RevisionSeparator;
     suffix.append(revisionText.data(), revisionText.size());
-    suffix += __hidden_resource_names::s_OwnerSeparator;
+    suffix += SkinningResourceNamesDetail::s_OwnerSeparator;
     suffix.append(label.data(), label.size());
     return suffix;
 }
@@ -77,11 +77,11 @@ inline constexpr AStringView s_OwnerSeparator = "_";
     NameHash derivedHash = {};
     if(
         !BeginDerivedNameHash(sourceName, derivedHash)
-        || !UpdateDerivedNameHashText(derivedHash, __hidden_resource_names::s_RuntimePrefix)
+        || !UpdateDerivedNameHashText(derivedHash, SkinningResourceNamesDetail::s_RuntimePrefix)
         || !UpdateDerivedNameHashText(derivedHash, ownerText)
-        || !UpdateDerivedNameHashText(derivedHash, __hidden_resource_names::s_RevisionSeparator)
+        || !UpdateDerivedNameHashText(derivedHash, SkinningResourceNamesDetail::s_RevisionSeparator)
         || !UpdateDerivedNameHashText(derivedHash, revisionText)
-        || !UpdateDerivedNameHashText(derivedHash, __hidden_resource_names::s_OwnerSeparator)
+        || !UpdateDerivedNameHashText(derivedHash, SkinningResourceNamesDetail::s_OwnerSeparator)
         || !UpdateDerivedNameHashText(derivedHash, label)
     )
         return NAME_NONE;

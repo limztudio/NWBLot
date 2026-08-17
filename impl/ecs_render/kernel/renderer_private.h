@@ -14,7 +14,7 @@
 #include <impl/ecs_render/kernel/renderer_format_private.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 #include <impl/ecs_render/material/renderer_render_state_private.h>
-#include <impl/ecs_render/deferred/renderer_scene_private.h>
+#include <impl/ecs_render/shared/renderer_scene_private.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
 #include <core/assets/manager.h>

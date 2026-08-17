@@ -46,7 +46,7 @@ namespace Metascript = Core::Metascript;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_cook{
+namespace __hidden_shader_cook{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1235,13 +1235,13 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
 ShaderCook::ShaderCook(CookArena& memoryArena, ShaderCompilerFactory compilerFactory)
     : m_memoryArena(memoryArena)
 {
-    const ShaderCompilerFactory createCompiler = compilerFactory ? compilerFactory : &__hidden_cook::CreateDefaultShaderCompiler;
+    const ShaderCompilerFactory createCompiler = compilerFactory ? compilerFactory : &__hidden_shader_cook::CreateDefaultShaderCompiler;
     m_compiler = createCompiler(m_memoryArena);
 }
 
 
 bool ShaderCook::parseDocument(const Path& nwbFilePath, Metascript::Document& outDoc){
-    return __hidden_cook::ParseMetascriptDocument(nwbFilePath, "Meta", m_memoryArena, outDoc);
+    return __hidden_shader_cook::ParseMetascriptDocument(nwbFilePath, "Meta", m_memoryArena, outDoc);
 }
 
 
@@ -1251,7 +1251,7 @@ bool ShaderCook::validateVariantSignature(
     const CookMap<CookString, DefineEntry>& defineValues,
     Alloc::ScratchArena& scratchArena
 ){
-    return __hidden_cook::ValidateVariantSignature(contextLabel, variantSignature, defineValues, scratchArena);
+    return __hidden_shader_cook::ValidateVariantSignature(contextLabel, variantSignature, defineValues, scratchArena);
 }
 
 bool ShaderCook::parseShaderMeta(
@@ -1262,20 +1262,20 @@ bool ShaderCook::parseShaderMeta(
 ){
     outEntry = ShaderEntry(m_memoryArena);
 
-    if(__hidden_cook::CanonicalAssetType(doc).view() != __hidden_cook::s_AssetTypeShader)
+    if(__hidden_shader_cook::CanonicalAssetType(doc).view() != __hidden_shader_cook::s_AssetTypeShader)
         return true;
 
-    const Metascript::Value* assetValue = __hidden_cook::FindAssetMapValue(nwbFilePath, doc, "Shader");
+    const Metascript::Value* assetValue = __hidden_shader_cook::FindAssetMapValue(nwbFilePath, doc, "Shader");
     if(!assetValue)
         return false;
     const Metascript::Value& asset = *assetValue;
 
     if(!Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, outEntry.source))
         return false;
-    if(!__hidden_cook::ValidatePairedSourceExtension(
+    if(!__hidden_shader_cook::ValidatePairedSourceExtension(
         nwbFilePath,
         outEntry.source,
-        __hidden_cook::s_SlangSourceExtension,
+        __hidden_shader_cook::s_SlangSourceExtension,
         "Shader",
         scratchArena
     ))
@@ -1288,14 +1288,14 @@ bool ShaderCook::parseShaderMeta(
         { "stage", "target_profile", "entry_point", "include_roots", "defines", "emit_mesh_compute_shadow" }
     ))
         return false;
-    if(!__hidden_cook::ParseCompactStringField(nwbFilePath, asset, "stage", outEntry.stage))
+    if(!__hidden_shader_cook::ParseCompactStringField(nwbFilePath, asset, "stage", outEntry.stage))
         return false;
     outEntry.archiveStage = outEntry.stage;
-    if(!__hidden_cook::ParseCompactStringField(nwbFilePath, asset, "target_profile", outEntry.targetProfile))
+    if(!__hidden_shader_cook::ParseCompactStringField(nwbFilePath, asset, "target_profile", outEntry.targetProfile))
         return false;
     AStringView slangTargetProfile;
     AStringView targetProfileCapability;
-    if(!__hidden_cook::TryMapTargetProfileToSlangArguments(
+    if(!__hidden_shader_cook::TryMapTargetProfileToSlangArguments(
         outEntry.targetProfile.view(),
         slangTargetProfile,
         targetProfileCapability
@@ -1306,13 +1306,13 @@ bool ShaderCook::parseShaderMeta(
         );
         return false;
     }
-    if(!__hidden_cook::ParseStringField(nwbFilePath, asset, "entry_point", outEntry.entryPoint))
+    if(!__hidden_shader_cook::ParseStringField(nwbFilePath, asset, "entry_point", outEntry.entryPoint))
         return false;
     if(outEntry.entryPoint.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': entry_point must not be empty"), PathToString<tchar>(nwbFilePath));
         return false;
     }
-    if(!__hidden_cook::ParseOptionalIntegerFlagField(nwbFilePath, asset, "emit_mesh_compute_shadow", outEntry.emitMeshComputeShadow))
+    if(!__hidden_shader_cook::ParseOptionalIntegerFlagField(nwbFilePath, asset, "emit_mesh_compute_shadow", outEntry.emitMeshComputeShadow))
         return false;
 
     if(const auto* includeRootsVal = asset.findField("include_roots")){
@@ -1329,7 +1329,7 @@ bool ShaderCook::parseShaderMeta(
         }
     }
 
-    if(!__hidden_cook::ParseDefines(nwbFilePath, asset, m_memoryArena, outEntry.defineValues))
+    if(!__hidden_shader_cook::ParseDefines(nwbFilePath, asset, m_memoryArena, outEntry.defineValues))
         return false;
 
     if(outEntry.stage.empty()){
@@ -1360,28 +1360,28 @@ bool ShaderCook::parseIncludeMeta(
 ){
     outEntry = IncludeEntry(m_memoryArena);
 
-    if(__hidden_cook::CanonicalAssetType(doc).view() != __hidden_cook::s_AssetTypeInclude)
+    if(__hidden_shader_cook::CanonicalAssetType(doc).view() != __hidden_shader_cook::s_AssetTypeInclude)
         return true;
 
     if(!Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, outEntry.source))
         return false;
-    if(!__hidden_cook::ValidatePairedSourceExtension(
+    if(!__hidden_shader_cook::ValidatePairedSourceExtension(
         nwbFilePath,
         outEntry.source,
-        __hidden_cook::s_SlangIncludeExtension,
+        __hidden_shader_cook::s_SlangIncludeExtension,
         "Include",
         scratchArena
     ))
         return false;
 
-    const Metascript::Value* assetValue = __hidden_cook::FindAssetMapValue(nwbFilePath, doc, "Include");
+    const Metascript::Value* assetValue = __hidden_shader_cook::FindAssetMapValue(nwbFilePath, doc, "Include");
     if(!assetValue)
         return false;
     const Metascript::Value& asset = *assetValue;
 
     if(!Assets::ValidateMetadataAssetFields(nwbFilePath, asset, "Include meta", { "defines" }))
         return false;
-    if(!__hidden_cook::ParseDefines(nwbFilePath, asset, m_memoryArena, outEntry.defineValues))
+    if(!__hidden_shader_cook::ParseDefines(nwbFilePath, asset, m_memoryArena, outEntry.defineValues))
         return false;
 
     return true;
@@ -1397,7 +1397,7 @@ bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, IncludeEntry& outEntr
 
 void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata){
     Alloc::ScratchArena scratchArena(AssetsShaderArenaScope::s_MergeInheritedDefinesArena);
-    __hidden_cook::ScratchVector<const IncludeEntry*> inheritedEntries{scratchArena};
+    __hidden_shader_cook::ScratchVector<const IncludeEntry*> inheritedEntries{scratchArena};
     inheritedEntries.reserve(dependencies.size());
 
     usize defineReserveCount = inOutEntry.defineValues.size();
@@ -1438,13 +1438,13 @@ bool ShaderCook::gatherShaderDependencies(
 ){
     outDependencies.clear();
 
-    __hidden_cook::ScratchHashSet<__hidden_cook::ScratchString> visited{
+    __hidden_shader_cook::ScratchHashSet<__hidden_shader_cook::ScratchString> visited{
         0,
-        Hasher<__hidden_cook::ScratchString>(),
-        EqualTo<__hidden_cook::ScratchString>(),
+        Hasher<__hidden_shader_cook::ScratchString>(),
+        EqualTo<__hidden_shader_cook::ScratchString>(),
         scratchArena
     };
-    return __hidden_cook::CollectDependencies(sourcePath, includeDirectories, visited, outDependencies, scratchArena);
+    return __hidden_shader_cook::CollectDependencies(sourcePath, includeDirectories, visited, outDependencies, scratchArena);
 }
 
 bool ShaderCook::expandDefineCombinations(
@@ -1559,7 +1559,7 @@ bool ShaderCook::computeDependencyChecksum(
         return false;
     }
 
-    CookVector<__hidden_cook::NormalizedDependencyRootAlias> normalizedRootAliases{m_memoryArena};
+    CookVector<__hidden_shader_cook::NormalizedDependencyRootAlias> normalizedRootAliases{m_memoryArena};
     normalizedRootAliases.reserve(dependencyRootAliases.size());
     for(const DependencyRootAlias& rootAlias : dependencyRootAliases){
         if(rootAlias.root.empty() || rootAlias.key.empty()){
@@ -1567,9 +1567,9 @@ bool ShaderCook::computeDependencyChecksum(
             return false;
         }
 
-        __hidden_cook::NormalizedDependencyRootAlias normalizedAlias{m_memoryArena};
+        __hidden_shader_cook::NormalizedDependencyRootAlias normalizedAlias{m_memoryArena};
         errorCode.clear();
-        normalizedAlias.root = __hidden_cook::NormalizeDependencyRootAliasPath(AbsolutePath(rootAlias.root, errorCode));
+        normalizedAlias.root = __hidden_shader_cook::NormalizeDependencyRootAliasPath(AbsolutePath(rootAlias.root, errorCode));
         if(errorCode){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency root alias '{}' : {}")
                 , PathToString<tchar>(rootAlias.root)
@@ -1584,7 +1584,7 @@ bool ShaderCook::computeDependencyChecksum(
             NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires non-empty dependency root alias keys"));
             return false;
         }
-        normalizedAlias.depth = __hidden_cook::PathDepth(normalizedAlias.root);
+        normalizedAlias.depth = __hidden_shader_cook::PathDepth(normalizedAlias.root);
         normalizedRootAliases.push_back(Move(normalizedAlias));
     }
 
@@ -1602,8 +1602,8 @@ bool ShaderCook::computeDependencyChecksum(
             return false;
         }
 
-        const __hidden_cook::NormalizedDependencyRootAlias* bestRootAlias = nullptr;
-        for(const __hidden_cook::NormalizedDependencyRootAlias& rootAlias : normalizedRootAliases){
+        const __hidden_shader_cook::NormalizedDependencyRootAlias* bestRootAlias = nullptr;
+        for(const __hidden_shader_cook::NormalizedDependencyRootAlias& rootAlias : normalizedRootAliases){
             if(normalizedDependency != rootAlias.root && !PathHasDirectoryAncestor(normalizedDependency, rootAlias.root))
                 continue;
             if(!bestRootAlias || rootAlias.depth > bestRootAlias->depth)
@@ -1616,7 +1616,7 @@ bool ShaderCook::computeDependencyChecksum(
             return false;
         }
 
-        __hidden_cook::ScratchString relativePathText = PathToString(scratchArena, normalizedDependency.lexically_relative(bestRootAlias->root));
+        __hidden_shader_cook::ScratchString relativePathText = PathToString(scratchArena, normalizedDependency.lexically_relative(bestRootAlias->root));
         CanonicalizeTextInPlace(relativePathText);
 
         item.canonicalPath = bestRootAlias->key;

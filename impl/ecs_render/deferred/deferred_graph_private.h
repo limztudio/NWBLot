@@ -5,9 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/kernel/renderer_private.h>
-
-#include <impl/assets/graphics/csg/names.h>
+#include <core/graphics/gpu_timing.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,40 +17,48 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace CsgIntervalDetail{
+class RendererDeferredSystem;
+struct DeferredFrameTargets;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CsgIntervalDispatchPushConstants{
-    u32 frameWidth = 0u;
-    u32 frameHeight = 0u;
-    u32 receiverCount = 0u;
-    u32 layerCount = 0u;
-    u32 workOffsetX = 0u;
-    u32 workOffsetY = 0u;
-    u32 workExtentX = 0u;
-    u32 workExtentY = 0u;
-    u32 meshViewHeapSlot = 0u;
-    u32 csgContextHeapSlot = 0u;
-    u32 resourceSlotPadding1 = 0u;
-    u32 resourceSlotPadding2 = 0u;
-};
-
-static_assert(sizeof(CsgIntervalDispatchPushConstants) == NWB_CSG_INTERVAL_DISPATCH_PUSH_CONSTANT_BYTE_SIZE, "CSG interval dispatch push constants must match shader layout");
+namespace ECSRenderDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace CsgTextureAccess{
-    enum Enum : u8{
-        None,
-        SRV,
-        UAV
-    };
-};
+template<typename Record>
+[[nodiscard]] bool RecordDeferredGraphTask(
+    RendererDeferredSystem& deferredSystem,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    Core::CommandList& commandList,
+    Record&& record
+){
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
+    return record(deferredSystem, targets, commandList);
+}
+
+template<typename Payload, typename Record>
+[[nodiscard]] bool RecordDeferredGraphTask(
+    const Payload& payload,
+    Core::CommandList& commandList,
+    Record&& record
+){
+    if(!payload.deferredSystem || !payload.targets || !payload.timingTicket)
+        return false;
+
+    return RecordDeferredGraphTask(
+        *payload.deferredSystem,
+        *payload.targets,
+        *payload.timingTicket,
+        commandList,
+        Forward<Record>(record)
+    );
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -68,4 +74,5 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

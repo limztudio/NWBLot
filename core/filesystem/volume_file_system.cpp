@@ -41,7 +41,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
     unmountLocked();
 
     if(!::ValidVolumeName(desc.volumeName.view())){
-        __hidden_filesystem::LogFailure(desc.volumeName.view(), "mount", "invalid volume name");
+        FilesystemVolumeDetail::LogFailure(desc.volumeName.view(), "mount", "invalid volume name");
         return false;
     }
 
@@ -53,46 +53,46 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
 
     if(!FileExists(m_mountDirectory, errorCode)){
         if(errorCode){
-            __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:exists", m_mountDirectory, errorCode);
+            FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, "mount:exists", m_mountDirectory, errorCode);
             return false;
         }
 
         if(!desc.createIfMissing || !m_writable){
-            __hidden_filesystem::LogFailure(m_volumeName, "mount", "mount directory does not exist and creation is disabled");
+            FilesystemVolumeDetail::LogFailure(m_volumeName, "mount", "mount directory does not exist and creation is disabled");
             return false;
         }
 
         if(!EnsureDirectories(m_mountDirectory, errorCode)){
-            __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:create_directories", m_mountDirectory, errorCode);
+            FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, "mount:create_directories", m_mountDirectory, errorCode);
             return false;
         }
     }
     else if(!IsDirectory(m_mountDirectory, errorCode)){
-        __hidden_filesystem::LogFailureWithPath(m_volumeName, "mount:is_directory", m_mountDirectory, "path is not a directory");
+        FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, "mount:is_directory", m_mountDirectory, "path is not a directory");
         return false;
     }
 
     if(!scanSegmentsLocked()){
-        __hidden_filesystem::LogFailure(m_volumeName, "mount", "segment scan failed");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "mount", "segment scan failed");
         unmountLocked();
         return false;
     }
 
     if(m_segmentPaths.empty()){
         if(!desc.createIfMissing || !m_writable || desc.segmentSize == 0){
-            __hidden_filesystem::LogFailure(m_volumeName, "mount", "volume does not exist and creation parameters are invalid");
+            FilesystemVolumeDetail::LogFailure(m_volumeName, "mount", "volume does not exist and creation parameters are invalid");
             unmountLocked();
             return false;
         }
 
         m_segmentSize = desc.segmentSize;
         m_metadataBytes = desc.metadataSize == 0
-            ? __hidden_filesystem::DefaultMetadataBytes(m_segmentSize)
+            ? FilesystemVolumeDetail::DefaultMetadataBytes(m_segmentSize)
             : desc.metadataSize
         ;
 
-        if(m_metadataBytes <= sizeof(__hidden_filesystem::VolumeHeaderDisk) || m_metadataBytes >= m_segmentSize){
-            __hidden_filesystem::LogFailure(
+        if(m_metadataBytes <= sizeof(FilesystemVolumeDetail::VolumeHeaderDisk) || m_metadataBytes >= m_segmentSize){
+            FilesystemVolumeDetail::LogFailure(
                 m_volumeName,
                 "mount",
                 "metadata size is outside valid segment bounds"
@@ -104,29 +104,29 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         m_nextFreeOffset = m_metadataBytes;
 
         if(!createSegmentLocked(0)){
-            __hidden_filesystem::LogFailure(m_volumeName, "mount", "failed to create first segment");
+            FilesystemVolumeDetail::LogFailure(m_volumeName, "mount", "failed to create first segment");
             unmountLocked();
             return false;
         }
         if(!flushMetadataLocked()){
-            __hidden_filesystem::LogFailure(m_volumeName, "mount", "failed to write initial metadata");
+            FilesystemVolumeDetail::LogFailure(m_volumeName, "mount", "failed to write initial metadata");
             unmountLocked();
             return false;
         }
     }
     else{
-        __hidden_filesystem::VolumeHeaderDisk discoveredHeader{};
-        if(!__hidden_filesystem::ReadVolumeHeaderFromSegment(m_volumeName, m_segmentPaths[0], discoveredHeader)){
+        FilesystemVolumeDetail::VolumeHeaderDisk discoveredHeader{};
+        if(!FilesystemVolumeDetail::ReadVolumeHeaderFromSegment(m_volumeName, m_segmentPaths[0], discoveredHeader)){
             unmountLocked();
             return false;
         }
-        if(NWB_MEMCMP(discoveredHeader.magic, __hidden_filesystem::s_VolumeMagic, sizeof(discoveredHeader.magic)) != 0){
-            __hidden_filesystem::LogFailure(m_volumeName, "mount", "magic mismatch");
+        if(NWB_MEMCMP(discoveredHeader.magic, FilesystemVolumeDetail::s_VolumeMagic, sizeof(discoveredHeader.magic)) != 0){
+            FilesystemVolumeDetail::LogFailure(m_volumeName, "mount", "magic mismatch");
             unmountLocked();
             return false;
         }
         if(discoveredHeader.segmentSize == 0){
-            __hidden_filesystem::LogFailure(m_volumeName, "mount", "segment size is zero");
+            FilesystemVolumeDetail::LogFailure(m_volumeName, "mount", "segment size is zero");
             unmountLocked();
             return false;
         }
@@ -137,9 +137,9 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
             const u64 segmentFileSize = FileSize(segmentPath, errorCode);
             if(errorCode || segmentFileSize == 0){
                 if(errorCode)
-                    __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:file_size", segmentPath, errorCode);
+                    FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, "mount:file_size", segmentPath, errorCode);
                 else
-                    __hidden_filesystem::LogFailureWithPath(m_volumeName, "mount:file_size", segmentPath, "segment size is zero");
+                    FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, "mount:file_size", segmentPath, "segment size is zero");
                 unmountLocked();
                 return false;
             }
@@ -168,11 +168,11 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         }
 
         const u64 firstSegmentFileSize = FileSize(m_segmentPaths[0], errorCode);
-        if(errorCode || firstSegmentFileSize < sizeof(__hidden_filesystem::VolumeHeaderDisk)){
+        if(errorCode || firstSegmentFileSize < sizeof(FilesystemVolumeDetail::VolumeHeaderDisk)){
             if(errorCode)
-                __hidden_filesystem::LogFailureWithFsError(m_volumeName, "mount:file_size", m_segmentPaths[0], errorCode);
+                FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, "mount:file_size", m_segmentPaths[0], errorCode);
             else
-                __hidden_filesystem::LogFailureWithPath(m_volumeName, "mount:file_size", m_segmentPaths[0], "segment is smaller than the volume header");
+                FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, "mount:file_size", m_segmentPaths[0], "segment is smaller than the volume header");
             unmountLocked();
             return false;
         }
@@ -188,7 +188,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         }
 
         if(!loadMetadataLocked()){
-            __hidden_filesystem::LogFailure(m_volumeName, "mount", "metadata load failed");
+            FilesystemVolumeDetail::LogFailure(m_volumeName, "mount", "metadata load failed");
             unmountLocked();
             return false;
         }
@@ -269,7 +269,7 @@ u64 VolumeFileSystem::usedBytes()const{
 
     u64 totalUsedBytes = 0;
     for(const auto& [_, record] : m_files){
-        if(!__hidden_filesystem::AddNoOverflow(totalUsedBytes, record.size, totalUsedBytes))
+        if(!FilesystemVolumeDetail::AddNoOverflow(totalUsedBytes, record.size, totalUsedBytes))
             return Limit<u64>::s_Max;
     }
 
@@ -283,7 +283,7 @@ u64 VolumeFileSystem::wastedBytes()const{
 
     u64 totalUsedBytes = 0;
     for(const auto& [_, record] : m_files){
-        if(!__hidden_filesystem::AddNoOverflow(totalUsedBytes, record.size, totalUsedBytes))
+        if(!FilesystemVolumeDetail::AddNoOverflow(totalUsedBytes, record.size, totalUsedBytes))
             return 0;
     }
 
@@ -302,15 +302,15 @@ bool VolumeFileSystem::writeFileLocked(
     const MetadataFlushMode::Enum flushMode
 ){
     if(!m_mounted || !m_writable){
-        __hidden_filesystem::LogFailure(m_volumeName, "writeFile", "filesystem is not mounted in writable mode");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "filesystem is not mounted in writable mode");
         return false;
     }
     if(!virtualPath){
-        __hidden_filesystem::LogFailure(m_volumeName, "writeFile", "virtual path is invalid");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "virtual path is invalid");
         return false;
     }
     if(bytes != 0 && data == nullptr){
-        __hidden_filesystem::LogFailure(m_volumeName, "writeFile", "data pointer is null while byte count is non-zero");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "data pointer is null while byte count is non-zero");
         return false;
     }
 
@@ -320,7 +320,7 @@ bool VolumeFileSystem::writeFileLocked(
     u64 fileCountAfterWrite = static_cast<u64>(m_files.size());
     if(!existed){
         if(fileCountAfterWrite == Limit<u64>::s_Max){
-            __hidden_filesystem::LogFailure(m_volumeName, "writeFile", "file count overflow");
+            FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "file count overflow");
             return false;
         }
         ++fileCountAfterWrite;
@@ -335,8 +335,8 @@ bool VolumeFileSystem::writeFileLocked(
 
     const u64 byteCount = static_cast<u64>(bytes);
     u64 newFileEnd = 0;
-    if(!__hidden_filesystem::AddNoOverflow(m_nextFreeOffset, byteCount, newFileEnd)){
-        __hidden_filesystem::LogFailure(m_volumeName, "writeFile", "offset overflow while reserving payload bytes");
+    if(!FilesystemVolumeDetail::AddNoOverflow(m_nextFreeOffset, byteCount, newFileEnd)){
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "offset overflow while reserving payload bytes");
         return false;
     }
     if(!ensureCapacityLocked(newFileEnd))
@@ -365,7 +365,7 @@ bool VolumeFileSystem::writeFileLocked(
     else
         m_files.erase(virtualPath);
     m_nextFreeOffset = previousNextFreeOffset;
-    __hidden_filesystem::LogFailure(m_volumeName, "writeFile", "failed to flush metadata after payload write");
+    FilesystemVolumeDetail::LogFailure(m_volumeName, "writeFile", "failed to flush metadata after payload write");
     return false;
 }
 
@@ -382,7 +382,7 @@ bool VolumeFileSystem::writeFileDeferred(const Name& virtualPath, const void* da
 bool VolumeFileSystem::flushMetadata(){
     ScopedLock lock(m_mutex);
     if(!m_mounted || !m_writable){
-        __hidden_filesystem::LogFailure(m_volumeName, "flushMetadata", "filesystem is not mounted in writable mode");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "flushMetadata", "filesystem is not mounted in writable mode");
         return false;
     }
 
@@ -398,16 +398,16 @@ void VolumeFileSystem::reserveFileCapacity(const usize fileCount){
 bool VolumeFileSystem::readFileRecordLocked(const Name& virtualPath, FileRecord& outRecord)const{
     outRecord = {};
     if(!m_mounted){
-        __hidden_filesystem::LogFailure(m_volumeName.view(), "readFile", "filesystem is not mounted");
+        FilesystemVolumeDetail::LogFailure(m_volumeName.view(), "readFile", "filesystem is not mounted");
         return false;
     }
     if(!virtualPath){
-        __hidden_filesystem::LogFailure(m_volumeName.view(), "readFile", "virtual path is invalid");
+        FilesystemVolumeDetail::LogFailure(m_volumeName.view(), "readFile", "virtual path is invalid");
         return false;
     }
     const auto itr = m_files.find(virtualPath);
     if(itr == m_files.end()){
-        __hidden_filesystem::LogFailure(m_volumeName.view(), "readFile", "file was not found");
+        FilesystemVolumeDetail::LogFailure(m_volumeName.view(), "readFile", "file was not found");
         return false;
     }
 
@@ -418,16 +418,16 @@ bool VolumeFileSystem::readFileRecordLocked(const Name& virtualPath, FileRecord&
 bool VolumeFileSystem::removeFile(const Name& virtualPath){
     ScopedLock lock(m_mutex);
     if(!m_mounted || !m_writable){
-        __hidden_filesystem::LogFailure(m_volumeName, "removeFile", "filesystem is not mounted in writable mode");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "removeFile", "filesystem is not mounted in writable mode");
         return false;
     }
     if(!virtualPath){
-        __hidden_filesystem::LogFailure(m_volumeName, "removeFile", "virtual path is invalid");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "removeFile", "virtual path is invalid");
         return false;
     }
     const auto itr = m_files.find(virtualPath);
     if(itr == m_files.end()){
-        __hidden_filesystem::LogFailure(m_volumeName, "removeFile", "file was not found");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "removeFile", "file was not found");
         return false;
     }
 
@@ -437,7 +437,7 @@ bool VolumeFileSystem::removeFile(const Name& virtualPath){
         return true;
 
     m_files.insert_or_assign(virtualPath, removedRecord);
-    __hidden_filesystem::LogFailure(m_volumeName, "removeFile", "failed to flush metadata after erase");
+    FilesystemVolumeDetail::LogFailure(m_volumeName, "removeFile", "failed to flush metadata after erase");
     return false;
 }
 
@@ -453,17 +453,17 @@ bool VolumeFileSystem::fileExists(const Name& virtualPath)const{
 bool VolumeFileSystem::fileSize(const Name& virtualPath, u64& outSize)const{
     ScopedLock lock(m_mutex);
     if(!m_mounted){
-        __hidden_filesystem::LogFailure(m_volumeName, "fileSize", "filesystem is not mounted");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "fileSize", "filesystem is not mounted");
         return false;
     }
     if(!virtualPath){
-        __hidden_filesystem::LogFailure(m_volumeName, "fileSize", "virtual path is invalid");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "fileSize", "virtual path is invalid");
         return false;
     }
 
     const auto itr = m_files.find(virtualPath);
     if(itr == m_files.end()){
-        __hidden_filesystem::LogFailure(m_volumeName, "fileSize", "file was not found");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "fileSize", "file was not found");
         return false;
     }
 
@@ -487,7 +487,7 @@ Vector<Name, VolumeArena> VolumeFileSystem::listFiles()const{
 bool VolumeFileSystem::compact(const bool shrinkSegments){
     ScopedLock lock(m_mutex);
     if(!m_mounted || !m_writable){
-        __hidden_filesystem::LogFailure(m_volumeName, "compact", "filesystem is not mounted in writable mode");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "compact", "filesystem is not mounted in writable mode");
         return false;
     }
 
@@ -504,16 +504,16 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
 
     for(const auto& [path, record] : m_files){
         u64 endOffset = 0;
-        if(!__hidden_filesystem::AddNoOverflow(record.offset, record.size, endOffset)){
-            __hidden_filesystem::LogFailure(m_volumeName, "compact", "offset overflow detected in file layout");
+        if(!FilesystemVolumeDetail::AddNoOverflow(record.offset, record.size, endOffset)){
+            FilesystemVolumeDetail::LogFailure(m_volumeName, "compact", "offset overflow detected in file layout");
             return false;
         }
         if(record.offset < m_metadataBytes){
-            __hidden_filesystem::LogFailure(m_volumeName, "compact", "file layout overlaps metadata region");
+            FilesystemVolumeDetail::LogFailure(m_volumeName, "compact", "file layout overlaps metadata region");
             return false;
         }
         if(endOffset > m_nextFreeOffset){
-            __hidden_filesystem::LogFailure(m_volumeName, "compact", "file layout exceeds next-free boundary");
+            FilesystemVolumeDetail::LogFailure(m_volumeName, "compact", "file layout exceeds next-free boundary");
             return false;
         }
 
@@ -532,18 +532,18 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
     u64 previousSourceEnd = m_metadataBytes;
     for(auto& layout : layouts){
         if(layout.sourceOffset < previousSourceEnd){
-            __hidden_filesystem::LogFailure(m_volumeName, "compact", "file layout overlap detected");
+            FilesystemVolumeDetail::LogFailure(m_volumeName, "compact", "file layout overlap detected");
             return false;
         }
 
         layout.destinationOffset = compactedWriteOffset;
 
-        if(!__hidden_filesystem::AddNoOverflow(layout.sourceOffset, layout.size, previousSourceEnd)){
-            __hidden_filesystem::LogFailure(m_volumeName, "compact", "source offset overflow while building compaction plan");
+        if(!FilesystemVolumeDetail::AddNoOverflow(layout.sourceOffset, layout.size, previousSourceEnd)){
+            FilesystemVolumeDetail::LogFailure(m_volumeName, "compact", "source offset overflow while building compaction plan");
             return false;
         }
-        if(!__hidden_filesystem::AddNoOverflow(compactedWriteOffset, layout.size, compactedWriteOffset)){
-            __hidden_filesystem::LogFailure(m_volumeName, "compact", "destination offset overflow while building compaction plan");
+        if(!FilesystemVolumeDetail::AddNoOverflow(compactedWriteOffset, layout.size, compactedWriteOffset)){
+            FilesystemVolumeDetail::LogFailure(m_volumeName, "compact", "destination offset overflow while building compaction plan");
             return false;
         }
     }
@@ -566,7 +566,7 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
     if(!flushMetadataLocked()){
         m_files = previousFiles;
         m_nextFreeOffset = previousNextFreeOffset;
-        __hidden_filesystem::LogFailure(m_volumeName, "compact", "failed to flush metadata after move");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, "compact", "failed to flush metadata after move");
         return false;
     }
 
@@ -576,7 +576,7 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
     if(trimSegmentsForNextFreeOffsetLocked())
         return true;
 
-    __hidden_filesystem::LogFailure(m_volumeName, "compact", "failed to trim trailing segments");
+    FilesystemVolumeDetail::LogFailure(m_volumeName, "compact", "failed to trim trailing segments");
     return false;
 }
 
@@ -591,21 +591,21 @@ bool VolumeFileSystem::scanSegmentsLocked(){
 
         const bool exists = FileExists(hashedSegmentPath, errorCode);
         if(errorCode){
-            __hidden_filesystem::LogFailureWithFsError(m_volumeName, "scanSegments:exists", hashedSegmentPath, errorCode);
+            FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, "scanSegments:exists", hashedSegmentPath, errorCode);
             return false;
         }
         if(!exists)
             break;
 
         if(!IsRegularFile(hashedSegmentPath, errorCode)){
-            __hidden_filesystem::LogFailureWithPath(m_volumeName, "scanSegments:is_regular_file", hashedSegmentPath, "segment path is not a regular file");
+            FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, "scanSegments:is_regular_file", hashedSegmentPath, "segment path is not a regular file");
             return false;
         }
 
         m_segmentPaths.push_back(hashedSegmentPath);
 
         if(segmentIndex == Limit<usize>::s_Max){
-            __hidden_filesystem::LogFailure(m_volumeName, "scanSegments", "segment index overflow");
+            FilesystemVolumeDetail::LogFailure(m_volumeName, "scanSegments", "segment index overflow");
             return false;
         }
     }

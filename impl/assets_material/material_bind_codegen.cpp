@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_bind{
+namespace MaterialBindDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,7 +41,7 @@ bool ParseMaterialBindResourceFieldTypeText(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_cook{
+namespace MaterialCookDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -952,7 +952,7 @@ static bool AppendMaterialBindGeneratedInstance(
     inOutSource += " value;\n";
     for(const MaterialBindField& field : bindStruct.fields){
         MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
-        if(__hidden_bind::ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
+        if(MaterialBindDetail::ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
             continue;
 
         const CookString functionName =
@@ -1061,7 +1061,7 @@ bool BuildMaterialBindIncludeSourceImpl(
         outSource += "{\n";
         for(const MaterialBindField& field : bindStruct.fields){
             MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
-            if(__hidden_bind::ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
+            if(MaterialBindDetail::ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
                 continue;
 
             outSource += "    ";

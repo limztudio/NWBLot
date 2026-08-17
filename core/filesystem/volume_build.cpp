@@ -20,11 +20,11 @@ NWB_FILESYSTEM_BEGIN
 bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, const VolumeBuildFileMap& files, VolumeBuildInfo& outBuildInfo){
     outBuildInfo = {};
 
-    const StagedDirectoryPaths stagedVolumePaths = __hidden_filesystem_staging::BuildStagedVolumePaths(outputDirectory, config.volumeName.view());
-    if(!EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, __hidden_filesystem_staging::s_VolumePublishLogPrefix, "stage directory"))
+    const StagedDirectoryPaths stagedVolumePaths = FilesystemVolumeStagingDetail::BuildStagedVolumePaths(outputDirectory, config.volumeName.view());
+    if(!EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, "stage directory"))
         return false;
-    StagedDirectoryCleanupGuard stageDirectoryCleanup(stagedVolumePaths.stageDirectory, __hidden_filesystem_staging::s_VolumePublishLogPrefix);
-    if(!RemoveStagedDirectoryIfPresent(stagedVolumePaths.backupDirectory, __hidden_filesystem_staging::s_VolumePublishLogPrefix, "backup directory"))
+    StagedDirectoryCleanupGuard stageDirectoryCleanup(stagedVolumePaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix);
+    if(!RemoveStagedDirectoryIfPresent(stagedVolumePaths.backupDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, "backup directory"))
         return false;
 
     Alloc::GlobalArena arena(FilesystemArenaScope::s_BuildVolumeArena);
@@ -47,7 +47,7 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
     }
 
     if(
-        !__hidden_filesystem_staging::PromoteStagedVolume(
+        !FilesystemVolumeStagingDetail::PromoteStagedVolume(
             stagedVolumePaths,
             outputDirectory,
             config.volumeName.view(),

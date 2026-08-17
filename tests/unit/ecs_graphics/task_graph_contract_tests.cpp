@@ -84,6 +84,31 @@ TEST(EcsGraphics, PrefixAndShadowTopologyUsesSemanticTaskAnchors){
 }
 
 
+// The AVBOIT routing choice can still produce one or five submissions, but validation must ask whether semantic
+// stages compiled and share their declared packet rather than duplicate packet IDs for each stage.
+TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", systemSource));
+    const AStringView system(systemSource.data(), systemSource.size());
+
+    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredAvboitPreTask)"));
+    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredAvboitDepthWarpTask)"));
+    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredAvboitExtinctionTask)"));
+    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredAvboitIntegrationTask)"));
+    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredAvboitAccumulationTask)"));
+    EXPECT_TRUE(ContainsText(system, "tasksSharePacket(\n            m_deferredAvboitPreTask"));
+
+    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId avboitPrePacket"));
+    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId avboitDepthWarpPacket"));
+    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId avboitExtinctionPacket"));
+    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId avboitIntegrationPacket"));
+    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId avboitAccumulationPacket"));
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

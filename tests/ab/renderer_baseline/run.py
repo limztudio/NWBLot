@@ -587,6 +587,10 @@ def run_self_test() -> int:
         assert caustic_profile.capture_freeze_frame == 360
         assert caustic_profile.settle_seconds == 0.75
         assert caustic_profile.fixed_delta_seconds == 1.0 / 60.0
+        surfel_profile = get_profile("surfel-gi")
+        assert surfel_profile.capture_freeze_frame == 360
+        assert surfel_profile.settle_seconds == 0.75
+        assert surfel_profile.fixed_delta_seconds == 1.0 / 60.0
         difference = compare_bmp_rgb(reference_image, candidate_image, root / "difference.bmp")
         assert difference.width == 2 and difference.height == 1
         assert difference.max_abs == 3

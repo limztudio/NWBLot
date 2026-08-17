@@ -472,6 +472,37 @@ TEST(EcsGraphics, CausticBaselineUsesFixedTemporalWarmup){
 }
 
 
+// Surfel GI has its own temporal producer/resolve sequence. Its baseline therefore needs a project-local, fixed
+// frame boundary rather than inheriting wall-clock capture timing from an unrelated smoke scene.
+TEST(EcsGraphics, SurfelGiBaselineUsesFixedTemporalWarmup){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString profileSource;
+    AString smokeSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "ab" / "renderer_baseline" / "profiles.py", profileSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "gi_test_project.cpp", smokeSource));
+    const AStringView profiles(profileSource.data(), profileSource.size());
+    const AStringView smoke(smokeSource.data(), smokeSource.size());
+    const usize surfelOffset = profiles.find("\"surfel-gi\": BaselineProfile(");
+    const usize stressOffset = profiles.find("\"stress\": BaselineProfile(", surfelOffset);
+    ASSERT_NE(surfelOffset, AStringView::npos);
+    ASSERT_NE(stressOffset, AStringView::npos);
+    ASSERT_LT(surfelOffset, stressOffset);
+    const AStringView surfel = profiles.substr(surfelOffset, stressOffset - surfelOffset);
+
+    EXPECT_TRUE(ContainsText(surfel, "settle_seconds=0.75"));
+    EXPECT_TRUE(ContainsText(surfel, "capture_freeze_frame=360"));
+    EXPECT_TRUE(ContainsText(surfel, "capture_ready_log=\"GiTestSmokeProject: renderer baseline capture ready after\""));
+    EXPECT_TRUE(ContainsText(surfel, "fixed_delta_seconds=1.0 / 60.0"));
+    EXPECT_TRUE(ContainsText(smoke, "rendererBaselineCaptureFreezeFrame"));
+    EXPECT_TRUE(ContainsText(smoke, "rendererBaselineFixedDelta"));
+    EXPECT_TRUE(ContainsText(smoke, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"));
+    EXPECT_TRUE(ContainsText(smoke, "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"));
+    EXPECT_TRUE(ContainsText(smoke, "GiTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"));
+}
+
+
 // Surfel GI is an explicitly promoted Compute adopter. It can select an alternate Compute family only for the
 // graph-owned output-clear/compute chain; the compiler remains responsible for rejecting an undeclared resource
 // sharing contract or lowering the required exclusive ownership transfer.

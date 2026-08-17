@@ -84,9 +84,12 @@ PROFILES: Mapping[str, BaselineProfile] = {
         target="nwb_gi_test_smoke",
         runtime_directory=Path("Testing") / "skinning_culling_benchmark_runtime",
         window_title="NWB GI Test",
-        settle_seconds=6.0,
+        settle_seconds=0.75,
         frozen_environment={},
         description="Surfel-GI trace and resolve baseline.",
+        capture_freeze_frame=360,
+        capture_ready_log="GiTestSmokeProject: renderer baseline capture ready after",
+        fixed_delta_seconds=1.0 / 60.0,
     ),
     "stress": BaselineProfile(
         target="nwb_stress_test_smoke",

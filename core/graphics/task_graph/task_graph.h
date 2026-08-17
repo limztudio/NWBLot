@@ -346,10 +346,10 @@ public:
         const GpuCompiledBarrier& barrier,
         CommandList& commandList
     )const;
-    // Materializes retained buffer states in the native tracker after compiler barriers lower. This preserves
-    // graph-owned packet handoffs when a required state already matches an imported automatic-state buffer and
+    // Materializes retained resource states in the native tracker after compiler barriers lower. This preserves
+    // graph-owned packet handoffs when a required state already matches an imported automatic-state resource and
     // therefore needs no Vulkan transition command.
-    [[nodiscard]] bool seedTaskRetainedBufferStates(
+    [[nodiscard]] bool seedTaskRetainedResourceStates(
         const GpuTaskId& task,
         CommandList& commandList
     )const;

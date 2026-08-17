@@ -1820,7 +1820,7 @@ bool GpuTaskGraph::applyCompiledBarrier(
     }
 }
 
-bool GpuTaskGraph::seedTaskRetainedBufferStates(
+bool GpuTaskGraph::seedTaskRetainedResourceStates(
     const GpuTaskId& taskID,
     CommandList& commandList
 )const{
@@ -1840,30 +1840,70 @@ bool GpuTaskGraph::seedTaskRetainedBufferStates(
             return false;
 
         const GpuGraphResourceNode& resource = m_resources[use.resource.index];
-        if(resource.type != GpuGraphResourceType::Buffer)
-            continue;
+        switch(resource.type){
+        case GpuGraphResourceType::Texture:{
+            if(!resource.texture)
+                return false;
+            const TextureDesc& description = resource.texture->getDescription();
+            // Only seed a state that the Vulkan backend will retain exactly at packet close. Other graph resources
+            // must already have an explicit compiler transition or native record-time state before they can become
+            // a source.
+            if(!description.keepInitialState || description.initialState != use.requiredState)
+                continue;
 
-        bool alreadySeededByTask = false;
-        for(usize previousUseIndex = 0u; previousUseIndex < useIndex; ++previousUseIndex){
-            const GpuTaskResourceUse& previousUse = resourceUses[previousUseIndex];
-            if(previousUse.resource == use.resource){
-                alreadySeededByTask = true;
-                break;
+            const TextureSubresourceSet subresources = use.range.textureSubresources.resolve(
+                description,
+                TextureSubresourceMipResolve::Range
+            );
+            if(subresources.numMipLevels == 0u || subresources.numArraySlices == 0u)
+                return false;
+
+            const MipLevel mipEnd = subresources.baseMipLevel + subresources.numMipLevels;
+            const ArraySlice arrayEnd = subresources.baseArraySlice + subresources.numArraySlices;
+            bool stateMatches = true;
+            for(ArraySlice arraySlice = subresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+                for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+                    if(commandList.getTextureSubresourceState(resource.texture.get(), arraySlice, mipLevel) != use.requiredState){
+                        stateMatches = false;
+                        break;
+                    }
+                }
+                if(!stateMatches)
+                    break;
             }
+            // A graph task can establish this state inside its own recording body (for example an upload changes
+            // CopyDest back to a texture's retained ShaderResource state). Only materialize a state that is already
+            // present before the task; the record body publishes its own state through the ordinary native tracker.
+            if(!stateMatches)
+                continue;
+            commandList.beginTrackingTextureState(resource.texture.get(), subresources, use.requiredState);
+            break;
         }
-        if(alreadySeededByTask)
-            continue;
+        case GpuGraphResourceType::Buffer:{
+            bool alreadySeededByTask = false;
+            for(usize previousUseIndex = 0u; previousUseIndex < useIndex; ++previousUseIndex){
+                const GpuTaskResourceUse& previousUse = resourceUses[previousUseIndex];
+                if(previousUse.resource == use.resource){
+                    alreadySeededByTask = true;
+                    break;
+                }
+            }
+            if(alreadySeededByTask)
+                continue;
 
-        if(!resource.buffer)
-            return false;
-        const BufferDesc& description = resource.buffer->getDescription();
-        // Only seed a state that the Vulkan backend will retain exactly at packet close. Other graph resources must
-        // already have an explicit compiler transition or native record-time state before they can become a source.
-        if(!description.keepInitialState || description.initialState != use.requiredState)
-            continue;
-        if(commandList.getBufferState(resource.buffer.get()) != use.requiredState)
-            return false;
-        commandList.beginTrackingBufferState(resource.buffer.get(), use.requiredState);
+            if(!resource.buffer)
+                return false;
+            const BufferDesc& description = resource.buffer->getDescription();
+            if(!description.keepInitialState || description.initialState != use.requiredState)
+                continue;
+            if(commandList.getBufferState(resource.buffer.get()) != use.requiredState)
+                return false;
+            commandList.beginTrackingBufferState(resource.buffer.get(), use.requiredState);
+            break;
+        }
+        default:
+            break;
+        }
     }
     return true;
 }

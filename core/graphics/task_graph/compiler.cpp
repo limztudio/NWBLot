@@ -1523,13 +1523,13 @@ bool GpuTaskGraphCompiler::compile(
                 // the native paired acquire (if families differ); this immutable marker also proves the snapshot
                 // and the external completion belong to this first range consumer.
                 outCompiledGraph.m_prologueBarriers.push_back(GpuCompiledBarrier{
-                    .type = acquireType,
                     .resource = use.resource,
                     .range = use.range,
                     .before = before,
                     .after = before,
                     .sourceQueue = resource.initialOwnerQueue,
                     .destinationQueue = compiledTask->queue,
+                    .type = acquireType,
                     .isInitialOwnerHandoff = true,
                 });
                 initialOwnershipDependencies.push_back(GpuTaskExternalDependencyEdge{
@@ -1599,23 +1599,23 @@ bool GpuTaskGraphCompiler::compile(
                         pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
                             .task = previousState->task,
                             .barrier = GpuCompiledBarrier{
-                                .type = releaseType,
                                 .resource = use.resource,
                                 .range = use.range,
                                 .before = before,
                                 .after = before,
                                 .sourceQueue = previousState->queue,
                                 .destinationQueue = compiledTask->queue,
+                                .type = releaseType,
                             },
                         });
                         outCompiledGraph.m_prologueBarriers.push_back(GpuCompiledBarrier{
-                            .type = acquireType,
                             .resource = use.resource,
                             .range = use.range,
                             .before = before,
                             .after = before,
                             .sourceQueue = previousState->queue,
                             .destinationQueue = compiledTask->queue,
+                            .type = acquireType,
                         });
                     }
                     const bool readOnlySameState =
@@ -1640,15 +1640,15 @@ bool GpuTaskGraphCompiler::compile(
             }
             if(before != use.requiredState || needsUavDependency){
                 outCompiledGraph.m_prologueBarriers.push_back(GpuCompiledBarrier{
-                    .type = before == use.requiredState
-                        ? UavBarrierType(resource.type)
-                        : TransitionBarrierType(resource.type),
                     .resource = use.resource,
                     .range = use.range,
                     .before = before,
                     .after = use.requiredState,
                     .sourceQueue = previousState ? previousState->queue : compiledTask->queue,
                     .destinationQueue = compiledTask->queue,
+                    .type = before == use.requiredState
+                        ? UavBarrierType(resource.type)
+                        : TransitionBarrierType(resource.type),
                 });
             }
 
@@ -1739,13 +1739,13 @@ bool GpuTaskGraphCompiler::compile(
             pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
                 .task = state.task,
                 .barrier = GpuCompiledBarrier{
-                    .type = exportType,
                     .resource = state.resource,
                     .range = state.range,
                     .before = state.state,
                     .after = resource.externalFinalState,
                     .sourceQueue = state.queue,
                     .destinationQueue = state.queue,
+                    .type = exportType,
                 },
             });
             if(hasExternalFinalRelease && state.queue != resource.externalFinalReleaseDestinationQueue){
@@ -1759,13 +1759,13 @@ bool GpuTaskGraphCompiler::compile(
                 pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
                     .task = state.task,
                     .barrier = GpuCompiledBarrier{
-                        .type = releaseType,
                         .resource = state.resource,
                         .range = state.range,
                         .before = resource.externalFinalState,
                         .after = resource.externalFinalState,
                         .sourceQueue = state.queue,
                         .destinationQueue = resource.externalFinalReleaseDestinationQueue,
+                        .type = releaseType,
                     },
                 });
             }

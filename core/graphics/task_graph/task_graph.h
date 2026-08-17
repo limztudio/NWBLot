@@ -123,23 +123,23 @@ private:
 
     struct GpuGraphResourceNode{
         Name identity = NAME_NONE;
-        GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
-        ResourceStates::Mask initialState = ResourceStates::Unknown;
-        ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
-        GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
-        GpuPhysicalQueueId initialOwnerQueue;
-        GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
-        GpuExternalCompletionId initialOwnerCompletion;
+        TextureHandle texture;
+        BufferHandle buffer;
+        RayTracingAccelStructHandle accelStruct;
         // The graph retains its own immutable copy for late recording. Keep the declaration source identity
         // separately so repeated typed imports continue to reject incompatible external handoff metadata.
         CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
         const CommandListResourceStateHandoff* initialOwnerStateSourceIdentity = nullptr;
-        ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+        GpuExternalCompletionId initialOwnerCompletion;
+        ResourceStates::Mask initialState = ResourceStates::Unknown;
+        ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
-        TextureHandle texture;
-        BufferHandle buffer;
-        RayTracingAccelStructHandle accelStruct;
+        GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
+        GpuPhysicalQueueId initialOwnerQueue;
+        GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
+        GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
+        ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     };
 
     struct GpuGraphResourceSetNode{

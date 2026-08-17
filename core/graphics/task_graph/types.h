@@ -300,17 +300,18 @@ namespace GpuCompiledBarrierType{
 };
 
 struct GpuCompiledBarrier{
-    GpuCompiledBarrierType::Enum type = GpuCompiledBarrierType::TextureTransition;
     GpuGraphResourceId resource;
     GpuTaskResourceRange range;
     ResourceStates::Mask before = ResourceStates::Unknown;
     ResourceStates::Mask after = ResourceStates::Unknown;
     GpuPhysicalQueueId sourceQueue;
     GpuPhysicalQueueId destinationQueue;
+    GpuCompiledBarrierType::Enum type = GpuCompiledBarrierType::TextureTransition;
     // Only the first use of an imported external ownership handoff consumes the descriptor-owned state source.
     // Later graph-internal ownership acquires use their producer packet snapshot instead.
     bool isInitialOwnerHandoff = false;
 };
+static_assert(sizeof(GpuCompiledBarrier) == 72u, "GpuCompiledBarrier should keep its compact runtime layout");
 
 // A packet-state seed names the prior packet that owns the authoritative native state snapshot for one declared
 // resource range.  The recorder filters that snapshot to the declared range before opening the consumer command

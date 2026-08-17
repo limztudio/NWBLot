@@ -146,15 +146,16 @@ private:
     using TaskGraphDrawCommandVector = Vector<TaskGraphDrawCommand, Core::Alloc::GlobalArena>;
 
     struct TaskGraphDrawSnapshot{
+        UiPushConstants pushConstants;
         Core::BufferHandle vertexBuffer;
         Core::BufferHandle indexBuffer;
         Core::GraphicsPipelineHandle pipeline;
         Core::GpuDescriptorHandle samplerHeapHandle = Core::GpuDescriptorHandle::invalid();
-        UiPushConstants pushConstants;
         i32 framebufferWidth = 0;
         i32 framebufferHeight = 0;
         bool valid = false;
     };
+    static_assert(sizeof(TaskGraphDrawSnapshot) == 96u, "Task graph draw snapshots should stay compact");
 
 private:
     void setCurrentContext()const;

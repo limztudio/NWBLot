@@ -232,23 +232,7 @@ private:
     // the containing primary-Graphics packet is accepted.
     struct GraphOwnedSkinningDispatchPlan{
         RuntimeMeshHandle handle;
-        MeshSkinningSubmissionCommit submissionCommit;
-        bool hasActiveSkin = false;
-        bool copiedRestStreams = false;
-        bool updatesMeshletBounds = false;
-        bool repacksNormals = false;
-        u32 meshletCount = 0u;
-        u32 skinCount = 0u;
-        u32 jointCount = 0u;
-        u32 skinningMode = SkeletonSkinningMode::LinearBlend;
-        u32 attributeCount = 0u;
-        u32 bindlessResourceSlots = 0u;
-
-        // Acceptance validates this exact selector generation before setting its residency bit.
         Core::BufferHandle bindlessResourceSlotsBuffer;
-        Core::GpuDescriptorHandle bindlessResourceSlotsDescriptor = Core::GpuDescriptorHandle::invalid();
-        RuntimeBindlessResourceSlots bindlessResourceSlotsPayload;
-
         Core::GpuGraphResourceId bindlessResourceSlotsResource;
         Core::GpuGraphResourceId restPositionResource;
         Core::GpuGraphResourceId restNormalResource;
@@ -269,7 +253,22 @@ private:
         Core::GpuGraphPipelineId skinningPipeline;
         Core::GpuGraphPipelineId boundsPipeline;
         Core::GpuGraphPipelineId repackPipeline;
+        u32 meshletCount = 0u;
+        u32 skinCount = 0u;
+        u32 jointCount = 0u;
+        u32 skinningMode = SkeletonSkinningMode::LinearBlend;
+        u32 attributeCount = 0u;
+        u32 bindlessResourceSlots = 0u;
+        Core::GpuDescriptorHandle bindlessResourceSlotsDescriptor = Core::GpuDescriptorHandle::invalid();
+        MeshSkinningSubmissionCommit submissionCommit;
+        // Acceptance validates this exact selector generation before setting its residency bit.
+        RuntimeBindlessResourceSlots bindlessResourceSlotsPayload;
+        bool hasActiveSkin = false;
+        bool copiedRestStreams = false;
+        bool updatesMeshletBounds = false;
+        bool repacksNormals = false;
     };
+    static_assert(sizeof(GraphOwnedSkinningDispatchPlan) == 448u, "Graph-owned skinning plans should stay compact");
 
     struct TaskGraphSkinningDeformationTask;
     struct TaskGraphSkinningPostDispatchTask;

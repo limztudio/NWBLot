@@ -312,22 +312,23 @@ struct GpuClearTextureTaskRecordHooks{
 };
 
 struct GpuClearTextureTaskDesc{
+    // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
+    QueueSubmissionToken* acceptedToken = nullptr;
     GpuGraphResourceId destination;
+    // Optional recording-local hooks. They bracket the native clear in the same graph task, so a later cross-queue
+    // consumer cannot split an instrumentation endpoint away from the command it observes.
+    GpuClearTextureTaskRecordHooks recordHooks{};
+    f32 depthValue = 1.f;
     TextureSubresourceSet subresources = s_AllSubresources;
     GpuClearTextureTaskValueType::Enum valueType = GpuClearTextureTaskValueType::UInt;
-    Color floatValue;
-    UIntColor uintValue;
-    IntColor intValue;
-    f32 depthValue = 1.f;
     u8 stencilValue = 0u;
     bool clearDepth = false;
     bool clearStencil = false;
-    // Optional recording-local hooks. They bracket the native clear in the same graph task, so a later cross-queue
-    // consumer cannot split an instrumentation endpoint away from the command it observes.
-    GpuClearTextureTaskRecordHooks recordHooks;
-    // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
-    QueueSubmissionToken* acceptedToken = nullptr;
+    Color floatValue{};
+    UIntColor uintValue{};
+    IntColor intValue{};
 };
+static_assert(sizeof(GpuClearTextureTaskDesc) == 128u, "GpuClearTextureTaskDesc should keep its compact runtime layout");
 
 // A rectangular unsigned-integer clear keeps the same graph-owned CopyDest/lifecycle contract as the general
 // texture clear, while preserving the work-region bounds that a whole-image clear cannot represent. It is kept

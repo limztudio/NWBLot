@@ -34399,14 +34399,14 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     const GpuTaskId clearDepthTextureTask = graph.addClearTextureTask(
         clearDepthTextureTaskDesc,
         GpuClearTextureTaskDesc{
+            .acceptedToken = &clearDepthTextureAcceptedToken,
             .destination = depthTextureResource,
+            .depthValue = 0.25f,
             .subresources = TextureSubresourceSet(0u, 1u, 0u, 1u),
             .valueType = GpuClearTextureTaskValueType::DepthStencil,
-            .depthValue = 0.25f,
             .stencilValue = 0x7fu,
             .clearDepth = true,
             .clearStencil = true,
-            .acceptedToken = &clearDepthTextureAcceptedToken,
         }
     );
     ASSERT_TRUE(clearBufferTask.valid());

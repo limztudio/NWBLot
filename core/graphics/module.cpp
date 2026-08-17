@@ -108,55 +108,11 @@ constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
     }
 }
 
-// A setup API returns only a resource handle, not an external-completion handle that every future graph import must
-// consume. Bridge an accepted upload onto every declared consumer queue before returning, so later submissions retain
-// the old same-queue readiness guarantee while the producer may use Transfer or Compute.
-[[nodiscard]] static bool BridgeSetupUploadToConsumerQueues(
-    GraphicsBackend::Device& device,
-    const QueueSubmissionToken& uploadToken,
-    const ResourceQueueSharing::Mask queueSharing
-){
-    if(!uploadToken.valid())
-        return false;
-
-    constexpr CommandQueue::Enum consumerQueues[] = {
-        CommandQueue::Graphics,
-        CommandQueue::Compute,
-        CommandQueue::Transfer,
-    };
-    for(const CommandQueue::Enum consumerQueue : consumerQueues){
-        if(
-            consumerQueue == uploadToken.queue
-            || !QueueSharingIncludesQueue(queueSharing, consumerQueue)
-            || !device.getQueue(consumerQueue)
-        )
-            continue;
-
-        QueueSubmissionDesc bridgeDesc;
-        bridgeDesc.setWaitTokens(&uploadToken, 1u);
-        const QueueSubmissionToken bridgeToken = device.executeCommandLists(
-            nullptr,
-            0u,
-            consumerQueue,
-            bridgeDesc
-        );
-        if(!bridgeToken.valid()){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Graphics: failed to bridge setup upload readiness from queue {} to queue {}"),
-                static_cast<u32>(uploadToken.queue),
-                static_cast<u32>(consumerQueue)
-            );
-            return false;
-        }
-    }
-    return true;
-}
-
 // The synchronous setup APIs predate frame-owned graph declaration, but their ordinary buffer/texture uploads
 // have all of the information a graph task needs: an immutable source blob, one destination resource, an exact
 // final state, and an already-resolved physical transport. Keep the public API synchronous while using the same
-// compiler/recorder/transaction path as graph-owned frame uploads. The compatibility bridge remains below the
-// graph packet because setup callers receive a resource handle rather than an external-completion handle.
+// compiler/recorder/transaction path as graph-owned frame uploads. Because callers receive only a resource handle,
+// graph-owned no-op consumer packets retain the legacy same-queue readiness guarantee before the call returns.
 [[nodiscard]] static GpuQueueRequest SetupUploadGraphQueueRequest(const CommandQueue::Enum uploadQueue)noexcept{
     GpuQueueRequest request;
     request.requiredCapabilities = GpuQueueCapability::Transfer;
@@ -201,6 +157,69 @@ constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
         ? ResourceStates::CopyDest
         : declaredInitialState
     ;
+}
+
+// A returned setup resource has no external-completion object that a later direct consumer can wait on. Retain the
+// historical readiness rule by recording one explicit graph packet on every declared consumer queue. Its dependency
+// on the producer lowers the exact timeline wait, and later native work on that queue follows it in queue order.
+struct SetupUploadReadinessBridgeGraphTask{
+    struct Payload{};
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(payload);
+        static_cast<void>(commandList);
+        static_cast<void>(context);
+        return true;
+    }
+};
+
+[[nodiscard]] static GpuTaskId DeclareSetupUploadReadinessBridgeTasks(
+    GpuTaskGraph& graph,
+    GraphicsBackend::Device& device,
+    const ResourceQueueSharing::Mask queueSharing,
+    const CommandQueue::Enum uploadQueue,
+    const GpuTaskId uploadTask
+){
+    if(!uploadTask.valid())
+        return {};
+
+    GpuTaskId terminalTask = uploadTask;
+    constexpr CommandQueue::Enum consumerQueues[] = {
+        CommandQueue::Graphics,
+        CommandQueue::Compute,
+        CommandQueue::Transfer,
+    };
+    for(const CommandQueue::Enum consumerQueue : consumerQueues){
+        if(
+            consumerQueue == uploadQueue
+            || !QueueSharingIncludesQueue(queueSharing, consumerQueue)
+            || !device.getQueue(consumerQueue)
+        )
+            continue;
+
+        GpuTaskSchedulingHint scheduling = SetupUploadGraphScheduling(0u);
+        scheduling.overlapPreferred = false;
+        GpuTaskDesc bridgeDesc;
+        bridgeDesc
+            .setIdentity(Name("graphics.setup_upload.readiness_bridge"))
+            .setMarkerLabel("Setup Upload Readiness Bridge")
+            .setQueue(SetupUploadGraphQueueRequest(consumerQueue))
+            .setScheduling(scheduling)
+            .setDependencies(&uploadTask, 1u)
+        ;
+        const GpuTaskId bridgeTask = graph.addTask<SetupUploadReadinessBridgeGraphTask>(
+            bridgeDesc,
+            SetupUploadReadinessBridgeGraphTask::Payload{}
+        );
+        if(!bridgeTask.valid())
+            return {};
+        terminalTask = bridgeTask;
+    }
+    return terminalTask;
 }
 
 template<typename DeclareTask>
@@ -279,18 +298,35 @@ template<typename DeclareTask>
     GraphicsBackend::Device& device,
     GraphicsArena& graphArena,
     const ResourceQueueSharing::Mask queueSharing,
+    const CommandQueue::Enum uploadQueue,
     DeclareTask&& declareTask,
     QueueSubmissionToken& outUploadToken
 ){
+    outUploadToken = {};
+    QueueSubmissionToken terminalToken;
     if(!SubmitGraphOwnedStandaloneTask(
         device,
         graphArena,
-        Forward<DeclareTask>(declareTask),
-        outUploadToken
+        [&device, queueSharing, uploadQueue, &declareTask](GpuTaskGraph& graph){
+            const GpuTaskId uploadTask = declareTask(graph);
+            return DeclareSetupUploadReadinessBridgeTasks(
+                graph,
+                device,
+                queueSharing,
+                uploadQueue,
+                uploadTask
+            );
+        },
+        terminalToken
     ))
         return false;
 
-    return BridgeSetupUploadToConsumerQueues(device, outUploadToken, queueSharing);
+    if(!outUploadToken.valid()){
+        // The producer's accepted callback supplies the public token. A successful bridge graph without that token
+        // would weaken the existing setup API contract, so reject it rather than returning a falsely ready handle.
+        return false;
+    }
+    return true;
 }
 
 
@@ -1430,6 +1466,7 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
         device,
         m_allocator.getObjectArena(),
         uploadDesc.queueSharing,
+        uploadQueue,
         [&buffer, &desc, &uploadDesc, uploadQueue, &uploadToken](GpuTaskGraph& graph){
             const GpuGraphResourceId destination = graph.importBuffer(
                 buffer,
@@ -1510,6 +1547,7 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
         device,
         m_allocator.getObjectArena(),
         uploadDesc.queueSharing,
+        uploadQueue,
         [&texture, &desc, &uploadDesc, uploadQueue, &uploadToken](GpuTaskGraph& graph){
             const GpuGraphResourceId destination = graph.importTexture(
                 texture,
@@ -1599,6 +1637,7 @@ bool Graphics::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
         device,
         m_allocator.getObjectArena(),
         textureDesc.queueSharing,
+        uploadQueue,
         [&desc, &textureDesc, uploadQueue, &uploadToken](GpuTaskGraph& graph){
             const GpuGraphResourceId destination = graph.importTexture(
                 desc.destination,

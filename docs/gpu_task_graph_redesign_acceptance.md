@@ -39,18 +39,19 @@ can receive an unconditional final sign-off.
   facade is not used to restore renderer scheduling.
 - Large setup uploads have an automatic Transfer-preferred route with Graphics/Compute fallback. The external
   dedicated-Transfer performance proof is explicitly deferred by the user for this closeout.
-- Representable synchronous `Graphics::setupBuffer` and `Graphics::setupTexture` payloads now declare a one-packet
-  graph upload: caller bytes are retained as immutable graph blobs, the built-in buffer/texture task publishes the
-  graph-visible final state and accepted producer token, and the pre-existing consumer-queue readiness bridge preserves
-  the returned-handle compatibility contract. Every supported public buffer and texture upload now uses that graph
-  path. Buffer regions with an unaligned offset or byte size reject before they can form an invalid Vulkan copy;
+- Representable synchronous `Graphics::setupBuffer` and `Graphics::setupTexture` payloads now declare a compiler-owned
+  upload graph: caller bytes are retained as immutable graph blobs, the built-in buffer/texture task publishes the
+  graph-visible final state and accepted producer token, and dependent graph-owned consumer-queue readiness packets
+  preserve the returned-handle compatibility contract. Every supported public buffer and texture upload now uses that
+  graph path. Buffer regions with an unaligned offset or byte size reject before they can form an invalid Vulkan copy;
   generic raw combined depth/stencil payloads reject until an explicit per-aspect upload API exists; and
   `keepInitialState + Unknown` uploads reject because they cannot publish a safe final state. None can enter a native
   fallback.
 - Texture assets decode every UASTC mip/slice into immutable batch regions before graph declaration. The batch helper
   retains each region as a graph upload blob, serializes the subresources to one terminal accepted token, declares
   `ShaderResource` as the visible final state, and keeps the automatic Transfer -> Compute -> Graphics route plus
-  consumer readiness bridge. Bindless sampled-image allocation/commit follows only after that graph batch accepts.
+  graph-owned consumer readiness packets. Bindless sampled-image allocation/commit follows only after that graph
+  batch accepts.
 - Runtime skinning now derives immutable per-mesh dispatch plans before recording. Active joint palettes and one-time
   bindless selectors upload into the same primary-Graphics graph packet as deformation, meshlet-bounds, and optional
   normal-repack compute work; no-active poses similarly merge their three-region rest-to-skinned copy with the
@@ -410,6 +411,7 @@ can receive an unconditional final sign-off.
 | Public buffer-upload validation closeout: graph-unit and descriptor-buffer smoke binaries | passed; unaligned setup offsets/sizes and retained-Unknown setup descriptors now reject before any native submission, leaving every supported public buffer upload on the graph-owned path. Graph tests passed 122/122 and the real Vulkan descriptor smoke passed 146 with 16 expected topology skips. |
 | Standalone ImGui texture-upload fallback: UI/ECS contracts, graph unit, and descriptor-buffer smoke | passed; no-renderer or custom-callback UI texture requests now declare immutable built-in upload tasks plus a terminal Graphics completion task through `Graphics::submitStandaloneTaskGraph`, instead of opening a native preparation command list. The terminal callback alone publishes ImGui status after every upload packet accepts; a real Vulkan regression rejects one standalone upload transaction, observes its discard, then retries and observes the compiler-owned `ShaderResource` handoff and accepted terminal token. ECS graphics passed 25/25, graph tests passed 122/122, and descriptor smoke passed 147 with 16 expected topology skips. |
 | Standalone ImGui presentation fallback: UI/ECS contracts, graph unit, and descriptor-buffer smoke | passed; a no-renderer frame or an abandoned renderer-owned overlay declaration now rebuilds the ordinary frozen vertex/index/command snapshot as an isolated graph with a Graphics terminal task and physical-Graphics verification. Existing UI task declarations accept an omitted predecessor only for this standalone route, preserving their scene-output dependency when one is supplied. Direct rasterization remains restricted to unsupported custom callbacks and a failed standalone graph attempt. ECS graphics passed 25/25, graph tests passed 122/122, and descriptor smoke passed 147 with 16 expected topology skips. |
+| Graph-owned public setup-upload readiness bridges: ECS graphics contract and descriptor-buffer smoke | passed; the returned-handle compatibility bridge no longer submits a raw zero-command list after graph acceptance. Every selected consumer queue instead receives an explicit dependent no-op graph packet, so compiler-owned physical queue waits establish normal queue order before `setupBuffer`, `setupTexture`, or a texture batch returns. The source upload token remains the public accepted token. ECS graphics passed 26/26 and descriptor smoke passed 147 with 16 expected topology skips; the dedicated-Transfer execution proof cleanly skips on this adapter. |
 | Graph-owned deferred-frame upload follow-up: `nwb_ecs_graphics_tests`, `nwb_graphics_task_graph_tests`, and `nwb_descriptor_buffer_tests` | 3/3 passed |
 | Graph-owned deferred-frame upload follow-up: rebuilt `nwb_testbed` window capture | passed; a real X11/Vulkan deferred frame completed with the graph-owned mesh-view, scene-light, and scene-shading uploads |
 | Graph-owned decoded-texture upload follow-up: `nwb_assets_texture_loader`, `nwb_graphics_task_graph_tests`, and `nwb_descriptor_buffer_tests` | passed; the native smoke now reads back two graph-owned mip payloads after their caller arrays are overwritten (74 passed; 10 expected topology skips) |

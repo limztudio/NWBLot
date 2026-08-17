@@ -38120,9 +38120,9 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedTransferQueueCopiesConcurrentBuff
 
 
 // Graph-owned setup uploads expose only a returned resource handle, so an automatic Transfer producer must publish
-// readiness onto Graphics before it returns. This deliberately submits the Graphics copy without an explicit wait
-// token: queue order behind the setup bridge is the compatibility contract that keeps legacy callers and graph
-// imports safe.
+// readiness onto Graphics before it returns. The graph-owned Graphics bridge carries the producer wait, so this
+// deliberately submits the following Graphics copy without an explicit wait token; queue order keeps legacy callers
+// and graph imports safe.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSetupBufferUsesDedicatedTransferAndBridgesGraphicsReadiness){
     HeadlessGraphicsScope transferScope;
     ASSERT_TRUE(transferScope.setTransferQueueEnabled(true));

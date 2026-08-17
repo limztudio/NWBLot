@@ -245,6 +245,32 @@ TEST(EcsGraphics, UiLegacyTextureFallbackUsesStandaloneGraphUpload){
 }
 
 
+// Public setup uploads return only a resource handle, so a Transfer/Compute producer must still establish queue
+// order for later legacy consumers. Keep those readiness packets inside the same graph transaction instead of
+// issuing an opaque direct zero-command submission after graph acceptance.
+TEST(EcsGraphics, SetupUploadReadinessBridgeRemainsGraphOwned){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString graphicsSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.cpp", graphicsSource));
+    const AStringView graphics(graphicsSource.data(), graphicsSource.size());
+
+    EXPECT_TRUE(ContainsText(graphics, "SetupUploadReadinessBridgeGraphTask"));
+    EXPECT_TRUE(ContainsText(graphics, "DeclareSetupUploadReadinessBridgeTasks"));
+    EXPECT_TRUE(ContainsText(graphics, "graphics.setup_upload.readiness_bridge"));
+    EXPECT_FALSE(ContainsText(graphics, "BridgeSetupUploadToConsumerQueues"));
+
+    const usize setupUploadOffset = graphics.find("static bool SubmitGraphOwnedSetupUpload");
+    const usize timingResetOffset = graphics.find("struct FrameTimingResetGraphTask", setupUploadOffset);
+    ASSERT_NE(setupUploadOffset, AStringView::npos);
+    ASSERT_NE(timingResetOffset, AStringView::npos);
+    const AStringView setupUpload = graphics.substr(setupUploadOffset, timingResetOffset - setupUploadOffset);
+    EXPECT_TRUE(ContainsText(setupUpload, "DeclareSetupUploadReadinessBridgeTasks"));
+    EXPECT_FALSE(ContainsText(setupUpload, "executeCommandLists"));
+}
+
+
 // The current renderer has exactly two runtime-selected sampled-image domains: material Texture2D assets (shared
 // by raster and ray-trace surface dispatch) and ImGui textures.  A new domain must not silently rely on a global
 // descriptor slot: keep the supported domain small and require each one to retain handles before graph declaration.

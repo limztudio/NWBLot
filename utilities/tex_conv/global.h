@@ -44,9 +44,6 @@ inline Core::Alloc::GlobalArena& Arena(){
     return s_Arena;
 }
 
-template<typename T>
-using Allocator = ContainerDetail::DefaultArenaAllocatorFor_T<T, Core::Alloc::GlobalArena, Arena>;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -58,9 +55,9 @@ using Allocator = ContainerDetail::DefaultArenaAllocatorFor_T<T, Core::Alloc::Gl
 
 
 template<typename T>
-using Vector = std::vector<T, UtilityDetail::Allocator<T>>;
-using AString = std::basic_string<char, std::char_traits<char>, UtilityDetail::Allocator<char>>;
-using AStringStream = std::basic_stringstream<char, std::char_traits<char>, UtilityDetail::Allocator<char>>;
+using Vector = DefaultVector<T, Core::Alloc::GlobalArena, UtilityDetail::Arena>;
+using AString = DefaultAString<Core::Alloc::GlobalArena, UtilityDetail::Arena>;
+using AStringStream = DefaultAStringStream<Core::Alloc::GlobalArena, UtilityDetail::Arena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

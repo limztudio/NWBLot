@@ -221,6 +221,22 @@ using HashSet = typename ContainerDetail::HashSetSelector<T, First, Second, Thir
 template<typename T, typename V, typename First, typename Second = void, typename Third = void>
 using HashMap = typename ContainerDetail::HashMapSelector<T, V, First, Second, Third>::Type;
 
+template<
+    typename K,
+    typename V,
+    typename ArenaT,
+    ArenaT& (*DefaultArena)(),
+    typename Hash = Hasher<K>,
+    typename Equal = EqualTo<K>
+>
+using DefaultHashMap = tsl::robin_map<
+    K,
+    V,
+    Hash,
+    Equal,
+    ContainerDetail::DefaultArenaAllocatorFor_T<Pair<K, V>, ArenaT, DefaultArena>
+>;
+
 template<typename T, usize N>
 using Array = std::array<T, N>;
 

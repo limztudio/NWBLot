@@ -100,6 +100,10 @@ inline void SetUnsupportedError(ErrorCode& outError)noexcept{
     outError = std::make_error_code(std::errc::function_not_supported);
 }
 
+inline void SetValueTooLargeError(ErrorCode& outError)noexcept{
+    outError = std::make_error_code(std::errc::value_too_large);
+}
+
 template<typename ArenaT>
 [[nodiscard]] inline bool IsRootComponent(const Path<ArenaT>& path)noexcept{
     return path.size() != 0u && path.size() == GlobalFilesystemPathDetail::RootDirectoryLength(path.native());

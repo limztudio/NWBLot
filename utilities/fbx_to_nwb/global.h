@@ -53,9 +53,6 @@ inline Core::Alloc::GlobalArena& Arena(){
     return s_Arena;
 }
 
-template<typename T>
-using Allocator = ContainerDetail::DefaultArenaAllocatorFor_T<T, Core::Alloc::GlobalArena, Arena>;
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -66,16 +63,19 @@ using Allocator = ContainerDetail::DefaultArenaAllocatorFor_T<T, Core::Alloc::Gl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T>
-using Vector = std::vector<T, UtilityDetail::Allocator<T>>;
-using AString = std::basic_string<char, std::char_traits<char>, UtilityDetail::Allocator<char>>;
-using AStringStream = std::basic_stringstream<char, std::char_traits<char>, UtilityDetail::Allocator<char>>;
+using AString = DefaultAString<Core::Alloc::GlobalArena, UtilityDetail::Arena>;
+using AStringStream = DefaultAStringStream<Core::Alloc::GlobalArena, UtilityDetail::Arena>;
 
-template<typename K, typename V, typename Hash = Hasher<K>, typename Equal = EqualTo<K>>
-using HashMap = tsl::robin_map<K, V, Hash, Equal, UtilityDetail::Allocator<Pair<K, V>>>;
+template<
+    typename K,
+    typename V,
+    typename Hash = Hasher<K>,
+    typename Equal = EqualTo<K>
+>
+using HashMap = DefaultHashMap<K, V, Core::Alloc::GlobalArena, UtilityDetail::Arena, Hash, Equal>;
 
 template<typename T>
-using UtilityVector = Vector<T>;
+using UtilityVector = DefaultVector<T, Core::Alloc::GlobalArena, UtilityDetail::Arena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

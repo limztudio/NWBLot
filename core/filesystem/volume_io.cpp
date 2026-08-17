@@ -54,7 +54,7 @@ static bool ToStreamSize(const u64 value, GlobalFilesystemDetail::StreamSize& ou
 static bool ResizeFile(const Path& path, const u64 byteCount, ErrorCode& outError){
 #if defined(NWB_PLATFORM_WINDOWS)
     if(byteCount > static_cast<u64>(Limit<LONGLONG>::s_Max)){
-        outError = std::make_error_code(std::errc::value_too_large);
+        GlobalFilesystemDetail::SetValueTooLargeError(outError);
         return false;
     }
 
@@ -84,7 +84,7 @@ static bool ResizeFile(const Path& path, const u64 byteCount, ErrorCode& outErro
     return resizeSucceeded;
 #else
     if(!CanRepresentU64<off_t>(byteCount)){
-        outError = std::make_error_code(std::errc::value_too_large);
+        GlobalFilesystemDetail::SetValueTooLargeError(outError);
         return false;
     }
 

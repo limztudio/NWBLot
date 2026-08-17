@@ -58,6 +58,19 @@ using WStringStream = BasicStringStream<wchar, ArenaT>;
 template<typename ArenaT>
 using TStringStream = BasicStringStream<tchar, ArenaT>;
 
+template<typename T, typename ArenaT, ArenaT& (*DefaultArena)()>
+using DefaultBasicStringStream = std::basic_stringstream<
+    T,
+    std::char_traits<T>,
+    ContainerDetail::DefaultArenaAllocatorFor_T<T, ArenaT, DefaultArena>
+>;
+template<typename ArenaT, ArenaT& (*DefaultArena)()>
+using DefaultAStringStream = DefaultBasicStringStream<char, ArenaT, DefaultArena>;
+template<typename ArenaT, ArenaT& (*DefaultArena)()>
+using DefaultWStringStream = DefaultBasicStringStream<wchar, ArenaT, DefaultArena>;
+template<typename ArenaT, ArenaT& (*DefaultArena)()>
+using DefaultTStringStream = DefaultBasicStringStream<tchar, ArenaT, DefaultArena>;
+
 using AFormatContext = std::format_context;
 using WFormatContext = std::wformat_context;
 template<typename T>

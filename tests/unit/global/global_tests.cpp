@@ -12,6 +12,7 @@
 #include <global/arena_base.h>
 #include <global/arena_c_allocator.h>
 #include <global/arena_object.h>
+#include <global/basic_string.h>
 #include <global/binary.h>
 #include <global/blocking_io.h>
 #include <global/compile.h>
@@ -276,6 +277,35 @@ TEST(Global, GenericAllocationAndTypeHelpers){
     EXPECT_EQ(firstId, ::TypeCounter<TypeCounterFirstTag>::id<u32>());
     EXPECT_NE(firstId, ::TypeCounter<TypeCounterFirstTag>::id<u64>());
     EXPECT_EQ(::TypeCounter<TypeCounterSecondTag>::id<u32>(), 0u);
+}
+
+TEST(Global, DefaultArenaAliases){
+    using DefaultString = DefaultAString<NWB::Core::Alloc::GlobalArena, NWB::Tests::TestDetail::Arena>;
+    using DefaultStringStream = DefaultAStringStream<NWB::Core::Alloc::GlobalArena, NWB::Tests::TestDetail::Arena>;
+    using DefaultMap = DefaultHashMap<u32, DefaultString, NWB::Core::Alloc::GlobalArena, NWB::Tests::TestDetail::Arena>;
+
+    DefaultString value("default arena");
+    DefaultStringStream stream;
+    stream << value << " aliases";
+
+    DefaultMap values;
+    values.emplace(7u, stream.str());
+
+    ASSERT_EQ(values.size(), 1u);
+    const DefaultString& stored = values.at(7u);
+    EXPECT_EQ(AStringView(stored.data(), stored.size()), "default arena aliases");
+}
+
+TEST(Global, ParsesIntegerViews){
+    i64 signedValue = 0;
+    EXPECT_TRUE(ParseI64("-42", signedValue));
+    EXPECT_EQ(signedValue, -42);
+    EXPECT_FALSE(ParseI64("42x", signedValue));
+
+    u64 unsignedValue = 0u;
+    EXPECT_TRUE(ParseU64("42", unsignedValue));
+    EXPECT_EQ(unsignedValue, 42u);
+    EXPECT_FALSE(ParseU64("-1", unsignedValue));
 }
 
 TEST(Global, ArenaMemoryTrackerRecordsLifetimeStatistics){

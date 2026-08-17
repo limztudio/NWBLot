@@ -466,6 +466,32 @@ TEST(EcsGraphics, ShadowVisibilityPermitsOptInCrossFamilyComputeRouting){
 }
 
 
+// AVBOIT's Graphics raster packets deliberately retain their established primary route, but its split Depth Warp
+// and Integration tasks are pure Compute packets with complete graph-declared handoffs. Keep their auxiliary
+// routing opt-in explicit rather than inferring it from the broader AVBOIT effect name.
+TEST(EcsGraphics, SplitAvboitComputePacketsPermitCrossFamilyRouting){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    const usize schedulingOffset = taskGraph.find("Core::GpuTaskSchedulingHint avboitComputeScheduling");
+    const usize accumulationOffset = taskGraph.find("AvboitAccumulationGraphTask::Payload", schedulingOffset);
+    ASSERT_NE(schedulingOffset, AStringView::npos);
+    ASSERT_NE(accumulationOffset, AStringView::npos);
+    ASSERT_LT(schedulingOffset, accumulationOffset);
+    const AStringView splitCompute = taskGraph.substr(schedulingOffset, accumulationOffset - schedulingOffset);
+
+    EXPECT_TRUE(ContainsText(splitCompute, "EnableSameFamilyComputeEffectRouting(avboitComputeScheduling, false)"));
+    EXPECT_TRUE(ContainsText(splitCompute, "EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling)"));
+    EXPECT_TRUE(ContainsText(splitCompute, ".setQueue(ComputeQueueRequest())"));
+    EXPECT_TRUE(ContainsText(splitCompute, "render.avboit.depth_warp"));
+    EXPECT_TRUE(ContainsText(splitCompute, "render.avboit.integration"));
+}
+
+
 // The current renderer has exactly two runtime-selected sampled-image domains: material Texture2D assets (shared
 // by raster and ray-trace surface dispatch) and ImGui textures.  A new domain must not silently rely on a global
 // descriptor slot: keep the supported domain small and require each one to retain handles before graph declaration.

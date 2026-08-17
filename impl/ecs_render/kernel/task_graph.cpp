@@ -14219,6 +14219,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitComputeScheduling.cost = Core::GpuTaskCostHint::Medium;
     avboitComputeScheduling.forceSubmissionBoundary = true;
     avboitComputeScheduling.allowPacketMerge = false;
+    // Split Depth Warp and Integration are the two Compute-only AVBOIT packets. They may independently select an
+    // explicitly enabled auxiliary Compute transport, including an alternate family when each declared resource
+    // can cross it; Graphics raster/interleaving packets retain their existing primary-Graphics policy.
+    EnableSameFamilyComputeEffectRouting(avboitComputeScheduling, false);
+    EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling);
     Core::GpuTaskId avboitDepthWarpCompletionTask = m_deferredAvboitOccupancyTask;
     if(splitAvboitStages){
         const Core::GpuTaskResourceUse depthWarpResourceUses[] = {

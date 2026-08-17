@@ -21,6 +21,8 @@ NWB_CORE_BEGIN
 
 
 class IGpuTaskGraphPresentationContributor;
+class GpuTaskGraph;
+struct GpuTaskId;
 
 
 class Graphics{
@@ -122,6 +124,10 @@ public:
 
     using JobHandle = Alloc::JobSystem::JobHandle;
     using PointerScaleChangedCallback = void(*)(void* userData, f32 scaleX, f32 scaleY);
+    // A synchronous caller may declare one isolated graph through this callback. The graph owns all native command
+    // recording and submission; the callback must only retain declaration-time inputs and return its terminal task.
+    // `userData` remains caller-owned for the duration of this synchronous call.
+    using StandaloneTaskGraphDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
 
 
 private:
@@ -242,6 +248,14 @@ public:
     [[nodiscard]] BufferHandle setupBuffer(const BufferSetupDesc& desc)const;
     [[nodiscard]] TextureHandle setupTexture(const TextureSetupDesc& desc)const;
     [[nodiscard]] bool uploadTextureBatch(const TextureUploadBatchDesc& desc)const;
+    // Compiles, records, and submits an isolated graph synchronously. This is the graph-owned escape hatch for a
+    // compatibility caller that has no renderer-owned frame graph but can still provide immutable task inputs.
+    [[nodiscard]] bool submitStandaloneTaskGraph(
+        void* userData,
+        StandaloneTaskGraphDeclaration declareTask,
+        QueueSubmissionToken& outSubmissionToken,
+        GpuPhysicalQueueId requiredTerminalQueue = {}
+    )const;
     [[nodiscard]] MeshResource setupMesh(const MeshSetupDesc& desc)const;
 
     [[nodiscard]] JobHandle setupBufferAsync(const BufferSetupDesc& desc, BufferHandle& outBuffer);

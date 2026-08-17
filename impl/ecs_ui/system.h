@@ -100,6 +100,7 @@ public:
 private:
     struct TaskGraphRenderTask;
     struct TaskGraphUploadCompletionTask;
+    struct StandaloneTextureUploadCompletionTask;
 
     struct UiTextureResource{
         Core::TextureHandle texture;
@@ -163,7 +164,7 @@ private:
     [[nodiscard]] bool recordTaskGraphUploadCompletion()const;
     void confirmTaskGraphPresentationSubmission()noexcept;
     void clearTaskGraphDrawSnapshot()noexcept;
-    [[nodiscard]] bool ensureFrameCommandLists();
+    [[nodiscard]] bool ensureRenderCommandList();
     [[nodiscard]] bool ensureRenderResources(Core::Framebuffer* framebuffer);
     [[nodiscard]] bool ensureShadersLoaded();
     [[nodiscard]] bool ensureInputLayout();
@@ -179,10 +180,8 @@ private:
         Vector<Core::GpuTaskId, Core::Alloc::ScratchArena>& outTasks
     );
     [[nodiscard]] bool submitLegacyTextureRequests(ImDrawData& drawData);
-    [[nodiscard]] bool processTextureRequests(Core::CommandList& commandList, ImDrawData& drawData);
     [[nodiscard]] bool prepareTextureRequests(ImDrawData& drawData);
     [[nodiscard]] bool createOrRefreshTexture(ImTextureData& textureData);
-    [[nodiscard]] bool recordTextureUpload(Core::CommandList& commandList, ImTextureData& textureData);
     [[nodiscard]] Core::GpuGraphResourceId importTaskGraphTexture(
         Core::GpuTaskGraph& graph,
         UiTextureResource& resource
@@ -194,6 +193,7 @@ private:
         Vector<Core::GpuTaskId, Core::Alloc::ScratchArena>& outTasks,
         Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& outResources
     );
+    [[nodiscard]] Core::GpuTaskId declareStandaloneTextureUploadGraph(Core::GpuTaskGraph& graph);
     void destroyTexture(ImTextureData& textureData);
     [[nodiscard]] UiTextureResource* textureResourceFromId(ImTextureID textureId)const;
     [[nodiscard]] UiTextureResource* fallbackTextureResource()const{
@@ -225,7 +225,6 @@ private:
     Core::GraphicsPipelineHandle m_pipeline;
     Core::BufferHandle m_vertexBuffer;
     Core::BufferHandle m_indexBuffer;
-    Core::CommandListHandle m_prepareCommandList;
     Core::CommandListHandle m_renderCommandList;
     UiTextureResourceVector m_textures;
     UiTextureUploadBatch m_textureUploadBatch;

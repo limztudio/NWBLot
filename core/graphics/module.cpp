@@ -227,7 +227,7 @@ template<typename DeclareTask>
     GpuCompiledGraph compiledGraph(graphArena);
     GpuRecordedGraph recordedGraph(graphArena);
     GpuGraphSubmissionTransaction transaction(graphArena);
-    Alloc::ScratchArena scratchArena(Name("graphics.setup_upload_graph_scratch"));
+    Alloc::ScratchArena scratchArena(Name("graphics.standalone_task_graph_scratch"));
     const GpuTaskGraphCompiler compiler;
     if(!compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena))
         return false;
@@ -1555,6 +1555,27 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
         *desc.acceptedToken = uploadToken;
 
     return texture;
+}
+
+bool Graphics::submitStandaloneTaskGraph(
+    void* const userData,
+    const StandaloneTaskGraphDeclaration declareTask,
+    QueueSubmissionToken& outSubmissionToken,
+    const GpuPhysicalQueueId requiredTerminalQueue
+)const{
+    outSubmissionToken = {};
+    if(!declareTask)
+        return false;
+
+    return __hidden_graphics::SubmitGraphOwnedStandaloneTask(
+        getDevice(),
+        m_allocator.getObjectArena(),
+        [userData, declareTask](GpuTaskGraph& graph){
+            return declareTask(userData, graph);
+        },
+        outSubmissionToken,
+        requiredTerminalQueue
+    );
 }
 
 bool Graphics::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{

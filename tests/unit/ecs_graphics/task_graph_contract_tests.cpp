@@ -183,6 +183,47 @@ TEST(EcsGraphics, UiPresentationSnapshotsLateRecordInputs){
 }
 
 
+// The exceptional non-renderer/custom-callback UI route must not reopen the old preparation command list merely to
+// upload requested ImGui textures. It may retain direct rasterization when no presentation graph exists or a callback
+// is arbitrary, but its mutable texture bytes and status publication now belong to an isolated graph with one
+// terminal acceptance task.
+TEST(EcsGraphics, UiLegacyTextureFallbackUsesStandaloneGraphUpload){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString graphicsHeaderSource;
+    AString graphicsSource;
+    AString uiSource;
+    AString uiTextureSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.h", graphicsHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.cpp", graphicsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "texture_resources.cpp", uiTextureSource));
+    const AStringView graphicsHeader(graphicsHeaderSource.data(), graphicsHeaderSource.size());
+    const AStringView graphics(graphicsSource.data(), graphicsSource.size());
+    const AStringView ui(uiSource.data(), uiSource.size());
+    const AStringView uiTextures(uiTextureSource.data(), uiTextureSource.size());
+
+    EXPECT_TRUE(ContainsText(graphicsHeader, "StandaloneTaskGraphDeclaration"));
+    EXPECT_TRUE(ContainsText(graphicsHeader, "submitStandaloneTaskGraph"));
+    EXPECT_TRUE(ContainsText(graphics, "Graphics::submitStandaloneTaskGraph"));
+    EXPECT_TRUE(ContainsText(ui, "StandaloneTextureUploadCompletionTask"));
+    EXPECT_TRUE(ContainsText(ui, "declareStandaloneTextureUploadGraph"));
+
+    const usize legacySubmitOffset = ui.find("bool UiSystem::submitLegacyTextureRequests");
+    const usize renderOffset = ui.find("void UiSystem::render", legacySubmitOffset);
+    ASSERT_NE(legacySubmitOffset, AStringView::npos);
+    ASSERT_NE(renderOffset, AStringView::npos);
+    const AStringView legacySubmit = ui.substr(legacySubmitOffset, renderOffset - legacySubmitOffset);
+    EXPECT_TRUE(ContainsText(legacySubmit, "m_graphics.submitStandaloneTaskGraph"));
+    EXPECT_FALSE(ContainsText(legacySubmit, "executeCommandLists"));
+    EXPECT_FALSE(ContainsText(legacySubmit, "createCommandList"));
+    EXPECT_FALSE(ContainsText(ui, "m_prepareCommandList"));
+    EXPECT_FALSE(ContainsText(uiTextures, "recordTextureUpload"));
+    EXPECT_TRUE(ContainsText(uiTextures, "if(previousTask.valid())"));
+}
+
+
 // The current renderer has exactly two runtime-selected sampled-image domains: material Texture2D assets (shared
 // by raster and ray-trace surface dispatch) and ImGui textures.  A new domain must not silently rely on a global
 // descriptor slot: keep the supported domain small and require each one to retain handles before graph declaration.

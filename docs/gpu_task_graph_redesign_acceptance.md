@@ -60,7 +60,10 @@ can receive an unconditional final sign-off.
   one bind-pose copy/repack.
 - In the shared deferred path, ImGui vertex/index payloads and requested font/texture updates are retained as
   immutable graph blobs, lowered through the built-in upload tasks, and made dependencies of the terminal overlay
-  or upload-completion packet. Small deltas stay on Graphics; amortizable updates prefer Transfer.
+  or upload-completion packet. Small deltas stay on Graphics; amortizable updates prefer Transfer. The non-renderer
+  and custom-callback fallback now routes its requested textures through the same compiler/recorder/transaction
+  lifecycle as an isolated graph, including terminal acceptance-only status publication; only its compatibility
+  raster body remains direct.
 - The shared deferred graphics prefix resolves changed mesh-view, scene-light, and scene-shading data before graph
   compilation. Each payload is retained as an immutable graph blob, uploaded through a Graphics-routed built-in
   buffer task, and committed to its CPU mirror only when the matching packet is accepted. These automatic-state
@@ -404,6 +407,7 @@ can receive an unconditional final sign-off.
 | Graph-owned public setup-upload follow-up: descriptor-buffer smoke binary | 73 passed; 10 expected skips. Normal buffer and texture setup routes compile, record, and submit through one graph packet while preserving queue selection, graph-visible final states, and Graphics readiness; the dedicated-Transfer probe is hardware-skipped on this adapter |
 | Public texture-upload validation closeout: graph-unit and descriptor-buffer smoke binaries | passed; combined D24S8/D32S8 raw payloads and retained-Unknown setup/batch descriptors now reject before any native submission, leaving every supported public texture upload on the graph-owned path. A future combined depth/stencil upload requires an explicit per-aspect payload/task contract. Graph tests passed 122/122 and the real Vulkan descriptor smoke passed 145 with 16 expected topology skips. |
 | Public buffer-upload validation closeout: graph-unit and descriptor-buffer smoke binaries | passed; unaligned setup offsets/sizes and retained-Unknown setup descriptors now reject before any native submission, leaving every supported public buffer upload on the graph-owned path. Graph tests passed 122/122 and the real Vulkan descriptor smoke passed 146 with 16 expected topology skips. |
+| Standalone ImGui texture-upload fallback: UI/ECS contracts, graph unit, and descriptor-buffer smoke | passed; no-renderer or custom-callback UI texture requests now declare immutable built-in upload tasks plus a terminal Graphics completion task through `Graphics::submitStandaloneTaskGraph`, instead of opening a native preparation command list. The terminal callback alone publishes ImGui status after every upload packet accepts; a real Vulkan regression rejects one standalone upload transaction, observes its discard, then retries and observes the compiler-owned `ShaderResource` handoff and accepted terminal token. ECS graphics passed 25/25, graph tests passed 122/122, and descriptor smoke passed 147 with 16 expected topology skips. |
 | Graph-owned deferred-frame upload follow-up: `nwb_ecs_graphics_tests`, `nwb_graphics_task_graph_tests`, and `nwb_descriptor_buffer_tests` | 3/3 passed |
 | Graph-owned deferred-frame upload follow-up: rebuilt `nwb_testbed` window capture | passed; a real X11/Vulkan deferred frame completed with the graph-owned mesh-view, scene-light, and scene-shading uploads |
 | Graph-owned decoded-texture upload follow-up: `nwb_assets_texture_loader`, `nwb_graphics_task_graph_tests`, and `nwb_descriptor_buffer_tests` | passed; the native smoke now reads back two graph-owned mip payloads after their caller arrays are overwritten (74 passed; 10 expected topology skips) |
@@ -627,9 +631,10 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    legacy state-handoff data, but the shared deferred renderer now gives the task runtime semantic task endpoints
    for every normal and late recovery/readback/history record/submit span; the runtime alone resolves current
    compiler packet ranges. The shared deferred path now owns per-frame ImGui draw/font/texture uploads and freezes
-   its late-record draw commands plus their exact bindless sampled-texture handles; its direct path remains only as
-   a compatibility fallback for worlds without a graph-owning renderer, a rejected graph attempt, or custom ImGui
-   callbacks that cannot safely become immutable graph payloads. Frame GPU-timing query-pool reset is now a strict primary-Graphics graph packet whose accepted
+   its late-record draw commands plus their exact bindless sampled-texture handles. When no renderer-owned graph is
+   available (including custom ImGui callbacks), requested texture uploads still use an isolated graph and publish
+   status only from its terminal accepted callback; direct rendering remains only for the compatibility raster body
+   on those paths and a rejected graph attempt. Frame GPU-timing query-pool reset is now a strict primary-Graphics graph packet whose accepted
    callback alone publishes query availability; failed work remains revoked. Public buffer/texture setup uploads, decoded texture-asset uploads, and the shared deferred
    mesh-view, scene-light, scene-shading, runtime skinning selector/palette/copy/compute updates, and opaque material instance/typed updates
    now use the graph-owned primitive path. Prepared opaque, CSG, and AVBOIT material consumers also inherit their

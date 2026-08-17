@@ -254,6 +254,145 @@ Optional<Common::LoggerRegistrationGuard> DescriptorBufferRoundTripTest::s_logge
 }
 
 
+// The UI compatibility path owns neither a renderer graph nor a native preparation list. This compact probe uses
+// the public standalone submission boundary directly: an immutable upload must reach ShaderResource before the
+// terminal callback accepts, while a rejected packet must discard that callback without publishing a token.
+struct StandaloneGraphTextureUploadCompletionTask{
+    struct Payload{
+        GpuGraphResourceId texture;
+        bool* recorded = nullptr;
+        bool* accepted = nullptr;
+        bool* discarded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        Texture* const texture = context.taskGraph.textureForResource(payload.texture);
+        const bool ready = texture
+            && commandList.getTextureSubresourceState(texture, 0u, 0u) == ResourceStates::ShaderResource
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(payload.accepted)
+            *payload.accepted = token.valid();
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.discarded)
+            *payload.discarded = true;
+    }
+};
+
+struct StandaloneGraphTextureUploadContext{
+    TextureHandle destination;
+    const void* bytes = nullptr;
+    usize byteCount = 0u;
+    usize rowPitch = 0u;
+    bool* recorded = nullptr;
+    bool* accepted = nullptr;
+    bool* discarded = nullptr;
+};
+
+[[nodiscard]] static GpuTaskId DeclareStandaloneGraphTextureUpload(
+    void* const rawContext,
+    GpuTaskGraph& graph
+){
+    StandaloneGraphTextureUploadContext* const context =
+        static_cast<StandaloneGraphTextureUploadContext*>(rawContext)
+    ;
+    if(!context || !context->destination || !context->bytes || context->byteCount == 0u)
+        return {};
+
+    const TextureDesc& textureDesc = context->destination->getDescription();
+    const GpuGraphResourceId destination = graph.importTexture(
+        context->destination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests.standalone_graph_texture_upload.destination"))
+            .setMarkerLabel("Standalone Graph Texture Upload")
+            .setType(GpuGraphResourceType::Texture)
+            .setInitialState(textureDesc.initialState)
+            .setQueueSharing(textureDesc.queueSharing)
+    );
+    const GpuUploadBlobId source = graph.copyUploadData(context->bytes, context->byteCount, alignof(u32));
+    if(!destination.valid() || !source.valid())
+        return {};
+
+    GpuTaskSchedulingHint uploadScheduling;
+    uploadScheduling.cost = GpuTaskCostHint::Tiny;
+    uploadScheduling.forceSubmissionBoundary = true;
+    uploadScheduling.allowPacketMerge = false;
+    GpuTaskDesc uploadDesc;
+    uploadDesc
+        .setIdentity(Name("tests.standalone_graph_texture_upload.upload"))
+        .setMarkerLabel("Standalone Graph Texture Upload")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Transfer,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(uploadScheduling)
+    ;
+    const GpuTaskId uploadTask = graph.addUploadTextureTask(
+        uploadDesc,
+        GpuUploadTextureTaskDesc{
+            .source = source,
+            .destination = destination,
+            .arraySlice = 0u,
+            .mipLevel = 0u,
+            .rowPitch = context->rowPitch,
+            .depthPitch = 0u,
+            .finalState = ResourceStates::ShaderResource,
+        }
+    );
+    if(!uploadTask.valid())
+        return {};
+
+    const GpuTaskResourceUse completionUses[] = {
+        GpuTaskResourceUse{
+            .resource = destination,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskSchedulingHint completionScheduling;
+    completionScheduling.cost = GpuTaskCostHint::Tiny;
+    completionScheduling.forceSubmissionBoundary = true;
+    completionScheduling.allowPacketMerge = false;
+    GpuTaskDesc completionDesc;
+    completionDesc
+        .setIdentity(Name("tests.standalone_graph_texture_upload.completion"))
+        .setMarkerLabel("Standalone Graph Texture Upload Completion")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(completionScheduling)
+        .setDependencies(&uploadTask, 1u)
+        .setResourceUses(completionUses, LengthOf(completionUses))
+    ;
+    return graph.addTask<StandaloneGraphTextureUploadCompletionTask>(
+        completionDesc,
+        StandaloneGraphTextureUploadCompletionTask::Payload{
+            .texture = destination,
+            .recorded = context->recorded,
+            .accepted = context->accepted,
+            .discarded = context->discarded,
+        }
+    );
+}
+
+
 // These compact graph tasks model skinning's descriptor-visible compute endpoint. They deliberately perform no
 // synthetic native submission: their packet-local barriers publish the required compute states, and the task's
 // accepted callback observes the same packet token as its uploads/copies.
@@ -38256,6 +38395,75 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
         }
         device.unmapStagingTexture(readback.get());
     }
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAcceptsTerminalCompletion){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    const TextureHandle destination = graphics.createTexture(
+        TextureDesc()
+            .setWidth(2u)
+            .setHeight(2u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInitialState(ResourceStates::ShaderResource)
+            .setKeepInitialState(true)
+    );
+    ASSERT_NE(destination.get(), nullptr);
+
+    u8 uploadBytes[2u * 2u * 4u] = {};
+    for(usize byteIndex = 0u; byteIndex < LengthOf(uploadBytes); ++byteIndex)
+        uploadBytes[byteIndex] = static_cast<u8>(byteIndex * 19u + 5u);
+
+    bool rejectedRecorded = false;
+    bool rejectedAccepted = false;
+    bool rejectedDiscarded = false;
+    StandaloneGraphTextureUploadContext rejectedContext{
+        .destination = destination,
+        .bytes = uploadBytes,
+        .byteCount = sizeof(uploadBytes),
+        .rowPitch = 2u * 4u,
+        .recorded = &rejectedRecorded,
+        .accepted = &rejectedAccepted,
+        .discarded = &rejectedDiscarded,
+    };
+    QueueSubmissionToken rejectedToken;
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    EXPECT_FALSE(graphics.submitStandaloneTaskGraph(
+        &rejectedContext,
+        &DeclareStandaloneGraphTextureUpload,
+        rejectedToken
+    ));
+    EXPECT_FALSE(rejectedToken.valid());
+    EXPECT_TRUE(rejectedRecorded);
+    EXPECT_FALSE(rejectedAccepted);
+    EXPECT_TRUE(rejectedDiscarded);
+
+    bool acceptedRecorded = false;
+    bool accepted = false;
+    bool acceptedDiscarded = false;
+    StandaloneGraphTextureUploadContext acceptedContext{
+        .destination = destination,
+        .bytes = uploadBytes,
+        .byteCount = sizeof(uploadBytes),
+        .rowPitch = 2u * 4u,
+        .recorded = &acceptedRecorded,
+        .accepted = &accepted,
+        .discarded = &acceptedDiscarded,
+    };
+    QueueSubmissionToken acceptedToken;
+    ASSERT_TRUE(graphics.submitStandaloneTaskGraph(
+        &acceptedContext,
+        &DeclareStandaloneGraphTextureUpload,
+        acceptedToken
+    ));
+    EXPECT_TRUE(acceptedToken.valid());
+    EXPECT_EQ(acceptedToken.queue, CommandQueue::Graphics);
+    EXPECT_TRUE(acceptedRecorded);
+    EXPECT_TRUE(accepted);
+    EXPECT_FALSE(acceptedDiscarded);
+    EXPECT_TRUE(device.waitForIdle());
 }
 
 

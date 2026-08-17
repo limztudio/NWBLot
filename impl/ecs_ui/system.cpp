@@ -260,6 +260,34 @@ struct UiSystem::TaskGraphUploadCompletionTask{
 };
 
 
+struct UiSystem::StandaloneTextureUploadCompletionTask{
+    struct Payload{
+        UiSystem* ui = nullptr;
+        bool uploadsPrepared = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(commandList);
+        static_cast<void>(context);
+        return payload.ui && payload.uploadsPrepared;
+    }
+
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        if(payload.ui && token.valid())
+            payload.ui->m_textureUploadBatch.complete(true);
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.ui)
+            payload.ui->m_textureUploadBatch.complete(false);
+    }
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -409,9 +437,6 @@ bool UiSystem::validateResources(const u32 width, const u32 height, const u32 sa
     if(width == 0 || height == 0)
         return true;
 
-    if(!ensureFrameCommandLists())
-        return false;
-
     Core::Framebuffer* framebuffer = m_graphics.getCurrentFramebuffer();
     return !framebuffer || ensureRenderResources(framebuffer);
 }
@@ -442,7 +467,6 @@ void UiSystem::invalidateResources(){
     m_taskGraphIndexUpload.clear();
     clearTaskGraphDrawSnapshot();
 
-    m_prepareCommandList.reset();
     m_renderCommandList.reset();
     m_bindingLayout.reset();
     m_sampler.reset();
@@ -463,16 +487,8 @@ void UiSystem::invalidateResources(){
     m_taskGraphPresentationGraphGeneration = 0u;
 }
 
-bool UiSystem::ensureFrameCommandLists(){
+bool UiSystem::ensureRenderCommandList(){
     auto& device = m_graphics.getDevice();
-
-    if(!m_prepareCommandList){
-        m_prepareCommandList = device.createCommandList();
-        if(!m_prepareCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create preparation command list"));
-            return false;
-        }
-    }
 
     if(!m_renderCommandList){
         m_renderCommandList = device.createCommandList();
@@ -523,13 +539,9 @@ bool UiSystem::prepareFrameResources(Core::Framebuffer* framebuffer, const bool 
     }
 
     if(__hidden_ui::HasTextureRequests(*drawData)){
-        // Legacy submission performs its own preflight immediately before recording.  Do not recreate a requested
-        // texture twice in that path; the graph path instead retains the prepared resource until declaration.
-        if(graphOwnsUploads){
-            if(!prepareTextureRequests(*drawData))
-                return false;
-        }
-        else if(!submitLegacyTextureRequests(*drawData))
+        // Both the renderer-owned and standalone graph routes retain prepared textures until task declaration.
+        // The exceptional direct raster fallback still uses the same declaration-time resource preparation.
+        if(!prepareTextureRequests(*drawData))
             return false;
     }
 
@@ -557,8 +569,6 @@ bool UiSystem::prepareFrameResources(Core::Framebuffer* framebuffer, const bool 
 
     if(graphOwnsUploads && !prepareTaskGraphDrawUploads(*drawData))
         return false;
-
-    NWB_ASSERT(m_renderCommandList);
 
     return true;
 }
@@ -1165,6 +1175,81 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
     return task;
 }
 
+Core::GpuTaskId UiSystem::declareStandaloneTextureUploadGraph(Core::GpuTaskGraph& graph){
+    if(!m_frameFinished)
+        return {};
+
+    setCurrentContext();
+    ImDrawData* const drawData = ImGui::GetDrawData();
+    if(!drawData)
+        return {};
+
+    Core::Alloc::ScratchArena scratchArena(__hidden_ui::s_TaskGraphDeclarationArena);
+    Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> uploadTasks(scratchArena);
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> uploadedTextures(scratchArena);
+    uploadTasks.reserve(2u);
+    uploadedTextures.reserve(m_textures.size());
+    if(
+        !declareTaskGraphTextureUploads(
+            graph,
+            *drawData,
+            {},
+            uploadTasks,
+            uploadedTextures
+        )
+        || uploadTasks.empty()
+    ){
+        m_textureUploadBatch.reset();
+        return {};
+    }
+
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses(scratchArena);
+    resourceUses.reserve(uploadedTextures.size());
+    for(const Core::GpuGraphResourceId texture : uploadedTextures){
+        bool alreadyDeclared = false;
+        for(const Core::GpuTaskResourceUse& use : resourceUses){
+            if(use.resource == texture){
+                alreadyDeclared = true;
+                break;
+            }
+        }
+        if(!alreadyDeclared)
+            resourceUses.push_back(__hidden_ui::ReadTextureUse(texture));
+    }
+
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Tiny;
+    scheduling.avoidQueueCrossing = true;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Core::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("ui.imgui_standalone_texture_upload_completion"))
+        .setMarkerLabel("ImGui Standalone Texture Upload Completion")
+        .setQueue(Core::GpuQueueRequest{
+            Core::GpuQueueCapability::Graphics,
+            Core::GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(scheduling)
+        .setDependencies(uploadTasks.data(), uploadTasks.size())
+        // The direct raster fallback runs after this graph returns, so its first texture sampling must observe the
+        // compiler-owned ShaderResource handoff even if an upload preferred a separate transport.
+        .setResourceUses(resourceUses.data(), resourceUses.size())
+    ;
+    const Core::GpuTaskId completionTask = graph.addTask<StandaloneTextureUploadCompletionTask>(
+        desc,
+        StandaloneTextureUploadCompletionTask::Payload{
+            .ui = this,
+            .uploadsPrepared = true,
+        }
+    );
+    if(!completionTask.valid())
+        m_textureUploadBatch.reset();
+    return completionTask;
+}
+
 bool UiSystem::recordTaskGraphDrawSnapshot(Core::CommandList& commandList, Core::Framebuffer* const framebuffer){
     const TaskGraphDrawSnapshot& snapshot = m_taskGraphDrawSnapshot;
     if(
@@ -1297,26 +1382,27 @@ void UiSystem::confirmTaskGraphPresentationSubmission()noexcept{
 bool UiSystem::submitLegacyTextureRequests(ImDrawData& drawData){
     if(!__hidden_ui::HasTextureRequests(drawData))
         return true;
-    if(!ensureFrameCommandLists())
-        return false;
 
-    NWB_ASSERT(m_prepareCommandList);
-    m_prepareCommandList->open();
-    const bool texturesReady = processTextureRequests(*m_prepareCommandList, drawData);
-    m_prepareCommandList->close();
-    if(!texturesReady){
+    if(!prepareTextureRequests(drawData)){
         m_textureUploadBatch.reset();
         return false;
     }
-    if(m_textureUploadBatch.empty())
+    if(!__hidden_ui::HasPendingTextureUploads(drawData))
         return true;
 
-    Core::CommandList* commandLists[] = { m_prepareCommandList.get() };
-    bool submitted = false;
-    m_graphics.getDevice().executeCommandLists(commandLists, LengthOf(commandLists), Core::CommandQueue::Graphics, &submitted);
-    m_textureUploadBatch.complete(submitted);
-    if(!submitted){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to submit ImGui texture uploads"));
+    Core::QueueSubmissionToken submissionToken;
+    const bool submitted = m_graphics.submitStandaloneTaskGraph(
+        this,
+        [](void* const userData, Core::GpuTaskGraph& graph){
+            return static_cast<UiSystem*>(userData)->declareStandaloneTextureUploadGraph(graph);
+        },
+        submissionToken
+    );
+    if(!submitted || !submissionToken.valid()){
+        // Compilation/recording failure can occur before the completion task is available to discard this batch.
+        // Keeping every request pending makes the next direct fallback frame retry the same immutable graph inputs.
+        m_textureUploadBatch.complete(false);
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to submit graph-owned ImGui texture uploads"));
         return false;
     }
     return true;
@@ -1360,7 +1446,7 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    if(!ensureFrameCommandLists())
+    if(!ensureRenderCommandList())
         return;
     Core::CommandList* commandList = m_renderCommandList.get();
     NWB_ASSERT(commandList);
@@ -1389,7 +1475,6 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
 }
 
 void UiSystem::backBufferResizing(){
-    m_prepareCommandList.reset();
     m_renderCommandList.reset();
     m_pipeline.reset();
     m_taskGraphPresentationPrepared = false;

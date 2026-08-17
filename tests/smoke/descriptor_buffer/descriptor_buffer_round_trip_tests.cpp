@@ -305,6 +305,7 @@ struct StandaloneGraphTextureUploadContext{
     bool* discarded = nullptr;
 };
 
+#if !defined(NWB_FINAL)
 [[nodiscard]] static GpuTaskId DeclareStandaloneGraphTextureUpload(
     void* const rawContext,
     GpuTaskGraph& graph
@@ -396,6 +397,7 @@ struct StandaloneGraphTextureUploadContext{
         }
     );
 }
+#endif
 
 
 // These compact graph tasks model skinning's descriptor-visible compute endpoint. They deliberately perform no
@@ -4248,10 +4250,12 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
     const GpuTaskGraphSubmitter submitter(device);
     NativeTaskAcceptanceOrder taskAcceptanceOrder;
     NativeTaskAcceptanceObserver meshViewSetupAcceptance{
+        .lastToken = {},
         .order = &taskAcceptanceOrder,
         .orderMarker = 1u,
     };
     NativeTaskAcceptanceObserver normalizeAcceptance{
+        .lastToken = {},
         .order = &taskAcceptanceOrder,
         .orderMarker = 2u,
     };
@@ -14637,7 +14641,9 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
     const GpuCopyTextureTaskRegion copyRegions[] = {
         GpuCopyTextureTaskRegion{
             .source = sourceResource,
+            .sourceSlice = {},
             .destination = destinationResource,
+            .destinationSlice = {},
         },
     };
     QueueSubmissionToken acceptedToken;
@@ -15264,6 +15270,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedComm
         const GpuTaskResourceUse uses[] = {
             GpuTaskResourceUse{
                 .resource = resource,
+                .range = {},
                 .requiredState = ResourceStates::CopyDest,
                 .access = GpuTaskResourceAccess::Write,
             },
@@ -34391,6 +34398,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
         .subresources = TextureSubresourceSet(0u, 1u, 0u, 1u),
         .rect = Rect(1, 3, 1, 3),
         .uintValue = UIntColor(9u, 10u, 11u, 12u),
+        .recordHooks = {},
         .acceptedToken = &clearTextureRectAcceptedToken,
     };
     const GpuTaskId clearTextureRectTask = graph.addClearTextureRectUIntTask(
@@ -34454,6 +34462,8 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
         GpuClearTextureRectUIntTaskDesc{
             .destination = depthTextureResource,
             .rect = Rect(1, 3, 1, 3),
+            .uintValue = {},
+            .recordHooks = {},
         }
     ).valid());
     EXPECT_FALSE(graph.addClearTextureRectUIntTask(
@@ -34461,6 +34471,8 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
         GpuClearTextureRectUIntTaskDesc{
             .destination = textureResource,
             .rect = Rect(2, 2, 1, 3),
+            .uintValue = {},
+            .recordHooks = {},
         }
     ).valid());
 

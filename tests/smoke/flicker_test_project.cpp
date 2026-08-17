@@ -67,12 +67,12 @@ static constexpr FlickerMaterialRef s_OpaqueMaterial = []() constexpr{
     FlickerMaterialRef result;
     result.virtualPath = Name("project/smoke/transparent_multi/materials/ground");
     return result;
-}(); // opaque lambert
+}();
 static constexpr FlickerMaterialRef s_TransparentMaterial = []() constexpr{
     FlickerMaterialRef result;
     result.virtualPath = Name("project/smoke/transparent_multi/materials/shared");
     return result;
-}(); // glass
+}();
 static constexpr FlickerMeshRef s_GroundMesh = []() constexpr{
     FlickerMeshRef result;
     result.virtualPath = Name("project/meshes/shadow_plane");

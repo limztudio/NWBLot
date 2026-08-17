@@ -25,8 +25,8 @@
 #include "csg_smoke_helpers.h"
 #endif
 
-#include <global/math/constant.h> // s_2PI -- normalising the displayed yaw into [0, 2pi) for the title bar
-#include <global/simplemath.h>    // IsFinite -- env override validation
+#include <global/math/constant.h>
+#include <global/simplemath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -352,8 +352,6 @@ public:
 #endif
 
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraTargetY, s_CameraStartDepth, 0.0f);
-        // Shadow-check key light: a single directional source makes the transparent CSG tetrahedra cast a readable
-        // tinted transmittance shadow onto the receiver plane below.
         const auto lightEntity = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,
             s_DefaultDirectionalLightPitch,
@@ -386,7 +384,7 @@ public:
         const auto shapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_TransparentLeftMesh, // cylinder
+            s_TransparentLeftMesh,
             s_TransparentSharedMaterial,
             Float4(1.0f, 0.42f, 0.20f, 0.42f),
             TransparentLeftShapeBasePosition(),
@@ -395,7 +393,7 @@ public:
         const auto centerShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_TransparentCenterMesh, // octahedron
+            s_TransparentCenterMesh,
             s_TransparentSharedMaterial,
             Float4(0.10f, 1.0f, 0.45f, 0.42f),
             TransparentCenterShapeBasePosition(),
@@ -405,7 +403,7 @@ public:
         const auto rightShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_TransparentRightMesh, // cone
+            s_TransparentRightMesh,
             s_TransparentSharedMaterial,
             Float4(0.12f, 0.44f, 1.0f, 0.42f),
             TransparentRightShapeBasePosition(),

@@ -144,6 +144,76 @@ bool GpuCompiledGraph::taskPrecedesOrSharesPacket(
     ;
 }
 
+bool GpuCompiledGraph::taskPrecedesInSamePacket(
+    const GpuTaskId& first,
+    const GpuTaskId& second
+)const noexcept{
+    if(first == second)
+        return false;
+    const GpuCompiledTask* const firstTask = findTask(first);
+    const GpuCompiledTask* const secondTask = findTask(second);
+    if(
+        !firstTask
+        || !secondTask
+        || firstTask->packet != secondTask->packet
+        || !validPacket(firstTask->packet)
+    )
+        return false;
+
+    const GpuSubmissionPacket& packetPlan = m_packets[firstTask->packet.index];
+    if(
+        packetPlan.taskCount == 0u
+        || packetPlan.taskOffset > m_packetTasks.size()
+        || packetPlan.taskCount > m_packetTasks.size() - packetPlan.taskOffset
+    )
+        return false;
+
+    bool foundFirst = false;
+    for(u32 taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
+        const GpuTaskId task = m_packetTasks[packetPlan.taskOffset + taskIndex];
+        if(task == first)
+            foundFirst = true;
+        else if(task == second)
+            return foundFirst;
+    }
+    return false;
+}
+
+bool GpuCompiledGraph::tasksFormContiguousPacketSequence(
+    const GpuTaskId* const tasks,
+    const usize taskCount
+)const noexcept{
+    if(!tasks || taskCount == 0u)
+        return false;
+    const GpuCompiledTask* const firstTask = findTask(tasks[0u]);
+    if(!firstTask || !validPacket(firstTask->packet))
+        return false;
+
+    const GpuSubmissionPacket& packetPlan = m_packets[firstTask->packet.index];
+    if(
+        taskCount > packetPlan.taskCount
+        || packetPlan.taskOffset > m_packetTasks.size()
+        || packetPlan.taskCount > m_packetTasks.size() - packetPlan.taskOffset
+    )
+        return false;
+
+    for(u32 firstTaskIndex = 0u;
+        static_cast<usize>(firstTaskIndex) + taskCount <= packetPlan.taskCount;
+        ++firstTaskIndex
+    ){
+        bool matches = true;
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            if(m_packetTasks[packetPlan.taskOffset + firstTaskIndex + taskIndex] == tasks[taskIndex])
+                continue;
+            matches = false;
+            break;
+        }
+        if(matches)
+            return true;
+    }
+    return false;
+}
+
 bool GpuCompiledGraph::taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept{
     const GpuCompiledTask* const compiledTask = findTask(task);
     return compiledTask

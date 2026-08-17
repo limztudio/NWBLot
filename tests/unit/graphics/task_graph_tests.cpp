@@ -3601,6 +3601,9 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(first, second));
     EXPECT_FALSE(compiledGraph.taskPrecedesOrSharesPacket(second, first));
     EXPECT_FALSE(compiledGraph.taskPrecedesOrSharesPacket(first, {}));
+    EXPECT_FALSE(compiledGraph.taskPrecedesInSamePacket(first, second));
+    EXPECT_FALSE(compiledGraph.taskPrecedesInSamePacket(first, first));
+    EXPECT_FALSE(compiledGraph.tasksFormContiguousPacketSequence(nullptr, 0u));
     EXPECT_FALSE(compiledGraph.taskJoinsAcceptedQueueFrontier(first));
     EXPECT_TRUE(compiledGraph.taskJoinsAcceptedQueueFrontier(recovery));
     EXPECT_FALSE(compiledGraph.taskJoinsAcceptedQueueFrontier({}));
@@ -4554,6 +4557,19 @@ TEST(GpuTaskGraph, MergesSharedOpaqueComputeEmulationDispatchRasterPairsIntoOneP
     EXPECT_EQ(packetTasks[1u], rasterA);
     EXPECT_EQ(packetTasks[2u], dispatchB);
     EXPECT_EQ(packetTasks[3u], rasterB);
+    const Graphics::GpuTaskId firstPair[] = { dispatchA, rasterA };
+    const Graphics::GpuTaskId fullSequence[] = { dispatchA, rasterA, dispatchB, rasterB };
+    const Graphics::GpuTaskId nonContiguousSequence[] = { dispatchA, dispatchB };
+    const Graphics::GpuTaskId reversedPair[] = { rasterA, dispatchA };
+    EXPECT_TRUE(compiledGraph.taskPrecedesInSamePacket(dispatchA, rasterB));
+    EXPECT_FALSE(compiledGraph.taskPrecedesInSamePacket(rasterB, dispatchA));
+    EXPECT_TRUE(compiledGraph.tasksFormContiguousPacketSequence(firstPair, LengthOf(firstPair)));
+    EXPECT_TRUE(compiledGraph.tasksFormContiguousPacketSequence(fullSequence, LengthOf(fullSequence)));
+    EXPECT_FALSE(compiledGraph.tasksFormContiguousPacketSequence(
+        nonContiguousSequence,
+        LengthOf(nonContiguousSequence)
+    ));
+    EXPECT_FALSE(compiledGraph.tasksFormContiguousPacketSequence(reversedPair, LengthOf(reversedPair)));
 
     const auto expectTransition = [&](const Graphics::GpuTaskId task, const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
         const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);

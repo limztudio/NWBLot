@@ -112,6 +112,17 @@ public:
     // compiler packet IDs; packet handles remain available below for packet-local runtime compatibility only.
     [[nodiscard]] bool tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
     [[nodiscard]] bool taskPrecedesOrSharesPacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
+    // Strict semantic compiler-order query for two tasks in one packet. This keeps renderer validation out of the
+    // packet task array while retaining the difference between an in-packet ordering guarantee and an ordinary
+    // cross-packet dependency.
+    [[nodiscard]] bool taskPrecedesInSamePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
+    // Returns true only when the declared tasks occur as one exact contiguous sequence in the same compiled
+    // packet. The runtime owns the packet-local search, so renderer code need not retain compiler packet IDs just
+    // to validate graph-owned producer/raster alternation.
+    [[nodiscard]] bool tasksFormContiguousPacketSequence(
+        const GpuTaskId* tasks,
+        usize taskCount
+    )const noexcept;
     [[nodiscard]] bool taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const noexcept;
     [[nodiscard]] const GpuSubmissionPacket& packet(const GpuSubmissionPacketId& packet)const noexcept;

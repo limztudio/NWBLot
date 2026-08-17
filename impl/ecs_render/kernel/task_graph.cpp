@@ -2674,6 +2674,19 @@ namespace RendererTaskGraphDetail{
     };
 }
 
+// Large graph-owned compute effects may use an auxiliary physical queue only when the device-wide same-class
+// policy is enabled. Keep each direct successor on the initially chosen transport: the effect remains one
+// semantic packet while the compiler owns its exact inter-packet waits. Cross-family routing stays separately
+// disabled here until an effect-specific ownership/performance decision promotes it.
+static void EnableSameFamilyComputeEffectRouting(
+    Core::GpuTaskSchedulingHint& scheduling,
+    const bool preserveDirectDependency = true
+){
+    scheduling.allowSameClassQueueRouting = true;
+    scheduling.preferNonPrimarySameClassQueue = true;
+    scheduling.preserveSameClassQueueWithDirectDependency = preserveDirectDependency;
+}
+
 // Material raster callbacks may first generate vertices with a compute-emulation dispatch, then issue ordinary
 // Graphics work. They must stay on the primary Graphics transport, but their declaration must include both command
 // capabilities so debug recording can reject a genuinely incompatible route rather than the valid emulation path.
@@ -9376,6 +9389,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     scheduling.cost = Core::GpuTaskCostHint::Large;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
+    EnableSameFamilyComputeEffectRouting(scheduling);
     const Core::GpuTaskId shadowVisibilityDependency[] = { m_deferredShadowVisibilityTask };
 
     // Black irradiance is the no-producer result. Start the existing Software Caustics Compute packet with this
@@ -9385,6 +9399,9 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     Core::GpuTaskSchedulingHint irradianceClearScheduling;
     irradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
     irradianceClearScheduling.allowPacketMerge = true;
+    // This starts the independent effect packet, so choose the auxiliary lane rather than inheriting Shadow
+    // Visibility's same-class transport. All following direct successors retain this selected lane.
+    EnableSameFamilyComputeEffectRouting(irradianceClearScheduling, false);
     Core::GpuTaskDesc irradianceClearDesc;
     irradianceClearDesc
         .setIdentity(Name("render.software_caustics.irradiance_clear"))
@@ -9413,6 +9430,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     if(graphOwnsNonTemporalAccumulatorClear){
         Core::GpuTaskSchedulingHint accumulatorNonTemporalClearScheduling = irradianceClearScheduling;
         accumulatorNonTemporalClearScheduling.mergeWithPrevious = true;
+        EnableSameFamilyComputeEffectRouting(accumulatorNonTemporalClearScheduling);
         Core::GpuTaskDesc accumulatorNonTemporalClearDesc;
         accumulatorNonTemporalClearDesc
             .setIdentity(Name("render.software_caustics.accumulator_non_temporal_clear"))
@@ -9446,6 +9464,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         accumulatorBootstrapClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
         accumulatorBootstrapClearScheduling.allowPacketMerge = true;
         accumulatorBootstrapClearScheduling.mergeWithPrevious = true;
+        EnableSameFamilyComputeEffectRouting(accumulatorBootstrapClearScheduling);
         Core::GpuTaskDesc accumulatorBootstrapClearDesc;
         accumulatorBootstrapClearDesc
             .setIdentity(Name("render.software_caustics.accumulator_bootstrap_clear"))
@@ -9480,6 +9499,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         accumulatorDecayScheduling.cost = Core::GpuTaskCostHint::Tiny;
         accumulatorDecayScheduling.allowPacketMerge = true;
         accumulatorDecayScheduling.mergeWithPrevious = true;
+        EnableSameFamilyComputeEffectRouting(accumulatorDecayScheduling);
         const Core::GpuTaskResourceUse accumulatorDecayUses[] = {
             ReadWriteTextureUse(
                 causticAccumulator,

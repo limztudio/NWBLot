@@ -696,7 +696,10 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    dependencies and accepts cross-family use only when its existing resource-sharing contract names that class.
    Graph-owned large ImGui uploads are a third bounded adopter: their persistent Graphics/Compute/Transfer-sharing
    resources permit the exact same selected auxiliary class, but their overlay/standalone completion remains primary
-   Graphics. Dynamic routing policy beyond those bounded adopters and target-scene performance evidence remain open.
+   Graphics. Software Caustics is a fourth bounded adopter: its graph-owned clear-through-resolve chain may choose a
+   same-family auxiliary Compute transport (or Graphics fallback), then preserves that physical queue across each
+   direct successor. It does not yet opt into a cross-family effect route; that ownership/performance decision and
+   broader dynamic routing policy remain open, along with target-scene performance evidence.
 
 2. **Complete graph ownership.** Renderer code still controls high-level recording/submission sequencing and holds
    legacy state-handoff data, but the shared deferred renderer now gives the task runtime semantic task endpoints

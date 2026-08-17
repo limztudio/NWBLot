@@ -1022,7 +1022,6 @@ private:
 
 
 public:
-    // For volatile buffers - version tracking per frame
     struct VolatileBufferState{
         i32 latestVersion = 0;
         i32 minVersion = 0;

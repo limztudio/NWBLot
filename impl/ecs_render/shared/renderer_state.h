@@ -588,7 +588,6 @@ struct RtSurfelGiState{
     Core::BindingLayoutHandle m_surfelTraceBindingLayout;
     Core::ShaderHandle m_surfelSpawnShader;
     Core::ComputePipelineHandle m_surfelSpawnPipeline;
-    // Recycles stale surfels.
     Core::ShaderHandle m_surfelAgeFreeShader;
     Core::ComputePipelineHandle m_surfelAgeFreePipeline;
     Core::ShaderHandle m_surfelHashBuildShader;
@@ -603,7 +602,6 @@ struct RtSurfelGiState{
     Core::BindingLayoutHandle m_surfelUpsampleBindingLayout;
     Core::ShaderHandle m_surfelUpsampleShader;
     Core::ComputePipelineHandle m_surfelUpsamplePipeline;
-    // Builds indirect args from live surfel count for both trace paths.
     Core::BindingLayoutHandle m_surfelTraceBuildArgsBindingLayout;
     Core::ShaderHandle m_surfelTraceBuildArgsShader;
     Core::ComputePipelineHandle m_surfelTraceBuildArgsPipeline;
@@ -615,16 +613,13 @@ struct RtSurfelGiState{
     Core::BufferHandle m_surfelPoolBuffer;
     Core::BufferHandle m_surfelCellHeadBuffer;
     Core::BufferHandle m_surfelCounterBuffer;
-    // Rebuilt each frame by the build-args pass.
     Core::BufferHandle m_surfelTraceIndirectArgsBuffer;
-    // Persistent recycled-surfel ID stack.
     Core::BufferHandle m_surfelFreeListBuffer;
     // Previous-frame field prevents read/write feedback during tracing.
     Core::BufferHandle m_surfelPoolSnapshotBuffer;
     Core::BufferHandle m_surfelCellHeadSnapshotBuffer;
     // Async-safe counter readback. The graph-owned copy task publishes this only after its packet accepts.
     Core::BufferHandle m_surfelCounterReadback;
-    // Uploaded each rendered frame.
     Core::BufferHandle m_surfelConstants;
 
     // Descriptor generations retire before their backing buffers.

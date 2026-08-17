@@ -70,7 +70,7 @@ static constexpr GiTestMaterialRef s_OpaqueMaterial = []() constexpr{
     GiTestMaterialRef result;
     result.virtualPath = Name("project/smoke/transparent_multi/materials/ground");
     return result;
-}(); // opaque lambert
+}();
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 // Box geometry: a 4x4 unit open-top box centered at the origin. Each wall/floor is a scaled plane.

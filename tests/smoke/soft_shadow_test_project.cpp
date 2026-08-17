@@ -81,12 +81,12 @@ static constexpr SoftShadowMaterialRef s_OpaqueMaterial = []() constexpr{
     SoftShadowMaterialRef result;
     result.virtualPath = Name("project/smoke/transparent_multi/materials/ground");
     return result;
-}(); // opaque lambert
+}();
 static constexpr SoftShadowMaterialRef s_TransparentMaterial = []() constexpr{
     SoftShadowMaterialRef result;
     result.virtualPath = Name("project/smoke/transparent_multi/materials/shared");
     return result;
-}(); // glass (colored transmittance)
+}();
 static constexpr SoftShadowMeshRef s_GroundMesh = []() constexpr{
     SoftShadowMeshRef result;
     result.virtualPath = Name("project/meshes/shadow_plane");
@@ -96,9 +96,9 @@ static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/
 
 static constexpr f32 s_GroundScale = 8.0f;
 
-static constexpr f32 s_CameraDistance = 3.2f;                        // fits the opaque + glass casters both in frame
+static constexpr f32 s_CameraDistance = 3.2f;
 static constexpr f32 s_CameraHeight = 1.5f;
-static constexpr f32 s_CameraPitch = 0.30f;                         // tilt down a bit more to frame the ground shadow
+static constexpr f32 s_CameraPitch = 0.30f;
 
 // Directional light aimed to cast the shadow SIDEWAYS across the plane (large yaw), NOT behind the character where her
 // own body would hide it -- the shadow rakes out to one side, in full view, and its penumbra widens along its length
@@ -107,8 +107,8 @@ static constexpr f32 s_CameraPitch = 0.30f;                         // tilt down
 static constexpr f32 s_DirectionalLightPitch = 0.65f;
 static constexpr f32 s_DirectionalLightYaw = 1.4f;
 static constexpr f32 s_DirectionalLightIntensity = 2.0f;
-static constexpr f32 s_DefaultAngularRadius = 0.03f;                 // ~1.7deg: clearly soft but not mushy (env-overridable)
-static constexpr f32 s_DefaultSourceRadius = 0.15f;                  // point/spot emissive sphere radius (world units); env-overridable
+static constexpr f32 s_DefaultAngularRadius = 0.03f;
+static constexpr f32 s_DefaultSourceRadius = 0.15f;
 
 // Point / spot light params. All three lights (directional + point + spot) are lit AT ONCE, spread so their coloured
 // shadows rake in different directions. Point lights attenuate by distance -> brighter than the directional sun.
@@ -222,7 +222,7 @@ public:
             s_DirectionalLightPitch,
             s_DirectionalLightYaw,
             0.0f,
-            Float4(1.00f, 0.96f, 0.88f), // warm white sun
+            Float4(1.00f, 0.96f, 0.88f),
             s_DirectionalLightIntensity
         );
         if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(directionalLight))
@@ -231,7 +231,7 @@ public:
         const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(
             *m_world,
             Float4(1.5f, 2.2f, 0.3f, 0.0f),
-            Float4(1.00f, 0.35f, 0.30f), // red
+            Float4(1.00f, 0.35f, 0.30f),
             s_PointLightIntensity,
             s_PointLightRange
         );
@@ -244,7 +244,7 @@ public:
             s_SpotLightPitch,
             s_SpotLightYaw,
             0.0f,
-            Float4(0.35f, 0.55f, 1.00f), // blue
+            Float4(0.35f, 0.55f, 1.00f),
             s_SpotLightIntensity,
             s_SpotLightRange,
             s_SpotInnerConeCos,

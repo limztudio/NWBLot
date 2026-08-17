@@ -83,6 +83,20 @@ add_test(
         --self-test
 )
 add_test(
+    NAME nwb_source_text_format
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/source_text_format.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_source_text_format_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/source_text_format.py"
+        --self-test
+)
+add_test(
     NAME nwb_test_feature_override_boundary
     COMMAND
         "${Python3_EXECUTABLE}"

@@ -777,39 +777,6 @@ bool RendererRayTracingSystem::retainPreparedCausticEmissionTargetUpload(
     return outBlob.valid();
 }
 
-bool RendererRayTracingSystem::recordPreparedCausticEmissionTargets(Core::CommandList& commandList){
-    const u32 targetCount = rayTracingState().m_causticRefractiveInstanceCount;
-    if(targetCount == 0u)
-        return m_preparedCausticEmissionTargetBytes.empty();
-
-    const usize targetByteCount = static_cast<usize>(targetCount) * sizeof(NwbCausticEmissionTargetGpu);
-    if(
-        m_preparedCausticEmissionTargetBytes.size() != targetByteCount
-        || !rayTracingState().m_causticEmissionTargetBuffer
-        || rayTracingState().m_causticEmissionTargetCapacity < targetCount
-        || !rayTracingState().m_causticEmissionTargetHeapHandle.valid()
-    ){
-        // Capacity and descriptor registration are selected during preflight. A recording-time retry would replace
-        // an imported graph resource, so retain the safe no-caustic fallback instead.
-        rayTracingState().m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
-        rayTracingState().m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
-        rayTracingState().m_causticRefractiveInstanceCount = 0u;
-        return true;
-    }
-
-    Core::Buffer* const targetBuffer = rayTracingState().m_causticEmissionTargetBuffer.get();
-    commandList.setBufferState(targetBuffer, Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(
-        targetBuffer,
-        m_preparedCausticEmissionTargetBytes.data(),
-        targetByteCount
-    );
-    commandList.setBufferState(targetBuffer, Core::ResourceStates::ShaderResource);
-    commandList.commitBarriers();
-    return true;
-}
-
 void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
     if(
         !rayTracingState().m_causticEmissionTargetHeapHandle.valid()

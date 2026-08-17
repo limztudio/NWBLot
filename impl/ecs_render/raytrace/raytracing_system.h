@@ -224,7 +224,6 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool& outBackendReady,
-        bool causticEmissionTargetsGraphOwned = false,
         bool surfelFrameConstantsGraphOwned = false,
         bool shadowMaterialContextBatchGraphOwned = false,
         bool sceneBvhBatchGraphOwned = false,
@@ -864,7 +863,6 @@ private:
         bool meshSwBvhBuildsGraphOwned = false
     );
     [[nodiscard]] bool prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool recordPreparedCausticEmissionTargets(Core::CommandList& commandList);
     [[nodiscard]] bool capturePreparedShadowMaterialContext(
         PreparedShadowMaterialContextRoute route,
         bool staticScene,

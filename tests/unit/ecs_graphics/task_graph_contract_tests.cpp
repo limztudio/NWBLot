@@ -609,6 +609,32 @@ TEST(EcsGraphics, RayTraceMaterialContextSelectorHasNoNativeCompatibilityDispatc
 }
 
 
+// A frozen caustic-emission stream is either represented by a graph upload blob or absent. Recording must not
+// re-upload it natively after the packet has declared the target buffer.
+TEST(EcsGraphics, CausticEmissionTargetsHaveNoNativeCompatibilityDispatcher){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString rayTracingHeaderSource;
+    AString causticsSource;
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_caustics.cpp", causticsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
+    const AStringView caustics(causticsSource.data(), causticsSource.size());
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    EXPECT_TRUE(ContainsText(rayTracingHeader, "retainPreparedCausticEmissionTargetUpload"));
+    EXPECT_FALSE(ContainsText(rayTracingHeader, "recordPreparedCausticEmissionTargets"));
+    EXPECT_FALSE(ContainsText(caustics, "recordPreparedCausticEmissionTargets"));
+    EXPECT_FALSE(ContainsText(caustics, "commandList.writeBuffer("));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.raytrace.caustic_emission_targets_upload"));
+    EXPECT_TRUE(ContainsText(taskGraph, "m_causticEmissionTargetsUploadTask"));
+    EXPECT_FALSE(ContainsText(taskGraph, "causticEmissionTargetsGraphOwned"));
+}
+
+
 // The current renderer has exactly two runtime-selected sampled-image domains: material Texture2D assets (shared
 // by raster and ray-trace surface dispatch) and ImGui textures.  A new domain must not silently rely on a global
 // descriptor slot: keep the supported domain small and require each one to retain handles before graph declaration.

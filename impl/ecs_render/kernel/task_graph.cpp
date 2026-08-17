@@ -103,7 +103,6 @@ struct ShadowPrepareGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool deferredBindlessSlotsWereUploaded = false;
         bool currentBindlessSlotsGraphOwned = false;
-        bool causticEmissionTargetsGraphOwned = false;
         bool surfelFrameConstantsGraphOwned = false;
         bool shadowMaterialContextBatchGraphOwned = false;
         bool sceneBvhBatchGraphOwned = false;
@@ -134,7 +133,6 @@ struct ShadowPrepareGraphTask{
                 commandList,
                 *payload.targets,
                 renderer.m_preparedShadowVisibilityReady,
-                payload.causticEmissionTargetsGraphOwned,
                 payload.surfelFrameConstantsGraphOwned,
                 payload.shadowMaterialContextBatchGraphOwned,
                 payload.sceneBvhBatchGraphOwned,
@@ -5626,7 +5624,6 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .timingTicket = &timingTicket,
             .deferredBindlessSlotsWereUploaded = deferredTargets.bindless.slotsUploaded,
             .currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned,
-            .causticEmissionTargetsGraphOwned = true,
             .surfelFrameConstantsGraphOwned = true,
             .shadowMaterialContextBatchGraphOwned = shadowMaterialContextBatchGraphOwned,
             .sceneBvhBatchGraphOwned = sceneBvhBatchGraphOwned,

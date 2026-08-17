@@ -1727,7 +1727,6 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     bool& outBackendReady,
-    const bool causticEmissionTargetsGraphOwned,
     const bool surfelFrameConstantsGraphOwned,
     const bool shadowMaterialContextBatchGraphOwned,
     const bool sceneBvhBatchGraphOwned,
@@ -1743,8 +1742,6 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
         return false;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
-    if(!causticEmissionTargetsGraphOwned && !recordPreparedCausticEmissionTargets(commandList))
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: caustic emission-target upload failed"));
 
     // A non-fatal preflight miss intentionally leaves tracing unavailable for this frame. Do not retry capacity
     // growth while recording: the shared graph has already frozen its imported resource identities.

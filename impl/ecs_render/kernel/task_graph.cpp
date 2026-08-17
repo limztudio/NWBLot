@@ -5136,12 +5136,12 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         19u
         + shadowTraceGeometryResourceCount
         + softwareBvhBuildStateResourceCount
-        + meshState().m_meshes.size() * 2u
-        + preparedMeshBlasBuilds.size() * 4u
+        + meshState().m_meshes.size()
+        + preparedMeshBlasBuilds.size() * 2u
     );
     accelStructFinalizeResourceUses.reserve(
-        (sceneTlasBuildGraphOwned ? 2u : 0u)
-        + preparedMeshBlasBuilds.size() * 2u
+        (sceneTlasBuildGraphOwned ? 1u : 0u)
+        + preparedMeshBlasBuilds.size()
     );
     resourceSetUses.reserve(3u);
     meshBlasGeometryBuildInputResources.reserve(preparedMeshBlasBuilds.size() * 2u);
@@ -5258,28 +5258,17 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     if(meshBlasBuildsGraphOwned){
         for(const PreparedMeshBlasBuild& build : preparedMeshBlasBuilds){
             const Name blasIdentity = DeriveName(build.meshName, AStringView(":blas"));
-            const Name backingIdentity = DeriveName(build.meshName, AStringView(":blas_backing"));
             const Core::GpuGraphResourceId blas = m_deferredLightingTaskGraph.importAccelStruct(
                 build.blas,
                 AccelStructResourceDesc(blasIdentity, "Prepared Mesh BLAS")
             );
-            const Core::GpuGraphResourceId backing = importBuffer(
-                build.blasBackingBuffer,
-                backingIdentity,
-                "Prepared Mesh BLAS Backing"
-            );
-            resourcesImported = resourcesImported
-                && blas.valid()
-                && backing.valid()
-            ;
-            if(blas.valid() && backing.valid()){
-                // The graph owns typed/backing Write states here and the accepting successor publishes both Read
-                // aliases. A prepared no-tail route and a fully verified hybrid tail own the matching geometry
-                // boundary; direct and incomplete compatibility routes retain their native bridge.
+            resourcesImported = resourcesImported && blas.valid();
+            if(blas.valid()){
+                // The typed graph resource lowers its state and ownership through its retained backing allocation.
+                // A prepared no-tail route and a fully verified hybrid tail own the matching geometry boundary;
+                // direct and incomplete compatibility routes retain their native bridge.
                 resourceUses.push_back(ReadWriteUse(blas, Core::ResourceStates::AccelStructWrite));
-                resourceUses.push_back(WriteUse(backing, Core::ResourceStates::AccelStructWrite));
                 accelStructFinalizeResourceUses.push_back(ReadUse(blas, Core::ResourceStates::AccelStructRead));
-                accelStructFinalizeResourceUses.push_back(ReadUse(backing, Core::ResourceStates::AccelStructRead));
             }
         }
     }
@@ -5397,32 +5386,23 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         resourceSetUses.push_back(softwareBvhBuildStateSetUse);
 
     Core::GpuGraphResourceId sceneTlas;
-    Core::GpuGraphResourceId sceneTlasBacking;
     if(m_rayTracingState.m_tlas){
         sceneTlas = m_deferredLightingTaskGraph.importAccelStruct(
             m_rayTracingState.m_tlas,
             AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
         );
-        sceneTlasBacking = importBuffer(
-            m_rayTracingState.m_tlas->getBackingBufferHandle(),
-            Name("render.deferred_effects.tlas_backing"),
-            "Scene TLAS Backing"
-        );
-        resourcesImported = resourcesImported && sceneTlas.valid() && sceneTlasBacking.valid();
-        if(sceneTlas.valid() && sceneTlasBacking.valid()){
+        resourcesImported = resourcesImported && sceneTlas.valid();
+        if(sceneTlas.valid()){
             if(sceneTlasBuildGraphOwned){
                 // The frozen native recorder only builds. The graph lowers its required Write entry state here and
-                // the state-only successor below lowers the final Read handoff on the same backing storage.
+                // the state-only successor below lowers the final Read handoff through the same retained backing.
                 resourceUses.push_back(ReadWriteUse(sceneTlas, Core::ResourceStates::AccelStructWrite));
-                resourceUses.push_back(WriteUse(sceneTlasBacking, Core::ResourceStates::AccelStructWrite));
                 accelStructFinalizeResourceUses.push_back(ReadUse(sceneTlas, Core::ResourceStates::AccelStructRead));
-                accelStructFinalizeResourceUses.push_back(ReadUse(sceneTlasBacking, Core::ResourceStates::AccelStructRead));
             }
             else{
                 // Direct compatibility builders still publish their native Write -> Read sequence inside Shadow
                 // Preparation. Keep the graph-visible final handoff unchanged for those routes.
                 resourceUses.push_back(ReadWriteUse(sceneTlas, Core::ResourceStates::AccelStructRead));
-                resourceUses.push_back(WriteUse(sceneTlasBacking, Core::ResourceStates::AccelStructRead));
             }
         }
     }
@@ -5436,30 +5416,22 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             continue;
 
         const Name blasIdentity = DeriveName(mesh.meshName, AStringView(":blas"));
-        const Name backingIdentity = DeriveName(mesh.meshName, AStringView(":blas_backing"));
         const Core::GpuGraphResourceId blas = m_deferredLightingTaskGraph.importAccelStruct(
             mesh.blas,
             AccelStructResourceDesc(blasIdentity, "Mesh BLAS")
         );
-        const Core::GpuGraphResourceId backing = importBuffer(
-            mesh.blas->getBackingBufferHandle(),
-            backingIdentity,
-            "Mesh BLAS Backing"
-        );
-        resourcesImported = resourcesImported && blas.valid() && backing.valid();
-        if(blas.valid() && backing.valid()){
+        resourcesImported = resourcesImported && blas.valid();
+        if(blas.valid()){
             const bool nativeBuildsBlas = mesh.runtimeMesh || mesh.blasBuildPending;
             if(nativeBuildsBlas){
                 // Direct hybrid compatibility and frozen opaque plans both record the native write/read sequence
-                // here. Keep the backing imported so an accepted prior AccelStructRead state seeds that transition.
+                // here. The typed graph resource seeds its retained backing state on the next declaration.
                 resourceUses.push_back(ReadWriteUse(blas, Core::ResourceStates::AccelStructRead));
-                resourceUses.push_back(WriteUse(backing, Core::ResourceStates::AccelStructRead));
             }
             else{
                 // State-only import: a later rejected preparation can re-pend this static BLAS, and its next build
-                // must seed the true accepted AccelStructRead backing state instead of BufferDesc::initialState.
+                // must seed the true accepted AccelStructRead state instead of BufferDesc::initialState.
                 resourceUses.push_back(ReadUse(blas, Core::ResourceStates::AccelStructRead));
-                resourceUses.push_back(ReadUse(backing, Core::ResourceStates::AccelStructRead));
             }
         }
     }
@@ -5719,11 +5691,11 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     const bool accelStructBuildStatesGraphOwned = sceneTlasBuildGraphOwned || meshBlasBuildsGraphOwned;
     if(accelStructBuildStatesGraphOwned){
         const usize expectedFinalizeResourceUseCount =
-            (sceneTlasBuildGraphOwned ? 2u : 0u)
-            + preparedMeshBlasBuilds.size() * 2u
+            (sceneTlasBuildGraphOwned ? 1u : 0u)
+            + preparedMeshBlasBuilds.size()
         ;
         if(
-            (sceneTlasBuildGraphOwned && (!sceneTlas.valid() || !sceneTlasBacking.valid()))
+            (sceneTlasBuildGraphOwned && !sceneTlas.valid())
             || accelStructFinalizeResourceUses.size() != expectedFinalizeResourceUseCount
         ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen acceleration-structure build has no final-state graph resources"));
@@ -5755,7 +5727,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         accelStructFinalizeScheduling.allowPacketMerge = true;
         accelStructFinalizeScheduling.mergeWithPrevious = true;
         // Shadow Preparation has direct later Compute consumers. Keep these Read finalizers in the same accepting
-        // packet so those consumers wait on every completed build and descriptor-visible backing state together.
+        // packet so those consumers wait on every completed build and its typed backing state together.
         accelStructFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
         Core::GpuTaskDesc accelStructFinalizeDesc;
         accelStructFinalizeDesc
@@ -5764,8 +5736,8 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .setQueue(GraphicsQueueRequest())
             .setScheduling(accelStructFinalizeScheduling)
             .setDependencies(&shadowPrepareFinalizeDependency, 1u)
-            // The immutable typed-and-backing final-state collection expands to the same compiler inputs. Retain
-            // the individual declarations if a future compatibility route cannot form a complete unique set.
+            // The immutable typed final-state collection expands to the same compiler inputs. Retain the
+            // individual declarations if a future compatibility route cannot form a complete unique set.
             .setResourceUses(
                 accelStructFinalizeSetGraphOwned ? nullptr : accelStructFinalizeResourceUses.data(),
                 accelStructFinalizeSetGraphOwned ? 0u : accelStructFinalizeResourceUses.size()
@@ -8236,17 +8208,9 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             m_rayTracingState.m_tlas,
             AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
         );
-        const Core::GpuGraphResourceId tlasBackingBuffer = importBuffer(
-            m_rayTracingState.m_tlas->getBackingBufferHandle(),
-            Name("render.deferred_effects.tlas_backing"),
-            "Scene TLAS Backing"
-        );
-        optionalResourcesImported = optionalResourcesImported && tlas.valid() && tlasBackingBuffer.valid();
-        if(tlas.valid() && tlasBackingBuffer.valid()){
+        optionalResourcesImported = optionalResourcesImported && tlas.valid();
+        if(tlas.valid()){
             resourceUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
-            // setAccelStructState lowers through this buffer; importing it explicitly keeps declaration-driven
-            // external state seeding and ownership handoff complete.
-            resourceUses.push_back(ReadUse(tlasBackingBuffer, Core::ResourceStates::AccelStructRead));
         }
     }
     if(!optionalResourcesImported){
@@ -9956,7 +9920,6 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     Core::GpuGraphResourceId sceneBvhNodes;
     Core::GpuGraphResourceId sceneInstances;
     Core::GpuGraphResourceId tlas;
-    Core::GpuGraphResourceId tlasBackingBuffer;
     bool optionalResourcesImported =
         appendOptionalReadBuffer(
             m_rayTracingState.m_shadowInstanceMaterialBuffer,
@@ -10063,15 +10026,9 @@ bool RendererSystem::declareDeferredSurfelGiTask(
                 m_rayTracingState.m_tlas,
                 AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
             );
-            tlasBackingBuffer = importBuffer(
-                m_rayTracingState.m_tlas->getBackingBufferHandle(),
-                Name("render.deferred_effects.tlas_backing"),
-                "Scene TLAS Backing"
-            );
-            optionalResourcesImported = tlas.valid() && tlasBackingBuffer.valid();
+            optionalResourcesImported = tlas.valid();
             if(optionalResourcesImported){
                 resourceUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
-                resourceUses.push_back(ReadUse(tlasBackingBuffer, Core::ResourceStates::AccelStructRead));
             }
         }
     }
@@ -10097,7 +10054,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         && surfelFreeList.valid()
         && surfelPoolSnapshot.valid()
         && surfelCellHeadSnapshot.valid()
-        && (useHwTrace ? (tlas.valid() && tlasBackingBuffer.valid()) : (sceneBvhNodes.valid() && sceneInstances.valid()))
+        && (useHwTrace ? tlas.valid() : (sceneBvhNodes.valid() && sceneInstances.valid()))
         && m_rayTracingState.m_surfelAgeFreePipeline
         && m_rayTracingState.m_surfelHashBuildPipeline
         && m_rayTracingState.m_surfelSpawnPipeline
@@ -10139,7 +10096,6 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         }
         if(useHwTrace){
             traceResourceUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
-            traceResourceUses.push_back(ReadUse(tlasBackingBuffer, Core::ResourceStates::AccelStructRead));
         }
         else{
             traceResourceUses.push_back(ReadUse(sceneBvhNodes, Core::ResourceStates::ShaderResource));
@@ -12033,15 +11989,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 m_rayTracingState.m_tlas,
                 AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
             );
-            const Core::GpuGraphResourceId tlasBackingBuffer = importBuffer(
-                m_rayTracingState.m_tlas->getBackingBufferHandle(),
-                Name("render.deferred_effects.tlas_backing"),
-                "Scene TLAS Backing"
-            );
-            optionalResourcesImported = optionalResourcesImported && tlas.valid() && tlasBackingBuffer.valid();
-            if(tlas.valid() && tlasBackingBuffer.valid()){
+            optionalResourcesImported = optionalResourcesImported && tlas.valid();
+            if(tlas.valid()){
                 hardwarePhotonResourceUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
-                hardwarePhotonResourceUses.push_back(ReadUse(tlasBackingBuffer, Core::ResourceStates::AccelStructRead));
             }
         }
         if(!optionalResourcesImported){

@@ -4239,9 +4239,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
 
 
 // Prepared acceleration-structure recording owns no native entry or exit transition on the normal graph path.
-// These getter-only callbacks use real Vulkan TLAS/BLAS objects, their aliased backing buffers, and frozen position/
-// index build inputs. The compiler must lower the immutable build-input set plus typed Write -> Read finalization
-// handoffs in one accepting Graphics packet without a callback-local transition bridge.
+// These getter-only callbacks use real Vulkan TLAS/BLAS objects and frozen position/index build inputs, but import
+// no backing Buffer as a second graph resource. The compiler must lower the immutable build-input set plus typed
+// Write -> Read finalization handoffs in one accepting Graphics packet without a callback-local transition bridge.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalizeRecordsWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
     if(!device.queryFeatureSupport(Feature::RayTracingAccelStruct))
@@ -4313,28 +4313,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
             .setType(GpuGraphResourceType::AccelStruct)
             .setInitialState(ResourceStates::Common)
     );
-    const GpuGraphResourceId tlasBackingResource = graph.importBuffer(
-        tlasBacking,
-        GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/descriptor_buffer/prepared_tlas_backing_state"))
-            .setMarkerLabel("Prepared TLAS Backing")
-            .setType(GpuGraphResourceType::Buffer)
-            .setInitialState(ResourceStates::Common)
-    );
     const GpuGraphResourceId blasResource = graph.importAccelStruct(
         blas,
         GpuGraphResourceDesc{}
             .setIdentity(Name("tests/descriptor_buffer/prepared_blas_state"))
             .setMarkerLabel("Prepared BLAS")
             .setType(GpuGraphResourceType::AccelStruct)
-            .setInitialState(ResourceStates::Common)
-    );
-    const GpuGraphResourceId blasBackingResource = graph.importBuffer(
-        blasBacking,
-        GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/descriptor_buffer/prepared_blas_backing_state"))
-            .setMarkerLabel("Prepared BLAS Backing")
-            .setType(GpuGraphResourceType::Buffer)
             .setInitialState(ResourceStates::Common)
     );
     const GpuGraphResourceId blasPositionResource = graph.importBuffer(
@@ -4354,11 +4338,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
             .setInitialState(ResourceStates::Common)
     );
     ASSERT_TRUE(tlasResource.valid());
-    ASSERT_TRUE(tlasBackingResource.valid());
     ASSERT_TRUE(blasResource.valid());
-    ASSERT_TRUE(blasBackingResource.valid());
     ASSERT_TRUE(blasPositionResource.valid());
     ASSERT_TRUE(blasIndexResource.valid());
+    EXPECT_FALSE(graph.findImportedBuffer(tlasBacking).valid());
+    EXPECT_FALSE(graph.findImportedBuffer(blasBacking).valid());
 
     const GpuGraphResourceId geometryBuildInputMembers[] = {
         blasPositionResource,
@@ -4374,9 +4358,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
 
     const GpuGraphResourceId finalizeMembers[] = {
         tlasResource,
-        tlasBackingResource,
         blasResource,
-        blasBackingResource,
     };
     const GpuGraphResourceSetId finalizeSet = graph.importResourceSet(
         GpuGraphResourceSetDesc{}
@@ -4434,22 +4416,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
             .access = GpuTaskResourceAccess::ReadWrite,
         },
         GpuTaskResourceUse{
-            .resource = tlasBackingResource,
-            .range = {},
-            .requiredState = ResourceStates::AccelStructWrite,
-            .access = GpuTaskResourceAccess::Write,
-        },
-        GpuTaskResourceUse{
             .resource = blasResource,
             .range = {},
             .requiredState = ResourceStates::AccelStructWrite,
             .access = GpuTaskResourceAccess::ReadWrite,
-        },
-        GpuTaskResourceUse{
-            .resource = blasBackingResource,
-            .range = {},
-            .requiredState = ResourceStates::AccelStructWrite,
-            .access = GpuTaskResourceAccess::Write,
         },
     };
     GpuTaskDesc buildDesc;
@@ -4601,22 +4571,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
         ResourceStates::AccelStructWrite
     ));
     EXPECT_TRUE(hasTransition(
-        buildTask,
-        *compiledBuild,
-        GpuCompiledBarrierType::BufferTransition,
-        blasBackingResource,
-        ResourceStates::Common,
-        ResourceStates::AccelStructWrite
-    ));
-    EXPECT_TRUE(hasTransition(
-        buildTask,
-        *compiledBuild,
-        GpuCompiledBarrierType::BufferTransition,
-        tlasBackingResource,
-        ResourceStates::Common,
-        ResourceStates::AccelStructWrite
-    ));
-    EXPECT_TRUE(hasTransition(
         finalizeTask,
         *compiledFinalize,
         GpuCompiledBarrierType::AccelStructTransition,
@@ -4629,22 +4583,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
         *compiledFinalize,
         GpuCompiledBarrierType::AccelStructTransition,
         blasResource,
-        ResourceStates::AccelStructWrite,
-        ResourceStates::AccelStructRead
-    ));
-    EXPECT_TRUE(hasTransition(
-        finalizeTask,
-        *compiledFinalize,
-        GpuCompiledBarrierType::BufferTransition,
-        blasBackingResource,
-        ResourceStates::AccelStructWrite,
-        ResourceStates::AccelStructRead
-    ));
-    EXPECT_TRUE(hasTransition(
-        finalizeTask,
-        *compiledFinalize,
-        GpuCompiledBarrierType::BufferTransition,
-        tlasBackingResource,
         ResourceStates::AccelStructWrite,
         ResourceStates::AccelStructRead
     ));

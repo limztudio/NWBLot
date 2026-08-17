@@ -12035,6 +12035,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwareScheduling.cost = Core::GpuTaskCostHint::Large;
         hardwareScheduling.forceSubmissionBoundary = true;
         hardwareScheduling.allowPacketMerge = false;
+        EnableSameFamilyComputeEffectRouting(hardwareScheduling);
 
         // The lagged-history completion must protect the first writer too: clear starts the existing Hardware
         // Caustics Graphics packet and the ray-tracing producer merges into it below. A fresh temporal accumulator
@@ -12042,6 +12043,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         Core::GpuTaskSchedulingHint irradianceClearScheduling;
         irradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
         irradianceClearScheduling.allowPacketMerge = true;
+        // Start Hardware Caustics on the selected auxiliary Graphics lane when available; every later direct
+        // successor retains that lane through the graph's normal physical-queue dependency plan.
+        EnableSameFamilyComputeEffectRouting(irradianceClearScheduling, false);
         Core::GpuTaskDesc irradianceClearDesc;
         irradianceClearDesc
             .setIdentity(Name("render.hardware_caustics.irradiance_clear"))
@@ -12071,6 +12075,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         if(graphOwnsNonTemporalAccumulatorClear){
             Core::GpuTaskSchedulingHint accumulatorNonTemporalClearScheduling = irradianceClearScheduling;
             accumulatorNonTemporalClearScheduling.mergeWithPrevious = true;
+            EnableSameFamilyComputeEffectRouting(accumulatorNonTemporalClearScheduling);
             Core::GpuTaskDesc accumulatorNonTemporalClearDesc;
             accumulatorNonTemporalClearDesc
                 .setIdentity(Name("render.hardware_caustics.accumulator_non_temporal_clear"))
@@ -12104,6 +12109,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             accumulatorBootstrapClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
             accumulatorBootstrapClearScheduling.allowPacketMerge = true;
             accumulatorBootstrapClearScheduling.mergeWithPrevious = true;
+            EnableSameFamilyComputeEffectRouting(accumulatorBootstrapClearScheduling);
             Core::GpuTaskDesc accumulatorBootstrapClearDesc;
             accumulatorBootstrapClearDesc
                 .setIdentity(Name("render.hardware_caustics.accumulator_bootstrap_clear"))
@@ -12138,6 +12144,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             accumulatorDecayScheduling.cost = Core::GpuTaskCostHint::Tiny;
             accumulatorDecayScheduling.allowPacketMerge = true;
             accumulatorDecayScheduling.mergeWithPrevious = true;
+            EnableSameFamilyComputeEffectRouting(accumulatorDecayScheduling);
             const Core::GpuTaskResourceUse accumulatorDecayUses[] = {
                 ReadWriteTextureUse(
                     causticAccumulator,

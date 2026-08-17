@@ -8558,6 +8558,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         opaqueScheduling.forceSubmissionBoundary = false;
         opaqueScheduling.allowPacketMerge = true;
         opaqueScheduling.mergeWithPrevious = false;
+        EnableSameFamilyComputeEffectRouting(opaqueScheduling, false);
         Core::GpuTaskDesc opaqueDesc;
         opaqueDesc
             .setIdentity(Name("render.shadow_visibility.opaque"))
@@ -8595,6 +8596,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         tailScheduling.forceSubmissionBoundary = false;
         tailScheduling.allowPacketMerge = true;
         tailScheduling.mergeWithPrevious = true;
+        EnableSameFamilyComputeEffectRouting(tailScheduling);
         const Core::GpuTaskId opaqueFirstWaveletDependencies[] = { m_deferredShadowVisibilityOpaqueTask };
         Core::GpuTaskDesc opaqueFirstWaveletDesc;
         opaqueFirstWaveletDesc
@@ -8790,6 +8792,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         primitiveScheduling.cost = Core::GpuTaskCostHint::Tiny;
         primitiveScheduling.forceSubmissionBoundary = false;
         primitiveScheduling.allowPacketMerge = true;
+        EnableSameFamilyComputeEffectRouting(primitiveScheduling, false);
 
         if(graphOwnedAdaptivePrimitives.captureStatsSnapshot){
             Core::GpuTaskDesc statsClearDesc;
@@ -8818,6 +8821,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         if(graphOwnedAdaptivePrimitives.compact){
             Core::GpuTaskSchedulingHint counterClearScheduling = primitiveScheduling;
             counterClearScheduling.mergeWithPrevious = adaptivePrimitivePrecedesVisibility;
+            EnableSameFamilyComputeEffectRouting(counterClearScheduling, adaptivePrimitivePrecedesVisibility);
             Core::GpuTaskDesc counterClearDesc;
             counterClearDesc
                 .setIdentity(Name("render.shadow_visibility.adaptive_counter_clear"))
@@ -8851,6 +8855,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     allLitClearScheduling.forceSubmissionBoundary = false;
     allLitClearScheduling.allowPacketMerge = true;
     allLitClearScheduling.mergeWithPrevious = adaptivePrimitivePrecedesVisibility;
+    EnableSameFamilyComputeEffectRouting(allLitClearScheduling, adaptivePrimitivePrecedesVisibility);
     Core::GpuTaskDesc allLitClearDesc;
     allLitClearDesc
         .setIdentity(Name("render.shadow_visibility.all_lit_clear"))
@@ -8879,6 +8884,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
     scheduling.mergeWithPrevious = true;
+    EnableSameFamilyComputeEffectRouting(scheduling);
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.shadow_visibility"))
@@ -8918,6 +8924,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         statsReadbackScheduling.forceSubmissionBoundary = false;
         statsReadbackScheduling.allowPacketMerge = true;
         statsReadbackScheduling.mergeWithPrevious = true;
+        EnableSameFamilyComputeEffectRouting(statsReadbackScheduling);
         // Lighting/caustics consume Shadow Visibility on another physical queue.  This immediate dependent is the
         // semantic terminal of the same packet, so it may intentionally close that consumer frontier.
         statsReadbackScheduling.allowMergeAcrossConsumerFrontier = true;

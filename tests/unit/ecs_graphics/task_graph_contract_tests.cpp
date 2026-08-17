@@ -145,6 +145,38 @@ TEST(EcsGraphics, OnlyTerminalPresentationRetainsAPacketIdentity){
 }
 
 
+// The graph-owned ImGui terminal task must record from declaration-time data. Re-reading ImGui's mutable command
+// arrays after the task declares its sampled textures would allow an undeclared bindless access into the packet.
+TEST(EcsGraphics, UiPresentationSnapshotsLateRecordInputs){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString uiSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
+    const AStringView ui(uiSource.data(), uiSource.size());
+
+    AString uiHeaderSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.h", uiHeaderSource));
+    const AStringView uiHeader(uiHeaderSource.data(), uiHeaderSource.size());
+
+    EXPECT_TRUE(ContainsText(uiHeader, "struct TaskGraphDrawCommand"));
+    EXPECT_TRUE(ContainsText(ui, "m_taskGraphDrawCommands"));
+    EXPECT_TRUE(ContainsText(ui, "recordTaskGraphDrawSnapshot"));
+    EXPECT_TRUE(ContainsText(ui, "graph-owned ImGui overlay cannot safely record a custom draw callback"));
+    EXPECT_TRUE(ContainsText(ui, "appendDrawTextureUse(drawCommand.texture)"));
+
+    const usize recordOffset = ui.find("bool UiSystem::recordTaskGraphPresentation");
+    const usize completionOffset = ui.find("bool UiSystem::recordTaskGraphUploadCompletion");
+    ASSERT_NE(recordOffset, AStringView::npos);
+    ASSERT_NE(completionOffset, AStringView::npos);
+    ASSERT_LT(recordOffset, completionOffset);
+    const AStringView recordBody = ui.substr(recordOffset, completionOffset - recordOffset);
+    EXPECT_TRUE(ContainsText(recordBody, "recordTaskGraphDrawSnapshot(commandList, framebuffer)"));
+    EXPECT_FALSE(ContainsText(recordBody, "ImGui::GetDrawData()"));
+    EXPECT_FALSE(ContainsText(recordBody, "renderDrawData(commandList, framebuffer"));
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

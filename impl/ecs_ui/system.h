@@ -127,6 +127,33 @@ private:
     };
     static_assert(sizeof(UiPushConstants) == sizeof(f32) * 4u + sizeof(u32) * 4u, "Ui push constants must match the ImGui shader block");
 
+    // A graph declaration must never leave late native recording to re-read ImGui's transient command arrays.
+    // Each visible draw captures its exact heap-selected texture and already-resolved source offsets; the retained
+    // texture handle keeps the declared sampled resource alive independently of the next ImGui frame.
+    struct TaskGraphDrawCommand{
+        Core::TextureHandle texture;
+        Core::GpuDescriptorHandle textureHeapHandle = Core::GpuDescriptorHandle::invalid();
+        f32 clipMinX = 0.0f;
+        f32 clipMinY = 0.0f;
+        f32 clipMaxX = 0.0f;
+        f32 clipMaxY = 0.0f;
+        u32 elementCount = 0u;
+        u32 startIndexLocation = 0u;
+        u32 startVertexLocation = 0u;
+    };
+    using TaskGraphDrawCommandVector = Vector<TaskGraphDrawCommand, Core::Alloc::GlobalArena>;
+
+    struct TaskGraphDrawSnapshot{
+        Core::BufferHandle vertexBuffer;
+        Core::BufferHandle indexBuffer;
+        Core::GraphicsPipelineHandle pipeline;
+        Core::GpuDescriptorHandle samplerHeapHandle = Core::GpuDescriptorHandle::invalid();
+        UiPushConstants pushConstants;
+        i32 framebufferWidth = 0;
+        i32 framebufferHeight = 0;
+        bool valid = false;
+    };
+
 private:
     void setCurrentContext()const;
     void beginFrame(f32 delta);
@@ -135,6 +162,7 @@ private:
     [[nodiscard]] bool recordTaskGraphPresentation(Core::CommandList& commandList, Core::Framebuffer* framebuffer);
     [[nodiscard]] bool recordTaskGraphUploadCompletion()const;
     void confirmTaskGraphPresentationSubmission()noexcept;
+    void clearTaskGraphDrawSnapshot()noexcept;
     [[nodiscard]] bool ensureFrameCommandLists();
     [[nodiscard]] bool ensureRenderResources(Core::Framebuffer* framebuffer);
     [[nodiscard]] bool ensureShadersLoaded();
@@ -142,6 +170,7 @@ private:
     [[nodiscard]] bool ensureBuffers(usize vertexCount, usize indexCount);
     [[nodiscard]] bool drawBuffersReady(usize vertexCount, usize indexCount)const;
     [[nodiscard]] bool prepareTaskGraphDrawUploads(ImDrawData& drawData);
+    [[nodiscard]] bool recordTaskGraphDrawSnapshot(Core::CommandList& commandList, Core::Framebuffer* framebuffer);
     [[nodiscard]] bool declareTaskGraphDrawUploads(
         Core::GpuTaskGraph& graph,
         const Core::GpuGraphResourceId& vertexBuffer,
@@ -201,10 +230,12 @@ private:
     UiTextureResourceVector m_textures;
     UiTextureUploadBatch m_textureUploadBatch;
     UiTextureUploadVector m_textureUploadScratch;
-    // Graph declaration snapshots ImGui's transient draw-list arrays before native recording.  GpuTaskGraph then
-    // copies these bytes into immutable blobs, retaining them independently of the next ImGui frame.
+    // Graph declaration snapshots both ImGui's transient upload bytes and the draw commands that consume them.
+    // GpuTaskGraph then retains all late-record inputs independently of the next ImGui frame.
     UiTextureUploadVector m_taskGraphVertexUpload;
     UiTextureUploadVector m_taskGraphIndexUpload;
+    TaskGraphDrawCommandVector m_taskGraphDrawCommands;
+    TaskGraphDrawSnapshot m_taskGraphDrawSnapshot;
     usize m_vertexBufferCapacity = 0;
     usize m_indexBufferCapacity = 0;
     f32 m_deltaSeconds = 0.0f;

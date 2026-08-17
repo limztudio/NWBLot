@@ -182,6 +182,28 @@ static bool HasPendingTextureUploads(const ImDrawData& drawData){
     };
 }
 
+[[nodiscard]] static Core::GpuGraphResourceDesc TextureResourceDesc(const Core::TextureDesc& textureDesc){
+    Core::GpuGraphResourceDesc desc;
+    desc
+        .setIdentity(textureDesc.name)
+        .setMarkerLabel("ImGui Texture")
+        .setType(Core::GpuGraphResourceType::Texture)
+        .setInitialState(textureDesc.initialState)
+        .setQueueSharing(textureDesc.queueSharing)
+    ;
+    return desc;
+}
+
+[[nodiscard]] static bool IsTaskGraphResetCallback(const ImDrawCmd& drawCommand){
+    if(!drawCommand.UserCallback)
+        return false;
+
+    const ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
+    return drawCommand.UserCallback == ImDrawCallback_ResetRenderState
+        || drawCommand.UserCallback == platformIO.DrawCallback_ResetRenderState
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -262,6 +284,7 @@ UiSystem::UiSystem(
     , m_textureUploadScratch(arena)
     , m_taskGraphVertexUpload(arena)
     , m_taskGraphIndexUpload(arena)
+    , m_taskGraphDrawCommands(arena)
 {
     readAccess<UiComponent>();
 
@@ -343,6 +366,7 @@ void UiSystem::beginFrame(const f32 delta){
     m_taskGraphPresentationGraphGeneration = 0u;
     m_taskGraphVertexUpload.clear();
     m_taskGraphIndexUpload.clear();
+    clearTaskGraphDrawSnapshot();
 
     m_deltaSeconds = IsFinite(delta) && delta > 0.0f ? delta : __hidden_ui::s_FallbackDeltaSeconds;
 
@@ -416,6 +440,7 @@ void UiSystem::invalidateResources(){
     m_textureUploadScratch.clear();
     m_taskGraphVertexUpload.clear();
     m_taskGraphIndexUpload.clear();
+    clearTaskGraphDrawSnapshot();
 
     m_prepareCommandList.reset();
     m_renderCommandList.reset();
@@ -538,13 +563,38 @@ bool UiSystem::prepareFrameResources(Core::Framebuffer* framebuffer, const bool 
     return true;
 }
 
+void UiSystem::clearTaskGraphDrawSnapshot()noexcept{
+    m_taskGraphDrawCommands.clear();
+    m_taskGraphDrawSnapshot = {};
+}
+
 bool UiSystem::prepareTaskGraphDrawUploads(ImDrawData& drawData){
     m_taskGraphDrawUploadsPrepared = false;
     m_taskGraphVertexUpload.clear();
     m_taskGraphIndexUpload.clear();
+    clearTaskGraphDrawSnapshot();
+
+    const auto discardPreparedUploads = [this](){
+        m_taskGraphVertexUpload.clear();
+        m_taskGraphIndexUpload.clear();
+        clearTaskGraphDrawSnapshot();
+    };
 
     if(drawData.TotalVtxCount <= 0 || drawData.TotalIdxCount <= 0)
         return true;
+
+    if(!m_vertexBuffer || !m_indexBuffer || !m_pipeline || !m_samplerHeapHandle.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: graph-owned ImGui overlay resources are unavailable during preflight"));
+        return false;
+    }
+
+    i32 framebufferWidth = 0;
+    i32 framebufferHeight = 0;
+    __hidden_ui::GetFramebufferExtent(drawData, framebufferWidth, framebufferHeight);
+    if(framebufferWidth <= 0 || framebufferHeight <= 0){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: graph-owned ImGui overlay has an invalid framebuffer extent"));
+        return false;
+    }
 
     const usize vertexCount = static_cast<usize>(drawData.TotalVtxCount);
     const usize indexCount = static_cast<usize>(drawData.TotalIdxCount);
@@ -574,17 +624,33 @@ bool UiSystem::prepareTaskGraphDrawUploads(ImDrawData& drawData){
         || m_taskGraphIndexUpload.size() != paddedIndexBytes
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to retain graph-owned ImGui draw upload bytes"));
-        m_taskGraphVertexUpload.clear();
-        m_taskGraphIndexUpload.clear();
+        discardPreparedUploads();
         return false;
     }
 
     if(drawData.CmdListsCount < 0 || (drawData.CmdListsCount > 0 && !drawData.CmdLists.Data)){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: ImGui reported invalid draw-list storage"));
-        m_taskGraphVertexUpload.clear();
-        m_taskGraphIndexUpload.clear();
+        discardPreparedUploads();
         return false;
     }
+
+    TaskGraphDrawSnapshot snapshot;
+    snapshot.vertexBuffer = m_vertexBuffer;
+    snapshot.indexBuffer = m_indexBuffer;
+    snapshot.pipeline = m_pipeline;
+    snapshot.samplerHeapHandle = m_samplerHeapHandle;
+    snapshot.framebufferWidth = framebufferWidth;
+    snapshot.framebufferHeight = framebufferHeight;
+    StoreFloat(__hidden_ui::BuildUiScaleTranslate(
+        VectorSet(drawData.DisplayPos.x, drawData.DisplayPos.y, 0.0f, 0.0f),
+        VectorSet(drawData.DisplaySize.x, drawData.DisplaySize.y, 0.0f, 0.0f)
+    ), &snapshot.pushConstants.scaleTranslate);
+    snapshot.pushConstants.presentationMode = static_cast<u32>(
+        m_graphics.isHDR10OutputActive()
+            ? Core::SwapChainOutputMode::HDR10
+            : Core::SwapChainOutputMode::SDR
+    );
+    snapshot.pushConstants.samplerSlot = snapshot.samplerHeapHandle.slot();
 
     usize vertexOffset = 0u;
     usize indexOffset = 0u;
@@ -593,14 +659,20 @@ bool UiSystem::prepareTaskGraphDrawUploads(ImDrawData& drawData){
         if(!drawList)
             continue;
 
-        if(drawList->VtxBuffer.Size < 0 || drawList->IdxBuffer.Size < 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: ImGui reported negative draw-list buffer counts"));
-            m_taskGraphVertexUpload.clear();
-            m_taskGraphIndexUpload.clear();
+        if(
+            drawList->VtxBuffer.Size < 0
+            || drawList->IdxBuffer.Size < 0
+            || drawList->CmdBuffer.Size < 0
+            || (drawList->CmdBuffer.Size > 0 && !drawList->CmdBuffer.Data)
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: ImGui reported invalid graph-owned draw-list storage"));
+            discardPreparedUploads();
             return false;
         }
-        const usize drawListVertexBytes = static_cast<usize>(drawList->VtxBuffer.Size) * sizeof(ImDrawVert);
-        const usize drawListIndexBytes = static_cast<usize>(drawList->IdxBuffer.Size) * sizeof(ImDrawIdx);
+        const usize drawListVertexCount = static_cast<usize>(drawList->VtxBuffer.Size);
+        const usize drawListIndexCount = static_cast<usize>(drawList->IdxBuffer.Size);
+        const usize drawListVertexBytes = drawListVertexCount * sizeof(ImDrawVert);
+        const usize drawListIndexBytes = drawListIndexCount * sizeof(ImDrawIdx);
         if(
             (drawListVertexBytes != 0u && !drawList->VtxBuffer.Data)
             || (drawListIndexBytes != 0u && !drawList->IdxBuffer.Data)
@@ -608,8 +680,7 @@ bool UiSystem::prepareTaskGraphDrawUploads(ImDrawData& drawData){
             || drawListIndexBytes > indexBytes - indexOffset
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: ImGui draw-list data changed during graph upload preflight"));
-            m_taskGraphVertexUpload.clear();
-            m_taskGraphIndexUpload.clear();
+            discardPreparedUploads();
             return false;
         }
 
@@ -629,16 +700,106 @@ bool UiSystem::prepareTaskGraphDrawUploads(ImDrawData& drawData){
                 drawListIndexBytes
             );
         }
+
+        const u64 globalVertexOffset = vertexOffset / sizeof(ImDrawVert);
+        const u64 globalIndexOffset = indexOffset / sizeof(ImDrawIdx);
+        for(i32 commandIndex = 0; commandIndex < drawList->CmdBuffer.Size; ++commandIndex){
+            const ImDrawCmd& drawCommand = drawList->CmdBuffer[commandIndex];
+            if(drawCommand.UserCallback){
+                if(__hidden_ui::IsTaskGraphResetCallback(drawCommand))
+                    continue;
+
+                NWB_LOGGER_WARNING(NWB_TEXT("UiSystem: graph-owned ImGui overlay cannot safely record a custom draw callback"));
+                discardPreparedUploads();
+                return false;
+            }
+
+            const f32 clipMinX = Max(
+                (drawCommand.ClipRect.x - drawData.DisplayPos.x) * drawData.FramebufferScale.x,
+                0.0f
+            );
+            const f32 clipMinY = Max(
+                (drawCommand.ClipRect.y - drawData.DisplayPos.y) * drawData.FramebufferScale.y,
+                0.0f
+            );
+            const f32 clipMaxX = Min(
+                (drawCommand.ClipRect.z - drawData.DisplayPos.x) * drawData.FramebufferScale.x,
+                static_cast<f32>(framebufferWidth)
+            );
+            const f32 clipMaxY = Min(
+                (drawCommand.ClipRect.w - drawData.DisplayPos.y) * drawData.FramebufferScale.y,
+                static_cast<f32>(framebufferHeight)
+            );
+            if(clipMaxX <= clipMinX || clipMaxY <= clipMinY)
+                continue;
+
+            const usize commandIndexOffset = static_cast<usize>(drawCommand.IdxOffset);
+            const usize commandElementCount = static_cast<usize>(drawCommand.ElemCount);
+            const usize commandVertexOffset = static_cast<usize>(drawCommand.VtxOffset);
+            if(
+                commandIndexOffset > drawListIndexCount
+                || commandElementCount > drawListIndexCount - commandIndexOffset
+                || commandVertexOffset > drawListVertexCount
+            ){
+                NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: ImGui draw command exceeds its graph-owned upload snapshot"));
+                discardPreparedUploads();
+                return false;
+            }
+
+            const u64 startIndexLocation = globalIndexOffset + commandIndexOffset;
+            const u64 startVertexLocation = globalVertexOffset + commandVertexOffset;
+            if(
+                startIndexLocation > Limit<u32>::s_Max
+                || startVertexLocation > Limit<u32>::s_Max
+                || commandElementCount > Limit<u32>::s_Max
+            ){
+                NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: ImGui graph-owned draw command exceeds native index limits"));
+                discardPreparedUploads();
+                return false;
+            }
+
+            UiTextureResource* const textureResource = textureResourceForDraw(drawCommand.GetTexID());
+            if(
+                !textureResource
+                || !textureResource->texture
+                || !textureResource->sampledImageHeapHandle.valid()
+                || textureResource->sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage
+            ){
+                NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: graph-owned ImGui draw command has no declared sampled texture"));
+                discardPreparedUploads();
+                return false;
+            }
+
+            const usize priorCommandCount = m_taskGraphDrawCommands.size();
+            m_taskGraphDrawCommands.push_back(TaskGraphDrawCommand{
+                .texture = textureResource->texture,
+                .textureHeapHandle = textureResource->sampledImageHeapHandle,
+                .clipMinX = clipMinX,
+                .clipMinY = clipMinY,
+                .clipMaxX = clipMaxX,
+                .clipMaxY = clipMaxY,
+                .elementCount = static_cast<u32>(commandElementCount),
+                .startIndexLocation = static_cast<u32>(startIndexLocation),
+                .startVertexLocation = static_cast<u32>(startVertexLocation),
+            });
+            if(m_taskGraphDrawCommands.size() != priorCommandCount + 1u){
+                NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to retain graph-owned ImGui draw command"));
+                discardPreparedUploads();
+                return false;
+            }
+        }
+
         vertexOffset += drawListVertexBytes;
         indexOffset += drawListIndexBytes;
     }
     if(vertexOffset != vertexBytes || indexOffset != indexBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: ImGui draw-list counts no longer match its graph upload payload"));
-        m_taskGraphVertexUpload.clear();
-        m_taskGraphIndexUpload.clear();
+        discardPreparedUploads();
         return false;
     }
 
+    snapshot.valid = true;
+    m_taskGraphDrawSnapshot = Move(snapshot);
     m_taskGraphDrawUploadsPrepared = true;
     return true;
 }
@@ -726,6 +887,8 @@ bool UiSystem::prepareTaskGraphPresentation(Core::Framebuffer* framebuffer){
         && drawData->TotalIdxCount > 0
         && m_pipeline
         && m_taskGraphDrawUploadsPrepared
+        && m_taskGraphDrawSnapshot.valid
+        && !m_taskGraphDrawCommands.empty()
     ;
     // A font/texture update can arrive before any visible ImGui command. Keep it in the shared graph with a
     // terminal completion packet rather than sending a direct preparation list after scene presentation.
@@ -769,8 +932,6 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
     ImDrawData* const drawData = ImGui::GetDrawData();
     if(!drawData)
         return {};
-    if(drawData->CmdListsCount < 0 || (drawData->CmdListsCount > 0 && !drawData->CmdLists.Data))
-        return {};
 
     Core::Alloc::ScratchArena scratchArena(__hidden_ui::s_TaskGraphDeclarationArena);
     Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> uploadTasks(scratchArena);
@@ -781,8 +942,8 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
 
     const bool hasDrawWork =
         m_taskGraphDrawUploadsPrepared
-        && drawData->TotalVtxCount > 0
-        && drawData->TotalIdxCount > 0
+        && m_taskGraphDrawSnapshot.valid
+        && !m_taskGraphDrawCommands.empty()
     ;
     if(!hasDrawWork){
         if(
@@ -855,22 +1016,27 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         return task;
     }
 
-    if(!m_vertexBuffer || !m_indexBuffer)
+    if(
+        !m_taskGraphDrawSnapshot.vertexBuffer
+        || !m_taskGraphDrawSnapshot.indexBuffer
+        || !m_taskGraphDrawSnapshot.pipeline
+        || !m_taskGraphDrawSnapshot.samplerHeapHandle.valid()
+    )
         return {};
     const Core::GpuGraphResourceId vertexBuffer = graph.importBuffer(
-        m_vertexBuffer,
+        m_taskGraphDrawSnapshot.vertexBuffer,
         __hidden_ui::BufferResourceDesc(
             Name("ui.imgui_vertices"),
             "ImGui Vertices",
-            m_vertexBuffer->getDescription()
+            m_taskGraphDrawSnapshot.vertexBuffer->getDescription()
         )
     );
     const Core::GpuGraphResourceId indexBuffer = graph.importBuffer(
-        m_indexBuffer,
+        m_taskGraphDrawSnapshot.indexBuffer,
         __hidden_ui::BufferResourceDesc(
             Name("ui.imgui_indices"),
             "ImGui Indices",
-            m_indexBuffer->getDescription()
+            m_taskGraphDrawSnapshot.indexBuffer->getDescription()
         )
     );
     if(!vertexBuffer.valid() || !indexBuffer.valid())
@@ -897,7 +1063,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         dependencies.push_back(task);
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses(scratchArena);
-    resourceUses.reserve(3u + m_textures.size());
+    resourceUses.reserve(3u + uploadedTextures.size() + m_taskGraphDrawCommands.size());
     resourceUses.push_back(Core::GpuTaskResourceUse{
             .resource = backbuffer,
             .range = {},
@@ -923,10 +1089,16 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
             resourceUses.push_back(__hidden_ui::ReadTextureUse(texture));
     }
 
-    const auto appendDrawTextureUse = [&](UiTextureResource* const texture){
+    const auto appendDrawTextureUse = [&](const Core::TextureHandle& texture){
         if(!texture)
             return true;
-        const Core::GpuGraphResourceId textureResource = importTaskGraphTexture(graph, *texture);
+        Core::GpuGraphResourceId textureResource = graph.findImportedTexture(texture);
+        if(!textureResource.valid()){
+            textureResource = graph.importTexture(
+                texture,
+                __hidden_ui::TextureResourceDesc(texture->getDescription())
+            );
+        }
         if(!textureResource.valid())
             return false;
         for(const Core::GpuTaskResourceUse& use : resourceUses){
@@ -936,22 +1108,10 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         resourceUses.push_back(__hidden_ui::ReadTextureUse(textureResource));
         return true;
     };
-    for(i32 listIndex = 0; listIndex < drawData->CmdListsCount; ++listIndex){
-        const ImDrawList* const drawList = drawData->CmdLists[listIndex];
-        if(!drawList)
-            continue;
-        if(drawList->CmdBuffer.Size < 0){
+    for(const TaskGraphDrawCommand& drawCommand : m_taskGraphDrawCommands){
+        if(!appendDrawTextureUse(drawCommand.texture)){
             m_textureUploadBatch.reset();
             return {};
-        }
-        for(i32 commandIndex = 0; commandIndex < drawList->CmdBuffer.Size; ++commandIndex){
-            const ImDrawCmd& drawCommand = drawList->CmdBuffer[commandIndex];
-            if(drawCommand.UserCallback)
-                continue;
-            if(!appendDrawTextureUse(textureResourceForDraw(drawCommand.GetTexID()))){
-                m_textureUploadBatch.reset();
-                return {};
-            }
         }
     }
 
@@ -991,25 +1151,112 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
     return task;
 }
 
+bool UiSystem::recordTaskGraphDrawSnapshot(Core::CommandList& commandList, Core::Framebuffer* const framebuffer){
+    const TaskGraphDrawSnapshot& snapshot = m_taskGraphDrawSnapshot;
+    if(
+        !framebuffer
+        || !snapshot.valid
+        || !snapshot.vertexBuffer
+        || !snapshot.indexBuffer
+        || !snapshot.pipeline
+        || !snapshot.samplerHeapHandle.valid()
+        || snapshot.samplerHeapHandle.descriptorClass() != Core::GpuDescriptorClass::Sampler
+        || snapshot.framebufferWidth <= 0
+        || snapshot.framebufferHeight <= 0
+        || m_taskGraphDrawCommands.empty()
+    )
+        return false;
+
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
+
+    const Core::Viewport viewport(
+        0.0f,
+        static_cast<f32>(snapshot.framebufferWidth),
+        0.0f,
+        static_cast<f32>(snapshot.framebufferHeight),
+        0.0f,
+        1.0f
+    );
+    const Core::Format::Enum indexFormat = sizeof(ImDrawIdx) == sizeof(u16)
+        ? Core::Format::R16_UINT
+        : Core::Format::R32_UINT
+    ;
+
+    for(const TaskGraphDrawCommand& drawCommand : m_taskGraphDrawCommands){
+        if(
+            !drawCommand.texture
+            || !drawCommand.textureHeapHandle.valid()
+            || drawCommand.textureHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage
+        )
+            return false;
+
+        const i32 scissorMinX = Max(static_cast<i32>(drawCommand.clipMinX), 0);
+        const i32 scissorMinY = Max(static_cast<i32>(drawCommand.clipMinY), 0);
+        const i32 scissorMaxX = Min(static_cast<i32>(Ceil(drawCommand.clipMaxX)), snapshot.framebufferWidth);
+        const i32 scissorMaxY = Min(static_cast<i32>(Ceil(drawCommand.clipMaxY)), snapshot.framebufferHeight);
+        if(scissorMaxX <= scissorMinX || scissorMaxY <= scissorMinY)
+            continue;
+
+        Core::ViewportState viewportState;
+        viewportState.addViewport(viewport);
+        viewportState.addScissorRect(Core::Rect(scissorMinX, scissorMaxX, scissorMinY, scissorMaxY));
+
+        Core::GraphicsState graphicsState;
+        graphicsState
+            .setPipeline(snapshot.pipeline.get())
+            .setFramebuffer(framebuffer)
+            .setViewport(viewportState)
+            .addVertexBuffer(
+                Core::VertexBufferBinding()
+                    .setBuffer(snapshot.vertexBuffer.get())
+                    .setSlot(NWB_IMGUI_VERTEX_BUFFER_INDEX)
+                    .setOffset(0u)
+            )
+            .setIndexBuffer(
+                Core::IndexBufferBinding()
+                    .setBuffer(snapshot.indexBuffer.get())
+                    .setFormat(indexFormat)
+                    .setOffset(0u)
+            )
+        ;
+        commandList.setGraphicsState(graphicsState);
+        heap.bindGraphics(commandList, *snapshot.pipeline);
+
+        UiPushConstants pushConstants = snapshot.pushConstants;
+        pushConstants.textureSlot = drawCommand.textureHeapHandle.slot();
+        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+
+        Core::DrawArguments drawArguments;
+        drawArguments
+            .setVertexCount(drawCommand.elementCount)
+            .setStartIndexLocation(drawCommand.startIndexLocation)
+            .setStartVertexLocation(drawCommand.startVertexLocation)
+        ;
+        commandList.drawIndexed(drawArguments);
+    }
+
+    return true;
+}
+
 bool UiSystem::recordTaskGraphPresentation(Core::CommandList& commandList, Core::Framebuffer* const framebuffer){
     if(
         !framebuffer
         || !m_taskGraphPresentationClaimed
         || !m_taskGraphDrawUploadsPrepared
+        || !m_taskGraphDrawSnapshot.valid
     )
         return false;
 
-    setCurrentContext();
-    if(!m_frameFinished || !m_pipeline)
+    if(!m_frameFinished)
         return false;
 
-    ImDrawData* const drawData = ImGui::GetDrawData();
-    if(!drawData || drawData->TotalVtxCount <= 0 || drawData->TotalIdxCount <= 0)
+    // Vertex/index bytes and the command stream reached immutable graph-owned storage before declaration. This
+    // terminal task only consumes the declared VertexBuffer/IndexBuffer and sampled-texture states.
+    if(!recordTaskGraphDrawSnapshot(commandList, framebuffer))
         return false;
-
-    // Vertex/index bytes reached their graph-owned CopyDest tasks already.  This terminal task only consumes their
-    // declared VertexBuffer/IndexBuffer states and records the actual overlay draw.
-    renderDrawData(commandList, framebuffer, *drawData);
     commandList.endRenderPass();
     return true;
 }
@@ -1030,6 +1277,7 @@ void UiSystem::confirmTaskGraphPresentationSubmission()noexcept{
     m_taskGraphPresentationGraphGeneration = 0u;
     m_taskGraphVertexUpload.clear();
     m_taskGraphIndexUpload.clear();
+    clearTaskGraphDrawSnapshot();
 }
 
 bool UiSystem::submitLegacyTextureRequests(ImDrawData& drawData){
@@ -1122,6 +1370,7 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
         m_taskGraphPresentationGraphGeneration = 0u;
         m_taskGraphVertexUpload.clear();
         m_taskGraphIndexUpload.clear();
+        clearTaskGraphDrawSnapshot();
     }
 }
 
@@ -1136,6 +1385,7 @@ void UiSystem::backBufferResizing(){
     m_taskGraphPresentationGraphGeneration = 0u;
     m_taskGraphVertexUpload.clear();
     m_taskGraphIndexUpload.clear();
+    clearTaskGraphDrawSnapshot();
 }
 
 bool UiSystem::uploadDrawBuffers(Core::CommandList& commandList, ImDrawData& drawData){

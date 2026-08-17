@@ -157,6 +157,9 @@ public:
     // Must be configured before device creation. It exposes one auxiliary Graphics queue only to graph tasks that
     // explicitly opt into same-class physical routing; unsupported adapters retain one Graphics transport.
     bool setSameClassMultiQueueEnabled(bool enabled);
+    // Extends the optional same-class transport discovery to a distinct Graphics-capable Vulkan family. Individual
+    // graph tasks must still explicitly accept the resulting ownership-transfer route.
+    bool setCrossFamilySameClassQueueRoutingEnabled(bool enabled);
     // Selects a Vulkan adapter enumeration index, or -1 for the backend default. Must be configured before device
     // creation so target-hardware probes can reproduce a multi-adapter route on paired processes.
     bool setAdapterIndex(i32 index);

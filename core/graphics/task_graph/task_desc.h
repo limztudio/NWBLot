@@ -73,6 +73,10 @@ struct GpuTaskSchedulingHint{
     // and Vulkan family. The default retains the current one-transport-per-class behavior; callers that opt in
     // accept explicit timeline waits when a producer and consumer land on different queues in that family.
     bool allowSameClassQueueRouting = false;
+    // Extends the same-class opt-in to a physical queue from another Vulkan family. This remains separately opt-in
+    // because exclusive resource uses cross that boundary through compiler-owned release/acquire ownership pairs.
+    // It has no effect unless allowSameClassQueueRouting is also set.
+    bool allowCrossFamilySameClassQueueRouting = false;
 };
 
 // A resource may be metadata-only during the shadow-graph phase, or may retain an imported engine handle through

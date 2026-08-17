@@ -228,15 +228,16 @@ inline constexpr u8 s_ValidQueueCapabilityMask =
 }
 
 // Physical queues in one Vulkan family can exchange work through a timeline semaphore without a queue-family
-// ownership transfer. Keep routing inside the selected base family's class: a future topology may expose the same
-// broad class from another family, but that needs a deliberate cross-family policy rather than an implicit balance.
+// ownership transfer. Cross-family balancing is deliberately separate: opted-in tasks may use it, and resource
+// planning below then emits the paired exclusive ownership handoff when required.
 [[nodiscard]] static const GpuPhysicalQueueInfo* FindLeastLoadedSameClassQueue(
     const GpuTaskGraph& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
     const GpuTaskGraphQueueTopology& topology,
     const GpuPhysicalQueueInfo& baseQueue,
-    const GpuQueueCapability::Mask requiredCapabilities
+    const GpuQueueCapability::Mask requiredCapabilities,
+    const bool allowCrossFamilyRouting
 )noexcept{
     const GpuPhysicalQueueInfo* result = nullptr;
     u64 resultLoad = Limit<u64>::s_Max;
@@ -244,7 +245,7 @@ inline constexpr u8 s_ValidQueueCapabilityMask =
         const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
         if(
             candidate.queueClass != baseQueue.queueClass
-            || candidate.familyIndex != baseQueue.familyIndex
+            || (!allowCrossFamilyRouting && candidate.familyIndex != baseQueue.familyIndex)
             || !HasCapabilities(candidate.capabilities, requiredCapabilities)
         )
             continue;
@@ -1079,7 +1080,8 @@ bool GpuTaskGraphCompiler::assignQueues(
                 outAssignments.m_assignments,
                 topology,
                 *selectedQueue,
-                task.queue.requiredCapabilities
+                task.queue.requiredCapabilities,
+                task.scheduling.allowCrossFamilySameClassQueueRouting
             ))
                 selectedQueue = balancedQueue;
         }
@@ -1481,15 +1483,6 @@ bool GpuTaskGraphCompiler::compile(
                         outCompiledGraph.reset();
                         return false;
                     }
-                    if(
-                        sourceQueue->queueClass == destinationQueue->queueClass
-                        && sourceQueue->familyIndex != destinationQueue->familyIndex
-                    ){
-                        // CommandQueue names one resolved transport. Multiple same-class families need a richer
-                        // physical-owner token before they can participate in explicit ownership transfers.
-                        outCompiledGraph.reset();
-                        return false;
-                    }
                     const bool differentQueueFamilies = sourceQueue->familyIndex != destinationQueue->familyIndex;
                     const bool resourceUsesConcurrentSharing = ResourceUsesConcurrentQueueSharing(
                         resource.queueSharing,
@@ -1510,7 +1503,7 @@ bool GpuTaskGraphCompiler::compile(
 
                     const bool requiresExclusiveOwnershipHandoff =
                         !resourceUsesConcurrentSharing
-                        && sourceQueue->queueClass != destinationQueue->queueClass
+                        && differentQueueFamilies
                     ;
                     if(requiresExclusiveOwnershipHandoff){
                         const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);

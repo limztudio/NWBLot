@@ -581,8 +581,10 @@ struct VulkanContext{
     VkPhysicalDeviceSubgroupProperties subgroupProperties{};
     DescriptorBufferManager* descriptorBufferManager = nullptr;
 
-    // Physical families used for Graphics/AsyncCompute/Transfer resource sharing.
+    // Physical families used for Graphics/AsyncCompute/Transfer resource sharing. The auxiliary Graphics family is
+    // invalid unless the optional cross-family same-class route was registered on this Device.
     i32 graphicsQueueFamilyIndex = s_InvalidQueueFamilyIndex;
+    i32 auxiliaryGraphicsQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 asyncComputeQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 transferQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     bool asyncComputeLaneEnabled = false;
@@ -637,7 +639,7 @@ struct VulkanContext{
 
 struct QueueFamilySharingInfo{
     VkSharingMode mode = VK_SHARING_MODE_EXCLUSIVE;
-    Array<u32, 3u> familyIndices = {};
+    Array<u32, 4u> familyIndices = {};
     u32 familyIndexCount = 0u;
 
     [[nodiscard]] const u32* data()const{ return familyIndexCount > 0u ? familyIndices.data() : nullptr; }
@@ -661,8 +663,10 @@ inline QueueFamilySharingInfo ResolveQueueFamilySharing(
         ++result.familyIndexCount;
     };
 
-    if(sharingBits & static_cast<u8>(ResourceQueueSharing::Graphics))
+    if(sharingBits & static_cast<u8>(ResourceQueueSharing::Graphics)){
         appendFamily(context.graphicsQueueFamilyIndex);
+        appendFamily(context.auxiliaryGraphicsQueueFamilyIndex);
+    }
     if(
         (sharingBits & static_cast<u8>(ResourceQueueSharing::AsyncCompute))
         && context.asyncComputeLaneEnabled

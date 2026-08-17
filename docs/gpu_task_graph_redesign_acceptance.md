@@ -6,7 +6,7 @@
 
 **Follow-up implementation:** physical queue identity, frontier-safe deferred scheduling, graph-bound presentation,
 graph-owned per-frame ImGui uploads, opt-in ready-frontier native recording, and opt-in same-class physical Graphics
-routing, actual-device stale packet-recording recreation coverage, qualified dedicated-Transfer recovery-frontier
+routing including explicit cross-family ownership handoffs, actual-device stale packet-recording recreation coverage, qualified dedicated-Transfer recovery-frontier
 coverage, graph-owned public setup uploads,
 graph-owned deferred mesh-view, scene-light, and scene-shading frame updates, and graph-owned decoded texture-asset
 uploads, graph-owned runtime-skinning dispatch packets, graph-owned opaque material draw-stream and sampled-image resource sets, graph-owned alias-free split- and unsplit-AVBOIT regular Occupancy, Extinction, and Accumulation plus CSG-only Occupancy, Extinction, and Accumulation compute-emulation handoffs, exact-two-, three-, or four-draw shared-output regular opaque and unsplit-AVBOIT Occupancy, Extinction, and Accumulation handoffs, and a graph-owned unsplit AVBOIT Integration tail,
@@ -405,6 +405,8 @@ can receive an unconditional final sign-off.
 | Ready-frontier recording follow-up: `nwb_ecs_ui` and `nwb_ecs_render` | passed |
 | Same-class Graphics routing follow-up: graph-unit binary | 45/45 passed, including deterministic opt-in balancing, same-family state planning, duplicate native queue rejection, and stale recording/transaction recreation |
 | Same-class Graphics routing follow-up: descriptor-buffer smoke binary | 72 passed; 10 expected skips. The added real-Vulkan route skipped because this adapter exposes only one Graphics queue; the existing 9 skips lack dedicated Compute-only or Transfer-only families |
+| Cross-family same-class Graphics routing follow-up: graph-unit binary | 124/124 passed, including default same-family retention plus deterministic explicit cross-family routing and exclusive Buffer ownership release/acquire planning |
+| Cross-family same-class Graphics routing follow-up: descriptor-buffer smoke binary | 147 passed; 17 expected topology skips. The added real-Vulkan route requests a separately enabled alternate Graphics family, verifies compiler release/acquire barriers, records/submits its exact physical timeline dependency, and reads the copied buffer back; this adapter cleanly skips because it exposes no alternate Graphics-capable family |
 | Actual device-recreation graph-packet follow-up: descriptor-buffer smoke binary | 73 passed; 10 expected skips. A real headless Graphics instance releases its recorded packets/transaction before teardown, recreates its device, then recompiles, records, and submits only on the replacement generation |
 | Graph-owned public setup-upload follow-up: descriptor-buffer smoke binary | 73 passed; 10 expected skips. Normal buffer and texture setup routes compile, record, and submit through one graph packet while preserving queue selection, graph-visible final states, and Graphics readiness; the dedicated-Transfer probe is hardware-skipped on this adapter |
 | Public texture-upload validation closeout: graph-unit and descriptor-buffer smoke binaries | passed; combined D24S8/D32S8 raw payloads and retained-Unknown setup/batch descriptors now reject before any native submission, leaving every supported public texture upload on the graph-owned path. A future combined depth/stencil upload requires an explicit per-aspect payload/task contract. Graph tests passed 122/122 and the real Vulkan descriptor smoke passed 145 with 16 expected topology skips. |
@@ -630,8 +632,10 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    Device; and a token from a retired device is rejected at the native submission boundary. An opt-in second
    Graphics queue from the same Vulkan family is now registered, explicitly selected graph packets route to it
    deterministically, and same-family state handoffs use exact physical timeline waits without a spurious ownership
-   barrier. There is still no policy for same-class queues from different families, dynamic queue scaling, or target
-   scene performance evidence for the new route.
+   barrier. A separately enabled alternate Graphics-capable family may now be registered too; tasks explicitly opt
+   into that higher-cost route, and exclusive resource crossings use the same physical-owner release/acquire plan
+   already used by cross-class handoffs. Dynamic queue scaling and target-scene performance evidence for the new
+   routes remain open.
 
 2. **Complete graph ownership.** Renderer code still controls high-level recording/submission sequencing and holds
    legacy state-handoff data, but the shared deferred renderer now gives the task runtime semantic task endpoints

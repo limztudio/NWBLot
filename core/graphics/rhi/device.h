@@ -392,6 +392,9 @@ struct DeviceCreationParameters : public InstanceParameters{
     // backend registers it as a second physical Graphics queue for graph tasks that explicitly allow same-class
     // routing. Ordinary renderer work remains on the primary Graphics queue.
     bool enableSameClassMultiQueue = false;
+    // Permits the auxiliary same-class Graphics transport to come from a different Graphics-capable Vulkan family.
+    // Tasks must separately opt in before the compiler can route across that ownership boundary.
+    bool enableCrossFamilySameClassQueueRouting = false;
     i32 adapterIndex = -1;
     bool supportExplicitDisplayScaling = false;
     bool resizeWindowWithDisplayScale = false;

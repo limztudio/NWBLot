@@ -1013,6 +1013,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
     vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, props.data());
 
     m_graphicsQueueFamily = s_InvalidQueueFamilyIndex;
+    m_secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
     m_computeQueueFamily = s_InvalidQueueFamilyIndex;
     m_transferQueueFamily = s_InvalidQueueFamilyIndex;
     m_presentQueueFamily = s_InvalidQueueFamilyIndex;
@@ -1088,6 +1089,26 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
     )
         return false;
 
+    // A second queue from the primary family remains the low-overhead default same-class route. A caller that
+    // explicitly enables the cross-family policy may instead register the first deterministic alternate Graphics
+    // family; task-level scheduling still has to opt in before compiler routing can cross its ownership boundary.
+    if(
+        m_deviceParams.enableSameClassMultiQueue
+        && m_deviceParams.enableCrossFamilySameClassQueueRouting
+    ){
+        for(i32 i = 0; i < static_cast<i32>(props.size()); ++i){
+            const VkQueueFamilyProperties& queueFamily = props[i];
+            if(
+                i != m_graphicsQueueFamily
+                && queueFamily.queueCount > 0u
+                && (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            ){
+                m_secondaryGraphicsQueueFamily = i;
+                break;
+            }
+        }
+    }
+
     return true;
 }
 
@@ -1139,6 +1160,7 @@ bool BackendContext::pickPhysicalDevice(){
     struct DeviceSelection{
         VkPhysicalDevice device = VK_NULL_HANDLE;
         i32 graphicsQueueFamily = s_InvalidQueueFamilyIndex;
+        i32 secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
         i32 computeQueueFamily = s_InvalidQueueFamilyIndex;
         i32 transferQueueFamily = s_InvalidQueueFamilyIndex;
         i32 presentQueueFamily = s_InvalidQueueFamilyIndex;
@@ -1147,6 +1169,7 @@ bool BackendContext::pickPhysicalDevice(){
         DeviceSelection selection;
         selection.device = device;
         selection.graphicsQueueFamily = m_graphicsQueueFamily;
+        selection.secondaryGraphicsQueueFamily = m_secondaryGraphicsQueueFamily;
         selection.computeQueueFamily = m_computeQueueFamily;
         selection.transferQueueFamily = m_transferQueueFamily;
         selection.presentQueueFamily = m_presentQueueFamily;
@@ -1155,6 +1178,7 @@ bool BackendContext::pickPhysicalDevice(){
     auto applySelection = [this](const DeviceSelection& selection){
         m_vulkanPhysicalDevice = selection.device;
         m_graphicsQueueFamily = selection.graphicsQueueFamily;
+        m_secondaryGraphicsQueueFamily = selection.secondaryGraphicsQueueFamily;
         m_computeQueueFamily = selection.computeQueueFamily;
         m_transferQueueFamily = selection.transferQueueFamily;
         m_presentQueueFamily = selection.presentQueueFamily;
@@ -1587,8 +1611,9 @@ bool BackendContext::createVulkanDevice(){
         && requestedOptionalFeatures.rayTracingLinearSweptSpheres.linearSweptSpheres == VK_TRUE
     ;
 
-    // The optional same-class route uses a second VkQueue from the already selected Graphics family. Query the
-    // family count here, after physical-device selection and before vkCreateDevice, so no unsupported queue index
+    // The optional same-class route prefers the selected cross-family Graphics transport only when that separate
+    // policy is enabled; otherwise it keeps the existing second-queue-from-primary-family behavior. Query the
+    // family counts here, after physical-device selection and before vkCreateDevice, so no unsupported queue index
     // is ever placed in the immutable Device registry.
     uint32_t physicalQueueFamilyCount = 0u;
     vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysicalDevice, &physicalQueueFamilyCount, nullptr);
@@ -1598,17 +1623,39 @@ bool BackendContext::createVulkanDevice(){
         &physicalQueueFamilyCount,
         physicalQueueFamilies.data()
     );
-    const bool createSecondaryGraphicsQueue =
+    const bool createCrossFamilySecondaryGraphicsQueue =
         m_deviceParams.enableSameClassMultiQueue
+        && m_deviceParams.enableCrossFamilySameClassQueueRouting
+        && m_secondaryGraphicsQueueFamily != s_InvalidQueueFamilyIndex
+        && m_secondaryGraphicsQueueFamily != m_graphicsQueueFamily
+        && static_cast<usize>(m_secondaryGraphicsQueueFamily) < physicalQueueFamilies.size()
+        && physicalQueueFamilies[static_cast<usize>(m_secondaryGraphicsQueueFamily)].queueCount > s_GraphicsQueueIndex
+    ;
+    const bool createPrimaryFamilySecondaryGraphicsQueue =
+        !createCrossFamilySecondaryGraphicsQueue
+        && m_deviceParams.enableSameClassMultiQueue
         && m_graphicsQueueFamily != s_InvalidQueueFamilyIndex
         && static_cast<usize>(m_graphicsQueueFamily) < physicalQueueFamilies.size()
         && physicalQueueFamilies[static_cast<usize>(m_graphicsQueueFamily)].queueCount
             > s_SecondaryGraphicsQueueIndex
     ;
+    const bool createSecondaryGraphicsQueue =
+        createCrossFamilySecondaryGraphicsQueue || createPrimaryFamilySecondaryGraphicsQueue
+    ;
+    const i32 secondaryGraphicsQueueFamily = createCrossFamilySecondaryGraphicsQueue
+        ? m_secondaryGraphicsQueueFamily
+        : m_graphicsQueueFamily
+    ;
+    const u32 secondaryGraphicsQueueIndex = createCrossFamilySecondaryGraphicsQueue
+        ? s_GraphicsQueueIndex
+        : s_SecondaryGraphicsQueueIndex
+    ;
 
     HashSet<i32, Hasher<i32>, EqualTo<i32>, Alloc::ScratchArena> uniqueQueueFamilies(0, Hasher<i32>(), EqualTo<i32>(), scratchArena);
     uniqueQueueFamilies.reserve(s_MaxVulkanQueueFamilyKinds);
     uniqueQueueFamilies.insert(m_graphicsQueueFamily);
+    if(createSecondaryGraphicsQueue)
+        uniqueQueueFamilies.insert(secondaryGraphicsQueueFamily);
 
     if(!m_deviceParams.headlessDevice)
         uniqueQueueFamilies.insert(m_presentQueueFamily);
@@ -1634,7 +1681,13 @@ bool BackendContext::createVulkanDevice(){
         VkDeviceQueueCreateInfo queueInfo = {};
         queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queueInfo.queueFamilyIndex = static_cast<u32>(queueFamily);
-        queueInfo.queueCount = createSecondaryGraphicsQueue && queueFamily == m_graphicsQueueFamily ? 2u : 1u;
+        queueInfo.queueCount =
+            createSecondaryGraphicsQueue
+            && queueFamily == secondaryGraphicsQueueFamily
+            && secondaryGraphicsQueueIndex == s_SecondaryGraphicsQueueIndex
+                ? 2u
+                : 1u
+        ;
         queueInfo.pQueuePriorities = queuePriorities;
         queueDesc[queueIndex] = queueInfo;
         ++queueIndex;
@@ -1749,15 +1802,18 @@ bool BackendContext::createVulkanDevice(){
 
     m_secondaryGraphicsQueue = VK_NULL_HANDLE;
     m_sameClassGraphicsQueueEnabled = false;
+    m_secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
     vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_graphicsQueueFamily), s_GraphicsQueueIndex, &m_graphicsQueue);
     if(createSecondaryGraphicsQueue){
         vkGetDeviceQueue(
             m_vulkanDevice,
-            static_cast<uint32_t>(m_graphicsQueueFamily),
-            s_SecondaryGraphicsQueueIndex,
+            static_cast<uint32_t>(secondaryGraphicsQueueFamily),
+            secondaryGraphicsQueueIndex,
             &m_secondaryGraphicsQueue
         );
         m_sameClassGraphicsQueueEnabled = m_secondaryGraphicsQueue != VK_NULL_HANDLE;
+        if(m_sameClassGraphicsQueueEnabled)
+            m_secondaryGraphicsQueueFamily = secondaryGraphicsQueueFamily;
     }
     if(createAsyncComputeQueue)
         vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_computeQueueFamily), s_ComputeQueueIndex, &m_computeQueue);
@@ -1821,13 +1877,19 @@ bool BackendContext::createVulkanDevice(){
     const char* const sameClassGraphicsQueueReason = !m_deviceParams.enableSameClassMultiQueue
         ? "disabled"
         : m_sameClassGraphicsQueueEnabled
-            ? "second queue from the Graphics family selected"
-            : "Graphics family exposes no second queue"
+            ? m_secondaryGraphicsQueueFamily != m_graphicsQueueFamily
+                ? "cross-family Graphics queue selected"
+                : "second queue from the Graphics family selected"
+            : m_deviceParams.enableCrossFamilySameClassQueueRouting
+                ? "no alternate Graphics family or second Graphics queue"
+                : "Graphics family exposes no second queue"
     ;
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: same-class graphics queue requested={} effective={} graphicsFamily={} ({})")
+    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: same-class graphics queue requested={} crossFamilyRequested={} effective={} graphicsFamily={} auxiliaryGraphicsFamily={} ({})")
         , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableSameClassMultiQueue))
+        , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableCrossFamilySameClassQueueRouting))
         , StringConvert(VulkanDetail::BoolToString(m_sameClassGraphicsQueueEnabled))
         , m_graphicsQueueFamily
+        , m_secondaryGraphicsQueueFamily
         , StringConvert(sameClassGraphicsQueueReason)
     );
 
@@ -2366,8 +2428,10 @@ bool BackendContext::createDevice(){
             .queue = m_secondaryGraphicsQueue,
             .queueClass = CommandQueue::Graphics,
             .capabilities = graphicsQueueCapabilities,
-            .familyIndex = static_cast<u32>(m_graphicsQueueFamily),
-            .queueIndex = s_SecondaryGraphicsQueueIndex,
+            .familyIndex = static_cast<u32>(m_secondaryGraphicsQueueFamily),
+            .queueIndex = m_secondaryGraphicsQueueFamily == m_graphicsQueueFamily
+                ? s_SecondaryGraphicsQueueIndex
+                : s_GraphicsQueueIndex,
             .dedicated = false,
             .primaryForClass = false,
         };

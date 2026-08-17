@@ -968,6 +968,14 @@ bool Graphics::setSameClassMultiQueueEnabled(const bool enabled){
     return true;
 }
 
+bool Graphics::setCrossFamilySameClassQueueRoutingEnabled(const bool enabled){
+    if(m_backend->getDevice())
+        return false;
+
+    m_deviceCreationParams.enableCrossFamilySameClassQueueRouting = enabled;
+    return true;
+}
+
 bool Graphics::setAdapterIndex(const i32 index){
     if(index < -1 || m_backend->getDevice())
         return false;

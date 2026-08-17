@@ -222,14 +222,18 @@ private:
 
     VkPhysicalDevice m_vulkanPhysicalDevice = VK_NULL_HANDLE;
     i32 m_graphicsQueueFamily = s_InvalidQueueFamilyIndex;
+    // Family selected for the optional auxiliary Graphics queue; it differs from the primary only for explicitly
+    // enabled cross-family routing.
+    i32 m_secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_computeQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_transferQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_presentQueueFamily = s_InvalidQueueFamilyIndex;
 
     VkDevice m_vulkanDevice = VK_NULL_HANDLE;
     VkQueue m_graphicsQueue = VK_NULL_HANDLE;
-    // Optional second VkQueue from the primary Graphics family. It is exposed only through the physical registry;
-    // legacy CommandQueue::Graphics callers continue to use m_graphicsQueue.
+    // Optional auxiliary Graphics VkQueue. It may come from the primary family or, under the separate cross-family
+    // opt-in, a distinct Graphics-capable family. It is exposed only through the physical registry; legacy
+    // CommandQueue::Graphics callers continue to use m_graphicsQueue.
     VkQueue m_secondaryGraphicsQueue = VK_NULL_HANDLE;
     VkQueue m_computeQueue = VK_NULL_HANDLE;
     VkQueue m_transferQueue = VK_NULL_HANDLE;

@@ -801,6 +801,19 @@ void Device::configureLegacyQueueContext(){
         ? static_cast<i32>(graphicsQueue->m_queueFamilyIndex)
         : s_InvalidQueueFamilyIndex
     ;
+    m_context.auxiliaryGraphicsQueueFamilyIndex = s_InvalidQueueFamilyIndex;
+    if(graphicsQueue){
+        for(const Queue* const physicalQueue : m_physicalQueues){
+            if(
+                physicalQueue
+                && physicalQueue->m_queueID == CommandQueue::Graphics
+                && physicalQueue->m_queueFamilyIndex != graphicsQueue->m_queueFamilyIndex
+            ){
+                m_context.auxiliaryGraphicsQueueFamilyIndex = static_cast<i32>(physicalQueue->m_queueFamilyIndex);
+                break;
+            }
+        }
+    }
     m_context.asyncComputeQueueFamilyIndex = computeQueue
         ? static_cast<i32>(computeQueue->m_queueFamilyIndex)
         : s_InvalidQueueFamilyIndex

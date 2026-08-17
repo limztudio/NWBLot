@@ -22,6 +22,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct MaterialSurfaceInfo;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Soft resolve either overwrites visibility or multiplies transparent transmittance.
 namespace SoftShadowUpsampleFold{
     enum Enum : u32{
@@ -53,6 +59,14 @@ struct PreparedShadowTraceGeometryBuffer{
 
 using PreparedShadowTraceGeometryBufferVector = Vector<
     PreparedShadowTraceGeometryBuffer,
+    Core::Alloc::GlobalArena
+>;
+
+// Material surface hooks in the shadow, caustic, and GI trace paths select texture assets through typed bindless
+// slots. Keep the exact preflight-resolved handles beside the trace geometry so graph declaration never has to
+// inspect mutable material caches while recording.
+using PreparedShadowTraceMaterialSampledTextureVector = Vector<
+    Core::TextureHandle,
     Core::Alloc::GlobalArena
 >;
 
@@ -244,6 +258,8 @@ public:
     // uses the shared IDs for every packet that manually stages it.
     [[nodiscard]] bool freezePreparedShadowTraceGeometryBuffers();
     [[nodiscard]] const PreparedShadowTraceGeometryBufferVector& preparedShadowTraceGeometryBuffers()const noexcept;
+    [[nodiscard]] const PreparedShadowTraceMaterialSampledTextureVector&
+        preparedShadowTraceMaterialSampledTextures()const noexcept;
     // Includes accepted but currently invisible mesh streams, which must retain their state source until their
     // owning mesh is removed or a later preparation packet supersedes it.
     [[nodiscard]] const Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& acceptedShadowTraceGeometryBuffers()const noexcept;
@@ -848,6 +864,11 @@ private:
         usize materialTypedByteCount
     )const;
     void clearPreparedShadowMaterialContext()noexcept;
+    [[nodiscard]] bool appendPreparedShadowTraceMaterialSampledTextures(
+        const MaterialSurfaceInfo& materialInfo,
+        Core::Alloc::ScratchArena& scratchArena
+    );
+    void clearPreparedShadowTraceMaterialSampledTextures()noexcept;
     // A healthy hybrid preflight gathers the HW context before the final SW context replaces it. Retain that exact
     // immutable HW payload so an optional SW-tail miss can restore opaque consumers without a recording-time
     // renderer/material regather; stale sources still take the established direct retry.
@@ -1234,6 +1255,7 @@ private:
 private:
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;
+    PreparedShadowTraceMaterialSampledTextureVector m_preparedShadowTraceMaterialSampledTextures;
     // Persist across graph declaration/recording so the immutable blob and compatibility writer never regather
     // mutable renderer state after preflight. The bytes are tightly packed NwbCausticEmissionTargetGpu records.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedCausticEmissionTargetBytes;

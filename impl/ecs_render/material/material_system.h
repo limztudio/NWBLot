@@ -166,6 +166,10 @@ public:
     // Resolves the exact persistent sampled textures selected by frozen prepared draw streams. It never creates
     // assets or descriptors: a missing or unresolved cached resource makes the collection unavailable so callers
     // can retain their existing compatibility route.
+    [[nodiscard]] bool appendPreparedMaterialSurfaceSampledTextures(
+        const MaterialSurfaceInfo& materialInfo,
+        Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& inOutTextures
+    );
     [[nodiscard]] bool gatherPreparedMaterialPassSampledTextures(
         const MaterialPassDrawItems* const* drawItemSets,
         usize drawItemSetCount,

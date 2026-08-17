@@ -20,6 +20,7 @@ RendererRayTracingSystem::RendererRayTracingSystem(RendererSystem& renderer)
     : RendererSystemSubsystemBase<RendererSystem>(renderer)
     , m_preparedShadowTraceGeometryBuffers(arena())
     , m_acceptedShadowTraceGeometryBuffers(arena())
+    , m_preparedShadowTraceMaterialSampledTextures(arena())
     , m_preparedCausticEmissionTargetBytes(arena())
     , m_preparedShadowInstanceMaterialBytes(arena())
     , m_preparedShadowInstanceBytes(arena())
@@ -1273,6 +1274,40 @@ RendererRayTracingSystem::acceptedShadowTraceGeometryBuffers()const noexcept{
     return m_acceptedShadowTraceGeometryBuffers;
 }
 
+const PreparedShadowTraceMaterialSampledTextureVector&
+RendererRayTracingSystem::preparedShadowTraceMaterialSampledTextures()const noexcept{
+    return m_preparedShadowTraceMaterialSampledTextures;
+}
+
+bool RendererRayTracingSystem::appendPreparedShadowTraceMaterialSampledTextures(
+    const MaterialSurfaceInfo& materialInfo,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    Vector<Core::TextureHandle, Core::Alloc::ScratchArena> sampledTextures{ scratchArena };
+    if(!m_renderer.materialSystem().appendPreparedMaterialSurfaceSampledTextures(materialInfo, sampledTextures))
+        return false;
+
+    for(const Core::TextureHandle& texture : sampledTextures){
+        if(!texture || !texture->getDescription().name)
+            return false;
+
+        bool alreadyCollected = false;
+        for(const Core::TextureHandle& existing : m_preparedShadowTraceMaterialSampledTextures){
+            if(existing.get() == texture.get()){
+                alreadyCollected = true;
+                break;
+            }
+        }
+        if(!alreadyCollected)
+            m_preparedShadowTraceMaterialSampledTextures.push_back(texture);
+    }
+    return true;
+}
+
+void RendererRayTracingSystem::clearPreparedShadowTraceMaterialSampledTextures()noexcept{
+    m_preparedShadowTraceMaterialSampledTextures.clear();
+}
+
 void RendererRayTracingSystem::confirmPreparedShadowTraceGeometryNormalization()noexcept{
     for(const PreparedShadowTraceGeometryBuffer& resource : m_preparedShadowTraceGeometryBuffers){
         bool known = false;
@@ -1290,10 +1325,12 @@ void RendererRayTracingSystem::confirmPreparedShadowTraceGeometryNormalization()
 void RendererRayTracingSystem::invalidatePreparedShadowTraceGeometryBuffers()noexcept{
     m_preparedShadowTraceGeometryBuffers.clear();
     m_acceptedShadowTraceGeometryBuffers.clear();
+    clearPreparedShadowTraceMaterialSampledTextures();
 }
 
 void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexcept{
     m_preparedShadowTraceGeometryBuffers.clear();
+    clearPreparedShadowTraceMaterialSampledTextures();
     m_preparedCausticEmissionTargetBytes.clear();
     clearPreparedShadowMaterialContext();
     clearPreparedHybridHardwareMaterialContextFallback();
@@ -1349,6 +1386,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     m_shadowVisibilityHybridResourcesPreflighted = false;
     m_shadowVisibilityBackendPipelinePreflighted = false;
     m_shadowVisibilityHybridPipelinePreflighted = false;
+    clearPreparedShadowTraceMaterialSampledTextures();
     clearPreparedShadowMaterialContext();
     clearPreparedHybridHardwareMaterialContextFallback();
     clearPreparedSceneBvh();
@@ -1993,8 +2031,20 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
                         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: test hybrid hardware material fallback retried directly"));
                 }
 #endif
-                if(!restoredFrozenHardwareContext && !restoredDirectHardwareContext){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid hardware material-context fallback failed; caustics and surfel GI are disabled this frame"));
+                if(!restoredFrozenHardwareContext){
+                    // The direct retry intentionally re-gathers current material descriptors after the graph froze
+                    // its trace-texture set. Keep its opaque-HW shadow result, but do not let later caustic/surfel
+                    // consumers sample an untracked bindless texture in this already-compiled frame.
+                    if(restoredDirectHardwareContext){
+                        NWB_LOGGER_WARNING(NWB_TEXT(
+                            "RendererSystem: hybrid hardware material-context fallback retried directly; caustics and surfel GI are disabled this frame"
+                        ));
+                    }
+                    else{
+                        NWB_LOGGER_WARNING(NWB_TEXT(
+                            "RendererSystem: hybrid hardware material-context fallback failed; caustics and surfel GI are disabled this frame"
+                        ));
+                    }
                     disableHybridMaterialConsumers();
                 }
             }

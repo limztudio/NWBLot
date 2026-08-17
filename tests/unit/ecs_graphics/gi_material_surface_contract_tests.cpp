@@ -85,6 +85,72 @@ TEST(EcsGraphics, GiMaterialSurfaceDispatchSupportsHeterogeneousFrostInterface){
 }
 
 
+// Every trace backend evaluates the generated material-surface dispatcher. Keep its dynamic Texture2D accesses
+// coupled to the preflight snapshot and the graph's immutable ShaderResource set, rather than relying on the
+// material heap selector alone.
+TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    AString materialSurfaceSource;
+    AString rayTracingSystemSource;
+    AString rayTracingSystemHeader;
+    AString swBvhSource;
+    AString swShadowTraceSource;
+    AString swCausticSource;
+    AString hwCausticSource;
+    AString swGiTraceSource;
+    AString hwGiTraceSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_surface.cpp", materialSurfaceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingSystemHeader));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "shadow" / "sw_shadow_traverse.slangi", swShadowTraceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "caustic" / "caustic_photon_sw_cs.slang", swCausticSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "caustic" / "caustic_photon_hw_chit.slang", hwCausticSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "gi" / "gi_sw_trace.slangi", swGiTraceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "gi" / "gi_hw_trace.slangi", hwGiTraceSource));
+
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const AStringView materialSurface(materialSurfaceSource.data(), materialSurfaceSource.size());
+    const AStringView rayTracingSystem(rayTracingSystemSource.data(), rayTracingSystemSource.size());
+    const AStringView rayTracingSystemHeaderView(rayTracingSystemHeader.data(), rayTracingSystemHeader.size());
+    const AStringView swBvh(swBvhSource.data(), swBvhSource.size());
+    const AStringView swShadowTrace(swShadowTraceSource.data(), swShadowTraceSource.size());
+    const AStringView swCaustic(swCausticSource.data(), swCausticSource.size());
+    const AStringView hwCaustic(hwCausticSource.data(), hwCausticSource.size());
+    const AStringView swGiTrace(swGiTraceSource.data(), swGiTraceSource.size());
+    const AStringView hwGiTrace(hwGiTraceSource.data(), hwGiTraceSource.size());
+
+    EXPECT_TRUE(ContainsText(materialSurface, "appendPreparedMaterialSurfaceSampledTextures"));
+    EXPECT_TRUE(ContainsText(rayTracingSystemHeaderView, "PreparedShadowTraceMaterialSampledTextureVector"));
+    EXPECT_TRUE(ContainsText(rayTracingSystem, "appendPreparedShadowTraceMaterialSampledTextures"));
+    EXPECT_TRUE(ContainsText(swBvh, "materialInfo->shadowTransmittanceModelId != Limit<u32>::s_Max"));
+
+    EXPECT_TRUE(ContainsText(swShadowTrace, "nwbShadowDispatchSurface"));
+    EXPECT_TRUE(ContainsText(swCaustic, "nwbShadowDispatchSurface"));
+    EXPECT_TRUE(ContainsText(hwCaustic, "nwbShadowDispatchSurface"));
+    EXPECT_TRUE(ContainsText(swGiTrace, "nwbShadowDispatchSurface"));
+    EXPECT_TRUE(ContainsText(hwGiTrace, "nwbShadowDispatchSurface"));
+
+    EXPECT_TRUE(ContainsText(taskGraph, "render.trace_material_sampled_textures"));
+    EXPECT_TRUE(ContainsText(taskGraph, "Trace Material Sampled Textures"));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.shadow_visibility.soft_transparent_trace"));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.shadow_visibility"));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.software_caustics.photons"));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.hardware_caustics.photons"));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.surfel_gi.trace"));
+    EXPECT_TRUE(ContainsText(taskGraph, "traceMaterialSampledTextureSetUse"));
+    EXPECT_TRUE(ContainsText(taskGraph, "hardwarePhotonResourceSetUses"));
+    EXPECT_TRUE(ContainsText(
+        rayTracingSystem,
+        "hybrid hardware material-context fallback retried directly; caustics and surfel GI are disabled this frame"
+    ));
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

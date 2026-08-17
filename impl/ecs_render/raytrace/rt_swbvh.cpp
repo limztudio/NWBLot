@@ -1135,6 +1135,15 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         if(m_renderer.materialSystem().findMaterialSurfaceInfo(renderer.material, materialInfo)){
             if(materialInfo->transparent)
                 rayTracingState().m_sceneHasTransparentOccluder = true;
+            // The trace surface dispatcher reads this material's Texture2D fields through non-uniform bindless
+            // slots. Retain the exact resolved handles during preflight; recording must never discover a texture
+            // after the shared graph fixed its immutable resource set.
+            if(
+                !commandList
+                && materialInfo->shadowTransmittanceModelId != Limit<u32>::s_Max
+                && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, scratchArena)
+            )
+                return false;
             u32 materialConstantByteOffset = 0u;
             if(!m_renderer.materialSystem().appendShadowOccluderMaterialContext(
                 entity,
@@ -1742,6 +1751,14 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         InstanceGpuData shadowInstance;
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(m_renderer.materialSystem().findMaterialSurfaceInfo(renderer.material, materialInfo)){
+            // Software shadow, caustic, and surfel traversal evaluate the same material surface dispatcher as the
+            // hardware path. Freeze its sampled textures alongside the scene-BVH material context.
+            if(
+                !commandList
+                && materialInfo->shadowTransmittanceModelId != Limit<u32>::s_Max
+                && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, scratchArena)
+            )
+                return false;
             u32 materialConstantByteOffset = 0u;
             if(!m_renderer.materialSystem().appendShadowOccluderMaterialContext(
                 entity,

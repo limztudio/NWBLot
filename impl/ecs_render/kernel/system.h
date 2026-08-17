@@ -303,6 +303,7 @@ private:
         const Core::GpuGraphResourceId* softwareTraceGeometryResources,
         usize softwareTraceGeometryResourceCount,
         Core::GpuGraphResourceSetId softwareTraceGeometrySet,
+        Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
         Core::GpuTaskId prefixTask,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming,
@@ -326,6 +327,7 @@ private:
         const Core::GpuGraphResourceId* softwareTraceGeometryResources,
         usize softwareTraceGeometryResourceCount,
         Core::GpuGraphResourceSetId softwareTraceGeometrySet,
+        Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
         Optional<Core::GpuTimingMeasure>& causticResolveTiming
@@ -342,6 +344,7 @@ private:
         const Core::GpuGraphResourceId* traceGeometryResources,
         usize traceGeometryResourceCount,
         Core::GpuGraphResourceSetId traceGeometrySet,
+        Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
         Core::GpuTaskId effectsTask,
         Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
         Core::GpuTimingSubmissionTicket& timingTicket,

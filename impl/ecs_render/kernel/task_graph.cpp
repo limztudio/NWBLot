@@ -7756,6 +7756,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     const Core::GpuGraphResourceId* const softwareTraceGeometryResources,
     const usize softwareTraceGeometryResourceCount,
     const Core::GpuGraphResourceSetId softwareTraceGeometrySet,
+    const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
     const Core::GpuTaskId prefixTask,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming,
@@ -8185,6 +8186,18 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         .requiredState = Core::ResourceStates::ShaderResource,
         .access = Core::GpuTaskResourceAccess::Read,
     };
+    const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{
+        .resourceSet = traceMaterialSampledTextureSet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
+    Core::GpuTaskResourceSetUse traceResourceSetUses[2u] = {};
+    usize traceResourceSetUseCount = 0u;
+    if(softwareTraceGeometryStatesGraphOwned)
+        traceResourceSetUses[traceResourceSetUseCount++] = softwareTraceGeometrySetUse;
+    if(traceMaterialSampledTextureSet.valid())
+        traceResourceSetUses[traceResourceSetUseCount++] = traceMaterialSampledTextureSetUse;
 
     // The prepared soft path keeps the opaque first wavelet, resolve tail, transparent trace, and temporal/RGB
     // resolve as adjacent callbacks. Re-importing retains shared graph identities while making each graph-owned
@@ -8553,8 +8566,8 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             .setDependencies(traceDependencies, LengthOf(traceDependencies))
             .setResourceUses(transparentTraceResourceUses.data(), transparentTraceResourceUses.size())
             .setResourceSetUses(
-                softwareTraceGeometryStatesGraphOwned ? &softwareTraceGeometrySetUse : nullptr,
-                softwareTraceGeometryStatesGraphOwned ? 1u : 0u
+                traceResourceSetUseCount != 0u ? traceResourceSetUses : nullptr,
+                traceResourceSetUseCount
             )
         ;
         m_deferredShadowVisibilityTransparentTraceTask = m_raytracingSystem.declareShadowTransparentSoftTraceTask(
@@ -8779,8 +8792,8 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         .setDependencies(&shadowVisibilityDependency, 1u)
         .setResourceUses(resourceUses.data(), resourceUses.size())
         .setResourceSetUses(
-            softwareTraceGeometryStatesGraphOwned ? &softwareTraceGeometrySetUse : nullptr,
-            softwareTraceGeometryStatesGraphOwned ? 1u : 0u
+            traceResourceSetUseCount != 0u ? traceResourceSetUses : nullptr,
+            traceResourceSetUseCount
         )
     ;
     m_deferredShadowVisibilityTask = m_raytracingSystem.declareShadowVisibilityTask(
@@ -8850,6 +8863,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     const Core::GpuGraphResourceId* const softwareTraceGeometryResources,
     const usize softwareTraceGeometryResourceCount,
     const Core::GpuGraphResourceSetId softwareTraceGeometrySet,
+    const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
     Optional<Core::GpuTimingMeasure>& causticResolveTiming
@@ -9262,6 +9276,18 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         .requiredState = Core::ResourceStates::ShaderResource,
         .access = Core::GpuTaskResourceAccess::Read,
     };
+    const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{
+        .resourceSet = traceMaterialSampledTextureSet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
+    Core::GpuTaskResourceSetUse photonResourceSetUses[2u] = {};
+    usize photonResourceSetUseCount = 0u;
+    if(softwareTraceGeometryStatesGraphOwned)
+        photonResourceSetUses[photonResourceSetUseCount++] = softwareTraceGeometrySetUse;
+    if(traceMaterialSampledTextureSet.valid())
+        photonResourceSetUses[photonResourceSetUseCount++] = traceMaterialSampledTextureSetUse;
 
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
@@ -9419,8 +9445,8 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         .setDependencies(&causticsDependency, 1u)
         .setResourceUses(photonResourceUses.data(), photonResourceUses.size())
         .setResourceSetUses(
-            softwareTraceGeometryStatesGraphOwned ? &softwareTraceGeometrySetUse : nullptr,
-            softwareTraceGeometryStatesGraphOwned ? 1u : 0u
+            photonResourceSetUseCount != 0u ? photonResourceSetUses : nullptr,
+            photonResourceSetUseCount
         )
     ;
     m_deferredCausticPhotonTask = m_raytracingSystem.declareSoftwareCausticsTask(
@@ -9665,6 +9691,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     const Core::GpuGraphResourceId* const traceGeometryResources,
     const usize traceGeometryResourceCount,
     const Core::GpuGraphResourceSetId traceGeometrySet,
+    const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
     const Core::GpuTaskId effectsTask,
     const Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
     Core::GpuTimingSubmissionTicket& timingTicket,
@@ -9709,6 +9736,18 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         .requiredState = Core::ResourceStates::ShaderResource,
         .access = Core::GpuTaskResourceAccess::Read,
     };
+    const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{
+        .resourceSet = traceMaterialSampledTextureSet,
+        .range = {},
+        .requiredState = Core::ResourceStates::ShaderResource,
+        .access = Core::GpuTaskResourceAccess::Read,
+    };
+    Core::GpuTaskResourceSetUse traceResourceSetUses[2u] = {};
+    usize traceResourceSetUseCount = 0u;
+    if(traceGeometryStatesGraphOwned)
+        traceResourceSetUses[traceResourceSetUseCount++] = traceGeometrySetUse;
+    if(traceMaterialSampledTextureSet.valid())
+        traceResourceSetUses[traceResourceSetUseCount++] = traceMaterialSampledTextureSetUse;
 
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
@@ -10338,8 +10377,8 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             .setDependencies(&m_deferredSurfelGiTraceBuildArgsTask, 1u)
             .setResourceUses(traceResourceUses.data(), traceResourceUses.size())
             .setResourceSetUses(
-                traceGeometryStatesGraphOwned ? &traceGeometrySetUse : nullptr,
-                traceGeometryStatesGraphOwned ? 1u : 0u
+                traceResourceSetUseCount != 0u ? traceResourceSetUses : nullptr,
+                traceResourceSetUseCount
             )
         ;
         m_deferredSurfelGiTraceTask = m_raytracingSystem.declareSurfelGiTraceTask(
@@ -10392,8 +10431,8 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         )
         .setResourceUses(resourceUses.data(), resourceUses.size())
         .setResourceSetUses(
-            !graphOwnsSurfelGiResolve && traceGeometryStatesGraphOwned ? &traceGeometrySetUse : nullptr,
-            !graphOwnsSurfelGiResolve && traceGeometryStatesGraphOwned ? 1u : 0u
+            !graphOwnsSurfelGiResolve && traceResourceSetUseCount != 0u ? traceResourceSetUses : nullptr,
+            !graphOwnsSurfelGiResolve ? traceResourceSetUseCount : 0u
         )
     ;
     m_deferredSurfelGiTask = m_raytracingSystem.declareSurfelGiTask(
@@ -10716,17 +10755,24 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     const PreparedShadowTraceGeometryBufferVector& preparedTraceGeometry =
         m_raytracingSystem.preparedShadowTraceGeometryBuffers()
     ;
+    const PreparedShadowTraceMaterialSampledTextureVector& preparedTraceMaterialSampledTextures =
+        m_raytracingSystem.preparedShadowTraceMaterialSampledTextures()
+    ;
     Core::Alloc::ScratchArena traceGeometryScratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> traceGeometryResources{ traceGeometryScratchArena };
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hardwareTraceGeometryResources{ traceGeometryScratchArena };
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hardwareTraceAttributeResources{ traceGeometryScratchArena };
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareTraceGeometryResources{ traceGeometryScratchArena };
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> traceMaterialSampledTextureResources{
+        traceGeometryScratchArena
+    };
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareBvhBuildStateResources{ traceGeometryScratchArena };
     Vector<Core::Buffer*, Core::Alloc::ScratchArena> softwareBvhBuildStateBuffers{ traceGeometryScratchArena };
     traceGeometryResources.reserve(preparedTraceGeometry.size());
     hardwareTraceGeometryResources.reserve(preparedTraceGeometry.size());
     hardwareTraceAttributeResources.reserve(preparedTraceGeometry.size());
     softwareTraceGeometryResources.reserve(preparedTraceGeometry.size());
+    traceMaterialSampledTextureResources.reserve(preparedTraceMaterialSampledTextures.size());
     softwareBvhBuildStateResources.reserve(meshState().m_meshes.size() + 3u);
     softwareBvhBuildStateBuffers.reserve(meshState().m_meshes.size() + 3u);
 
@@ -10767,6 +10813,25 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ))
             softwareTraceGeometryResources.push_back(resource);
     }
+    // Shadow, caustic, and surfel closest-hit dispatchers use the frozen material context to select these Texture2D
+    // assets through the bindless heap. Reuse a typed preflight import when G-buffer/AVBOIT already owns it, rather
+    // than introducing an opaque descriptor domain around the trace paths.
+    for(const Core::TextureHandle& texture : preparedTraceMaterialSampledTextures){
+        Core::GpuGraphResourceId resource = m_deferredLightingTaskGraph.findImportedTexture(texture);
+        if(!resource.valid()){
+            const Name textureIdentity = texture ? texture->getDescription().name : NAME_NONE;
+            if(!textureIdentity){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared trace material texture has no stable identity"));
+                return;
+            }
+            resource = importTexture(texture, textureIdentity, "Prepared Trace Material Sampled Texture");
+        }
+        if(!resource.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import prepared trace material sampled texture"));
+            return;
+        }
+        traceMaterialSampledTextureResources.push_back(resource);
+    }
     Core::GpuGraphResourceSetId shadowTraceGeometrySet;
     if(!traceGeometryResources.empty()){
         shadowTraceGeometrySet = m_deferredLightingTaskGraph.importResourceSet(
@@ -10784,6 +10849,22 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 .setMarkerLabel("Software Trace Geometry")
                 .setMembers(softwareTraceGeometryResources.data(), softwareTraceGeometryResources.size())
         );
+    }
+    Core::GpuGraphResourceSetId traceMaterialSampledTextureSet;
+    if(!traceMaterialSampledTextureResources.empty()){
+        traceMaterialSampledTextureSet = m_deferredLightingTaskGraph.importResourceSet(
+            Core::GpuGraphResourceSetDesc{}
+                .setIdentity(Name("render.trace_material_sampled_textures"))
+                .setMarkerLabel("Trace Material Sampled Textures")
+                .setMembers(
+                    traceMaterialSampledTextureResources.data(),
+                    traceMaterialSampledTextureResources.size()
+                )
+        );
+        if(!traceMaterialSampledTextureSet.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared trace material sampled textures"));
+            return;
+        }
     }
     Core::GpuGraphResourceSetId hardwareTraceGeometrySet;
     if(!hardwareTraceGeometryResources.empty()){
@@ -11384,6 +11465,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         softwareTraceGeometryResources.data(),
         softwareTraceGeometryResources.size(),
         softwareTraceGeometrySet,
+        traceMaterialSampledTextureSet,
         m_graphicsPrefixTask,
         shadowVisibilityTimingTicket,
         shadowVisibilityAsyncTiming,
@@ -11408,6 +11490,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         softwareTraceGeometryResources.data(),
         softwareTraceGeometryResources.size(),
         softwareTraceGeometrySet,
+        traceMaterialSampledTextureSet,
         softwareCausticsTimingTicket,
         causticPhotonTiming,
         causticResolveTiming
@@ -11443,6 +11526,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 ? hardwareTraceGeometrySet
                 : softwareTraceGeometrySet
         ),
+        traceMaterialSampledTextureSet,
         effectsTask,
         m_deferredSurfelGiCounterReadbackCompletion,
         surfelGiTimingTicket,
@@ -11505,6 +11589,20 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .requiredState = Core::ResourceStates::ShaderResource,
             .access = Core::GpuTaskResourceAccess::Read,
         };
+        const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{
+            .resourceSet = traceMaterialSampledTextureSet,
+            .range = {},
+            .requiredState = Core::ResourceStates::ShaderResource,
+            .access = Core::GpuTaskResourceAccess::Read,
+        };
+        Core::GpuTaskResourceSetUse hardwarePhotonResourceSetUses[2u] = {};
+        usize hardwarePhotonResourceSetUseCount = 0u;
+        if(hardwareTraceAttributeStatesGraphOwned){
+            hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCount++] = hardwareTraceAttributeSetUse;
+        }
+        if(traceMaterialSampledTextureSet.valid()){
+            hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCount++] = traceMaterialSampledTextureSetUse;
+        }
         hardwarePhotonResourceUses.reserve(15u + (
             hardwareTraceAttributeStatesGraphOwned ? 0u : hardwareTraceAttributeResources.size()
         ));
@@ -11999,8 +12097,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .setDependencies(&causticsDependency, 1u)
             .setResourceUses(hardwarePhotonResourceUses.data(), hardwarePhotonResourceUses.size())
             .setResourceSetUses(
-                hardwareTraceAttributeStatesGraphOwned ? &hardwareTraceAttributeSetUse : nullptr,
-                hardwareTraceAttributeStatesGraphOwned ? 1u : 0u
+                hardwarePhotonResourceSetUseCount != 0u ? hardwarePhotonResourceSetUses : nullptr,
+                hardwarePhotonResourceSetUseCount
             )
         ;
         m_deferredCausticPhotonTask = m_raytracingSystem.declareHardwareCausticsTask(

@@ -42,6 +42,7 @@ from window_capture_smoke import (  # noqa: E402
     require_normal_testbed_exit,
     terminate_process,
     validate_capture_result,
+    wait_for_log_message,
 )
 
 
@@ -127,6 +128,10 @@ def effective_frozen_environment(profile: BaselineProfile) -> Dict[str, str]:
         name: os.environ.get(name, default_value)
         for name, default_value in sorted(profile.frozen_environment.items())
     }
+
+
+def capture_mode(profile: BaselineProfile) -> str:
+    return "frame-locked" if profile.capture_freeze_frame != 0 else "settled"
 
 
 def read_bmp_rgb(path: Path) -> Tuple[int, int, bytes]:
@@ -268,6 +273,8 @@ def capture_scene(
     environment = build_launch_environment(launch_args)
     environment["NWB_RENDER_UNFOCUSED"] = "1"
     environment.update(frozen_environment)
+    if profile.capture_freeze_frame != 0:
+        environment["NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"] = str(profile.capture_freeze_frame)
     backend = None
     logserver_process = None
     app_process = None
@@ -288,7 +295,23 @@ def capture_scene(
         if not window:
             ensure_process_running(app_process, f"while waiting for '{profile.window_title}'")
             raise SmokeFailure(f"renderer baseline did not expose expected window '{profile.window_title}'")
-        time.sleep(args.settle_seconds)
+        if profile.capture_freeze_frame != 0:
+            if not profile.capture_ready_log:
+                raise SmokeFailure(f"frame-locked profile '{args.profile}' has no capture-ready log marker")
+            if not log_directory:
+                raise SmokeFailure("frame-locked renderer baseline requires a readable runtime-log directory")
+            wait_for_log_message(
+                log_directory,
+                log_baseline,
+                log_pattern,
+                profile.capture_ready_log,
+                args.startup_timeout,
+            )
+            # Submission is already suspended, so this wait allows the final accepted present to become visible
+            # without advancing the frame-locked temporal state.
+            time.sleep(args.settle_seconds)
+        else:
+            time.sleep(args.settle_seconds)
         ensure_process_running(app_process, "before baseline capture")
         validate_capture_result(backend.capture_window(window, capture_path))
     finally:
@@ -337,6 +360,8 @@ def manifest_payload(
         "profile_description": profile.description,
         "target": profile.target,
         "window_title": profile.window_title,
+        "capture_mode": capture_mode(profile),
+        "capture_freeze_frame": profile.capture_freeze_frame,
         "settle_seconds": args.settle_seconds,
         "gpu_validation": args.gpu_validation,
         "runtime_directory": str(args.runtime_dir),
@@ -366,6 +391,7 @@ def load_reference(
     frozen_environment: Mapping[str, str],
     settle_seconds: float,
     gpu_validation: bool,
+    capture_freeze_frame: int,
 ) -> Tuple[Mapping[str, object], Path]:
     manifest_path = reference_directory / "manifest.json"
     try:
@@ -388,6 +414,11 @@ def load_reference(
         raise SmokeFailure("baseline GPU-validation mode differs from the candidate capture")
     if manifest.get("settle_seconds") != settle_seconds:
         raise SmokeFailure("baseline settle duration differs from the candidate capture")
+    expected_capture_mode = "frame-locked" if capture_freeze_frame != 0 else "settled"
+    if manifest.get("capture_mode") != expected_capture_mode:
+        raise SmokeFailure("baseline capture mode differs from the candidate capture")
+    if manifest.get("capture_freeze_frame") != capture_freeze_frame:
+        raise SmokeFailure("baseline capture freeze frame differs from the candidate capture")
     capture_name = manifest.get("capture_file")
     if not isinstance(capture_name, str) or not capture_name:
         raise SmokeFailure(f"baseline manifest has no capture filename: {manifest_path}")
@@ -424,6 +455,7 @@ def run(args: argparse.Namespace) -> int:
             frozen_environment,
             args.settle_seconds,
             args.gpu_validation,
+            profile.capture_freeze_frame,
         )
 
     if reference_capture is None and not source_worktree_clean():
@@ -527,12 +559,17 @@ def run_self_test() -> int:
             "frozen_environment": {},
             "gpu_validation": False,
             "settle_seconds": 4.0,
+            "capture_mode": "settled",
+            "capture_freeze_frame": 0,
             "source_revision": "test-reference",
         }
         write_json(reference_directory / "manifest.json", manifest)
-        loaded_manifest, loaded_capture = load_reference(reference_directory, "opaque-texture", {}, 4.0, False)
+        loaded_manifest, loaded_capture = load_reference(reference_directory, "opaque-texture", {}, 4.0, False, 0)
         assert loaded_manifest["source_revision"] == "test-reference"
         assert loaded_capture == reference_image
+        transparent_profile = get_profile("transparent-avboit")
+        assert transparent_profile.capture_freeze_frame == 96
+        assert transparent_profile.settle_seconds == 0.75
         difference = compare_bmp_rgb(reference_image, candidate_image, root / "difference.bmp")
         assert difference.width == 2 and difference.height == 1
         assert difference.max_abs == 3

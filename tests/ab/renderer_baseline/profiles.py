@@ -17,6 +17,8 @@ class BaselineProfile:
     settle_seconds: float
     frozen_environment: Mapping[str, str]
     description: str
+    capture_freeze_frame: int = 0
+    capture_ready_log: str = ""
 
 
 PROFILES: Mapping[str, BaselineProfile] = {
@@ -32,9 +34,11 @@ PROFILES: Mapping[str, BaselineProfile] = {
         target="nwb_transparent_multi_smoke",
         runtime_directory=Path("Testing") / "smoke_runtime",
         window_title="NWB Transparent Multi Smoke",
-        settle_seconds=4.0,
+        settle_seconds=0.75,
         frozen_environment={"NWB_TRANSPARENT_MULTI_SPIN_ANGLE": "0.6"},
         description="Prepared transparent AVBOIT baseline with immutable material streams.",
+        capture_freeze_frame=96,
+        capture_ready_log="TransparentMultiSmokeProject: renderer baseline capture ready after",
     ),
     "static-csg": BaselineProfile(
         target="nwb_csg_visible_smoke",

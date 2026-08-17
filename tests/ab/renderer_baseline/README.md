@@ -32,6 +32,12 @@ Without thresholds the comparison is report-only; `--require-exact` is suitable 
 reference with a different profile, frozen environment, or GPU-validation mode is rejected rather than silently
 compared.
 
+The `transparent-avboit` profile is frame-locked at 96 completed render submissions. Its smoke project sets the
+test-only `NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME` control, suspends further submission, logs the ready marker,
+then allows a fixed 0.75-second present settle while the native event loop remains alive before it captures the
+pinned temporal phase. Other profiles retain their documented fixed settle duration until they receive an equally
+explicit temporal capture point.
+
 Available profiles cover opaque sampled images, transparent AVBOIT, static/skinned CSG, soft shadows, caustics,
 surfel GI, and the skinned stress scene. Frame-lagged async lighting and dedicated-Transfer evidence retain their
 separate topology-gated workflows because a Graphics fallback is not equivalent evidence.

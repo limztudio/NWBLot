@@ -292,6 +292,22 @@ static void ApplyTransparentCsgSceneTransform(
 
 class TransparentMultiSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
+    [[nodiscard]] static u32 rendererBaselineCaptureFreezeFrame(){
+        static const u32 s_captureFrame = [](){
+            f32 configuredFrame = 0.0f;
+            if(
+                !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", configuredFrame)
+                || !IsFinite(configuredFrame)
+                || configuredFrame < 1.0f
+            ){
+                return 0u;
+            }
+            return static_cast<u32>(Min(configuredFrame, 1000000.0f));
+        }();
+        return s_captureFrame;
+    }
+
+
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("TransparentMultiSmokeProject"));
 
@@ -495,6 +511,7 @@ public:
     }
 
     virtual void onShutdown()override{
+        m_context.graphics.setFrameSubmissionSuspended(false);
         m_context.input.removeHandler(m_arrowYawInput);
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
         m_context.input.removeHandler(m_frameLaggedAsyncLightingToggleInput);
@@ -504,6 +521,22 @@ public:
     }
 
     virtual bool onUpdate(const f32 delta)override{
+        const u32 captureFreezeFrame = rendererBaselineCaptureFreezeFrame();
+        if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
+            if(!m_rendererBaselineCapturePaused){
+                // The harness captures only after the last requested render submission has completed. Keeping the
+                // event loop alive while submissions are suspended pins AVBOIT's temporal phase for a later image
+                // comparison without adding a renderer/runtime test feature.
+                m_context.graphics.setFrameSubmissionSuspended(true);
+                m_rendererBaselineCapturePaused = true;
+                NWB_LOGGER_ESSENTIAL_INFO(
+                    NWB_TEXT("TransparentMultiSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"),
+                    m_rendererBaselineRenderedFrameCount
+                );
+            }
+            return true;
+        }
+
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
@@ -529,6 +562,7 @@ public:
         updateTransparentSceneTransforms();
         SetSmokeYawWindowTitle(m_context, m_sceneYaw.yaw(), m_sceneYaw.manualControl(), s_2PI);
         m_world->tick(safeDelta);
+        ++m_rendererBaselineRenderedFrameCount;
         return true;
     }
 
@@ -594,6 +628,8 @@ private:
     NWB::Core::ECS::EntityID m_opaqueRightShape = {};
     NWB::Tests::Smoke::YawSpinController m_sceneYaw;
     ArrowYawInputHandler m_arrowYawInput;
+    u32 m_rendererBaselineRenderedFrameCount = 0u;
+    bool m_rendererBaselineCapturePaused = false;
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
     FrameLaggedAsyncLightingToggleInputHandler m_frameLaggedAsyncLightingToggleInput;
     bool m_frameLaggedAsyncLightingEnabled = true;

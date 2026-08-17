@@ -392,6 +392,33 @@ TEST(EcsGraphics, SetupUploadReadinessBridgeRemainsGraphOwned){
 }
 
 
+// The parity baseline must pin temporal AVBOIT in test code, not introduce a renderer/core feature toggle. The
+// runner waits for the smoke marker only after that project has suspended its next submission.
+TEST(EcsGraphics, TransparentAvboitBaselineCaptureIsFrameLockedAndTestOwned){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString profileSource;
+    AString runnerSource;
+    AString smokeSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "ab" / "renderer_baseline" / "profiles.py", profileSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "ab" / "renderer_baseline" / "run.py", runnerSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "transparent_multi_project.cpp", smokeSource));
+    const AStringView profiles(profileSource.data(), profileSource.size());
+    const AStringView runner(runnerSource.data(), runnerSource.size());
+    const AStringView smoke(smokeSource.data(), smokeSource.size());
+
+    EXPECT_TRUE(ContainsText(profiles, "capture_freeze_frame=96"));
+    EXPECT_TRUE(ContainsText(profiles, "capture_ready_log=\"TransparentMultiSmokeProject: renderer baseline capture ready after\""));
+    EXPECT_TRUE(ContainsText(runner, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"));
+    EXPECT_TRUE(ContainsText(runner, "wait_for_log_message("));
+    EXPECT_TRUE(ContainsText(smoke, "rendererBaselineCaptureFreezeFrame"));
+    EXPECT_TRUE(ContainsText(smoke, "m_context.graphics.setFrameSubmissionSuspended(true)"));
+    EXPECT_TRUE(ContainsText(smoke, "renderer baseline capture ready after {} rendered frames; render submission suspended"));
+    EXPECT_TRUE(ContainsText(smoke, "m_context.graphics.setFrameSubmissionSuspended(false)"));
+}
+
+
 // Surfel GI is an explicitly promoted Compute adopter. It can select an alternate Compute family only for the
 // graph-owned output-clear/compute chain; the compiler remains responsible for rejecting an undeclared resource
 // sharing contract or lowering the required exclusive ownership transfer.

@@ -247,7 +247,14 @@ public:
         bool shadowMaterialContextBatchGraphOwned = false,
         bool sceneBvhBatchGraphOwned = false,
         bool meshSwBvhBuildsGraphOwned = false,
-        bool meshSwBvhInputStatesGraphOwned = false
+        bool meshSwBvhInputStatesGraphOwned = false,
+        bool hybridHardwareFallbackUploadsGraphOwned = false,
+        const void* hybridHardwareFallbackInstanceMaterialData = nullptr,
+        usize hybridHardwareFallbackInstanceMaterialByteCount = 0u,
+        const void* hybridHardwareFallbackInstanceData = nullptr,
+        usize hybridHardwareFallbackInstanceByteCount = 0u,
+        const void* hybridHardwareFallbackMaterialTypedData = nullptr,
+        usize hybridHardwareFallbackMaterialTypedByteCount = 0u
     );
     [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept;
     [[nodiscard]] bool shadowVisibilityHardwareSupported()const noexcept;
@@ -309,6 +316,29 @@ public:
         Core::GpuUploadBlobId& outInstanceBlob,
         Core::GpuUploadBlobId& outMaterialTypedBlob
     )const;
+    // A healthy hybrid preflight retains an immutable hardware context before the final software context replaces
+    // it. The optional tail may need that exact hardware snapshot again, so retain three graph-owned blobs without
+    // allowing a late recorder to re-read the renderer/material stream. An absent snapshot is a valid request for
+    // the existing direct compatibility retry.
+    [[nodiscard]] bool retainPreparedHybridHardwareMaterialContextFallbackUploads(
+        Core::GpuTaskGraph& graph,
+        Core::GpuUploadBlobId& outInstanceMaterialBlob,
+        Core::GpuUploadBlobId& outInstanceBlob,
+        Core::GpuUploadBlobId& outMaterialTypedBlob
+    )const;
+    // Records the retained hardware fallback against graph-owned immutable bytes. This is intentionally separate
+    // from the stale-snapshot direct retry, which remains the narrow compatibility boundary after validation fails.
+    [[nodiscard]] bool recordPreparedHybridHardwareMaterialContextFallback(
+        Core::CommandList& commandList,
+        const void* instanceMaterialData,
+        usize instanceMaterialByteCount,
+        const void* instanceData,
+        usize instanceByteCount,
+        const void* materialTypedData,
+        usize materialTypedByteCount
+    );
+    // Compatibility-only overload for callers that do not have a graph-owned upload blob.
+    [[nodiscard]] bool recordPreparedHybridHardwareMaterialContextFallback(Core::CommandList& commandList);
     void confirmPreparedShadowMaterialContextUploads()noexcept;
     // The software scene hierarchy and its leaf instances share topology and leaf indices, so retain them as one
     // immutable preflight batch and publish both only when the accepting Shadow Preparation packet submits.
@@ -873,7 +903,6 @@ private:
     // immutable HW payload so an optional SW-tail miss can restore opaque consumers without a recording-time
     // renderer/material regather; stale sources still take the established direct retry.
     [[nodiscard]] bool capturePreparedHybridHardwareMaterialContextFallback();
-    [[nodiscard]] bool recordPreparedHybridHardwareMaterialContextFallback(Core::CommandList& commandList);
     void clearPreparedHybridHardwareMaterialContextFallback()noexcept;
     [[nodiscard]] bool capturePreparedSceneBvh(
         bool staticScene,

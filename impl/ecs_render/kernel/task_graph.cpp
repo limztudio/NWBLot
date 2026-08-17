@@ -230,6 +230,10 @@ struct ShadowPrepareHybridSoftwareTailGraphTask{
         bool sceneBvhBatchGraphOwned = false;
         bool meshSwBvhBuildsGraphOwned = false;
         bool meshSwBvhInputStatesGraphOwned = false;
+        bool hybridHardwareFallbackUploadsGraphOwned = false;
+        Core::GpuUploadBlobId hybridHardwareFallbackInstanceMaterialBlob;
+        Core::GpuUploadBlobId hybridHardwareFallbackInstanceBlob;
+        Core::GpuUploadBlobId hybridHardwareFallbackMaterialTypedBlob;
     };
 
     [[nodiscard]] static bool record(
@@ -237,9 +241,39 @@ struct ShadowPrepareHybridSoftwareTailGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        static_cast<void>(context);
         if(!payload.raytracingSystem || !payload.targets || !payload.hardwarePreparationReady || !payload.timingTicket)
             return false;
+
+        const void* hybridHardwareFallbackInstanceMaterialData = nullptr;
+        const void* hybridHardwareFallbackInstanceData = nullptr;
+        const void* hybridHardwareFallbackMaterialTypedData = nullptr;
+        usize hybridHardwareFallbackInstanceMaterialByteCount = 0u;
+        usize hybridHardwareFallbackInstanceByteCount = 0u;
+        usize hybridHardwareFallbackMaterialTypedByteCount = 0u;
+        if(payload.hybridHardwareFallbackUploadsGraphOwned){
+            hybridHardwareFallbackInstanceMaterialData = context.taskGraph.uploadBlobData(
+                payload.hybridHardwareFallbackInstanceMaterialBlob,
+                hybridHardwareFallbackInstanceMaterialByteCount
+            );
+            hybridHardwareFallbackInstanceData = context.taskGraph.uploadBlobData(
+                payload.hybridHardwareFallbackInstanceBlob,
+                hybridHardwareFallbackInstanceByteCount
+            );
+            hybridHardwareFallbackMaterialTypedData = context.taskGraph.uploadBlobData(
+                payload.hybridHardwareFallbackMaterialTypedBlob,
+                hybridHardwareFallbackMaterialTypedByteCount
+            );
+            if(
+                !hybridHardwareFallbackInstanceMaterialData
+                || !hybridHardwareFallbackInstanceData
+                || !hybridHardwareFallbackMaterialTypedData
+                || hybridHardwareFallbackInstanceMaterialByteCount == 0u
+                || hybridHardwareFallbackInstanceByteCount == 0u
+                || hybridHardwareFallbackMaterialTypedByteCount == 0u
+            )
+                return false;
+        }
+
         // The tail may record SW-BVH timing scopes, so it shares the accepting packet's timing ticket even though
         // its callback begins after the hardware preparation callback closed its own recording scope.
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
@@ -252,7 +286,14 @@ struct ShadowPrepareHybridSoftwareTailGraphTask{
             payload.shadowMaterialContextBatchGraphOwned,
             payload.sceneBvhBatchGraphOwned,
             payload.meshSwBvhBuildsGraphOwned,
-            payload.meshSwBvhInputStatesGraphOwned
+            payload.meshSwBvhInputStatesGraphOwned,
+            payload.hybridHardwareFallbackUploadsGraphOwned,
+            hybridHardwareFallbackInstanceMaterialData,
+            hybridHardwareFallbackInstanceMaterialByteCount,
+            hybridHardwareFallbackInstanceData,
+            hybridHardwareFallbackInstanceByteCount,
+            hybridHardwareFallbackMaterialTypedData,
+            hybridHardwareFallbackMaterialTypedByteCount
         );
     }
 
@@ -5002,6 +5043,48 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     // untouched.
     const bool hybridSoftwareTailGraphOwned =
         m_raytracingSystem.hybridShadowVisibilityResourcesPreflighted();
+    // A healthy hybrid preflight retains the opaque-HW material context before it publishes the software context
+    // consumed by the tail. If that tail later declines to record, it can restore the frozen HW bytes from these
+    // graph-owned blobs without re-gathering material descriptors. A missing/stale capture deliberately keeps the
+    // existing direct retry boundary below.
+    Core::GpuUploadBlobId hybridHardwareFallbackInstanceMaterialBlob;
+    Core::GpuUploadBlobId hybridHardwareFallbackInstanceBlob;
+    Core::GpuUploadBlobId hybridHardwareFallbackMaterialTypedBlob;
+    bool hybridHardwareFallbackUploadsGraphOwned = false;
+    if(hybridSoftwareTailGraphOwned){
+        const bool retainedHybridHardwareFallback =
+            m_raytracingSystem.retainPreparedHybridHardwareMaterialContextFallbackUploads(
+                m_deferredLightingTaskGraph,
+                hybridHardwareFallbackInstanceMaterialBlob,
+                hybridHardwareFallbackInstanceBlob,
+                hybridHardwareFallbackMaterialTypedBlob
+            )
+        ;
+        const bool hybridHardwareFallbackBlobBatchComplete =
+            hybridHardwareFallbackInstanceMaterialBlob.valid()
+            && hybridHardwareFallbackInstanceBlob.valid()
+            && hybridHardwareFallbackMaterialTypedBlob.valid()
+        ;
+        const bool hybridHardwareFallbackBlobBatchEmpty =
+            !hybridHardwareFallbackInstanceMaterialBlob.valid()
+            && !hybridHardwareFallbackInstanceBlob.valid()
+            && !hybridHardwareFallbackMaterialTypedBlob.valid()
+        ;
+        if(
+            retainedHybridHardwareFallback
+            && hybridHardwareFallbackBlobBatchComplete
+            && shadowInstanceMaterials.valid()
+            && shadowInstances.valid()
+            && shadowMaterialTyped.valid()
+        ){
+            hybridHardwareFallbackUploadsGraphOwned = true;
+        }
+        else if(!retainedHybridHardwareFallback || !hybridHardwareFallbackBlobBatchEmpty){
+            NWB_LOGGER_WARNING(NWB_TEXT(
+                "RendererSystem: frozen hybrid hardware material fallback cannot use graph-owned upload blobs; retaining direct retry"
+            ));
+        }
+    }
     // A fully frozen hybrid packet has a separate software-tail callback, so the graph can now lower its exact
     // BLAS AccelStructBuildInput -> SW-BVH ShaderResource handoff at that boundary. Keep the direct/retry fallback
     // native unless both frozen plans and every required shared trace-geometry import are available.
@@ -5064,7 +5147,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     meshBlasGeometryBuildInputResources.reserve(preparedMeshBlasBuilds.size() * 2u);
     hybridSoftwareTailInputResources.reserve(preparedMeshSwBvhBuilds.size() * 2u);
     shadowPrepareTraceGeometryResources.reserve(shadowTraceGeometryResourceCount);
-    hybridSoftwareTailResourceUses.reserve(preparedMeshSwBvhBuilds.size() * 2u);
+    hybridSoftwareTailResourceUses.reserve(preparedMeshSwBvhBuilds.size() * 2u + 3u);
     pureSoftwareMeshSwBvhGraphResources.reserve(preparedMeshSwBvhBuilds.size());
     // Shadow Preparation owns each preflight input's post-transition packet boundary. This deliberately supersedes
     // preceding immutable uploads as graph producers, so later Compute readers wait on this first Graphics packet
@@ -5087,6 +5170,21 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         resourceUses.push_back(WriteUse(sceneBvhNodes, Core::ResourceStates::ShaderResource));
     if(sceneBvhInstances.valid())
         resourceUses.push_back(WriteUse(sceneBvhInstances, Core::ResourceStates::ShaderResource));
+
+    if(hybridHardwareFallbackUploadsGraphOwned){
+        // The tail may conditionally restore these immutable HW bytes after the optional SW traversal fails. Its
+        // final shader-visible state is declared here; the graph-owned recorder performs the internal CopyDest
+        // writes only on that fallback arm.
+        hybridSoftwareTailResourceUses.push_back(
+            WriteUse(shadowInstanceMaterials, Core::ResourceStates::ShaderResource)
+        );
+        hybridSoftwareTailResourceUses.push_back(
+            WriteUse(shadowInstances, Core::ResourceStates::ShaderResource)
+        );
+        hybridSoftwareTailResourceUses.push_back(
+            WriteUse(shadowMaterialTyped, Core::ResourceStates::ShaderResource)
+        );
+    }
 
     bool resourcesImported = true;
     const auto isShadowTraceGeometryResource = [&](const Core::GpuGraphResourceId resource){
@@ -5605,6 +5703,10 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
                 .sceneBvhBatchGraphOwned = sceneBvhBatchGraphOwned,
                 .meshSwBvhBuildsGraphOwned = meshSwBvhBuildsGraphOwned,
                 .meshSwBvhInputStatesGraphOwned = meshSwBvhInputStatesGraphOwned,
+                .hybridHardwareFallbackUploadsGraphOwned = hybridHardwareFallbackUploadsGraphOwned,
+                .hybridHardwareFallbackInstanceMaterialBlob = hybridHardwareFallbackInstanceMaterialBlob,
+                .hybridHardwareFallbackInstanceBlob = hybridHardwareFallbackInstanceBlob,
+                .hybridHardwareFallbackMaterialTypedBlob = hybridHardwareFallbackMaterialTypedBlob,
             }
         );
         if(!m_deferredShadowPrepareHybridSoftwareTailTask.valid()){

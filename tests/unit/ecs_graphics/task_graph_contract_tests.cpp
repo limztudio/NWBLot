@@ -245,6 +245,46 @@ TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
 }
 
 
+// The hybrid HW-to-SW tail may fail after the software material context has replaced the opaque-HW context. Its
+// successful frozen restore must use declaration-time graph blobs; only a stale snapshot may retain the existing
+// direct re-gather/retry boundary, which disables later consumers before they can observe undeclared resources.
+TEST(EcsGraphics, HybridHardwareFallbackRestoreUsesGraphOwnedBlobsWhenFrozen){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    AString rayTracingHeaderSource;
+    AString rayTracingSource;
+    AString swBvhSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
+
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
+    const AStringView rayTracing(rayTracingSource.data(), rayTracingSource.size());
+    const AStringView swBvh(swBvhSource.data(), swBvhSource.size());
+
+    EXPECT_TRUE(ContainsText(rayTracingHeader, "retainPreparedHybridHardwareMaterialContextFallbackUploads"));
+    EXPECT_TRUE(ContainsText(rayTracingHeader, "hybridHardwareFallbackUploadsGraphOwned"));
+    EXPECT_TRUE(ContainsText(rayTracing, "retainPreparedHybridHardwareMaterialContextFallbackUploads"));
+    EXPECT_TRUE(ContainsText(rayTracing, "graph.copyUploadData("));
+    EXPECT_TRUE(ContainsText(taskGraph, "hybridHardwareFallbackInstanceMaterialBlob"));
+    EXPECT_TRUE(ContainsText(taskGraph, "hybridHardwareFallbackUploadsGraphOwned"));
+    EXPECT_TRUE(ContainsText(taskGraph, "context.taskGraph.uploadBlobData("));
+    EXPECT_TRUE(ContainsText(taskGraph, "frozen hybrid hardware material fallback cannot use graph-owned upload blobs"));
+    EXPECT_TRUE(ContainsText(swBvh, "const void* const instanceMaterialData"));
+    EXPECT_TRUE(ContainsText(swBvh, "graph-owned hybrid hardware fallback bytes differ from preflight"));
+    EXPECT_TRUE(ContainsText(swBvh, "tryWriteBuffer(instanceMaterialBuffer, instanceMaterialData"));
+
+    // Keep the stale-snapshot direct retry explicitly narrow. It remains the compatibility boundary only after the
+    // immutable graph bytes fail validation, and it disables material consumers for this compiled frame.
+    EXPECT_TRUE(ContainsText(rayTracing, "!restoredFrozenHardwareContext\n                    && buildSceneTlas(commandList, scratchArena, false)"));
+    EXPECT_TRUE(ContainsText(rayTracing, "disableHybridMaterialConsumers();"));
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

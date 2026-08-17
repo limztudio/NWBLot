@@ -448,6 +448,65 @@ bool RendererRayTracingSystem::retainPreparedShadowMaterialContextUploads(
     return outInstanceMaterialBlob.valid() && outInstanceBlob.valid() && outMaterialTypedBlob.valid();
 }
 
+bool RendererRayTracingSystem::retainPreparedHybridHardwareMaterialContextFallbackUploads(
+    Core::GpuTaskGraph& graph,
+    Core::GpuUploadBlobId& outInstanceMaterialBlob,
+    Core::GpuUploadBlobId& outInstanceBlob,
+    Core::GpuUploadBlobId& outMaterialTypedBlob
+)const{
+    outInstanceMaterialBlob = {};
+    outInstanceBlob = {};
+    outMaterialTypedBlob = {};
+    if(!m_preparedHybridHardwareFallbackReady)
+        return true;
+
+    const auto& state = rayTracingState();
+    const usize instanceMaterialByteCount = m_preparedHybridHardwareFallbackInstanceMaterialByteCount;
+    const usize instanceByteCount = m_preparedHybridHardwareFallbackInstanceByteCount;
+    const usize materialTypedByteCount = m_preparedHybridHardwareFallbackMaterialTypedByteCount;
+    if(
+        instanceMaterialByteCount == 0u
+        || instanceByteCount == 0u
+        || materialTypedByteCount == 0u
+        || instanceMaterialByteCount % sizeof(NwbRtInstanceMaterialGpu) != 0u
+        || instanceByteCount % sizeof(InstanceGpuData) != 0u
+        || instanceMaterialByteCount > Limit<usize>::s_Max - instanceByteCount
+        || instanceMaterialByteCount + instanceByteCount > Limit<usize>::s_Max - materialTypedByteCount
+        || m_preparedHybridHardwareFallbackBytes.size()
+            != instanceMaterialByteCount + instanceByteCount + materialTypedByteCount
+        || state.m_shadowInstanceMaterialBuffer.get() != m_preparedHybridHardwareFallbackInstanceMaterialBuffer.get()
+        || state.m_shadowInstanceBuffer.get() != m_preparedHybridHardwareFallbackInstanceBuffer.get()
+        || state.m_shadowMaterialTypedBuffer.get() != m_preparedHybridHardwareFallbackMaterialTypedBuffer.get()
+        || state.m_shadowInstanceMaterialCapacity != m_preparedHybridHardwareFallbackInstanceMaterialCapacity
+        || state.m_shadowInstanceCapacity != m_preparedHybridHardwareFallbackInstanceCapacity
+        || state.m_shadowMaterialTypedCapacity != m_preparedHybridHardwareFallbackMaterialTypedCapacity
+        || state.m_shadowInstanceMaterialHeapHandle != m_preparedHybridHardwareFallbackInstanceMaterialHeapHandle
+        || state.m_shadowInstanceHeapHandle != m_preparedHybridHardwareFallbackInstanceHeapHandle
+        || state.m_shadowMaterialTypedHeapHandle != m_preparedHybridHardwareFallbackMaterialTypedHeapHandle
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen hybrid hardware material fallback could not retain graph uploads"));
+        return false;
+    }
+
+    const u8* const bytes = m_preparedHybridHardwareFallbackBytes.data();
+    outInstanceMaterialBlob = graph.copyUploadData(
+        bytes,
+        instanceMaterialByteCount,
+        alignof(NwbRtInstanceMaterialGpu)
+    );
+    outInstanceBlob = graph.copyUploadData(
+        bytes + instanceMaterialByteCount,
+        instanceByteCount,
+        alignof(InstanceGpuData)
+    );
+    outMaterialTypedBlob = graph.copyUploadData(
+        bytes + instanceMaterialByteCount + instanceByteCount,
+        materialTypedByteCount,
+        alignof(u32)
+    );
+    return outInstanceMaterialBlob.valid() && outInstanceBlob.valid() && outMaterialTypedBlob.valid();
+}
+
 void RendererRayTracingSystem::confirmPreparedShadowMaterialContextUploads()noexcept{
     if(m_preparedShadowMaterialContextReady){
         if(m_preparedShadowMaterialContextRoute == PreparedShadowMaterialContextRoute::Hardware){
@@ -1873,7 +1932,14 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
     const bool shadowMaterialContextBatchGraphOwned,
     const bool sceneBvhBatchGraphOwned,
     const bool meshSwBvhBuildsGraphOwned,
-    const bool meshSwBvhInputStatesGraphOwned
+    const bool meshSwBvhInputStatesGraphOwned,
+    const bool hybridHardwareFallbackUploadsGraphOwned,
+    const void* const hybridHardwareFallbackInstanceMaterialData,
+    const usize hybridHardwareFallbackInstanceMaterialByteCount,
+    const void* const hybridHardwareFallbackInstanceData,
+    const usize hybridHardwareFallbackInstanceByteCount,
+    const void* const hybridHardwareFallbackMaterialTypedData,
+    const usize hybridHardwareFallbackMaterialTypedByteCount
 ){
     if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
         return false;
@@ -2019,8 +2085,18 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
                 // snapshot retained before the SW context replaced it; only a stale snapshot regathers via the
                 // established direct compatibility retry.
                 discardHybridGraphMaterialContext();
-                const bool restoredFrozenHardwareContext =
-                    recordPreparedHybridHardwareMaterialContextFallback(commandList);
+                const bool restoredFrozenHardwareContext = hybridHardwareFallbackUploadsGraphOwned
+                    ? recordPreparedHybridHardwareMaterialContextFallback(
+                        commandList,
+                        hybridHardwareFallbackInstanceMaterialData,
+                        hybridHardwareFallbackInstanceMaterialByteCount,
+                        hybridHardwareFallbackInstanceData,
+                        hybridHardwareFallbackInstanceByteCount,
+                        hybridHardwareFallbackMaterialTypedData,
+                        hybridHardwareFallbackMaterialTypedByteCount
+                    )
+                    : recordPreparedHybridHardwareMaterialContextFallback(commandList)
+                ;
                 const bool restoredDirectHardwareContext =
                     !restoredFrozenHardwareContext
                     && buildSceneTlas(commandList, scratchArena, false);

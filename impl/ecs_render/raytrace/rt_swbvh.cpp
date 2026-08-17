@@ -1464,6 +1464,32 @@ bool RendererRayTracingSystem::buildSceneSwBvh(
 }
 
 bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallback(Core::CommandList& commandList){
+    if(m_preparedHybridHardwareFallbackBytes.empty()){
+        m_preparedHybridHardwareFallbackRecorded = false;
+        return false;
+    }
+    const u8* const bytes = m_preparedHybridHardwareFallbackBytes.data();
+    return recordPreparedHybridHardwareMaterialContextFallback(
+        commandList,
+        bytes,
+        m_preparedHybridHardwareFallbackInstanceMaterialByteCount,
+        bytes + m_preparedHybridHardwareFallbackInstanceMaterialByteCount,
+        m_preparedHybridHardwareFallbackInstanceByteCount,
+        bytes + m_preparedHybridHardwareFallbackInstanceMaterialByteCount
+            + m_preparedHybridHardwareFallbackInstanceByteCount,
+        m_preparedHybridHardwareFallbackMaterialTypedByteCount
+    );
+}
+
+bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallback(
+    Core::CommandList& commandList,
+    const void* const instanceMaterialData,
+    const usize sourceInstanceMaterialByteCount,
+    const void* const instanceData,
+    const usize sourceInstanceByteCount,
+    const void* const materialTypedData,
+    const usize sourceMaterialTypedByteCount
+){
     m_preparedHybridHardwareFallbackRecorded = false;
 #if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
     if(m_forceHybridHardwareFallbackSnapshotStaleForTesting){
@@ -1482,9 +1508,15 @@ bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallba
     const usize materialTypedByteCount = m_preparedHybridHardwareFallbackMaterialTypedByteCount;
     if(
         !m_preparedHybridHardwareFallbackReady
+        || !instanceMaterialData
+        || !instanceData
+        || !materialTypedData
         || instanceMaterialByteCount == 0u
         || instanceByteCount == 0u
         || materialTypedByteCount == 0u
+        || sourceInstanceMaterialByteCount != instanceMaterialByteCount
+        || sourceInstanceByteCount != instanceByteCount
+        || sourceMaterialTypedByteCount != materialTypedByteCount
         || instanceMaterialByteCount % sizeof(NwbRtInstanceMaterialGpu) != 0u
         || instanceByteCount % sizeof(InstanceGpuData) != 0u
         || instanceMaterialByteCount > Limit<usize>::s_Max - instanceByteCount
@@ -1515,7 +1547,30 @@ bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallba
         return false;
     }
 
-    const u8* const bytes = m_preparedHybridHardwareFallbackBytes.data();
+    // A graph-owned caller provides immutable declaration-time blobs. Verify they still equal the retained
+    // preflight snapshot before recording, so a caller-side replacement cannot restore a context the compiled task
+    // did not declare. The compatibility overload above passes the same retained ranges directly.
+    if(
+        NWB_MEMCMP(
+            m_preparedHybridHardwareFallbackBytes.data(),
+            instanceMaterialData,
+            instanceMaterialByteCount
+        ) != 0
+        || NWB_MEMCMP(
+            m_preparedHybridHardwareFallbackBytes.data() + instanceMaterialByteCount,
+            instanceData,
+            instanceByteCount
+        ) != 0
+        || NWB_MEMCMP(
+            m_preparedHybridHardwareFallbackBytes.data() + instanceMaterialByteCount + instanceByteCount,
+            materialTypedData,
+            materialTypedByteCount
+        ) != 0
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned hybrid hardware fallback bytes differ from preflight"));
+        return false;
+    }
+
     Core::Buffer* const instanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer.get();
     Core::Buffer* const instanceBuffer = state.m_shadowInstanceBuffer.get();
     Core::Buffer* const materialTypedBuffer = state.m_shadowMaterialTypedBuffer.get();
@@ -1523,13 +1578,12 @@ bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallba
     commandList.setBufferState(instanceBuffer, Core::ResourceStates::CopyDest);
     commandList.setBufferState(materialTypedBuffer, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
-    commandList.writeBuffer(instanceMaterialBuffer, bytes, instanceMaterialByteCount);
-    commandList.writeBuffer(instanceBuffer, bytes + instanceMaterialByteCount, instanceByteCount);
-    commandList.writeBuffer(
-        materialTypedBuffer,
-        bytes + instanceMaterialByteCount + instanceByteCount,
-        materialTypedByteCount
-    );
+    if(
+        !commandList.tryWriteBuffer(instanceMaterialBuffer, instanceMaterialData, instanceMaterialByteCount)
+        || !commandList.tryWriteBuffer(instanceBuffer, instanceData, instanceByteCount)
+        || !commandList.tryWriteBuffer(materialTypedBuffer, materialTypedData, materialTypedByteCount)
+    )
+        return false;
     commandList.setBufferState(instanceMaterialBuffer, Core::ResourceStates::ShaderResource);
     commandList.setBufferState(instanceBuffer, Core::ResourceStates::ShaderResource);
     commandList.setBufferState(materialTypedBuffer, Core::ResourceStates::ShaderResource);

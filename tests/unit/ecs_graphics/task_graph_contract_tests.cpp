@@ -392,6 +392,31 @@ TEST(EcsGraphics, SetupUploadReadinessBridgeRemainsGraphOwned){
 }
 
 
+// Surfel GI is an explicitly promoted Compute adopter. It can select an alternate Compute family only for the
+// graph-owned output-clear/compute chain; the compiler remains responsible for rejecting an undeclared resource
+// sharing contract or lowering the required exclusive ownership transfer.
+TEST(EcsGraphics, SurfelGiPermitsOptInCrossFamilyComputeRouting){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    const usize surfelGiOffset = taskGraph.find("bool RendererSystem::declareDeferredSurfelGiTask");
+    const usize readbackOffset = taskGraph.find("void RendererSystem::declareDeferredSurfelCountReadbackTask", surfelGiOffset);
+    ASSERT_NE(surfelGiOffset, AStringView::npos);
+    ASSERT_NE(readbackOffset, AStringView::npos);
+    ASSERT_LT(surfelGiOffset, readbackOffset);
+    const AStringView surfelGi = taskGraph.substr(surfelGiOffset, readbackOffset - surfelGiOffset);
+
+    EXPECT_TRUE(ContainsText(surfelGi, "EnableSameFamilyComputeEffectRouting(surfelIrradianceClearScheduling, false)"));
+    EXPECT_TRUE(ContainsText(surfelGi, "EnableCrossFamilyComputeEffectRouting(surfelIrradianceClearScheduling)"));
+    EXPECT_TRUE(ContainsText(surfelGi, "EnableSameFamilyComputeEffectRouting(surfelGiScheduling)"));
+    EXPECT_TRUE(ContainsText(surfelGi, "EnableCrossFamilyComputeEffectRouting(surfelGiScheduling)"));
+}
+
+
 // The current renderer has exactly two runtime-selected sampled-image domains: material Texture2D assets (shared
 // by raster and ray-trace surface dispatch) and ImGui textures.  A new domain must not silently rely on a global
 // descriptor slot: keep the supported domain small and require each one to retain handles before graph declaration.

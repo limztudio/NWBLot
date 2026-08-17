@@ -2627,6 +2627,106 @@ TEST(GpuTaskGraph, RoutesIsolatedOffloadToAuxiliaryAndReturnsPrimaryBridge){
 }
 
 
+// Once an isolated upload chain has selected an auxiliary physical queue, each explicitly serial successor must
+// retain that transport. Rebalancing every mip would create needless queue-family crossings and defeat packet merge.
+TEST(GpuTaskGraph, PreservesAuxiliarySameClassQueueAcrossSerialOffloadChain){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuQueueRequest graphicsRequest;
+    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Transfer;
+    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+    graphicsRequest.allowFallback = false;
+    graphicsRequest.compilerMayOverridePreference = false;
+
+    Graphics::GpuTaskSchedulingHint firstScheduling;
+    firstScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    firstScheduling.allowSameClassQueueRouting = true;
+    firstScheduling.preferNonPrimarySameClassQueue = true;
+    firstScheduling.allowCrossFamilySameClassQueueRouting = true;
+    firstScheduling.forceSubmissionBoundary = true;
+    firstScheduling.allowPacketMerge = false;
+    const Graphics::GpuTaskId first = AddTaskWithQueue(
+        graph,
+        Name("tests/task_graph/serial_same_class_offload_first"),
+        "Serial Same Class Offload First",
+        graphicsRequest,
+        firstScheduling
+    );
+    ASSERT_TRUE(first.valid());
+
+    Graphics::GpuTaskSchedulingHint secondScheduling = firstScheduling;
+    secondScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    secondScheduling.preferNonPrimarySameClassQueue = false;
+    secondScheduling.preserveSameClassQueueWithDirectDependency = true;
+    const Graphics::GpuTaskId secondDependencies[] = { first };
+    Graphics::GpuTaskDesc secondDesc;
+    secondDesc
+        .setIdentity(Name("tests/task_graph/serial_same_class_offload_second"))
+        .setMarkerLabel("Serial Same Class Offload Second")
+        .setQueue(graphicsRequest)
+        .setScheduling(secondScheduling)
+        .setDependencies(secondDependencies, LengthOf(secondDependencies))
+    ;
+    const Graphics::GpuTaskId second = graph.addTask(secondDesc);
+    ASSERT_TRUE(second.valid());
+
+    Graphics::GpuTaskSchedulingHint bridgeScheduling;
+    bridgeScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    bridgeScheduling.overlapPreferred = false;
+    bridgeScheduling.forceSubmissionBoundary = true;
+    bridgeScheduling.allowPacketMerge = false;
+    const Graphics::GpuTaskId bridgeDependencies[] = { second };
+    Graphics::GpuTaskDesc bridgeDesc;
+    bridgeDesc
+        .setIdentity(Name("tests/task_graph/serial_same_class_primary_bridge"))
+        .setMarkerLabel("Serial Same Class Primary Bridge")
+        .setQueue(graphicsRequest)
+        .setScheduling(bridgeScheduling)
+        .setDependencies(bridgeDependencies, LengthOf(bridgeDependencies))
+    ;
+    const Graphics::GpuTaskId bridge = graph.addTask(bridgeDesc);
+    ASSERT_TRUE(bridge.valid());
+
+    Graphics::GpuPhysicalQueueInfo auxiliaryGraphicsQueue = GraphicsQueue(1u);
+    auxiliaryGraphicsQueue.familyIndex = 3u;
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        auxiliaryGraphicsQueue,
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuTaskQueueAssignment* const firstAssignment = assignments.find(first);
+    const Graphics::GpuTaskQueueAssignment* const secondAssignment = assignments.find(second);
+    const Graphics::GpuTaskQueueAssignment* const bridgeAssignment = assignments.find(bridge);
+    ASSERT_NE(firstAssignment, nullptr);
+    ASSERT_NE(secondAssignment, nullptr);
+    ASSERT_NE(bridgeAssignment, nullptr);
+    EXPECT_EQ(firstAssignment->queue, auxiliaryGraphicsQueue.id);
+    EXPECT_EQ(secondAssignment->queue, auxiliaryGraphicsQueue.id);
+    EXPECT_EQ(secondAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+    EXPECT_EQ(bridgeAssignment->queue, queues[0u].id);
+
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(second);
+    const Graphics::GpuSubmissionPacketId bridgePacket = compiledGraph.packetForTask(bridge);
+    ASSERT_TRUE(firstPacket.valid());
+    ASSERT_TRUE(secondPacket.valid());
+    ASSERT_TRUE(bridgePacket.valid());
+    ASSERT_EQ(compiledGraph.packet(secondPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(secondPacket)[0u].producer, firstPacket);
+    ASSERT_EQ(compiledGraph.packet(bridgePacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(bridgePacket)[0u].producer, secondPacket);
+}
+
+
 TEST(GpuTaskGraph, RetainsSameFamilyRoutingWithoutCrossFamilyOptIn){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

@@ -1736,13 +1736,24 @@ bool Graphics::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
         totalByteCount,
         textureDesc
     );
+    __hidden_graphics::SetupUploadSameClassRouting sameClassRouting =
+        __hidden_graphics::ResolveSetupUploadSameClassRouting(device, uploadQueue, totalByteCount)
+    ;
+    // Existing batch destinations cannot be recreated with a wider sharing contract. A cross-family producer is
+    // therefore valid only when the texture was already created for that broad queue class; same-family offload
+    // retains ordinary exclusive sharing.
+    if(
+        sameClassRouting.crossesQueueFamily
+        && !__hidden_graphics::QueueSharingIncludesQueue(textureDesc.queueSharing, uploadQueue)
+    )
+        sameClassRouting = {};
     QueueSubmissionToken uploadToken;
     const bool submitted = __hidden_graphics::SubmitGraphOwnedSetupUpload(
         device,
         m_allocator.getObjectArena(),
         textureDesc.queueSharing,
         uploadQueue,
-        [&desc, &textureDesc, uploadQueue, &uploadToken](GpuTaskGraph& graph){
+        [&desc, &textureDesc, uploadQueue, sameClassRouting, &uploadToken](GpuTaskGraph& graph){
             const GpuGraphResourceId destination = graph.importTexture(
                 desc.destination,
                 GpuGraphResourceDesc{}
@@ -1766,10 +1777,15 @@ bool Graphics::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
                 if(!source.valid())
                     return GpuTaskId{};
 
-                GpuTaskSchedulingHint scheduling = __hidden_graphics::SetupUploadGraphScheduling(region.dataSize);
+                GpuTaskSchedulingHint scheduling = __hidden_graphics::SetupUploadGraphScheduling(
+                    region.dataSize,
+                    sameClassRouting.enabled,
+                    sameClassRouting.crossesQueueFamily
+                );
                 scheduling.forceSubmissionBoundary = false;
                 scheduling.allowPacketMerge = true;
                 scheduling.mergeWithPrevious = previousTask.valid();
+                scheduling.preserveSameClassQueueWithDirectDependency = previousTask.valid();
                 GpuTaskDesc uploadTaskDesc;
                 uploadTaskDesc
                     .setIdentity(Name("graphics.upload_texture_batch.upload"))
@@ -1799,7 +1815,9 @@ bool Graphics::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
             }
             return previousTask;
         },
-        uploadToken
+        uploadToken,
+        sameClassRouting.enabled,
+        sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
     );
     if(!submitted){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit graph-owned texture upload batch '{}'"), StringConvert(textureDesc.name.c_str()));

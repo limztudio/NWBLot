@@ -38780,6 +38780,147 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSetupBufferUsesAuxiliaryGraphics
 }
 
 
+// Multi-subresource assets are a serial chain, not independent work. Once its first large region offloads to an
+// auxiliary Graphics queue, every later mip stays there; the terminal graph-owned primary bridge still makes an
+// immediate direct Graphics readback safe without exposing a completion token to the caller.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureBatchUsesAuxiliaryGraphicsAndBridgesPrimaryReadiness){
+    HeadlessGraphicsScope multiQueueScope;
+    ASSERT_TRUE(multiQueueScope.setTransferQueueEnabled(false));
+    ASSERT_TRUE(multiQueueScope.setSameClassMultiQueueEnabled(true));
+    ASSERT_TRUE(multiQueueScope.setCrossFamilySameClassQueueRoutingEnabled(true));
+    if(!multiQueueScope.initialize())
+        GTEST_SKIP() << "Same-class texture batch routing: no usable headless Vulkan device on this host.";
+
+    auto& graphics = multiQueueScope.graphics();
+    auto& device = graphics.getDevice();
+    const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueInfo* const primaryGraphicsInfo = device.getPhysicalQueueInfo(primaryGraphicsQueue);
+    ASSERT_NE(primaryGraphicsInfo, nullptr);
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueInfo* auxiliaryGraphicsInfo = nullptr;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+        if(
+            candidate.queueClass != CommandQueue::Graphics
+            || candidate.id == primaryGraphicsQueue
+            || (auxiliaryGraphicsInfo && candidate.id.index >= auxiliaryGraphicsInfo->id.index)
+        )
+            continue;
+        auxiliaryGraphicsInfo = &candidate;
+    }
+    if(!auxiliaryGraphicsInfo)
+        GTEST_SKIP() << "Same-class texture batch routing: adapter exposes only one Graphics transport.";
+
+    static constexpr u32 s_Mip0Width = 512u;
+    static constexpr u32 s_Mip0Height = 512u;
+    static constexpr u32 s_Mip1Width = s_Mip0Width / 2u;
+    static constexpr u32 s_Mip1Height = s_Mip0Height / 2u;
+    static constexpr usize s_Mip0ByteSize = static_cast<usize>(s_Mip0Width) * s_Mip0Height * 4u;
+    static constexpr usize s_Mip1ByteSize = static_cast<usize>(s_Mip1Width) * s_Mip1Height * 4u;
+    Vector<u8, Alloc::GlobalArena> mip0Bytes(multiQueueScope.arena());
+    Vector<u8, Alloc::GlobalArena> mip1Bytes(multiQueueScope.arena());
+    mip0Bytes.resize(s_Mip0ByteSize);
+    mip1Bytes.resize(s_Mip1ByteSize);
+    for(usize byteIndex = 0u; byteIndex < mip0Bytes.size(); ++byteIndex)
+        mip0Bytes[byteIndex] = static_cast<u8>(byteIndex * 13u + 0x27u);
+    for(usize byteIndex = 0u; byteIndex < mip1Bytes.size(); ++byteIndex)
+        mip1Bytes[byteIndex] = static_cast<u8>(byteIndex * 29u + 0x91u);
+
+    const TextureHandle destination = graphics.createTexture(
+        TextureDesc()
+            .setWidth(s_Mip0Width)
+            .setHeight(s_Mip0Height)
+            .setMipLevels(2u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInitialState(ResourceStates::ShaderResource)
+            .setKeepInitialState(true)
+            .setQueueSharing(ResourceQueueSharing::Graphics)
+    );
+    ASSERT_NE(destination.get(), nullptr);
+    const Graphics::TextureUploadRegion regions[] = {
+        Graphics::TextureUploadRegion{
+            .data = mip0Bytes.data(),
+            .dataSize = mip0Bytes.size(),
+            .rowPitch = s_Mip0Width * 4u,
+            .depthPitch = s_Mip0Width * s_Mip0Height * 4u,
+            .arraySlice = 0u,
+            .mipLevel = 0u,
+        },
+        Graphics::TextureUploadRegion{
+            .data = mip1Bytes.data(),
+            .dataSize = mip1Bytes.size(),
+            .rowPitch = s_Mip1Width * 4u,
+            .depthPitch = s_Mip1Width * s_Mip1Height * 4u,
+            .arraySlice = 0u,
+            .mipLevel = 1u,
+        },
+    };
+    QueueSubmissionToken uploadToken;
+    ASSERT_TRUE(graphics.uploadTextureBatch(Graphics::TextureUploadBatchDesc{
+        .destination = destination,
+        .regions = regions,
+        .regionCount = LengthOf(regions),
+        .finalState = ResourceStates::ShaderResource,
+        .queue = CommandQueue::Graphics,
+        .acceptedToken = &uploadToken,
+    }));
+    ASSERT_TRUE(uploadToken.valid());
+    ASSERT_TRUE(uploadToken.matchesPhysicalQueue(
+        auxiliaryGraphicsInfo->id.index,
+        auxiliaryGraphicsInfo->id.deviceGeneration
+    ));
+    EXPECT_EQ(destination->getDescription().queueSharing, ResourceQueueSharing::Graphics);
+
+    const u8* const expectedMips[] = { mip0Bytes.data(), mip1Bytes.data() };
+    const u32 mipWidths[] = { s_Mip0Width, s_Mip1Width };
+    const u32 mipHeights[] = { s_Mip0Height, s_Mip1Height };
+    for(u32 mipLevel = 0u; mipLevel < LengthOf(expectedMips); ++mipLevel){
+        StagingTextureHandle readback = device.createStagingTexture(destination->getDescription(), CpuAccessMode::Read);
+        ASSERT_NE(readback.get(), nullptr);
+        TextureSlice slice;
+        slice.setMipLevel(mipLevel);
+        CommandListHandle readbackCommandList = device.createCommandList();
+        ASSERT_NE(readbackCommandList.get(), nullptr);
+        readbackCommandList->open();
+        readbackCommandList->copyTexture(readback.get(), slice, destination.get(), slice);
+        readbackCommandList->close();
+        CommandList* const readbackLists[] = { readbackCommandList.get() };
+        const QueueSubmissionToken readbackToken = device.executeCommandLists(
+            readbackLists,
+            LengthOf(readbackLists),
+            CommandQueue::Graphics,
+            QueueSubmissionDesc{}
+        );
+        ASSERT_TRUE(readbackToken.valid());
+        ASSERT_TRUE(readbackToken.matchesPhysicalQueue(
+            primaryGraphicsQueue.index,
+            primaryGraphicsQueue.deviceGeneration
+        ));
+        ASSERT_TRUE(device.waitForIdle());
+
+        usize rowPitch = 0u;
+        const u8* const readbackBytes = static_cast<const u8*>(device.mapStagingTexture(
+            readback.get(),
+            slice,
+            CpuAccessMode::Read,
+            &rowPitch
+        ));
+        ASSERT_NE(readbackBytes, nullptr);
+        const u32 sampleXs[] = { 0u, mipWidths[mipLevel] / 2u, mipWidths[mipLevel] - 1u };
+        const u32 sampleYs[] = { 0u, mipHeights[mipLevel] / 2u, mipHeights[mipLevel] - 1u };
+        for(usize sampleIndex = 0u; sampleIndex < LengthOf(sampleXs); ++sampleIndex){
+            const usize expectedOffset = (
+                static_cast<usize>(sampleYs[sampleIndex]) * mipWidths[mipLevel] + sampleXs[sampleIndex]
+            ) * 4u;
+            const usize readbackOffset = static_cast<usize>(sampleYs[sampleIndex]) * rowPitch + sampleXs[sampleIndex] * 4u;
+            for(usize component = 0u; component < 4u; ++component)
+                EXPECT_EQ(readbackBytes[readbackOffset + component], expectedMips[mipLevel][expectedOffset + component]);
+        }
+        device.unmapStagingTexture(readback.get());
+    }
+}
+
+
 // If no dedicated Transfer family exists, automatic sizeable setup uploads must still choose a real transport: a
 // dedicated Compute queue when one is available, otherwise the established Graphics path. The accepted token makes
 // this routing observable without exposing a backend-specific queue object through the public setup API.

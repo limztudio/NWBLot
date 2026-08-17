@@ -347,6 +347,14 @@ TEST(EcsGraphics, SetupUploadReadinessBridgeRemainsGraphOwned){
     EXPECT_TRUE(ContainsText(graphics, "ResolveSetupUploadSameClassRouting"));
     EXPECT_TRUE(ContainsText(graphics, "preferNonPrimarySameClassQueue"));
     EXPECT_TRUE(ContainsText(graphics, "sameClassRouting.enabled ? sameClassRouting.primaryQueue"));
+
+    const usize textureBatchOffset = graphics.find("bool Graphics::uploadTextureBatch");
+    const usize meshSetupOffset = graphics.find("Graphics::MeshResource Graphics::setupMesh", textureBatchOffset);
+    ASSERT_NE(textureBatchOffset, AStringView::npos);
+    ASSERT_NE(meshSetupOffset, AStringView::npos);
+    const AStringView textureBatch = graphics.substr(textureBatchOffset, meshSetupOffset - textureBatchOffset);
+    EXPECT_TRUE(ContainsText(textureBatch, "preserveSameClassQueueWithDirectDependency"));
+    EXPECT_TRUE(ContainsText(textureBatch, "sameClassRouting.crossesQueueFamily"));
 }
 
 

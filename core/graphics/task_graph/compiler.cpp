@@ -289,6 +289,41 @@ inline constexpr u64 s_LargeTaskQueueCostWeight = 8u;
     return result;
 }
 
+[[nodiscard]] static const GpuPhysicalQueueInfo* FindDirectDependencySameClassQueue(
+    const GpuTaskGraphTaskView& task,
+    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueInfo& baseQueue,
+    const GpuQueueCapability::Mask requiredCapabilities,
+    const bool allowCrossFamilyRouting
+)noexcept{
+    for(usize dependencyIndex = task.dependencyCount; dependencyIndex > 0u; --dependencyIndex){
+        const GpuTaskId dependency = task.dependencies[dependencyIndex - 1u];
+        const GpuTaskQueueAssignment* assignment = nullptr;
+        for(const GpuTaskQueueAssignment& candidateAssignment : assignments){
+            if(candidateAssignment.task == dependency){
+                assignment = &candidateAssignment;
+                break;
+            }
+        }
+        if(!assignment)
+            continue;
+
+        for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+            const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+            if(
+                candidate.id != assignment->queue
+                || candidate.queueClass != baseQueue.queueClass
+                || (!allowCrossFamilyRouting && candidate.familyIndex != baseQueue.familyIndex)
+                || !HasCapabilities(candidate.capabilities, requiredCapabilities)
+            )
+                continue;
+            return &candidate;
+        }
+    }
+    return nullptr;
+}
+
 [[nodiscard]] static bool IsReadAccess(const GpuTaskResourceAccess::Enum access)noexcept{
     return access == GpuTaskResourceAccess::Read || access == GpuTaskResourceAccess::ReadWrite;
 }
@@ -1097,7 +1132,22 @@ bool GpuTaskGraphCompiler::assignQueues(
             && task.scheduling.overlapPreferred
             && !task.scheduling.avoidQueueCrossing
         ){
-            if(const GpuPhysicalQueueInfo* const balancedQueue = FindLeastLoadedSameClassQueue(
+            const GpuPhysicalQueueInfo* const dependencyQueue =
+                task.scheduling.preserveSameClassQueueWithDirectDependency
+                    ? FindDirectDependencySameClassQueue(
+                        task,
+                        outAssignments.m_assignments,
+                        topology,
+                        *selectedQueue,
+                        task.queue.requiredCapabilities,
+                        task.scheduling.allowCrossFamilySameClassQueueRouting
+                    )
+                    : nullptr
+            ;
+            if(dependencyQueue){
+                selectedQueue = dependencyQueue;
+            }
+            else if(const GpuPhysicalQueueInfo* const balancedQueue = FindLeastLoadedSameClassQueue(
                 graph,
                 analysis,
                 outAssignments.m_assignments,
@@ -1106,7 +1156,8 @@ bool GpuTaskGraphCompiler::assignQueues(
                 task.queue.requiredCapabilities,
                 task.scheduling.allowCrossFamilySameClassQueueRouting,
                 task.scheduling.preferNonPrimarySameClassQueue
-            ))
+            )
+            )
                 selectedQueue = balancedQueue;
         }
         if(selectedQueue != initiallySelectedQueue)

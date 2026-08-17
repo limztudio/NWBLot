@@ -77,6 +77,10 @@ struct GpuTaskSchedulingHint{
     // opt-in because broad CommandQueue callers retain the primary transport by default; upload/offload work can
     // use it to create real overlap even when it is the first task in an otherwise-empty standalone graph.
     bool preferNonPrimarySameClassQueue = false;
+    // Retains the exact physical queue selected for the last compatible direct dependency. This is for explicitly
+    // serial same-class chains (for example, multi-mip uploads): the first task may offload, while later tasks stay
+    // with it instead of creating avoidable timeline/ownership crossings at every stage.
+    bool preserveSameClassQueueWithDirectDependency = false;
     // Extends the same-class opt-in to a physical queue from another Vulkan family. This remains separately opt-in
     // because exclusive resource uses cross that boundary through compiler-owned release/acquire ownership pairs.
     // It has no effect unless allowSameClassQueueRouting is also set.

@@ -629,24 +629,6 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
     return true;
 }
 
-bool RendererDeferredSystem::uploadDeferredBindlessFrameResources(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    DeferredBindlessFrameResources& bindless = targets.bindless;
-    if(bindless.slotsUploaded)
-        return true;
-    if(!bindless.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot upload incomplete deferred bindless resources"));
-        return false;
-    }
-
-    commandList.setBufferState(bindless.slotsBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(bindless.slotsBuffer.get(), &bindless.slots, sizeof(bindless.slots));
-    commandList.setBufferState(bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.commitBarriers();
-    bindless.slotsUploaded = true;
-    return true;
-}
-
 bool RendererDeferredSystem::uploadLaggedLightingHistoryResources(Core::CommandList& commandList, DeferredFrameTargets& targets){
     DeferredLaggedLightingHistoryResources& history = targets.laggedLightingHistory;
     if(history.slotsUploaded)

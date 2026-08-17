@@ -661,6 +661,38 @@ TEST(EcsGraphics, SurfelFrameConstantsHaveNoNativeCompatibilityDispatcher){
 }
 
 
+// The current deferred bindless selector has a mandatory graph upload before any Shadow/Lighting/Composite/Present
+// consumer. Those render callbacks must not retain a native writer for a target-generation selector.
+TEST(EcsGraphics, DeferredBindlessSelectorHasNoNativeCompatibilityDispatcher){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString deferredHeaderSource;
+    AString deferredTargetsSource;
+    AString deferredLightingSource;
+    AString deferredCompositeSource;
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.h", deferredHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_targets.cpp", deferredTargetsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_lighting.cpp", deferredLightingSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_composite.cpp", deferredCompositeSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView deferredHeader(deferredHeaderSource.data(), deferredHeaderSource.size());
+    const AStringView deferredTargets(deferredTargetsSource.data(), deferredTargetsSource.size());
+    const AStringView deferredLighting(deferredLightingSource.data(), deferredLightingSource.size());
+    const AStringView deferredComposite(deferredCompositeSource.data(), deferredCompositeSource.size());
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    EXPECT_FALSE(ContainsText(deferredHeader, "uploadDeferredBindlessFrameResources"));
+    EXPECT_FALSE(ContainsText(deferredTargets, "uploadDeferredBindlessFrameResources"));
+    EXPECT_FALSE(ContainsText(deferredTargets, "bindless.slotsBuffer.get(), &bindless.slots"));
+    EXPECT_FALSE(ContainsText(deferredLighting, "currentBindlessSlotsGraphOwned"));
+    EXPECT_FALSE(ContainsText(deferredComposite, "currentBindlessSlotsGraphOwned"));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.deferred.bindless_slots_upload"));
+    EXPECT_TRUE(ContainsText(taskGraph, "m_deferredBindlessSlotsUploadTask"));
+}
+
+
 // The current renderer has exactly two runtime-selected sampled-image domains: material Texture2D assets (shared
 // by raster and ray-trace surface dispatch) and ImGui textures.  A new domain must not silently rely on a global
 // descriptor slot: keep the supported domain small and require each one to retain handles before graph declaration.

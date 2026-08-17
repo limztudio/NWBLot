@@ -41,7 +41,6 @@ struct DeferredCompositeGraphTask{
         RendererDeferredSystem* deferredSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        bool currentBindlessSlotsGraphOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -56,8 +55,7 @@ struct DeferredCompositeGraphTask{
             [&](RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::CommandList& taskCommandList){
                 return deferredSystem.renderDeferredComposite(
                     taskCommandList,
-                    targets,
-                    payload.currentBindlessSlotsGraphOwned
+                    targets
                 );
             }
         );
@@ -201,7 +199,6 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredCompositeTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
-    const bool currentBindlessSlotsGraphOwned,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     return graph.addTask<__hidden_deferred_composite::DeferredCompositeGraphTask>(
@@ -210,7 +207,6 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredCompositeTask(
             .deferredSystem = this,
             .targets = &targets,
             .timingTicket = &timingTicket,
-            .currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned,
         }
     );
 }
@@ -218,13 +214,9 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredCompositeTask(
 
 bool RendererDeferredSystem::renderDeferredComposite(
     Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const bool currentBindlessSlotsGraphOwned
+    DeferredFrameTargets& targets
 ){
     NWB_ASSERT(deferredState().m_compositeComputePipeline);
-
-    if(!currentBindlessSlotsGraphOwned && !uploadDeferredBindlessFrameResources(commandList, targets))
-        return false;
 
     // Packet-boundary states for these bindless resources are emitted from the compiled task graph.  This thunk
     // retains only the commands intrinsic to composite recording.
@@ -248,8 +240,7 @@ bool RendererDeferredSystem::renderDeferredComposite(
 bool RendererDeferredSystem::renderDeferredPresent(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    Core::Framebuffer* presentationFramebuffer,
-    const bool currentBindlessSlotsGraphOwned
+    Core::Framebuffer* presentationFramebuffer
 ){
     NWB_ASSERT(presentationFramebuffer);
     NWB_ASSERT(deferredState().m_presentPipeline);
@@ -258,9 +249,6 @@ bool RendererDeferredSystem::renderDeferredPresent(
         && deferredState().m_presentPipeline
         && deferredState().m_presentPipeline->getFramebufferInfo() == presentationFramebuffer->getFramebufferInfo()
     );
-
-    if(!currentBindlessSlotsGraphOwned && !uploadDeferredBindlessFrameResources(commandList, targets))
-        return false;
 
     // The graph transitions the sampled composite image before this task.  The framebuffer stays a hazard domain:
     // its acquire, render-pass, and presentation ownership remain intrinsic to the Graphics command-list path.

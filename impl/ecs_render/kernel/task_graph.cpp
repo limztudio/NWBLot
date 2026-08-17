@@ -4017,7 +4017,6 @@ struct DeferredPresentGraphTask{
         Optional<Core::GpuTimingMeasure>* asyncFinalTiming = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const Core::GpuTaskId* shadowVisibilityTask = nullptr;
-        bool currentBindlessSlotsGraphOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -4057,8 +4056,7 @@ struct DeferredPresentGraphTask{
         const bool presentRecorded = payload.deferredSystem->renderDeferredPresent(
             commandList,
             *payload.targets,
-            payload.presentationFramebuffer,
-            payload.currentBindlessSlotsGraphOwned
+            payload.presentationFramebuffer
         );
         const bool frameTimingEnded = presentRecorded
             && payload.frameTimingTransaction->recordEnd(commandList)
@@ -11457,7 +11455,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             ? m_deferredShadowPrepareHybridSoftwareTailTask
             : m_deferredShadowPrepareTask)
     ;
-    const bool currentBindlessSlotsGraphOwned = m_deferredBindlessSlotsUploadTask.valid();
 
     if(!declareDeferredGraphicsPrefixTasks(
         deferredTargets,
@@ -16289,7 +16286,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         desc,
         deferredTargets,
         useLaggedLightingHistory,
-        currentBindlessSlotsGraphOwned,
         laggedBindlessSlotsGraphOwned,
         lightingTimingTicket
     );
@@ -16349,7 +16345,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         m_deferredLightingTaskGraph,
         compositeDesc,
         deferredTargets,
-        currentBindlessSlotsGraphOwned,
         compositeTimingTicket
     );
     if(!m_deferredCompositeTask.valid()){
@@ -16400,7 +16395,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .asyncFinalTiming = &asyncFinalTiming,
             .timingTicket = &presentTimingTicket,
             .shadowVisibilityTask = &m_deferredShadowVisibilityTask,
-            .currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned,
         }
     );
     if(!m_deferredPresentTask.valid()){

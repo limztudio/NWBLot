@@ -37,7 +37,6 @@ struct DeferredLightingGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool useLaggedLightingHistory = false;
-        bool currentBindlessSlotsGraphOwned = false;
         bool laggedBindlessSlotsGraphOwned = false;
     };
 
@@ -55,7 +54,6 @@ struct DeferredLightingGraphTask{
                     taskCommandList,
                     targets,
                     payload.useLaggedLightingHistory,
-                    payload.currentBindlessSlotsGraphOwned,
                     payload.laggedBindlessSlotsGraphOwned
                 );
             }
@@ -180,7 +178,6 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredLightingTask(
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
     const bool useLaggedLightingHistory,
-    const bool currentBindlessSlotsGraphOwned,
     const bool laggedBindlessSlotsGraphOwned,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
@@ -191,7 +188,6 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredLightingTask(
             .targets = &targets,
             .timingTicket = &timingTicket,
             .useLaggedLightingHistory = useLaggedLightingHistory,
-            .currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned,
             .laggedBindlessSlotsGraphOwned = laggedBindlessSlotsGraphOwned,
         }
     );
@@ -315,13 +311,10 @@ bool RendererDeferredSystem::renderDeferredLighting(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const bool useLaggedLightingHistory,
-    const bool currentBindlessSlotsGraphOwned,
     const bool laggedBindlessSlotsGraphOwned
 ){
     NWB_ASSERT(deferredState().m_lightingPipeline);
 
-    if(!currentBindlessSlotsGraphOwned && !uploadDeferredBindlessFrameResources(commandList, targets))
-        return false;
     if(
         useLaggedLightingHistory
         && !laggedBindlessSlotsGraphOwned

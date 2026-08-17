@@ -59,7 +59,6 @@ public:
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
         bool useLaggedLightingHistory,
-        bool currentBindlessSlotsGraphOwned,
         bool laggedBindlessSlotsGraphOwned,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
@@ -67,7 +66,6 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool useLaggedLightingHistory = false,
-        bool currentBindlessSlotsGraphOwned = false,
         bool laggedBindlessSlotsGraphOwned = false
     );
     [[nodiscard]] bool createDeferredFrameTargets(u32 width, u32 height);
@@ -81,23 +79,17 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
-        bool currentBindlessSlotsGraphOwned,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] bool renderDeferredComposite(
         Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        bool currentBindlessSlotsGraphOwned = false
+        DeferredFrameTargets& targets
     );
     [[nodiscard]] bool renderDeferredPresent(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        Core::Framebuffer* presentationFramebuffer,
-        bool currentBindlessSlotsGraphOwned = false
+        Core::Framebuffer* presentationFramebuffer
     );
-    // One-time target-generation upload shared by every consumer of DeferredBindlessResourceSlots. Shadow tracing runs
-    // before deferred lighting, so it must be able to make the slot cbuffer resident during shadow preparation.
-    [[nodiscard]] bool uploadDeferredBindlessFrameResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
 
 
 private:

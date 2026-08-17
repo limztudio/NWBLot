@@ -24,6 +24,9 @@ NWB_IMPL_BEGIN
 namespace __hidden_renderer_system{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Packet-range checks below encode the fixed semantic topology of the renderer graph. Keep the counts named so
 // validation does not silently drift when a task is added to one of those ranges.
 inline constexpr usize s_SinglePacketCount = 1u;

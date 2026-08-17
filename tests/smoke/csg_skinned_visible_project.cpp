@@ -42,6 +42,7 @@ using NWB::Tests::Smoke::AssignCsgCutterTransform;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::FindSpawnedModelObject;
+using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
 using CsgSkinnedModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
@@ -154,6 +155,22 @@ static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f)
 
 class CsgSkinnedVisibleSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
+    [[nodiscard]] static u32 rendererBaselineCaptureFreezeFrame(){
+        static const u32 s_captureFrame = [](){
+            f32 configuredFrame = 0.0f;
+            if(
+                !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", configuredFrame)
+                || !IsFinite(configuredFrame)
+                || configuredFrame < 1.0f
+            ){
+                return 0u;
+            }
+            return static_cast<u32>(Min(configuredFrame, 1000000.0f));
+        }();
+        return s_captureFrame;
+    }
+
+
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.threadPool);
         if(!world){
@@ -386,11 +403,27 @@ public:
     }
 
     virtual void onShutdown()override{
+        m_context.graphics.setFrameSubmissionSuspended(false);
         destroyWorld();
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgSkinnedVisibleSmokeProject: shutdown"));
     }
 
     virtual bool onUpdate(const f32 delta)override{
+        const u32 captureFreezeFrame = rendererBaselineCaptureFreezeFrame();
+        if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
+            if(!m_rendererBaselineCapturePaused){
+                // This test-only suspension freezes the animated skinned receiver and CSG cutter at the exact
+                // accepted frame the baseline manifest names. Production renderer scheduling is not involved.
+                m_context.graphics.setFrameSubmissionSuspended(true);
+                m_rendererBaselineCapturePaused = true;
+                NWB_LOGGER_ESSENTIAL_INFO(
+                    NWB_TEXT("CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"),
+                    m_rendererBaselineRenderedFrameCount
+                );
+            }
+            return true;
+        }
+
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_CutterAnimationSpeed;
@@ -399,6 +432,7 @@ public:
         updateCutterTransform(receiverRotation, LoadFloat(m_cutterLocalCenter));
 
         m_world->tick(safeDelta);
+        ++m_rendererBaselineRenderedFrameCount;
         return true;
     }
 
@@ -413,6 +447,8 @@ private:
     f32 m_animationTime = s_InitialAnimationTime;
     Float4 m_cutterLocalCenter = Float4(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ CsgSkinnedVisibleFpsLabel() };
+    u32 m_rendererBaselineRenderedFrameCount = 0u;
+    bool m_rendererBaselineCapturePaused = false;
 };
 
 

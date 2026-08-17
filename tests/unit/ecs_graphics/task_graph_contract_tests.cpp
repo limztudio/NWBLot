@@ -419,6 +419,29 @@ TEST(EcsGraphics, TransparentAvboitBaselineCaptureIsFrameLockedAndTestOwned){
 }
 
 
+// Skinned CSG animates both the receiver and the cutter. It must use the same test-only freeze contract before its
+// baseline can act as a runtime-skinning/CSG parity reference.
+TEST(EcsGraphics, SkinnedCsgBaselineCaptureIsFrameLockedAndTestOwned){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString profileSource;
+    AString smokeSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "ab" / "renderer_baseline" / "profiles.py", profileSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "csg_skinned_visible_project.cpp", smokeSource));
+    const AStringView profiles(profileSource.data(), profileSource.size());
+    const AStringView smoke(smokeSource.data(), smokeSource.size());
+
+    EXPECT_TRUE(ContainsText(profiles, "window_title=\"NWB Skinned CSG Smoke\""));
+    EXPECT_TRUE(ContainsText(profiles, "capture_ready_log=\"CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after\""));
+    EXPECT_TRUE(ContainsText(smoke, "rendererBaselineCaptureFreezeFrame"));
+    EXPECT_TRUE(ContainsText(smoke, "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"));
+    EXPECT_TRUE(ContainsText(smoke, "m_context.graphics.setFrameSubmissionSuspended(true)"));
+    EXPECT_TRUE(ContainsText(smoke, "CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"));
+    EXPECT_TRUE(ContainsText(smoke, "m_context.graphics.setFrameSubmissionSuspended(false)"));
+}
+
+
 // Surfel GI is an explicitly promoted Compute adopter. It can select an alternate Compute family only for the
 // graph-owned output-clear/compute chain; the compiler remains responsible for rejecting an undeclared resource
 // sharing contract or lowering the required exclusive ownership transfer.

@@ -52,9 +52,11 @@ PROFILES: Mapping[str, BaselineProfile] = {
         target="nwb_csg_skinned_visible_smoke",
         runtime_directory=Path("Testing") / "csg_skinned_visible_smoke_runtime",
         window_title="NWB Skinned CSG Smoke",
-        settle_seconds=5.0,
+        settle_seconds=0.75,
         frozen_environment={},
         description="Runtime-skinning and CSG interval-production baseline.",
+        capture_freeze_frame=96,
+        capture_ready_log="CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after",
     ),
     "soft-shadows": BaselineProfile(
         target="nwb_soft_shadow_test_smoke",

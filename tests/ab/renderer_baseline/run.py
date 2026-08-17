@@ -570,6 +570,9 @@ def run_self_test() -> int:
         transparent_profile = get_profile("transparent-avboit")
         assert transparent_profile.capture_freeze_frame == 96
         assert transparent_profile.settle_seconds == 0.75
+        skinned_csg_profile = get_profile("skinned-csg")
+        assert skinned_csg_profile.capture_freeze_frame == 96
+        assert skinned_csg_profile.settle_seconds == 0.75
         difference = compare_bmp_rgb(reference_image, candidate_image, root / "difference.bmp")
         assert difference.width == 2 and difference.height == 1
         assert difference.max_abs == 3

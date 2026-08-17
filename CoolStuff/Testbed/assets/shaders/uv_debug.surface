@@ -27,11 +27,7 @@ half3 nwbProjectUvDebug(const float2 uv0){
 
 
 NwbMeshSurface nwbMaterialSurface(){
-    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
-    const NwbSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
-    const NwbRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
-    const half3 baseColor = half3((surface.base_color * runtime.color_tint).rgb);
-    return nwbMakeMeshSurface(nwbProjectUvDebug(inUv0) * nwbMaterialVertexColor(baseColor), inNormal);
+    return nwbMakeMeshSurface(nwbProjectUvDebug(inUv0) * nwbMaterialSurfaceBaseColor(), inNormal);
 }
 
 

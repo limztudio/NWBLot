@@ -1,0 +1,91 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_GI_SURFEL_GATHER_FIELD_SLANGI
+#define NWB_GRAPHICS_GI_SURFEL_GATHER_FIELD_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The including pass selects a read-only surfel field through the four macros below. Keeping the traversal here
+// prevents the live deferred-lighting gather and the previous-frame trace gather from drifting apart.
+
+
+#ifndef NWB_SURFEL_GATHER_FIELD_POOL
+    #error NWB_SURFEL_GATHER_FIELD_POOL must select a read-only NwbSurfel buffer
+#endif
+#ifndef NWB_SURFEL_GATHER_FIELD_CELL_HEAD
+    #error NWB_SURFEL_GATHER_FIELD_CELL_HEAD must select a read-only cell-head buffer
+#endif
+#ifndef NWB_SURFEL_GATHER_FIELD_CONSTANTS
+    #error NWB_SURFEL_GATHER_FIELD_CONSTANTS must select NwbSurfelConstants
+#endif
+#ifndef NWB_SURFEL_GATHER_FIELD_INDEX_VALID
+    #error NWB_SURFEL_GATHER_FIELD_INDEX_VALID must validate a cell-list index
+#endif
+
+
+#include "surfel_heap_resources.slangi"
+#include "surfel_hash.slangi"
+#include "surfel_sh.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool nwbSurfelGatherField(
+    const float3 worldPosition,
+    const float3 normal,
+    const uint poolCapacity,
+    out float3 outIrradiance
+){
+    outIrradiance = float3(0.0, 0.0, 0.0);
+
+    const float cellSize = NWB_SURFEL_GATHER_FIELD_CONSTANTS.cameraPositionCellSize.w;
+    const uint cellCount = uint(NWB_SURFEL_GATHER_FIELD_CONSTANTS.hashPoolFrameDivisor.x);
+    const float normalBias = NWB_SURFEL_GATHER_FIELD_CONSTANTS.coverageRadiusBiasHyst.z;
+    const float3 biasedPosition = worldPosition + normal * normalBias;
+
+    float3 irradianceSum = float3(0.0, 0.0, 0.0);
+    float totalWeight = 0.0;
+    const int3 baseCell = nwbSurfelCellCoord(biasedPosition, cellSize);
+    for(int dz = -NWB_SURFEL_GATHER_CELL_EXTENT; dz <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dz)
+    for(int dy = -NWB_SURFEL_GATHER_CELL_EXTENT; dy <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dy)
+    for(int dx = -NWB_SURFEL_GATHER_CELL_EXTENT; dx <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dx){
+        const uint bucket = nwbSurfelHashCell(baseCell + int3(dx, dy, dz), cellCount);
+        uint id = NWB_SURFEL_GATHER_FIELD_CELL_HEAD[bucket];
+        uint walk = 0u;
+        [loop] while(NWB_SURFEL_GATHER_FIELD_INDEX_VALID(id, poolCapacity) && walk < NWB_SURFEL_MAX_WALK){
+            const NwbSurfel surfel = NWB_SURFEL_GATHER_FIELD_POOL[id];
+            if(surfel.alive != 0u && surfel.sampleCount != 0u){
+                const float dist = length(biasedPosition - surfel.position);
+                const float normalWeight = saturate(dot(normal, surfel.normal));
+                const float distanceWeight = saturate(1.0 - dist / max(surfel.radius, NWB_SURFEL_RADIUS_MIN));
+                const float confidence = saturate(float(surfel.sampleCount) / NWB_SURFEL_GATHER_FULL_CONFIDENCE_SAMPLE_COUNT);
+                const float weight = normalWeight * distanceWeight * confidence;
+                // Reconstruct the surfel's directional irradiance at the query normal. Normal/distance similarity
+                // gates leakage while the SH reconstruction retains the surfel's directional response.
+                irradianceSum += nwbSurfelShReconstruct(surfel.shR, surfel.shG, surfel.shB, normal) * weight;
+                totalWeight += weight;
+            }
+            id = surfel.nextInCell;
+            ++walk;
+        }
+    }
+
+    if(totalWeight < NWB_SURFEL_GATHER_WEIGHT_EPSILON)
+        return false;
+    outIrradiance = irradianceSum / totalWeight;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

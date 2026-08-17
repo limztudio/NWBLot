@@ -49,14 +49,16 @@ struct DeferredCompositeGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.deferredSystem || !payload.targets || !payload.timingTicket)
-            return false;
-
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        return payload.deferredSystem->renderDeferredComposite(
+        return ECSRenderDetail::RecordDeferredGraphTask(
+            payload,
             commandList,
-            *payload.targets,
-            payload.currentBindlessSlotsGraphOwned
+            [&](RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::CommandList& taskCommandList){
+                return deferredSystem.renderDeferredComposite(
+                    taskCommandList,
+                    targets,
+                    payload.currentBindlessSlotsGraphOwned
+                );
+            }
         );
     }
 };

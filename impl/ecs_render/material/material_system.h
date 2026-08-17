@@ -182,7 +182,24 @@ public:
         bool materialFrameStatesGraphOwned,
         bool materialGeometryStatesGraphOwned
     );
+    void setMaterialPassDrawItemResourceStates(
+        const MaterialPassDrawContext& context,
+        const MaterialPassDrawItem& drawItem,
+        const MeshResources& mesh
+    );
     void setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MeshResources& mesh);
+    void dispatchComputeMaterialPassDrawItem(
+        const MaterialPassDrawContext& context,
+        const MaterialPassDrawItem& drawItem,
+        const MeshResources& mesh,
+        MaterialPipelineResources& pipelineResources
+    );
+    void drawComputeMaterialPassDrawItem(
+        const MaterialPassDrawContext& context,
+        const MaterialPassDrawItem& drawItem,
+        const MeshResources& mesh,
+        MaterialPipelineResources& pipelineResources
+    );
     void renderMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItems& drawItems);
     void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     // Graph-only producer half. The graph must provide each generated-vertex output in UAV state; this method

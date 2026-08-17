@@ -165,6 +165,27 @@ struct CsgReceiverLocalSpace{
     return localSpace;
 }
 
+[[nodiscard]] static CsgReceiverLocalSpace BuildCsgReceiverLocalSpace(
+    const CsgReceiverCpuBounds& receiverBounds,
+    const Scene::TransformComponent* transform
+){
+    const bool boundsCanCull = CsgReceiverBoundsCanCull(receiverBounds);
+    const SIMDVector localMinBounds = boundsCanCull ? LoadFloatInt(receiverBounds.minBounds) : VectorZero();
+    const SIMDVector localMaxBounds = boundsCanCull ? LoadFloatInt(receiverBounds.maxBounds) : VectorZero();
+    SIMDMatrix localToWorld;
+    const SIMDMatrix* localToWorldPtr = nullptr;
+    if(transform){
+        localToWorld = MatrixAffineTransformation(
+            LoadFloat(transform->scale),
+            VectorZero(),
+            LoadFloat(transform->rotation),
+            LoadFloat(transform->position)
+        );
+        localToWorldPtr = &localToWorld;
+    }
+    return BuildCsgReceiverLocalSpace(boundsCanCull, localMinBounds, localMaxBounds, localToWorldPtr);
+}
+
 static void ExpandCsgFrameWorkRegionForWorldBounds(
     CsgFrameGpuData& csgFrameData,
     const SIMDMatrix& worldToClip,
@@ -687,16 +708,7 @@ bool RendererCsgSystem::prepareCsgClipContextSlotData(
 bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData){
     if(!csgFrameData.hasWork())
         return true;
-    NWB_ASSERT(csgState().m_receiverRangeBuffer);
-    NWB_ASSERT(csgState().m_cutterBuffer);
-    NWB_ASSERT(csgState().m_receiverRangeBufferCapacity >= csgFrameData.receiverRanges.size());
-    NWB_ASSERT(csgState().m_cutterBufferCapacity >= csgFrameData.cutters.size());
-    NWB_ASSERT(csgState().m_clipContextSlotsBuffer);
-    NWB_ASSERT(csgState().m_receiverRangeBufferHeapHandle.valid());
-    NWB_ASSERT(csgState().m_cutterBufferHeapHandle.valid());
-    NWB_ASSERT(csgState().m_clipContextSlotsHeapHandle.valid());
-    NWB_ASSERT(csgState().m_intervalSampleStateHeapHandle.valid());
-    NWB_ASSERT(m_renderer.meshSystem().meshFrameHeapHandlesReady());
+    NWB_ASSERT(csgFrameBuffersReady(csgFrameData));
     NWB_ASSERT(deferredState().m_targets.bindless.slotsBufferDescriptor.valid());
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgUpload, graphics().getDevice(), commandList);
@@ -723,14 +735,7 @@ bool RendererCsgSystem::uploadCsgFrameContextSlots(
 ){
     if(!csgFrameData.hasWork())
         return true;
-    NWB_ASSERT(csgState().m_receiverRangeBuffer);
-    NWB_ASSERT(csgState().m_cutterBuffer);
-    NWB_ASSERT(csgState().m_clipContextSlotsBuffer);
-    NWB_ASSERT(csgState().m_receiverRangeBufferHeapHandle.valid());
-    NWB_ASSERT(csgState().m_cutterBufferHeapHandle.valid());
-    NWB_ASSERT(csgState().m_clipContextSlotsHeapHandle.valid());
-    NWB_ASSERT(csgState().m_intervalSampleStateHeapHandle.valid());
-    NWB_ASSERT(m_renderer.meshSystem().meshFrameHeapHandlesReady());
+    NWB_ASSERT(csgFrameBuffersReady(csgFrameData));
     NWB_ASSERT(deferredState().m_targets.bindless.slotsBufferDescriptor.valid());
 
     CsgClipContextSlots contextSlots;
@@ -760,27 +765,8 @@ bool RendererCsgSystem::resolveCsgReceiverClipDrawInfo(
     CsgReceiverClipDrawInfo& outInfo
 )const{
     outInfo = CsgReceiverClipDrawInfo{};
-    const bool receiverBoundsCanCull = CsgReceiverBoundsCanCull(receiverBounds);
-    const SIMDVector receiverLocalMinBounds = receiverBoundsCanCull ? LoadFloatInt(receiverBounds.minBounds) : VectorZero();
-    const SIMDVector receiverLocalMaxBounds = receiverBoundsCanCull ? LoadFloatInt(receiverBounds.maxBounds) : VectorZero();
-    SIMDMatrix receiverLocalToWorld;
-    const SIMDMatrix* receiverLocalToWorldPtr = nullptr;
-    if(transform){
-        receiverLocalToWorld = MatrixAffineTransformation(
-            LoadFloat(transform->scale),
-            VectorZero(),
-            LoadFloat(transform->rotation),
-            LoadFloat(transform->position)
-        );
-        receiverLocalToWorldPtr = &receiverLocalToWorld;
-    }
     const __hidden_csg_resources::CsgReceiverLocalSpace receiverLocalSpace =
-        __hidden_csg_resources::BuildCsgReceiverLocalSpace(
-            receiverBoundsCanCull,
-            receiverLocalMinBounds,
-            receiverLocalMaxBounds,
-            receiverLocalToWorldPtr
-        )
+        __hidden_csg_resources::BuildCsgReceiverLocalSpace(receiverBounds, transform)
     ;
 
     return __hidden_csg_resources::ForEachReceiverClipCutter(
@@ -829,27 +815,8 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
 
     if(!receiverBounds.valid())
         return false;
-    const bool receiverBoundsCanCull = CsgReceiverBoundsCanCull(receiverBounds);
-    const SIMDVector receiverLocalMinBounds = receiverBoundsCanCull ? LoadFloatInt(receiverBounds.minBounds) : VectorZero();
-    const SIMDVector receiverLocalMaxBounds = receiverBoundsCanCull ? LoadFloatInt(receiverBounds.maxBounds) : VectorZero();
-    SIMDMatrix receiverLocalToWorld;
-    const SIMDMatrix* receiverLocalToWorldPtr = nullptr;
-    if(transform){
-        receiverLocalToWorld = MatrixAffineTransformation(
-            LoadFloat(transform->scale),
-            VectorZero(),
-            LoadFloat(transform->rotation),
-            LoadFloat(transform->position)
-        );
-        receiverLocalToWorldPtr = &receiverLocalToWorld;
-    }
     const __hidden_csg_resources::CsgReceiverLocalSpace receiverLocalSpace =
-        __hidden_csg_resources::BuildCsgReceiverLocalSpace(
-            receiverBoundsCanCull,
-            receiverLocalMinBounds,
-            receiverLocalMaxBounds,
-            receiverLocalToWorldPtr
-        )
+        __hidden_csg_resources::BuildCsgReceiverLocalSpace(receiverBounds, transform)
     ;
 
     SIMDMatrix worldToReceiver;

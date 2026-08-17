@@ -16,56 +16,25 @@
 
 
 #include "surfel_heap_resources.slangi"
-#include "surfel_hash.slangi"
-#include "surfel_sh.slangi"
 
-// Resolve reads the immutable views of the live field through its dispatch-uniform heap slots.
-#define g_NwbSceneSurfelPool g_NwbHeapSurfelReadOnlyPools[g_NwbSurfelHeapPushConstants.poolHeapSlot]
-#define g_NwbSceneSurfelCellHead g_NwbHeapSurfelReadOnlyUintBuffers[g_NwbSurfelHeapPushConstants.cellHeadHeapSlot]
+// Resolve reads the immutable live field through its dispatch-uniform heap slots.
 #define g_NwbSceneSurfelParams g_NwbHeapSurfelConstantBuffers[g_NwbSurfelHeapPushConstants.constantsHeapSlot]
+#define NWB_SURFEL_GATHER_FIELD_POOL g_NwbHeapSurfelReadOnlyPools[g_NwbSurfelHeapPushConstants.poolHeapSlot]
+#define NWB_SURFEL_GATHER_FIELD_CELL_HEAD g_NwbHeapSurfelReadOnlyUintBuffers[g_NwbSurfelHeapPushConstants.cellHeadHeapSlot]
+#define NWB_SURFEL_GATHER_FIELD_CONSTANTS g_NwbSceneSurfelParams
+#define NWB_SURFEL_GATHER_FIELD_INDEX_VALID(id, poolCapacity) ((id) != NWB_SURFEL_CELL_INVALID)
+
+#include "surfel_gather_field.slangi"
+
+#undef NWB_SURFEL_GATHER_FIELD_INDEX_VALID
+#undef NWB_SURFEL_GATHER_FIELD_CONSTANTS
+#undef NWB_SURFEL_GATHER_FIELD_CELL_HEAD
+#undef NWB_SURFEL_GATHER_FIELD_POOL
 
 
 // Gathers the surfel irradiance at a shaded point. Returns false if no surfel covers it (caller -> hemiAmbient).
 bool nwbSurfelGather(const float3 worldPosition, const float3 normal, out float3 outIrradiance){
-    outIrradiance = float3(0.0, 0.0, 0.0);
-
-    const float cellSize = g_NwbSceneSurfelParams.cameraPositionCellSize.w;
-    const uint cellCount = uint(g_NwbSceneSurfelParams.hashPoolFrameDivisor.x);
-    const float normalBias = g_NwbSceneSurfelParams.coverageRadiusBiasHyst.z;
-    const float3 biasedPosition = worldPosition + normal * normalBias;
-
-    float3 irradianceSum = float3(0.0, 0.0, 0.0);
-    float totalWeight = 0.0;
-    const int3 baseCell = nwbSurfelCellCoord(biasedPosition, cellSize);
-    for(int dz = -NWB_SURFEL_GATHER_CELL_EXTENT; dz <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dz)
-    for(int dy = -NWB_SURFEL_GATHER_CELL_EXTENT; dy <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dy)
-    for(int dx = -NWB_SURFEL_GATHER_CELL_EXTENT; dx <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dx){
-        const uint bucket = nwbSurfelHashCell(baseCell + int3(dx, dy, dz), cellCount);
-        uint id = g_NwbSceneSurfelCellHead[bucket];
-        uint walk = 0u;
-        [loop] while(id != NWB_SURFEL_CELL_INVALID && walk < NWB_SURFEL_MAX_WALK){
-            const NwbSurfel surfel = g_NwbSceneSurfelPool[id];
-            if(surfel.alive != 0u && surfel.sampleCount != 0u){
-                const float dist = length(biasedPosition - surfel.position);
-                const float normalWeight = saturate(dot(normal, surfel.normal));
-                const float distanceWeight = saturate(1.0 - dist / max(surfel.radius, NWB_SURFEL_RADIUS_MIN));
-                const float confidence = saturate(float(surfel.sampleCount) / NWB_SURFEL_GATHER_FULL_CONFIDENCE_SAMPLE_COUNT);
-                const float weight = normalWeight * distanceWeight * confidence;
-                // Reconstruct the surfel's directional irradiance at the QUERY normal: a surface facing the red
-                // wall reads redder than one facing away. Normal/distance similarity still gates leakage (the surfel's
-                // SH is only sampled over its own hemisphere, so a far-off query normal is rejected by normalWeight).
-                irradianceSum += nwbSurfelShReconstruct(surfel.shR, surfel.shG, surfel.shB, normal) * weight;
-                totalWeight += weight;
-            }
-            id = surfel.nextInCell;
-            ++walk;
-        }
-    }
-
-    if(totalWeight < NWB_SURFEL_GATHER_WEIGHT_EPSILON)
-        return false;
-    outIrradiance = irradianceSum / totalWeight;
-    return true;
+    return nwbSurfelGatherField(worldPosition, normal, 0u, outIrradiance);
 }
 
 

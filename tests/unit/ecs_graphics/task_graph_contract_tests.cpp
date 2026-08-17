@@ -635,6 +635,32 @@ TEST(EcsGraphics, CausticEmissionTargetsHaveNoNativeCompatibilityDispatcher){
 }
 
 
+// Surfel frame constants are frozen while the graph is declared. The Shadow Prepare and optional hybrid-tail
+// callbacks must consume that upload rather than recomputing and writing a later mutable constant buffer.
+TEST(EcsGraphics, SurfelFrameConstantsHaveNoNativeCompatibilityDispatcher){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString rayTracingHeaderSource;
+    AString surfelSource;
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_surfel_gi.cpp", surfelSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
+    const AStringView surfel(surfelSource.data(), surfelSource.size());
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    EXPECT_TRUE(ContainsText(rayTracingHeader, "retainPreparedSurfelFrameConstantsUpload"));
+    EXPECT_FALSE(ContainsText(rayTracingHeader, "recordPreparedSurfelFrameConstants"));
+    EXPECT_FALSE(ContainsText(surfel, "recordPreparedSurfelFrameConstants"));
+    EXPECT_FALSE(ContainsText(surfel, "commandList.writeBuffer("));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.surfel_gi.constants_upload"));
+    EXPECT_TRUE(ContainsText(taskGraph, "m_surfelFrameConstantsUploadTask"));
+    EXPECT_FALSE(ContainsText(taskGraph, "surfelFrameConstantsGraphOwned"));
+}
+
+
 // The current renderer has exactly two runtime-selected sampled-image domains: material Texture2D assets (shared
 // by raster and ray-trace surface dispatch) and ImGui textures.  A new domain must not silently rely on a global
 // descriptor slot: keep the supported domain small and require each one to retain handles before graph declaration.

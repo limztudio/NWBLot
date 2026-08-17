@@ -103,7 +103,6 @@ struct ShadowPrepareGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool deferredBindlessSlotsWereUploaded = false;
         bool currentBindlessSlotsGraphOwned = false;
-        bool surfelFrameConstantsGraphOwned = false;
         bool shadowMaterialContextBatchGraphOwned = false;
         bool sceneBvhBatchGraphOwned = false;
         bool sceneTlasBuildGraphOwned = false;
@@ -133,7 +132,6 @@ struct ShadowPrepareGraphTask{
                 commandList,
                 *payload.targets,
                 renderer.m_preparedShadowVisibilityReady,
-                payload.surfelFrameConstantsGraphOwned,
                 payload.shadowMaterialContextBatchGraphOwned,
                 payload.sceneBvhBatchGraphOwned,
                 payload.sceneTlasBuildGraphOwned,
@@ -220,7 +218,6 @@ struct ShadowPrepareHybridSoftwareTailGraphTask{
         DeferredFrameTargets* targets = nullptr;
         bool* hardwarePreparationReady = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        bool surfelFrameConstantsGraphOwned = false;
         bool shadowMaterialContextBatchGraphOwned = false;
         bool sceneBvhBatchGraphOwned = false;
         bool meshSwBvhBuildsGraphOwned = false;
@@ -277,7 +274,6 @@ struct ShadowPrepareHybridSoftwareTailGraphTask{
             commandList,
             *payload.targets,
             *payload.hardwarePreparationReady,
-            payload.surfelFrameConstantsGraphOwned,
             payload.shadowMaterialContextBatchGraphOwned,
             payload.sceneBvhBatchGraphOwned,
             payload.meshSwBvhBuildsGraphOwned,
@@ -5624,7 +5620,6 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .timingTicket = &timingTicket,
             .deferredBindlessSlotsWereUploaded = deferredTargets.bindless.slotsUploaded,
             .currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned,
-            .surfelFrameConstantsGraphOwned = true,
             .shadowMaterialContextBatchGraphOwned = shadowMaterialContextBatchGraphOwned,
             .sceneBvhBatchGraphOwned = sceneBvhBatchGraphOwned,
             .sceneTlasBuildGraphOwned = sceneTlasBuildGraphOwned,
@@ -5671,7 +5666,6 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
                 .targets = &deferredTargets,
                 .hardwarePreparationReady = &m_preparedShadowVisibilityReady,
                 .timingTicket = &timingTicket,
-                .surfelFrameConstantsGraphOwned = true,
                 .shadowMaterialContextBatchGraphOwned = shadowMaterialContextBatchGraphOwned,
                 .sceneBvhBatchGraphOwned = sceneBvhBatchGraphOwned,
                 .meshSwBvhBuildsGraphOwned = meshSwBvhBuildsGraphOwned,

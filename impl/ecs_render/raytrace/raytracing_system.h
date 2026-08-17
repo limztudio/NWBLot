@@ -224,7 +224,6 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool& outBackendReady,
-        bool surfelFrameConstantsGraphOwned = false,
         bool shadowMaterialContextBatchGraphOwned = false,
         bool sceneBvhBatchGraphOwned = false,
         bool sceneTlasBuildGraphOwned = false,
@@ -242,7 +241,6 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool hardwareBackendReady,
-        bool surfelFrameConstantsGraphOwned = false,
         bool shadowMaterialContextBatchGraphOwned = false,
         bool sceneBvhBatchGraphOwned = false,
         bool meshSwBvhBuildsGraphOwned = false,
@@ -964,7 +962,6 @@ private:
     [[nodiscard]] bool preparedMeshSwBvhBuildProducesTopology(const MeshResources& mesh)const noexcept;
     void clearPreparedMeshSwBvhBuilds()noexcept;
     [[nodiscard]] bool prepareSurfelResources(DeferredFrameTargets& targets);
-    [[nodiscard]] bool recordPreparedSurfelFrameConstants(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool initializeSurfelResources(
         Core::CommandList& commandList,
         bool graphEntryStatesOwned = false

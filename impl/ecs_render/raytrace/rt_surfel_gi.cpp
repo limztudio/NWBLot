@@ -1297,24 +1297,6 @@ bool RendererRayTracingSystem::retainPreparedSurfelFrameConstantsUpload(
     return outBlob.valid();
 }
 
-bool RendererRayTracingSystem::recordPreparedSurfelFrameConstants(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets
-){
-    if(!hasSurfelWork() || !rayTracingState().m_surfelConstants)
-        return true;
-
-    const NwbSurfelConstantsGpu params = BuildSurfelFrameConstants(rayTracingState(), targets);
-
-    Core::Buffer* cb = rayTracingState().m_surfelConstants.get();
-    commandList.setBufferState(cb, Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(cb, &params, sizeof(params));
-    commandList.setBufferState(cb, Core::ResourceStates::ConstantBuffer);
-    commandList.commitBarriers();
-    return true;
-}
-
 void RendererRayTracingSystem::finalizeSurfelResourceInitialization(){
     if(!rayTracingState().m_surfelResourcesClearPending)
         return;

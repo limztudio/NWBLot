@@ -1727,7 +1727,6 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     bool& outBackendReady,
-    const bool surfelFrameConstantsGraphOwned,
     const bool shadowMaterialContextBatchGraphOwned,
     const bool sceneBvhBatchGraphOwned,
     const bool sceneTlasBuildGraphOwned,
@@ -1856,7 +1855,6 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
             commandList,
             targets,
             outBackendReady,
-            surfelFrameConstantsGraphOwned,
             shadowMaterialContextBatchGraphOwned,
             sceneBvhBatchGraphOwned,
             meshSwBvhBuildsGraphOwned
@@ -1911,12 +1909,6 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     }
 
     outBackendReady = m_shadowVisibilityBackendPipelinePreflighted;
-    if(
-        rayTracingState().m_surfelEnabled
-        && !surfelFrameConstantsGraphOwned
-        && !recordPreparedSurfelFrameConstants(commandList, targets)
-    )
-        return false;
     return true;
 }
 
@@ -1925,7 +1917,6 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const bool hardwareBackendReady,
-    const bool surfelFrameConstantsGraphOwned,
     const bool shadowMaterialContextBatchGraphOwned,
     const bool sceneBvhBatchGraphOwned,
     const bool meshSwBvhBuildsGraphOwned,
@@ -2134,12 +2125,6 @@ bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
     // it.
     if(sceneBvhBatchGraphOwned && !hybridSceneBvhBuildRecorded)
         clearPreparedSceneBvh();
-    if(
-        rayTracingState().m_surfelEnabled
-        && !surfelFrameConstantsGraphOwned
-        && !recordPreparedSurfelFrameConstants(commandList, targets)
-    )
-        return false;
     return true;
 }
 

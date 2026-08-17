@@ -183,6 +183,68 @@ TEST(EcsGraphics, UiPresentationSnapshotsLateRecordInputs){
 }
 
 
+// The current renderer has exactly two runtime-selected sampled-image domains: material Texture2D assets (shared
+// by raster and ray-trace surface dispatch) and ImGui textures.  A new domain must not silently rely on a global
+// descriptor slot: keep the supported domain small and require each one to retain handles before graph declaration.
+TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString materialAssetHeaderSource;
+    AString materialSurfaceSource;
+    AString taskGraphSource;
+    AString uiHeaderSource;
+    AString uiSource;
+    AString uiTextureSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets_material" / "asset.h", materialAssetHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_surface.cpp", materialSurfaceSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.h", uiHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "texture_resources.cpp", uiTextureSource));
+
+    const AStringView materialAssetHeader(materialAssetHeaderSource.data(), materialAssetHeaderSource.size());
+    const AStringView materialSurface(materialSurfaceSource.data(), materialSurfaceSource.size());
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const AStringView uiHeader(uiHeaderSource.data(), uiHeaderSource.size());
+    const AStringView ui(uiSource.data(), uiSource.size());
+    const AStringView uiTextures(uiTextureSource.data(), uiTextureSource.size());
+
+    // Material resource validation supports only a Texture2D asset and a sampler. The prepared collector must
+    // resolve the former to a retained texture handle, while samplers deliberately have no resource state to track.
+    EXPECT_TRUE(ContainsText(materialAssetHeader, "SampledImage2D = 1"));
+    EXPECT_TRUE(ContainsText(materialAssetHeader, "Sampler = 2"));
+    EXPECT_TRUE(ContainsText(materialAssetHeader, "return resourceKind == MaterialResourceKind::SampledImage2D || resourceKind == MaterialResourceKind::Sampler"));
+    EXPECT_TRUE(ContainsText(materialSurface, "appendPreparedMaterialSurfaceSampledTextures"));
+    EXPECT_TRUE(ContainsText(materialSurface, "inOutTextures.push_back(textureResource.texture)"));
+    EXPECT_TRUE(ContainsText(materialSurface, "default:\n            return false;"));
+
+    // Raster and trace consumers share the frozen material collection. The named sets make a future dynamic
+    // bindless consumer visible to the audit rather than allowing it to hide behind the descriptor heap.
+    EXPECT_TRUE(ContainsText(taskGraph, "GatherPreparedMaterialSampledTextureResourceSet"));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.graphics_prefix.gbuffer.material_sampled_textures"));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.graphics_prefix.csg_interval_sample.material_sampled_textures"));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.avboit.intervals.transparent_csg_material_sampled_textures"));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.avboit.occupancy.material_sampled_textures"));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.avboit.extinction.material_sampled_textures"));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.avboit.accumulation.material_sampled_textures"));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.trace_material_sampled_textures"));
+    EXPECT_TRUE(ContainsText(taskGraph, "traceMaterialSampledTextureSetUse"));
+
+    // ImGui is the other dynamic domain. Its draw command retains the selected texture and heap slot, its upload
+    // path imports the exact destination, and the terminal task declares that frozen texture rather than reading
+    // the mutable ImGui command list.
+    EXPECT_TRUE(ContainsText(uiHeader, "Core::TextureHandle texture;"));
+    EXPECT_TRUE(ContainsText(uiHeader, "Core::GpuDescriptorHandle textureHeapHandle"));
+    EXPECT_TRUE(ContainsText(uiTextures, "heap.allocate(Core::GpuDescriptorClass::SampledImage)"));
+    EXPECT_TRUE(ContainsText(uiTextures, "importTaskGraphTexture(graph, *resource)"));
+    EXPECT_TRUE(ContainsText(uiTextures, "graph.addUploadTextureTask("));
+    EXPECT_TRUE(ContainsText(ui, "appendDrawTextureUse(drawCommand.texture)"));
+    EXPECT_TRUE(ContainsText(ui, "m_taskGraphDrawCommands.push_back(TaskGraphDrawCommand{"));
+    EXPECT_TRUE(ContainsText(ui, "graph-owned ImGui overlay cannot safely record a custom draw callback"));
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

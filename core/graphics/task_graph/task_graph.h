@@ -327,6 +327,10 @@ public:
     [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const;
     [[nodiscard]] Texture* textureForResource(const GpuGraphResourceId& resource)const noexcept;
     [[nodiscard]] Buffer* bufferForResource(const GpuGraphResourceId& resource)const noexcept;
+    // Acceleration structures expose their concrete backing allocation only for graph-runtime state handoffs.
+    // Renderer declarations remain typed as AccelStruct resources; callers should not need to import the backing
+    // buffer merely to preserve cross-packet state or queue-family ownership.
+    [[nodiscard]] RayTracingAccelStruct* accelStructForResource(const GpuGraphResourceId& resource)const noexcept;
     // Immutable byte view for graph-owned task recorders. Callers must consume it only while the graph generation
     // remains valid; `outByteSize` is zero and the return value is null for an invalid/stale blob handle.
     [[nodiscard]] const void* uploadBlobData(const GpuUploadBlobId& blob, usize& outByteSize)const noexcept;

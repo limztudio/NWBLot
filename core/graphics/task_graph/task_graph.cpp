@@ -1657,6 +1657,13 @@ Buffer* GpuTaskGraph::bufferForResource(const GpuGraphResourceId& resource)const
     return node.type == GpuGraphResourceType::Buffer ? node.buffer.get() : nullptr;
 }
 
+RayTracingAccelStruct* GpuTaskGraph::accelStructForResource(const GpuGraphResourceId& resource)const noexcept{
+    if(!validResource(resource))
+        return nullptr;
+    const GpuGraphResourceNode& node = m_resources[resource.index];
+    return node.type == GpuGraphResourceType::AccelStruct ? node.accelStruct.get() : nullptr;
+}
+
 const void* GpuTaskGraph::uploadBlobData(const GpuUploadBlobId& blob, usize& outByteSize)const noexcept{
     outByteSize = 0u;
     const GpuUploadBlobNode* const node = findUploadBlob(blob);
@@ -1768,6 +1775,18 @@ bool GpuTaskGraph::applyCompiledBarrier(
         commandList.setBufferState(resource.buffer.get(), barrier.after);
         commandList.beginTrackingBufferState(resource.buffer.get(), barrier.after);
         return true;
+    case GpuCompiledBarrierType::AccelStructStateExport:{
+        if(resource.type != GpuGraphResourceType::AccelStruct || !resource.accelStruct)
+            return false;
+        Buffer* const backingBuffer = resource.accelStruct->getBackingBuffer();
+        if(!backingBuffer)
+            return false;
+        // Acceleration-structure state and ownership are represented by Vulkan through the allocation that backs
+        // the AS. Keep that lowering private to the graph runtime while retaining one typed graph resource.
+        commandList.setAccelStructState(resource.accelStruct.get(), barrier.after);
+        commandList.beginTrackingBufferState(backingBuffer, barrier.after);
+        return true;
+    }
     case GpuCompiledBarrierType::AccelStructTransition:
     case GpuCompiledBarrierType::AccelStructUav:
         if(resource.type != GpuGraphResourceType::AccelStruct || !resource.accelStruct)
@@ -1804,8 +1823,25 @@ bool GpuTaskGraph::applyCompiledBarrier(
         commandList.releaseBufferOwnership(resource.buffer.get(), destinationQueue->id);
         return true;
     }
+    case GpuCompiledBarrierType::AccelStructOwnershipRelease:{
+        const GpuPhysicalQueueInfo* const sourceQueue = compiledGraph.queueInfo(barrier.sourceQueue);
+        const GpuPhysicalQueueInfo* const destinationQueue = compiledGraph.queueInfo(barrier.destinationQueue);
+        if(
+            resource.type != GpuGraphResourceType::AccelStruct
+            || !resource.accelStruct
+            || !resolveOwnershipQueues()
+            || commandList.getDescription().physicalQueue != sourceQueue->id
+        )
+            return false;
+        Buffer* const backingBuffer = resource.accelStruct->getBackingBuffer();
+        if(!backingBuffer)
+            return false;
+        commandList.releaseBufferOwnership(backingBuffer, destinationQueue->id);
+        return true;
+    }
     case GpuCompiledBarrierType::TextureOwnershipAcquire:
-    case GpuCompiledBarrierType::BufferOwnershipAcquire:{
+    case GpuCompiledBarrierType::BufferOwnershipAcquire:
+    case GpuCompiledBarrierType::AccelStructOwnershipAcquire:{
         const GpuPhysicalQueueInfo* const destinationQueue = compiledGraph.queueInfo(barrier.destinationQueue);
         if(!resolveOwnershipQueues() || commandList.getDescription().physicalQueue != destinationQueue->id)
             return false;
@@ -1899,6 +1935,30 @@ bool GpuTaskGraph::seedTaskRetainedResourceStates(
             if(commandList.getBufferState(resource.buffer.get()) != use.requiredState)
                 return false;
             commandList.beginTrackingBufferState(resource.buffer.get(), use.requiredState);
+            break;
+        }
+        case GpuGraphResourceType::AccelStruct:{
+            bool alreadySeededByTask = false;
+            for(usize previousUseIndex = 0u; previousUseIndex < useIndex; ++previousUseIndex){
+                const GpuTaskResourceUse& previousUse = resourceUses[previousUseIndex];
+                if(previousUse.resource == use.resource){
+                    alreadySeededByTask = true;
+                    break;
+                }
+            }
+            if(alreadySeededByTask)
+                continue;
+
+            RayTracingAccelStruct* const accelStruct = resource.accelStruct.get();
+            Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
+            if(!backingBuffer)
+                return false;
+            const BufferDesc& description = backingBuffer->getDescription();
+            if(!description.keepInitialState || description.initialState != use.requiredState)
+                continue;
+            if(commandList.getBufferState(backingBuffer) != use.requiredState)
+                return false;
+            commandList.beginTrackingBufferState(backingBuffer, use.requiredState);
             break;
         }
         default:
@@ -2167,18 +2227,24 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
             desc.externalFinalState != ResourceStates::Unknown
             && desc.type != GpuGraphResourceType::Texture
             && desc.type != GpuGraphResourceType::Buffer
+            && desc.type != GpuGraphResourceType::AccelStruct
         )
         || (
             hasExternalFinalRelease
             && (
                 desc.externalFinalState == ResourceStates::Unknown
-                || (desc.type != GpuGraphResourceType::Texture && desc.type != GpuGraphResourceType::Buffer)
+                || (
+                    desc.type != GpuGraphResourceType::Texture
+                    && desc.type != GpuGraphResourceType::Buffer
+                    && desc.type != GpuGraphResourceType::AccelStruct
+                )
             )
         )
         || (
             desc.initialOwnerQueue.valid()
             && desc.type != GpuGraphResourceType::Texture
             && desc.type != GpuGraphResourceType::Buffer
+            && desc.type != GpuGraphResourceType::AccelStruct
         )
         || (
             hasInitialOwnerHandoff

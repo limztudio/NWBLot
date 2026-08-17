@@ -288,6 +288,12 @@ namespace GpuCompiledBarrierType{
         // retains the requested state in the packet snapshot for the external consumer.
         TextureStateExport,
         BufferStateExport,
+        // Acceleration structures lower through their typed backing allocations, but remain graph resources in
+        // their own right.  These markers let the graph retain/export that backing state and pair queue-family
+        // ownership without forcing every caller to import the backing Buffer as a second resource.
+        AccelStructOwnershipRelease,
+        AccelStructOwnershipAcquire,
+        AccelStructStateExport,
 
         kCount,
     };

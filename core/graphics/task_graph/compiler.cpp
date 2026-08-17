@@ -423,6 +423,8 @@ struct PendingCompiledEpilogueBarrier{
         return GpuCompiledBarrierType::TextureStateExport;
     case GpuGraphResourceType::Buffer:
         return GpuCompiledBarrierType::BufferStateExport;
+    case GpuGraphResourceType::AccelStruct:
+        return GpuCompiledBarrierType::AccelStructStateExport;
     default:
         return GpuCompiledBarrierType::kCount;
     }
@@ -436,6 +438,8 @@ struct PendingCompiledEpilogueBarrier{
         return GpuCompiledBarrierType::TextureOwnershipRelease;
     case GpuGraphResourceType::Buffer:
         return GpuCompiledBarrierType::BufferOwnershipRelease;
+    case GpuGraphResourceType::AccelStruct:
+        return GpuCompiledBarrierType::AccelStructOwnershipRelease;
     default:
         return GpuCompiledBarrierType::kCount;
     }
@@ -449,6 +453,8 @@ struct PendingCompiledEpilogueBarrier{
         return GpuCompiledBarrierType::TextureOwnershipAcquire;
     case GpuGraphResourceType::Buffer:
         return GpuCompiledBarrierType::BufferOwnershipAcquire;
+    case GpuGraphResourceType::AccelStruct:
+        return GpuCompiledBarrierType::AccelStructOwnershipAcquire;
     default:
         return GpuCompiledBarrierType::kCount;
     }
@@ -1158,7 +1164,8 @@ bool GpuTaskGraphCompiler::compile(
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex)
         outCompiledGraph.m_queueTopology.push_back(topology.queues[queueIndex]);
 
-    // An import may name the exact physical queue that owned an exclusive texture/buffer before graph work began.
+    // An import may name the exact physical queue that owned an exclusive texture/buffer/acceleration structure
+    // before graph work began.
     // A different first packet must also name a fixed release destination, an imported completion, and a native
     // state handoff source. That keeps the compiler from manufacturing an acquire or cross-queue wait on its own.
     for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
@@ -1372,7 +1379,11 @@ bool GpuTaskGraphCompiler::compile(
             if(resource.type == GpuGraphResourceType::HazardDomain || use.requiredState == ResourceStates::Unknown)
                 continue;
             if(
-                (resource.type == GpuGraphResourceType::Texture || resource.type == GpuGraphResourceType::Buffer)
+                (
+                    resource.type == GpuGraphResourceType::Texture
+                    || resource.type == GpuGraphResourceType::Buffer
+                    || resource.type == GpuGraphResourceType::AccelStruct
+                )
                 && ResourceUsesConcurrentQueueSharing(resource.queueSharing, topology)
                 && !ResourceSharingIncludesQueueClass(resource.queueSharing, taskQueue->queueClass)
             ){
@@ -1465,7 +1476,11 @@ bool GpuTaskGraphCompiler::compile(
             ;
             if(
                 previousState
-                && (resource.type == GpuGraphResourceType::Texture || resource.type == GpuGraphResourceType::Buffer)
+                && (
+                    resource.type == GpuGraphResourceType::Texture
+                    || resource.type == GpuGraphResourceType::Buffer
+                    || resource.type == GpuGraphResourceType::AccelStruct
+                )
             ){
                 const GpuSubmissionPacketId sourcePacket = outCompiledGraph.packetForTask(previousState->task);
                 if(!sourcePacket.valid()){
@@ -1585,7 +1600,8 @@ bool GpuTaskGraphCompiler::compile(
         ;
     }
 
-    // Imported texture/buffer metadata can require a graph-owned terminal state for code that resumes outside this
+    // Imported texture/buffer/acceleration-structure metadata can require a graph-owned terminal state for code
+    // that resumes outside this
     // compiled graph. Emit one explicit export for every declared range with no later overlapping graph use. The
     // runtime lowers an export through the native state tracker and retains it even when it was already in the
     // required state, so the accepted packet snapshot is authoritative without a renderer-side final-state bridge.

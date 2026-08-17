@@ -412,6 +412,7 @@ can receive an unconditional final sign-off.
 | Cross-family same-class Graphics routing follow-up: graph-unit binary | 124/124 passed, including default same-family retention plus deterministic explicit cross-family routing and exclusive Buffer ownership release/acquire planning |
 | Cross-family same-class Graphics routing follow-up: descriptor-buffer smoke binary | 147 passed; 17 expected topology skips. The added real-Vulkan route requests a separately enabled alternate Graphics family, verifies compiler release/acquire barriers, records/submits its exact physical timeline dependency, and reads the copied buffer back; this adapter cleanly skips because it exposes no alternate Graphics-capable family |
 | Primary-Graphics terminal-presentation boundary: swap-chain unit, graph/ECS contracts, and descriptor-buffer smoke | passed; the presentation policy admits only the exact primary physical Graphics queue, rejecting same-family and cross-family auxiliary queues before a binary signal can be queued or accepted. The deferred renderer independently rejects an off-primary scene Present or terminal overlay, so the acquired image remains on the transport named by its existing acquire/share contract. Presentation tests passed 7/7, graph tests 124/124, ECS graphics 26/26, and descriptor smoke passed 147 with 17 expected topology skips. |
+| Typed acceleration-structure ownership: graph unit and descriptor-buffer smoke | passed; `AccelStruct` declarations now carry cross-packet state seeds, terminal final-state exports, and exclusive queue-family release/acquire markers through their typed backing allocation inside graph-runtime lowering. A caller no longer needs a second backing-buffer import just to transport state: compiler coverage proves cross-family `AccelStructWrite → AccelStructRead` ownership planning plus external export, while the real Vulkan test imports only a TLAS, forces a packet split, observes the producer state in its consumer, and publishes `AccelStructRead` in the accepted final snapshot. Graph tests passed 126/126 and descriptor smoke passed 148 with 17 expected topology skips. |
 | Actual device-recreation graph-packet follow-up: descriptor-buffer smoke binary | 73 passed; 10 expected skips. A real headless Graphics instance releases its recorded packets/transaction before teardown, recreates its device, then recompiles, records, and submits only on the replacement generation |
 | Graph-owned public setup-upload follow-up: descriptor-buffer smoke binary | 73 passed; 10 expected skips. Normal buffer and texture setup routes compile, record, and submit through one graph packet while preserving queue selection, graph-visible final states, and Graphics readiness; the dedicated-Transfer probe is hardware-skipped on this adapter |
 | Public texture-upload validation closeout: graph-unit and descriptor-buffer smoke binaries | passed; combined D24S8/D32S8 raw payloads and retained-Unknown setup/batch descriptors now reject before any native submission, leaving every supported public texture upload on the graph-owned path. A future combined depth/stencil upload requires an explicit per-aspect payload/task contract. Graph tests passed 122/122 and the real Vulkan descriptor smoke passed 145 with 16 expected topology skips. |
@@ -700,16 +701,19 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    rejection behavior while retiring its renderer-local raw handoff/backing vector and retaining the native record
    fallback itself. The optional lagged-history tail remains
    separately late-recorded after Present acceptance, but now resolves its retained return snapshots through its
-   semantic history-copy task rather than a packet override. Imported texture/buffer metadata can now also require
+   semantic history-copy task rather than a packet override. Imported texture/buffer/acceleration-structure metadata can now also require
    an external final state: the compiler appends a terminal export after the last overlapping declared use and the
    packet handoff retains that state even when task-local work changed it. This removes a generic final-state bridge.
-   Imported texture/buffer metadata now also retains an optional initial exclusive physical owner. Owner-only
+   Acceleration structures lower their state snapshot and ownership transfer through their retained backing buffer,
+   without requiring renderer declarations to duplicate that buffer solely for graph state transport. Imported
+   texture/buffer/acceleration-structure metadata now also retains an optional initial exclusive physical owner. Owner-only
    imports require a current, nonconcurrent, exact first-packet match; a different first packet must name the fixed
    external release destination, imported completion, and native state-handoff source. The graph captures an
    immutable owner-state snapshot at declaration, so the producer may release its original handoff before late
    recording. The compiler attaches that completion to the first consumer and rejects a token that does not identify
    the declared source physical queue.
-   Graph-to-external routing now supports one terminal producer packet for an exclusive typed texture/buffer: the
+   Graph-to-external routing now supports one terminal producer packet for an exclusive typed texture, buffer, or
+   acceleration structure: the
    descriptor declares its final state and fixed destination, the compiler exports then releases ownership, and the
    accepted transaction publishes the semantic producer token plus recorded state snapshot. Concurrent sharing and
    terminal resource ranges spanning multiple producer packets are deliberately rejected until a multi-token export

@@ -89,16 +89,16 @@ struct GpuGraphResourceDesc{
     // transitional CommandListResourceStateHandoff supplies the authoritative imported state at recording time.
     ResourceStates::Mask initialState = ResourceStates::Unknown;
     // Optional required state when graph work completes. The compiler applies this to every terminal range the
-    // graph declared for an imported texture/buffer and publishes it in the accepted packet's native state
-    // snapshot. Unknown leaves the resource's final state under ordinary task ownership.
+    // graph declared for an imported texture, buffer, or acceleration structure and publishes it in the accepted
+    // packet's native state snapshot. Unknown leaves the resource's final state under ordinary task ownership.
     ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
-    // Optional physical queue that receives an exclusive imported texture/buffer after its final graph use. The
-    // compiler emits the terminal state export first, then a release to this exact destination. The accepted
+    // Optional physical queue that receives an exclusive imported texture, buffer, or acceleration structure after
+    // its final graph use. The compiler emits the terminal state export first, then a release to this exact destination. The accepted
     // terminal packet token and recorded state snapshot form the external handoff consumed by subsequent native
     // work or a later graph import.
     GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
-    // Optional owner of an exclusive imported texture/buffer before its first graph use. An exact first-packet
-    // match needs no extra synchronization because submission order on one physical queue is sufficient.
+    // Optional owner of an exclusive imported texture, buffer, or acceleration structure before its first graph
+    // use. An exact first-packet match needs no extra synchronization because submission order on one physical queue is sufficient.
     GpuPhysicalQueueId initialOwnerQueue;
     // A different first packet is permitted only when an already-recorded external producer released ownership to
     // this exact physical queue, exports the state snapshot below, and supplies the completion node imported into

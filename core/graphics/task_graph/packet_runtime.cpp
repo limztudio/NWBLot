@@ -126,6 +126,7 @@ inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph
             if(
                 barrier.type != GpuCompiledBarrierType::TextureOwnershipAcquire
                 && barrier.type != GpuCompiledBarrierType::BufferOwnershipAcquire
+                && barrier.type != GpuCompiledBarrierType::AccelStructOwnershipAcquire
             )
                 return false;
 
@@ -386,10 +387,16 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                         return false;
                     break;
                 }
-                case GpuGraphResourceType::AccelStruct:
-                    // Acceleration structures lower through their backing buffers.  Their first graph use still
-                    // emits a compiler barrier; typed backing-buffer imports supply a state seed when needed.
-                    continue;
+                case GpuGraphResourceType::AccelStruct:{
+                    RayTracingAccelStruct* const accelStruct = graph.accelStructForResource(use.resource);
+                    Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
+                    if(!backingBuffer)
+                        return false;
+                    Buffer* const buffers[] = { backingBuffer };
+                    if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))
+                        return false;
+                    break;
+                }
                 case GpuGraphResourceType::HazardDomain:
                     continue;
                 default:
@@ -440,6 +447,16 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                 return false;
             break;
         }
+        case GpuGraphResourceType::AccelStruct:{
+            RayTracingAccelStruct* const accelStruct = graph.accelStructForResource(barrier.resource);
+            Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
+            if(!backingBuffer)
+                return false;
+            Buffer* const buffers[] = { backingBuffer };
+            if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))
+                return false;
+            break;
+        }
         default:
             return false;
         }
@@ -467,6 +484,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                 || (
                     barrier.type != GpuCompiledBarrierType::TextureOwnershipAcquire
                     && barrier.type != GpuCompiledBarrierType::BufferOwnershipAcquire
+                    && barrier.type != GpuCompiledBarrierType::AccelStructOwnershipAcquire
                 )
             )
                 continue;
@@ -569,6 +587,14 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             }
             else if(Buffer* const buffer = graph.bufferForResource(seed.resource)){
                 Buffer* const buffers[] = { buffer };
+                if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))
+                    return false;
+            }
+            else if(RayTracingAccelStruct* const accelStruct = graph.accelStructForResource(seed.resource)){
+                Buffer* const backingBuffer = accelStruct->getBackingBuffer();
+                if(!backingBuffer)
+                    return false;
+                Buffer* const buffers[] = { backingBuffer };
                 if(!scratch.stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))
                     return false;
             }

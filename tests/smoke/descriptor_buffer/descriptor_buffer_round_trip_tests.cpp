@@ -4696,6 +4696,190 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
 }
 
 
+// Typed acceleration-structure declarations now carry the backing allocation through packet state seeds and
+// terminal exports. This deliberately imports no backing Buffer: if either path falls back to the former manual
+// buffer declaration, the second packet observes Common instead of the producer's AccelStructWrite state.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnsAccelStructPacketStateAndExternalExportWithoutBackingImport){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    if(!device.queryFeatureSupport(Feature::RayTracingAccelStruct))
+        GTEST_SKIP() << "Acceleration structures are not enabled on this device.";
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/typed_accel_struct_handoff_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+    RayTracingAccelStructDesc tlasDesc(descArena);
+    tlasDesc
+        .setTopLevelMaxInstances(1u)
+        .setDebugName(Name{"tests/descriptor_buffer/typed_accel_struct_handoff"})
+    ;
+    RayTracingAccelStructHandle tlas = device.createAccelStruct(tlasDesc);
+    ASSERT_NE(tlas.get(), nullptr);
+    Buffer* const backingBuffer = tlas->getBackingBuffer();
+    ASSERT_NE(backingBuffer, nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId accelStruct = graph.importAccelStruct(
+        tlas,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/typed_accel_struct_handoff"))
+            .setMarkerLabel("Typed Accel-Struct Handoff")
+            .setType(GpuGraphResourceType::AccelStruct)
+            .setInitialState(ResourceStates::Common)
+            .setExternalFinalState(ResourceStates::AccelStructRead)
+    );
+    ASSERT_TRUE(accelStruct.valid());
+    EXPECT_FALSE(graph.findImportedBuffer(tlas->getBackingBufferHandle()).valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint boundaryScheduling;
+    boundaryScheduling.cost = GpuTaskCostHint::Medium;
+    boundaryScheduling.forceSubmissionBoundary = true;
+    boundaryScheduling.allowPacketMerge = false;
+
+    const GpuTaskResourceUse producerUse{
+        .resource = accelStruct,
+        .range = {},
+        .requiredState = ResourceStates::AccelStructWrite,
+        .access = GpuTaskResourceAccess::Write,
+    };
+    GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/descriptor_buffer/typed_accel_struct_handoff_producer"))
+        .setMarkerLabel("Typed Accel-Struct Handoff Producer")
+        .setQueue(graphicsQueue)
+        .setScheduling(boundaryScheduling)
+        .setResourceUses(&producerUse, 1u)
+    ;
+    bool producerRecorded = false;
+    const GpuTaskId producer = graph.addTask<NativePacketPrefixTask>(
+        producerDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = backingBuffer,
+            .expectedState = ResourceStates::AccelStructWrite,
+            .recorded = &producerRecorded,
+        }
+    );
+    ASSERT_TRUE(producer.valid());
+
+    const GpuTaskId consumerDependencies[] = { producer };
+    const GpuTaskResourceUse consumerUse{
+        .resource = accelStruct,
+        .range = {},
+        .requiredState = ResourceStates::AccelStructWrite,
+        .access = GpuTaskResourceAccess::Read,
+    };
+    GpuTaskDesc consumerDesc;
+    consumerDesc
+        .setIdentity(Name("tests/descriptor_buffer/typed_accel_struct_handoff_consumer"))
+        .setMarkerLabel("Typed Accel-Struct Handoff Consumer")
+        .setQueue(graphicsQueue)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
+        .setResourceUses(&consumerUse, 1u)
+    ;
+    bool consumerRecorded = false;
+    const GpuTaskId consumer = graph.addTask<NativePacketPrefixTask>(
+        consumerDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = backingBuffer,
+            .expectedState = ResourceStates::AccelStructWrite,
+            .recorded = &consumerRecorded,
+        }
+    );
+    ASSERT_TRUE(consumer.valid());
+
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/typed_accel_struct_handoff_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+
+    const GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+    const GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledConsumer, nullptr);
+    ASSERT_NE(compiledProducer->packet, compiledConsumer->packet);
+    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
+    const GpuPacketStateSeed* const consumerSeeds = compiledGraph.taskPrologueStateSeeds(consumer);
+    ASSERT_NE(consumerSeeds, nullptr);
+    EXPECT_EQ(consumerSeeds[0u].resource, accelStruct);
+    EXPECT_EQ(consumerSeeds[0u].sourcePacket, compiledProducer->packet);
+    ASSERT_EQ(compiledConsumer->epilogueBarrierCount, 1u);
+    const GpuCompiledBarrier* const consumerEpilogue = compiledGraph.taskEpilogueBarriers(consumer);
+    ASSERT_NE(consumerEpilogue, nullptr);
+    EXPECT_EQ(consumerEpilogue[0u].type, GpuCompiledBarrierType::AccelStructStateExport);
+    EXPECT_EQ(consumerEpilogue[0u].resource, accelStruct);
+    EXPECT_EQ(consumerEpilogue[0u].before, ResourceStates::AccelStructWrite);
+    EXPECT_EQ(consumerEpilogue[0u].after, ResourceStates::AccelStructRead);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(producerRecorded);
+    EXPECT_TRUE(consumerRecorded);
+
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(
+        compiledConsumer->packet
+    );
+    ASSERT_NE(finalState, nullptr);
+    auto stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getBufferState(backingBuffer), ResourceStates::AccelStructRead);
+    stateProbe->close();
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(compiledProducer->packet).valid());
+    EXPECT_TRUE(transaction.packetToken(compiledConsumer->packet).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Pure software Shadow Preparation can begin after a forced-emulation frame inherits an accepted hardware build-input
 // seed. The same two-callback state shape is used by a fully frozen hybrid BLAS -> software-tail handoff. Its frozen
 // SW-BVH recorder only observes the graph-established position/index ShaderResource state; it must not need to issue

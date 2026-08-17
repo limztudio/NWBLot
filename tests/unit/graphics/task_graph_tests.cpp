@@ -2719,6 +2719,108 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
 }
 
 
+TEST(GpuTaskGraph, RoutesAccelStructAcrossQueueFamiliesWithOwnershipAndStateSeed){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId accelStruct = AddAccelStructMetadata(
+        graph,
+        Name("tests/task_graph/cross_family_accel_struct"),
+        "Cross Family Accel Struct"
+    );
+    ASSERT_TRUE(accelStruct.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    const Graphics::GpuTaskResourceUse producerUse{
+        .resource = accelStruct,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::AccelStructWrite,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    Graphics::GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/task_graph/cross_family_accel_struct_producer"))
+        .setMarkerLabel("Cross Family Accel Struct Producer")
+        .setQueue(graphicsRequest)
+        .setResourceUses(&producerUse, 1u)
+    ;
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    ASSERT_TRUE(producer.valid());
+
+    const Graphics::GpuTaskId consumerDependencies[] = { producer };
+    const Graphics::GpuTaskResourceUse consumerUse{
+        .resource = accelStruct,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::AccelStructRead,
+        .access = Graphics::GpuTaskResourceAccess::Read,
+    };
+    Graphics::GpuTaskDesc consumerDesc;
+    consumerDesc
+        .setIdentity(Name("tests/task_graph/cross_family_accel_struct_consumer"))
+        .setMarkerLabel("Cross Family Accel Struct Consumer")
+        .setQueue(computeRequest)
+        .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
+        .setResourceUses(&consumerUse, 1u)
+    ;
+    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    ASSERT_TRUE(consumer.valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledConsumer, nullptr);
+    EXPECT_EQ(compiledProducer->queue, queues[0u].id);
+    EXPECT_EQ(compiledConsumer->queue, queues[1u].id);
+    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
+    const Graphics::GpuPacketStateSeed* const seeds = compiledGraph.taskPrologueStateSeeds(consumer);
+    ASSERT_NE(seeds, nullptr);
+    EXPECT_EQ(seeds[0u].resource, accelStruct);
+    EXPECT_EQ(seeds[0u].sourcePacket, compiledProducer->packet);
+
+    ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
+    const Graphics::GpuCompiledBarrier* const release = compiledGraph.taskEpilogueBarriers(producer);
+    ASSERT_NE(release, nullptr);
+    EXPECT_EQ(release[0u].type, Graphics::GpuCompiledBarrierType::AccelStructOwnershipRelease);
+    EXPECT_EQ(release[0u].resource, accelStruct);
+    EXPECT_EQ(release[0u].sourceQueue, queues[0u].id);
+    EXPECT_EQ(release[0u].destinationQueue, queues[1u].id);
+
+    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
+    const Graphics::GpuCompiledBarrier* const acquireAndTransition = compiledGraph.taskPrologueBarriers(consumer);
+    ASSERT_NE(acquireAndTransition, nullptr);
+    EXPECT_EQ(acquireAndTransition[0u].type, Graphics::GpuCompiledBarrierType::AccelStructOwnershipAcquire);
+    EXPECT_EQ(acquireAndTransition[0u].resource, accelStruct);
+    EXPECT_EQ(acquireAndTransition[0u].sourceQueue, queues[0u].id);
+    EXPECT_EQ(acquireAndTransition[0u].destinationQueue, queues[1u].id);
+    EXPECT_EQ(acquireAndTransition[1u].type, Graphics::GpuCompiledBarrierType::AccelStructTransition);
+    EXPECT_EQ(acquireAndTransition[1u].before, Graphics::ResourceStates::AccelStructWrite);
+    EXPECT_EQ(acquireAndTransition[1u].after, Graphics::ResourceStates::AccelStructRead);
+}
+
+
 TEST(GpuTaskGraph, ExportsRequiredImportedResourceFinalStates){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -2888,6 +2990,76 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
 }
 
 
+TEST(GpuTaskGraph, ExportsExclusiveAccelStructOwnershipToExternalQueue){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+
+    const Graphics::GpuGraphResourceId accelStruct = graph.importResource(
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/external_final_release_accel_struct"))
+            .setMarkerLabel("External Final Release Accel Struct")
+            .setType(Graphics::GpuGraphResourceType::AccelStruct)
+            .setInitialState(Graphics::ResourceStates::Common)
+            .setExternalFinalState(Graphics::ResourceStates::AccelStructRead)
+            .setExternalFinalReleaseDestinationQueue(queues[1u].id)
+    );
+    ASSERT_TRUE(accelStruct.valid());
+
+    const Graphics::GpuTaskResourceUse use{
+        .resource = accelStruct,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::AccelStructWrite,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    const Graphics::GpuTaskId task = AddTask(
+        graph,
+        Name("tests/task_graph/external_final_release_accel_struct_writer"),
+        "External Final Release Accel Struct Writer",
+        nullptr,
+        0u,
+        &use,
+        1u
+    );
+    ASSERT_TRUE(task.valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+    ASSERT_NE(compiledTask, nullptr);
+    const Graphics::GpuCompiledExternalResourceExport* const exportInfo = compiledGraph.externalResourceExport(accelStruct);
+    ASSERT_NE(exportInfo, nullptr);
+    EXPECT_EQ(exportInfo->producerTask, task);
+    EXPECT_EQ(exportInfo->sourceQueue, queues[0u].id);
+    EXPECT_EQ(exportInfo->destinationQueue, queues[1u].id);
+    EXPECT_EQ(exportInfo->finalState, Graphics::ResourceStates::AccelStructRead);
+
+    ASSERT_EQ(compiledTask->epilogueBarrierCount, 2u);
+    const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskEpilogueBarriers(task);
+    ASSERT_NE(barriers, nullptr);
+    EXPECT_EQ(barriers[0u].type, Graphics::GpuCompiledBarrierType::AccelStructStateExport);
+    EXPECT_EQ(barriers[0u].resource, accelStruct);
+    EXPECT_EQ(barriers[0u].before, Graphics::ResourceStates::AccelStructWrite);
+    EXPECT_EQ(barriers[0u].after, Graphics::ResourceStates::AccelStructRead);
+    EXPECT_EQ(barriers[1u].type, Graphics::GpuCompiledBarrierType::AccelStructOwnershipRelease);
+    EXPECT_EQ(barriers[1u].resource, accelStruct);
+    EXPECT_EQ(barriers[1u].before, Graphics::ResourceStates::AccelStructRead);
+    EXPECT_EQ(barriers[1u].after, Graphics::ResourceStates::AccelStructRead);
+    EXPECT_EQ(barriers[1u].sourceQueue, queues[0u].id);
+    EXPECT_EQ(barriers[1u].destinationQueue, queues[1u].id);
+}
+
+
 TEST(GpuTaskGraph, RejectsExternalFinalOwnershipExportWithMultipleTerminalPackets){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -2969,9 +3141,9 @@ TEST(GpuTaskGraph, RejectsUnpublishableExternalFinalStateContracts){
 
     Graphics::GpuGraphResourceDesc unsupportedDesc;
     unsupportedDesc
-        .setIdentity(Name("tests/task_graph/external_final_accel_struct"))
-        .setMarkerLabel("External Final Accel Struct")
-        .setType(Graphics::GpuGraphResourceType::AccelStruct)
+        .setIdentity(Name("tests/task_graph/external_final_hazard_domain"))
+        .setMarkerLabel("External Final Hazard Domain")
+        .setType(Graphics::GpuGraphResourceType::HazardDomain)
         .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
     ;
     EXPECT_FALSE(graph.importResource(unsupportedDesc).valid());

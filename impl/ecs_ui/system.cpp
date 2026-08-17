@@ -139,6 +139,12 @@ static bool HasPendingTextureUploads(const ImDrawData& drawData){
     scheduling.avoidQueueCrossing = !preferDedicatedTransport;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
+    // UI buffers and textures are created with the full graph-upload sharing contract below. A large immutable
+    // upload may therefore use an explicitly registered same-class physical queue, including an opt-in alternate
+    // Vulkan family, while the terminal overlay remains on primary Graphics.
+    scheduling.allowSameClassQueueRouting = preferDedicatedTransport;
+    scheduling.preferNonPrimarySameClassQueue = preferDedicatedTransport;
+    scheduling.allowCrossFamilySameClassQueueRouting = preferDedicatedTransport;
     // Built-in graph uploads capture immutable blobs and create a fresh native command list, so independent vertex
     // and index packets may record together once their shared scene-output dependency is ready.
     scheduling.allowParallelRecording = true;

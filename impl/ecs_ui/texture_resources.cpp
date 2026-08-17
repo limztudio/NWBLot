@@ -116,6 +116,12 @@ static bool BuildUploadPixels(ImTextureData& textureData, ByteVector& scratch, c
     scheduling.avoidQueueCrossing = !preferDedicatedTransport;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
+    // Imported UI textures are created for all graph upload classes. Large immutable updates may therefore offload
+    // across explicitly opted-in same-class physical queues; the graph-owned UI completion task still consumes the
+    // texture from primary Graphics before any direct compatibility rasterization can proceed.
+    scheduling.allowSameClassQueueRouting = preferDedicatedTransport;
+    scheduling.preferNonPrimarySameClassQueue = preferDedicatedTransport;
+    scheduling.allowCrossFamilySameClassQueueRouting = preferDedicatedTransport;
     // Texture bytes are copied into graph-owned blobs before declaration; this built-in upload has no mutable ImGui
     // state during native recording and is safe to join other ready upload packets on worker threads.
     scheduling.allowParallelRecording = true;
@@ -294,6 +300,10 @@ bool UiSystem::createOrRefreshTexture(ImTextureData& textureData){
             .setFormat(Core::Format::RGBA8_UNORM)
             .setInitialState(Core::ResourceStates::ShaderResource)
             .setKeepInitialState(true)
+            // Graph-owned ImGui texture updates may prefer Transfer/Compute and can explicitly offload within that
+            // class. Keep all normal producer/consumer families concurrent from creation; a one-family device still
+            // retains the backend's ordinary exclusive allocation mode.
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
             .setName(__hidden_ui::UiTextureName(static_cast<usize>(textureData.UniqueID)))
         ;
 

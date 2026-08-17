@@ -2898,6 +2898,107 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
 }
 
 
+// A resource that names the whole Graphics class is concurrent across every registered Graphics family. This is the
+// contract used by persistent UI resources: cross-family same-class routing keeps the timeline dependency and state
+// seed, but must not manufacture an exclusive ownership release/acquire pair.
+TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOwnershipHandoff){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/cross_family_same_class_concurrent_buffer"),
+        "Cross Family Same Class Concurrent Buffer",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Graphics
+    );
+    ASSERT_TRUE(buffer.valid());
+
+    Graphics::GpuQueueRequest graphicsRequest;
+    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+    graphicsRequest.allowFallback = false;
+    graphicsRequest.compilerMayOverridePreference = false;
+
+    Graphics::GpuTaskSchedulingHint producerScheduling;
+    producerScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    producerScheduling.allowSameClassQueueRouting = true;
+    producerScheduling.allowCrossFamilySameClassQueueRouting = true;
+    const Graphics::GpuTaskResourceUse producerUse{
+        .resource = buffer,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::CopyDest,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    Graphics::GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/task_graph/cross_family_same_class_concurrent_producer"))
+        .setMarkerLabel("Cross Family Same Class Concurrent Producer")
+        .setQueue(graphicsRequest)
+        .setScheduling(producerScheduling)
+        .setResourceUses(&producerUse, 1u)
+    ;
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    ASSERT_TRUE(producer.valid());
+
+    Graphics::GpuTaskSchedulingHint consumerScheduling;
+    consumerScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    consumerScheduling.allowSameClassQueueRouting = true;
+    consumerScheduling.allowCrossFamilySameClassQueueRouting = true;
+    const Graphics::GpuTaskId consumerDependencies[] = { producer };
+    const Graphics::GpuTaskResourceUse consumerUse{
+        .resource = buffer,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::CopySource,
+        .access = Graphics::GpuTaskResourceAccess::Read,
+    };
+    Graphics::GpuTaskDesc consumerDesc;
+    consumerDesc
+        .setIdentity(Name("tests/task_graph/cross_family_same_class_concurrent_consumer"))
+        .setMarkerLabel("Cross Family Same Class Concurrent Consumer")
+        .setQueue(graphicsRequest)
+        .setScheduling(consumerScheduling)
+        .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
+        .setResourceUses(&consumerUse, 1u)
+    ;
+    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    ASSERT_TRUE(consumer.valid());
+
+    Graphics::GpuPhysicalQueueInfo auxiliaryGraphicsQueue = GraphicsQueue(1u);
+    auxiliaryGraphicsQueue.familyIndex = 3u;
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        auxiliaryGraphicsQueue,
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
+    const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+    ASSERT_NE(producerAssignment, nullptr);
+    ASSERT_NE(consumerAssignment, nullptr);
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledConsumer, nullptr);
+    EXPECT_EQ(producerAssignment->queue, queues[0u].id);
+    EXPECT_EQ(consumerAssignment->queue, auxiliaryGraphicsQueue.id);
+    EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+    EXPECT_EQ(compiledProducer->epilogueBarrierCount, 0u);
+    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
+    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
+    EXPECT_EQ(
+        compiledGraph.taskPrologueBarriers(consumer)[0u].type,
+        Graphics::GpuCompiledBarrierType::BufferTransition
+    );
+}
+
+
 TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnershipHandoffs){
     const auto runCase = [](
         const Graphics::GpuQueueCapability::Mask capabilities,

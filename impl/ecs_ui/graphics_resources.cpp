@@ -253,6 +253,9 @@ bool UiSystem::ensureBuffers(const usize vertexCount, const usize indexCount){
             .setIsVertexBuffer(true)
             .setDebugName(__hidden_ui::s_UiVertexBufferName)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
+            // Immutable graph uploads may route through Transfer/Compute or an explicitly opted-in same-class
+            // physical transport before the primary-Graphics overlay consumes this buffer.
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         ;
 
         m_vertexBuffer = device.createBuffer(bufferDesc);
@@ -276,6 +279,7 @@ bool UiSystem::ensureBuffers(const usize vertexCount, const usize indexCount){
             .setIsIndexBuffer(true)
             .setDebugName(__hidden_ui::s_UiIndexBufferName)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         ;
 
         m_indexBuffer = device.createBuffer(bufferDesc);

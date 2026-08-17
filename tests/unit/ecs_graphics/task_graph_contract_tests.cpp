@@ -217,6 +217,31 @@ TEST(EcsGraphics, UiPresentationSnapshotsLateRecordInputs){
 }
 
 
+// Large immutable UI uploads may already select Transfer/Compute. Their persistent buffers and textures must be
+// created with the matching graph-sharing contract before a same-class auxiliary queue can legally record them.
+TEST(EcsGraphics, UiGraphUploadsDeclareConcurrentProducerFamilies){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString uiSystemSource;
+    AString uiTextureSource;
+    AString uiGraphicsResourceSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "texture_resources.cpp", uiTextureSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "graphics_resources.cpp", uiGraphicsResourceSource));
+    const AStringView uiSystem(uiSystemSource.data(), uiSystemSource.size());
+    const AStringView uiTextures(uiTextureSource.data(), uiTextureSource.size());
+    const AStringView uiGraphicsResources(uiGraphicsResourceSource.data(), uiGraphicsResourceSource.size());
+
+    EXPECT_TRUE(ContainsText(uiSystem, "allowSameClassQueueRouting = preferDedicatedTransport"));
+    EXPECT_TRUE(ContainsText(uiSystem, "allowCrossFamilySameClassQueueRouting = preferDedicatedTransport"));
+    EXPECT_TRUE(ContainsText(uiTextures, "allowSameClassQueueRouting = preferDedicatedTransport"));
+    EXPECT_TRUE(ContainsText(uiTextures, "allowCrossFamilySameClassQueueRouting = preferDedicatedTransport"));
+    EXPECT_TRUE(ContainsText(uiTextures, "ResourceQueueSharing::GraphicsAsyncComputeAndTransfer"));
+    EXPECT_TRUE(ContainsText(uiGraphicsResources, "ResourceQueueSharing::GraphicsAsyncComputeAndTransfer"));
+}
+
+
 // The exceptional non-renderer/custom-callback UI route must keep its texture uploads and ordinary rasterization
 // graph-owned. An arbitrary callback is explicitly opaque and serial, but submitStandaloneTaskGraph() records it
 // synchronously; native direct rendering remains only as the last availability fallback after that graph rejects.

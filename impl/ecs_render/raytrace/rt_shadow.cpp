@@ -2673,37 +2673,6 @@ bool RendererRayTracingSystem::ensureShadowMaterialTypedBuffer(usize byteCount){
     return true;
 }
 
-bool RendererRayTracingSystem::uploadShadowMaterialContextBuffers(
-    Core::CommandList& commandList,
-    const InstanceGpuDataVector& instanceData,
-    const MaterialTypedByteDataVector& materialTypedBytes
-){
-    usize uploadBytes = 0u;
-    if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes, uploadBytes))
-        return false;
-
-    if(!ensureShadowInstanceContextBuffer(instanceData.size()) || !ensureShadowMaterialTypedBuffer(uploadBytes))
-        return false;
-
-    if(!instanceData.empty()){
-        Core::Buffer* instanceBuffer = rayTracingState().m_shadowInstanceBuffer.get();
-        commandList.setBufferState(instanceBuffer, Core::ResourceStates::CopyDest);
-        commandList.commitBarriers();
-        commandList.writeBuffer(instanceBuffer, instanceData.data(), instanceData.size() * sizeof(InstanceGpuData));
-        commandList.setBufferState(instanceBuffer, Core::ResourceStates::ShaderResource);
-        commandList.commitBarriers();
-    }
-
-    Core::Buffer* materialTypedBuffer = rayTracingState().m_shadowMaterialTypedBuffer.get();
-    commandList.setBufferState(materialTypedBuffer, Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(materialTypedBuffer, materialTypedBytes.data(), uploadBytes);
-    commandList.setBufferState(materialTypedBuffer, Core::ResourceStates::ShaderResource);
-    commandList.commitBarriers();
-    return true;
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

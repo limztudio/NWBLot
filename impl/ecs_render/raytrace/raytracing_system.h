@@ -1266,11 +1266,6 @@ private:
     void transitionSwShadowTraversalResources(Core::CommandList& commandList);
     [[nodiscard]] bool ensureCausticEmissionTargetBuffer(usize targetCount);
     [[nodiscard]] bool ensureShadowInstanceMaterialBuffer(usize instanceCount);
-    [[nodiscard]] bool uploadShadowMaterialContextBuffers(
-        Core::CommandList& commandList,
-        const InstanceGpuDataVector& instanceData,
-        const MaterialTypedByteDataVector& materialTypedBytes
-    );
     [[nodiscard]] bool ensureShadowInstanceContextBuffer(usize instanceCount);
     [[nodiscard]] bool ensureShadowMaterialTypedBuffer(usize byteCount);
 

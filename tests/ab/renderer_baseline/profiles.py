@@ -98,9 +98,12 @@ PROFILES: Mapping[str, BaselineProfile] = {
         target="nwb_stress_test_smoke",
         runtime_directory=Path("Testing") / "skinning_culling_benchmark_runtime",
         window_title="NWB Stress Test Smoke",
-        settle_seconds=6.0,
+        settle_seconds=0.75,
         frozen_environment={"NWB_STRESS_TEST_SPIN_ANGLE": "0.6"},
         description="Skinned opaque/transparent stress-scene baseline.",
+        capture_freeze_frame=96,
+        capture_ready_log="StressTestSmokeProject: renderer baseline capture ready after",
+        fixed_delta_seconds=1.0 / 60.0,
     ),
 }
 

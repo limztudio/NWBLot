@@ -595,6 +595,10 @@ def run_self_test() -> int:
         assert soft_shadow_profile.capture_freeze_frame == 360
         assert soft_shadow_profile.settle_seconds == 0.75
         assert soft_shadow_profile.fixed_delta_seconds == 1.0 / 60.0
+        stress_profile = get_profile("stress")
+        assert stress_profile.capture_freeze_frame == 96
+        assert stress_profile.settle_seconds == 0.75
+        assert stress_profile.fixed_delta_seconds == 1.0 / 60.0
         difference = compare_bmp_rgb(reference_image, candidate_image, root / "difference.bmp")
         assert difference.width == 2 and difference.height == 1
         assert difference.max_abs == 3

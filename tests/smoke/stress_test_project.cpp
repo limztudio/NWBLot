@@ -174,6 +174,37 @@ private:
 #endif
     }
 
+    [[nodiscard]] static u32 rendererBaselineCaptureFreezeFrame(){
+        static const u32 s_captureFrame = [](){
+            f32 configuredFrame = 0.0f;
+            if(
+                !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", configuredFrame)
+                || !IsFinite(configuredFrame)
+                || configuredFrame < 1.0f
+            ){
+                return 0u;
+            }
+            return static_cast<u32>(Min(configuredFrame, 1000000.0f));
+        }();
+        return s_captureFrame;
+    }
+
+    [[nodiscard]] static f32 rendererBaselineFixedDelta(){
+        static const f32 s_fixedDelta = [](){
+            f32 configuredDelta = 0.0f;
+            if(
+                !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS", configuredDelta)
+                || !IsFinite(configuredDelta)
+                || configuredDelta <= 0.0f
+                || configuredDelta > 1.0f
+            ){
+                return 0.0f;
+            }
+            return configuredDelta;
+        }();
+        return s_fixedDelta;
+    }
+
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("StressTestSmokeProject"));
 
@@ -411,8 +442,8 @@ public:
     }
 
     virtual bool onUpdate(const f32 delta)override{
-        const u32 captureFreezeFrame = m4PixelCaptureFreezeFrame();
-        if(captureFreezeFrame != 0u && m_m4RenderedFrameCount >= captureFreezeFrame){
+        const u32 m4CaptureFreezeFrame = m4PixelCaptureFreezeFrame();
+        if(m4CaptureFreezeFrame != 0u && m_m4RenderedFrameCount >= m4CaptureFreezeFrame){
             if(!m_m4PixelCapturePaused){
                 // Stop runFrame before publishing the marker. The external M4 harness can therefore settle and capture
                 // the last completed image without advancing temporal shadow/caustic history after this frame index.
@@ -426,7 +457,23 @@ public:
             return true;
         }
 
-        const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
+        const u32 baselineCaptureFreezeFrame = rendererBaselineCaptureFreezeFrame();
+        if(baselineCaptureFreezeFrame != 0u && m_m4RenderedFrameCount >= baselineCaptureFreezeFrame){
+            if(!m_rendererBaselineCapturePaused){
+                // Keep the M4-specific capture contract above intact. Ordinary baseline captures use their own
+                // smoke-only marker and share the fixed submitted-frame counter without affecting async tests.
+                m_context.graphics.setFrameSubmissionSuspended(true);
+                m_rendererBaselineCapturePaused = true;
+                NWB_LOGGER_ESSENTIAL_INFO(
+                    NWB_TEXT("StressTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"),
+                    m_m4RenderedFrameCount
+                );
+            }
+            return true;
+        }
+
+        const f32 fixedDelta = rendererBaselineFixedDelta();
+        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
         m_fpsProbe.recordFrame(safeDelta);
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
         // Yaw selection: 1) NWB_STRESS_TEST_SPIN_ANGLE env freeze (pins one orientation); 2) manual arrow scrub (latches off
@@ -456,6 +503,7 @@ private:
     ArrowYawInputHandler m_arrowYawInput;
     u32 m_m4RenderedFrameCount = 0u;
     bool m_m4PixelCapturePaused = false;
+    bool m_rendererBaselineCapturePaused = false;
 };
 
 

@@ -73,9 +73,12 @@ PROFILES: Mapping[str, BaselineProfile] = {
         target="nwb_caustic_sphere_smoke",
         runtime_directory=Path("Testing") / "smoke_runtime",
         window_title="NWB Caustic Sphere Smoke",
-        settle_seconds=6.0,
+        settle_seconds=0.75,
         frozen_environment={"NWB_TRANSPARENT_MULTI_SPIN_ANGLE": "0.6"},
         description="Caustic accumulation baseline after the temporal warm-up.",
+        capture_freeze_frame=360,
+        capture_ready_log="TransparentMultiSmokeProject: renderer baseline capture ready after",
+        fixed_delta_seconds=1.0 / 60.0,
     ),
     "surfel-gi": BaselineProfile(
         target="nwb_gi_test_smoke",

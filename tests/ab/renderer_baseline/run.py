@@ -583,6 +583,10 @@ def run_self_test() -> int:
         assert skinned_csg_profile.capture_freeze_frame == 96
         assert skinned_csg_profile.settle_seconds == 0.75
         assert skinned_csg_profile.fixed_delta_seconds == 1.0 / 60.0
+        caustic_profile = get_profile("caustics")
+        assert caustic_profile.capture_freeze_frame == 360
+        assert caustic_profile.settle_seconds == 0.75
+        assert caustic_profile.fixed_delta_seconds == 1.0 / 60.0
         difference = compare_bmp_rgb(reference_image, candidate_image, root / "difference.bmp")
         assert difference.width == 2 and difference.height == 1
         assert difference.max_abs == 3

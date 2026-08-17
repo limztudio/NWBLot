@@ -449,6 +449,29 @@ TEST(EcsGraphics, SkinnedCsgBaselineCaptureIsFrameLockedAndTestOwned){
 }
 
 
+// Caustic accumulation is temporal even with a static refractor. Keep its baseline warm-up frame-counted and on the
+// same test-only fixed clock rather than allowing host throughput to choose an arbitrary convergence point.
+TEST(EcsGraphics, CausticBaselineUsesFixedTemporalWarmup){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString profileSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "ab" / "renderer_baseline" / "profiles.py", profileSource));
+    const AStringView profiles(profileSource.data(), profileSource.size());
+    const usize causticsOffset = profiles.find("\"caustics\": BaselineProfile(");
+    const usize surfelOffset = profiles.find("\"surfel-gi\": BaselineProfile(", causticsOffset);
+    ASSERT_NE(causticsOffset, AStringView::npos);
+    ASSERT_NE(surfelOffset, AStringView::npos);
+    ASSERT_LT(causticsOffset, surfelOffset);
+    const AStringView caustics = profiles.substr(causticsOffset, surfelOffset - causticsOffset);
+
+    EXPECT_TRUE(ContainsText(caustics, "settle_seconds=0.75"));
+    EXPECT_TRUE(ContainsText(caustics, "capture_freeze_frame=360"));
+    EXPECT_TRUE(ContainsText(caustics, "capture_ready_log=\"TransparentMultiSmokeProject: renderer baseline capture ready after\""));
+    EXPECT_TRUE(ContainsText(caustics, "fixed_delta_seconds=1.0 / 60.0"));
+}
+
+
 // Surfel GI is an explicitly promoted Compute adopter. It can select an alternate Compute family only for the
 // graph-owned output-clear/compute chain; the compiler remains responsible for rejecting an undeclared resource
 // sharing contract or lowering the required exclusive ownership transfer.

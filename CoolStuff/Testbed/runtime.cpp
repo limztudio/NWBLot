@@ -203,8 +203,7 @@ static void ApplyFlyCameraInputToMainCamera(
     const f32 delta
 ){
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world);
-    if(!cameraView.valid())
-        return;
+    NWB_ASSERT(cameraView.valid());
 
     f32 yawRadians = 0.0f;
     f32 pitchRadians = 0.0f;

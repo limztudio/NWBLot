@@ -408,6 +408,7 @@ can receive an unconditional final sign-off.
 | `descriptor_buffer_tests` | 67 passed; 9 expected skips because this host has no dedicated Compute-only or Transfer-only family |
 | Project policy checks (`return_value_handling`, test `std::` use, interop containers) | passed |
 | Command-IR and Transfer A/B launcher/runner self-tests | passed |
+| Async-render lifecycle evidence: frame-lagged and M4 harnesses | passed with topology-gated execution; their parser/launcher self-tests pass, and freshly rebuilt Vulkan runs on AMD BC-250 (RADV GFX1013) each return the intentional `77` skip because no dedicated Compute-only family exists. This confirms that neither workflow silently treats the Graphics fallback as asynchronous coverage; it does not replace the still-required target-GPU timing/pixel evidence or change the default-disabled rollout policy. |
 | Command-IR profile, 4,096 records, Vulkan validation | passed; capture remained allocation-free and direct `CopyBuffer` replay was 3.63% faster than `Core::CommandList` replay |
 | Physical queue identity follow-up: graph unit binary | 37/37 passed |
 | Physical queue identity follow-up: descriptor-buffer smoke binary | 68 passed; 9 expected skips because this host has no dedicated Compute-only or Transfer-only family |

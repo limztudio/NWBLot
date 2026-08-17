@@ -37,7 +37,6 @@ struct DeferredLightingGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool useLaggedLightingHistory = false;
-        bool laggedBindlessSlotsGraphOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -53,8 +52,7 @@ struct DeferredLightingGraphTask{
                 return deferredSystem.renderDeferredLighting(
                     taskCommandList,
                     targets,
-                    payload.useLaggedLightingHistory,
-                    payload.laggedBindlessSlotsGraphOwned
+                    payload.useLaggedLightingHistory
                 );
             }
         );
@@ -178,7 +176,6 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredLightingTask(
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
     const bool useLaggedLightingHistory,
-    const bool laggedBindlessSlotsGraphOwned,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     return graph.addTask<__hidden_deferred_lighting::DeferredLightingGraphTask>(
@@ -188,7 +185,6 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredLightingTask(
             .targets = &targets,
             .timingTicket = &timingTicket,
             .useLaggedLightingHistory = useLaggedLightingHistory,
-            .laggedBindlessSlotsGraphOwned = laggedBindlessSlotsGraphOwned,
         }
     );
 }
@@ -310,17 +306,9 @@ void RendererDeferredSystem::confirmSceneShadingBufferUploads(
 bool RendererDeferredSystem::renderDeferredLighting(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const bool useLaggedLightingHistory,
-    const bool laggedBindlessSlotsGraphOwned
+    const bool useLaggedLightingHistory
 ){
     NWB_ASSERT(deferredState().m_lightingPipeline);
-
-    if(
-        useLaggedLightingHistory
-        && !laggedBindlessSlotsGraphOwned
-        && !uploadLaggedLightingHistoryResources(commandList, targets)
-    )
-        return false;
 
     const DeferredLaggedLightingHistoryResources* const laggedHistory = useLaggedLightingHistory
         ? &targets.laggedLightingHistory

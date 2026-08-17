@@ -693,6 +693,34 @@ TEST(EcsGraphics, DeferredBindlessSelectorHasNoNativeCompatibilityDispatcher){
 }
 
 
+// The optional lagged-history selector is either already accepted or uploaded as a declared dependency of Lighting.
+// Keep the render callback free of a native writer so rejected graph work cannot make that selector look resident.
+TEST(EcsGraphics, LaggedLightingSelectorHasNoNativeCompatibilityDispatcher){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString deferredHeaderSource;
+    AString deferredTargetsSource;
+    AString deferredLightingSource;
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.h", deferredHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_targets.cpp", deferredTargetsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_lighting.cpp", deferredLightingSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView deferredHeader(deferredHeaderSource.data(), deferredHeaderSource.size());
+    const AStringView deferredTargets(deferredTargetsSource.data(), deferredTargetsSource.size());
+    const AStringView deferredLighting(deferredLightingSource.data(), deferredLightingSource.size());
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    EXPECT_FALSE(ContainsText(deferredHeader, "uploadLaggedLightingHistoryResources"));
+    EXPECT_FALSE(ContainsText(deferredTargets, "uploadLaggedLightingHistoryResources"));
+    EXPECT_FALSE(ContainsText(deferredTargets, "history.slotsBuffer.get(), &history.slots"));
+    EXPECT_FALSE(ContainsText(deferredLighting, "laggedBindlessSlotsGraphOwned"));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.lagged_lighting.bindless_slots_upload"));
+    EXPECT_TRUE(ContainsText(taskGraph, "laggedBindlessSlotsGraphOwned"));
+}
+
+
 // The current renderer has exactly two runtime-selected sampled-image domains: material Texture2D assets (shared
 // by raster and ray-trace surface dispatch) and ImGui textures.  A new domain must not silently rely on a global
 // descriptor slot: keep the supported domain small and require each one to retain handles before graph declaration.

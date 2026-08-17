@@ -629,26 +629,6 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
     return true;
 }
 
-bool RendererDeferredSystem::uploadLaggedLightingHistoryResources(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    DeferredLaggedLightingHistoryResources& history = targets.laggedLightingHistory;
-    if(history.slotsUploaded)
-        return true;
-    if(!history.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot upload incomplete lagged lighting-history resources"));
-        return false;
-    }
-
-    commandList.setBufferState(history.slotsBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(history.slotsBuffer.get(), &history.slots, sizeof(history.slots));
-    commandList.setBufferState(history.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.commitBarriers();
-    // RendererSystem flips slotsUploaded only after the lighting submission itself is accepted. Recording can be
-    // abandoned after this write, and treating an unsubmitted selector upload as resident would sample garbage on a
-    // retry.
-    return true;
-}
-
 void RendererDeferredSystem::resetDeferredFrameTargets(){
     resetLaggedLightingHistoryResources(deferredState().m_targets);
     resetDeferredBindlessFrameResources(deferredState().m_targets);

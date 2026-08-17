@@ -59,14 +59,12 @@ public:
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
         bool useLaggedLightingHistory,
-        bool laggedBindlessSlotsGraphOwned,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] bool renderDeferredLighting(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        bool useLaggedLightingHistory = false,
-        bool laggedBindlessSlotsGraphOwned = false
+        bool useLaggedLightingHistory = false
     );
     [[nodiscard]] bool createDeferredFrameTargets(u32 width, u32 height);
     [[nodiscard]] bool createDeferredCompositeResources();
@@ -97,7 +95,6 @@ private:
     void resetDeferredBindlessFrameResources(DeferredFrameTargets& targets);
     void resetLaggedLightingHistoryResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool createLaggedLightingHistoryResources(DeferredFrameTargets& targets);
-    [[nodiscard]] bool uploadLaggedLightingHistoryResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void logCausticClassificationOnce(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount, u32 causticLightCount, u32 refractiveInstanceCount);
 };
 

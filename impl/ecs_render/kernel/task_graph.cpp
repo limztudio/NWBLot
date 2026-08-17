@@ -16286,7 +16286,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         desc,
         deferredTargets,
         useLaggedLightingHistory,
-        laggedBindlessSlotsGraphOwned,
         lightingTimingTicket
     );
     if(!m_deferredLightingTask.valid()){

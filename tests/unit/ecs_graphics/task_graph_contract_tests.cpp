@@ -172,22 +172,30 @@ TEST(EcsGraphics, UiPresentationSnapshotsLateRecordInputs){
     EXPECT_TRUE(ContainsText(ui, "appendDrawTextureUse(drawCommand.texture)"));
 
     const usize recordOffset = ui.find("bool UiSystem::recordTaskGraphPresentation");
-    const usize completionOffset = ui.find("bool UiSystem::recordTaskGraphUploadCompletion");
+    const usize opaqueRecordOffset = ui.find("bool UiSystem::recordStandaloneLegacyTaskGraphPresentation", recordOffset);
     ASSERT_NE(recordOffset, AStringView::npos);
-    ASSERT_NE(completionOffset, AStringView::npos);
-    ASSERT_LT(recordOffset, completionOffset);
-    const AStringView recordBody = ui.substr(recordOffset, completionOffset - recordOffset);
+    ASSERT_NE(opaqueRecordOffset, AStringView::npos);
+    ASSERT_LT(recordOffset, opaqueRecordOffset);
+    const AStringView recordBody = ui.substr(recordOffset, opaqueRecordOffset - recordOffset);
     EXPECT_TRUE(ContainsText(recordBody, "recordTaskGraphDrawSnapshot(commandList, framebuffer)"));
     EXPECT_FALSE(ContainsText(recordBody, "ImGui::GetDrawData()"));
     EXPECT_FALSE(ContainsText(recordBody, "renderDrawData(commandList, framebuffer"));
+
+    // The separately named opaque fallback is intentionally the sole graph task allowed to touch live callback
+    // storage, and it must guard that synchronous boundary against a changed ImGui frame.
+    const usize completionOffset = ui.find("bool UiSystem::recordTaskGraphUploadCompletion", opaqueRecordOffset);
+    ASSERT_NE(completionOffset, AStringView::npos);
+    const AStringView opaqueRecord = ui.substr(opaqueRecordOffset, completionOffset - opaqueRecordOffset);
+    EXPECT_TRUE(ContainsText(opaqueRecord, "ImGui::GetDrawData() != drawData"));
+    EXPECT_TRUE(ContainsText(opaqueRecord, "frameGeneration != m_frameGeneration"));
+    EXPECT_TRUE(ContainsText(opaqueRecord, "renderDrawData(commandList, framebuffer, *drawData)"));
 }
 
 
-// The exceptional non-renderer/custom-callback UI route must not reopen the old preparation command list merely to
-// upload requested ImGui textures. It may retain direct rasterization when no presentation graph exists or a callback
-// is arbitrary, but its mutable texture bytes and status publication now belong to an isolated graph with one
-// terminal acceptance task.
-TEST(EcsGraphics, UiLegacyTextureFallbackUsesStandaloneGraphUpload){
+// The exceptional non-renderer/custom-callback UI route must keep its texture uploads and ordinary rasterization
+// graph-owned. An arbitrary callback is explicitly opaque and serial, but submitStandaloneTaskGraph() records it
+// synchronously; native direct rendering remains only as the last availability fallback after that graph rejects.
+TEST(EcsGraphics, UiLegacyFallbackUsesStandaloneGraphs){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
@@ -210,12 +218,29 @@ TEST(EcsGraphics, UiLegacyTextureFallbackUsesStandaloneGraphUpload){
     EXPECT_TRUE(ContainsText(ui, "StandaloneTextureUploadCompletionTask"));
     EXPECT_TRUE(ContainsText(ui, "declareStandaloneTextureUploadGraph"));
     EXPECT_TRUE(ContainsText(ui, "submitStandaloneTaskGraphPresentation"));
+    EXPECT_TRUE(ContainsText(ui, "StandaloneLegacyPresentationTask"));
+    EXPECT_TRUE(ContainsText(ui, "declareStandaloneLegacyTaskGraphPresentation"));
+    EXPECT_TRUE(ContainsText(ui, "submitStandaloneLegacyTaskGraphPresentation"));
+    EXPECT_TRUE(ContainsText(ui, "OpaquePresentationQueueRequest"));
     EXPECT_TRUE(ContainsText(ui, "Standalone ImGui Presentation Back Buffer"));
+    EXPECT_TRUE(ContainsText(ui, "ImGui Opaque Callback Domain"));
     EXPECT_TRUE(ContainsText(ui, "if(prepareTaskGraphPresentation(framebuffer))"));
 
+    const usize opaquePresentationOffset = ui.find("Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation");
     const usize legacySubmitOffset = ui.find("bool UiSystem::submitPreparedLegacyTextureUploads");
-    const usize renderOffset = ui.find("void UiSystem::render", legacySubmitOffset);
+    ASSERT_NE(opaquePresentationOffset, AStringView::npos);
     ASSERT_NE(legacySubmitOffset, AStringView::npos);
+    ASSERT_LT(opaquePresentationOffset, legacySubmitOffset);
+    const AStringView opaquePresentation = ui.substr(opaquePresentationOffset, legacySubmitOffset - opaquePresentationOffset);
+    EXPECT_TRUE(ContainsText(opaquePresentation, "m_graphics.submitStandaloneTaskGraph"));
+    EXPECT_TRUE(ContainsText(opaquePresentation, "importTaskGraphTexture(graph, *textureResource)"));
+    EXPECT_TRUE(ContainsText(opaquePresentation, "m_frameGeneration"));
+    EXPECT_TRUE(ContainsText(opaquePresentation, "setQueue(__hidden_ui::OpaquePresentationQueueRequest())"));
+    EXPECT_TRUE(ContainsText(ui, "recordStandaloneLegacyTaskGraphPresentation"));
+    EXPECT_FALSE(ContainsText(opaquePresentation, "executeCommandLists"));
+    EXPECT_FALSE(ContainsText(opaquePresentation, "createCommandList"));
+
+    const usize renderOffset = ui.find("void UiSystem::render", legacySubmitOffset);
     ASSERT_NE(renderOffset, AStringView::npos);
     const AStringView legacySubmit = ui.substr(legacySubmitOffset, renderOffset - legacySubmitOffset);
     EXPECT_TRUE(ContainsText(legacySubmit, "m_graphics.submitStandaloneTaskGraph"));
@@ -239,10 +264,14 @@ TEST(EcsGraphics, UiLegacyTextureFallbackUsesStandaloneGraphUpload){
 
     const AStringView presentationRenderBody = ui.substr(renderOffset);
     const usize standalonePresentationOffset = presentationRenderBody.find("submitStandaloneTaskGraphPresentation(framebuffer)");
+    const usize opaquePresentationFallbackOffset = presentationRenderBody.find("submitStandaloneLegacyTaskGraphPresentation(framebuffer)");
     const usize directTextureFallbackOffset = presentationRenderBody.find("submitPreparedLegacyTextureUploads(*drawData)");
     ASSERT_NE(standalonePresentationOffset, AStringView::npos);
+    ASSERT_NE(opaquePresentationFallbackOffset, AStringView::npos);
     ASSERT_NE(directTextureFallbackOffset, AStringView::npos);
     EXPECT_LT(standalonePresentationOffset, directTextureFallbackOffset);
+    EXPECT_LT(standalonePresentationOffset, opaquePresentationFallbackOffset);
+    EXPECT_LT(opaquePresentationFallbackOffset, directTextureFallbackOffset);
 
     const usize prepareFrameOffset = ui.find("bool UiSystem::prepareFrameResources");
     const usize snapshotClearOffset = ui.find("void UiSystem::clearTaskGraphDrawSnapshot", prepareFrameOffset);
@@ -255,6 +284,13 @@ TEST(EcsGraphics, UiLegacyTextureFallbackUsesStandaloneGraphUpload){
     EXPECT_TRUE(ContainsText(prepareFrame, "ensureRenderCommandList()"));
     EXPECT_FALSE(ContainsText(directRenderBody, "ensureRenderCommandList()"));
     EXPECT_FALSE(ContainsText(directRenderBody, "prepareTextureRequests"));
+    EXPECT_TRUE(ContainsText(directRenderBody, "standalone legacy ImGui graph presentation failed; retaining direct raster fallback"));
+
+    const usize directTextureSubmitOffset = directRenderBody.find("submitPreparedLegacyTextureUploads(*drawData)");
+    const usize directExecuteOffset = directRenderBody.find("device.executeCommandLists(commandLists, 1)");
+    ASSERT_NE(directTextureSubmitOffset, AStringView::npos);
+    ASSERT_NE(directExecuteOffset, AStringView::npos);
+    EXPECT_LT(directTextureSubmitOffset, directExecuteOffset);
 }
 
 

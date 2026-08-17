@@ -101,6 +101,7 @@ private:
     struct TaskGraphRenderTask;
     struct TaskGraphUploadCompletionTask;
     struct StandaloneTextureUploadCompletionTask;
+    struct StandaloneLegacyPresentationTask;
 
     struct UiTextureResource{
         Core::TextureHandle texture;
@@ -161,9 +162,23 @@ private:
     void finishFrame();
     [[nodiscard]] bool prepareFrameResources(Core::Framebuffer* framebuffer, bool graphOwnsUploads);
     [[nodiscard]] bool submitStandaloneTaskGraphPresentation(Core::Framebuffer* framebuffer);
+    [[nodiscard]] bool submitStandaloneLegacyTaskGraphPresentation(Core::Framebuffer* framebuffer);
+    [[nodiscard]] Core::GpuTaskId declareStandaloneLegacyTaskGraphPresentation(
+        Core::GpuTaskGraph& graph,
+        Core::Framebuffer* framebuffer,
+        ImDrawData* drawData,
+        u64 frameGeneration
+    );
     [[nodiscard]] bool recordTaskGraphPresentation(Core::CommandList& commandList, Core::Framebuffer* framebuffer);
+    [[nodiscard]] bool recordStandaloneLegacyTaskGraphPresentation(
+        Core::CommandList& commandList,
+        Core::Framebuffer* framebuffer,
+        ImDrawData* drawData,
+        u64 frameGeneration
+    );
     [[nodiscard]] bool recordTaskGraphUploadCompletion()const;
     void confirmTaskGraphPresentationSubmission()noexcept;
+    void discardStandaloneLegacyTaskGraphPresentation()noexcept;
     void clearTaskGraphDrawSnapshot()noexcept;
     [[nodiscard]] bool ensureRenderCommandList();
     [[nodiscard]] bool ensureRenderResources(Core::Framebuffer* framebuffer);
@@ -247,8 +262,12 @@ private:
     bool m_taskGraphPresentationPrepared = false;
     bool m_taskGraphPresentationHasWork = false;
     bool m_taskGraphPresentationClaimed = false;
+    // This opaque callback route is graph-submitted but deliberately records a live ImGui callback synchronously.
+    // Keep it separate from the immutable overlay claim above.
+    bool m_taskGraphLegacyPresentationClaimed = false;
     bool m_taskGraphDrawUploadsPrepared = false;
     u64 m_taskGraphPresentationGraphGeneration = 0u;
+    u64 m_frameGeneration = 0u;
     bool m_wantsKeyboardCapture = false;
     bool m_wantsMouseCapture = false;
     bool m_wantsTextInput = false;

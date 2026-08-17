@@ -145,6 +145,21 @@ static bool HasPendingTextureUploads(const ImDrawData& drawData){
     return scheduling;
 }
 
+// This is intentionally broader than the immutable overlay task. An ImGui callback is opaque to the backend, and
+// the graph must preserve the existing primary-Graphics command-list contract while capability tracking remains on.
+[[nodiscard]] static Core::GpuQueueRequest OpaquePresentationQueueRequest(){
+    return Core::GpuQueueRequest{
+        static_cast<Core::GpuQueueCapability::Mask>(
+            static_cast<u8>(Core::GpuQueueCapability::Graphics)
+            | static_cast<u8>(Core::GpuQueueCapability::Compute)
+            | static_cast<u8>(Core::GpuQueueCapability::Transfer)
+        ),
+        Core::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+}
+
 [[nodiscard]] static Core::GpuGraphResourceDesc BufferResourceDesc(
     const Name& identity,
     const AStringView label,
@@ -288,6 +303,43 @@ struct UiSystem::StandaloneTextureUploadCompletionTask{
 };
 
 
+// An arbitrary ImDrawCmd callback owns opaque user state and therefore cannot enter the immutable overlay packet.
+// The standalone graph recorder is synchronous, so this compatibility task may invoke it against the still-live
+// ImGui arrays while the graph retains and orders every ordinary UI resource around that opaque operation.
+struct UiSystem::StandaloneLegacyPresentationTask{
+    struct Payload{
+        UiSystem* ui = nullptr;
+        Core::Framebuffer* framebuffer = nullptr;
+        ImDrawData* drawData = nullptr;
+        u64 frameGeneration = 0u;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        return payload.ui && payload.ui->recordStandaloneLegacyTaskGraphPresentation(
+            commandList,
+            payload.framebuffer,
+            payload.drawData,
+            payload.frameGeneration
+        );
+    }
+
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        if(payload.ui && token.valid())
+            payload.ui->confirmTaskGraphPresentationSubmission();
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.ui)
+            payload.ui->discardStandaloneLegacyTaskGraphPresentation();
+    }
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -390,11 +442,16 @@ void UiSystem::beginFrame(const f32 delta){
     m_taskGraphPresentationPrepared = false;
     m_taskGraphPresentationHasWork = false;
     m_taskGraphPresentationClaimed = false;
+    m_taskGraphLegacyPresentationClaimed = false;
     m_taskGraphDrawUploadsPrepared = false;
     m_taskGraphPresentationGraphGeneration = 0u;
     m_taskGraphVertexUpload.clear();
     m_taskGraphIndexUpload.clear();
     clearTaskGraphDrawSnapshot();
+
+    ++m_frameGeneration;
+    if(m_frameGeneration == 0u)
+        ++m_frameGeneration;
 
     m_deltaSeconds = IsFinite(delta) && delta > 0.0f ? delta : __hidden_ui::s_FallbackDeltaSeconds;
 
@@ -483,6 +540,7 @@ void UiSystem::invalidateResources(){
     m_taskGraphPresentationPrepared = false;
     m_taskGraphPresentationHasWork = false;
     m_taskGraphPresentationClaimed = false;
+    m_taskGraphLegacyPresentationClaimed = false;
     m_taskGraphDrawUploadsPrepared = false;
     m_taskGraphPresentationGraphGeneration = 0u;
 }
@@ -1252,6 +1310,240 @@ bool UiSystem::submitStandaloneTaskGraphPresentation(Core::Framebuffer* const fr
     return false;
 }
 
+Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
+    Core::GpuTaskGraph& graph,
+    Core::Framebuffer* const framebuffer,
+    ImDrawData* const drawData,
+    const u64 frameGeneration
+){
+    if(
+        !framebuffer
+        || !drawData
+        || !m_frameFinished
+        || m_taskGraphLegacyPresentationClaimed
+        || frameGeneration == 0u
+        || frameGeneration != m_frameGeneration
+        || drawData->TotalVtxCount <= 0
+        || drawData->TotalIdxCount <= 0
+        || !m_pipeline
+        || !m_samplerHeapHandle.valid()
+        || !drawBuffersReady(
+            static_cast<usize>(drawData->TotalVtxCount),
+            static_cast<usize>(drawData->TotalIdxCount)
+        )
+        || drawData->CmdListsCount < 0
+        || (drawData->CmdListsCount > 0 && !drawData->CmdLists.Data)
+    )
+        return {};
+
+    const Core::GpuGraphResourceId backbuffer = graph.importHazardDomain(
+        Core::GpuGraphResourceDesc{}
+            .setIdentity(Name("ui.imgui_standalone_legacy_presentation.backbuffer"))
+            .setMarkerLabel("Standalone ImGui Legacy Presentation Back Buffer")
+            .setType(Core::GpuGraphResourceType::HazardDomain)
+    );
+    const Core::GpuGraphResourceId opaqueCallbackDomain = graph.importHazardDomain(
+        Core::GpuGraphResourceDesc{}
+            .setIdentity(Name("ui.imgui_standalone_legacy_presentation.callback"))
+            .setMarkerLabel("ImGui Opaque Callback Domain")
+            .setType(Core::GpuGraphResourceType::HazardDomain)
+    );
+    const Core::GpuGraphResourceId vertexBuffer = graph.importBuffer(
+        m_vertexBuffer,
+        __hidden_ui::BufferResourceDesc(
+            Name("ui.imgui_standalone_legacy_vertices"),
+            "Standalone ImGui Legacy Vertices",
+            m_vertexBuffer->getDescription()
+        )
+    );
+    const Core::GpuGraphResourceId indexBuffer = graph.importBuffer(
+        m_indexBuffer,
+        __hidden_ui::BufferResourceDesc(
+            Name("ui.imgui_standalone_legacy_indices"),
+            "Standalone ImGui Legacy Indices",
+            m_indexBuffer->getDescription()
+        )
+    );
+    if(
+        !backbuffer.valid()
+        || !opaqueCallbackDomain.valid()
+        || !vertexBuffer.valid()
+        || !indexBuffer.valid()
+    )
+        return {};
+
+    Core::Alloc::ScratchArena scratchArena(__hidden_ui::s_TaskGraphDeclarationArena);
+    Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> uploadTasks(scratchArena);
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> uploadedTextures(scratchArena);
+    uploadTasks.reserve(2u);
+    uploadedTextures.reserve(m_textures.size());
+    if(!declareTaskGraphTextureUploads(graph, *drawData, {}, uploadTasks, uploadedTextures)){
+        m_textureUploadBatch.reset();
+        return {};
+    }
+
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses(scratchArena);
+    resourceUses.reserve(4u + uploadedTextures.size() + static_cast<usize>(drawData->CmdListsCount));
+    resourceUses.push_back(Core::GpuTaskResourceUse{
+        .resource = backbuffer,
+        .range = {},
+        .requiredState = Core::ResourceStates::Present,
+        .access = Core::GpuTaskResourceAccess::Write,
+    });
+    // The opaque task writes its live ImGui bytes before binding the same buffers for rasterization.  The callback
+    // retains that intra-task CopyDest-to-Vertex/Index transition; the graph owns packet ordering and final use.
+    resourceUses.push_back(Core::GpuTaskResourceUse{
+        .resource = vertexBuffer,
+        .range = {},
+        .requiredState = Core::ResourceStates::VertexBuffer,
+        .access = Core::GpuTaskResourceAccess::ReadWrite,
+    });
+    resourceUses.push_back(Core::GpuTaskResourceUse{
+        .resource = indexBuffer,
+        .range = {},
+        .requiredState = Core::ResourceStates::IndexBuffer,
+        .access = Core::GpuTaskResourceAccess::ReadWrite,
+    });
+    // A custom ImDrawCmd callback can bind arbitrary user resources.  Keep that operation explicit and serial
+    // without pretending its private state can be converted into an immutable resource declaration.
+    resourceUses.push_back(Core::GpuTaskResourceUse{
+        .resource = opaqueCallbackDomain,
+        .range = {},
+        .requiredState = Core::ResourceStates::Unknown,
+        .access = Core::GpuTaskResourceAccess::ReadWrite,
+    });
+
+    const auto appendTextureUse = [&](const Core::GpuGraphResourceId texture){
+        if(!texture.valid())
+            return false;
+        for(const Core::GpuTaskResourceUse& use : resourceUses){
+            if(use.resource == texture)
+                return true;
+        }
+        resourceUses.push_back(__hidden_ui::ReadTextureUse(texture));
+        return true;
+    };
+    for(const Core::GpuGraphResourceId texture : uploadedTextures){
+        if(!appendTextureUse(texture)){
+            m_textureUploadBatch.reset();
+            return {};
+        }
+    }
+
+    for(i32 listIndex = 0; listIndex < drawData->CmdListsCount; ++listIndex){
+        const ImDrawList* const drawList = drawData->CmdLists[listIndex];
+        if(!drawList)
+            continue;
+        if(drawList->CmdBuffer.Size < 0 || (drawList->CmdBuffer.Size > 0 && !drawList->CmdBuffer.Data)){
+            m_textureUploadBatch.reset();
+            return {};
+        }
+
+        for(i32 commandIndex = 0; commandIndex < drawList->CmdBuffer.Size; ++commandIndex){
+            const ImDrawCmd& drawCommand = drawList->CmdBuffer[commandIndex];
+            if(drawCommand.UserCallback)
+                continue;
+
+            UiTextureResource* const textureResource = textureResourceForDraw(drawCommand.GetTexID());
+            const Core::GpuGraphResourceId texture = textureResource
+                ? importTaskGraphTexture(graph, *textureResource)
+                : Core::GpuGraphResourceId{}
+            ;
+            if(!appendTextureUse(texture)){
+                m_textureUploadBatch.reset();
+                return {};
+            }
+        }
+    }
+
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Small;
+    scheduling.overlapPreferred = false;
+    scheduling.avoidQueueCrossing = true;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    scheduling.allowParallelRecording = false;
+    Core::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("ui.imgui_standalone_legacy_presentation"))
+        .setMarkerLabel("Standalone ImGui Opaque Callback Presentation")
+        .setQueue(__hidden_ui::OpaquePresentationQueueRequest())
+        .setScheduling(scheduling)
+        .setDependencies(uploadTasks.data(), uploadTasks.size())
+        .setResourceUses(resourceUses.data(), resourceUses.size())
+    ;
+    const Core::GpuTaskId task = graph.addTask<StandaloneLegacyPresentationTask>(
+        desc,
+        StandaloneLegacyPresentationTask::Payload{
+            .ui = this,
+            .framebuffer = framebuffer,
+            .drawData = drawData,
+            .frameGeneration = frameGeneration,
+        }
+    );
+    if(task.valid())
+        m_taskGraphLegacyPresentationClaimed = true;
+    else
+        m_textureUploadBatch.reset();
+    return task;
+}
+
+bool UiSystem::submitStandaloneLegacyTaskGraphPresentation(Core::Framebuffer* const framebuffer){
+    if(!framebuffer || !m_frameFinished || m_taskGraphLegacyPresentationClaimed)
+        return false;
+
+    setCurrentContext();
+    ImDrawData* const drawData = ImGui::GetDrawData();
+    if(!drawData)
+        return false;
+
+    const Core::GpuPhysicalQueueId graphicsQueue =
+        m_graphics.getDevice().getPrimaryPhysicalQueue(Core::CommandQueue::Graphics)
+    ;
+    if(!graphicsQueue.valid())
+        return false;
+
+    struct StandaloneLegacyPresentationContext{
+        UiSystem* ui = nullptr;
+        Core::Framebuffer* framebuffer = nullptr;
+        ImDrawData* drawData = nullptr;
+        u64 frameGeneration = 0u;
+    };
+    StandaloneLegacyPresentationContext context{
+        .ui = this,
+        .framebuffer = framebuffer,
+        .drawData = drawData,
+        .frameGeneration = m_frameGeneration,
+    };
+    Core::QueueSubmissionToken submissionToken;
+    const bool submitted = m_graphics.submitStandaloneTaskGraph(
+        &context,
+        [](void* const rawContext, Core::GpuTaskGraph& graph){
+            StandaloneLegacyPresentationContext* const context =
+                static_cast<StandaloneLegacyPresentationContext*>(rawContext)
+            ;
+            if(!context || !context->ui)
+                return Core::GpuTaskId{};
+            return context->ui->declareStandaloneLegacyTaskGraphPresentation(
+                graph,
+                context->framebuffer,
+                context->drawData,
+                context->frameGeneration
+            );
+        },
+        submissionToken,
+        graphicsQueue
+    );
+    if(submitted && submissionToken.valid())
+        return true;
+
+    // This is the final availability fallback: graph compilation/recording failure must not drop an editor overlay.
+    // The rejected graph leaves every texture request pending for the existing direct path below.
+    m_taskGraphLegacyPresentationClaimed = false;
+    m_textureUploadBatch.complete(false);
+    return false;
+}
+
 Core::GpuTaskId UiSystem::declareStandaloneTextureUploadGraph(Core::GpuTaskGraph& graph){
     if(!m_frameFinished)
         return {};
@@ -1437,6 +1729,35 @@ bool UiSystem::recordTaskGraphPresentation(Core::CommandList& commandList, Core:
     return true;
 }
 
+bool UiSystem::recordStandaloneLegacyTaskGraphPresentation(
+    Core::CommandList& commandList,
+    Core::Framebuffer* const framebuffer,
+    ImDrawData* const drawData,
+    const u64 frameGeneration
+){
+    if(
+        !framebuffer
+        || !drawData
+        || !m_taskGraphLegacyPresentationClaimed
+        || !m_frameFinished
+        || frameGeneration == 0u
+        || frameGeneration != m_frameGeneration
+    )
+        return false;
+
+    // submitStandaloneTaskGraph() records synchronously. The pointer/generation guard turns the opaque callback
+    // boundary into a fail-closed record contract if another ImGui frame unexpectedly replaces the live arrays.
+    setCurrentContext();
+    if(ImGui::GetDrawData() != drawData)
+        return false;
+
+    if(!uploadDrawBuffers(commandList, *drawData))
+        return false;
+    renderDrawData(commandList, framebuffer, *drawData);
+    commandList.endRenderPass();
+    return true;
+}
+
 bool UiSystem::recordTaskGraphUploadCompletion()const{
     return m_taskGraphPresentationClaimed && m_frameFinished;
 }
@@ -1449,11 +1770,19 @@ void UiSystem::confirmTaskGraphPresentationSubmission()noexcept{
     m_frameFinished = false;
     m_taskGraphPresentationHasWork = false;
     m_taskGraphPresentationClaimed = false;
+    m_taskGraphLegacyPresentationClaimed = false;
     m_taskGraphDrawUploadsPrepared = false;
     m_taskGraphPresentationGraphGeneration = 0u;
     m_taskGraphVertexUpload.clear();
     m_taskGraphIndexUpload.clear();
     clearTaskGraphDrawSnapshot();
+}
+
+void UiSystem::discardStandaloneLegacyTaskGraphPresentation()noexcept{
+    // A failed opaque packet may have reached recording after it prepared graph-owned texture blobs. Keep every
+    // status pending so the direct availability fallback can retry from the live ImGui frame.
+    m_textureUploadBatch.complete(false);
+    m_taskGraphLegacyPresentationClaimed = false;
 }
 
 bool UiSystem::submitPreparedLegacyTextureUploads(ImDrawData& drawData){
@@ -1512,8 +1841,15 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
         NWB_LOGGER_WARNING(NWB_TEXT("UiSystem: standalone graph presentation failed; retaining direct raster fallback"));
     }
 
-    // Custom callbacks cannot be represented by an immutable graph payload. Their raster path remains direct, but
-    // requested textures and descriptors were already prepared before render.
+    if(drawData->TotalVtxCount > 0 && drawData->TotalIdxCount > 0){
+        // Custom callbacks remain opaque, but the standalone graph records them synchronously against the live
+        // ImGui arrays. That preserves callback ABI while moving command-list ownership, texture uploads, and the
+        // submit transaction into the graph. Only a rejected opaque graph reaches the direct availability fallback.
+        if(submitStandaloneLegacyTaskGraphPresentation(framebuffer))
+            return;
+        NWB_LOGGER_WARNING(NWB_TEXT("UiSystem: standalone legacy ImGui graph presentation failed; retaining direct raster fallback"));
+    }
+
     if(!submitPreparedLegacyTextureUploads(*drawData))
         return;
 
@@ -1549,6 +1885,7 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
         m_taskGraphPresentationPrepared = false;
         m_taskGraphPresentationHasWork = false;
         m_taskGraphPresentationClaimed = false;
+        m_taskGraphLegacyPresentationClaimed = false;
         m_taskGraphDrawUploadsPrepared = false;
         m_taskGraphPresentationGraphGeneration = 0u;
         m_taskGraphVertexUpload.clear();
@@ -1563,6 +1900,7 @@ void UiSystem::backBufferResizing(){
     m_taskGraphPresentationPrepared = false;
     m_taskGraphPresentationHasWork = false;
     m_taskGraphPresentationClaimed = false;
+    m_taskGraphLegacyPresentationClaimed = false;
     m_taskGraphDrawUploadsPrepared = false;
     m_taskGraphPresentationGraphGeneration = 0u;
     m_taskGraphVertexUpload.clear();

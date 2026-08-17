@@ -25,7 +25,7 @@ struct NwbDeferredCompositePixelInput{
 };
 
 struct NwbDeferredCompositePixelOutput{
-    [[vk::location(NWB_DEFERRED_COLOR_TARGET_LOCATION)]] float4 color : SV_Target0;
+    [[vk::location(NWB_DEFERRED_COLOR_TARGET_LOCATION)]] half4 color : SV_Target0;
 };
 
 
@@ -38,14 +38,16 @@ struct NwbDeferredCompositePixelOutput{
 // Rec.2020/PQ before writing its A2B10G10R10 surface.
 NwbDeferredCompositePixelOutput main(NwbDeferredCompositePixelInput input){
     const SamplerState sampler = NwbHeapSampler(g_NwbDeferredBindlessResources.lightingSlots.w);
-    const float3 compositeColor = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.avboitWorkSlots1.z).Sample(sampler, input.uv).rgb;
+    // Composite color is an RGBA16F target. Retain its sampled payload in FP16 through the SDR path; only the HDR10
+    // primary conversion/PQ transfer below needs FP32 range and precision before the 10-bit presentation store.
+    const half3 compositeColor = half3(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.avboitWorkSlots1.z).Sample(sampler, input.uv).rgb);
 
     NwbDeferredCompositePixelOutput output;
     const float3 presentationColor = g_NwbDeferredCompositePushConstants.presentationMode == NWB_DEFERRED_PRESENTATION_HDR10
-        ? nwbHdr10EncodeScene(compositeColor)
-        : compositeColor
+        ? nwbHdr10EncodeScene(float3(compositeColor))
+        : float3(compositeColor)
     ;
-    output.color = float4(presentationColor, 1.0);
+    output.color = half4(half3(presentationColor), half(1.0h));
     return output;
 }
 

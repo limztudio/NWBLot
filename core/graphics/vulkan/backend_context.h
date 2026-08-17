@@ -226,7 +226,11 @@ private:
     // enabled cross-family routing.
     i32 m_secondaryGraphicsQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_computeQueueFamily = s_InvalidQueueFamilyIndex;
+    // Dedicated Compute and Transfer paths may likewise expose one cross-family auxiliary transport. Device
+    // registration is opt-in, and task-level scheduling must separately select the resulting route.
+    i32 m_secondaryComputeQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_transferQueueFamily = s_InvalidQueueFamilyIndex;
+    i32 m_secondaryTransferQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_presentQueueFamily = s_InvalidQueueFamilyIndex;
 
     VkDevice m_vulkanDevice = VK_NULL_HANDLE;
@@ -236,7 +240,9 @@ private:
     // CommandQueue::Graphics callers continue to use m_graphicsQueue.
     VkQueue m_secondaryGraphicsQueue = VK_NULL_HANDLE;
     VkQueue m_computeQueue = VK_NULL_HANDLE;
+    VkQueue m_secondaryComputeQueue = VK_NULL_HANDLE;
     VkQueue m_transferQueue = VK_NULL_HANDLE;
+    VkQueue m_secondaryTransferQueue = VK_NULL_HANDLE;
     VkQueue m_presentQueue = VK_NULL_HANDLE;
 
     VkSurfaceKHR m_windowSurface = VK_NULL_HANDLE;
@@ -278,6 +284,8 @@ private:
     bool m_cooperativeVectorFeatureEnabled = false;
     bool m_cooperativeVectorTrainingFeatureEnabled = false;
     bool m_sameClassGraphicsQueueEnabled = false;
+    bool m_sameClassComputeQueueEnabled = false;
+    bool m_sameClassTransferQueueEnabled = false;
     bool m_asyncComputeLaneEnabled = false;
     bool m_transferQueueEnabled = false;
     bool m_meshTaskShaderSupported = false;

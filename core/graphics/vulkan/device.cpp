@@ -797,31 +797,35 @@ void Device::configureLegacyQueueContext(){
     const Queue* const computeQueue = m_primaryQueues[static_cast<u32>(CommandQueue::Compute)];
     const Queue* const transferQueue = m_primaryQueues[static_cast<u32>(CommandQueue::Transfer)];
 
+    const auto resolveAuxiliaryFamily = [this](const Queue* const primaryQueue, const CommandQueue::Enum queueClass){
+        if(!primaryQueue)
+            return s_InvalidQueueFamilyIndex;
+        for(const Queue* const physicalQueue : m_physicalQueues){
+            if(
+                physicalQueue
+                && physicalQueue->m_queueID == queueClass
+                && physicalQueue->m_queueFamilyIndex != primaryQueue->m_queueFamilyIndex
+            )
+                return static_cast<i32>(physicalQueue->m_queueFamilyIndex);
+        }
+        return s_InvalidQueueFamilyIndex;
+    };
+
     m_context.graphicsQueueFamilyIndex = graphicsQueue
         ? static_cast<i32>(graphicsQueue->m_queueFamilyIndex)
         : s_InvalidQueueFamilyIndex
     ;
-    m_context.auxiliaryGraphicsQueueFamilyIndex = s_InvalidQueueFamilyIndex;
-    if(graphicsQueue){
-        for(const Queue* const physicalQueue : m_physicalQueues){
-            if(
-                physicalQueue
-                && physicalQueue->m_queueID == CommandQueue::Graphics
-                && physicalQueue->m_queueFamilyIndex != graphicsQueue->m_queueFamilyIndex
-            ){
-                m_context.auxiliaryGraphicsQueueFamilyIndex = static_cast<i32>(physicalQueue->m_queueFamilyIndex);
-                break;
-            }
-        }
-    }
+    m_context.auxiliaryGraphicsQueueFamilyIndex = resolveAuxiliaryFamily(graphicsQueue, CommandQueue::Graphics);
     m_context.asyncComputeQueueFamilyIndex = computeQueue
         ? static_cast<i32>(computeQueue->m_queueFamilyIndex)
         : s_InvalidQueueFamilyIndex
     ;
+    m_context.auxiliaryAsyncComputeQueueFamilyIndex = resolveAuxiliaryFamily(computeQueue, CommandQueue::Compute);
     m_context.transferQueueFamilyIndex = transferQueue
         ? static_cast<i32>(transferQueue->m_queueFamilyIndex)
         : s_InvalidQueueFamilyIndex
     ;
+    m_context.auxiliaryTransferQueueFamilyIndex = resolveAuxiliaryFamily(transferQueue, CommandQueue::Transfer);
     // RenderLane remains a compatibility façade: it may target Compute only when the primary Compute transport is
     // a separate family. Graph packets bypass this policy and submit through their exact physical queue ID.
     m_context.asyncComputeLaneEnabled = graphicsQueue

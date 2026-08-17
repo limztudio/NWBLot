@@ -581,12 +581,14 @@ struct VulkanContext{
     VkPhysicalDeviceSubgroupProperties subgroupProperties{};
     DescriptorBufferManager* descriptorBufferManager = nullptr;
 
-    // Physical families used for Graphics/AsyncCompute/Transfer resource sharing. The auxiliary Graphics family is
-    // invalid unless the optional cross-family same-class route was registered on this Device.
+    // Physical families used for Graphics/AsyncCompute/Transfer resource sharing. Every auxiliary family is
+    // invalid unless the optional cross-family same-class route registered that physical transport on this Device.
     i32 graphicsQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 auxiliaryGraphicsQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 asyncComputeQueueFamilyIndex = s_InvalidQueueFamilyIndex;
+    i32 auxiliaryAsyncComputeQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 transferQueueFamilyIndex = s_InvalidQueueFamilyIndex;
+    i32 auxiliaryTransferQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     bool asyncComputeLaneEnabled = false;
     bool transferQueueEnabled = false;
 
@@ -639,7 +641,7 @@ struct VulkanContext{
 
 struct QueueFamilySharingInfo{
     VkSharingMode mode = VK_SHARING_MODE_EXCLUSIVE;
-    Array<u32, 4u> familyIndices = {};
+    Array<u32, 6u> familyIndices = {};
     u32 familyIndexCount = 0u;
 
     [[nodiscard]] const u32* data()const{ return familyIndexCount > 0u ? familyIndices.data() : nullptr; }
@@ -670,13 +672,17 @@ inline QueueFamilySharingInfo ResolveQueueFamilySharing(
     if(
         (sharingBits & static_cast<u8>(ResourceQueueSharing::AsyncCompute))
         && context.asyncComputeLaneEnabled
-    )
+    ){
         appendFamily(context.asyncComputeQueueFamilyIndex);
+        appendFamily(context.auxiliaryAsyncComputeQueueFamilyIndex);
+    }
     if(
         (sharingBits & static_cast<u8>(ResourceQueueSharing::Transfer))
         && context.transferQueueEnabled
-    )
+    ){
         appendFamily(context.transferQueueFamilyIndex);
+        appendFamily(context.auxiliaryTransferQueueFamilyIndex);
+    }
 
     if(result.familyIndexCount < 2u){
         result.familyIndexCount = 0u;

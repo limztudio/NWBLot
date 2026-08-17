@@ -1089,6 +1089,65 @@ TEST_F(DescriptorBufferRoundTripTest, CrossFamilySameClassGraphicsQueuesRouteWit
 }
 
 
+
+// The device registry must expose alternate dedicated Compute/Transfer families with their concrete queue identity
+// before the compiler can use its class-generic cross-family ownership path. Most adapters expose only one such
+// family, so this remains a topology-qualified probe; graph-unit coverage exercises the ownership plan either way.
+TEST_F(DescriptorBufferRoundTripTest, CrossFamilySameClassComputeAndTransferQueuesRegisterWhenAvailable){
+    HeadlessGraphicsScope multiQueueScope;
+    ASSERT_TRUE(multiQueueScope.setAsyncComputeLaneEnabled(true));
+    ASSERT_TRUE(multiQueueScope.setTransferQueueEnabled(true));
+    ASSERT_TRUE(multiQueueScope.setSameClassMultiQueueEnabled(true));
+    ASSERT_TRUE(multiQueueScope.setCrossFamilySameClassQueueRoutingEnabled(true));
+    if(!multiQueueScope.initialize())
+        GTEST_SKIP() << "Cross-family same-class Compute/Transfer routing: no usable headless Vulkan device on this host.";
+
+    auto& device = multiQueueScope.graphics().getDevice();
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+
+    const auto findAuxiliary = [&](const CommandQueue::Enum queueClass){
+        const GpuPhysicalQueueId primary = device.getPrimaryPhysicalQueue(queueClass);
+        const u32 primaryFamily = device.getQueueFamilyIndex(primary);
+        const GpuPhysicalQueueInfo* auxiliary = static_cast<const GpuPhysicalQueueInfo*>(nullptr);
+        for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+            const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+            if(
+                candidate.queueClass == queueClass
+                && candidate.id != primary
+                && candidate.familyIndex != primaryFamily
+            ){
+                auxiliary = &candidate;
+                break;
+            }
+        }
+        return auxiliary;
+    };
+
+    const GpuPhysicalQueueInfo* const auxiliaryCompute = findAuxiliary(CommandQueue::Compute);
+    const GpuPhysicalQueueInfo* const auxiliaryTransfer = findAuxiliary(CommandQueue::Transfer);
+    if(!auxiliaryCompute && !auxiliaryTransfer){
+        GTEST_SKIP() << "Cross-family same-class Compute/Transfer routing: adapter exposes no alternate dedicated family.";
+    }
+
+    if(auxiliaryCompute){
+        const GpuPhysicalQueueId primaryCompute = device.getPrimaryPhysicalQueue(CommandQueue::Compute);
+        EXPECT_TRUE(primaryCompute.valid());
+        EXPECT_TRUE(device.matchesPhysicalQueueIdentity(auxiliaryCompute->id));
+        EXPECT_NE(auxiliaryCompute->familyIndex, device.getQueueFamilyIndex(primaryCompute));
+        EXPECT_TRUE(static_cast<u8>(auxiliaryCompute->capabilities) & static_cast<u8>(GpuQueueCapability::Compute));
+    }
+    if(auxiliaryTransfer){
+        const GpuPhysicalQueueId primaryTransfer = device.getPrimaryPhysicalQueue(CommandQueue::Transfer);
+        EXPECT_TRUE(primaryTransfer.valid());
+        EXPECT_TRUE(device.matchesPhysicalQueueIdentity(auxiliaryTransfer->id));
+        EXPECT_NE(auxiliaryTransfer->familyIndex, device.getQueueFamilyIndex(primaryTransfer));
+        EXPECT_TRUE(static_cast<u8>(auxiliaryTransfer->capabilities) & static_cast<u8>(GpuQueueCapability::Transfer));
+    }
+}
+
+
 // A timeline value is only meaningful for the Device that issued it.  Make the rejection observable at the native
 // submission boundary so an imported graph completion cannot accidentally wait on a recycled queue timeline after
 // device recreation.

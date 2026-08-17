@@ -37,7 +37,9 @@ public:
         u64 destOffsetBytes = 0;
         // kCount selects the automatic setup-upload route: sizeable uploads prefer a real dedicated Transfer
         // transport, then dedicated Compute, then Graphics. Supplying a concrete queue preserves an explicit
-        // caller preference; Transfer and Compute still fall back to an available physical transport.
+        // caller preference; Transfer and Compute still fall back to an available physical transport. Upload
+        // offsets and byte sizes must be 4-byte aligned; a non-retained Unknown initial state publishes CopyDest,
+        // while a retained upload requires a concrete initial state.
         CommandQueue::Enum queue = CommandQueue::kCount;
         // Written only after the upload submission and every declared consumer-queue readiness bridge have been
         // accepted. Async callers must keep this storage alive until their setup job completes.

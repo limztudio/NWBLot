@@ -152,29 +152,6 @@ constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
     return true;
 }
 
-[[nodiscard]] static bool SubmitSetupUpload(
-    GraphicsBackend::Device& device,
-    CommandListHandle& commandList,
-    const CommandQueue::Enum uploadQueue,
-    const ResourceQueueSharing::Mask queueSharing,
-    QueueSubmissionToken& outUploadToken
-){
-    outUploadToken = {};
-    if(!commandList || !commandList->hasCommandBuffer())
-        return false;
-
-    CommandList* const commandLists[] = { commandList.get() };
-    outUploadToken = device.executeCommandLists(
-        commandLists,
-        LengthOf(commandLists),
-        uploadQueue,
-        QueueSubmissionDesc{}
-    );
-    return outUploadToken.valid()
-        && BridgeSetupUploadToConsumerQueues(device, outUploadToken, queueSharing)
-    ;
-}
-
 // The synchronous setup APIs predate frame-owned graph declaration, but their ordinary buffer/texture uploads
 // have all of the information a graph task needs: an immutable source blob, one destination resource, an exact
 // final state, and an already-resolved physical transport. Keep the public API synchronous while using the same
@@ -223,16 +200,6 @@ constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
     return declaredInitialState == ResourceStates::Unknown
         ? ResourceStates::CopyDest
         : declaredInitialState
-    ;
-}
-
-[[nodiscard]] static bool CanDeclareGraphOwnedBufferSetupUpload(const Graphics::BufferSetupDesc& desc)noexcept{
-    // Built-in buffer uploads retain Vulkan's copy-region alignment contract. Keep the legacy direct route for
-    // callers that rely on its pre-existing diagnostic behavior rather than changing their setup API result here.
-    return
-        (desc.destOffsetBytes & (sizeof(u32) - 1u)) == 0u
-        && (desc.dataSize & (sizeof(u32) - 1u)) == 0u
-        && (!desc.bufferDesc.keepInitialState || desc.bufferDesc.initialState != ResourceStates::Unknown)
     ;
 }
 
@@ -485,6 +452,23 @@ static bool ValidateBufferSetupUpload(const Graphics::BufferSetupDesc& desc){
             , desc.destOffsetBytes
             , static_cast<u64>(desc.dataSize)
             , desc.bufferDesc.byteSize
+        );
+        return false;
+    }
+    // Both the legacy CommandList staging path and the graph-owned upload task lower to VkBufferCopy.  The API
+    // cannot truthfully report a successful upload for a region Vulkan rejects, so fail before creating either
+    // a native command list or a graph packet.
+    if((desc.destOffsetBytes & (sizeof(u32) - 1u)) != 0u || (desc.dataSize & (sizeof(u32) - 1u)) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up buffer '{}': upload offset and size must be 4-byte aligned")
+            , StringConvert(desc.bufferDesc.debugName.c_str())
+        );
+        return false;
+    }
+    // A retained buffer must publish a concrete state.  Unknown would be restored at native close without a
+    // graph-visible final-state contract for the next consumer.
+    if(desc.bufferDesc.keepInitialState && desc.bufferDesc.initialState == ResourceStates::Unknown){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up buffer '{}': keep-initial-state uploads require a concrete initial state")
+            , StringConvert(desc.bufferDesc.debugName.c_str())
         );
         return false;
     }
@@ -1441,88 +1425,51 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
         return {};
     }
 
-    if(__hidden_graphics::CanDeclareGraphOwnedBufferSetupUpload(desc)){
-        QueueSubmissionToken uploadToken;
-        const bool submitted = __hidden_graphics::SubmitGraphOwnedSetupUpload(
-            device,
-            m_allocator.getObjectArena(),
-            uploadDesc.queueSharing,
-            [&buffer, &desc, &uploadDesc, uploadQueue, &uploadToken](GpuTaskGraph& graph){
-                const GpuGraphResourceId destination = graph.importBuffer(
-                    buffer,
-                    GpuGraphResourceDesc{}
-                        .setIdentity(Name("graphics.setup_buffer.resource"))
-                        .setMarkerLabel("Setup Buffer")
-                        .setType(GpuGraphResourceType::Buffer)
-                        .setInitialState(uploadDesc.initialState)
-                        .setQueueSharing(uploadDesc.queueSharing)
-                );
-                const GpuUploadBlobId source = graph.copyUploadData(
-                    desc.data,
-                    desc.dataSize,
-                    alignof(u32)
-                );
-                if(!destination.valid() || !source.valid())
-                    return GpuTaskId{};
-
-                GpuTaskDesc uploadTaskDesc;
-                uploadTaskDesc
-                    .setIdentity(Name("graphics.setup_buffer.upload"))
-                    .setMarkerLabel("Setup Buffer Upload")
-                    .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue))
-                    .setScheduling(__hidden_graphics::SetupUploadGraphScheduling(desc.dataSize))
-                ;
-                return graph.addUploadBufferTask(
-                    uploadTaskDesc,
-                    GpuUploadBufferTaskDesc{
-                        .source = source,
-                        .destination = destination,
-                        .destinationOffsetBytes = desc.destOffsetBytes,
-                        .finalState = __hidden_graphics::SetupUploadGraphFinalState(uploadDesc.initialState),
-                        .acceptedToken = &uploadToken,
-                    }
-                );
-            },
-            uploadToken
-        );
-        if(!submitted){
-            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit graph-owned setup buffer upload '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
-            return {};
-        }
-        if(desc.acceptedToken)
-            *desc.acceptedToken = uploadToken;
-        return buffer;
-    }
-
-    // Compatibility fallback for the narrow descriptor cases the built-in graph uploads intentionally reject.
-    CommandListParameters cmdParams;
-    cmdParams.setQueueType(uploadQueue);
-    CommandListHandle commandList = device.createCommandList(cmdParams);
-    if(!commandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create upload command list for buffer '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
-        return {};
-    }
-
-    commandList->open();
-    if(!commandList->hasCommandBuffer()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to open upload command list for buffer '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
-        return {};
-    }
-    commandList->writeBuffer(buffer.get(), desc.data, desc.dataSize, desc.destOffsetBytes);
-    // Publish the resource's declared initial state before the cross-queue bridge. This is the state later command
-    // lists and graph imports already use as their exact seed, including BufferDesc's default Common state.
-    if(uploadDesc.initialState != ResourceStates::Unknown)
-        commandList->setBufferState(buffer.get(), uploadDesc.initialState);
-    commandList->close();
     QueueSubmissionToken uploadToken;
-    if(!__hidden_graphics::SubmitSetupUpload(
+    const bool submitted = __hidden_graphics::SubmitGraphOwnedSetupUpload(
         device,
-        commandList,
-        uploadQueue,
+        m_allocator.getObjectArena(),
         uploadDesc.queueSharing,
+        [&buffer, &desc, &uploadDesc, uploadQueue, &uploadToken](GpuTaskGraph& graph){
+            const GpuGraphResourceId destination = graph.importBuffer(
+                buffer,
+                GpuGraphResourceDesc{}
+                    .setIdentity(Name("graphics.setup_buffer.resource"))
+                    .setMarkerLabel("Setup Buffer")
+                    .setType(GpuGraphResourceType::Buffer)
+                    .setInitialState(uploadDesc.initialState)
+                    .setQueueSharing(uploadDesc.queueSharing)
+            );
+            const GpuUploadBlobId source = graph.copyUploadData(
+                desc.data,
+                desc.dataSize,
+                alignof(u32)
+            );
+            if(!destination.valid() || !source.valid())
+                return GpuTaskId{};
+
+            GpuTaskDesc uploadTaskDesc;
+            uploadTaskDesc
+                .setIdentity(Name("graphics.setup_buffer.upload"))
+                .setMarkerLabel("Setup Buffer Upload")
+                .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue))
+                .setScheduling(__hidden_graphics::SetupUploadGraphScheduling(desc.dataSize))
+            ;
+            return graph.addUploadBufferTask(
+                uploadTaskDesc,
+                GpuUploadBufferTaskDesc{
+                    .source = source,
+                    .destination = destination,
+                    .destinationOffsetBytes = desc.destOffsetBytes,
+                    .finalState = __hidden_graphics::SetupUploadGraphFinalState(uploadDesc.initialState),
+                    .acceptedToken = &uploadToken,
+                }
+            );
+        },
         uploadToken
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit setup buffer upload '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
+    );
+    if(!submitted){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit graph-owned setup buffer upload '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
         return {};
     }
     if(desc.acceptedToken)

@@ -38391,6 +38391,77 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsRejectUnsafeLegacy
 }
 
 
+// Public buffer uploads must not claim success through the former direct route when VkBufferCopy would reject the
+// region, nor can a retained Unknown state provide the graph-visible final state expected by the next consumer.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedBufferUploadsRejectUnsafeLegacyDescriptors){
+    auto& graphics = s_scope->graphics();
+    const u8 oneByte = 0xabu;
+    const u8 alignedBytes[4u] = {};
+
+    Graphics::BufferSetupDesc unalignedSizeDesc;
+    unalignedSizeDesc.bufferDesc = BufferDesc()
+        .setByteSize(sizeof(alignedBytes))
+        .setInitialState(ResourceStates::Common)
+    ;
+    unalignedSizeDesc.data = &oneByte;
+    unalignedSizeDesc.dataSize = sizeof(oneByte);
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        QueueSubmissionToken unalignedSizeToken;
+        unalignedSizeDesc.acceptedToken = &unalignedSizeToken;
+        EXPECT_EQ(graphics.setupBuffer(unalignedSizeDesc).get(), nullptr);
+    }, "");
+#else
+    QueueSubmissionToken unalignedSizeToken;
+    unalignedSizeDesc.acceptedToken = &unalignedSizeToken;
+    EXPECT_EQ(graphics.setupBuffer(unalignedSizeDesc).get(), nullptr);
+    EXPECT_FALSE(unalignedSizeToken.valid());
+#endif
+
+    Graphics::BufferSetupDesc unalignedOffsetDesc;
+    unalignedOffsetDesc.bufferDesc = BufferDesc()
+        .setByteSize(8u)
+        .setInitialState(ResourceStates::Common)
+    ;
+    unalignedOffsetDesc.data = alignedBytes;
+    unalignedOffsetDesc.dataSize = sizeof(alignedBytes);
+    unalignedOffsetDesc.destOffsetBytes = 2u;
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        QueueSubmissionToken unalignedOffsetToken;
+        unalignedOffsetDesc.acceptedToken = &unalignedOffsetToken;
+        EXPECT_EQ(graphics.setupBuffer(unalignedOffsetDesc).get(), nullptr);
+    }, "");
+#else
+    QueueSubmissionToken unalignedOffsetToken;
+    unalignedOffsetDesc.acceptedToken = &unalignedOffsetToken;
+    EXPECT_EQ(graphics.setupBuffer(unalignedOffsetDesc).get(), nullptr);
+    EXPECT_FALSE(unalignedOffsetToken.valid());
+#endif
+
+    Graphics::BufferSetupDesc unknownSetupDesc;
+    unknownSetupDesc.bufferDesc = BufferDesc()
+        .setByteSize(sizeof(alignedBytes))
+        .setInitialState(ResourceStates::Unknown)
+        .setKeepInitialState(true)
+    ;
+    unknownSetupDesc.data = alignedBytes;
+    unknownSetupDesc.dataSize = sizeof(alignedBytes);
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        QueueSubmissionToken unknownSetupToken;
+        unknownSetupDesc.acceptedToken = &unknownSetupToken;
+        EXPECT_EQ(graphics.setupBuffer(unknownSetupDesc).get(), nullptr);
+    }, "");
+#else
+    QueueSubmissionToken unknownSetupToken;
+    unknownSetupDesc.acceptedToken = &unknownSetupToken;
+    EXPECT_EQ(graphics.setupBuffer(unknownSetupDesc).get(), nullptr);
+    EXPECT_FALSE(unknownSetupToken.valid());
+#endif
+}
+
+
 // A dedicated compute family is optional in CI, but when one exists this is the phase-zero ownership proof:
 // exclusive storage moves Compute -> Graphics -> Compute with paired release/acquire barriers and submission-local
 // timeline tokens. No rendering job has moved yet; this specifically validates the resource-lifecycle round trip

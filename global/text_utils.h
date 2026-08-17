@@ -496,6 +496,16 @@ template<usize N>
     return ParseU64FromChars(begin, end, outValue);
 }
 
+[[nodiscard]] inline bool ParseI64(const AStringView text, i64& outValue){
+    outValue = 0;
+    if(text.empty())
+        return false;
+
+    const char* begin = text.data();
+    const char* end = begin + text.size();
+    return ParseI64FromChars(begin, end, outValue);
+}
+
 template<typename CharT>
 [[nodiscard]] inline bool NextTextLine(const BasicStringView<CharT> text, usize& inOutCursor, BasicStringView<CharT>& outLine){
     if(inOutCursor >= text.size())

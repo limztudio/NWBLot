@@ -52,6 +52,7 @@ inline constexpr u32 s_DefaultSampleCount = 11u;
 inline constexpr u32 s_MaxRecordCount = 65536u;
 inline constexpr u32 s_MaxSampleCount = 64u;
 inline constexpr int s_F64DecimalRoundTripPrecision = 17;
+inline constexpr u64 s_ChecksumHashSeed = 1469598103934665603ull;
 
 
 struct Arguments{
@@ -121,9 +122,8 @@ struct Result{
     if(!value || !*value)
         return false;
 
-    char* end = nullptr;
-    const unsigned long long parsed = strtoull(value, &end, 10);
-    if(end == value || *end != '\0' || parsed > static_cast<unsigned long long>(Limit<u32>::s_Max))
+    u64 parsed = 0u;
+    if(!ParseU64(AStringView(value), parsed) || parsed > static_cast<u64>(Limit<u32>::s_Max))
         return false;
 
     outValue = static_cast<u32>(parsed);
@@ -134,9 +134,8 @@ struct Result{
     if(!value || !*value)
         return false;
 
-    char* end = nullptr;
-    const long long parsed = strtoll(value, &end, 10);
-    if(end == value || *end != '\0' || parsed < 0 || parsed > static_cast<long long>(Limit<i32>::s_Max))
+    i64 parsed = 0;
+    if(!ParseI64(AStringView(value), parsed) || parsed < 0 || parsed > static_cast<i64>(Limit<i32>::s_Max))
         return false;
 
     outValue = static_cast<i32>(parsed);
@@ -183,14 +182,6 @@ struct Result{
         && outArguments.sampleCount != 0u
         && outArguments.sampleCount <= s_MaxSampleCount
     ;
-}
-
-[[nodiscard]] static u64 HashBytes(const u8* const bytes, const usize byteCount, u64 hash = 1469598103934665603ull){
-    for(usize index = 0u; index < byteCount; ++index){
-        hash ^= static_cast<u64>(bytes[index]);
-        hash *= 1099511628211ull;
-    }
-    return hash;
 }
 
 [[nodiscard]] static TimingSummary Summarize(const TimingSamples& samples){
@@ -418,7 +409,7 @@ struct Result{
     const auto* const bytesRead = static_cast<const u8*>(device.mapBuffer(destination, CpuAccessMode::Read));
     if(!bytesRead)
         return false;
-    outResult.observedHash = HashBytes(bytesRead, byteCount);
+    outResult.observedHash = UpdateFnv64(s_ChecksumHashSeed, bytesRead, byteCount);
     device.unmapBuffer(destination);
     outResult.checksumVerified = outResult.observedHash == outResult.expectedHash;
     return outResult.checksumVerified;
@@ -464,7 +455,7 @@ struct Result{
     const auto* const bytesRead = static_cast<const u8*>(device.mapBuffer(destination, CpuAccessMode::Read));
     if(!bytesRead)
         return false;
-    outResult.directVulkanObservedHash = HashBytes(bytesRead, byteCount);
+    outResult.directVulkanObservedHash = UpdateFnv64(s_ChecksumHashSeed, bytesRead, byteCount);
     device.unmapBuffer(destination);
     outResult.directVulkanChecksumVerified = outResult.directVulkanObservedHash == outResult.expectedHash;
     return outResult.directVulkanChecksumVerified;
@@ -504,7 +495,7 @@ struct Result{
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
         sourceWords[wordIndex] = s_SourceWords[wordIndex];
     device.unmapBuffer(source.get());
-    outResult.expectedHash = HashBytes(reinterpret_cast<const u8*>(s_SourceWords), sizeof(s_SourceWords));
+    outResult.expectedHash = UpdateFnv64(s_ChecksumHashSeed, reinterpret_cast<const u8*>(s_SourceWords), sizeof(s_SourceWords));
 
     GpuTaskGraph graph(arena);
     const GpuGraphResourceId sourceResource = graph.importBuffer(

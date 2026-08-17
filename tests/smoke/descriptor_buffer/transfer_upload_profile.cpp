@@ -44,6 +44,7 @@ using namespace Core;
 inline constexpr int s_SkipExitCode = 77;
 inline constexpr usize s_MiB = 1024u * 1024u;
 inline constexpr u32 s_TextureWidth = 1024u;
+inline constexpr u64 s_ChecksumHashSeed = 1469598103934665603ull;
 
 
 enum class Route : u8{
@@ -139,9 +140,8 @@ struct Result{
     if(!value || !*value)
         return false;
 
-    char* end = nullptr;
-    const unsigned long long parsed = strtoull(value, &end, 10);
-    if(end == value || *end != '\0' || parsed > static_cast<unsigned long long>(Limit<usize>::s_Max))
+    u64 parsed = 0u;
+    if(!ParseU64(AStringView(value), parsed) || parsed > static_cast<u64>(Limit<usize>::s_Max))
         return false;
 
     outValue = static_cast<usize>(parsed);
@@ -161,9 +161,8 @@ struct Result{
     if(!value || !*value)
         return false;
 
-    char* end = nullptr;
-    const long long parsed = strtoll(value, &end, 10);
-    if(end == value || *end != '\0' || parsed < -1 || parsed > static_cast<long long>(Limit<i32>::s_Max))
+    i64 parsed = 0;
+    if(!ParseI64(AStringView(value), parsed) || parsed < -1 || parsed > static_cast<i64>(Limit<i32>::s_Max))
         return false;
 
     outValue = static_cast<i32>(parsed);
@@ -253,14 +252,6 @@ struct Result{
         return false;
 
     return true;
-}
-
-[[nodiscard]] static u64 HashBytes(const u8* const bytes, const usize byteCount, u64 hash = 1469598103934665603ull){
-    for(usize index = 0u; index < byteCount; ++index){
-        hash ^= static_cast<u64>(bytes[index]);
-        hash *= 1099511628211ull;
-    }
-    return hash;
 }
 
 [[nodiscard]] static bool CaptureSelectedAdapterIdentity(
@@ -385,7 +376,7 @@ static void FillUploadData(Vector<u8, Alloc::GlobalArena>& outBytes){
     const auto* const bytes = static_cast<const u8*>(device.mapBuffer(readback, CpuAccessMode::Read));
     if(!bytes)
         return false;
-    outHash = HashBytes(bytes, byteSize);
+    outHash = UpdateFnv64(s_ChecksumHashSeed, bytes, byteSize);
     device.unmapBuffer(readback);
     return true;
 }
@@ -430,10 +421,10 @@ static void FillUploadData(Vector<u8, Alloc::GlobalArena>& outBytes){
     if(!bytes || rowPitch < static_cast<usize>(textureDesc.width) * sizeof(u32))
         return false;
 
-    outHash = 1469598103934665603ull;
+    outHash = s_ChecksumHashSeed;
     const usize rowBytes = static_cast<usize>(textureDesc.width) * sizeof(u32);
     for(u32 row = 0u; row < textureDesc.height; ++row)
-        outHash = HashBytes(bytes + static_cast<usize>(row) * rowPitch, rowBytes, outHash);
+        outHash = UpdateFnv64(outHash, bytes + static_cast<usize>(row) * rowPitch, rowBytes);
     device.unmapStagingTexture(readback);
     return true;
 }
@@ -476,7 +467,7 @@ static void FillUploadData(Vector<u8, Alloc::GlobalArena>& outBytes){
     Vector<u8, Alloc::GlobalArena> input(arena);
     input.resize(uploadBytes);
     FillUploadData(input);
-    outResult.expectedHash = HashBytes(input.data(), input.size());
+    outResult.expectedHash = UpdateFnv64(s_ChecksumHashSeed, input.data(), input.size());
 
     const u32 inFlightWindow = arguments.inFlightIterations > arguments.iterations
         ? arguments.iterations
@@ -596,7 +587,7 @@ static void FillUploadData(Vector<u8, Alloc::GlobalArena>& outBytes){
     Vector<u8, Alloc::GlobalArena> input(arena);
     input.resize(uploadBytes);
     FillUploadData(input);
-    outResult.expectedHash = HashBytes(input.data(), input.size());
+    outResult.expectedHash = UpdateFnv64(s_ChecksumHashSeed, input.data(), input.size());
 
     const u32 inFlightWindow = arguments.inFlightIterations > arguments.iterations
         ? arguments.iterations

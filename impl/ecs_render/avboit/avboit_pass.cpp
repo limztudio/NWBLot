@@ -59,27 +59,6 @@ static void DispatchAvboitCompute(
     commandList.dispatch(groupCountX, 1, 1);
 }
 
-static void ClearAvboitTargetValues(Core::CommandList& commandList, AvboitFrameTargets& targets){
-    const Core::Color transparentBlack(0.f, 0.f, 0.f, 0.f);
-    commandList.clearTextureFloat(targets.lowRasterTarget.get(), ECSRenderDetail::s_FramebufferSubresources, transparentBlack);
-    commandList.clearTextureFloat(targets.accumColor.get(), ECSRenderDetail::s_FramebufferSubresources, transparentBlack);
-    commandList.clearTextureFloat(targets.accumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources, transparentBlack);
-    commandList.clearBufferUInt(targets.coverageBuffer.get(), 0u);
-    commandList.clearBufferUInt(targets.depthWarpBuffer.get(), 0u);
-    commandList.clearBufferUInt(targets.controlBuffer.get(), 0u);
-    commandList.clearBufferUInt(targets.extinctionBuffer.get(), 0u);
-    commandList.clearBufferUInt(targets.extinctionOverflowBuffer.get(), NWB_AVBOIT_OVERFLOW_INVALID);
-    commandList.clearTextureFloat(
-        targets.transmittanceTexture.get(),
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::Color(1.f, 1.f, 1.f, 1.f)
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
 
 
@@ -179,26 +158,6 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTa
     pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_SELF_OCCLUSION_SLICE_BIAS] = ECSRenderAvboitDetail::s_AvboitSelfOcclusionSliceBias;
     pushConstants.heapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES] = targets.deferredSlotsBufferDescriptor.slot();
     return pushConstants;
-}
-
-void RendererAvboitSystem::clearAvboitTargets(Core::CommandList& commandList, AvboitFrameTargets& targets){
-    NWB_ASSERT(targets.valid());
-
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_AvboitClear, graphics().getDevice(), commandList);
-
-    commandList.setTextureState(targets.lowRasterTarget.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.accumColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.accumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    commandList.setBufferState(targets.coverageBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.setBufferState(targets.depthWarpBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.setBufferState(targets.controlBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.setBufferState(targets.extinctionBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.setBufferState(targets.extinctionOverflowBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.transmittanceTexture.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-
-    commandList.commitBarriers();
-
-    __hidden_avboit::ClearAvboitTargetValues(commandList, targets);
 }
 
 bool RendererAvboitSystem::prepareAvboitPassResources(

@@ -33,7 +33,6 @@ public:
     );
     [[nodiscard]] bool registerAvboitFrameTargetDescriptors(DeferredFrameTargets& createdTargets, AvboitFrameTargets& avboitTargets);
     [[nodiscard]] bool prepareAvboitPassResources(DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
-    void clearAvboitTargets(Core::CommandList& commandList, AvboitFrameTargets& targets);
     void renderAvboitTransparentCsgIntervals(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,

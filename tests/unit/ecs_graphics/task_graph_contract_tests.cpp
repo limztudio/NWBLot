@@ -560,10 +560,13 @@ TEST(EcsGraphics, AvboitMaterialUploadsHaveNoNativeCompatibilityDispatcher){
     EXPECT_FALSE(ContainsText(avboitHeader, "renderAvboitPreDepthWarpPasses"));
     EXPECT_FALSE(ContainsText(avboitHeader, "renderAvboitPostOccupancyPasses"));
     EXPECT_FALSE(ContainsText(avboitHeader, "buildTransparentCsgIntervals"));
+    EXPECT_FALSE(ContainsText(avboitHeader, "clearAvboitTargets"));
     EXPECT_FALSE(ContainsText(avboit, "renderAvboitPasses"));
     EXPECT_FALSE(ContainsText(avboit, "renderAvboitPreDepthWarpPasses"));
     EXPECT_FALSE(ContainsText(avboit, "renderAvboitPostOccupancyPasses"));
     EXPECT_FALSE(ContainsText(avboit, "buildTransparentCsgIntervals"));
+    EXPECT_FALSE(ContainsText(avboit, "clearAvboitTargets"));
+    EXPECT_FALSE(ContainsText(avboit, "ClearAvboitTargetValues"));
 
     EXPECT_FALSE(ContainsText(materialHeader, "renderMaterialPass("));
     EXPECT_FALSE(ContainsText(materialHeader, "uploadMaterialPassDrawBuffers"));

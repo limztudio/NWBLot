@@ -103,7 +103,6 @@ struct ShadowPrepareGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool deferredBindlessSlotsWereUploaded = false;
         bool currentBindlessSlotsGraphOwned = false;
-        bool rayTraceMaterialContextSlotsGraphOwned = false;
         bool causticEmissionTargetsGraphOwned = false;
         bool surfelFrameConstantsGraphOwned = false;
         bool shadowMaterialContextBatchGraphOwned = false;
@@ -147,15 +146,9 @@ struct ShadowPrepareGraphTask{
                 payload.deferHybridSoftwareTail
             )
         ;
-        // The graph-owned material-context selector was snapshotted after preflight settled every backing handle.
-        // Compatibility callers retain the direct write after native preparation recording.
-        if(
-            !shadowResourcesPrepared
-            || (
-                !payload.rayTraceMaterialContextSlotsGraphOwned
-                && !renderer.m_raytracingSystem.uploadRayTraceMaterialContextSlots(commandList)
-            )
-        )
+        // The immutable material-context selector upload precedes this task and the compiler establishes its
+        // ConstantBuffer state before native preparation records.
+        if(!shadowResourcesPrepared)
             return false;
 
         // These declarations, and the adjacent hybrid-tail ShaderResource reads when present, export every selected
@@ -5633,7 +5626,6 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .timingTicket = &timingTicket,
             .deferredBindlessSlotsWereUploaded = deferredTargets.bindless.slotsUploaded,
             .currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned,
-            .rayTraceMaterialContextSlotsGraphOwned = true,
             .causticEmissionTargetsGraphOwned = true,
             .surfelFrameConstantsGraphOwned = true,
             .shadowMaterialContextBatchGraphOwned = shadowMaterialContextBatchGraphOwned,

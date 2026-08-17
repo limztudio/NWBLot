@@ -896,20 +896,6 @@ bool RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(RayTraceMate
     return true;
 }
 
-bool RendererRayTracingSystem::uploadRayTraceMaterialContextSlots(Core::CommandList& commandList){
-    RayTraceMaterialContextSlots slots;
-    if(!snapshotRayTraceMaterialContextSlots(slots))
-        return false;
-
-    Core::Buffer* const slotsBuffer = rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get();
-    commandList.setBufferState(slotsBuffer, Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(slotsBuffer, &slots, sizeof(slots));
-    commandList.setBufferState(slotsBuffer, Core::ResourceStates::ConstantBuffer);
-    commandList.commitBarriers();
-    return true;
-}
-
 bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsHeapHandle(){
     if(!ensureRayTraceMaterialContextSlotsBuffer())
         return false;

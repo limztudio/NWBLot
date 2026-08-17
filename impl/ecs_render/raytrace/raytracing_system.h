@@ -293,8 +293,6 @@ public:
     // Resolve the frozen shared material-context heap slots after preflight has settled all backing-buffer capacities.
     // The shared graph retains this POD as an immutable upload blob before recording begins.
     [[nodiscard]] bool snapshotRayTraceMaterialContextSlots(RayTraceMaterialContextSlots& outSlots);
-    // Compatibility-only direct writer for callers outside the shared graph path.
-    [[nodiscard]] bool uploadRayTraceMaterialContextSlots(Core::CommandList& commandList);
     // Retain the exact preflight-gathered caustic AABB stream as an immutable graph blob. A valid empty result
     // authoritatively represents a frame without refractive emission targets.
     [[nodiscard]] bool retainPreparedCausticEmissionTargetUpload(

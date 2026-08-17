@@ -1342,18 +1342,19 @@ bool GpuTaskGraphCompiler::compile(
     trackedResourceStates.reserve(graph.taskCount());
     pendingEpilogueBarriers.reserve(graph.taskCount());
     initialOwnershipDependencies.reserve(graph.taskCount());
-    for(const GpuTaskId taskID : outAnalysis.topologicalOrder()){
-        GpuCompiledTask* compiledTask = nullptr;
-        for(GpuCompiledTask& candidate : outCompiledGraph.m_tasks){
-            if(candidate.task == taskID){
-                compiledTask = &candidate;
-                break;
-            }
-        }
-        if(!compiledTask){
+    // The construction pass appended one compiled task for each entry in this stable order, and no later phase
+    // mutates that vector. Preserve the prior fail-closed contract while avoiding a re-scan for every task.
+    const GraphicsVector<GpuTaskId>& topologicalOrder = outAnalysis.topologicalOrder();
+    for(usize taskIndex = 0u; taskIndex < topologicalOrder.size(); ++taskIndex){
+        const GpuTaskId taskID = topologicalOrder[taskIndex];
+        if(
+            taskIndex >= outCompiledGraph.m_tasks.size()
+            || outCompiledGraph.m_tasks[taskIndex].task != taskID
+        ){
             outCompiledGraph.reset();
             return false;
         }
+        GpuCompiledTask* const compiledTask = &outCompiledGraph.m_tasks[taskIndex];
 
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
         const GpuPhysicalQueueInfo* const taskQueue = outCompiledGraph.queueInfo(compiledTask->queue);

@@ -1175,6 +1175,7 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
     )
         return {};
     const GpuClearTextureTaskDesc formatValidation{
+        .destination = {},
         .valueType = GpuClearTextureTaskValueType::UInt,
     };
     if(!__hidden_gpu_task_graph::ClearTextureValueMatchesFormat(

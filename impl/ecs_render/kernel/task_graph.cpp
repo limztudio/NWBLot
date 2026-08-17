@@ -10770,13 +10770,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     const auto& device = graphics().getDevice();
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
     const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
-    const u32 transferFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Transfer);
     const bool dedicatedAsyncCompute = computeFamilyIndex != Limit<u32>::s_Max
         && computeFamilyIndex != graphicsFamilyIndex
-    ;
-    const bool dedicatedTransfer = transferFamilyIndex != Limit<u32>::s_Max
-        && transferFamilyIndex != graphicsFamilyIndex
-        && transferFamilyIndex != computeFamilyIndex
     ;
     const bool useLaggedLightingHistory = dedicatedAsyncCompute
         && features.frameLaggedAsyncLightingEnabled

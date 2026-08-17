@@ -357,6 +357,8 @@ bool ProjectTestbed::onStartup(){
         __hidden_runtime::s_PointLightIntensity,
         __hidden_runtime::s_PointLightRange
     );
+    if(!directionalLight.valid() || !pointLight.valid())
+        return false;
     NWB_ASSERT(directionalLight.valid());
     NWB_ASSERT(pointLight.valid());
 

@@ -1566,6 +1566,8 @@ void Device::runGarbageCollection(){
         if(queue){
             ScopedLock lock(queue->m_mutex);
             queue->updateLastFinishedID();
+            if(isDeviceLost())
+                return;
             queue->collectCompletedCommandBuffers();
         }
     }

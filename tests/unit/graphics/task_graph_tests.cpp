@@ -282,6 +282,7 @@ struct TransferOwnershipPair{
     const Graphics::GpuTaskResourceUse producerUses[] = {
         Graphics::GpuTaskResourceUse{
             .resource = texture,
+            .range = {},
             .requiredState = Graphics::ResourceStates::CopySource,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
@@ -289,6 +290,7 @@ struct TransferOwnershipPair{
     const Graphics::GpuTaskResourceUse consumerUses[] = {
         Graphics::GpuTaskResourceUse{
             .resource = texture,
+            .range = {},
             .requiredState = Graphics::ResourceStates::CopySource,
             .access = Graphics::GpuTaskResourceAccess::Read,
         },
@@ -738,7 +740,9 @@ TEST(GpuTaskGraph, CopyTextureTaskRequiresTypedTextureImports){
     ;
     const Graphics::GpuCopyTextureTaskRegion region{
         .source = source,
+        .sourceSlice = {},
         .destination = destination,
+        .destinationSlice = {},
     };
     EXPECT_FALSE(graph.addCopyTextureTask(
         desc,

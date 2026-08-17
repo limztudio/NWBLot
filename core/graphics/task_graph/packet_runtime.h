@@ -481,6 +481,20 @@ public:
         const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr,
         usize taskAcceptedCallbackCount = 0u
     )const;
+    // Records and submits one semantic late-recovery/finalization task whose compiled packet joins the accepted
+    // physical-queue frontier. The transaction supplies the exact current queue waits during submission; callers
+    // never assemble a renderer-local frontier token list or compiler packet range. Record or submit failure
+    // rejects the still-unaccepted task before returning false.
+    [[nodiscard]] bool recordAndSubmitAcceptedFrontierTask(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuNativePacketRecorder& recorder,
+        GpuRecordedGraph& recordedGraph,
+        GpuTaskId task,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuSubmissionPacketId* outFailedPacket = nullptr
+    )const;
     // Semantic companion to the packet-timing overload above.  It resolves timing tickets and one-shot native
     // pre-submit hooks through the current compiled graph, so packet splitting/merging remains compiler-owned.
     // Multiple timing bindings may target one packet only when they deliberately share the same timing ticket;

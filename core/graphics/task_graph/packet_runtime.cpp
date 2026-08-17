@@ -1644,6 +1644,82 @@ bool GpuTaskGraphSubmitter::submitTaskRangeInCompileOrder(
 }
 
 
+bool GpuTaskGraphSubmitter::recordAndSubmitAcceptedFrontierTask(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuNativePacketRecorder& recorder,
+    GpuRecordedGraph& recordedGraph,
+    const GpuTaskId task,
+    GpuGraphSubmissionTransaction& transaction,
+    Alloc::ScratchArena& scratchArena,
+    GpuSubmissionPacketId* const outFailedPacket
+)const{
+    if(outFailedPacket)
+        *outFailedPacket = {};
+
+    const auto rejectTask = [&]{
+        if(
+            compiledGraph.validFor(graph)
+            && transaction.validFor(compiledGraph)
+            && graph.validTask(task)
+            && compiledGraph.findTask(task)
+        )
+            transaction.rejectTask(graph, compiledGraph, task);
+    };
+    if(
+        !compiledGraph.validFor(graph)
+        || !transaction.validFor(compiledGraph)
+        || !graph.validTask(task)
+        || !compiledGraph.findTask(task)
+        || !compiledGraph.taskJoinsAcceptedQueueFrontier(task)
+        || !transaction.hasAcceptedPackets()
+    ){
+        rejectTask();
+        return false;
+    }
+
+    GpuSubmissionPacketId failedPacket;
+    if(!recorder.recordTaskRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        task,
+        task,
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )){
+        if(outFailedPacket)
+            *outFailedPacket = failedPacket;
+        rejectTask();
+        return false;
+    }
+
+    if(!submitTaskRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        task,
+        task,
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena,
+        &failedPacket
+    )){
+        if(outFailedPacket)
+            *outFailedPacket = failedPacket;
+        // submitPacket() normally rejected the packet already. Keep this idempotent closeout for validation
+        // failures that happen before packet traversal, so a renderer cannot strand an armed recovery task.
+        rejectTask();
+        return false;
+    }
+    return true;
+}
+
+
 bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderFromTasks(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,

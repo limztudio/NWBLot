@@ -37514,23 +37514,16 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     frameTransaction.prepareForRecovery();
     recoveryArmed = true;
     recoveryRetiresTiming = true;
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(submitter.recordAndSubmitAcceptedFrontierTask(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = recoveryPacket },
-        recordedGraph
-    ));
-    ASSERT_TRUE(recoveryRecorded);
-    ASSERT_TRUE(submitter.submitPacket(
-        graph,
-        compiledGraph,
+        recorder,
         recordedGraph,
-        recoveryPacket,
-        nullptr,
-        0u,
+        recoveryTask,
         transaction,
         scratchArena
     ));
+    ASSERT_TRUE(recoveryRecorded);
     EXPECT_TRUE(recoveryAccepted);
     EXPECT_FALSE(recoveryDiscarded);
     EXPECT_FALSE(recoveryArmed);
@@ -38017,27 +38010,20 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_EQ(recoveryWaitTokens[0u].physicalQueueIndex, transferQueue.index);
     EXPECT_EQ(recoveryWaitTokens[0u].deviceGeneration, transferQueue.deviceGeneration);
 
-    ASSERT_TRUE(recorder.recordPacket(
-        graph,
-        compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = recoveryPacket },
-        recordedGraph
-    ));
-    EXPECT_TRUE(recoveryRecorded);
     // The preceding rejected suffix also carried the Transfer dependency. Clear that capture so this assertion
-    // observes only the late recovery submitter call, after it has assembled its accepted-frontier waits.
+    // observes only the late recovery helper's submitter call, after it has assembled its accepted-frontier waits.
     device.clearSubmissionWaitTokensForTesting();
     device.armSubmissionWaitCaptureForTesting();
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.recordAndSubmitAcceptedFrontierTask(
         graph,
         compiledGraph,
+        recorder,
         recordedGraph,
-        recoveryPacket,
-        nullptr,
-        0u,
+        recoveryTask,
         transaction,
         scratchArena
     ));
+    EXPECT_TRUE(recoveryRecorded);
     const QueueSubmissionToken recoveryToken = transaction.packetToken(recoveryPacket);
     ASSERT_TRUE(recoveryToken.valid());
     ASSERT_EQ(device.lastSubmissionWaitTokenCountForTesting(graphicsQueue), 1u);

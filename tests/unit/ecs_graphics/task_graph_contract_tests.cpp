@@ -151,6 +151,26 @@ TEST(EcsGraphics, OnlyTerminalPresentationRetainsAPacketIdentity){
 }
 
 
+// A late recovery task owns its packet range and accepted-frontier waits in the generic runtime. Keep the renderer
+// limited to arming its timing payload and handling device-recreation policy rather than reconstructing record/
+// submit/reject sequencing around a compiler packet.
+TEST(EcsGraphics, FrameRecoveryUsesGraphRuntimeFrontierHelper){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", systemSource));
+    const AStringView system(systemSource.data(), systemSource.size());
+
+    EXPECT_TRUE(ContainsText(system, "recordAndSubmitAcceptedFrontierTask("));
+    EXPECT_TRUE(ContainsText(system, "deferredRecorder,\n            m_deferredLightingRecordedGraph,\n            m_deferredFrameRecoveryTask"));
+    EXPECT_FALSE(ContainsText(system, "deferredFrameRecoveryPacketRange"));
+    EXPECT_FALSE(ContainsText(system, "const auto discardFrameRecovery"));
+    EXPECT_FALSE(ContainsText(system, "failed to late-record deferred frame recovery packet"));
+    EXPECT_FALSE(ContainsText(system, "deferred frame recovery submission was rejected"));
+}
+
+
 // The graph-owned ImGui terminal task must record from declaration-time data. Re-reading ImGui's mutable command
 // arrays after the task declares its sampled textures would allow an undeclared bindless access into the packet.
 TEST(EcsGraphics, UiPresentationSnapshotsLateRecordInputs){

@@ -2402,11 +2402,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredSurfelGiCounterReadbackTask,
             m_deferredSurfelGiCounterReadbackTask
         );
-    const Core::GpuSubmissionPacketRange deferredFrameRecoveryPacketRange =
-        m_deferredLightingCompiledGraph.packetRangeForTasks(
-            m_deferredFrameRecoveryTask,
-            m_deferredFrameRecoveryTask
-        );
     const Core::GpuSubmissionPacketRange effectsThroughPresentationPacketRange =
         m_deferredLightingCompiledGraph.packetRangeForTasks(
             m_deferredShadowVisibilityTask,
@@ -2663,8 +2658,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             !deferredLaggedLightingHistoryPacketRange.valid()
             || deferredLaggedLightingHistoryPacketRange.packetCount != 1u
         ))
-        || !deferredFrameRecoveryPacketRange.valid()
-        || deferredFrameRecoveryPacketRange.packetCount != 1u
         || !effectsThroughPresentationPacketRange.valid()
         || !deferredNormalPacketRange.valid()
         || deferredNormalPacketRange.packetCount
@@ -3485,76 +3478,35 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             frameTimingTransaction.discard();
             return false;
         }
+        if(
+            !m_deferredLightingTaskGraphValid
+            || !m_deferredFrameRecoveryTask.valid()
+            || !m_deferredLightingCompiledGraph.findTask(m_deferredFrameRecoveryTask)
+        ){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred frame recovery task was unavailable"));
+            m_deferredFrameRecoveryArmed = false;
+            m_deferredFrameRecoveryRetiresTiming = false;
+            frameTimingTransaction.discard();
+            return false;
+        }
         const bool retireTiming = frameTimingTransaction.needsRetirement();
         if(retireTiming)
             frameTimingTransaction.prepareForRecovery();
         m_deferredFrameRecoveryArmed = true;
         m_deferredFrameRecoveryRetiresTiming = retireTiming;
-        const auto discardFrameRecovery = [&](){
-            if(
-                m_deferredLightingTaskGraphValid
-                && m_deferredLightingCompiledGraph.findTask(m_deferredFrameRecoveryTask)
-            ){
-                m_deferredLightingSubmissionTransaction.rejectTask(
-                    m_deferredLightingTaskGraph,
-                    m_deferredLightingCompiledGraph,
-                    m_deferredFrameRecoveryTask
-                );
-            }
-            else{
-                m_deferredFrameRecoveryArmed = false;
-                m_deferredFrameRecoveryRetiresTiming = false;
-                frameTimingTransaction.discard();
-            }
-        };
-        if(
-            !m_deferredLightingTaskGraphValid
-            || !m_deferredFrameRecoveryTask.valid()
-            || !m_deferredLightingCompiledGraph.findTask(m_deferredFrameRecoveryTask)
-            || !deferredFrameRecoveryPacketRange.valid()
-            || !deferredFrameRecoveryQueue
-            || deferredFrameRecoveryQueue->queueClass != Core::CommandQueue::Graphics
-            || !m_deferredLightingCompiledGraph.taskJoinsAcceptedQueueFrontier(m_deferredFrameRecoveryTask)
-            || !m_deferredLightingSubmissionTransaction.hasAcceptedPackets()
-        ){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred frame recovery packet was unavailable"));
-            discardFrameRecovery();
-            return false;
-        }
-
-        const bool recoveryRecorded = deferredRecorder.recordTaskRangeInCompileOrder(
-            m_deferredLightingTaskGraph,
-            m_deferredLightingCompiledGraph,
-            m_deferredFrameRecoveryTask,
-            m_deferredFrameRecoveryTask,
-            nullptr,
-            0u,
-            m_deferredLightingRecordedGraph
-        );
-        if(!recoveryRecorded){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to late-record deferred frame recovery packet"));
-            discardFrameRecovery();
-            return false;
-        }
-
         Core::Alloc::ScratchArena recoveryScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter submitter(device);
-        const bool recoveryAccepted = submitter.submitTaskRangeInCompileOrder(
+        const bool recoveryAccepted = submitter.recordAndSubmitAcceptedFrontierTask(
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph,
+            deferredRecorder,
             m_deferredLightingRecordedGraph,
             m_deferredFrameRecoveryTask,
-            m_deferredFrameRecoveryTask,
-            nullptr,
-            0u,
-            nullptr,
-            0u,
             m_deferredLightingSubmissionTransaction,
             recoveryScratchArena
         );
         if(!recoveryAccepted){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred frame recovery submission was rejected"));
-            discardFrameRecovery();
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred frame recovery record/submission was rejected"));
             return false;
         }
         return true;

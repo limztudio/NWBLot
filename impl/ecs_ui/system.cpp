@@ -504,6 +504,12 @@ bool UiSystem::ensureRenderCommandList(){
 bool UiSystem::prepareResources(Core::Framebuffer* framebuffer){
     if(m_taskGraphPresentationPrepared)
         return true;
+
+    // A world without RendererSystem still has a complete immutable overlay snapshot, so prefer the standalone
+    // graph path. An arbitrary ImGui callback cannot be retained safely; only that exceptional case falls through
+    // to the direct raster compatibility preparation below.
+    if(prepareTaskGraphPresentation(framebuffer))
+        return true;
     return prepareFrameResources(framebuffer, false);
 }
 
@@ -839,13 +845,11 @@ bool UiSystem::declareTaskGraphDrawUploads(
         !m_taskGraphDrawUploadsPrepared
         || !vertexBuffer.valid()
         || !indexBuffer.valid()
-        || !previousTask.valid()
         || m_taskGraphVertexUpload.empty()
         || m_taskGraphIndexUpload.empty()
     )
         return false;
 
-    const Core::GpuTaskId dependencies[] = { previousTask };
     const auto declareUpload = [&](const Name& identity,
                                    const AStringView label,
                                    const UiTextureUploadVector& bytes,
@@ -864,8 +868,9 @@ bool UiSystem::declareTaskGraphDrawUploads(
             .setMarkerLabel(label)
             .setQueue(__hidden_ui::UploadQueueRequest())
             .setScheduling(__hidden_ui::UploadScheduling(bytes.size()))
-            .setDependencies(dependencies, LengthOf(dependencies))
         ;
+        if(previousTask.valid())
+            desc.setDependencies(&previousTask, 1u);
         return graph.addUploadBufferTask(
             desc,
             Core::GpuUploadBufferTaskDesc{
@@ -949,7 +954,6 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         || m_taskGraphPresentationClaimed
         || !framebuffer
         || !backbuffer.valid()
-        || !previousTask.valid()
     )
         return {};
 
@@ -985,8 +989,9 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         }
 
         Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> dependencies(scratchArena);
-        dependencies.reserve(1u + uploadTasks.size());
-        dependencies.push_back(previousTask);
+        dependencies.reserve((previousTask.valid() ? 1u : 0u) + uploadTasks.size());
+        if(previousTask.valid())
+            dependencies.push_back(previousTask);
         for(const Core::GpuTaskId task : uploadTasks)
             dependencies.push_back(task);
 
@@ -1081,8 +1086,9 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
     }
 
     Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> dependencies(scratchArena);
-    dependencies.reserve(1u + uploadTasks.size());
-    dependencies.push_back(previousTask);
+    dependencies.reserve((previousTask.valid() ? 1u : 0u) + uploadTasks.size());
+    if(previousTask.valid())
+        dependencies.push_back(previousTask);
     for(const Core::GpuTaskId task : uploadTasks)
         dependencies.push_back(task);
 
@@ -1173,6 +1179,72 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
     else
         m_textureUploadBatch.reset();
     return task;
+}
+
+bool UiSystem::submitStandaloneTaskGraphPresentation(Core::Framebuffer* const framebuffer){
+    if(
+        !framebuffer
+        || !m_frameFinished
+        || !m_taskGraphPresentationPrepared
+        || !m_taskGraphPresentationHasWork
+    )
+        return false;
+
+    const Core::GpuPhysicalQueueId graphicsQueue =
+        m_graphics.getDevice().getPrimaryPhysicalQueue(Core::CommandQueue::Graphics)
+    ;
+    if(!graphicsQueue.valid())
+        return false;
+
+    // RendererSystem may already have declared this optional tail before a later graph packet rejected. The accepted
+    // path resets m_frameFinished before UiSystem::render() reaches here, so a still-live claim is necessarily an
+    // abandoned declaration and can be rebuilt as this independent graph.
+    m_taskGraphPresentationClaimed = false;
+    m_taskGraphPresentationGraphGeneration = 0u;
+    struct StandalonePresentationContext{
+        UiSystem* ui = nullptr;
+        Core::Framebuffer* framebuffer = nullptr;
+    };
+    StandalonePresentationContext context{
+        .ui = this,
+        .framebuffer = framebuffer,
+    };
+    Core::QueueSubmissionToken submissionToken;
+    const bool submitted = m_graphics.submitStandaloneTaskGraph(
+        &context,
+        [](void* const rawContext, Core::GpuTaskGraph& graph){
+            StandalonePresentationContext* const context =
+                static_cast<StandalonePresentationContext*>(rawContext)
+            ;
+            if(!context || !context->ui || !context->framebuffer)
+                return Core::GpuTaskId{};
+
+            const Core::GpuGraphResourceId backbuffer = graph.importHazardDomain(
+                Core::GpuGraphResourceDesc{}
+                    .setIdentity(Name("ui.imgui_standalone_presentation.backbuffer"))
+                    .setMarkerLabel("Standalone ImGui Presentation Back Buffer")
+                    .setType(Core::GpuGraphResourceType::HazardDomain)
+            );
+            if(!backbuffer.valid())
+                return Core::GpuTaskId{};
+            return context->ui->declareTaskGraphPresentation(
+                graph,
+                context->framebuffer,
+                backbuffer,
+                {}
+            );
+        },
+        submissionToken,
+        graphicsQueue
+    );
+    if(submitted && submissionToken.valid())
+        return true;
+
+    // A failed standalone attempt must leave the direct compatibility path able to consume the live ImGui list.
+    // The task graph itself discards incomplete immutable upload work; clearing this claim only releases graph IDs.
+    m_taskGraphPresentationClaimed = false;
+    m_taskGraphPresentationGraphGeneration = 0u;
+    return false;
 }
 
 Core::GpuTaskId UiSystem::declareStandaloneTextureUploadGraph(Core::GpuTaskGraph& graph){
@@ -1431,8 +1503,17 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // A graph declaration is not an accepted submission.  If the renderer abandoned/rebuilt its graph this frame,
-    // retain the ordinary direct fallback rather than suppressing the overlay and leaving pending textures stale.
+    // A renderer-owned declaration is not necessarily an accepted submission. If it was abandoned, or this world
+    // has no RendererSystem at all, rebuild the immutable overlay as one standalone graph before considering the
+    // direct compatibility raster path.
+    if(m_taskGraphPresentationPrepared && m_taskGraphPresentationHasWork){
+        if(submitStandaloneTaskGraphPresentation(framebuffer))
+            return;
+        NWB_LOGGER_WARNING(NWB_TEXT("UiSystem: standalone graph presentation failed; retaining direct raster fallback"));
+    }
+
+    // Custom callbacks cannot be represented by an immutable graph payload. Their raster path remains direct, but
+    // requested texture updates have already moved to their own standalone graph transaction.
     if(!submitLegacyTextureRequests(*drawData))
         return;
 

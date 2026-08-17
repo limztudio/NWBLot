@@ -160,6 +160,7 @@ private:
     void beginFrame(f32 delta);
     void finishFrame();
     [[nodiscard]] bool prepareFrameResources(Core::Framebuffer* framebuffer, bool graphOwnsUploads);
+    [[nodiscard]] bool submitStandaloneTaskGraphPresentation(Core::Framebuffer* framebuffer);
     [[nodiscard]] bool recordTaskGraphPresentation(Core::CommandList& commandList, Core::Framebuffer* framebuffer);
     [[nodiscard]] bool recordTaskGraphUploadCompletion()const;
     void confirmTaskGraphPresentationSubmission()noexcept;

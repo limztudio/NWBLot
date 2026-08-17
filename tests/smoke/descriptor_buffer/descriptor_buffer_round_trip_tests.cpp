@@ -38401,6 +38401,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
 TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAcceptsTerminalCompletion){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
+    const GpuPhysicalQueueId graphicsQueue = BackendQueueId(device, CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
 
     const TextureHandle destination = graphics.createTexture(
         TextureDesc()
@@ -38433,7 +38435,8 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAc
     EXPECT_FALSE(graphics.submitStandaloneTaskGraph(
         &rejectedContext,
         &DeclareStandaloneGraphTextureUpload,
-        rejectedToken
+        rejectedToken,
+        graphicsQueue
     ));
     EXPECT_FALSE(rejectedToken.valid());
     EXPECT_TRUE(rejectedRecorded);
@@ -38456,7 +38459,8 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAc
     ASSERT_TRUE(graphics.submitStandaloneTaskGraph(
         &acceptedContext,
         &DeclareStandaloneGraphTextureUpload,
-        acceptedToken
+        acceptedToken,
+        graphicsQueue
     ));
     EXPECT_TRUE(acceptedToken.valid());
     EXPECT_EQ(acceptedToken.queue, CommandQueue::Graphics);

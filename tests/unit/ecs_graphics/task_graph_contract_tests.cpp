@@ -209,6 +209,9 @@ TEST(EcsGraphics, UiLegacyTextureFallbackUsesStandaloneGraphUpload){
     EXPECT_TRUE(ContainsText(graphics, "Graphics::submitStandaloneTaskGraph"));
     EXPECT_TRUE(ContainsText(ui, "StandaloneTextureUploadCompletionTask"));
     EXPECT_TRUE(ContainsText(ui, "declareStandaloneTextureUploadGraph"));
+    EXPECT_TRUE(ContainsText(ui, "submitStandaloneTaskGraphPresentation"));
+    EXPECT_TRUE(ContainsText(ui, "Standalone ImGui Presentation Back Buffer"));
+    EXPECT_TRUE(ContainsText(ui, "if(prepareTaskGraphPresentation(framebuffer))"));
 
     const usize legacySubmitOffset = ui.find("bool UiSystem::submitLegacyTextureRequests");
     const usize renderOffset = ui.find("void UiSystem::render", legacySubmitOffset);
@@ -221,6 +224,24 @@ TEST(EcsGraphics, UiLegacyTextureFallbackUsesStandaloneGraphUpload){
     EXPECT_FALSE(ContainsText(ui, "m_prepareCommandList"));
     EXPECT_FALSE(ContainsText(uiTextures, "recordTextureUpload"));
     EXPECT_TRUE(ContainsText(uiTextures, "if(previousTask.valid())"));
+
+    const usize presentationDeclareOffset = ui.find("Core::GpuTaskId UiSystem::declareTaskGraphPresentation");
+    const usize standaloneTextureOffset = ui.find("Core::GpuTaskId UiSystem::declareStandaloneTextureUploadGraph");
+    ASSERT_NE(presentationDeclareOffset, AStringView::npos);
+    ASSERT_NE(standaloneTextureOffset, AStringView::npos);
+    const AStringView presentationDeclare = ui.substr(
+        presentationDeclareOffset,
+        standaloneTextureOffset - presentationDeclareOffset
+    );
+    EXPECT_FALSE(ContainsText(presentationDeclare, "|| !previousTask.valid()"));
+    EXPECT_TRUE(ContainsText(presentationDeclare, "if(previousTask.valid())"));
+
+    const AStringView renderBody = ui.substr(renderOffset);
+    const usize standalonePresentationOffset = renderBody.find("submitStandaloneTaskGraphPresentation(framebuffer)");
+    const usize directTextureFallbackOffset = renderBody.find("submitLegacyTextureRequests(*drawData)");
+    ASSERT_NE(standalonePresentationOffset, AStringView::npos);
+    ASSERT_NE(directTextureFallbackOffset, AStringView::npos);
+    EXPECT_LT(standalonePresentationOffset, directTextureFallbackOffset);
 }
 
 

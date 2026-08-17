@@ -19,6 +19,7 @@ class BaselineProfile:
     description: str
     capture_freeze_frame: int = 0
     capture_ready_log: str = ""
+    fixed_delta_seconds: float = 0.0
 
 
 PROFILES: Mapping[str, BaselineProfile] = {
@@ -39,6 +40,7 @@ PROFILES: Mapping[str, BaselineProfile] = {
         description="Prepared transparent AVBOIT baseline with immutable material streams.",
         capture_freeze_frame=96,
         capture_ready_log="TransparentMultiSmokeProject: renderer baseline capture ready after",
+        fixed_delta_seconds=1.0 / 60.0,
     ),
     "static-csg": BaselineProfile(
         target="nwb_csg_visible_smoke",
@@ -57,6 +59,7 @@ PROFILES: Mapping[str, BaselineProfile] = {
         description="Runtime-skinning and CSG interval-production baseline.",
         capture_freeze_frame=96,
         capture_ready_log="CsgSkinnedVisibleSmokeProject: renderer baseline capture ready after",
+        fixed_delta_seconds=1.0 / 60.0,
     ),
     "soft-shadows": BaselineProfile(
         target="nwb_soft_shadow_test_smoke",

@@ -170,6 +170,22 @@ private:
         return s_captureFrame;
     }
 
+    [[nodiscard]] static f32 rendererBaselineFixedDelta(){
+        static const f32 s_fixedDelta = [](){
+            f32 configuredDelta = 0.0f;
+            if(
+                !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS", configuredDelta)
+                || !IsFinite(configuredDelta)
+                || configuredDelta <= 0.0f
+                || configuredDelta > 1.0f
+            ){
+                return 0.0f;
+            }
+            return configuredDelta;
+        }();
+        return s_fixedDelta;
+    }
+
 
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.threadPool);
@@ -424,7 +440,8 @@ public:
             return true;
         }
 
-        const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
+        const f32 fixedDelta = rendererBaselineFixedDelta();
+        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
         m_fpsProbe.recordFrame(safeDelta);
         m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_CutterAnimationSpeed;
         const SIMDVector receiverRotation = BuildReceiverRotation(m_animationTime);

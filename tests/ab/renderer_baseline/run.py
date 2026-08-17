@@ -275,6 +275,8 @@ def capture_scene(
     environment.update(frozen_environment)
     if profile.capture_freeze_frame != 0:
         environment["NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"] = str(profile.capture_freeze_frame)
+    if profile.fixed_delta_seconds != 0.0:
+        environment["NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"] = f"{profile.fixed_delta_seconds:.9g}"
     backend = None
     logserver_process = None
     app_process = None
@@ -362,6 +364,7 @@ def manifest_payload(
         "window_title": profile.window_title,
         "capture_mode": capture_mode(profile),
         "capture_freeze_frame": profile.capture_freeze_frame,
+        "fixed_delta_seconds": profile.fixed_delta_seconds,
         "settle_seconds": args.settle_seconds,
         "gpu_validation": args.gpu_validation,
         "runtime_directory": str(args.runtime_dir),
@@ -392,6 +395,7 @@ def load_reference(
     settle_seconds: float,
     gpu_validation: bool,
     capture_freeze_frame: int,
+    fixed_delta_seconds: float,
 ) -> Tuple[Mapping[str, object], Path]:
     manifest_path = reference_directory / "manifest.json"
     try:
@@ -419,6 +423,8 @@ def load_reference(
         raise SmokeFailure("baseline capture mode differs from the candidate capture")
     if manifest.get("capture_freeze_frame") != capture_freeze_frame:
         raise SmokeFailure("baseline capture freeze frame differs from the candidate capture")
+    if manifest.get("fixed_delta_seconds") != fixed_delta_seconds:
+        raise SmokeFailure("baseline fixed simulation delta differs from the candidate capture")
     capture_name = manifest.get("capture_file")
     if not isinstance(capture_name, str) or not capture_name:
         raise SmokeFailure(f"baseline manifest has no capture filename: {manifest_path}")
@@ -456,6 +462,7 @@ def run(args: argparse.Namespace) -> int:
             args.settle_seconds,
             args.gpu_validation,
             profile.capture_freeze_frame,
+            profile.fixed_delta_seconds,
         )
 
     if reference_capture is None and not source_worktree_clean():
@@ -561,18 +568,21 @@ def run_self_test() -> int:
             "settle_seconds": 4.0,
             "capture_mode": "settled",
             "capture_freeze_frame": 0,
+            "fixed_delta_seconds": 0.0,
             "source_revision": "test-reference",
         }
         write_json(reference_directory / "manifest.json", manifest)
-        loaded_manifest, loaded_capture = load_reference(reference_directory, "opaque-texture", {}, 4.0, False, 0)
+        loaded_manifest, loaded_capture = load_reference(reference_directory, "opaque-texture", {}, 4.0, False, 0, 0.0)
         assert loaded_manifest["source_revision"] == "test-reference"
         assert loaded_capture == reference_image
         transparent_profile = get_profile("transparent-avboit")
         assert transparent_profile.capture_freeze_frame == 96
         assert transparent_profile.settle_seconds == 0.75
+        assert transparent_profile.fixed_delta_seconds == 1.0 / 60.0
         skinned_csg_profile = get_profile("skinned-csg")
         assert skinned_csg_profile.capture_freeze_frame == 96
         assert skinned_csg_profile.settle_seconds == 0.75
+        assert skinned_csg_profile.fixed_delta_seconds == 1.0 / 60.0
         difference = compare_bmp_rgb(reference_image, candidate_image, root / "difference.bmp")
         assert difference.width == 2 and difference.height == 1
         assert difference.max_abs == 3

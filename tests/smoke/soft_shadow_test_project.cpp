@@ -132,6 +132,38 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;                  // clamp hu
 
 class SoftShadowTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
+    [[nodiscard]] static u32 rendererBaselineCaptureFreezeFrame(){
+        static const u32 s_captureFrame = [](){
+            f32 configuredFrame = 0.0f;
+            if(
+                !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", configuredFrame)
+                || !IsFinite(configuredFrame)
+                || configuredFrame < 1.0f
+            ){
+                return 0u;
+            }
+            return static_cast<u32>(Min(configuredFrame, 1000000.0f));
+        }();
+        return s_captureFrame;
+    }
+
+    [[nodiscard]] static f32 rendererBaselineFixedDelta(){
+        static const f32 s_fixedDelta = [](){
+            f32 configuredDelta = 0.0f;
+            if(
+                !ReadSmokeEnvironmentF32("NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS", configuredDelta)
+                || !IsFinite(configuredDelta)
+                || configuredDelta <= 0.0f
+                || configuredDelta > 1.0f
+            ){
+                return 0.0f;
+            }
+            return configuredDelta;
+        }();
+        return s_fixedDelta;
+    }
+
+
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("SoftShadowTestSmokeProject"));
 
@@ -322,13 +354,30 @@ public:
     }
 
     virtual void onShutdown()override{
+        m_context.graphics.setFrameSubmissionSuspended(false);
         m_context.input.removeHandler(m_arrowYawInput);
         destroyWorld();
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SoftShadowTestSmokeProject: shutdown"));
     }
 
     virtual bool onUpdate(const f32 delta)override{
-        const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
+        const u32 captureFreezeFrame = rendererBaselineCaptureFreezeFrame();
+        if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
+            if(!m_rendererBaselineCapturePaused){
+                // Soft-shadow history must stop on a known accepted frame. This test-only control freezes the
+                // smoke loop after the requested history phase without adding a runtime renderer override.
+                m_context.graphics.setFrameSubmissionSuspended(true);
+                m_rendererBaselineCapturePaused = true;
+                NWB_LOGGER_ESSENTIAL_INFO(
+                    NWB_TEXT("SoftShadowTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"),
+                    m_rendererBaselineRenderedFrameCount
+                );
+            }
+            return true;
+        }
+
+        const f32 fixedDelta = rendererBaselineFixedDelta();
+        const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
         m_fpsProbe.recordFrame(safeDelta);
         // Yaw selection: 1) NWB_SOFT_SHADOW_TEST_SPIN_ANGLE env freeze (pins one orientation); 2) manual arrow scrub
         // (latches off auto-spin the moment Left/Right is first pressed); 3) auto-spin.
@@ -337,6 +386,7 @@ public:
         spinCasters();
         updateWindowTitle();
         m_world->tick(safeDelta);
+        ++m_rendererBaselineRenderedFrameCount;
         return true;
     }
 
@@ -368,6 +418,8 @@ private:
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("SoftShadowTestSmokeProject") };
     NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;
+    u32 m_rendererBaselineRenderedFrameCount = 0u;
+    bool m_rendererBaselineCapturePaused = false;
 };
 
 

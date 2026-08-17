@@ -39,7 +39,8 @@ pinned temporal phase. `transparent-avboit` and `skinned-csg` also set the test-
 `NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS=1/60`, so a fixed 96-frame capture advances time-scaled animation by the
 same amount on every run. The caustic profile uses the same control with a fixed 360-frame warm-up, replacing its
 old wall-clock-only temporal settle. Surfel GI also uses the fixed 360-frame/`1/60` boundary. Other profiles retain
-their documented fixed settle duration until they receive an equally explicit temporal capture point.
+their documented fixed settle duration until they receive an equally explicit temporal capture point. The soft-shadow
+profile now uses the same 360-frame/`1/60` test-only boundary for its temporal shadow history.
 
 Available profiles cover opaque sampled images, transparent AVBOIT, static/skinned CSG, soft shadows, caustics,
 surfel GI, and the skinned stress scene. Frame-lagged async lighting and dedicated-Transfer evidence retain their

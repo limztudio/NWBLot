@@ -591,6 +591,10 @@ def run_self_test() -> int:
         assert surfel_profile.capture_freeze_frame == 360
         assert surfel_profile.settle_seconds == 0.75
         assert surfel_profile.fixed_delta_seconds == 1.0 / 60.0
+        soft_shadow_profile = get_profile("soft-shadows")
+        assert soft_shadow_profile.capture_freeze_frame == 360
+        assert soft_shadow_profile.settle_seconds == 0.75
+        assert soft_shadow_profile.fixed_delta_seconds == 1.0 / 60.0
         difference = compare_bmp_rgb(reference_image, candidate_image, root / "difference.bmp")
         assert difference.width == 2 and difference.height == 1
         assert difference.max_abs == 3

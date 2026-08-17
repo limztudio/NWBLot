@@ -48,13 +48,67 @@ FORBIDDEN_LOG_MESSAGES = (
     "lagged lighting-history capture submission was rejected",
 )
 
+# A successful target run has exactly this accepted lifecycle.  Keep the sequence as data so the live poller and
+# the no-Vulkan self-test use the same verdict rather than independently counting markers.
+LAGGED_LIGHTING_LIFECYCLE = (
+    ("bootstrap", BOOTSTRAP_ACCEPTED),
+    ("active history", ACTIVE_HISTORY_ACCEPTED),
+    ("current frame", CURRENT_FRAME_ACCEPTED),
+    ("bootstrap", BOOTSTRAP_ACCEPTED),
+    ("active history", ACTIVE_HISTORY_ACCEPTED),
+)
+
 
 class DedicatedComputeUnavailable(SmokeSkip):
     """The application uses its Graphics queue route rather than the opt-in async topology."""
 
 
-def marker_count(log_text: str, marker: str) -> int:
-    return log_text.count(marker)
+def accepted_lifecycle_events(log_text: str) -> tuple[str, ...]:
+    """Return accepted lifecycle markers in log order, including repeated transition types."""
+    occurrences: list[tuple[int, str]] = []
+    for event_name, marker in (
+        ("bootstrap", BOOTSTRAP_ACCEPTED),
+        ("active history", ACTIVE_HISTORY_ACCEPTED),
+        ("current frame", CURRENT_FRAME_ACCEPTED),
+    ):
+        offset = 0
+        while True:
+            found = log_text.find(marker, offset)
+            if found < 0:
+                break
+            occurrences.append((found, event_name))
+            offset = found + len(marker)
+
+    occurrences.sort(key=lambda occurrence: occurrence[0])
+    return tuple(event_name for _, event_name in occurrences)
+
+
+def validate_lifecycle_order(log_text: str) -> tuple[str, ...]:
+    """Reject an out-of-order or duplicated accepted lifecycle event."""
+    expected_events = tuple(event_name for event_name, _ in LAGGED_LIGHTING_LIFECYCLE)
+    events = accepted_lifecycle_events(log_text)
+    allowed_prefix = expected_events[:len(events)]
+    if events != allowed_prefix:
+        raise SmokeFailure(
+            "frame-lagged async-lighting smoke observed an invalid accepted lifecycle: "
+            f"expected prefix {expected_events}, observed {events}"
+        )
+    return events
+
+
+def require_lifecycle_stage(log_text: str, expected_event_count: int) -> tuple[str, ...]:
+    """Require a valid accepted lifecycle to have reached a specific stage."""
+    if expected_event_count < 0 or expected_event_count > len(LAGGED_LIGHTING_LIFECYCLE):
+        raise ValueError(f"invalid expected lifecycle event count: {expected_event_count}")
+
+    expected_events = tuple(event_name for event_name, _ in LAGGED_LIGHTING_LIFECYCLE)
+    events = validate_lifecycle_order(log_text)
+    if len(events) < expected_event_count:
+        raise SmokeFailure(
+            "frame-lagged async-lighting smoke has not reached the required accepted lifecycle stage: "
+            f"expected {expected_events[:expected_event_count]}, observed {events}"
+        )
+    return events
 
 
 def reject_forbidden_messages(log_text: str) -> None:
@@ -63,13 +117,12 @@ def reject_forbidden_messages(log_text: str) -> None:
         raise SmokeFailure(f"frame-lagged async-lighting smoke found forbidden log messages: {rejected}")
 
 
-def wait_for_marker(
+def wait_for_lifecycle_stage(
     process,
     log_directory: Path,
     log_baseline: Mapping[Path, int],
     log_pattern: str,
-    marker: str,
-    expected_count: int,
+    expected_event_count: int,
     timeout_seconds: float,
     stage: str,
 ) -> str:
@@ -84,12 +137,15 @@ def wait_for_marker(
                 "because this adapter has no dedicated AsyncCompute lane"
             )
         reject_forbidden_messages(latest_log)
-        if marker_count(latest_log, marker) >= expected_count:
+        events = validate_lifecycle_order(latest_log)
+        if len(events) >= expected_event_count:
             return latest_log
         time.sleep(0.1)
 
+    expected_events = tuple(event_name for event_name, _ in LAGGED_LIGHTING_LIFECYCLE)
     raise SmokeFailure(
-        f"timed out {stage}: expected {expected_count} occurrence(s) of '{marker}'\n{latest_log[-4000:]}"
+        f"timed out {stage}: expected accepted lifecycle prefix {expected_events[:expected_event_count]}\n"
+        f"{latest_log[-4000:]}"
     )
 
 
@@ -171,47 +227,52 @@ def run(args: argparse.Namespace) -> int:
         if not window:
             raise SmokeFailure(f"lagged-lighting smoke did not expose the expected window '{args.window_title}'")
 
-        final_log = wait_for_marker(
+        final_log = wait_for_lifecycle_stage(
             app_process,
             log_directory,
             log_baseline,
             log_pattern,
-            ACTIVE_HISTORY_ACCEPTED,
             1,
             args.startup_timeout,
+            "while waiting for the first accepted bootstrap",
+        )
+        final_log = wait_for_lifecycle_stage(
+            app_process,
+            log_directory,
+            log_baseline,
+            log_pattern,
+            2,
+            args.transition_timeout,
             "while waiting for the first accepted history use",
         )
 
         capture_backend.send_named_key(window, "F1")
-        final_log = wait_for_marker(
+        final_log = wait_for_lifecycle_stage(
             app_process,
             log_directory,
             log_baseline,
             log_pattern,
-            CURRENT_FRAME_ACCEPTED,
-            1,
+            3,
             args.transition_timeout,
             "while waiting for the accepted current-frame path",
         )
 
         capture_backend.send_named_key(window, "F1")
-        final_log = wait_for_marker(
+        final_log = wait_for_lifecycle_stage(
             app_process,
             log_directory,
             log_baseline,
             log_pattern,
-            BOOTSTRAP_ACCEPTED,
-            2,
+            4,
             args.transition_timeout,
             "while waiting for the second accepted bootstrap",
         )
-        final_log = wait_for_marker(
+        final_log = wait_for_lifecycle_stage(
             app_process,
             log_directory,
             log_baseline,
             log_pattern,
-            ACTIVE_HISTORY_ACCEPTED,
-            2,
+            5,
             args.transition_timeout,
             "while waiting for the second accepted history use",
         )
@@ -233,9 +294,7 @@ def run(args: argparse.Namespace) -> int:
             "because this adapter has no dedicated AsyncCompute lane"
         )
     reject_forbidden_messages(final_log)
-    for marker, count in ((BOOTSTRAP_ACCEPTED, 2), (ACTIVE_HISTORY_ACCEPTED, 2), (CURRENT_FRAME_ACCEPTED, 1)):
-        if marker_count(final_log, marker) < count:
-            raise SmokeFailure(f"lagged-lighting smoke completed without {count} occurrence(s) of '{marker}'")
+    require_lifecycle_stage(final_log, len(LAGGED_LIGHTING_LIFECYCLE))
     print("frame-lagged async-lighting smoke passed: bootstrap -> active history -> current frame -> bootstrap -> active history")
     return 0
 
@@ -248,9 +307,37 @@ def run_self_test() -> int:
         f"{BOOTSTRAP_ACCEPTED} (target generation 7)",
         f"{ACTIVE_HISTORY_ACCEPTED} (target generation 7)",
     ))
-    assert marker_count(log, BOOTSTRAP_ACCEPTED) == 2
-    assert marker_count(log, ACTIVE_HISTORY_ACCEPTED) == 2
-    assert marker_count(log, CURRENT_FRAME_ACCEPTED) == 1
+    assert accepted_lifecycle_events(log) == tuple(event_name for event_name, _ in LAGGED_LIGHTING_LIFECYCLE)
+    assert validate_lifecycle_order(log) == accepted_lifecycle_events(log)
+    assert require_lifecycle_stage(log, len(LAGGED_LIGHTING_LIFECYCLE)) == accepted_lifecycle_events(log)
+    for invalid_log in (
+        "\n".join((
+            f"{ACTIVE_HISTORY_ACCEPTED} (target generation 7)",
+            f"{BOOTSTRAP_ACCEPTED} (target generation 7)",
+        )),
+        "\n".join((
+            f"{BOOTSTRAP_ACCEPTED} (target generation 7)",
+            f"{BOOTSTRAP_ACCEPTED} (target generation 7)",
+        )),
+    ):
+        try:
+            validate_lifecycle_order(invalid_log)
+        except SmokeFailure:
+            pass
+        else:
+            raise AssertionError("invalid accepted lifecycle was not rejected")
+    try:
+        require_lifecycle_stage(log.splitlines()[0], len(LAGGED_LIGHTING_LIFECYCLE))
+    except SmokeFailure:
+        pass
+    else:
+        raise AssertionError("incomplete accepted lifecycle was not rejected")
+    try:
+        require_lifecycle_stage(log, len(LAGGED_LIGHTING_LIFECYCLE) + 1)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("invalid lifecycle stage count was not rejected")
     reject_forbidden_messages(log)
     assert NO_DEDICATED_ASYNC_COMPUTE not in log
     graphics_route_log = f"{NO_DEDICATED_ASYNC_COMPUTE}, target generation 3)"

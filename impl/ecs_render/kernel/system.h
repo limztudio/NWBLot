@@ -54,104 +54,134 @@ NWB_IMPL_BEGIN
 class Shader;
 class Mesh;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace ECSRenderDetail{
-    // Shared-output compute emulation alternates one generate and one raster phase for every retained regular
-    // draw. Keep the supported range centralized because graph declaration, fixed task storage, and packet
-    // validation all depend on the same narrow contract.
-    inline constexpr usize s_SharedComputeEmulationPhasesPerDraw = 2u;
-    inline constexpr usize s_SharedComputeEmulationMinimumDrawCount = 2u;
-    inline constexpr usize s_SharedComputeEmulationMaximumDrawCount = 4u;
-    inline constexpr usize s_SharedComputeEmulationMinimumPhaseCount =
-        s_SharedComputeEmulationMinimumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
-    inline constexpr usize s_SharedComputeEmulationMaximumPhaseCount =
-        s_SharedComputeEmulationMaximumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
 
-    [[nodiscard]] inline constexpr bool IsSupportedSharedComputeEmulationDrawCount(const usize drawCount)noexcept{
-        return drawCount >= s_SharedComputeEmulationMinimumDrawCount
-            && drawCount <= s_SharedComputeEmulationMaximumDrawCount;
-    }
 
-    [[nodiscard]] inline constexpr usize SharedComputeEmulationPhaseCountForDrawCount(const usize drawCount)noexcept{
-        return drawCount * s_SharedComputeEmulationPhasesPerDraw;
-    }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    [[nodiscard]] inline constexpr bool IsSupportedSharedComputeEmulationPhaseCount(const usize phaseCount)noexcept{
-        return phaseCount >= s_SharedComputeEmulationMinimumPhaseCount
-            && phaseCount <= s_SharedComputeEmulationMaximumPhaseCount
-            && (phaseCount % s_SharedComputeEmulationPhasesPerDraw) == 0u;
-    }
+
+// Shared-output compute emulation alternates one generate and one raster phase for every retained regular
+// draw. Keep the supported range centralized because graph declaration, fixed task storage, and packet
+// validation all depend on the same narrow contract.
+inline constexpr usize s_SharedComputeEmulationPhasesPerDraw = 2u;
+inline constexpr usize s_SharedComputeEmulationMinimumDrawCount = 2u;
+inline constexpr usize s_SharedComputeEmulationMaximumDrawCount = 4u;
+inline constexpr usize s_SharedComputeEmulationMinimumPhaseCount =
+    s_SharedComputeEmulationMinimumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
+inline constexpr usize s_SharedComputeEmulationMaximumPhaseCount =
+    s_SharedComputeEmulationMaximumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
+
+[[nodiscard]] inline constexpr bool IsSupportedSharedComputeEmulationDrawCount(const usize drawCount)noexcept{
+    return drawCount >= s_SharedComputeEmulationMinimumDrawCount
+        && drawCount <= s_SharedComputeEmulationMaximumDrawCount;
+}
+
+[[nodiscard]] inline constexpr usize SharedComputeEmulationPhaseCountForDrawCount(const usize drawCount)noexcept{
+    return drawCount * s_SharedComputeEmulationPhasesPerDraw;
+}
+
+[[nodiscard]] inline constexpr bool IsSupportedSharedComputeEmulationPhaseCount(const usize phaseCount)noexcept{
+    return phaseCount >= s_SharedComputeEmulationMinimumPhaseCount
+        && phaseCount <= s_SharedComputeEmulationMaximumPhaseCount
+        && (phaseCount % s_SharedComputeEmulationPhasesPerDraw) == 0u;
+}
 
 #if defined(NWB_DEBUG)
-    struct MaterialTypedInstanceRangeVector;
+struct MaterialTypedInstanceRangeVector;
 #endif
-    // Immutable frame facts used while declaring the graph. Queue assignment remains a compiler result; this
-    // carries only the features and external-history availability that change which semantic tasks exist.
-    struct RendererFrameGraphFeatures{
-        bool frameLaggedAsyncLightingEnabled = false;
-        bool laggedLightingHistoryReady = false;
-        bool laggedLightingHistoryAccepted = false;
-        bool hasTransparentRenderers = false;
-        bool hardwareCaustics = false;
-    };
-    // These semantic prefix stages may coalesce into one native submission or split at a compiler-derived
-    // cross-queue frontier. Each stage points at a rebindable timing slot so the renderer can attach one ticket
-    // to every actual packet after compilation.
-    enum class DeferredGraphicsPrefixTimingSlot : u8{
-        MeshViewSetup,
-        SceneShadingSetup,
-        DeferredClear,
-        Gbuffer,
-        CsgReceiverSpanBuild,
-        CsgIntervalCombine,
-        CsgIntervalSample,
-        Normalize,
-        kCount,
-    };
-    struct ShadowPrepareGraphTask;
-    struct MeshViewSetupGraphTask;
-    struct MeshViewUploadCommitGraphTask;
-    struct SceneShadingSetupGraphTask;
-    struct CsgReceiverSpanBuildGraphTask;
-    struct CsgIntervalCombineGraphTask;
-    struct AvboitCsgReceiverSpanGraphTask;
-    struct AvboitCsgIntervalCombineGraphTask;
-    struct CsgIntervalSampleGraphTask;
-    struct DeferredClearTimingRecordState{
-        Core::Graphics* graphics = nullptr;
-        Optional<Core::GpuTimingMeasure>* timing = nullptr;
-        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
-    };
-    // AVBOIT's typed target-clear chain starts/ends one timing scope from its first/last texture clear, preserving
-    // the original measurement while the nine values record as individual graph built-ins.
-    struct AvboitClearTimingRecordState{
-        Core::Graphics* graphics = nullptr;
-        Optional<Core::GpuTimingMeasure>* timing = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-    };
-    // Opaque prefix timing tickets are rebound after compilation, whereas transparent CSG keeps AVBOIT Pre's
-    // stable ticket. The rectangular clear pair resolves either form while preserving one timing range.
-    struct CsgIntervalClearTimingRecordState{
-        Core::Graphics* graphics = nullptr;
-        Optional<Core::GpuTimingMeasure>* timing = nullptr;
-        Core::GpuTimingSubmissionTicket** rebindableTimingTicket = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-    };
-    struct OpaqueRegularComputeEmulationGraphTask;
-    struct OpaqueRegularSharedComputeEmulationGraphTask;
-    struct OpaqueCsgReceiverComputeEmulationGraphTask;
-    struct OpaqueCsgIntervalSampleComputeEmulationGraphTask;
-    struct GbufferGraphTask;
+// Immutable frame facts used while declaring the graph. Queue assignment remains a compiler result; this
+// carries only the features and external-history availability that change which semantic tasks exist.
+struct RendererFrameGraphFeatures{
+    bool frameLaggedAsyncLightingEnabled = false;
+    bool laggedLightingHistoryReady = false;
+    bool laggedLightingHistoryAccepted = false;
+    bool hasTransparentRenderers = false;
+    bool hardwareCaustics = false;
+};
+// These semantic prefix stages may coalesce into one native submission or split at a compiler-derived
+// cross-queue frontier. Each stage points at a rebindable timing slot so the renderer can attach one ticket
+// to every actual packet after compilation.
+enum class DeferredGraphicsPrefixTimingSlot : u8{
+    MeshViewSetup,
+    SceneShadingSetup,
+    DeferredClear,
+    Gbuffer,
+    CsgReceiverSpanBuild,
+    CsgIntervalCombine,
+    CsgIntervalSample,
+    Normalize,
+    kCount,
+};
+struct ShadowPrepareGraphTask;
+struct MeshViewSetupGraphTask;
+struct MeshViewUploadCommitGraphTask;
+struct SceneShadingSetupGraphTask;
+struct CsgReceiverSpanBuildGraphTask;
+struct CsgIntervalCombineGraphTask;
+struct AvboitCsgReceiverSpanGraphTask;
+struct AvboitCsgIntervalCombineGraphTask;
+struct CsgIntervalSampleGraphTask;
+struct DeferredClearTimingRecordState{
+    Core::Graphics* graphics = nullptr;
+    Optional<Core::GpuTimingMeasure>* timing = nullptr;
+    Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
+};
+// AVBOIT's typed target-clear chain starts/ends one timing scope from its first/last texture clear, preserving
+// the original measurement while the nine values record as individual graph built-ins.
+struct AvboitClearTimingRecordState{
+    Core::Graphics* graphics = nullptr;
+    Optional<Core::GpuTimingMeasure>* timing = nullptr;
+    Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+};
+// Opaque prefix timing tickets are rebound after compilation, whereas transparent CSG keeps AVBOIT Pre's
+// stable ticket. The rectangular clear pair resolves either form while preserving one timing range.
+struct CsgIntervalClearTimingRecordState{
+    Core::Graphics* graphics = nullptr;
+    Optional<Core::GpuTimingMeasure>* timing = nullptr;
+    Core::GpuTimingSubmissionTicket** rebindableTimingTicket = nullptr;
+    Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+};
+struct OpaqueRegularComputeEmulationGraphTask;
+struct OpaqueRegularSharedComputeEmulationGraphTask;
+struct OpaqueCsgReceiverComputeEmulationGraphTask;
+struct OpaqueCsgIntervalSampleComputeEmulationGraphTask;
+struct GbufferGraphTask;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace RendererTaskGraphDetail{
-    struct AvboitOccupancyComputeEmulationGraphTask;
-    struct AvboitOccupancySharedComputeEmulationGraphTask;
-    struct AvboitExtinctionComputeEmulationGraphTask;
-    struct AvboitExtinctionSharedComputeEmulationGraphTask;
-    struct AvboitAccumulationComputeEmulationGraphTask;
-    struct AvboitAccumulationSharedComputeEmulationGraphTask;
-}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct AvboitOccupancyComputeEmulationGraphTask;
+struct AvboitOccupancySharedComputeEmulationGraphTask;
+struct AvboitExtinctionComputeEmulationGraphTask;
+struct AvboitExtinctionSharedComputeEmulationGraphTask;
+struct AvboitAccumulationComputeEmulationGraphTask;
+struct AvboitAccumulationSharedComputeEmulationGraphTask;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass, public Core::Telemetry::IFrameGraphContributor{
@@ -622,9 +652,7 @@ private:
     // phases must remain in Extinction's selected Graphics packet so their material timing interval and
     // generated-vertex handoff share the consumer's token.
     Core::GpuTaskId m_deferredAvboitExtinctionComputeEmulationTask;
-    Core::GpuTaskId m_deferredAvboitExtinctionSharedComputeEmulationTasks[
-        ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount
-    ] = {};
+    Core::GpuTaskId m_deferredAvboitExtinctionSharedComputeEmulationTasks[ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount] = {};
     usize m_deferredAvboitExtinctionSharedComputeEmulationTaskCount = 0u;
     // The final immutable extinction upload, when that phase has visible draws. It must live in the native
     // extinction packet so rejected/retried packet recording cannot publish only a partial phase stream.

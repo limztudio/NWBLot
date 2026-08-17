@@ -2552,6 +2552,185 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
 }
 
 
+// Device discovery may expose more than one auxiliary queue from one Vulkan family. Keep the compiler's
+// deterministic least-loaded policy honest across the complete registry instead of assuming the historical
+// primary-plus-one topology.
+TEST(GpuTaskGraph, BalancesAcrossAllRegisteredSameClassPhysicalQueues){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuQueueRequest graphicsRequest;
+    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+    graphicsRequest.allowFallback = false;
+    graphicsRequest.compilerMayOverridePreference = false;
+
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Graphics::GpuTaskCostHint::Large;
+    scheduling.allowSameClassQueueRouting = true;
+    const Graphics::GpuTaskId tasks[] = {
+        AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/multi_auxiliary_same_class_first"),
+            "Multi Auxiliary Same Class First",
+            graphicsRequest,
+            scheduling
+        ),
+        AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/multi_auxiliary_same_class_second"),
+            "Multi Auxiliary Same Class Second",
+            graphicsRequest,
+            scheduling
+        ),
+        AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/multi_auxiliary_same_class_third"),
+            "Multi Auxiliary Same Class Third",
+            graphicsRequest,
+            scheduling
+        ),
+        AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/multi_auxiliary_same_class_fourth"),
+            "Multi Auxiliary Same Class Fourth",
+            graphicsRequest,
+            scheduling
+        ),
+    };
+    for(const Graphics::GpuTaskId task : tasks)
+        ASSERT_TRUE(task.valid());
+
+    Graphics::GpuPhysicalQueueInfo firstAuxiliary = GraphicsQueue(1u);
+    firstAuxiliary.queueIndex = 1u;
+    Graphics::GpuPhysicalQueueInfo secondAuxiliary = GraphicsQueue(2u);
+    secondAuxiliary.queueIndex = 2u;
+    Graphics::GpuPhysicalQueueInfo thirdAuxiliary = GraphicsQueue(3u);
+    thirdAuxiliary.queueIndex = 3u;
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        firstAuxiliary,
+        secondAuxiliary,
+        thirdAuxiliary,
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
+        const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(tasks[taskIndex]);
+        ASSERT_NE(assignment, nullptr);
+        EXPECT_EQ(assignment->queue, queues[taskIndex].id);
+        EXPECT_EQ(
+            assignment->reason,
+            taskIndex == 0u
+                ? Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics
+                : Graphics::GpuTaskQueueAssignmentReason::SameClassRouting
+        );
+    }
+}
+
+
+// Dedicated Compute and Transfer families use the same registry expansion as Graphics. Keep their queue-class
+// capabilities and primary identities intact while all additional queue indices participate in the same policy.
+TEST(GpuTaskGraph, BalancesAcrossAllRegisteredDedicatedSameClassPhysicalQueues){
+    const auto runCase = [](
+        const Graphics::GpuQueueCapability::Mask requiredCapabilities,
+        const Graphics::GpuQueuePreference::Enum preference,
+        const Graphics::GpuPhysicalQueueInfo& primary,
+        const Graphics::GpuPhysicalQueueInfo& firstAuxiliary,
+        const Graphics::GpuPhysicalQueueInfo& secondAuxiliary,
+        const Graphics::GpuPhysicalQueueInfo& thirdAuxiliary,
+        const Graphics::GpuTaskQueueAssignmentReason::Enum primaryReason
+    ){
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+
+        Graphics::GpuQueueRequest queueRequest;
+        queueRequest.requiredCapabilities = requiredCapabilities;
+        queueRequest.preferredQueue = preference;
+        queueRequest.allowFallback = false;
+        queueRequest.compilerMayOverridePreference = false;
+
+        Graphics::GpuTaskSchedulingHint scheduling;
+        scheduling.cost = Graphics::GpuTaskCostHint::Large;
+        scheduling.allowSameClassQueueRouting = true;
+        const Graphics::GpuTaskId tasks[] = {
+            AddTaskWithQueue(graph, Name("tests/task_graph/multi_auxiliary_dedicated_first"), "Multi Auxiliary Dedicated First", queueRequest, scheduling),
+            AddTaskWithQueue(graph, Name("tests/task_graph/multi_auxiliary_dedicated_second"), "Multi Auxiliary Dedicated Second", queueRequest, scheduling),
+            AddTaskWithQueue(graph, Name("tests/task_graph/multi_auxiliary_dedicated_third"), "Multi Auxiliary Dedicated Third", queueRequest, scheduling),
+            AddTaskWithQueue(graph, Name("tests/task_graph/multi_auxiliary_dedicated_fourth"), "Multi Auxiliary Dedicated Fourth", queueRequest, scheduling),
+        };
+        for(const Graphics::GpuTaskId task : tasks)
+            ASSERT_TRUE(task.valid());
+
+        const Graphics::GpuPhysicalQueueInfo queues[] = {
+            primary,
+            firstAuxiliary,
+            secondAuxiliary,
+            thirdAuxiliary,
+        };
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = queues,
+            .queueCount = LengthOf(queues),
+        };
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+        for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
+            const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(tasks[taskIndex]);
+            ASSERT_NE(assignment, nullptr);
+            EXPECT_EQ(assignment->queue, queues[taskIndex].id);
+            EXPECT_EQ(
+                assignment->reason,
+                taskIndex == 0u
+                    ? primaryReason
+                    : Graphics::GpuTaskQueueAssignmentReason::SameClassRouting
+            );
+        }
+    };
+
+    Graphics::GpuPhysicalQueueInfo firstComputeAuxiliary = DedicatedComputeQueue(2u);
+    firstComputeAuxiliary.queueIndex = 1u;
+    Graphics::GpuPhysicalQueueInfo secondComputeAuxiliary = DedicatedComputeQueue(3u);
+    secondComputeAuxiliary.queueIndex = 2u;
+    Graphics::GpuPhysicalQueueInfo thirdComputeAuxiliary = DedicatedComputeQueue(4u);
+    thirdComputeAuxiliary.queueIndex = 3u;
+    runCase(
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        DedicatedComputeQueue(),
+        firstComputeAuxiliary,
+        secondComputeAuxiliary,
+        thirdComputeAuxiliary,
+        Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute
+    );
+
+    Graphics::GpuPhysicalQueueInfo firstTransferAuxiliary = DedicatedTransferQueue(3u);
+    firstTransferAuxiliary.queueIndex = 1u;
+    Graphics::GpuPhysicalQueueInfo secondTransferAuxiliary = DedicatedTransferQueue(4u);
+    secondTransferAuxiliary.queueIndex = 2u;
+    Graphics::GpuPhysicalQueueInfo thirdTransferAuxiliary = DedicatedTransferQueue(5u);
+    thirdTransferAuxiliary.queueIndex = 3u;
+    runCase(
+        Graphics::GpuQueueCapability::Transfer,
+        Graphics::GpuQueuePreference::Transfer,
+        DedicatedTransferQueue(),
+        firstTransferAuxiliary,
+        secondTransferAuxiliary,
+        thirdTransferAuxiliary,
+        Graphics::GpuTaskQueueAssignmentReason::DedicatedTransfer
+    );
+}
+
+
 // An isolated graph has no earlier packet load, so an explicit offload policy must still select the registered
 // auxiliary queue deterministically. A following ordinary same-class task remains primary, which is the exact
 // readiness bridge large synchronous setup uploads require before they return a public resource handle.

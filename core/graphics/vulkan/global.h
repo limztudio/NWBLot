@@ -107,8 +107,6 @@ inline constexpr usize s_GeometryGrainSize = 64;
 inline constexpr usize s_ParallelTlasInstanceThreshold = 1024;
 inline constexpr usize s_TlasInstanceGrainSize = 256;
 inline constexpr usize s_DeviceSetupScratchArenaBytes = 32u * 1024u;
-// Primary Graphics/Compute/Transfer, present, and one optional same-class auxiliary family for each class.
-inline constexpr usize s_MaxVulkanQueueFamilyKinds = 7u;
 
 // Ray tracing helper defaults.
 inline constexpr u64 s_DefaultTopLevelASBufferSize = 1024 * 1024;

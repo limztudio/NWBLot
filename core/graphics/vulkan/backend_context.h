@@ -252,6 +252,9 @@ private:
 
     GraphicsVector<SwapChainImage> m_swapChainImages;
     DeviceHandle m_rhiDevice;
+    // Exact opt-in same-class transports registered after their class primary. The first entry for each class
+    // keeps the legacy secondary fields above populated, while graph packets use this complete physical registry.
+    GraphicsVector<VulkanPhysicalQueueDesc> m_sameClassQueues;
 
     SemaphoreVector m_acquireSemaphores;
     SemaphoreVector m_presentSemaphores;

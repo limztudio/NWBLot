@@ -154,9 +154,9 @@ public:
     bool setAsyncComputeLaneEnabled(bool enabled);
     // Must be configured before device creation. Unsupported adapters retain the Graphics/Compute copy fallback.
     bool setTransferQueueEnabled(bool enabled);
-    // Must be configured before device creation. It may expose one auxiliary Graphics queue and, with cross-family
-    // routing enabled, one auxiliary dedicated Compute or Transfer queue; only explicitly opted-in graph tasks may
-    // route to them.
+    // Must be configured before device creation. It may expose every safe additional queue from each active
+    // primary family and, with cross-family routing enabled, one auxiliary family for each class; only explicitly
+    // opted-in graph tasks may route to them.
     bool setSameClassMultiQueueEnabled(bool enabled);
     // Extends optional same-class discovery to distinct compatible Vulkan families. Individual graph tasks must
     // still explicitly accept the resulting ownership-transfer route.

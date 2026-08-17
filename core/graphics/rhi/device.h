@@ -388,9 +388,9 @@ struct DeviceCreationParameters : public InstanceParameters{
     // Best-effort optional transfer transport. Only a distinct transfer-only Vulkan family is exposed as a
     // CommandQueue::Transfer; task-graph copy work otherwise falls back to the existing Compute/Graphics queues.
     bool enableTransferQueue = true;
-    // Opt-in auxiliary same-class transports. The backend may register one additional Graphics queue and, with
-    // cross-family routing enabled, one additional dedicated Compute or Transfer queue; graph tasks must explicitly
-    // allow same-class routing before any ordinary work leaves the primary transport.
+    // Opt-in same-class transports. The backend registers every safe additional queue from each active primary
+    // family and, with cross-family routing enabled, one deterministic alternate family for each supported class.
+    // Graph tasks must explicitly allow same-class routing before any ordinary work leaves the primary transport.
     bool enableSameClassMultiQueue = false;
     // Permits an auxiliary same-class transport to come from a different compatible Vulkan family. Tasks must
     // separately opt in before the compiler can route across that ownership boundary.

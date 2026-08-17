@@ -378,11 +378,12 @@ can receive an unconditional final sign-off.
   record an explicitly opted-in frontier concurrently with isolated per-packet state scratch and native command
   buffers; submission, timing, and failure reporting remain in stable compiler order. Command-IR capture and
   legacy external-state overrides deliberately retain serial recording.
-- A Vulkan device may opt into one auxiliary Graphics `VkQueue` from the selected Graphics family and one
-  cross-family dedicated Compute/Transfer queue when those primary lanes exist. The Device registry assigns each
-  a distinct physical-queue identity; only graph tasks that explicitly allow same-class routing may use them. The
-  compiler uses deterministic current-cost balancing, broad class callers remain on their primary queue, and a
-  same-family handoff uses the graph packet's timeline dependency without emitting a queue-family ownership transfer.
+- A Vulkan device may opt into every additional `VkQueue` from each active selected primary Graphics, dedicated
+  Compute, and dedicated Transfer family, plus one deterministic cross-family alternate for each class when that
+  separate policy is enabled. The Device registry assigns each a distinct physical-queue identity; only graph tasks
+  that explicitly allow same-class routing may use them. The compiler uses deterministic current-cost balancing,
+  broad class callers remain on their primary queue, and a same-family handoff uses the graph packet's timeline
+  dependency without emitting a queue-family ownership transfer.
 - Windowed graph presentation is pinned to the primary physical Graphics transport. The backend rejects a claimed
   terminal signal from every auxiliary Graphics queue, and the deferred renderer rejects a Present or terminal
   overlay that resolves anywhere else. An auxiliary route needs an explicit acquired-image and swap-chain-sharing
@@ -423,6 +424,7 @@ can receive an unconditional final sign-off.
 | Cross-family same-class Graphics routing follow-up: graph-unit binary | 124/124 passed, including default same-family retention plus deterministic explicit cross-family routing and exclusive Buffer ownership release/acquire planning |
 | Cross-family same-class Graphics routing follow-up: descriptor-buffer smoke binary | 147 passed; 17 expected topology skips. The added real-Vulkan route requests a separately enabled alternate Graphics family, verifies compiler release/acquire barriers, records/submits its exact physical timeline dependency, and reads the copied buffer back; this adapter cleanly skips because it exposes no alternate Graphics-capable family |
 | Cross-family same-class Compute/Transfer routing follow-up: graph unit and descriptor-buffer smoke | passed; device discovery can now register one alternate dedicated Compute and Transfer family alongside the primary route when both device-level opt-ins are enabled. `ResourceQueueSharing::AsyncCompute` and `Transfer` include the registered auxiliary families, so concurrent resources remain legal while exclusive crossings retain compiler-owned release/acquire barriers. Compiler tests exercise deterministic cross-family Compute and Transfer routing; the real Vulkan registry probe cleanly skips here because this adapter exposes no alternate dedicated family. Graph tests passed 127/127 and descriptor smoke passed 148 with 18 expected topology skips. |
+| Multi-auxiliary primary-family registration: graph unit and descriptor-buffer smoke | passed; device creation now requests every valid extra queue index from each active primary Graphics, dedicated Compute, and dedicated Transfer family, carries those exact handles into the physical registry, and retains one deterministic cross-family alternate per class when separately enabled. Four-queue same-family compiler fixtures prove deterministic load distribution across Graphics, dedicated Compute, and dedicated Transfer registries. `graphics_task_graph_tests` passed 132/132; the real Vulkan descriptor smoke passed 150 with 21 expected topology skips, including clean skips because this adapter exposes no additional primary-family queues. |
 | Auxiliary same-class public setup-upload adoption: graph unit and descriptor-buffer smoke | passed; large isolated setup graphs now explicitly prefer a compatible auxiliary physical queue on an otherwise-empty queue class, then append a non-routed readiness packet on that class's exact primary physical queue. This preserves the returned-handle contract while making the opt-in transport real; a cross-family Graphics producer declares `ResourceQueueSharing::Graphics` so Vulkan creates concurrent sharing across the two registered Graphics families. The compiler test proves auxiliary producer -> primary bridge routing and dependency. The real Vulkan buffer copy submits a large Graphics upload, observes its auxiliary producer token, then performs an un-waited direct primary Graphics copy; it cleanly skips on this adapter because it has no alternate Graphics transport. Graph tests passed 128/128 and descriptor smoke passed 148 with 19 expected topology skips. |
 | Auxiliary same-class texture-batch adoption: graph unit, ECS contract, and descriptor-buffer smoke | passed; an explicit serial-chain affinity now keeps every directly dependent mip/slice task on the same compatible physical queue selected by the first auxiliary producer. This avoids queue ping-pong and preserves merge eligibility. Batch routing refuses a cross-family auxiliary route unless the already-created destination explicitly includes that broad queue class in its sharing mask; same-family exclusive textures remain valid. The terminal primary readiness bridge is retained. The real Vulkan proof uploads a large two-mip batch on an auxiliary Graphics queue, then reads both mips back through an un-waited direct primary Graphics command list; it cleanly skips on this adapter because it exposes no alternate Graphics transport. Graph tests passed 129/129, ECS graphics passed 27/27, and descriptor smoke passed 148 with 20 expected topology skips. |
 | Auxiliary same-class ImGui upload adoption: UI build, graph unit, ECS contract, and descriptor-buffer smoke | passed; persistent ImGui vertex/index buffers and dynamically created UI textures now declare `GraphicsAsyncComputeAndTransfer` at creation, matching the graph uploader's existing Transfer/Compute policy. Large immutable UI uploads opt into same-class, cross-family routing; the terminal overlay/standalone completion is explicitly required to resolve to primary Graphics before direct fallback can proceed. Compiler coverage proves that a Graphics-class concurrent resource crosses registered Graphics families with a timeline dependency and state seed but no ownership release/acquire. `nwb_ecs_ui` rebuilt; graph tests passed 130/130, ECS graphics passed 28/28, and descriptor smoke passed 148 with 20 expected topology skips. |
@@ -678,12 +680,13 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    imported completion bindings require that identity; the renderer and native smoke topologies obtain it from the
    Device; and a token from a retired device is rejected at the native submission boundary. Descriptor-heap
    quarantine now retains and queries that same exact physical token, so an auxiliary same-class queue cannot be
-   mistaken for the primary timeline during descriptor retirement. An opt-in second
-   Graphics queue from the same Vulkan family is now registered, explicitly selected graph packets route to it
-   deterministically, and same-family state handoffs use exact physical timeline waits without a spurious ownership
-   barrier. A separately enabled alternate Graphics-, dedicated Compute-, or dedicated Transfer-capable family may
-   now be registered too; tasks explicitly opt into that higher-cost route, and exclusive resource crossings use
-   the same physical-owner release/acquire plan already used by cross-class handoffs. Windowed presentation remains deliberately primary-Graphics-only: both the
+   mistaken for the primary timeline during descriptor retirement. An opt-in registry now exposes every additional
+   queue from each active primary Graphics, dedicated Compute, and dedicated Transfer family; explicitly selected
+   graph packets route to those exact identities deterministically, and same-family state handoffs use exact
+   physical timeline waits without a spurious ownership barrier. A separately enabled alternate Graphics-, dedicated
+   Compute-, or dedicated Transfer-capable family may now be registered too; tasks explicitly opt into that
+   higher-cost route, and exclusive resource crossings use the same physical-owner release/acquire plan already used
+   by cross-class handoffs. Windowed presentation remains deliberately primary-Graphics-only: both the
    renderer and Vulkan presentation hook reject an auxiliary terminal until a future acquired-image/swap-chain
    sharing contract names that transport. Large public setup uploads are the first ordinary-work adopter: their
    isolated producer may deliberately select an auxiliary Graphics, Compute, or Transfer transport, while their
@@ -692,7 +695,7 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    dependencies and accepts cross-family use only when its existing resource-sharing contract names that class.
    Graph-owned large ImGui uploads are a third bounded adopter: their persistent Graphics/Compute/Transfer-sharing
    resources permit the exact same selected auxiliary class, but their overlay/standalone completion remains primary
-   Graphics. Dynamic queue scaling beyond those bounded adopters and target-scene performance evidence remain open.
+   Graphics. Dynamic routing policy beyond those bounded adopters and target-scene performance evidence remain open.
 
 2. **Complete graph ownership.** Renderer code still controls high-level recording/submission sequencing and holds
    legacy state-handoff data, but the shared deferred renderer now gives the task runtime semantic task endpoints

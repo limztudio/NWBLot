@@ -15000,6 +15000,240 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlo
 }
 
 
+// Occupancy, Extinction, and Accumulation deliberately overwrite the same material-instance buffer at separate
+// AVBOIT write points. Each source must remain an immutable graph blob through late recording, and each phase's
+// accepted token must remain invalid when its packet is discarded.
+TEST_F(DescriptorBufferRoundTripTest, AvboitPhaseUploadsKeepImmutableSnapshotsIsolated){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    static constexpr u32 s_OccupancyWords[] = {
+        0x0cc0a001u,
+        0x0cc0a002u,
+        0x0cc0a003u,
+        0x0cc0a004u,
+    };
+    static constexpr u32 s_ExtinctionWords[] = {
+        0x0e710001u,
+        0x0e710002u,
+        0x0e710003u,
+        0x0e710004u,
+    };
+    static constexpr u32 s_AccumulationWords[] = {
+        0xacce0001u,
+        0xacce0002u,
+        0xacce0003u,
+        0xacce0004u,
+    };
+    u32 phaseWords[LengthOf(s_OccupancyWords)] = {};
+    const auto copyWords = [](u32* const destination, const u32* const source){
+        for(usize wordIndex = 0u; wordIndex < LengthOf(s_OccupancyWords); ++wordIndex)
+            destination[wordIndex] = source[wordIndex];
+    };
+
+    auto materialInstances = device.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(phaseWords))
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::Exclusive)
+            .setCpuAccess(CpuAccessMode::Read)
+    );
+    ASSERT_NE(materialInstances.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId materialInstancesResource = graph.importBuffer(
+        materialInstances,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/avboit_phase_material_instances"))
+            .setMarkerLabel("AVBOIT Phase Material Instances")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(materialInstancesResource.valid());
+
+    copyWords(phaseWords, s_OccupancyWords);
+    const GpuUploadBlobId occupancyBlob = graph.copyUploadData(phaseWords, sizeof(phaseWords), alignof(u32));
+    copyWords(phaseWords, s_ExtinctionWords);
+    const GpuUploadBlobId extinctionBlob = graph.copyUploadData(phaseWords, sizeof(phaseWords), alignof(u32));
+    copyWords(phaseWords, s_AccumulationWords);
+    const GpuUploadBlobId accumulationBlob = graph.copyUploadData(phaseWords, sizeof(phaseWords), alignof(u32));
+    ASSERT_TRUE(occupancyBlob.valid());
+    ASSERT_TRUE(extinctionBlob.valid());
+    ASSERT_TRUE(accumulationBlob.valid());
+    ASSERT_EQ(graph.uploadBlobCount(), 3u);
+    for(u32& word : phaseWords)
+        word = 0u;
+
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Tiny;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    const GpuQueueRequest graphicsUploadQueue{
+        GpuQueueCapability::Transfer,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const QueueSubmissionToken staleToken{
+        .queue = CommandQueue::Graphics,
+        .value = 17u,
+    };
+    QueueSubmissionToken occupancyAcceptedToken = staleToken;
+    QueueSubmissionToken extinctionAcceptedToken = staleToken;
+    QueueSubmissionToken accumulationAcceptedToken = staleToken;
+
+    GpuTaskDesc occupancyDesc;
+    occupancyDesc
+        .setIdentity(Name("tests/descriptor_buffer/avboit_occupancy_material_instances_upload"))
+        .setMarkerLabel("AVBOIT Occupancy Material Instances Upload")
+        .setQueue(graphicsUploadQueue)
+        .setScheduling(scheduling)
+    ;
+    const GpuTaskId occupancyUpload = graph.addUploadBufferTask(
+        occupancyDesc,
+        GpuUploadBufferTaskDesc{
+            .source = occupancyBlob,
+            .destination = materialInstancesResource,
+            .finalState = ResourceStates::Common,
+            .acceptedToken = &occupancyAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(occupancyUpload.valid());
+
+    GpuTaskDesc extinctionDesc;
+    extinctionDesc
+        .setIdentity(Name("tests/descriptor_buffer/avboit_extinction_material_instances_upload"))
+        .setMarkerLabel("AVBOIT Extinction Material Instances Upload")
+        .setQueue(graphicsUploadQueue)
+        .setScheduling(scheduling)
+        .setDependencies(&occupancyUpload, 1u)
+    ;
+    const GpuTaskId extinctionUpload = graph.addUploadBufferTask(
+        extinctionDesc,
+        GpuUploadBufferTaskDesc{
+            .source = extinctionBlob,
+            .destination = materialInstancesResource,
+            .finalState = ResourceStates::Common,
+            .acceptedToken = &extinctionAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(extinctionUpload.valid());
+
+    GpuTaskDesc accumulationDesc;
+    accumulationDesc
+        .setIdentity(Name("tests/descriptor_buffer/avboit_accumulation_material_instances_upload"))
+        .setMarkerLabel("AVBOIT Accumulation Material Instances Upload")
+        .setQueue(graphicsUploadQueue)
+        .setScheduling(scheduling)
+        .setDependencies(&extinctionUpload, 1u)
+    ;
+    const GpuTaskId accumulationUpload = graph.addUploadBufferTask(
+        accumulationDesc,
+        GpuUploadBufferTaskDesc{
+            .source = accumulationBlob,
+            .destination = materialInstancesResource,
+            .finalState = ResourceStates::Common,
+            .acceptedToken = &accumulationAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(accumulationUpload.valid());
+    EXPECT_FALSE(occupancyAcceptedToken.valid());
+    EXPECT_FALSE(extinctionAcceptedToken.valid());
+    EXPECT_FALSE(accumulationAcceptedToken.valid());
+
+    const GpuPhysicalQueueInfo graphicsQueue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &graphicsQueue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/avboit_phase_upload_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    const GpuSubmissionPacketId occupancyPacket = compiledGraph.packetForTask(occupancyUpload);
+    const GpuSubmissionPacketId extinctionPacket = compiledGraph.packetForTask(extinctionUpload);
+    const GpuSubmissionPacketId accumulationPacket = compiledGraph.packetForTask(accumulationUpload);
+    ASSERT_TRUE(occupancyPacket.valid());
+    ASSERT_TRUE(extinctionPacket.valid());
+    ASSERT_TRUE(accumulationPacket.valid());
+    EXPECT_LT(occupancyPacket.index, extinctionPacket.index);
+    EXPECT_LT(extinctionPacket.index, accumulationPacket.index);
+
+    const GpuNativePacketRecorder recorder(device);
+    GpuRecordedGraph rejectedRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction rejectedTransaction(DescriptorBufferRoundTripTest::arena());
+    rejectedTransaction.reset(compiledGraph);
+    GpuCommandIrCapture rejectedCapture(DescriptorBufferRoundTripTest::arena());
+    occupancyAcceptedToken = staleToken;
+    extinctionAcceptedToken = staleToken;
+    accumulationAcceptedToken = staleToken;
+    EXPECT_FALSE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = occupancyPacket },
+        rejectedRecordedGraph,
+        &rejectedCapture
+    ));
+    rejectedTransaction.discardUnaccepted(graph, compiledGraph);
+    EXPECT_FALSE(occupancyAcceptedToken.valid());
+    EXPECT_FALSE(extinctionAcceptedToken.valid());
+    EXPECT_FALSE(accumulationAcceptedToken.valid());
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    const auto submitAndVerify = [&](const GpuSubmissionPacketId packet, QueueSubmissionToken& acceptedToken, const u32* const expectedWords){
+        ASSERT_TRUE(submitter.submitPacket(
+            graph,
+            compiledGraph,
+            recordedGraph,
+            packet,
+            nullptr,
+            0u,
+            transaction,
+            scratchArena
+        ));
+        const QueueSubmissionToken packetToken = transaction.packetToken(packet);
+        ASSERT_TRUE(packetToken.valid());
+        EXPECT_TRUE(acceptedToken.valid());
+        EXPECT_EQ(acceptedToken.queue, packetToken.queue);
+        EXPECT_EQ(acceptedToken.value, packetToken.value);
+        ASSERT_TRUE(device.waitForIdle());
+
+        const u32* const uploadedWords = static_cast<const u32*>(device.mapBuffer(materialInstances.get(), CpuAccessMode::Read));
+        ASSERT_NE(uploadedWords, nullptr);
+        for(usize wordIndex = 0u; wordIndex < LengthOf(s_OccupancyWords); ++wordIndex)
+            EXPECT_EQ(uploadedWords[wordIndex], expectedWords[wordIndex]);
+        device.unmapBuffer(materialInstances.get());
+    };
+    submitAndVerify(occupancyPacket, occupancyAcceptedToken, s_OccupancyWords);
+    submitAndVerify(extinctionPacket, extinctionAcceptedToken, s_ExtinctionWords);
+    submitAndVerify(accumulationPacket, accumulationAcceptedToken, s_AccumulationWords);
+}
+
+
 // Independent immutable uploads are the first production opt-in packets for worker recording.  Use the real Vulkan
 // Device to prove the packet recorder keeps per-packet state scratch and command pools isolated before serial graph
 // submission consumes the recorded command lists in compiler order.

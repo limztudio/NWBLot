@@ -48,7 +48,7 @@ const MaterialBindAttribute* MaterialBindField::findAttribute(const AStringView 
 
 
 AStringView MaterialBindField::defaultArgument()const{
-    const MaterialBindAttribute* attribute = findAttribute(__hidden_bind::s_DefaultAttribute);
+    const MaterialBindAttribute* attribute = findAttribute(MaterialBindDetail::s_DefaultAttribute);
     return (attribute && attribute->arguments.size() == 1u) ? AStringView(attribute->arguments[0u]) : AStringView();
 }
 
@@ -145,10 +145,10 @@ bool ParseMaterialBindSource(
 
     MaterialCookArena& arena = outEntry.source.get_allocator().arena();
     Metascript::Document doc(arena);
-    if(!__hidden_bind::ParseMaterialBindDocument(bindFilePath, arena, doc))
+    if(!MaterialBindDetail::ParseMaterialBindDocument(bindFilePath, arena, doc))
         return false;
 
-    return __hidden_bind::ParseMaterialBindSource(bindFilePath, doc, arena, outEntry, scratchArena);
+    return MaterialBindDetail::ParseMaterialBindSource(bindFilePath, doc, arena, outEntry, scratchArena);
 }
 
 
@@ -161,7 +161,7 @@ bool BuildMaterialBindTypedLayout(
     MaterialBindTypedLayout& outLayout,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    return __hidden_bind::BuildMaterialBindTypedLayoutImpl(bindEntry, contextName, outLayout, scratchArena);
+    return MaterialBindDetail::BuildMaterialBindTypedLayoutImpl(bindEntry, contextName, outLayout, scratchArena);
 }
 
 
@@ -175,7 +175,7 @@ bool FindOrBuildMaterialBindTypedLayout(
     const MaterialBindTypedLayout*& outLayout,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    return __hidden_bind::FindOrBuildMaterialBindTypedLayoutImpl(
+    return MaterialBindDetail::FindOrBuildMaterialBindTypedLayoutImpl(
         materialInterface,
         bindEntry,
         inOutCache,
@@ -214,7 +214,7 @@ bool ApplyMaterialBindTypedLayoutParameters(
 ){
     outResourceReferences.clear();
     for(const auto& [parameterName, parameterValue] : parameters){
-        if(!__hidden_bind::ApplyMaterialBindTypedLayoutParameterValue(
+        if(!MaterialBindDetail::ApplyMaterialBindTypedLayoutParameterValue(
             layout,
             materialName,
             parameterName,

@@ -118,7 +118,7 @@ namespace ECSRenderDetail{
 };
 
 
-namespace __hidden_renderer_task_graph{
+namespace RendererTaskGraphDetail{
     struct AvboitOccupancyComputeEmulationGraphTask;
     struct AvboitOccupancySharedComputeEmulationGraphTask;
     struct AvboitExtinctionComputeEmulationGraphTask;
@@ -146,12 +146,12 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend struct ECSRenderDetail::OpaqueRegularSharedComputeEmulationGraphTask;
     friend struct ECSRenderDetail::OpaqueCsgReceiverComputeEmulationGraphTask;
     friend struct ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphTask;
-    friend struct __hidden_renderer_task_graph::AvboitOccupancyComputeEmulationGraphTask;
-    friend struct __hidden_renderer_task_graph::AvboitOccupancySharedComputeEmulationGraphTask;
-    friend struct __hidden_renderer_task_graph::AvboitExtinctionComputeEmulationGraphTask;
-    friend struct __hidden_renderer_task_graph::AvboitExtinctionSharedComputeEmulationGraphTask;
-    friend struct __hidden_renderer_task_graph::AvboitAccumulationComputeEmulationGraphTask;
-    friend struct __hidden_renderer_task_graph::AvboitAccumulationSharedComputeEmulationGraphTask;
+    friend struct RendererTaskGraphDetail::AvboitOccupancyComputeEmulationGraphTask;
+    friend struct RendererTaskGraphDetail::AvboitOccupancySharedComputeEmulationGraphTask;
+    friend struct RendererTaskGraphDetail::AvboitExtinctionComputeEmulationGraphTask;
+    friend struct RendererTaskGraphDetail::AvboitExtinctionSharedComputeEmulationGraphTask;
+    friend struct RendererTaskGraphDetail::AvboitAccumulationComputeEmulationGraphTask;
+    friend struct RendererTaskGraphDetail::AvboitAccumulationSharedComputeEmulationGraphTask;
     friend struct ECSRenderDetail::GbufferGraphTask;
     friend struct ECSRenderDetail::CsgReceiverSpanBuildGraphTask;
     friend struct ECSRenderDetail::CsgIntervalCombineGraphTask;

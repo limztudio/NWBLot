@@ -2594,7 +2594,7 @@ struct CsgIntervalSampleGraphTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_renderer_task_graph{
+namespace RendererTaskGraphDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -4505,7 +4505,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     const bool softwareTraceResourcesPrepared,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
-    using namespace __hidden_renderer_task_graph;
+    using namespace RendererTaskGraphDetail;
 
     m_deferredShadowPrepareTask = {};
     m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
@@ -5734,7 +5734,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     Core::GpuTimingSubmissionTicket** const timingTickets,
     const bool* const asyncPrefixTimingSpansOnePacket
 ){
-    using namespace __hidden_renderer_task_graph;
+    using namespace RendererTaskGraphDetail;
     using PrefixTimingSlot = ECSRenderDetail::DeferredGraphicsPrefixTimingSlot;
 
     m_graphicsPrefixMeshViewSetupTask = {};
@@ -7778,7 +7778,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     bool& transparentTraceProduced,
     u32& opaqueFrameIndex
 ){
-    using namespace __hidden_renderer_task_graph;
+    using namespace RendererTaskGraphDetail;
 
     m_deferredShadowVisibilityOpaqueTask = {};
     m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
@@ -8879,7 +8879,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     Optional<Core::GpuTimingMeasure>& causticPhotonTiming,
     Optional<Core::GpuTimingMeasure>& causticResolveTiming
 ){
-    using namespace __hidden_renderer_task_graph;
+    using namespace RendererTaskGraphDetail;
 
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
@@ -9708,7 +9708,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming
 ){
-    using namespace __hidden_renderer_task_graph;
+    using namespace RendererTaskGraphDetail;
 
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiInitializationLifecycleTask = {};
@@ -10469,7 +10469,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
 
 
 void RendererSystem::declareDeferredSurfelCountReadbackTask(){
-    using namespace __hidden_renderer_task_graph;
+    using namespace RendererTaskGraphDetail;
 
     m_deferredSurfelGiCounterReadbackTask = {};
     if(
@@ -10580,7 +10580,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::GpuTimingSubmissionTicket& presentTimingTicket,
     const bool includeLaggedLightingHistoryCapture
 ){
-    using namespace __hidden_renderer_task_graph;
+    using namespace RendererTaskGraphDetail;
 
     m_deferredLightingTaskGraphValid = false;
     m_deferredBindlessSlotsUploadTask = {};

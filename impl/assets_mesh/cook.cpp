@@ -35,7 +35,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_cook{
+namespace __hidden_assets_mesh_cook{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -153,10 +153,10 @@ bool ParseMeshCookMetadata(
     Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    __hidden_cook::DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
-    if(!__hidden_cook::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
+    __hidden_assets_mesh_cook::DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
+    if(!__hidden_assets_mesh_cook::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
         return false;
-    return __hidden_cook::ParseMeshMeta(discoveredFile, doc, outEntry, threadPool, scratchArena);
+    return __hidden_assets_mesh_cook::ParseMeshMeta(discoveredFile, doc, outEntry, threadPool, scratchArena);
 }
 
 bool ParseMeshCookMetadata(
@@ -167,13 +167,13 @@ bool ParseMeshCookMetadata(
     Core::Alloc::ThreadPool& threadPool,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    __hidden_cook::DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
+    __hidden_assets_mesh_cook::DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
     discoveredFile.filePath = nwbFilePath;
-    return __hidden_cook::ParseMeshMeta(discoveredFile, asset, virtualPath, outEntry, threadPool, scratchArena);
+    return __hidden_assets_mesh_cook::ParseMeshMeta(discoveredFile, asset, virtualPath, outEntry, threadPool, scratchArena);
 }
 
 bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
-    return __hidden_cook::BuildMeshAsset(meshEntry, outMesh);
+    return __hidden_assets_mesh_cook::BuildMeshAsset(meshEntry, outMesh);
 }
 
 

@@ -252,36 +252,6 @@ inline SceneShadingGpuData ResolveSceneShadingState(Core::ECS::World& world, con
     return state;
 }
 
-template<typename Record>
-[[nodiscard]] bool RecordDeferredGraphTask(
-    RendererDeferredSystem* deferredSystem,
-    DeferredFrameTargets* targets,
-    Core::GpuTimingSubmissionTicket* timingTicket,
-    Core::CommandList& commandList,
-    Record&& record
-){
-    if(!deferredSystem || !targets || !timingTicket)
-        return false;
-
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*timingTicket);
-    return record(*deferredSystem, *targets, commandList);
-}
-
-template<typename Payload, typename Record>
-[[nodiscard]] bool RecordDeferredGraphTask(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    Record&& record
-){
-    return RecordDeferredGraphTask(
-        payload.deferredSystem,
-        payload.targets,
-        payload.timingTicket,
-        commandList,
-        Forward<Record>(record)
-    );
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

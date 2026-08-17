@@ -718,10 +718,10 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex)
             recorded = graph.applyCompiledBarrier(compiledGraph, prologueBarriers[barrierIndex], *commandList);
         // A retained state that already matches the compiler plan still needs a native tracker entry. Otherwise a
-        // later packet cannot import that graph-declared buffer state, and a renderer thunk would need a redundant
+        // later packet cannot import that graph-declared resource state, and a renderer thunk would need a redundant
         // direct transition merely to publish its handoff.
         if(recorded)
-            recorded = graph.seedTaskRetainedBufferStates(task, *commandList);
+            recorded = graph.seedTaskRetainedResourceStates(task, *commandList);
         if(recorded)
             commandList->commitBarriers();
         commandList->beginMarker(taskView.markerLabel);

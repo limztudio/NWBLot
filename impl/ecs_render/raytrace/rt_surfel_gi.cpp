@@ -61,7 +61,7 @@ inline constexpr u32 s_SurfelCountLogInterval = 120u;
 inline constexpr u32 s_SurfelCountLogDelay = 3u;
 
 
-namespace __hidden_surfel_gi_task{
+namespace RayTracingSurfelGiTaskDetail{
 
 
 struct SurfelGiAgeFreeGraphTask{
@@ -922,14 +922,14 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
 
     // Persistent descriptors own backing resources until deferred retirement.
     if(
-        !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelConstants.get(), Core::GpuDescriptorClass::UniformBuffer, false, rayTracingState().m_surfelConstantsHeapHandle)
-        || !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelPoolBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelPoolHeapHandle)
-        || !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelCellHeadBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelCellHeadHeapHandle)
-        || !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelCounterHeapHandle)
-        || !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelTraceIndirectArgsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelTraceIndirectArgsHeapHandle)
-        || !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelFreeListBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelFreeListHeapHandle)
-        || !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelPoolSnapshotBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, false, rayTracingState().m_surfelPoolSnapshotHeapHandle)
-        || !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelCellHeadSnapshotBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, false, rayTracingState().m_surfelCellHeadSnapshotHeapHandle)
+        !RayTracingDetail::EnsureHeapBuffer(heap, *rayTracingState().m_surfelConstants.get(), Core::GpuDescriptorClass::UniformBuffer, false, rayTracingState().m_surfelConstantsHeapHandle)
+        || !RayTracingDetail::EnsureHeapBuffer(heap, *rayTracingState().m_surfelPoolBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelPoolHeapHandle)
+        || !RayTracingDetail::EnsureHeapBuffer(heap, *rayTracingState().m_surfelCellHeadBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelCellHeadHeapHandle)
+        || !RayTracingDetail::EnsureHeapBuffer(heap, *rayTracingState().m_surfelCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelCounterHeapHandle)
+        || !RayTracingDetail::EnsureHeapBuffer(heap, *rayTracingState().m_surfelTraceIndirectArgsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelTraceIndirectArgsHeapHandle)
+        || !RayTracingDetail::EnsureHeapBuffer(heap, *rayTracingState().m_surfelFreeListBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelFreeListHeapHandle)
+        || !RayTracingDetail::EnsureHeapBuffer(heap, *rayTracingState().m_surfelPoolSnapshotBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, false, rayTracingState().m_surfelPoolSnapshotHeapHandle)
+        || !RayTracingDetail::EnsureHeapBuffer(heap, *rayTracingState().m_surfelCellHeadSnapshotBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, false, rayTracingState().m_surfelCellHeadSnapshotHeapHandle)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register persistent surfel resources in the descriptor heap"));
         return false;
@@ -1172,15 +1172,15 @@ void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
     auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(heap.isInitialized()){
-        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelConstantsHeapHandle);
-        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelPoolHeapHandle);
-        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelCellHeadHeapHandle);
-        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelCounterHeapHandle);
-        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelTraceIndirectArgsHeapHandle);
-        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelFreeListHeapHandle);
-        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelPoolSnapshotHeapHandle);
-        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelCellHeadSnapshotHeapHandle);
-        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelMaterialContextSlotsHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_surfelConstantsHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_surfelPoolHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_surfelCellHeadHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_surfelCounterHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_surfelTraceIndirectArgsHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_surfelFreeListHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_surfelPoolSnapshotHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_surfelCellHeadSnapshotHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, rayTracingState().m_surfelMaterialContextSlotsHeapHandle);
         return;
     }
 
@@ -1257,9 +1257,9 @@ bool RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targ
     Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     if(
         !targets.bindless.valid()
-        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
+        || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
         || !rayTracingState().m_rayTraceMaterialContextSlotsBuffer
-        || !__hidden_raytracing_system::EnsureHeapBuffer(
+        || !RayTracingDetail::EnsureHeapBuffer(
             heap,
             *rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(),
             Core::GpuDescriptorClass::UniformBuffer,
@@ -1344,9 +1344,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiAgeFreeTask(
     Optional<Core::GpuTimingMeasure>& asyncTiming,
     const bool graphEntryStatesOwned
 ){
-    return graph.addTask<__hidden_surfel_gi_task::SurfelGiAgeFreeGraphTask>(
+    return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiAgeFreeGraphTask>(
         desc,
-        __hidden_surfel_gi_task::SurfelGiAgeFreeGraphTask::Payload{
+        RayTracingSurfelGiTaskDetail::SurfelGiAgeFreeGraphTask::Payload{
             .raytracingSystem = this,
             .graphics = &graphics(),
             .targets = &targets,
@@ -1365,9 +1365,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiHashBuildTask(
     Optional<Core::GpuTimingMeasure>* const asyncTiming,
     const bool graphEntryStatesOwned
 ){
-    return graph.addTask<__hidden_surfel_gi_task::SurfelGiHashBuildGraphTask>(
+    return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask>(
         desc,
-        __hidden_surfel_gi_task::SurfelGiHashBuildGraphTask::Payload{
+        RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
             .timingTicket = &timingTicket,
@@ -1385,9 +1385,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiSpawnTask(
     Optional<Core::GpuTimingMeasure>* const asyncTiming,
     const bool graphEntryStatesOwned
 ){
-    return graph.addTask<__hidden_surfel_gi_task::SurfelGiSpawnGraphTask>(
+    return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask>(
         desc,
-        __hidden_surfel_gi_task::SurfelGiSpawnGraphTask::Payload{
+        RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
             .timingTicket = &timingTicket,
@@ -1405,9 +1405,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceBuildArgsTask(
     Optional<Core::GpuTimingMeasure>* const asyncTiming,
     const bool graphEntryStatesOwned
 ){
-    return graph.addTask<__hidden_surfel_gi_task::SurfelGiTraceBuildArgsGraphTask>(
+    return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiTraceBuildArgsGraphTask>(
         desc,
-        __hidden_surfel_gi_task::SurfelGiTraceBuildArgsGraphTask::Payload{
+        RayTracingSurfelGiTaskDetail::SurfelGiTraceBuildArgsGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
             .timingTicket = &timingTicket,
@@ -1425,9 +1425,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceTask(
     Optional<Core::GpuTimingMeasure>* const asyncTiming,
     const bool graphEntryStatesOwned
 ){
-    return graph.addTask<__hidden_surfel_gi_task::SurfelGiTraceGraphTask>(
+    return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask>(
         desc,
-        __hidden_surfel_gi_task::SurfelGiTraceGraphTask::Payload{
+        RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
             .timingTicket = &timingTicket,
@@ -1445,9 +1445,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiResolveTask(
     Optional<Core::GpuTimingMeasure>* const asyncTiming,
     const bool graphEntryStatesOwned
 ){
-    return graph.addTask<__hidden_surfel_gi_task::SurfelGiResolveGraphTask>(
+    return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask>(
         desc,
-        __hidden_surfel_gi_task::SurfelGiResolveGraphTask::Payload{
+        RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
             .timingTicket = &timingTicket,
@@ -1471,9 +1471,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
     const bool graphOwnsResolve,
     Optional<Core::GpuTimingMeasure>* const asyncTiming
 ){
-    return graph.addTask<__hidden_surfel_gi_task::SurfelGiGraphTask>(
+    return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiGraphTask>(
         desc,
-        __hidden_surfel_gi_task::SurfelGiGraphTask::Payload{
+        RayTracingSurfelGiTaskDetail::SurfelGiGraphTask::Payload{
             .raytracingSystem = this,
             .graphics = &graphics(),
             .targets = &targets,
@@ -1754,22 +1754,22 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         !targets.bindless.valid()
         || !deferredState().m_sceneShadingBuffer
         || !deferredState().m_lightBuffer
-        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelConstantsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
-        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelPoolHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelCellHeadHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelTraceIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelFreeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelPoolSnapshotHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelCellHeadSnapshotHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
-        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
-        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.gbufferWorldPosition, Core::GpuDescriptorClass::SampledImage)
-        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.gbufferNormal, Core::GpuDescriptorClass::SampledImage)
-        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.surfelIrradianceHalf, Core::GpuDescriptorClass::SampledImage)
-        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.surfelIrradianceHalfStorage, Core::GpuDescriptorClass::StorageImage)
-        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.surfelIrradianceStorage, Core::GpuDescriptorClass::StorageImage)
-        || (useHwTrace && (!rayTracingState().m_tlas || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)))
+        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_surfelConstantsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
+        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_surfelPoolHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_surfelCellHeadHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_surfelCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_surfelTraceIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_surfelFreeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_surfelPoolSnapshotHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_surfelCellHeadSnapshotHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !RayTracingDetail::IsHeapHandle(rayTracingState().m_surfelMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
+        || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
+        || !RayTracingDetail::IsHeapHandle(targets.bindless.gbufferWorldPosition, Core::GpuDescriptorClass::SampledImage)
+        || !RayTracingDetail::IsHeapHandle(targets.bindless.gbufferNormal, Core::GpuDescriptorClass::SampledImage)
+        || !RayTracingDetail::IsHeapHandle(targets.bindless.surfelIrradianceHalf, Core::GpuDescriptorClass::SampledImage)
+        || !RayTracingDetail::IsHeapHandle(targets.bindless.surfelIrradianceHalfStorage, Core::GpuDescriptorClass::StorageImage)
+        || !RayTracingDetail::IsHeapHandle(targets.bindless.surfelIrradianceStorage, Core::GpuDescriptorClass::StorageImage)
+        || (useHwTrace && (!rayTracingState().m_tlas || !RayTracingDetail::IsHeapHandle(rayTracingState().m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)))
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel GI heap registration is incomplete"));
         return false;

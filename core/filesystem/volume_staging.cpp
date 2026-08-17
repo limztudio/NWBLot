@@ -91,7 +91,7 @@ void StagedDirectoryCleanupGuard::dismiss(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_filesystem_staging{
+namespace FilesystemVolumeStagingDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -418,16 +418,16 @@ bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView
 
 
 bool PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
-    return __hidden_filesystem_staging::PromoteStagedVolume(stagedPaths, outputDirectory, volumeName, segmentCount);
+    return FilesystemVolumeStagingDetail::PromoteStagedVolume(stagedPaths, outputDirectory, volumeName, segmentCount);
 }
 
 bool RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeName){
     if(!::ValidVolumeName(volumeName)){
-        __hidden_filesystem::LogFailure(volumeName, "remove", "invalid volume name");
+        FilesystemVolumeDetail::LogFailure(volumeName, "remove", "invalid volume name");
         return false;
     }
 
-    return __hidden_filesystem_staging::RemoveExistingVolumeSegments(outputDirectory, volumeName);
+    return FilesystemVolumeStagingDetail::RemoveExistingVolumeSegments(outputDirectory, volumeName);
 }
 
 

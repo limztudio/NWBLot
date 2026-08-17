@@ -168,7 +168,7 @@ using PreparedSceneSwBvhMeshVector = Vector<
 >;
 
 
-namespace __hidden_surfel_gi_task{
+namespace RayTracingSurfelGiTaskDetail{
     struct SurfelGiAgeFreeGraphTask;
     struct SurfelGiHashBuildGraphTask;
     struct SurfelGiSpawnGraphTask;
@@ -178,7 +178,7 @@ namespace __hidden_surfel_gi_task{
     struct SurfelGiGraphTask;
 }
 
-namespace __hidden_shadow_visibility_task{
+namespace RayTracingShadowVisibilityTaskDetail{
     struct ShadowVisibilityOpaqueGraphTask;
     struct ShadowVisibilityOpaqueFirstWaveletGraphTask;
     struct ShadowVisibilityOpaqueResolveTailGraphTask;
@@ -799,21 +799,21 @@ public:
 
 private:
     struct SurfelGiInitializationLifecycleGraphTask;
-    friend struct __hidden_shadow_visibility_task::ShadowVisibilityOpaqueGraphTask;
-    friend struct __hidden_shadow_visibility_task::ShadowVisibilityOpaqueFirstWaveletGraphTask;
-    friend struct __hidden_shadow_visibility_task::ShadowVisibilityOpaqueResolveTailGraphTask;
-    friend struct __hidden_shadow_visibility_task::ShadowTransparentSoftTraceGraphTask;
-    friend struct __hidden_shadow_visibility_task::ShadowTransparentSoftTemporalMergeGraphTask;
-    friend struct __hidden_shadow_visibility_task::ShadowTransparentSoftFirstWaveletGraphTask;
-    friend struct __hidden_shadow_visibility_task::ShadowTransparentSoftFoldGraphTask;
-    friend struct __hidden_shadow_visibility_task::ShadowVisibilityGraphTask;
-    friend struct __hidden_surfel_gi_task::SurfelGiAgeFreeGraphTask;
-    friend struct __hidden_surfel_gi_task::SurfelGiHashBuildGraphTask;
-    friend struct __hidden_surfel_gi_task::SurfelGiSpawnGraphTask;
-    friend struct __hidden_surfel_gi_task::SurfelGiTraceBuildArgsGraphTask;
-    friend struct __hidden_surfel_gi_task::SurfelGiTraceGraphTask;
-    friend struct __hidden_surfel_gi_task::SurfelGiResolveGraphTask;
-    friend struct __hidden_surfel_gi_task::SurfelGiGraphTask;
+    friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueGraphTask;
+    friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueFirstWaveletGraphTask;
+    friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueResolveTailGraphTask;
+    friend struct RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTraceGraphTask;
+    friend struct RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTemporalMergeGraphTask;
+    friend struct RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFirstWaveletGraphTask;
+    friend struct RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFoldGraphTask;
+    friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityGraphTask;
+    friend struct RayTracingSurfelGiTaskDetail::SurfelGiAgeFreeGraphTask;
+    friend struct RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask;
+    friend struct RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask;
+    friend struct RayTracingSurfelGiTaskDetail::SurfelGiTraceBuildArgsGraphTask;
+    friend struct RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask;
+    friend struct RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask;
+    friend struct RayTracingSurfelGiTaskDetail::SurfelGiGraphTask;
     enum class PreparedShadowMaterialContextRoute : u8{
         None,
         Hardware,

@@ -671,7 +671,7 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
 
         MeshResources* mesh = nullptr;
         RenderableMeshDesc resolvedMesh;
-        const bool meshReady = __hidden_raytracing_system::ResolveRenderableMeshResources(
+        const bool meshReady = RayTracingDetail::ResolveRenderableMeshResources(
             *meshSystem,
             m_renderer.meshSystem(),
             entity,
@@ -841,14 +841,14 @@ bool RendererRayTracingSystem::ensureCausticMaterialContextSlotsHeapHandle(){
 
     Core::GpuDescriptorHandle& handle = rayTracingState().m_causticMaterialContextSlotsHeapHandle;
     if(handle.valid()){
-        if(__hidden_raytracing_system::IsHeapHandle(handle, Core::GpuDescriptorClass::UniformBuffer))
+        if(RayTracingDetail::IsHeapHandle(handle, Core::GpuDescriptorClass::UniformBuffer))
             return true;
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic material-context selector has an unexpected descriptor class"));
         return false;
     }
 
     Core::GpuDescriptorHandle acquired;
-    if(!__hidden_raytracing_system::RegisterHeapBuffer(
+    if(!RayTracingDetail::RegisterHeapBuffer(
         heap,
         *rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(),
         Core::GpuDescriptorClass::UniformBuffer,
@@ -2582,7 +2582,7 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
     }
 
     const auto acquireHeapHandle = [&](Core::Buffer& buffer, Core::GpuDescriptorHandle& outHandle) -> bool{
-        if(!__hidden_raytracing_system::RegisterHeapBuffer(
+        if(!RayTracingDetail::RegisterHeapBuffer(
             heap,
             buffer,
             Core::GpuDescriptorClass::StorageBuffer,

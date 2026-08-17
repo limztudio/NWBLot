@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/kernel/renderer_private.h>
 
+#include <impl/ecs_render/deferred/deferred_graph_private.h>
 #include <impl/assets/graphics/deferred/binding_slots.h>
 #include <impl/assets/graphics/deferred/names.h>
 

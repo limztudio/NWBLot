@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_csg_interval_peel{
+namespace CsgIntervalDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -180,7 +180,7 @@ bool RendererCsgSystem::prepareCsgIntervalSampleStateData(
 
     // The work rectangle and heap slot are both resolved after preflight chose this frame's target generation.
     // Freeze them before graph recording so retry/acceptance cannot observe later mutable renderer state.
-    outState = __hidden_csg_interval_peel::BuildCsgIntervalSampleState(
+    outState = CsgIntervalDetail::BuildCsgIntervalSampleState(
         targets,
         csgFrameData,
         drawState().m_meshViewBufferHeapHandle.slot()
@@ -237,7 +237,7 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
     // Opaque G-buffer and prepared-transparent AVBOIT graph tasks declare these exact peel-array StorageImage
     // states before this thunk records. Direct compatibility callers retain the historical native setup.
     if(!intervalPeelTargetStatesGraphOwned)
-        __hidden_csg_interval_peel::SetCsgIntervalPeelStorageStates(commandList, targets);
+        CsgIntervalDetail::SetCsgIntervalPeelStorageStates(commandList, targets);
     // The graph declares the heap-selected view CBV for prepared material streams. Direct and compatibility callers
     // retain the established native setup.
     if(!materialFrameStatesGraphOwned)
@@ -246,7 +246,7 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
         setCsgClipBufferStates(commandList);
     commandList.commitBarriers();
 
-    __hidden_csg_interval_peel::DispatchCsgIntervalCompute(
+    CsgIntervalDetail::DispatchCsgIntervalCompute(
         commandList,
         graphics().getDevice().getDescriptorHeap(),
         targets,
@@ -272,7 +272,7 @@ void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgReceiverSpanBuild, graphics().getDevice(), commandList);
 
     commandList.endRenderPass();
-    __hidden_csg_interval_peel::SetCsgReceiverSpanStorageStates(
+    CsgIntervalDetail::SetCsgReceiverSpanStorageStates(
         commandList,
         targets,
         receiverSpanOutputImageStatesGraphOwned,
@@ -280,7 +280,7 @@ void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
     );
     commandList.commitBarriers();
 
-    __hidden_csg_interval_peel::DispatchCsgIntervalCompute(
+    CsgIntervalDetail::DispatchCsgIntervalCompute(
         commandList,
         graphics().getDevice().getDescriptorHeap(),
         targets,
@@ -305,7 +305,7 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalCombine, graphics().getDevice(), commandList);
 
     commandList.endRenderPass();
-    __hidden_csg_interval_peel::SetCsgIntervalCombineStorageStates(
+    CsgIntervalDetail::SetCsgIntervalCombineStorageStates(
         commandList,
         targets,
         removedIntervalOutputImageStatesGraphOwned,
@@ -313,7 +313,7 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
     );
     commandList.commitBarriers();
 
-    __hidden_csg_interval_peel::DispatchCsgIntervalCompute(
+    CsgIntervalDetail::DispatchCsgIntervalCompute(
         commandList,
         graphics().getDevice().getDescriptorHeap(),
         targets,
@@ -341,7 +341,7 @@ void RendererCsgSystem::renderCsgIntervalCaps(
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgCapFill, graphics().getDevice(), commandList);
 
     if(!intervalSampleImageStatesGraphOwned)
-        __hidden_csg_interval_peel::SetCsgIntervalSampleStorageStates(commandList, targets);
+        CsgIntervalDetail::SetCsgIntervalSampleStorageStates(commandList, targets);
     // The cap-fill surface evaluator reaches typed words, mesh instances, and the view through heap slots. Prepared
     // graph tasks declare those shared states before this thunk records; compatibility callers retain this bridge.
     if(!materialFrameStatesGraphOwned){
@@ -356,7 +356,7 @@ void RendererCsgSystem::renderCsgIntervalCaps(
     Core::ViewportState viewportState;
     viewportState
         .addViewport(targets.framebuffer->getFramebufferInfo().getViewport())
-        .addScissorRect(__hidden_csg_interval_peel::ResolveCsgFrameWorkRect(targets, csgFrameData))
+        .addScissorRect(CsgIntervalDetail::ResolveCsgFrameWorkRect(targets, csgFrameData))
     ;
 
     Core::GraphicsState graphicsState;

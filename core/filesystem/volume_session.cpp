@@ -23,7 +23,7 @@ VolumeSession::VolumeSession(Alloc::GlobalArena& arena)
 
 
 bool VolumeSession::create(const Path& outputDirectory, const VolumeBuildConfig& config){
-    if(!__hidden_filesystem_staging::RemoveExistingVolumeSegments(outputDirectory, config.volumeName.view()))
+    if(!FilesystemVolumeStagingDetail::RemoveExistingVolumeSegments(outputDirectory, config.volumeName.view()))
         return false;
 
     VolumeMountDesc desc(outputDirectory.arena());

@@ -584,6 +584,27 @@ TEST(EcsGraphics, AvboitMaterialUploadsHaveNoNativeCompatibilityDispatcher){
     EXPECT_TRUE(ContainsText(taskGraph, "if(payload.hasTransparentRenderers && (!payload.extinctionPhasePrepared || !payload.extinctionSnapshot.captured))"));
     EXPECT_TRUE(ContainsText(taskGraph, "if(payload.hasTransparentRenderers && (!payload.accumulationPhasePrepared || !payload.accumulationSnapshot.captured))"));
     EXPECT_TRUE(ContainsText(taskGraph, "addUploadBufferTask("));
+
+    const usize avboitPreOffset = taskGraph.find("struct AvboitPreGraphTask");
+    const usize avboitOccupancyOffset = taskGraph.find("struct AvboitOccupancyComputeEmulationGraphTask", avboitPreOffset);
+    ASSERT_NE(avboitPreOffset, AStringView::npos);
+    ASSERT_NE(avboitOccupancyOffset, AStringView::npos);
+    ASSERT_LT(avboitPreOffset, avboitOccupancyOffset);
+    const AStringView avboitPre = taskGraph.substr(avboitPreOffset, avboitOccupancyOffset - avboitPreOffset);
+    EXPECT_TRUE(ContainsText(avboitPre, "if(payload.transparentCsgStreamsUploaded != payload.transparentCsgSnapshot.captured)"));
+    EXPECT_FALSE(ContainsText(avboitPre, "CsgFrameState"));
+
+    const usize transparentCsgCaptureOffset = taskGraph.find("avboitPrePayload.transparentCsgSnapshot.capture(");
+    const usize transparentCsgSpanCaptureOffset = taskGraph.find("avboitCsgReceiverSpanPayload.transparentCsgSnapshot.capture(");
+    const usize transparentCsgCombineCaptureOffset = taskGraph.find("avboitCsgIntervalCombinePayload.transparentCsgSnapshot.capture(");
+    const usize transparentCsgUploadedOffset = taskGraph.find("avboitPrePayload.transparentCsgStreamsUploaded = true");
+    ASSERT_NE(transparentCsgCaptureOffset, AStringView::npos);
+    ASSERT_NE(transparentCsgSpanCaptureOffset, AStringView::npos);
+    ASSERT_NE(transparentCsgCombineCaptureOffset, AStringView::npos);
+    ASSERT_NE(transparentCsgUploadedOffset, AStringView::npos);
+    EXPECT_LT(transparentCsgCaptureOffset, transparentCsgUploadedOffset);
+    EXPECT_LT(transparentCsgSpanCaptureOffset, transparentCsgUploadedOffset);
+    EXPECT_LT(transparentCsgCombineCaptureOffset, transparentCsgUploadedOffset);
 }
 
 

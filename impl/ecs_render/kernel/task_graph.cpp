@@ -2862,6 +2862,10 @@ struct AvboitPreGraphTask{
         static_cast<void>(context);
         if(!payload.avboitSystem || !payload.targets || !payload.timingTicket)
             return false;
+        // A transparent CSG upload has no safe native fallback: accepting its packet without the paired frozen
+        // stream would leave the declared clears and later CSG consumers detached from their interval producer.
+        if(payload.transparentCsgStreamsUploaded != payload.transparentCsgSnapshot.captured)
+            return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
@@ -12779,6 +12783,14 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 transparentCsgInstanceData.size(),
                 transparentCsgMaterialTypedBytes.size()
             );
+            if(
+                !avboitPrePayload.transparentCsgSnapshot.captured
+                || !avboitCsgReceiverSpanPayload.transparentCsgSnapshot.captured
+                || !avboitCsgIntervalCombinePayload.transparentCsgSnapshot.captured
+            ){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not capture transparent CSG interval graph snapshots"));
+                return;
+            }
             avboitCsgIntervalCombinePayload.csgFrameBuffersUploaded = true;
             avboitPrePayload.transparentCsgStreamsUploaded = true;
         }

@@ -543,7 +543,8 @@ bool BackendContext::prepareFramePresentationSignal(
         return false;
 
     const GpuPhysicalQueueInfo* const queueInfo = m_rhiDevice->getPhysicalQueueInfo(executionQueue);
-    if(!queueInfo || queueInfo->queueClass != CommandQueue::Graphics)
+    const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    if(!VulkanDetail::IsPrimaryGraphicsPresentationQueue(primaryGraphicsQueue, queueInfo))
         return false;
 
 #if VK_USE_64_BIT_PTR_DEFINES
@@ -578,7 +579,8 @@ bool BackendContext::confirmFramePresentationSignal(const QueueSubmissionToken& 
         return false;
 
     const GpuPhysicalQueueInfo* const queueInfo = m_rhiDevice->getPhysicalQueueInfo(m_framePresentationQueue);
-    if(!queueInfo || queueInfo->queueClass != CommandQueue::Graphics)
+    const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    if(!VulkanDetail::IsPrimaryGraphicsPresentationQueue(primaryGraphicsQueue, queueInfo))
         return false;
 
     m_framePresentationSignalState = FramePresentationSignalState::Accepted;

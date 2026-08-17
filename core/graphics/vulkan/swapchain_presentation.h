@@ -33,6 +33,22 @@ struct SwapChainSurfaceFormatSelection{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Frame acquisition queues its binary semaphore on the primary physical Graphics transport. A secondary Graphics
+// queue therefore cannot safely become the terminal swap-chain signal source until the acquired-image and
+// swap-chain sharing contract is extended to name that transport explicitly. Keep this policy separate from broad
+// CommandQueue::Graphics validation so optional same-class routing cannot accidentally make a windowed
+// presentation packet cross an unprepared ownership boundary.
+inline bool IsPrimaryGraphicsPresentationQueue(
+    const GpuPhysicalQueueId& primaryGraphicsQueue,
+    const GpuPhysicalQueueInfo* const executionQueue
+)noexcept{
+    return primaryGraphicsQueue.valid()
+        && executionQueue
+        && executionQueue->queueClass == CommandQueue::Graphics
+        && executionQueue->id == primaryGraphicsQueue
+    ;
+}
+
 inline bool SurfaceFormatSupports(
     const VkSurfaceFormatKHR& supported,
     const VkFormat format,
@@ -124,4 +140,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

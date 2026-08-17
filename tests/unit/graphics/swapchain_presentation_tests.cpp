@@ -26,6 +26,9 @@ namespace __hidden_swapchain_presentation_tests{
 
 namespace Format = Core::Format;
 namespace SwapChainOutputMode = Core::SwapChainOutputMode;
+using Core::GpuPhysicalQueueId;
+using Core::GpuPhysicalQueueInfo;
+using Core::GraphicsBackend::VulkanDetail::IsPrimaryGraphicsPresentationQueue;
 using Core::GraphicsBackend::VulkanDetail::SelectSurfaceFormat;
 using Core::GraphicsBackend::VulkanDetail::SwapChainSurfaceFormatSelection;
 
@@ -115,6 +118,48 @@ TEST(SwapChainPresentation, RejectsSurfacesWithoutACompatibleHdrOrSdrFormat){
     EXPECT_EQ(selected.outputMode, SwapChainOutputMode::SDR);
 }
 
+TEST(SwapChainPresentation, RestrictsGraphPresentationSignalsToPrimaryGraphicsTransport){
+    const GpuPhysicalQueueId primaryGraphicsQueue{
+        .index = 1u,
+        .deviceGeneration = 7u,
+    };
+    const GpuPhysicalQueueInfo primaryGraphicsInfo{
+        .id = primaryGraphicsQueue,
+        .queueClass = Core::CommandQueue::Graphics,
+        .capabilities = Core::GpuQueueCapability::Graphics,
+        .familyIndex = 3u,
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuPhysicalQueueInfo sameFamilyAuxiliaryGraphicsInfo{
+        .id = GpuPhysicalQueueId{
+            .index = 2u,
+            .deviceGeneration = primaryGraphicsQueue.deviceGeneration,
+        },
+        .queueClass = Core::CommandQueue::Graphics,
+        .capabilities = Core::GpuQueueCapability::Graphics,
+        .familyIndex = primaryGraphicsInfo.familyIndex,
+        .queueIndex = 1u,
+        .dedicated = false,
+    };
+    const GpuPhysicalQueueInfo crossFamilyAuxiliaryGraphicsInfo{
+        .id = GpuPhysicalQueueId{
+            .index = 3u,
+            .deviceGeneration = primaryGraphicsQueue.deviceGeneration,
+        },
+        .queueClass = Core::CommandQueue::Graphics,
+        .capabilities = Core::GpuQueueCapability::Graphics,
+        .familyIndex = 4u,
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+
+    EXPECT_TRUE(IsPrimaryGraphicsPresentationQueue(primaryGraphicsQueue, &primaryGraphicsInfo));
+    EXPECT_FALSE(IsPrimaryGraphicsPresentationQueue(primaryGraphicsQueue, &sameFamilyAuxiliaryGraphicsInfo));
+    EXPECT_FALSE(IsPrimaryGraphicsPresentationQueue(primaryGraphicsQueue, &crossFamilyAuxiliaryGraphicsInfo));
+    EXPECT_FALSE(IsPrimaryGraphicsPresentationQueue({}, &primaryGraphicsInfo));
+}
+
 
 };
 
@@ -132,4 +177,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

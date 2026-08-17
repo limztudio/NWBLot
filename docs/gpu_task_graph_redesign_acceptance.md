@@ -373,6 +373,10 @@ can receive an unconditional final sign-off.
   may use it. The compiler uses deterministic current-cost balancing within that family, broad
   `CommandQueue::Graphics` callers remain on the primary queue, and a same-family handoff uses the graph packet's
   timeline dependency without emitting a queue-family ownership transfer.
+- Windowed graph presentation is pinned to the primary physical Graphics transport. The backend rejects a claimed
+  terminal signal from every auxiliary Graphics queue, and the deferred renderer rejects a Present or terminal
+  overlay that resolves anywhere else. An auxiliary route needs an explicit acquired-image and swap-chain-sharing
+  contract before it can become a presentation endpoint.
 - Recorded graph and submission-transaction state is generation-bound. Recompiling after graph reset invalidates
   stale recording state until it is reset for the new compiled graph, releasing the old packet-owned command-list
   handles before recording can resume.
@@ -407,6 +411,7 @@ can receive an unconditional final sign-off.
 | Same-class Graphics routing follow-up: descriptor-buffer smoke binary | 72 passed; 10 expected skips. The added real-Vulkan route skipped because this adapter exposes only one Graphics queue; the existing 9 skips lack dedicated Compute-only or Transfer-only families |
 | Cross-family same-class Graphics routing follow-up: graph-unit binary | 124/124 passed, including default same-family retention plus deterministic explicit cross-family routing and exclusive Buffer ownership release/acquire planning |
 | Cross-family same-class Graphics routing follow-up: descriptor-buffer smoke binary | 147 passed; 17 expected topology skips. The added real-Vulkan route requests a separately enabled alternate Graphics family, verifies compiler release/acquire barriers, records/submits its exact physical timeline dependency, and reads the copied buffer back; this adapter cleanly skips because it exposes no alternate Graphics-capable family |
+| Primary-Graphics terminal-presentation boundary: swap-chain unit, graph/ECS contracts, and descriptor-buffer smoke | passed; the presentation policy admits only the exact primary physical Graphics queue, rejecting same-family and cross-family auxiliary queues before a binary signal can be queued or accepted. The deferred renderer independently rejects an off-primary scene Present or terminal overlay, so the acquired image remains on the transport named by its existing acquire/share contract. Presentation tests passed 7/7, graph tests 124/124, ECS graphics 26/26, and descriptor smoke passed 147 with 17 expected topology skips. |
 | Actual device-recreation graph-packet follow-up: descriptor-buffer smoke binary | 73 passed; 10 expected skips. A real headless Graphics instance releases its recorded packets/transaction before teardown, recreates its device, then recompiles, records, and submits only on the replacement generation |
 | Graph-owned public setup-upload follow-up: descriptor-buffer smoke binary | 73 passed; 10 expected skips. Normal buffer and texture setup routes compile, record, and submit through one graph packet while preserving queue selection, graph-visible final states, and Graphics readiness; the dedicated-Transfer probe is hardware-skipped on this adapter |
 | Public texture-upload validation closeout: graph-unit and descriptor-buffer smoke binaries | passed; combined D24S8/D32S8 raw payloads and retained-Unknown setup/batch descriptors now reject before any native submission, leaving every supported public texture upload on the graph-owned path. A future combined depth/stencil upload requires an explicit per-aspect payload/task contract. Graph tests passed 122/122 and the real Vulkan descriptor smoke passed 145 with 16 expected topology skips. |
@@ -634,8 +639,10 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    deterministically, and same-family state handoffs use exact physical timeline waits without a spurious ownership
    barrier. A separately enabled alternate Graphics-capable family may now be registered too; tasks explicitly opt
    into that higher-cost route, and exclusive resource crossings use the same physical-owner release/acquire plan
-   already used by cross-class handoffs. Dynamic queue scaling and target-scene performance evidence for the new
-   routes remain open.
+   already used by cross-class handoffs. Windowed presentation remains deliberately primary-Graphics-only: both the
+   renderer and Vulkan presentation hook reject an auxiliary terminal until a future acquired-image/swap-chain
+   sharing contract names that transport. Dynamic queue scaling and target-scene performance evidence for the new
+   ordinary-work routes remain open.
 
 2. **Complete graph ownership.** Renderer code still controls high-level recording/submission sequencing and holds
    legacy state-handoff data, but the shared deferred renderer now gives the task runtime semantic task endpoints

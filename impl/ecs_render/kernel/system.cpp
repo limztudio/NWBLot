@@ -691,6 +691,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
     // Renderer scheduling queries the physical transport exposed to the graph, not the legacy unresolved lane.
     // A Compute entry exists only when Vulkan created an enabled, distinct async-compute queue for this device.
+    const Core::GpuPhysicalQueueId primaryGraphicsQueue =
+        device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
     const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
     const bool dedicatedAsyncCompute = computeFamilyIndex != Limit<u32>::s_Max
@@ -2622,6 +2624,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !deferredPresentQueue
         || !terminalPresentationQueue
         || !deferredFrameRecoveryQueue
+        // The acquired swap-chain semaphore is attached to the primary physical Graphics transport. The task
+        // graph may use an explicitly opted-in auxiliary Graphics queue for ordinary work, but it must not route
+        // a backbuffer writer or its final presentation signal without an acquired-image/share contract for it.
+        || !primaryGraphicsQueue.valid()
+        || deferredPresentQueue->id != primaryGraphicsQueue
+        || terminalPresentationQueue->id != primaryGraphicsQueue
         || !shadowPreparePacketRange.valid()
         || shadowPreparePacketRange.packetCount != 1u
         || !graphicsPrefixWorkPacketRange.valid()

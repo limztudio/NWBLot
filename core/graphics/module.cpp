@@ -236,17 +236,6 @@ constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
     ;
 }
 
-[[nodiscard]] static bool CanDeclareGraphOwnedTextureSetupUpload(const TextureDesc& textureDesc)noexcept{
-    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
-    // The graph helper intentionally uses the same single-aspect write primitive as ordinary color/depth-only
-    // texture setup. Combined depth/stencil uploads and unknown keep-initial-state descriptors stay on the narrow
-    // legacy path until they have a declaration-safe specialized upload task.
-    return
-        !(formatInfo.hasDepth && formatInfo.hasStencil)
-        && (!textureDesc.keepInitialState || textureDesc.initialState != ResourceStates::Unknown)
-    ;
-}
-
 template<typename DeclareTask>
 [[nodiscard]] static bool SubmitGraphOwnedStandaloneTask(
     GraphicsBackend::Device& device,
@@ -516,6 +505,21 @@ static bool ValidateTextureSetupUpload(const Graphics::TextureSetupDesc& desc){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up texture '{}': invalid upload layout"), StringConvert(desc.textureDesc.name.c_str()));
         return false;
     }
+
+    const FormatInfo& formatInfo = GetFormatInfo(desc.textureDesc.format);
+    // VkBufferImageCopy permits exactly one depth/stencil aspect per copy. The public setup descriptor has one
+    // packed payload and cannot state separate depth/stencil byte layouts, so accepting it would either skip the
+    // upload in debug or issue an explicitly unsupported native copy in release.
+    if(formatInfo.hasDepth && formatInfo.hasStencil){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up texture '{}': combined depth/stencil uploads require an explicit per-aspect upload API"), StringConvert(desc.textureDesc.name.c_str()));
+        return false;
+    }
+    // A retained texture must publish a concrete state. Leaving it Unknown makes command-list close restore an
+    // untracked layout, so no graph task or later consumer can safely describe the uploaded contents.
+    if(desc.textureDesc.keepInitialState && desc.textureDesc.initialState == ResourceStates::Unknown){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up texture '{}': keep-initial-state uploads require a concrete initial state"), StringConvert(desc.textureDesc.name.c_str()));
+        return false;
+    }
     if(desc.uploadDataSize < requiredBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up texture '{}': upload data size {} is smaller than required size {}")
             , StringConvert(desc.textureDesc.name.c_str())
@@ -551,6 +555,25 @@ static bool ValidateTextureSetupUpload(const Graphics::TextureSetupDesc& desc){
     }
 
     const TextureDesc& textureDesc = desc.destination->getDescription();
+    if(textureDesc.keepInitialState && textureDesc.initialState == ResourceStates::Unknown){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch '{}': keep-initial-state uploads require a concrete initial state")
+            , StringConvert(textureDesc.name.c_str())
+        );
+        return false;
+    }
+    if(static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::kCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch '{}': texture format is invalid")
+            , StringConvert(textureDesc.name.c_str())
+        );
+        return false;
+    }
+    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
+    if(formatInfo.hasDepth && formatInfo.hasStencil){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch '{}': combined depth/stencil uploads require an explicit per-aspect upload API")
+            , StringConvert(textureDesc.name.c_str())
+        );
+        return false;
+    }
     if(textureDesc.keepInitialState && desc.finalState != textureDesc.initialState){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch '{}': keep-initial-state requires final state {}")
             , StringConvert(textureDesc.name.c_str())
@@ -1535,93 +1558,50 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
         return {};
     }
 
-    if(__hidden_graphics::CanDeclareGraphOwnedTextureSetupUpload(uploadDesc)){
-        QueueSubmissionToken uploadToken;
-        const bool submitted = __hidden_graphics::SubmitGraphOwnedSetupUpload(
-            device,
-            m_allocator.getObjectArena(),
-            uploadDesc.queueSharing,
-            [&texture, &desc, &uploadDesc, uploadQueue, &uploadToken](GpuTaskGraph& graph){
-                const GpuGraphResourceId destination = graph.importTexture(
-                    texture,
-                    GpuGraphResourceDesc{}
-                        .setIdentity(Name("graphics.setup_texture.resource"))
-                        .setMarkerLabel("Setup Texture")
-                        .setType(GpuGraphResourceType::Texture)
-                        .setInitialState(uploadDesc.initialState)
-                        .setQueueSharing(uploadDesc.queueSharing)
-                );
-                const GpuUploadBlobId source = graph.copyUploadData(desc.data, desc.uploadDataSize, alignof(u32));
-                if(!destination.valid() || !source.valid())
-                    return GpuTaskId{};
-
-                GpuTaskDesc uploadTaskDesc;
-                uploadTaskDesc
-                    .setIdentity(Name("graphics.setup_texture.upload"))
-                    .setMarkerLabel("Setup Texture Upload")
-                    .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue))
-                    .setScheduling(__hidden_graphics::SetupUploadGraphScheduling(desc.uploadDataSize))
-                ;
-                return graph.addUploadTextureTask(
-                    uploadTaskDesc,
-                    GpuUploadTextureTaskDesc{
-                        .source = source,
-                        .destination = destination,
-                        .arraySlice = desc.arraySlice,
-                        .mipLevel = desc.mipLevel,
-                        .rowPitch = desc.rowPitch,
-                        .depthPitch = desc.depthPitch,
-                        .finalState = __hidden_graphics::SetupUploadGraphFinalState(uploadDesc.initialState),
-                        .acceptedToken = &uploadToken,
-                    }
-                );
-            },
-            uploadToken
-        );
-        if(!submitted){
-            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit graph-owned setup texture upload '{}'"), StringConvert(desc.textureDesc.name.c_str()));
-            return {};
-        }
-        if(desc.acceptedToken)
-            *desc.acceptedToken = uploadToken;
-        return texture;
-    }
-
-    // See the buffer path: specialized combined-depth/stencil and unknown keep-initial-state uploads retain their
-    // pre-graph command-list implementation until they can make the same exact final-state declaration.
-    CommandListParameters cmdParams;
-    cmdParams.setQueueType(uploadQueue);
-    CommandListHandle commandList = device.createCommandList(cmdParams);
-    if(!commandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create upload command list for texture '{}'"), StringConvert(desc.textureDesc.name.c_str()));
-        return {};
-    }
-
-    commandList->open();
-    if(!commandList->hasCommandBuffer()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to open upload command list for texture '{}'"), StringConvert(desc.textureDesc.name.c_str()));
-        return {};
-    }
-    commandList->writeTexture(texture.get(), desc.arraySlice, desc.mipLevel, desc.data, desc.rowPitch, desc.depthPitch);
-    // Texture setup publishes only the uploaded subresource. Other mips/slices retain their descriptor state and are
-    // intentionally not claimed by this primitive upload path.
-    if(uploadDesc.initialState != ResourceStates::Unknown){
-        commandList->setTextureState(
-            texture.get(),
-            TextureSubresourceSet(desc.mipLevel, 1u, desc.arraySlice, 1u),
-            uploadDesc.initialState
-        );
-    }
-    commandList->close();
     QueueSubmissionToken uploadToken;
-    if(!__hidden_graphics::SubmitSetupUpload(
+    const bool submitted = __hidden_graphics::SubmitGraphOwnedSetupUpload(
         device,
-        commandList,
-        uploadQueue,
+        m_allocator.getObjectArena(),
         uploadDesc.queueSharing,
+        [&texture, &desc, &uploadDesc, uploadQueue, &uploadToken](GpuTaskGraph& graph){
+            const GpuGraphResourceId destination = graph.importTexture(
+                texture,
+                GpuGraphResourceDesc{}
+                    .setIdentity(Name("graphics.setup_texture.resource"))
+                    .setMarkerLabel("Setup Texture")
+                    .setType(GpuGraphResourceType::Texture)
+                    .setInitialState(uploadDesc.initialState)
+                    .setQueueSharing(uploadDesc.queueSharing)
+            );
+            const GpuUploadBlobId source = graph.copyUploadData(desc.data, desc.uploadDataSize, alignof(u32));
+            if(!destination.valid() || !source.valid())
+                return GpuTaskId{};
+
+            GpuTaskDesc uploadTaskDesc;
+            uploadTaskDesc
+                .setIdentity(Name("graphics.setup_texture.upload"))
+                .setMarkerLabel("Setup Texture Upload")
+                .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue))
+                .setScheduling(__hidden_graphics::SetupUploadGraphScheduling(desc.uploadDataSize))
+            ;
+            return graph.addUploadTextureTask(
+                uploadTaskDesc,
+                GpuUploadTextureTaskDesc{
+                    .source = source,
+                    .destination = destination,
+                    .arraySlice = desc.arraySlice,
+                    .mipLevel = desc.mipLevel,
+                    .rowPitch = desc.rowPitch,
+                    .depthPitch = desc.depthPitch,
+                    .finalState = __hidden_graphics::SetupUploadGraphFinalState(uploadDesc.initialState),
+                    .acceptedToken = &uploadToken,
+                }
+            );
+        },
         uploadToken
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit setup texture upload '{}'"), StringConvert(desc.textureDesc.name.c_str()));
+    );
+    if(!submitted){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit graph-owned setup texture upload '{}'"), StringConvert(desc.textureDesc.name.c_str()));
         return {};
     }
     if(desc.acceptedToken)
@@ -1647,117 +1627,72 @@ bool Graphics::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
         textureDesc
     );
     QueueSubmissionToken uploadToken;
-    if(__hidden_graphics::CanDeclareGraphOwnedTextureSetupUpload(textureDesc)){
-        const bool submitted = __hidden_graphics::SubmitGraphOwnedSetupUpload(
-            device,
-            m_allocator.getObjectArena(),
-            textureDesc.queueSharing,
-            [&desc, &textureDesc, uploadQueue, &uploadToken](GpuTaskGraph& graph){
-                const GpuGraphResourceId destination = graph.importTexture(
-                    desc.destination,
-                    GpuGraphResourceDesc{}
-                        .setIdentity(Name("graphics.upload_texture_batch.resource"))
-                        .setMarkerLabel("Texture Upload Batch")
-                        .setType(GpuGraphResourceType::Texture)
-                        .setInitialState(textureDesc.initialState)
-                        .setQueueSharing(textureDesc.queueSharing)
+    const bool submitted = __hidden_graphics::SubmitGraphOwnedSetupUpload(
+        device,
+        m_allocator.getObjectArena(),
+        textureDesc.queueSharing,
+        [&desc, &textureDesc, uploadQueue, &uploadToken](GpuTaskGraph& graph){
+            const GpuGraphResourceId destination = graph.importTexture(
+                desc.destination,
+                GpuGraphResourceDesc{}
+                    .setIdentity(Name("graphics.upload_texture_batch.resource"))
+                    .setMarkerLabel("Texture Upload Batch")
+                    .setType(GpuGraphResourceType::Texture)
+                    .setInitialState(textureDesc.initialState)
+                    .setQueueSharing(textureDesc.queueSharing)
+            );
+            if(!destination.valid())
+                return GpuTaskId{};
+
+            GpuTaskId previousTask;
+            for(usize regionIndex = 0u; regionIndex < desc.regionCount; ++regionIndex){
+                const TextureUploadRegion& region = desc.regions[regionIndex];
+                const GpuUploadBlobId source = graph.copyUploadData(
+                    region.data,
+                    region.dataSize,
+                    alignof(u32)
                 );
-                if(!destination.valid())
+                if(!source.valid())
                     return GpuTaskId{};
 
-                GpuTaskId previousTask;
-                for(usize regionIndex = 0u; regionIndex < desc.regionCount; ++regionIndex){
-                    const TextureUploadRegion& region = desc.regions[regionIndex];
-                    const GpuUploadBlobId source = graph.copyUploadData(
-                        region.data,
-                        region.dataSize,
-                        alignof(u32)
-                    );
-                    if(!source.valid())
-                        return GpuTaskId{};
+                GpuTaskSchedulingHint scheduling = __hidden_graphics::SetupUploadGraphScheduling(region.dataSize);
+                scheduling.forceSubmissionBoundary = false;
+                scheduling.allowPacketMerge = true;
+                scheduling.mergeWithPrevious = previousTask.valid();
+                GpuTaskDesc uploadTaskDesc;
+                uploadTaskDesc
+                    .setIdentity(Name("graphics.upload_texture_batch.upload"))
+                    .setMarkerLabel("Texture Upload Batch")
+                    .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue))
+                    .setScheduling(scheduling)
+                ;
+                if(previousTask.valid())
+                    uploadTaskDesc.setDependencies(&previousTask, 1u);
 
-                    GpuTaskSchedulingHint scheduling = __hidden_graphics::SetupUploadGraphScheduling(region.dataSize);
-                    scheduling.forceSubmissionBoundary = false;
-                    scheduling.allowPacketMerge = true;
-                    scheduling.mergeWithPrevious = previousTask.valid();
-                    GpuTaskDesc uploadTaskDesc;
-                    uploadTaskDesc
-                        .setIdentity(Name("graphics.upload_texture_batch.upload"))
-                        .setMarkerLabel("Texture Upload Batch")
-                        .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue))
-                        .setScheduling(scheduling)
-                    ;
-                    if(previousTask.valid())
-                        uploadTaskDesc.setDependencies(&previousTask, 1u);
-
-                    const GpuTaskId uploadTask = graph.addUploadTextureTask(
-                        uploadTaskDesc,
-                        GpuUploadTextureTaskDesc{
-                            .source = source,
-                            .destination = destination,
-                            .arraySlice = region.arraySlice,
-                            .mipLevel = region.mipLevel,
-                            .rowPitch = region.rowPitch,
-                            .depthPitch = region.depthPitch,
-                            .finalState = desc.finalState,
-                            .acceptedToken = regionIndex + 1u == desc.regionCount ? &uploadToken : nullptr,
-                        }
-                    );
-                    if(!uploadTask.valid())
-                        return GpuTaskId{};
-                    previousTask = uploadTask;
-                }
-                return previousTask;
-            },
-            uploadToken
-        );
-        if(!submitted){
-            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit graph-owned texture upload batch '{}'"), StringConvert(textureDesc.name.c_str()));
-            return false;
-        }
-    }else{
-        // Combined depth/stencil and unknown keep-initial-state descriptors still use the established direct route
-        // until a per-aspect graph upload primitive can declare their exact final state.
-        CommandListParameters cmdParams;
-        cmdParams.setQueueType(uploadQueue);
-        CommandListHandle commandList = device.createCommandList(cmdParams);
-        if(!commandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create texture upload batch command list '{}'"), StringConvert(textureDesc.name.c_str()));
-            return false;
-        }
-
-        commandList->open();
-        if(!commandList->hasCommandBuffer()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to open texture upload batch command list '{}'"), StringConvert(textureDesc.name.c_str()));
-            return false;
-        }
-        for(usize regionIndex = 0u; regionIndex < desc.regionCount; ++regionIndex){
-            const TextureUploadRegion& region = desc.regions[regionIndex];
-            commandList->writeTexture(
-                desc.destination.get(),
-                region.arraySlice,
-                region.mipLevel,
-                region.data,
-                region.rowPitch,
-                region.depthPitch
-            );
-            commandList->setTextureState(
-                desc.destination.get(),
-                TextureSubresourceSet(region.mipLevel, 1u, region.arraySlice, 1u),
-                desc.finalState
-            );
-        }
-        commandList->close();
-        if(!__hidden_graphics::SubmitSetupUpload(
-            device,
-            commandList,
-            uploadQueue,
-            textureDesc.queueSharing,
-            uploadToken
-        )){
-            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit texture upload batch '{}'"), StringConvert(textureDesc.name.c_str()));
-            return false;
-        }
+                const GpuTaskId uploadTask = graph.addUploadTextureTask(
+                    uploadTaskDesc,
+                    GpuUploadTextureTaskDesc{
+                        .source = source,
+                        .destination = destination,
+                        .arraySlice = region.arraySlice,
+                        .mipLevel = region.mipLevel,
+                        .rowPitch = region.rowPitch,
+                        .depthPitch = region.depthPitch,
+                        .finalState = desc.finalState,
+                        .acceptedToken = regionIndex + 1u == desc.regionCount ? &uploadToken : nullptr,
+                    }
+                );
+                if(!uploadTask.valid())
+                    return GpuTaskId{};
+                previousTask = uploadTask;
+            }
+            return previousTask;
+        },
+        uploadToken
+    );
+    if(!submitted){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit graph-owned texture upload batch '{}'"), StringConvert(textureDesc.name.c_str()));
+        return false;
     }
 
     if(desc.acceptedToken)

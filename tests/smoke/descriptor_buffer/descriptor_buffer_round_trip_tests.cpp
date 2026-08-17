@@ -38259,6 +38259,138 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
 }
 
 
+// Public texture uploads no longer retain a native fallback.  A generic packed payload cannot describe the two
+// independently copied aspects of D24S8/D32S8, and retaining an Unknown initial state makes the post-upload state
+// untrackable.  Both cases must fail before a command list can claim a successful upload.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsRejectUnsafeLegacyDescriptors){
+    auto& graphics = s_scope->graphics();
+    const u8 depthStencilBytes[8u] = {};
+    const Format::Enum combinedDepthStencilFormats[] = {
+        Format::D24S8,
+        Format::D32S8,
+    };
+    for(const Format::Enum format : combinedDepthStencilFormats){
+        Graphics::TextureSetupDesc setupDesc;
+        setupDesc.textureDesc = TextureDesc()
+            .setWidth(1u)
+            .setHeight(1u)
+            .setFormat(format)
+            .setInRenderTarget(true)
+            .setInitialState(ResourceStates::DepthWrite)
+        ;
+        setupDesc.data = depthStencilBytes;
+        setupDesc.uploadDataSize = sizeof(depthStencilBytes);
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+        EXPECT_DEATH_IF_SUPPORTED({
+            QueueSubmissionToken setupToken;
+            setupDesc.acceptedToken = &setupToken;
+            EXPECT_EQ(graphics.setupTexture(setupDesc).get(), nullptr);
+        }, "");
+#else
+        QueueSubmissionToken setupToken;
+        setupDesc.acceptedToken = &setupToken;
+        const TextureHandle setupTexture = graphics.setupTexture(setupDesc);
+        EXPECT_EQ(setupTexture.get(), nullptr);
+        EXPECT_FALSE(setupToken.valid());
+#endif
+    }
+
+    const TextureHandle depthStencilDestination = graphics.createTexture(
+        TextureDesc()
+            .setWidth(1u)
+            .setHeight(1u)
+            .setFormat(Format::D24S8)
+            .setInRenderTarget(true)
+            .setInitialState(ResourceStates::DepthWrite)
+    );
+    ASSERT_NE(depthStencilDestination.get(), nullptr);
+    const Graphics::TextureUploadRegion depthStencilRegion{
+        .data = depthStencilBytes,
+        .dataSize = sizeof(depthStencilBytes),
+        .rowPitch = 0u,
+        .depthPitch = 0u,
+        .arraySlice = 0u,
+        .mipLevel = 0u,
+    };
+    const Graphics::TextureUploadBatchDesc depthStencilBatchDesc{
+        .destination = depthStencilDestination,
+        .regions = &depthStencilRegion,
+        .regionCount = 1u,
+        .finalState = ResourceStates::DepthWrite,
+    };
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        QueueSubmissionToken depthStencilBatchToken;
+        Graphics::TextureUploadBatchDesc rejectedBatchDesc = depthStencilBatchDesc;
+        rejectedBatchDesc.acceptedToken = &depthStencilBatchToken;
+        EXPECT_FALSE(graphics.uploadTextureBatch(rejectedBatchDesc));
+    }, "");
+#else
+    QueueSubmissionToken depthStencilBatchToken;
+    Graphics::TextureUploadBatchDesc depthStencilRejectedBatchDesc = depthStencilBatchDesc;
+    depthStencilRejectedBatchDesc.acceptedToken = &depthStencilBatchToken;
+    EXPECT_FALSE(graphics.uploadTextureBatch(depthStencilRejectedBatchDesc));
+    EXPECT_FALSE(depthStencilBatchToken.valid());
+#endif
+
+    const u8 colorBytes[4u] = {};
+    Graphics::TextureSetupDesc unknownSetupDesc;
+    unknownSetupDesc.textureDesc = TextureDesc()
+        .setWidth(1u)
+        .setHeight(1u)
+        .setFormat(Format::RGBA8_UNORM)
+        .setInitialState(ResourceStates::Unknown)
+        .setKeepInitialState(true)
+    ;
+    unknownSetupDesc.data = colorBytes;
+    unknownSetupDesc.uploadDataSize = sizeof(colorBytes);
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        QueueSubmissionToken unknownSetupToken;
+        unknownSetupDesc.acceptedToken = &unknownSetupToken;
+        EXPECT_EQ(graphics.setupTexture(unknownSetupDesc).get(), nullptr);
+    }, "");
+#else
+    QueueSubmissionToken unknownSetupToken;
+    unknownSetupDesc.acceptedToken = &unknownSetupToken;
+    const TextureHandle unknownSetupTexture = graphics.setupTexture(unknownSetupDesc);
+    EXPECT_EQ(unknownSetupTexture.get(), nullptr);
+    EXPECT_FALSE(unknownSetupToken.valid());
+#endif
+
+    const TextureHandle unknownDestination = graphics.createTexture(unknownSetupDesc.textureDesc);
+    ASSERT_NE(unknownDestination.get(), nullptr);
+    const Graphics::TextureUploadRegion unknownRegion{
+        .data = colorBytes,
+        .dataSize = sizeof(colorBytes),
+        .rowPitch = 0u,
+        .depthPitch = 0u,
+        .arraySlice = 0u,
+        .mipLevel = 0u,
+    };
+    const Graphics::TextureUploadBatchDesc unknownBatchDesc{
+        .destination = unknownDestination,
+        .regions = &unknownRegion,
+        .regionCount = 1u,
+        .finalState = ResourceStates::CopyDest,
+    };
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        QueueSubmissionToken unknownBatchToken;
+        Graphics::TextureUploadBatchDesc rejectedBatchDesc = unknownBatchDesc;
+        rejectedBatchDesc.acceptedToken = &unknownBatchToken;
+        EXPECT_FALSE(graphics.uploadTextureBatch(rejectedBatchDesc));
+    }, "");
+#else
+    QueueSubmissionToken unknownBatchToken;
+    Graphics::TextureUploadBatchDesc unknownRejectedBatchDesc = unknownBatchDesc;
+    unknownRejectedBatchDesc.acceptedToken = &unknownBatchToken;
+    EXPECT_FALSE(graphics.uploadTextureBatch(unknownRejectedBatchDesc));
+    EXPECT_FALSE(unknownBatchToken.valid());
+#endif
+}
+
+
 // A dedicated compute family is optional in CI, but when one exists this is the phase-zero ownership proof:
 // exclusive storage moves Compute -> Graphics -> Compute with paired release/acquire barriers and submission-local
 // timeline tokens. No rendering job has moved yet; this specifically validates the resource-lifecycle round trip

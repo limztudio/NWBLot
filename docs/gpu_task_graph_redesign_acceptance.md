@@ -42,8 +42,10 @@ can receive an unconditional final sign-off.
 - Representable synchronous `Graphics::setupBuffer` and `Graphics::setupTexture` payloads now declare a one-packet
   graph upload: caller bytes are retained as immutable graph blobs, the built-in buffer/texture task publishes the
   graph-visible final state and accepted producer token, and the pre-existing consumer-queue readiness bridge preserves
-  the returned-handle compatibility contract. The direct path remains a narrow fallback for combined depth/stencil
-  or unknown keep-initial-state descriptors until specialized declaration-safe tasks exist.
+  the returned-handle compatibility contract. Every supported public texture upload now uses that graph path.
+  Generic raw combined depth/stencil payloads reject until an explicit per-aspect upload API exists, and
+  `keepInitialState + Unknown` uploads reject because they cannot publish a safe final state; neither case can enter
+  a native fallback.
 - Texture assets decode every UASTC mip/slice into immutable batch regions before graph declaration. The batch helper
   retains each region as a graph upload blob, serializes the subresources to one terminal accepted token, declares
   `ShaderResource` as the visible final state, and keeps the automatic Transfer -> Compute -> Graphics route plus
@@ -399,6 +401,7 @@ can receive an unconditional final sign-off.
 | Same-class Graphics routing follow-up: descriptor-buffer smoke binary | 72 passed; 10 expected skips. The added real-Vulkan route skipped because this adapter exposes only one Graphics queue; the existing 9 skips lack dedicated Compute-only or Transfer-only families |
 | Actual device-recreation graph-packet follow-up: descriptor-buffer smoke binary | 73 passed; 10 expected skips. A real headless Graphics instance releases its recorded packets/transaction before teardown, recreates its device, then recompiles, records, and submits only on the replacement generation |
 | Graph-owned public setup-upload follow-up: descriptor-buffer smoke binary | 73 passed; 10 expected skips. Normal buffer and texture setup routes compile, record, and submit through one graph packet while preserving queue selection, graph-visible final states, and Graphics readiness; the dedicated-Transfer probe is hardware-skipped on this adapter |
+| Public texture-upload validation closeout: graph-unit and descriptor-buffer smoke binaries | passed; combined D24S8/D32S8 raw payloads and retained-Unknown setup/batch descriptors now reject before any native submission, leaving every supported public texture upload on the graph-owned path. A future combined depth/stencil upload requires an explicit per-aspect payload/task contract. Graph tests passed 122/122 and the real Vulkan descriptor smoke passed 145 with 16 expected topology skips. |
 | Graph-owned deferred-frame upload follow-up: `nwb_ecs_graphics_tests`, `nwb_graphics_task_graph_tests`, and `nwb_descriptor_buffer_tests` | 3/3 passed |
 | Graph-owned deferred-frame upload follow-up: rebuilt `nwb_testbed` window capture | passed; a real X11/Vulkan deferred frame completed with the graph-owned mesh-view, scene-light, and scene-shading uploads |
 | Graph-owned decoded-texture upload follow-up: `nwb_assets_texture_loader`, `nwb_graphics_task_graph_tests`, and `nwb_descriptor_buffer_tests` | passed; the native smoke now reads back two graph-owned mip payloads after their caller arrays are overwritten (74 passed; 10 expected topology skips) |

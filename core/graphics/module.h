@@ -53,8 +53,8 @@ public:
         usize depthPitch = 0;
         u32 arraySlice = 0;
         u32 mipLevel = 0;
-        // See BufferSetupDesc::queue. Unknown texture final states retain the established Graphics route because
-        // an automatic cross-queue upload cannot safely publish an opaque layout/state contract.
+        // See BufferSetupDesc::queue. A non-retained Unknown initial state publishes CopyDest; a retained upload
+        // requires a concrete initial state and is rejected otherwise.
         CommandQueue::Enum queue = CommandQueue::kCount;
         QueueSubmissionToken* acceptedToken = nullptr;
     };

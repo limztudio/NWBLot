@@ -10307,6 +10307,10 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     Core::GpuTaskSchedulingHint surfelIrradianceClearScheduling;
     surfelIrradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
     surfelIrradianceClearScheduling.allowPacketMerge = true;
+    // This starts the independent Surfel GI effect packet after its optional Transfer snapshot, so it may choose
+    // the same-family auxiliary lane instead of inheriting a predecessor's Compute transport. The GI chain below
+    // retains that exact queue through its direct dependencies.
+    EnableSameFamilyComputeEffectRouting(surfelIrradianceClearScheduling, false);
     Core::GpuTaskDesc surfelIrradianceClearDesc;
     surfelIrradianceClearDesc
         .setIdentity(Name("render.surfel_gi.irradiance_clear"))
@@ -10335,6 +10339,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     surfelGiScheduling.forceSubmissionBoundary = false;
     surfelGiScheduling.allowPacketMerge = true;
     surfelGiScheduling.mergeWithPrevious = true;
+    EnableSameFamilyComputeEffectRouting(surfelGiScheduling);
     if(graphOwnsSurfelGiResolve){
         ageFreeResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
         ageFreeResourceUses.push_back(WriteUse(surfelPool, Core::ResourceStates::UnorderedAccess));

@@ -343,6 +343,17 @@ struct GpuTaskGraphTaskAcceptedCallback{
     ) = nullptr;
 };
 
+// Runs after one semantic late task records and exports its packet state, but before that packet submits. A false
+// result rejects the still-unaccepted task. This lets a caller validate an immutable final-state candidate without
+// rebuilding the record/submit sequence around compiler packet IDs.
+struct GpuTaskGraphTaskRecordedCallback{
+    void* context = nullptr;
+    [[nodiscard]] bool (*invoke)(
+        void* context,
+        const CommandListResourceStateHandoff* finalState
+    ) = nullptr;
+};
+
 
 class GpuGraphSubmissionTransaction final : NoCopy{
 public:
@@ -491,6 +502,23 @@ public:
         const GpuNativePacketRecorder& recorder,
         GpuRecordedGraph& recordedGraph,
         GpuTaskId task,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuSubmissionPacketId* outFailedPacket = nullptr
+    )const;
+    // Records and submits one semantic late task after its graph dependencies have accepted. Optional
+    // task-anchored state bindings are resolved only while recording, and a recorded callback may validate the
+    // packet's immutable final-state seed before submission. Any rejection leaves task lifecycle owned by the
+    // transaction rather than a renderer-local packet/retry path.
+    [[nodiscard]] bool recordAndSubmitTask(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuNativePacketRecorder& recorder,
+        GpuRecordedGraph& recordedGraph,
+        GpuTaskId task,
+        const GpuTaskPacketStateBinding* taskStateBindings,
+        usize taskStateBindingCount,
+        const GpuTaskGraphTaskRecordedCallback* recordedCallback,
         GpuGraphSubmissionTransaction& transaction,
         Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr

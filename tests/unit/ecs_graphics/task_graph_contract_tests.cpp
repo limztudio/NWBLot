@@ -151,10 +151,10 @@ TEST(EcsGraphics, OnlyTerminalPresentationRetainsAPacketIdentity){
 }
 
 
-// A late recovery task owns its packet range and accepted-frontier waits in the generic runtime. Keep the renderer
-// limited to arming its timing payload and handling device-recreation policy rather than reconstructing record/
-// submit/reject sequencing around a compiler packet.
-TEST(EcsGraphics, FrameRecoveryUsesGraphRuntimeFrontierHelper){
+// Late recovery, readback, and history tasks own their record/submit/reject sequencing in the generic runtime.
+// Keep the renderer limited to payload validation, timing arming, and device-recreation policy rather than
+// reconstructing compiler packet ranges around every late tail.
+TEST(EcsGraphics, LateGraphTailsUseRuntimeHelpers){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
@@ -165,6 +165,11 @@ TEST(EcsGraphics, FrameRecoveryUsesGraphRuntimeFrontierHelper){
     EXPECT_TRUE(ContainsText(system, "recordAndSubmitAcceptedFrontierTask("));
     EXPECT_TRUE(ContainsText(system, "deferredRecorder,\n            m_deferredLightingRecordedGraph,\n            m_deferredFrameRecoveryTask"));
     EXPECT_FALSE(ContainsText(system, "deferredFrameRecoveryPacketRange"));
+    EXPECT_FALSE(ContainsText(system, "surfelGiCounterReadbackPacketRange"));
+    EXPECT_FALSE(ContainsText(system, "deferredLaggedLightingHistoryPacketRange"));
+    EXPECT_EQ(CountText(system, "recordAndSubmitTask("), 2u);
+    EXPECT_FALSE(ContainsText(system, "recordTaskRangeInCompileOrder("));
+    EXPECT_FALSE(ContainsText(system, "submitTaskRangeInCompileOrder("));
     EXPECT_FALSE(ContainsText(system, "const auto discardFrameRecovery"));
     EXPECT_FALSE(ContainsText(system, "failed to late-record deferred frame recovery packet"));
     EXPECT_FALSE(ContainsText(system, "deferred frame recovery submission was rejected"));

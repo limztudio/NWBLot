@@ -1678,6 +1678,59 @@ bool GpuTaskGraphSubmitter::recordAndSubmitAcceptedFrontierTask(
         return false;
     }
 
+    return recordAndSubmitTask(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        task,
+        nullptr,
+        0u,
+        nullptr,
+        transaction,
+        scratchArena,
+        outFailedPacket
+    );
+}
+
+
+bool GpuTaskGraphSubmitter::recordAndSubmitTask(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuNativePacketRecorder& recorder,
+    GpuRecordedGraph& recordedGraph,
+    const GpuTaskId task,
+    const GpuTaskPacketStateBinding* const taskStateBindings,
+    const usize taskStateBindingCount,
+    const GpuTaskGraphTaskRecordedCallback* const recordedCallback,
+    GpuGraphSubmissionTransaction& transaction,
+    Alloc::ScratchArena& scratchArena,
+    GpuSubmissionPacketId* const outFailedPacket
+)const{
+    if(outFailedPacket)
+        *outFailedPacket = {};
+
+    const auto rejectTask = [&]{
+        if(
+            compiledGraph.validFor(graph)
+            && transaction.validFor(compiledGraph)
+            && graph.validTask(task)
+            && compiledGraph.findTask(task)
+        )
+            transaction.rejectTask(graph, compiledGraph, task);
+    };
+    if(
+        !compiledGraph.validFor(graph)
+        || !transaction.validFor(compiledGraph)
+        || !graph.validTask(task)
+        || !compiledGraph.findTask(task)
+        || (taskStateBindingCount != 0u && !taskStateBindings)
+        || (recordedCallback && !recordedCallback->invoke)
+    ){
+        rejectTask();
+        return false;
+    }
+
     GpuSubmissionPacketId failedPacket;
     if(!recorder.recordTaskRangeInCompileOrder(
         graph,
@@ -1687,10 +1740,26 @@ bool GpuTaskGraphSubmitter::recordAndSubmitAcceptedFrontierTask(
         nullptr,
         0u,
         recordedGraph,
-        &failedPacket
+        &failedPacket,
+        nullptr,
+        taskStateBindings,
+        taskStateBindingCount
     )){
         if(outFailedPacket)
             *outFailedPacket = failedPacket;
+        rejectTask();
+        return false;
+    }
+
+    if(
+        recordedCallback
+        && !recordedCallback->invoke(
+            recordedCallback->context,
+            recordedGraph.taskFinalStateSeed(compiledGraph, task)
+        )
+    ){
+        if(outFailedPacket)
+            *outFailedPacket = compiledGraph.packetForTask(task);
         rejectTask();
         return false;
     }

@@ -36511,6 +36511,49 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     sourceState.reset();
     EXPECT_FALSE(sourceState.valid());
     EXPECT_TRUE(graph.taskAt(historyTask.index).externalStateSources[0u].states->valid());
+    // The declaration already owns this snapshot; repeat it through the late task binding so the generic helper
+    // proves it forwards task-anchored state sources without a renderer-selected packet override.
+    const GpuExternalPacketStateSource lateHistoryStateSources[] = {
+        GpuExternalPacketStateSource{ .states = historyTaskView.externalStateSources[0u].states },
+    };
+    const GpuTaskPacketStateBinding lateHistoryStateBindings[] = {
+        GpuTaskPacketStateBinding{
+            .task = historyTask,
+            .externalStateSources = lateHistoryStateSources,
+            .externalStateSourceCount = LengthOf(lateHistoryStateSources),
+        },
+    };
+
+    const GpuTaskId rejectedTailDependencies[] = { historyTask };
+    const GpuTaskResourceUse rejectedTailUses[] = {
+        GpuTaskResourceUse{
+            .resource = history,
+            .range = {},
+            .requiredState = ResourceStates::CopyDest,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    bool rejectedTailRecorded = false;
+    const GpuTaskId rejectedTailTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/late_history_record_callback_reject"))
+            .setMarkerLabel("Late History Record Callback Reject")
+            .setQueue(GpuQueueRequest{
+                GpuQueueCapability::Transfer,
+                GpuQueuePreference::Transfer,
+                true,
+                true,
+            })
+            .setScheduling(scheduling)
+            .setDependencies(rejectedTailDependencies, LengthOf(rejectedTailDependencies))
+            .setResourceUses(rejectedTailUses, LengthOf(rejectedTailUses)),
+        NativePacketPrefixTask::Payload{
+            .buffer = historyBuffer.get(),
+            .expectedState = ResourceStates::CopyDest,
+            .recorded = &rejectedTailRecorded,
+        }
+    );
+    ASSERT_TRUE(rejectedTailTask.valid());
 
     const GpuPhysicalQueueInfo queue{
         .id = BackendQueueId(device, CommandQueue::Graphics),
@@ -36537,11 +36580,14 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
 
     const GpuSubmissionPacketId presentPacket = compiledGraph.packetForTask(presentTask);
     const GpuSubmissionPacketId historyPacket = compiledGraph.packetForTask(historyTask);
+    const GpuSubmissionPacketId rejectedTailPacket = compiledGraph.packetForTask(rejectedTailTask);
     ASSERT_TRUE(presentPacket.valid());
     ASSERT_TRUE(historyPacket.valid());
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    ASSERT_TRUE(rejectedTailPacket.valid());
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
     EXPECT_EQ(compiledGraph.packetIdAt(0u), presentPacket);
     EXPECT_EQ(compiledGraph.packetIdAt(1u), historyPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(2u), rejectedTailPacket);
     ASSERT_GE(compiledGraph.packet(historyPacket).dependencyCount, 1u);
     const GpuPacketDependency* const historyPacketDependencies = compiledGraph.packetDependencies(historyPacket);
     ASSERT_NE(historyPacketDependencies, nullptr);
@@ -36550,6 +36596,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         historyWaitsForPresent = historyWaitsForPresent || historyPacketDependencies[index].producer == presentPacket;
     EXPECT_TRUE(historyWaitsForPresent);
     EXPECT_EQ(compiledGraph.packet(historyPacket).externalDependencyCount, 0u);
+    ASSERT_EQ(compiledGraph.packet(rejectedTailPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(rejectedTailPacket)[0u].producer, historyPacket);
 
     // Current-frame producer state arrives independently from the terminal Present dependency. This is the same
     // late fan-in shape used by the renderer's shadow/caustic/surfel return snapshots.
@@ -36591,26 +36639,65 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     EXPECT_EQ(presentAcceptedToken.value, presentSubmissionToken.value);
     EXPECT_FALSE(transaction.packetToken(historyPacket).valid());
 
-    ASSERT_TRUE(recorder.recordPacket(
+    bool historyFinalStateObserved = false;
+    const auto observeHistoryFinalState = [](
+        void* const rawContext,
+        const CommandListResourceStateHandoff* const finalState
+    ) -> bool {
+        bool* const observed = static_cast<bool*>(rawContext);
+        if(!observed || !finalState)
+            return false;
+        *observed = true;
+        return true;
+    };
+    const GpuTaskGraphTaskRecordedCallback historyRecordedCallback{
+        .context = &historyFinalStateObserved,
+        .invoke = observeHistoryFinalState,
+    };
+    ASSERT_TRUE(submitter.recordAndSubmitTask(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = historyPacket },
-        recordedGraph
-    ));
-    EXPECT_TRUE(historyRecorded);
-    ASSERT_TRUE(submitter.submitPacket(
-        graph,
-        compiledGraph,
+        recorder,
         recordedGraph,
-        historyPacket,
-        nullptr,
-        0u,
+        historyTask,
+        lateHistoryStateBindings,
+        LengthOf(lateHistoryStateBindings),
+        &historyRecordedCallback,
         transaction,
         scratchArena
     ));
+    EXPECT_TRUE(historyRecorded);
+    EXPECT_TRUE(historyFinalStateObserved);
     const QueueSubmissionToken historySubmissionToken = transaction.packetToken(historyPacket);
     ASSERT_TRUE(historySubmissionToken.valid());
     EXPECT_EQ(historyAcceptedToken.value, historySubmissionToken.value);
+
+    const auto rejectLateTailAfterRecord = [](
+        void* const context,
+        const CommandListResourceStateHandoff* const finalState
+    ) -> bool {
+        static_cast<void>(context);
+        static_cast<void>(finalState);
+        return false;
+    };
+    const GpuTaskGraphTaskRecordedCallback rejectedTailRecordedCallback{
+        .invoke = rejectLateTailAfterRecord,
+    };
+    EXPECT_FALSE(submitter.recordAndSubmitTask(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        rejectedTailTask,
+        nullptr,
+        0u,
+        &rejectedTailRecordedCallback,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(rejectedTailRecorded);
+    ASSERT_NE(transaction.packetRuntime(rejectedTailPacket), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(rejectedTailPacket)->state, GpuPacketRuntimeState::Rejected);
     EXPECT_TRUE(device.waitForIdle());
 }
 

@@ -2391,17 +2391,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredPresentTask, m_deferredPresentTask);
     const Core::GpuSubmissionPacketRange terminalPresentationPacketRange =
         m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredPresentTask, terminalPresentationTask);
-    const Core::GpuSubmissionPacketRange deferredLaggedLightingHistoryPacketRange =
-        m_deferredLightingCompiledGraph.packetRangeForTasks(
-            m_deferredLaggedLightingHistoryTask,
-            m_deferredLaggedLightingHistoryTask
-        )
-    ;
-    const Core::GpuSubmissionPacketRange surfelGiCounterReadbackPacketRange =
-        m_deferredLightingCompiledGraph.packetRangeForTasks(
-            m_deferredSurfelGiCounterReadbackTask,
-            m_deferredSurfelGiCounterReadbackTask
-        );
     const Core::GpuSubmissionPacketRange effectsThroughPresentationPacketRange =
         m_deferredLightingCompiledGraph.packetRangeForTasks(
             m_deferredShadowVisibilityTask,
@@ -2650,14 +2639,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || deferredPresentPacketRange.packetCount != 1u
         || !terminalPresentationPacketRange.valid()
         || terminalPresentationPacketRange.packetCount < minimumTerminalPresentationPacketCount
-        || (m_deferredSurfelGiCounterReadbackTask.valid() && (
-            !surfelGiCounterReadbackPacketRange.valid()
-            || surfelGiCounterReadbackPacketRange.packetCount != 1u
-        ))
-        || (captureLaggedLightingHistory && (
-            !deferredLaggedLightingHistoryPacketRange.valid()
-            || deferredLaggedLightingHistoryPacketRange.packetCount != 1u
-        ))
         || !effectsThroughPresentationPacketRange.valid()
         || !deferredNormalPacketRange.valid()
         || deferredNormalPacketRange.packetCount
@@ -4611,8 +4592,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && surfelGiCounterReadbackQueue
             && (static_cast<u8>(surfelGiCounterReadbackQueue->capabilities)
                 & static_cast<u8>(Core::GpuQueueCapability::Transfer)) != 0u
-            && surfelGiCounterReadbackPacketRange.valid()
-            && surfelGiCounterReadbackPacketRange.packetCount == 1u
         ;
         if(!readbackTailAvailable){
             m_deferredLightingSubmissionTransaction.rejectTask(
@@ -4623,88 +4602,88 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback tail was unavailable"));
         }
         else{
-            Core::GpuNativePacketRecorder recorder(device);
-            const bool readbackRecorded = recorder.recordTaskRangeInCompileOrder(
-                m_deferredLightingTaskGraph,
-                m_deferredLightingCompiledGraph,
-                m_deferredSurfelGiCounterReadbackTask,
-                m_deferredSurfelGiCounterReadbackTask,
-                nullptr,
-                0u,
-                m_deferredLightingRecordedGraph
-            );
-            const Core::CommandListResourceStateHandoff* const readbackFinalStateSeed = readbackRecorded
-                ? m_deferredLightingRecordedGraph.taskFinalStateSeed(
-                    m_deferredLightingCompiledGraph,
-                    m_deferredSurfelGiCounterReadbackTask
-                )
-                : nullptr
-            ;
-            // The tail is recorded before it is submitted. Keep its filtered final-state candidate private until the
-            // Transfer packet accepts so a rejected readback cannot replace the last accepted Surfel-GI counter state.
             Core::GpuPersistentResourceStateCache::Candidate readbackCounterStateCandidate(m_arena);
             const Core::BufferHandle readbackCounterBuffers[] = {
                 m_rayTracingState.m_surfelCounterBuffer,
             };
-            const bool readbackFinalStateReady = readbackFinalStateSeed
-                && m_surfelGiCounterPersistentState.buildFilteredBufferSubset(
-                    readbackCounterStateCandidate,
-                    *readbackFinalStateSeed,
-                    readbackCounterBuffers,
-                    LengthOf(readbackCounterBuffers)
-                )
-            ;
-            if(!readbackRecorded || !readbackFinalStateReady){
-                m_deferredLightingSubmissionTransaction.rejectTask(
-                    m_deferredLightingTaskGraph,
+            // Keep the filtered final-state candidate private until the Transfer task accepts, so a rejected
+            // readback cannot replace the last accepted Surfel-GI counter state.
+            struct SurfelCounterReadbackRecordContext{
+                RendererSystem* renderer = nullptr;
+                Core::GpuPersistentResourceStateCache::Candidate* candidate = nullptr;
+                const Core::BufferHandle* buffers = nullptr;
+                usize bufferCount = 0u;
+                bool finalStateReady = false;
+            } readbackRecordContext{
+                .renderer = this,
+                .candidate = &readbackCounterStateCandidate,
+                .buffers = readbackCounterBuffers,
+                .bufferCount = LengthOf(readbackCounterBuffers),
+            };
+            const auto prepareReadbackFinalState = [](
+                void* const rawContext,
+                const Core::CommandListResourceStateHandoff* const finalState
+            ) -> bool {
+                SurfelCounterReadbackRecordContext* const context =
+                    static_cast<SurfelCounterReadbackRecordContext*>(rawContext)
+                ;
+                if(!context || !context->renderer || !context->candidate || !context->buffers)
+                    return false;
+                context->finalStateReady = finalState
+                    && context->renderer->m_surfelGiCounterPersistentState.buildFilteredBufferSubset(
+                        *context->candidate,
+                        *finalState,
+                        context->buffers,
+                        context->bufferCount
+                    )
+                ;
+                return context->finalStateReady;
+            };
+            const Core::GpuTaskGraphTaskRecordedCallback readbackRecordedCallback{
+                .context = &readbackRecordContext,
+                .invoke = prepareReadbackFinalState,
+            };
+            Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+            const Core::GpuNativePacketRecorder recorder(device);
+            const Core::GpuTaskGraphSubmitter submitter(device);
+            const bool readbackAccepted = submitter.recordAndSubmitTask(
+                m_deferredLightingTaskGraph,
+                m_deferredLightingCompiledGraph,
+                recorder,
+                m_deferredLightingRecordedGraph,
+                m_deferredSurfelGiCounterReadbackTask,
+                nullptr,
+                0u,
+                &readbackRecordedCallback,
+                m_deferredLightingSubmissionTransaction,
+                scratchArena
+            );
+            const Core::QueueSubmissionToken readbackSubmissionToken = readbackAccepted
+                ? m_deferredLightingSubmissionTransaction.taskToken(
                     m_deferredLightingCompiledGraph,
                     m_deferredSurfelGiCounterReadbackTask
-                );
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retain late deferred surfel counter-readback state"));
+                )
+                : Core::QueueSubmissionToken{}
+            ;
+            if(!readbackSubmissionToken.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback record/submission was rejected"));
             }
             else{
-                Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-                const Core::GpuTaskGraphSubmitter submitter(device);
-                const bool readbackAccepted = submitter.submitTaskRangeInCompileOrder(
-                    m_deferredLightingTaskGraph,
-                    m_deferredLightingCompiledGraph,
-                    m_deferredLightingRecordedGraph,
-                    m_deferredSurfelGiCounterReadbackTask,
-                    m_deferredSurfelGiCounterReadbackTask,
-                    nullptr,
-                    0u,
-                    nullptr,
-                    0u,
-                    m_deferredLightingSubmissionTransaction,
-                    scratchArena
-                );
-                const Core::QueueSubmissionToken readbackSubmissionToken = readbackAccepted
-                    ? m_deferredLightingSubmissionTransaction.taskToken(
-                        m_deferredLightingCompiledGraph,
-                        m_deferredSurfelGiCounterReadbackTask
+                if(!m_surfelGiCounterPersistentState.commit(readbackCounterStateCandidate)){
+                    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: accepted surfel counter-readback tail lost its retained state"));
+                    failFrameRenderRecovery();
+                    return;
+                }
+                // addCopyBufferTask publishes only on accepted submission, keeping CPU polling tied to the
+                // selected physical transport rather than the preceding Surfel-GI packet.
+                NWB_ASSERT(
+                    m_rayTracingState.m_surfelCountReadbackSubmissionToken.queue == readbackSubmissionToken.queue
+                    && m_rayTracingState.m_surfelCountReadbackSubmissionToken.value == readbackSubmissionToken.value
+                    && m_rayTracingState.m_surfelCountReadbackSubmissionToken.matchesPhysicalQueue(
+                        readbackSubmissionToken.physicalQueueIndex,
+                        readbackSubmissionToken.deviceGeneration
                     )
-                    : Core::QueueSubmissionToken{}
-                ;
-                if(!readbackSubmissionToken.valid()){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback submission was rejected"));
-                }
-                else{
-                    if(!m_surfelGiCounterPersistentState.commit(readbackCounterStateCandidate)){
-                        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: accepted surfel counter-readback tail lost its retained state"));
-                        failFrameRenderRecovery();
-                        return;
-                    }
-                    // addCopyBufferTask publishes only on accepted submission, keeping CPU polling tied to the
-                    // selected physical transport rather than the preceding Surfel-GI packet.
-                    NWB_ASSERT(
-                        m_rayTracingState.m_surfelCountReadbackSubmissionToken.queue == readbackSubmissionToken.queue
-                        && m_rayTracingState.m_surfelCountReadbackSubmissionToken.value == readbackSubmissionToken.value
-                        && m_rayTracingState.m_surfelCountReadbackSubmissionToken.matchesPhysicalQueue(
-                            readbackSubmissionToken.physicalQueueIndex,
-                            readbackSubmissionToken.deviceGeneration
-                        )
-                    );
-                }
+                );
             }
         }
     }
@@ -4761,8 +4740,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !deferredLaggedLightingHistoryQueue
             || (static_cast<u8>(deferredLaggedLightingHistoryQueue->capabilities)
                 & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
-            || !deferredLaggedLightingHistoryPacketRange.valid()
-            || deferredLaggedLightingHistoryPacketRange.packetCount != 1u
         ){
             if(m_deferredLightingTaskGraphValid){
                 m_deferredLightingSubmissionTransaction.discardUnaccepted(
@@ -4774,7 +4751,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             invalidateLaggedLightingHistorySubmission();
         }
         else{
-            Core::GpuNativePacketRecorder recorder(device);
             const Core::GpuTaskPacketStateBinding historyCopyStateBindings[] = {
                 Core::GpuTaskPacketStateBinding{
                     .task = m_deferredLaggedLightingHistoryTask,
@@ -4782,57 +4758,55 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     .externalStateSourceCount = historyCopyStateSourceCount,
                 },
             };
-            const bool historyCopyRecorded = recorder.recordTaskRangeInCompileOrder(
-                    m_deferredLightingTaskGraph,
-                    m_deferredLightingCompiledGraph,
-                    m_deferredLaggedLightingHistoryTask,
-                    m_deferredLaggedLightingHistoryTask,
-                    nullptr,
-                    0u,
-                    m_deferredLightingRecordedGraph,
-                    nullptr,
-                    nullptr,
-                    historyCopyStateBindings,
-                    LengthOf(historyCopyStateBindings)
-                )
+            struct HistoryCopyRecordContext{
+                const Core::CommandListResourceStateHandoff* finalState = nullptr;
+            } historyCopyRecordContext;
+            const auto retainHistoryCopyFinalState = [](
+                void* const rawContext,
+                const Core::CommandListResourceStateHandoff* const finalState
+            ) -> bool {
+                HistoryCopyRecordContext* const context = static_cast<HistoryCopyRecordContext*>(rawContext);
+                if(!context || !finalState)
+                    return false;
+                context->finalState = finalState;
+                return true;
+            };
+            const Core::GpuTaskGraphTaskRecordedCallback historyCopyRecordedCallback{
+                .context = &historyCopyRecordContext,
+                .invoke = retainHistoryCopyFinalState,
+            };
+            Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+            const Core::GpuNativePacketRecorder recorder(device);
+            const Core::GpuTaskGraphSubmitter submitter(device);
+            const bool historyCopyAccepted = submitter.recordAndSubmitTask(
+                m_deferredLightingTaskGraph,
+                m_deferredLightingCompiledGraph,
+                recorder,
+                m_deferredLightingRecordedGraph,
+                m_deferredLaggedLightingHistoryTask,
+                historyCopyStateBindings,
+                LengthOf(historyCopyStateBindings),
+                &historyCopyRecordedCallback,
+                m_deferredLightingSubmissionTransaction,
+                scratchArena
+            );
+            const Core::CommandListResourceStateHandoff* const historyCopyFinalStateSeed =
+                historyCopyRecordContext.finalState
             ;
-            const Core::CommandListResourceStateHandoff* const historyCopyFinalStateSeed = historyCopyRecorded
-                ? m_deferredLightingRecordedGraph.taskFinalStateSeed(
-                    m_deferredLightingCompiledGraph,
-                    m_deferredLaggedLightingHistoryTask
-                )
-                : nullptr
-            ;
-            if(!historyCopyRecorded || !historyCopyFinalStateSeed){
+            if(!historyCopyAccepted || !historyCopyFinalStateSeed){
                 m_deferredLightingSubmissionTransaction.discardUnaccepted(
                     m_deferredLightingTaskGraph,
                     m_deferredLightingCompiledGraph
                 );
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to late-record graph-owned lagged lighting-history capture; reverting to current-frame lighting"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned lagged lighting-history capture record/submission was rejected; reverting to current-frame lighting"));
                 invalidateLaggedLightingHistorySubmission();
             }
             else{
-                Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-                const Core::GpuTaskGraphSubmitter submitter(device);
-                const bool historyCopyAccepted = submitter.submitTaskRangeInCompileOrder(
-                    m_deferredLightingTaskGraph,
-                    m_deferredLightingCompiledGraph,
-                    m_deferredLightingRecordedGraph,
-                    m_deferredLaggedLightingHistoryTask,
-                    m_deferredLaggedLightingHistoryTask,
-                    nullptr,
-                    0u,
-                    nullptr,
-                    0u,
-                    m_deferredLightingSubmissionTransaction,
-                    scratchArena
-                );
-                const Core::QueueSubmissionToken historyCopySubmissionToken = historyCopyAccepted
-                    ? m_deferredLightingSubmissionTransaction.taskToken(
+                const Core::QueueSubmissionToken historyCopySubmissionToken =
+                    m_deferredLightingSubmissionTransaction.taskToken(
                         m_deferredLightingCompiledGraph,
                         m_deferredLaggedLightingHistoryTask
                     )
-                    : Core::QueueSubmissionToken{}
                 ;
                 if(!historyCopySubmissionToken.valid()){
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned lagged lighting-history capture submission was rejected; reverting to current-frame lighting"));

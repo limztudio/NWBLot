@@ -41,6 +41,12 @@ LOCAL_DIRECT_INITIALIZER = r"(?<![\w.>:]){}\s*(?=[({{])"
 DIRECT_INITIALIZER = re.compile(r"(?<![\w.>:])([A-Za-z_]\w*)\s*(?=[({])")
 ASSIGNMENT_OPERATOR = re.compile(r"(?<![=!<>])=(?!=)")
 SINGLE_IDENTIFIER = re.compile(r"\s*([A-Za-z_]\w*)\s*")
+BRACE_WRAPPED_IDENTIFIER = re.compile(
+    r"\s*(?:(?:[A-Za-z_]\w*(?:::[A-Za-z_]\w*)*|decltype\s*\([^()]*\))\s*)?\{\s*([A-Za-z_]\w*)\s*\}\s*"
+)
+COMPARISON_WRAPPED_IDENTIFIER = re.compile(
+    r"\s*(?:([A-Za-z_]\w*)\s*(?:==|!=)\s*(?:true|false|nullptr|0|1)|(?:true|false|nullptr|0|1)\s*(?:==|!=)\s*([A-Za-z_]\w*))\s*"
+)
 IDENTIFIER = re.compile(r"(?<!\w)([A-Za-z_]\w*)")
 UNEVALUATED_OPERATORS = frozenset(("alignof", "decltype", "noexcept", "sizeof", "typeid"))
 CAST_IDENTIFIERS = frozenset(("const_cast", "dynamic_cast", "reinterpret_cast", "static_cast"))
@@ -456,9 +462,24 @@ def local_call_result_cast(source: str, position: int, expression: str) -> bool:
             break
 
     identifier_match = SINGLE_IDENTIFIER.fullmatch(expression)
-    if identifier_match is None:
-        return False
-    return local_initializer_contains_call(source, position, identifier_match.group(1), open_scopes(source, position))
+    active_scopes = open_scopes(source, position)
+    if identifier_match is not None:
+        return local_initializer_contains_call(source, position, identifier_match.group(1), active_scopes)
+
+    # A result can be hidden after a harmless-looking conversion or test, for
+    # example `static_cast<void>(result == true)` or `(void)bool{result}`.
+    # Limit this to complete, result-only wrappers so C-style `(void)` function
+    # parameter lists and unrelated expressions remain out of scope.
+    brace_wrapped = BRACE_WRAPPED_IDENTIFIER.fullmatch(expression)
+    if brace_wrapped is not None:
+        return local_initializer_contains_call(source, position, brace_wrapped.group(1), active_scopes)
+
+    comparison_wrapped = COMPARISON_WRAPPED_IDENTIFIER.fullmatch(expression)
+    if comparison_wrapped is not None:
+        identifier = comparison_wrapped.group(1) or comparison_wrapped.group(2)
+        return local_initializer_contains_call(source, position, identifier, active_scopes)
+
+    return False
 
 
 def assignment_initializer_start(source: str, start: int, end: int) -> int | None:
@@ -550,7 +571,8 @@ def find_discarded_calls(source: str) -> list[tuple[int, str]]:
         end = statement_end(code, initializer, len(code))
         if end is None:
             continue
-        if initializer_contains_call(code[initializer:end]):
+        expression = code[initializer:end]
+        if initializer_contains_call(expression) or local_call_result_cast(code, match.start(), expression):
             violations.append((line_number(code, match.start()), "maybe_unused local"))
 
     return violations
@@ -592,8 +614,11 @@ def run_self_test() -> int:
         ("cast-wrapped local static-void cast", "const bool result = callback();\nstatic_cast<void>(static_cast<bool>(result));", ((2, "local call result"),)),
         ("logical local static-void cast", "const bool result = callback();\nstatic_cast<void>(!!result);", ((2, "local call result"),)),
         ("cast-wrapped logical local static-void cast", "const bool result = callback();\nstatic_cast<void>(static_cast<bool>(!!result));", ((2, "local call result"),)),
+        ("comparison-wrapped local static-void cast", "const bool result = callback();\nstatic_cast<void>(result == true);", ((2, "local call result"),)),
+        ("brace-wrapped local static-void cast", "const bool result = callback();\nstatic_cast<void>(bool{result});", ((2, "local call result"),)),
         ("local c-style void cast", "const bool result = callback();\n(void)result;", ((2, "local call result"),)),
         ("cast-wrapped local c-style void cast", "const bool result = callback();\n(void)static_cast<bool>(result);", ((2, "local call result"),)),
+        ("brace-wrapped local c-style void cast", "const bool result = callback();\n(void)bool{result};", ((2, "local call result"),)),
         ("local non-call cast", "const bool result = false;\nstatic_cast<void>(result);", ()),
         ("wrapped local non-call cast", "const bool result = false;\nstatic_cast<void>(static_cast<bool>(result));", ()),
         ("unevaluated local", "const bool result = callback();\nstatic_cast<void>(sizeof(result));", ()),
@@ -601,12 +626,14 @@ def run_self_test() -> int:
         ("maybe-unused templated call", "[[maybe_unused]] const bool result = callback<int>();", ((1, "maybe_unused local"),)),
         ("maybe-unused brace-initialized call", "[[maybe_unused]] const bool result{callback()};", ((1, "maybe_unused local"),)),
         ("maybe-unused direct-initialized call", "[[maybe_unused]] const bool result(callback());", ((1, "maybe_unused local"),)),
+        ("maybe-unused local call result", "const bool result = callback();\n[[maybe_unused]] const bool ignored{result};", ((2, "maybe_unused local"),)),
         ("maybe-unused function pointer declaration", "[[maybe_unused]] bool (*result)(int) = callback;", ()),
         ("maybe-unused unevaluated call", "[[maybe_unused]] constexpr auto typeSize = sizeof(callback());", ()),
         ("maybe-unused lambda object", "[[maybe_unused]] const auto callback = []{ handler(); };", ()),
         ("std-ignore call", "std::ignore = callback();", ((1, "std::ignore assignment"),)),
         ("std-ignore templated call", "std::ignore = callback<int>();", ((1, "std::ignore assignment"),)),
         ("std-ignore local call result", "const bool result = callback();\nstd::ignore = result;", ((2, "std::ignore assignment"),)),
+        ("std-ignore brace-wrapped local call result", "const bool result = callback();\nstd::ignore = bool{result};", ((2, "std::ignore assignment"),)),
         ("unused parameter", "static_cast<void>(parameter);", ()),
     )
     failed = False

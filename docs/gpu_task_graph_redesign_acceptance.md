@@ -663,7 +663,7 @@ The latest local command-IR evidence is under
 checked-in performance claim. The profile is a CPU probe for `CopyBuffer` only; it does not justify persistent
 runtime IR templates or general direct-Vulkan IR replay.
 
-## Version-controlled evidence waivers
+## Version-controlled scope and evidence waivers
 
 ### W-ASYNC-001 — frame-lagged async-lighting target-hardware evidence
 
@@ -704,6 +704,27 @@ runtime IR templates or general direct-Vulkan IR replay.
   target adapter, attach the paired external profiler report with `--external-profiler-report`, retain the route,
   validation, JSON, and trace artifacts under `.cozter/out/ab-results/`, then update this audit with the reviewed
   bandwidth/copy-engine findings and an explicit policy decision.
+
+### W-LEGACY-PARITY-001 — retired legacy-renderer pixel-parity corpus
+
+- **Deferred requirement:** reconstruct a historically matching legacy-renderer corpus and compare it with the
+  graph renderer across the approved renderer profiles. A valid parity verdict would require matching scene
+  settings, capture mode, temporal inputs, adapter/driver qualification, validation mode, and documented
+  tolerances for both arms.
+- **Reason and decision:** the legacy renderer path is retired. Rather than revive it or claim parity from
+  incomplete historical artifacts, the project has selected the checked-in
+  [`current-renderer-v1`](../tests/ab/renderer_baseline/current_renderer_corpus.json) registry as its formal,
+  immutable forward reference for the current graph renderer. This is a scope decision, not historical migration
+  evidence.
+- **Affected behavior and safe fallback:** this waiver changes no renderer behavior. Future graph-renderer changes
+  must continue to qualify against `current-renderer-v1` on its documented adapter/driver configuration. Results
+  from that corpus must be described only as forward-regression evidence and must never be presented as
+  legacy-to-graph pixel parity.
+- **Removal condition:** obtain a runnable retired legacy binary or reproducible legacy source plus the complete
+  matching scene/capture configuration and qualified artifacts; capture or verify all approved profiles, retain
+  the paired images, manifests, logs, comparison reports, and tolerances under `.cozter/out/ab-results/`, then
+  replace this waiver with an audit row that reports the reviewed legacy-to-graph comparison. A current-renderer
+  re-capture alone cannot remove this waiver.
 
 ## Open criteria preventing strict final acceptance
 
@@ -888,16 +909,18 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    assets and NWB-owned ImGui textures are the only runtime-selected image domains, and both freeze their exact
    handles before graph declaration; static target-generation bindless images remain explicit task resource uses.
    The explicitly opaque user-callback task does not claim to discover user-owned descriptor accesses and instead
-   serializes that compatibility boundary through its hazard domain. This does not
-   replace the still-open general legacy-to-graph pixel-parity corpus.
+   serializes that compatibility boundary through its hazard domain. The retired general legacy-to-graph
+   pixel-parity corpus is explicitly deferred by [`W-LEGACY-PARITY-001`](#w-legacy-parity-001--retired-legacy-renderer-pixel-parity-corpus);
+   `current-renderer-v1` does not replace it.
    The paired target-scene critical-path comparison now covers the retained
    hybrid HW-to-SW transparent-shadow safety boundary plus a same-quality graph-owned soft-transparent-fold versus
-   retained-monolithic comparison, but neither replaces general legacy-to-graph parity evidence. Dedicated-Transfer ownership/bandwidth evidence and an
+   retained-monolithic comparison, but neither replaces the deferred legacy-to-graph parity evidence. Dedicated-Transfer ownership/bandwidth evidence and an
    external profiler trace remain deferred because the available adapter lacks that queue family.
 
 ## Required decision for a strict closeout
 
 Do not relabel this result as final architectural completion without either implementing the five areas above or
-explicitly waiving them in a revised, version-controlled acceptance scope. The next implementation work should
-finish the remaining graph-owned asset/resource-update paths and specialized descriptor/resource updates, then
-collect the dedicated-Transfer evidence still called out above.
+explicitly waiving them in this version-controlled acceptance scope. `W-LEGACY-PARITY-001` records the deliberate
+forward-corpus decision; it does not waive the remaining runtime, resource-ownership, or target-hardware evidence
+requirements. The next implementation work should finish the remaining graph-owned asset/resource-update paths and
+specialized descriptor/resource updates, then collect the dedicated-Transfer evidence still called out above.

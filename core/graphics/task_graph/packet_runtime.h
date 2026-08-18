@@ -652,6 +652,8 @@ public:
         const GpuTaskGraphTaskSubmissionHook* taskSubmissionHooks = nullptr,
         usize taskSubmissionHookCount = 0u
     )const;
+
+
 private:
     Device& m_device;
 };

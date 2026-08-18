@@ -18,6 +18,7 @@ if(WIN32)
         "${CMAKE_CURRENT_LIST_DIR}/src/tbb/itt_notify.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/src/tbb/main.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/src/tbb/market.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/src/tbb/numa_allocation.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/src/tbb/misc.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/src/tbb/misc_ex.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/src/tbb/observer_proxy.cpp"

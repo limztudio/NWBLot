@@ -108,6 +108,14 @@ struct GpuTaskGraphTelemetryOptions{
     const GpuTaskGraphQueueAssignments* queueAssignments = nullptr;
 };
 
+namespace GpuTaskLifecycleState{
+    enum Enum : u8{
+        Declared,
+        Accepted,
+        Discarded,
+    };
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -135,6 +143,7 @@ private:
         GpuTaskAcceptedThunk acceptPayload = nullptr;
         GpuTaskDiscardedThunk discardPayload = nullptr;
         GpuTaskPayloadDestroyThunk destroyPayload = nullptr;
+        GpuTaskLifecycleState::Enum lifecycleState = GpuTaskLifecycleState::Declared;
     };
 
     struct GpuGraphResourceNode{
@@ -279,7 +288,7 @@ public:
             &DestroyPayload<Payload>
         );
         if(!task.valid())
-            DestroyArenaObject(m_arena, storedPayload);
+            discardAndDestroyUnappendedPayload(storedPayload, discardPayload, &DestroyPayload<Payload>);
         return task;
     }
 
@@ -418,6 +427,11 @@ private:
         GpuTaskDiscardedThunk discardPayload,
         GpuTaskPayloadDestroyThunk destroyPayload
     );
+    void discardAndDestroyUnappendedPayload(
+        void* payload,
+        GpuTaskDiscardedThunk discardPayload,
+        GpuTaskPayloadDestroyThunk destroyPayload
+    )noexcept;
     [[nodiscard]] GpuGraphResourceId appendResource(const GpuGraphResourceDesc& desc);
     [[nodiscard]] GpuGraphResourceSetId appendResourceSet(const GpuGraphResourceSetDesc& desc);
     [[nodiscard]] GpuGraphPipelineId appendPipeline(const GpuGraphPipelineDesc& desc);

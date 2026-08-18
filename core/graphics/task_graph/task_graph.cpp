@@ -99,6 +99,11 @@ struct CopyTextureTask{
         if(payload.acceptedToken)
             *payload.acceptedToken = token;
     }
+
+    static void discarded(Payload& payload){
+        if(payload.acceptedToken)
+            *payload.acceptedToken = {};
+    }
 };
 
 struct CopyBufferTask{
@@ -161,6 +166,11 @@ struct CopyBufferTask{
     static void accepted(Payload& payload, const QueueSubmissionToken& token){
         if(payload.acceptedToken)
             *payload.acceptedToken = token;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.acceptedToken)
+            *payload.acceptedToken = {};
     }
 };
 
@@ -315,6 +325,11 @@ struct ClearBufferTask{
         if(payload.acceptedToken)
             *payload.acceptedToken = token;
     }
+
+    static void discarded(Payload& payload){
+        if(payload.acceptedToken)
+            *payload.acceptedToken = {};
+    }
 };
 
 struct ClearTextureTask{
@@ -410,6 +425,8 @@ struct ClearTextureTask{
     }
 
     static void discarded(Payload& payload){
+        if(payload.clearDesc.acceptedToken)
+            *payload.clearDesc.acceptedToken = {};
         if(payload.clearDesc.recordHooks.discarded)
             payload.clearDesc.recordHooks.discarded(payload.clearDesc.recordHooks.context);
     }
@@ -471,6 +488,8 @@ struct ClearTextureRectUIntTask{
     }
 
     static void discarded(Payload& payload){
+        if(payload.clearDesc.acceptedToken)
+            *payload.clearDesc.acceptedToken = {};
         if(payload.clearDesc.recordHooks.discarded)
             payload.clearDesc.recordHooks.discarded(payload.clearDesc.recordHooks.context);
     }
@@ -704,6 +723,9 @@ GpuTaskId GpuTaskGraph::addTask(const GpuTaskDesc& desc){
 }
 
 GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopyBufferTaskDesc& copyDesc){
+    if(copyDesc.acceptedToken)
+        *copyDesc.acceptedToken = {};
+
     if(
         desc.resourceUses
         || desc.resourceUseCount != 0u
@@ -783,7 +805,11 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
         }
     }
     if(!valid){
-        DestroyArenaObject(m_arena, payload);
+        discardAndDestroyUnappendedPayload(
+            payload,
+            &DiscardPayload<CopyTask>,
+            &DestroyPayload<CopyTask::Payload>
+        );
         return {};
     }
 
@@ -794,15 +820,22 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
         payload,
         &RecordPayload<CopyTask>,
         &AcceptPayload<CopyTask>,
-        nullptr,
+        &DiscardPayload<CopyTask>,
         &DestroyPayload<CopyTask::Payload>
     );
     if(!task.valid())
-        DestroyArenaObject(m_arena, payload);
+        discardAndDestroyUnappendedPayload(
+            payload,
+            &DiscardPayload<CopyTask>,
+            &DestroyPayload<CopyTask::Payload>
+        );
     return task;
 }
 
 GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCopyTextureTaskDesc& copyDesc){
+    if(copyDesc.acceptedToken)
+        *copyDesc.acceptedToken = {};
+
     if(
         desc.resourceUses
         || desc.resourceUseCount != 0u
@@ -871,7 +904,11 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
         }
     }
     if(!valid){
-        DestroyArenaObject(m_arena, payload);
+        discardAndDestroyUnappendedPayload(
+            payload,
+            &DiscardPayload<CopyTask>,
+            &DestroyPayload<CopyTask::Payload>
+        );
         return {};
     }
 
@@ -882,11 +919,15 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
         payload,
         &RecordPayload<CopyTask>,
         &AcceptPayload<CopyTask>,
-        nullptr,
+        &DiscardPayload<CopyTask>,
         &DestroyPayload<CopyTask::Payload>
     );
     if(!task.valid())
-        DestroyArenaObject(m_arena, payload);
+        discardAndDestroyUnappendedPayload(
+            payload,
+            &DiscardPayload<CopyTask>,
+            &DestroyPayload<CopyTask::Payload>
+        );
     return task;
 }
 
@@ -985,7 +1026,11 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
         &DestroyPayload<UploadTask::Payload>
     );
     if(!task.valid())
-        DestroyArenaObject(m_arena, payload);
+        discardAndDestroyUnappendedPayload(
+            payload,
+            &DiscardPayload<UploadTask>,
+            &DestroyPayload<UploadTask::Payload>
+        );
     return task;
 }
 
@@ -1067,11 +1112,18 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
         &DestroyPayload<UploadTask::Payload>
     );
     if(!task.valid())
-        DestroyArenaObject(m_arena, payload);
+        discardAndDestroyUnappendedPayload(
+            payload,
+            &DiscardPayload<UploadTask>,
+            &DestroyPayload<UploadTask::Payload>
+        );
     return task;
 }
 
 GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuClearBufferTaskDesc& clearDesc){
+    if(clearDesc.acceptedToken)
+        *clearDesc.acceptedToken = {};
+
     if(
         desc.resourceUses
         || desc.resourceUseCount != 0u
@@ -1113,15 +1165,22 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
         payload,
         &RecordPayload<ClearTask>,
         &AcceptPayload<ClearTask>,
-        nullptr,
+        &DiscardPayload<ClearTask>,
         &DestroyPayload<ClearTask::Payload>
     );
     if(!task.valid())
-        DestroyArenaObject(m_arena, payload);
+        discardAndDestroyUnappendedPayload(
+            payload,
+            &DiscardPayload<ClearTask>,
+            &DestroyPayload<ClearTask::Payload>
+        );
     return task;
 }
 
 GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc){
+    if(clearDesc.acceptedToken)
+        *clearDesc.acceptedToken = {};
+
     if(
         desc.resourceUses
         || desc.resourceUseCount != 0u
@@ -1189,7 +1248,11 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         &DestroyPayload<ClearTask::Payload>
     );
     if(!task.valid())
-        DestroyArenaObject(m_arena, payload);
+        discardAndDestroyUnappendedPayload(
+            payload,
+            &DiscardPayload<ClearTask>,
+            &DestroyPayload<ClearTask::Payload>
+        );
     return task;
 }
 
@@ -1197,6 +1260,9 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
     const GpuTaskDesc& desc,
     const GpuClearTextureRectUIntTaskDesc& clearDesc
 ){
+    if(clearDesc.acceptedToken)
+        *clearDesc.acceptedToken = {};
+
     if(
         desc.resourceUses
         || desc.resourceUseCount != 0u
@@ -1262,7 +1328,11 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
         &DestroyPayload<ClearTask::Payload>
     );
     if(!task.valid())
-        DestroyArenaObject(m_arena, payload);
+        discardAndDestroyUnappendedPayload(
+            payload,
+            &DiscardPayload<ClearTask>,
+            &DestroyPayload<ClearTask::Payload>
+        );
     return task;
 }
 
@@ -2023,6 +2093,9 @@ void GpuTaskGraph::acceptTask(const GpuTaskId& taskID, const QueueSubmissionToke
         return;
 
     GpuTaskNode& task = m_tasks[taskID.index];
+    if(task.lifecycleState != GpuTaskLifecycleState::Declared)
+        return;
+    task.lifecycleState = GpuTaskLifecycleState::Accepted;
     if(task.payload && task.acceptPayload)
         task.acceptPayload(task.payload, token);
 }
@@ -2032,6 +2105,9 @@ void GpuTaskGraph::discardTask(const GpuTaskId& taskID)noexcept{
         return;
 
     GpuTaskNode& task = m_tasks[taskID.index];
+    if(task.lifecycleState != GpuTaskLifecycleState::Declared)
+        return;
+    task.lifecycleState = GpuTaskLifecycleState::Discarded;
     if(task.payload && task.discardPayload)
         task.discardPayload(task.payload);
 }
@@ -2257,6 +2333,20 @@ GpuTaskId GpuTaskGraph::appendTask(
     const u32 index = static_cast<u32>(m_tasks.size());
     m_tasks.push_back(Move(task));
     return GpuTaskId{ index, m_generation };
+}
+
+void GpuTaskGraph::discardAndDestroyUnappendedPayload(
+    void* const payload,
+    const GpuTaskDiscardedThunk discardPayload,
+    const GpuTaskPayloadDestroyThunk destroyPayload
+)noexcept{
+    if(!payload)
+        return;
+
+    if(discardPayload)
+        discardPayload(payload);
+    if(destroyPayload)
+        destroyPayload(m_arena, payload);
 }
 
 GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc){
@@ -2560,6 +2650,11 @@ AStringView GpuTaskGraph::markerLabel(const u32 offset, const u32 size)const{
 
 void GpuTaskGraph::destroyTaskPayloads()noexcept{
     for(GpuTaskNode& task : m_tasks){
+        if(task.lifecycleState == GpuTaskLifecycleState::Declared){
+            task.lifecycleState = GpuTaskLifecycleState::Discarded;
+            if(task.payload && task.discardPayload)
+                task.discardPayload(task.payload);
+        }
         if(task.payload && task.destroyPayload)
             task.destroyPayload(m_arena, task.payload);
         task.payload = nullptr;

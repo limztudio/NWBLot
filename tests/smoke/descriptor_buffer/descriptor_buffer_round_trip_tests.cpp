@@ -93,6 +93,32 @@ inline constexpr GpuTimingScopeDefinition s_UnsplitAvboitIntegrationLifecycleSco
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Keep an unavailable validation layer as a GPU-optional test condition. BackendContext correctly reports a
+// missing required layer as an error, but that debug diagnostic breaks before Google Test can turn it into a skip.
+[[nodiscard]] static bool HasKhronosValidationLayer(){
+    if(volkInitialize() != VK_SUCCESS)
+        return false;
+
+    u32 layerCount = 0u;
+    if(vkEnumerateInstanceLayerProperties(&layerCount, nullptr) != VK_SUCCESS || layerCount == 0u)
+        return false;
+
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/validation_layer_query_scratch"));
+    Vector<VkLayerProperties, Alloc::ScratchArena> availableLayers(layerCount, scratchArena);
+    if(vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data()) != VK_SUCCESS)
+        return false;
+
+    for(u32 layerIndex = 0u; layerIndex < layerCount; ++layerIndex){
+        if(NWB_STRCMP(availableLayers[layerIndex].layerName, "VK_LAYER_KHRONOS_validation") == 0)
+            return true;
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Brings up a real headless GPU device with the minimum dependency set Graphics requires, mirroring Core::Frame's
 // construction. createHeadlessDevice() creates no window/swap chain, so this runs on any host with a Vulkan driver
 // that exposes the required descriptor-buffer capability.
@@ -109,9 +135,17 @@ public:
 
     ~HeadlessGraphicsScope(){}
 
-    // Returns false on driver/instance failure (no Vulkan, no physical device, etc.). The caller SKIPS in that case
-    // rather than failing — a CI runner without a GPU is an environment condition.
+    // Returns false when the test-local validation runtime or headless Vulkan device cannot be created. The caller
+    // SKIPS in that case rather than failing — a CI runner without a GPU or validation layer is an environment
+    // condition.
     [[nodiscard]] bool initialize(){
+        // The graph smoke paths must be validation-backed. This configuration is owned by each Graphics instance
+        // and must precede createHeadlessDevice(), which creates the Vulkan instance and enables
+        // VK_LAYER_KHRONOS_validation.
+        if(!HasKhronosValidationLayer())
+            return false;
+        if(!m_graphics.setDebugRuntimeEnabled(true))
+            return false;
         if(!m_graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()))
             return false;
         return m_graphics.createHeadlessDevice();
@@ -178,9 +212,10 @@ protected:
         s_scope = MakeUnique<HeadlessGraphicsScope>();
         const bool initialized = s_scope->initialize();
 
-        // No usable Vulkan device on this host -> skip the whole suite. Reported as SKIPPED, not failed.
+        // No usable validation-enabled Vulkan device on this host -> skip the whole suite. Reported as SKIPPED,
+        // not failed.
         if(!initialized){
-            GTEST_SKIP() << "Descriptor-buffer round-trip: no usable headless Vulkan device on this host; skipping suite.";
+            GTEST_SKIP() << "Descriptor-buffer round-trip: no usable validation-enabled headless Vulkan device on this host; skipping suite.";
             return;
         }
 

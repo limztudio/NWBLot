@@ -564,7 +564,7 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
 
-    u32 destructionCount = 0u;
+    u32 discardedCount = 0u;
     Graphics::GpuTaskDesc desc;
     desc
         .setIdentity(Name("tests/task_graph/non_recordable"))
@@ -576,9 +576,9 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
             false,
         })
     ;
-    const Graphics::GpuTaskId task = graph.addTask<PayloadDestroyTask>(
+    const Graphics::GpuTaskId task = graph.addTask<PacketLifecycleTask>(
         desc,
-        PayloadDestroyTask::Payload{ &destructionCount }
+        PacketLifecycleTask::Payload{ .discardedCount = &discardedCount }
     );
     ASSERT_TRUE(task.valid());
     EXPECT_TRUE(graph.taskAt(task.index).hasPayload);
@@ -608,6 +608,164 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
     EXPECT_TRUE(analysis.valid());
     EXPECT_TRUE(assignments.valid());
     EXPECT_TRUE(compiledGraph.validFor(graph));
+
+    graph.reset();
+    EXPECT_EQ(discardedCount, 1u);
+}
+
+TEST(GpuTaskGraph, ResolvesTypedPayloadLifecycleOnlyOnceWhenGraphIsAbandoned){
+    u32 acceptedCount = 0u;
+    u32 discardedCount = 0u;
+    Graphics::QueueSubmissionToken acceptedToken;
+    const Graphics::QueueSubmissionToken token{
+        .queue = Graphics::CommandQueue::Graphics,
+        .value = 1u,
+        .physicalQueueIndex = 0u,
+        .deviceGeneration = 1u,
+    };
+
+    {
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        Graphics::GpuTaskDesc desc;
+        desc
+            .setIdentity(Name("tests/task_graph/lifecycle_accepted"))
+            .setMarkerLabel("Accepted Lifecycle Task")
+        ;
+        const Graphics::GpuTaskId task = graph.addTask<PacketLifecycleTask>(
+            desc,
+            PacketLifecycleTask::Payload{ &acceptedCount, &discardedCount, &acceptedToken }
+        );
+        ASSERT_TRUE(task.valid());
+
+        graph.acceptTask(task, token);
+        graph.acceptTask(task, token);
+        graph.discardTask(task);
+        graph.reset();
+
+        EXPECT_EQ(acceptedCount, 1u);
+        EXPECT_EQ(discardedCount, 0u);
+        EXPECT_EQ(acceptedToken.value, token.value);
+    }
+
+    {
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        Graphics::GpuTaskDesc desc;
+        desc
+            .setIdentity(Name("tests/task_graph/lifecycle_discarded"))
+            .setMarkerLabel("Discarded Lifecycle Task")
+        ;
+        const Graphics::GpuTaskId task = graph.addTask<PacketLifecycleTask>(
+            desc,
+            PacketLifecycleTask::Payload{ &acceptedCount, &discardedCount, &acceptedToken }
+        );
+        ASSERT_TRUE(task.valid());
+
+        graph.discardTask(task);
+        graph.discardTask(task);
+        graph.reset();
+
+        EXPECT_EQ(acceptedCount, 1u);
+        EXPECT_EQ(discardedCount, 1u);
+    }
+
+    {
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        Graphics::GpuTaskDesc desc;
+        desc
+            .setIdentity(Name("tests/task_graph/lifecycle_unresolved"))
+            .setMarkerLabel("Unresolved Lifecycle Task")
+        ;
+        const Graphics::GpuTaskId task = graph.addTask<PacketLifecycleTask>(
+            desc,
+            PacketLifecycleTask::Payload{ &acceptedCount, &discardedCount, &acceptedToken }
+        );
+        ASSERT_TRUE(task.valid());
+    }
+
+    EXPECT_EQ(acceptedCount, 1u);
+    EXPECT_EQ(discardedCount, 2u);
+}
+
+TEST(GpuTaskGraph, DiscardsTypedPayloadWhenDeclarationIsRejected){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    u32 discardedCount = 0u;
+    Graphics::GpuTaskDesc invalidDesc;
+    const Graphics::GpuTaskId task = graph.addTask<PacketLifecycleTask>(
+        invalidDesc,
+        PacketLifecycleTask::Payload{ .discardedCount = &discardedCount }
+    );
+
+    EXPECT_FALSE(task.valid());
+    EXPECT_EQ(discardedCount, 1u);
+
+    graph.reset();
+    EXPECT_EQ(discardedCount, 1u);
+}
+
+TEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuTaskDesc desc;
+    Graphics::QueueSubmissionToken token{
+        .queue = Graphics::CommandQueue::Graphics,
+        .value = 1u,
+        .physicalQueueIndex = 0u,
+        .deviceGeneration = 1u,
+    };
+
+    Graphics::GpuCopyBufferTaskDesc copyBuffer;
+    copyBuffer.acceptedToken = &token;
+    EXPECT_FALSE(graph.addCopyBufferTask(desc, copyBuffer).valid());
+    EXPECT_FALSE(token.valid());
+
+    token = Graphics::QueueSubmissionToken{
+        .queue = Graphics::CommandQueue::Graphics,
+        .value = 1u,
+        .physicalQueueIndex = 0u,
+        .deviceGeneration = 1u,
+    };
+    Graphics::GpuCopyTextureTaskDesc copyTexture;
+    copyTexture.acceptedToken = &token;
+    EXPECT_FALSE(graph.addCopyTextureTask(desc, copyTexture).valid());
+    EXPECT_FALSE(token.valid());
+
+    token = Graphics::QueueSubmissionToken{
+        .queue = Graphics::CommandQueue::Graphics,
+        .value = 1u,
+        .physicalQueueIndex = 0u,
+        .deviceGeneration = 1u,
+    };
+    Graphics::GpuClearBufferTaskDesc clearBuffer;
+    clearBuffer.acceptedToken = &token;
+    EXPECT_FALSE(graph.addClearBufferTask(desc, clearBuffer).valid());
+    EXPECT_FALSE(token.valid());
+
+    token = Graphics::QueueSubmissionToken{
+        .queue = Graphics::CommandQueue::Graphics,
+        .value = 1u,
+        .physicalQueueIndex = 0u,
+        .deviceGeneration = 1u,
+    };
+    Graphics::GpuClearTextureTaskDesc clearTexture;
+    clearTexture.acceptedToken = &token;
+    EXPECT_FALSE(graph.addClearTextureTask(desc, clearTexture).valid());
+    EXPECT_FALSE(token.valid());
+
+    token = Graphics::QueueSubmissionToken{
+        .queue = Graphics::CommandQueue::Graphics,
+        .value = 1u,
+        .physicalQueueIndex = 0u,
+        .deviceGeneration = 1u,
+    };
+    Graphics::GpuClearTextureRectUIntTaskDesc clearTextureRect;
+    clearTextureRect.acceptedToken = &token;
+    EXPECT_FALSE(graph.addClearTextureRectUIntTask(desc, clearTextureRect).valid());
+    EXPECT_FALSE(token.valid());
 }
 
 TEST(GpuTaskGraph, OwnsUploadBlobsAndInvalidatesThemOnReset){
@@ -4972,6 +5130,75 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         transaction.packetRuntime(recoveryPacket)->state,
         Graphics::GpuPacketRuntimeState::Accepted
     );
+}
+
+
+TEST(GpuTaskGraph, DiscardsUnacceptedPayloadsAfterPacketRecordFailureCleanup){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    u32 acceptedCount = 0u;
+    u32 discardedCount = 0u;
+    Graphics::QueueSubmissionToken acceptedToken;
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+
+    Graphics::GpuTaskDesc firstDesc;
+    firstDesc
+        .setIdentity(Name("tests/task_graph/record_failure_first"))
+        .setMarkerLabel("Record Failure First")
+        .setScheduling(scheduling)
+    ;
+    const Graphics::GpuTaskId firstTask = graph.addTask<PacketLifecycleTask>(
+        firstDesc,
+        PacketLifecycleTask::Payload{ &acceptedCount, &discardedCount, &acceptedToken }
+    );
+    ASSERT_TRUE(firstTask.valid());
+
+    Graphics::GpuTaskDesc secondDesc;
+    secondDesc
+        .setIdentity(Name("tests/task_graph/record_failure_second"))
+        .setMarkerLabel("Record Failure Second")
+        .setDependencies(&firstTask, 1u)
+        .setScheduling(scheduling)
+    ;
+    const Graphics::GpuTaskId secondTask = graph.addTask<PacketLifecycleTask>(
+        secondDesc,
+        PacketLifecycleTask::Payload{ &acceptedCount, &discardedCount, &acceptedToken }
+    );
+    ASSERT_TRUE(secondTask.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(firstTask);
+    const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(secondTask);
+    ASSERT_TRUE(firstPacket.valid());
+    ASSERT_TRUE(secondPacket.valid());
+    ASSERT_NE(firstPacket, secondPacket);
+
+    Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
+    transaction.reset(compiledGraph);
+
+    // A native recorder reports failure before marking its packet recorded. Range-recording callers then invoke
+    // this transaction cleanup, which must reject the failed packet and all still-unaccepted work.
+    transaction.discardUnaccepted(graph, compiledGraph);
+    EXPECT_EQ(acceptedCount, 0u);
+    EXPECT_EQ(discardedCount, 2u);
+    ASSERT_NE(transaction.packetRuntime(firstPacket), nullptr);
+    ASSERT_NE(transaction.packetRuntime(secondPacket), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(firstPacket)->state, Graphics::GpuPacketRuntimeState::Rejected);
+    EXPECT_EQ(transaction.packetRuntime(secondPacket)->state, Graphics::GpuPacketRuntimeState::Rejected);
+
+    transaction.discardUnaccepted(graph, compiledGraph);
+    graph.reset();
+    EXPECT_EQ(discardedCount, 2u);
 }
 
 

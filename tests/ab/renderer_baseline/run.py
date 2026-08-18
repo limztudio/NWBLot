@@ -47,6 +47,9 @@ from window_capture_smoke import (  # noqa: E402
 
 
 SCHEMA = "nwb.renderer-baseline.v1"
+CORPUS_SCHEMA = "nwb.renderer-baseline-corpus.v1"
+CURRENT_CORPUS_ID = "current-renderer-v1"
+CURRENT_CORPUS_FILE = Path(__file__).with_name("current_renderer_corpus.json")
 FORBIDDEN_LOG_MESSAGES = (
     "[ERROR]",
     "VUID-",
@@ -79,6 +82,14 @@ class CaptureResult:
     source_worktree_clean: bool
     frozen_environment: Mapping[str, str]
     forbidden_log_messages: Tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CorpusReference:
+    corpus_id: str
+    reference_directory: Path
+    profile_entry: Mapping[str, object]
+    limits: Mapping[str, float]
 
 
 def sha256_file(path: Path) -> str:
@@ -128,6 +139,10 @@ def effective_frozen_environment(profile: BaselineProfile) -> Dict[str, str]:
         name: os.environ.get(name, default_value)
         for name, default_value in sorted(profile.frozen_environment.items())
     }
+
+
+def canonical_frozen_environment(profile: BaselineProfile) -> Dict[str, str]:
+    return dict(sorted(profile.frozen_environment.items()))
 
 
 def capture_mode(profile: BaselineProfile) -> str:
@@ -437,6 +452,220 @@ def load_reference(
     return manifest, capture_path
 
 
+def load_corpus(corpus_id: str, corpus_path: Path = CURRENT_CORPUS_FILE) -> Mapping[str, object]:
+    try:
+        corpus = json.loads(corpus_path.read_text(encoding="utf-8"))
+    except OSError as error:
+        raise SmokeFailure(f"could not read renderer baseline corpus '{corpus_path}': {error}") from error
+    except json.JSONDecodeError as error:
+        raise SmokeFailure(f"renderer baseline corpus is not valid JSON: {corpus_path}: {error}") from error
+    if not isinstance(corpus, dict) or corpus.get("schema") != CORPUS_SCHEMA:
+        raise SmokeFailure(f"renderer baseline corpus has an unsupported schema: {corpus_path}")
+    if corpus.get("corpus_id") != corpus_id:
+        raise SmokeFailure(f"renderer baseline corpus id does not match '{corpus_id}': {corpus_path}")
+    if not isinstance(corpus.get("artifact_root"), str):
+        raise SmokeFailure(f"renderer baseline corpus has no artifact root: {corpus_path}")
+    if not isinstance(corpus.get("profiles"), dict):
+        raise SmokeFailure(f"renderer baseline corpus has no profile table: {corpus_path}")
+    return corpus
+
+
+def corpus_artifact_root(corpus: Mapping[str, object], supplied_root: Optional[Path]) -> Path:
+    if supplied_root is not None:
+        return supplied_root
+    artifact_root = corpus.get("artifact_root")
+    assert isinstance(artifact_root, str)
+    return REPO / artifact_root
+
+
+def corpus_child(root: Path, relative_path: str, description: str) -> Path:
+    relative = Path(relative_path)
+    if relative.is_absolute():
+        raise SmokeFailure(f"renderer baseline corpus {description} must be relative: {relative_path}")
+    resolved_root = root.resolve()
+    resolved_child = (resolved_root / relative).resolve()
+    try:
+        resolved_child.relative_to(resolved_root)
+    except ValueError as error:
+        raise SmokeFailure(f"renderer baseline corpus {description} escapes its artifact root: {relative_path}") from error
+    return resolved_child
+
+
+def corpus_string(entry: Mapping[str, object], key: str, profile_name: str) -> str:
+    value = entry.get(key)
+    if not isinstance(value, str) or not value:
+        raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has no valid {key}")
+    return value
+
+
+def corpus_number(entry: Mapping[str, object], key: str, profile_name: str) -> float:
+    value = entry.get(key)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has no valid {key}")
+    return float(value)
+
+
+def load_corpus_reference(
+    corpus_id: str,
+    supplied_root: Optional[Path],
+    profile_name: str,
+    profile: BaselineProfile,
+    gpu_validation: bool,
+    frozen_environment: Optional[Mapping[str, str]] = None,
+    corpus_path: Path = CURRENT_CORPUS_FILE,
+) -> Tuple[Mapping[str, object], Path, CorpusReference]:
+    corpus = load_corpus(corpus_id, corpus_path)
+    capture_environment = corpus.get("capture_environment")
+    if not isinstance(capture_environment, dict):
+        raise SmokeFailure(f"renderer baseline corpus '{corpus_id}' has no capture environment")
+    expected_gpu_validation = capture_environment.get("gpu_validation")
+    if not isinstance(expected_gpu_validation, bool):
+        raise SmokeFailure(f"renderer baseline corpus '{corpus_id}' has no GPU-validation mode")
+    if gpu_validation != expected_gpu_validation:
+        raise SmokeFailure(
+            f"renderer baseline corpus '{corpus_id}' requires gpu_validation={expected_gpu_validation}, "
+            f"got {gpu_validation}"
+        )
+
+    profiles = corpus.get("profiles")
+    assert isinstance(profiles, dict)
+    entry = profiles.get(profile_name)
+    if not isinstance(entry, dict):
+        raise SmokeFailure(f"renderer baseline corpus '{corpus_id}' has no profile '{profile_name}'")
+    reference = entry.get("reference")
+    if not isinstance(reference, dict):
+        raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has no reference")
+    artifact_root = corpus_artifact_root(corpus, supplied_root)
+    reference_directory = corpus_child(
+        artifact_root,
+        corpus_string(reference, "directory", profile_name),
+        f"reference directory for '{profile_name}'",
+    )
+    manifest_path = reference_directory / "manifest.json"
+    log_path = reference_directory / "runtime.log"
+    if sha256_file(manifest_path) != corpus_string(reference, "manifest_sha256", profile_name):
+        raise SmokeFailure(f"renderer baseline corpus manifest checksum does not match for '{profile_name}'")
+    if sha256_file(log_path) != corpus_string(reference, "runtime_log_sha256", profile_name):
+        raise SmokeFailure(f"renderer baseline corpus runtime-log checksum does not match for '{profile_name}'")
+
+    manifest, capture = load_reference(
+        reference_directory,
+        profile_name,
+        effective_frozen_environment(profile) if frozen_environment is None else frozen_environment,
+        profile.settle_seconds,
+        gpu_validation,
+        profile.capture_freeze_frame,
+        profile.fixed_delta_seconds,
+    )
+    if manifest.get("source_revision") != corpus_string(reference, "source_revision", profile_name):
+        raise SmokeFailure(f"renderer baseline corpus source revision does not match for '{profile_name}'")
+    if manifest.get("capture_sha256") != corpus_string(reference, "capture_sha256", profile_name):
+        raise SmokeFailure(f"renderer baseline corpus capture manifest does not match for '{profile_name}'")
+    if sha256_file(capture) != corpus_string(reference, "capture_sha256", profile_name):
+        raise SmokeFailure(f"renderer baseline corpus image checksum does not match for '{profile_name}'")
+
+    limits_entry = entry.get("limits")
+    if not isinstance(limits_entry, dict):
+        raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has no comparison limits")
+    limits = {
+        "maximum_max_abs": corpus_number(limits_entry, "maximum_max_abs", profile_name),
+        "maximum_mean_abs": corpus_number(limits_entry, "maximum_mean_abs", profile_name),
+        "maximum_changed_fraction": corpus_number(limits_entry, "maximum_changed_fraction", profile_name),
+    }
+    if limits["maximum_max_abs"] < 0.0 or limits["maximum_mean_abs"] < 0.0:
+        raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has negative comparison limits")
+    if not 0.0 <= limits["maximum_changed_fraction"] <= 1.0:
+        raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has an invalid changed-fraction limit")
+    recapture = entry.get("same_revision_recapture")
+    if not isinstance(recapture, dict):
+        raise SmokeFailure(f"renderer baseline corpus entry '{profile_name}' has no same-revision re-capture")
+    recapture_directory = corpus_child(
+        artifact_root,
+        corpus_string(recapture, "directory", profile_name),
+        f"same-revision re-capture directory for '{profile_name}'",
+    )
+    comparison_path = recapture_directory / "comparison.json"
+    if sha256_file(comparison_path) != corpus_string(recapture, "comparison_sha256", profile_name):
+        raise SmokeFailure(f"renderer baseline corpus re-capture checksum does not match for '{profile_name}'")
+    try:
+        comparison = json.loads(comparison_path.read_text(encoding="utf-8"))
+    except OSError as error:
+        raise SmokeFailure(f"could not read renderer baseline corpus re-capture '{comparison_path}': {error}") from error
+    except json.JSONDecodeError as error:
+        raise SmokeFailure(f"renderer baseline corpus re-capture is not valid JSON: {comparison_path}: {error}") from error
+    if not isinstance(comparison, dict) or comparison.get("schema") != "nwb.renderer-baseline-comparison.v1":
+        raise SmokeFailure(f"renderer baseline corpus re-capture has an unsupported schema for '{profile_name}'")
+    if comparison.get("profile") != profile_name:
+        raise SmokeFailure(f"renderer baseline corpus re-capture profile does not match for '{profile_name}'")
+    expected_revision = corpus_string(reference, "source_revision", profile_name)
+    if comparison.get("reference_source_revision") != expected_revision:
+        raise SmokeFailure(f"renderer baseline corpus re-capture reference revision does not match for '{profile_name}'")
+    if comparison.get("candidate_source_revision") != expected_revision:
+        raise SmokeFailure(f"renderer baseline corpus re-capture candidate revision does not match for '{profile_name}'")
+    difference = comparison.get("difference")
+    if not isinstance(difference, dict):
+        raise SmokeFailure(f"renderer baseline corpus re-capture has no difference metrics for '{profile_name}'")
+    for corpus_key, comparison_key, limit_key in (
+        ("max_abs", "max_abs", "maximum_max_abs"),
+        ("mean_abs", "mean_abs", "maximum_mean_abs"),
+        ("changed_fraction", "changed_fraction", "maximum_changed_fraction"),
+    ):
+        recorded_value = corpus_number(recapture, corpus_key, profile_name)
+        observed_value = corpus_number(difference, comparison_key, profile_name)
+        if observed_value != recorded_value:
+            raise SmokeFailure(f"renderer baseline corpus re-capture metric does not match for '{profile_name}': {corpus_key}")
+        if recorded_value > limits[limit_key]:
+            raise SmokeFailure(f"renderer baseline corpus limit is below its observed re-capture for '{profile_name}'")
+    return manifest, capture, CorpusReference(corpus_id, reference_directory, entry, limits)
+
+
+def apply_corpus_limits(args: argparse.Namespace, reference: CorpusReference) -> None:
+    for argument_name, corpus_key in (
+        ("maximum_max_abs", "maximum_max_abs"),
+        ("maximum_mean_abs", "maximum_mean_abs"),
+        ("maximum_changed_fraction", "maximum_changed_fraction"),
+    ):
+        approved_limit = reference.limits[corpus_key]
+        requested_limit = getattr(args, argument_name)
+        if requested_limit is None:
+            setattr(args, argument_name, approved_limit)
+        elif requested_limit > approved_limit:
+            raise SmokeFailure(
+                f"--{argument_name.replace('_', '-')}={requested_limit} relaxes the immutable corpus limit "
+                f"{approved_limit}; omit it or choose a stricter value"
+            )
+
+
+def verify_corpus(corpus_id: str, supplied_root: Optional[Path]) -> int:
+    corpus = load_corpus(corpus_id)
+    profiles = corpus.get("profiles")
+    assert isinstance(profiles, dict)
+    expected_profiles = set(profile_names())
+    actual_profiles = set(profiles)
+    if actual_profiles != expected_profiles:
+        missing = sorted(expected_profiles - actual_profiles)
+        unexpected = sorted(actual_profiles - expected_profiles)
+        raise SmokeFailure(
+            f"renderer baseline corpus '{corpus_id}' profile set mismatch: missing={missing}, unexpected={unexpected}"
+        )
+    capture_environment = corpus.get("capture_environment")
+    assert isinstance(capture_environment, dict)
+    gpu_validation = capture_environment.get("gpu_validation")
+    assert isinstance(gpu_validation, bool)
+    for profile_name in sorted(expected_profiles):
+        profile = get_profile(profile_name)
+        load_corpus_reference(
+            corpus_id,
+            supplied_root,
+            profile_name,
+            profile,
+            gpu_validation,
+            canonical_frozen_environment(profile),
+        )
+    print(f"renderer baseline corpus verified: {corpus_id}")
+    return 0
+
+
 def prepare_output_directory(path: Path) -> None:
     if path.exists():
         raise SmokeFailure(f"baseline output directory already exists and will not be overwritten: {path}")
@@ -454,7 +683,20 @@ def run(args: argparse.Namespace) -> int:
     frozen_environment = effective_frozen_environment(profile)
     reference_manifest: Optional[Mapping[str, object]] = None
     reference_capture: Optional[Path] = None
-    if args.reference_dir is not None:
+    corpus_reference: Optional[CorpusReference] = None
+    reference_directory: Optional[Path] = None
+    if args.reference_corpus is not None:
+        reference_manifest, reference_capture, corpus_reference = load_corpus_reference(
+            args.reference_corpus,
+            args.corpus_root,
+            args.profile,
+            profile,
+            args.gpu_validation,
+            frozen_environment,
+        )
+        reference_directory = corpus_reference.reference_directory
+        apply_corpus_limits(args, corpus_reference)
+    elif args.reference_dir is not None:
         reference_manifest, reference_capture = load_reference(
             args.reference_dir,
             args.profile,
@@ -464,6 +706,7 @@ def run(args: argparse.Namespace) -> int:
             profile.capture_freeze_frame,
             profile.fixed_delta_seconds,
         )
+        reference_directory = args.reference_dir
 
     if reference_capture is None and not source_worktree_clean():
         raise SmokeFailure("refusing to create an immutable baseline from a dirty source worktree")
@@ -485,7 +728,7 @@ def run(args: argparse.Namespace) -> int:
     comparison = {
         "schema": "nwb.renderer-baseline-comparison.v1",
         "profile": args.profile,
-        "reference_directory": str(args.reference_dir),
+        "reference_directory": str(reference_directory),
         "candidate_directory": str(args.output_dir),
         "reference_source_revision": reference_manifest.get("source_revision"),
         "candidate_source_revision": capture.source_revision,
@@ -493,8 +736,15 @@ def run(args: argparse.Namespace) -> int:
         "candidate_capture": str(capture_path),
         "difference_capture": str(args.output_dir / "difference.bmp"),
         "difference": asdict(difference) | {"changed_fraction": difference.changed_fraction},
+        "reference_corpus": corpus_reference.corpus_id if corpus_reference is not None else None,
+        "effective_limits": {
+            "maximum_max_abs": args.maximum_max_abs,
+            "maximum_mean_abs": args.maximum_mean_abs,
+            "maximum_changed_fraction": args.maximum_changed_fraction,
+            "require_exact": args.require_exact,
+        },
         "threshold_failures": failures,
-        "verdict": "fail" if failures else "report-only",
+        "verdict": "fail" if failures else ("pass" if corpus_reference is not None else "report-only"),
     }
     write_json(args.output_dir / "comparison.json", comparison)
     print(f"renderer baseline comparison artifacts: {args.output_dir}")
@@ -510,7 +760,23 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--executable", type=Path, help="Selected smoke executable.")
     parser.add_argument("--runtime-dir", type=Path, help="Selected cooked smoke runtime directory.")
     parser.add_argument("--output-dir", type=Path, help="New, empty artifact directory.")
-    parser.add_argument("--reference-dir", type=Path, help="Immutable baseline directory to compare against.")
+    reference_group = parser.add_mutually_exclusive_group()
+    reference_group.add_argument("--reference-dir", type=Path, help="Immutable baseline directory to compare against.")
+    reference_group.add_argument(
+        "--reference-corpus",
+        choices=(CURRENT_CORPUS_ID,),
+        help="Compare against the checked-in formal current-renderer corpus and enforce its limits.",
+    )
+    parser.add_argument(
+        "--corpus-root",
+        type=Path,
+        help="Restored artifact root for --reference-corpus or --verify-corpus (defaults to the corpus artifact root).",
+    )
+    parser.add_argument(
+        "--verify-corpus",
+        choices=(CURRENT_CORPUS_ID,),
+        help="Verify every restored current-renderer corpus artifact without running Vulkan.",
+    )
     parser.add_argument("--logserver-executable", type=Path, help="Override the logserver executable.")
     parser.add_argument("--no-logserver", action="store_true", help="Use standalone loader logs instead of logserver.")
     validation_group = parser.add_mutually_exclusive_group()
@@ -531,6 +797,24 @@ def make_parser() -> argparse.ArgumentParser:
 def validate_args(args: argparse.Namespace) -> None:
     if args.self_test:
         return
+    if args.verify_corpus is not None:
+        conflicting = [
+            name
+            for name, value in (
+                ("--profile", args.profile),
+                ("--executable", args.executable),
+                ("--runtime-dir", args.runtime_dir),
+                ("--output-dir", args.output_dir),
+                ("--reference-dir", args.reference_dir),
+                ("--reference-corpus", args.reference_corpus),
+            )
+            if value is not None
+        ]
+        if conflicting:
+            raise SmokeFailure("--verify-corpus cannot be combined with " + ", ".join(conflicting))
+        return
+    if args.corpus_root is not None and args.reference_corpus is None:
+        raise SmokeFailure("--corpus-root requires --reference-corpus or --verify-corpus")
     missing = [
         flag
         for flag, value in (("--profile", args.profile), ("--executable", args.executable), ("--runtime-dir", args.runtime_dir), ("--output-dir", args.output_dir))
@@ -551,8 +835,8 @@ def validate_args(args: argparse.Namespace) -> None:
 def run_self_test() -> int:
     with tempfile.TemporaryDirectory(prefix="nwb_renderer_baseline_") as temporary_directory:
         root = Path(temporary_directory)
-        reference_directory = root / "reference"
-        reference_directory.mkdir()
+        reference_directory = root / "opaque-texture" / "reference"
+        reference_directory.mkdir(parents=True)
         reference_image = reference_directory / "baseline.bmp"
         candidate_image = root / "candidate.bmp"
         write_bmp_rgb(reference_image, 2, 1, bytes((8, 16, 24, 32, 40, 48)))
@@ -572,9 +856,99 @@ def run_self_test() -> int:
             "source_revision": "test-reference",
         }
         write_json(reference_directory / "manifest.json", manifest)
+        (reference_directory / "runtime.log").write_text("test runtime log\n", encoding="utf-8")
         loaded_manifest, loaded_capture = load_reference(reference_directory, "opaque-texture", {}, 4.0, False, 0, 0.0)
         assert loaded_manifest["source_revision"] == "test-reference"
         assert loaded_capture == reference_image
+        recapture_directory = root / "opaque-texture" / "recapture"
+        recapture_directory.mkdir(parents=True)
+        comparison_path = recapture_directory / "comparison.json"
+        write_json(
+            comparison_path,
+            {
+                "schema": "nwb.renderer-baseline-comparison.v1",
+                "profile": "opaque-texture",
+                "reference_source_revision": "test-reference",
+                "candidate_source_revision": "test-reference",
+                "difference": {
+                    "max_abs": 2,
+                    "mean_abs": 0.5,
+                    "changed_fraction": 0.25,
+                },
+            },
+        )
+        corpus_path = root / "corpus.json"
+        corpus = {
+            "schema": CORPUS_SCHEMA,
+            "corpus_id": CURRENT_CORPUS_ID,
+            "artifact_root": ".",
+            "capture_environment": {"gpu_validation": False},
+            "profiles": {
+                "opaque-texture": {
+                    "reference": {
+                        "directory": "opaque-texture/reference",
+                        "source_revision": "test-reference",
+                        "capture_sha256": sha256_file(reference_image),
+                        "manifest_sha256": sha256_file(reference_directory / "manifest.json"),
+                        "runtime_log_sha256": sha256_file(reference_directory / "runtime.log"),
+                    },
+                    "same_revision_recapture": {
+                        "directory": "opaque-texture/recapture",
+                        "comparison_sha256": sha256_file(comparison_path),
+                        "max_abs": 2,
+                        "mean_abs": 0.5,
+                        "changed_fraction": 0.25,
+                    },
+                    "limits": {
+                        "maximum_max_abs": 3,
+                        "maximum_mean_abs": 1.0,
+                        "maximum_changed_fraction": 0.75,
+                    },
+                }
+            },
+        }
+        write_json(corpus_path, corpus)
+        corpus_manifest, corpus_capture, corpus_reference = load_corpus_reference(
+            CURRENT_CORPUS_ID,
+            root,
+            "opaque-texture",
+            get_profile("opaque-texture"),
+            False,
+            corpus_path=corpus_path,
+        )
+        assert corpus_manifest["source_revision"] == "test-reference"
+        assert corpus_capture == reference_image
+        assert corpus_reference.limits["maximum_max_abs"] == 3.0
+        reference_log = reference_directory / "runtime.log"
+        reference_log.write_text("tampered runtime log\n", encoding="utf-8")
+        try:
+            load_corpus_reference(
+                CURRENT_CORPUS_ID,
+                root,
+                "opaque-texture",
+                get_profile("opaque-texture"),
+                False,
+                corpus_path=corpus_path,
+            )
+        except SmokeFailure:
+            pass
+        else:
+            raise AssertionError("corpus artifact tampering must fail closed")
+        reference_log.write_text("test runtime log\n", encoding="utf-8")
+        corpus_args = SimpleNamespace(
+            maximum_max_abs=None,
+            maximum_mean_abs=None,
+            maximum_changed_fraction=None,
+        )
+        apply_corpus_limits(corpus_args, corpus_reference)
+        assert corpus_args.maximum_mean_abs == 1.0
+        corpus_args.maximum_max_abs = 4
+        try:
+            apply_corpus_limits(corpus_args, corpus_reference)
+        except SmokeFailure:
+            pass
+        else:
+            raise AssertionError("corpus comparison limits must not be relaxed")
         transparent_profile = get_profile("transparent-avboit")
         assert transparent_profile.capture_freeze_frame == 96
         assert transparent_profile.settle_seconds == 0.75
@@ -617,6 +991,8 @@ def main(argv: Sequence[str]) -> int:
         validate_args(args)
         if args.self_test:
             return run_self_test()
+        if args.verify_corpus is not None:
+            return verify_corpus(args.verify_corpus, args.corpus_root)
         return run(args)
     except SmokeSkip as error:
         print(f"renderer baseline skipped: {error}", file=sys.stderr)

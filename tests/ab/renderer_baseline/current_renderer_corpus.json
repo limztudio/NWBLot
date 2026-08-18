@@ -1,0 +1,182 @@
+{
+  "schema": "nwb.renderer-baseline-corpus.v1",
+  "corpus_id": "current-renderer-v1",
+  "purpose": "Formal forward pixel reference for the graph renderer; this is not a retired-legacy parity corpus.",
+  "artifact_root": ".cozter/out/ab-results/renderer-baseline",
+  "capture_environment": {
+    "adapter": "AMD BC-250",
+    "driver": "RADV GFX1013",
+    "gpu_validation": true,
+    "platform": "Linux"
+  },
+  "profiles": {
+    "opaque-texture": {
+      "reference": {
+        "directory": "opaque-texture/20260818_085522",
+        "source_revision": "2d7628a843e9cb6bd992dc369ff4fca199ec6f19",
+        "capture_sha256": "e7dae58116caa49753262ff8d6c05ac1e6122bbe466c546472fc63650692dd6d",
+        "manifest_sha256": "d5bedbd74a6f3de38c57b6eca972566e5ec0eecbdffaf01dc4628bda79cafb76",
+        "runtime_log_sha256": "d1fa0c49f8b5989fea91beafdbaad7564cb444d8d2e047a6eb1a3a294869c1d1"
+      },
+      "same_revision_recapture": {
+        "directory": "opaque-texture/20260818_085535",
+        "comparison_sha256": "bcc91acc332fcadb9bbafea77eb1841664ad2e3c994847c0744ff71a7f762c19",
+        "max_abs": 17,
+        "mean_abs": 0.18113223379629628,
+        "changed_fraction": 0.12124479166666667
+      },
+      "limits": {
+        "maximum_max_abs": 32,
+        "maximum_mean_abs": 0.5,
+        "maximum_changed_fraction": 0.25
+      }
+    },
+    "static-csg": {
+      "reference": {
+        "directory": "static-csg/20260818_085551",
+        "source_revision": "2d7628a843e9cb6bd992dc369ff4fca199ec6f19",
+        "capture_sha256": "a518bc2cfdffbc9bf814f152b31e6e05fa0b8e5f3bfd7144a01617c60e8584b8",
+        "manifest_sha256": "7c722354b2748fda28dc36937c3d77a2cd1aba91a16c20d223955ee221b0fa06",
+        "runtime_log_sha256": "b9f2fbbe41b77a70e3c1cfc0ae17aedb8813daa822c95d52e2cce10257182e26"
+      },
+      "same_revision_recapture": {
+        "directory": "static-csg/20260818_085604",
+        "comparison_sha256": "0920b64c9fad0ed73dd7a67264d931a2b1b3825ab694003c231785214370660e",
+        "max_abs": 192,
+        "mean_abs": 0.06747337962962963,
+        "changed_fraction": 0.04263541666666667
+      },
+      "limits": {
+        "maximum_max_abs": 224,
+        "maximum_mean_abs": 0.25,
+        "maximum_changed_fraction": 0.1
+      }
+    },
+    "transparent-avboit": {
+      "reference": {
+        "directory": "transparent-avboit/20260818_082350",
+        "source_revision": "5340f2a2342143f7efc0df84a9579f4a5894d1d2",
+        "capture_sha256": "c994b3c13c4d85ba5c40ba67ea820cd6fb53a3b994a149fb6e0b29f05cc064d9",
+        "manifest_sha256": "b9ef8929186713d19b84da7ef58e3021815910457f5a242c7546cba59001e9f4",
+        "runtime_log_sha256": "f65d64e606ade7a5c0b857f4ff6a353da6e0f9b63cf444d051b33a7bf2f14c9b"
+      },
+      "same_revision_recapture": {
+        "directory": "transparent-avboit/20260818_082401",
+        "comparison_sha256": "f2a2ba33c58a67b9d640ab2c7cdb68c9065d232e8674b04f3e9a5371e7e00ac1",
+        "max_abs": 4,
+        "mean_abs": 0.012327835648148149,
+        "changed_fraction": 0.03388888888888889
+      },
+      "limits": {
+        "maximum_max_abs": 8,
+        "maximum_mean_abs": 0.05,
+        "maximum_changed_fraction": 0.08
+      }
+    },
+    "skinned-csg": {
+      "reference": {
+        "directory": "skinned-csg/20260818_082312",
+        "source_revision": "5340f2a2342143f7efc0df84a9579f4a5894d1d2",
+        "capture_sha256": "db3e6f5f8a0a318359f9b4920d4506b7d574bf564ad4db4964c625aa045329f3",
+        "manifest_sha256": "00ff0a57cc3b43a389b4d4c7e0b707a5ffc785389e7640d75229c480bd497482",
+        "runtime_log_sha256": "9cc44b567aaf2d6055252a488a4568f7e76e993346e41ece49ea80679d5093ad"
+      },
+      "same_revision_recapture": {
+        "directory": "skinned-csg/20260818_082325",
+        "comparison_sha256": "791e9a7eb5c54e6bc9fbd3a9499dd33019dd2518181cb139d8414e8e088f8549",
+        "max_abs": 74,
+        "mean_abs": 0.20728009259259259,
+        "changed_fraction": 0.06897395833333334
+      },
+      "limits": {
+        "maximum_max_abs": 96,
+        "maximum_mean_abs": 0.5,
+        "maximum_changed_fraction": 0.15
+      }
+    },
+    "soft-shadows": {
+      "reference": {
+        "directory": "soft-shadows/20260818_084125",
+        "source_revision": "86ce931d44eca1359a70450f0f04836dd21d65fa",
+        "capture_sha256": "5d2d3f0bfcf1bdfdd22d8fe5b3c87917ecbfd242fc3efa45ea7d42a2217a57af",
+        "manifest_sha256": "0ea79c8d68e21a32f51a168054740fc2ef1fc091177ed5a8ce8781e7138cc76a",
+        "runtime_log_sha256": "d903f1c2375a91d1f67e67c7f52ea9148c6bd84973d32bc2c2723f5592cec0d8"
+      },
+      "same_revision_recapture": {
+        "directory": "soft-shadows/20260818_084153",
+        "comparison_sha256": "a8f51a4f086cec279b1e47397b2df734ae27ba8e33ec394c0fd4c5322ef27e89",
+        "max_abs": 81,
+        "mean_abs": 0.2285222800925926,
+        "changed_fraction": 0.10812760416666667
+      },
+      "limits": {
+        "maximum_max_abs": 112,
+        "maximum_mean_abs": 0.5,
+        "maximum_changed_fraction": 0.25
+      }
+    },
+    "caustics": {
+      "reference": {
+        "directory": "caustics/20260818_082923",
+        "source_revision": "fb425f09f7d2b8cb054f1fec20163a22773ca0d8",
+        "capture_sha256": "c42dc2af50ed4d224463260f6fd5bc6f92f7f9b768184dcd29bd79a688585925",
+        "manifest_sha256": "5c784238fc6839c1b812330b7f4eaffaac8556a3651a2d1ff0be7388b6adbb4e",
+        "runtime_log_sha256": "d295376c3d5166742da64bf9c6f3e63724a43e23c70017aee53b2ef3f8a0695c"
+      },
+      "same_revision_recapture": {
+        "directory": "caustics/20260818_082944",
+        "comparison_sha256": "e0b11d22ff8efcc8bb1c1e28f47a12d1fe8fa39026f7a22e9584f7e78618dede",
+        "max_abs": 2,
+        "mean_abs": 0.028217303240740742,
+        "changed_fraction": 0.06252777777777778
+      },
+      "limits": {
+        "maximum_max_abs": 8,
+        "maximum_mean_abs": 0.1,
+        "maximum_changed_fraction": 0.15
+      }
+    },
+    "surfel-gi": {
+      "reference": {
+        "directory": "surfel-gi/20260818_083523",
+        "source_revision": "07536971dd627053cad746dbd0eb515ade6340fd",
+        "capture_sha256": "0807d1ec839e5f3e197970f7d08480f1f082d8e7ca90ae551a07d8f7bdd2d9c6",
+        "manifest_sha256": "e177ae890af65c32a28a9e869e688e65faf50c49a94fbc6346504b3ee8a15468",
+        "runtime_log_sha256": "e44dd875e7f3e759247f7c5c73031466c2f0ec4861ebab23a15c71867e4c4a0a"
+      },
+      "same_revision_recapture": {
+        "directory": "surfel-gi/20260818_083545",
+        "comparison_sha256": "d50657b6528ed042c68b5bd4aa3ef0132a914da5f53ae8d16be74b599d2f3452",
+        "max_abs": 8,
+        "mean_abs": 0.0705306712962963,
+        "changed_fraction": 0.1606657986111111
+      },
+      "limits": {
+        "maximum_max_abs": 16,
+        "maximum_mean_abs": 0.2,
+        "maximum_changed_fraction": 0.35
+      }
+    },
+    "stress": {
+      "reference": {
+        "directory": "stress/20260818_085339",
+        "source_revision": "2d7628a843e9cb6bd992dc369ff4fca199ec6f19",
+        "capture_sha256": "24a5cf39b2d9f7e795b469047e9abae7799ebb17591339e03c6c59638913b0cd",
+        "manifest_sha256": "7fd958242cf181df4f3a44da98d04ee12cb646cb0485cf241e016eb4d50177b7",
+        "runtime_log_sha256": "640011f2537844b9432393564091045ac0b4b9d0c9cabbff7daee60da3ee32b7"
+      },
+      "same_revision_recapture": {
+        "directory": "stress/20260818_085413",
+        "comparison_sha256": "77c3ecf34794b8290aac56dc48b90934559b0f34038c56701f38bcc9b2b97a94",
+        "max_abs": 4,
+        "mean_abs": 0.03578559027777778,
+        "changed_fraction": 0.09453645833333334
+      },
+      "limits": {
+        "maximum_max_abs": 8,
+        "maximum_mean_abs": 0.1,
+        "maximum_changed_fraction": 0.2
+      }
+    }
+  }
+}

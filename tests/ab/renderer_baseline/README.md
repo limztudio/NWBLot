@@ -2,8 +2,8 @@
 
 This test-owned workflow captures a current renderer image as an immutable reference, then compares a later
 renderer capture against that reference without adding a production feature switch or reviving retired renderer
-paths. It is the first prerequisite for the redesign's broader legacy-to-graph parity corpus: a known-good revision
-and its capture metadata are preserved before a candidate revision is evaluated.
+paths. `current-renderer-v1` is the formal forward reference for the graph renderer: it protects approved current
+output from later changes, but it is not a retired-legacy parity corpus.
 
 Capture a reference from the repository root:
 
@@ -31,6 +31,43 @@ The candidate directory receives `candidate.bmp`, `difference.bmp`, `comparison.
 Without thresholds the comparison is report-only; `--require-exact` is suitable only for deterministic paths. A
 reference with a different profile, frozen environment, or GPU-validation mode is rejected rather than silently
 compared.
+
+## Formal current-renderer corpus
+
+The checked-in [`current_renderer_corpus.json`](current_renderer_corpus.json) pins the eight approved reference
+artifacts by source revision and SHA-256, including each baseline BMP, manifest, and runtime log. It also records one
+same-revision re-capture per profile and conservative, adapter-local comparison limits derived from that observed
+noise. Use it for a formal forward comparison:
+
+```text
+python launcher.py renderer-baseline transparent-avboit -- \
+  --reference-corpus current-renderer-v1
+```
+
+That mode validates the complete reference identity before it starts the candidate, applies the corpus limits by
+default, and refuses a caller-supplied limit that would relax the recorded policy. Stricter limits and
+`--require-exact` remain allowed. Its `comparison.json` records `reference_corpus: "current-renderer-v1"` and reports
+`pass` or `fail`, rather than a generic report-only verdict.
+
+Raw captures deliberately remain ignored A/B artifacts under `.cozter/out/ab-results/`. Preserve the matching
+`renderer-baseline/` artifact tree in the project artifact store and restore it at that default path before use, or
+point the runner at a restored tree whose immediate children are the profile directories:
+
+```text
+python tests/ab/renderer_baseline/run.py --verify-corpus current-renderer-v1
+python launcher.py renderer-baseline surfel-gi -- \
+  --reference-corpus current-renderer-v1 \
+  --corpus-root /mnt/nwb-artifacts/current-renderer-v1
+```
+
+`--verify-corpus` is a no-Vulkan integrity check for all eight baseline images, manifests, and logs. Any missing or
+changed artifact fails closed. The v1 corpus was captured on AMD BC-250 with RADV GFX1013 on Linux and Vulkan
+validation enabled; use it only on that qualified adapter/driver configuration. The runner enforces validation mode,
+scene settings, and immutable hashes; adapter identity remains part of the operator's qualified-hardware selection.
+
+Do not edit or overwrite a corpus reference in place. Replacing it requires a new corpus id, clean-revision captures
+for every profile, a documented same-revision noise re-capture, a new checksummed registry, and an acceptance-audit
+update explaining why the approved current output changed.
 
 The `transparent-avboit` profile is frame-locked at 96 completed render submissions. Its smoke project sets the
 test-only `NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME` control, suspends further submission, logs the ready marker,

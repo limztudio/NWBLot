@@ -23,6 +23,9 @@ NWB_CORE_BEGIN
 namespace __hidden_gpu_packet_runtime{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph/packet_recording_frontier");
 
 [[nodiscard]] static u64 TextureRangeEnd(
@@ -182,9 +185,7 @@ inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph
                 return false;
 
             const GpuTaskGraphResourceView resource = graph.resourceAt(barrier.resource.index);
-            const GpuTaskGraphInitialOwnerHandoffSourceView* const multiSource =
-                FindInitialOwnerHandoffSource(resource, barrier)
-            ;
+            const GpuTaskGraphInitialOwnerHandoffSourceView* const multiSource = FindInitialOwnerHandoffSource(resource, barrier);
             if(resource.initialOwnerHandoffSourceCount != 0u && !multiSource)
                 return false;
             if(multiSource && multiSource->completion != completion)
@@ -222,7 +223,10 @@ inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph
 }
 
 
-} // namespace __hidden_gpu_packet_runtime
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

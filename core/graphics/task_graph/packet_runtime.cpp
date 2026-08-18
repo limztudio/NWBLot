@@ -250,6 +250,7 @@ void GpuRecordedGraph::reset(const GpuCompiledGraph& compiledGraph){
     m_serialRecordingScratch.externalBaseStateSeed.reset();
     m_serialRecordingScratch.externalMergedStateSeed.reset();
     m_generation = compiledGraph.generation();
+    m_planGeneration = compiledGraph.planGeneration();
     m_deviceGeneration = compiledGraph.deviceGeneration();
     m_valid = compiledGraph.valid();
 }
@@ -258,6 +259,7 @@ bool GpuRecordedGraph::validFor(const GpuCompiledGraph& compiledGraph)const noex
     return m_valid
         && compiledGraph.valid()
         && m_generation == compiledGraph.generation()
+        && m_planGeneration == compiledGraph.planGeneration()
         && m_deviceGeneration == compiledGraph.deviceGeneration()
         && m_packets.size() == compiledGraph.packetCount()
         && m_packetStateSeeds.size() == compiledGraph.packetCount()
@@ -283,6 +285,7 @@ bool GpuTaskGraphExternalCompletionToken::validFor(const GpuCompiledGraph& compi
 bool GpuTaskGraphExternalResourceHandoff::validFor(const GpuCompiledGraph& compiledGraph)const noexcept{
     if(
         !compiledGraph.valid()
+        || planGeneration != compiledGraph.planGeneration()
         || !resource.valid()
         || resource.generation != compiledGraph.generation()
         || !destinationQueue.valid()
@@ -376,7 +379,7 @@ bool GpuTaskGraphExternalResourceHandoff::validFor(const GpuCompiledGraph& compi
 const GpuRecordedPacket* GpuRecordedGraph::find(const GpuSubmissionPacketId& packet)const noexcept{
     if(
         !packet.valid()
-        || packet.generation != m_generation
+        || packet.generation != m_planGeneration
         || packet.index >= m_packets.size()
     )
         return nullptr;
@@ -404,7 +407,7 @@ const CommandListResourceStateHandoff* GpuRecordedGraph::taskFinalStateSeed(
 }
 
 CommandListResourceStateHandoff* GpuRecordedGraph::packetStateSeed(const GpuSubmissionPacketId& packet)noexcept{
-    if(!packet.valid() || packet.generation != m_generation || packet.index >= m_packetStateSeeds.size())
+    if(!packet.valid() || packet.generation != m_planGeneration || packet.index >= m_packetStateSeeds.size())
         return nullptr;
     return &m_packetStateSeeds[packet.index];
 }
@@ -412,7 +415,7 @@ CommandListResourceStateHandoff* GpuRecordedGraph::packetStateSeed(const GpuSubm
 const CommandListResourceStateHandoff* GpuRecordedGraph::packetStateSeed(
     const GpuSubmissionPacketId& packet
 )const noexcept{
-    if(!packet.valid() || packet.generation != m_generation || packet.index >= m_packetStateSeeds.size())
+    if(!packet.valid() || packet.generation != m_planGeneration || packet.index >= m_packetStateSeeds.size())
         return nullptr;
     return &m_packetStateSeeds[packet.index];
 }
@@ -420,7 +423,7 @@ const CommandListResourceStateHandoff* GpuRecordedGraph::packetStateSeed(
 GpuRecordedGraph::PacketRecordingScratch* GpuRecordedGraph::packetRecordingScratch(
     const GpuSubmissionPacketId& packet
 )noexcept{
-    if(!packet.valid() || packet.generation != m_generation || packet.index >= m_packetRecordingScratch.size())
+    if(!packet.valid() || packet.generation != m_planGeneration || packet.index >= m_packetRecordingScratch.size())
         return nullptr;
     return &m_packetRecordingScratch[packet.index];
 }
@@ -796,6 +799,8 @@ bool GpuNativePacketRecorder::recordPacket(
 )const{
     if(
         !compiledGraph.validFor(graph)
+        || !graph.validForDeviceGeneration(compiledGraph.deviceGeneration())
+        || m_device.getDeviceGeneration() != compiledGraph.deviceGeneration()
         || !compiledGraph.validPacket(desc.packet)
         || !__hidden_gpu_packet_runtime::ValidateTaskPacketStateBindings(
             graph,
@@ -832,6 +837,8 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
 )const{
     if(
         !compiledGraph.validFor(graph)
+        || !graph.validForDeviceGeneration(compiledGraph.deviceGeneration())
+        || m_device.getDeviceGeneration() != compiledGraph.deviceGeneration()
         || !compiledGraph.validPacket(desc.packet)
         || !outRecordedGraph.validFor(compiledGraph)
         || !__hidden_gpu_packet_runtime::ValidateTaskPacketStateBindings(
@@ -842,12 +849,16 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         )
     )
         return false;
-    // A capture is one graph-generation artifact. Reject a stale non-empty capture before opening a packet that
-    // happens not to contain a primitive command; otherwise old records could be mistaken for this packet's trace.
+    // A capture is one immutable compiled-plan artifact. Reject a stale non-empty capture before opening a packet
+    // that happens not to contain a primitive command; otherwise old records could be mistaken for this packet's
+    // trace after the same graph is recompiled with a different packet/queue plan.
     if(
         commandIrCapture
         && commandIrCapture->recordCount() != 0u
-        && commandIrCapture->graphGeneration() != compiledGraph.generation()
+        && (
+            commandIrCapture->graphGeneration() != compiledGraph.generation()
+            || commandIrCapture->planGeneration() != compiledGraph.planGeneration()
+        )
     )
         return false;
     if(outRecordedGraph.find(desc.packet))
@@ -998,6 +1009,8 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
         *outFailedPacket = {};
     if(
         !compiledGraph.validFor(graph)
+        || !graph.validForDeviceGeneration(compiledGraph.deviceGeneration())
+        || m_device.getDeviceGeneration() != compiledGraph.deviceGeneration()
         || !compiledGraph.validPacketRange(range)
         || (recordOverrideCount != 0u && !recordOverrides)
         || !__hidden_gpu_packet_runtime::ValidateTaskPacketStateBindings(
@@ -1103,6 +1116,8 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         *outFailedPacket = {};
     if(
         !compiledGraph.validFor(graph)
+        || !graph.validForDeviceGeneration(compiledGraph.deviceGeneration())
+        || m_device.getDeviceGeneration() != compiledGraph.deviceGeneration()
         || !compiledGraph.validPacketRange(range)
         || (recordOverrideCount != 0u && !recordOverrides)
         || !__hidden_gpu_packet_runtime::ValidateTaskPacketStateBindings(
@@ -1311,6 +1326,7 @@ void GpuGraphSubmissionTransaction::reset(const GpuCompiledGraph& compiledGraph)
     m_latestAcceptedQueueTokens.clear();
     m_externalResourceHandoffScratch.clear();
     m_generation = compiledGraph.generation();
+    m_planGeneration = compiledGraph.planGeneration();
     m_deviceGeneration = compiledGraph.deviceGeneration();
     m_acceptedSubmissionCount = 0u;
     m_valid = compiledGraph.valid();
@@ -1335,6 +1351,7 @@ bool GpuGraphSubmissionTransaction::validFor(const GpuCompiledGraph& compiledGra
     return m_valid
         && compiledGraph.valid()
         && m_generation == compiledGraph.generation()
+        && m_planGeneration == compiledGraph.planGeneration()
         && m_deviceGeneration == compiledGraph.deviceGeneration()
         && m_packets.size() == compiledGraph.packetCount()
         && m_externalResourceHandoffScratch.size() == compiledGraph.externalResourceExportCount()
@@ -1342,7 +1359,7 @@ bool GpuGraphSubmissionTransaction::validFor(const GpuCompiledGraph& compiledGra
 }
 
 bool GpuGraphSubmissionTransaction::markPacketRecorded(const GpuSubmissionPacketId& packet)noexcept{
-    if(!m_valid || !packet.valid() || packet.generation != m_generation || packet.index >= m_packets.size())
+    if(!m_valid || !packet.valid() || packet.generation != m_planGeneration || packet.index >= m_packets.size())
         return false;
     GpuPacketRuntime& runtime = m_packets[packet.index];
     if(runtime.state != GpuPacketRuntimeState::Declared)
@@ -1644,6 +1661,7 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
         return {};
 
     GpuTaskGraphExternalResourceHandoff handoff;
+    handoff.planGeneration = compiledGraph.planGeneration();
     handoff.resource = exportInfo->resource;
     handoff.destinationQueue = exportInfo->destinationQueue;
     handoff.finalState = exportInfo->finalState;
@@ -1733,6 +1751,7 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
     }
     scratch->waitTokens.push_back(producerToken);
     GpuTaskGraphExternalResourceHandoff handoff;
+    handoff.planGeneration = compiledGraph.planGeneration();
     handoff.resource = exportInfo->resource;
     handoff.producerTask = exportInfo->producerTask;
     handoff.sourceQueue = exportInfo->sourceQueue;
@@ -1781,7 +1800,7 @@ bool GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(
 const GpuPacketRuntime* GpuGraphSubmissionTransaction::packetRuntime(
     const GpuSubmissionPacketId& packet
 )const noexcept{
-    if(!m_valid || !packet.valid() || packet.generation != m_generation || packet.index >= m_packets.size())
+    if(!m_valid || !packet.valid() || packet.generation != m_planGeneration || packet.index >= m_packets.size())
         return nullptr;
     return &m_packets[packet.index];
 }
@@ -1801,6 +1820,8 @@ bool GpuTaskGraphSubmitter::submitPacket(
 )const{
     if(
         !compiledGraph.validFor(graph)
+        || !graph.validForDeviceGeneration(compiledGraph.deviceGeneration())
+        || m_device.getDeviceGeneration() != compiledGraph.deviceGeneration()
         || !compiledGraph.validPacket(packetID)
         || !recordedGraph.validFor(compiledGraph)
         || !transaction.validFor(compiledGraph)

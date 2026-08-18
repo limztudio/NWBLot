@@ -6,6 +6,10 @@
 
 #include "task_graph.h"
 
+#include <core/graphics/backend_selection.h>
+
+#include <global/atomic.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -34,6 +38,18 @@ inline constexpr u64 s_TinyTaskQueueCostWeight = 1u;
 inline constexpr u64 s_SmallTaskQueueCostWeight = 2u;
 inline constexpr u64 s_MediumTaskQueueCostWeight = 4u;
 inline constexpr u64 s_LargeTaskQueueCostWeight = 8u;
+
+// Compilers are short-lived value objects, so packet identity must be allocated process-wide.  The graph
+// generation remains the identity of declared task/resource handles; this distinct generation invalidates every
+// packet-local artifact whenever a graph is compiled into a replacement immutable plan.
+static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
+
+[[nodiscard]] static u64 AllocateCompiledPlanGeneration()noexcept{
+    u64 generation = s_NextCompiledPlanGeneration.fetch_add(1u, MemoryOrder::relaxed);
+    if(generation == 0u)
+        generation = s_NextCompiledPlanGeneration.fetch_add(1u, MemoryOrder::relaxed);
+    return generation;
+}
 
 [[nodiscard]] static bool HasCapabilities(
     const GpuQueueCapability::Mask available,
@@ -336,6 +352,25 @@ inline constexpr u64 s_LargeTaskQueueCostWeight = 8u;
     return range.numMipLevels != 0u && range.numArraySlices != 0u;
 }
 
+// Typed imports retain the physical Texture descriptor, so compile-time state planning must use the same finite
+// subresource extent as native recording. Metadata-only texture declarations intentionally remain symbolic: their
+// dimensions are not known until a later backend import.
+[[nodiscard]] static bool ResolveTextureRangeForPlanning(
+    const Texture* const texture,
+    const GpuTaskResourceRange& range,
+    GpuTaskResourceRange& outRange
+)noexcept{
+    outRange = range;
+    if(!texture)
+        return true;
+
+    outRange.textureSubresources = range.textureSubresources.resolve(
+        texture->getDescription(),
+        TextureSubresourceMipResolve::Range
+    );
+    return IsValidTextureRange(outRange.textureSubresources);
+}
+
 [[nodiscard]] static bool IsValidBufferRange(const BufferRange& range)noexcept{
     return range.byteSize != 0u
         && (
@@ -406,6 +441,7 @@ inline constexpr u64 s_LargeTaskQueueCostWeight = 8u;
 
 [[nodiscard]] static const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(
     const GpuTaskGraphResourceView& resource,
+    const Texture* const texture,
     const GpuTaskResourceRange& firstUseRange,
     const GpuPhysicalQueueId& destinationQueue
 )noexcept{
@@ -421,9 +457,11 @@ inline constexpr u64 s_LargeTaskQueueCostWeight = 8u;
         ++sourceIndex
     ){
         const GpuTaskGraphInitialOwnerHandoffSourceView& source = resource.initialOwnerHandoffSources[sourceIndex];
+        GpuTaskResourceRange plannedSourceRange;
         if(
             source.destinationQueue != destinationQueue
-            || !RangeContains(resource, source.range, firstUseRange)
+            || !ResolveTextureRangeForPlanning(texture, source.range, plannedSourceRange)
+            || !RangeContains(resource, plannedSourceRange, firstUseRange)
         )
             continue;
         // One first graph use must have one exact external owner. A broader range that straddles two released mips
@@ -460,6 +498,278 @@ struct TrackedCompiledResourceState{
     GpuTaskId task;
     GpuPhysicalQueueId queue;
 };
+
+// Texture state tracking is subresource-granular, but graph declarations can name rectangles that straddle several
+// independently produced regions. Keep the interval endpoints symbolic so metadata-only graphs retain the same
+// correct partition as typed textures whose physical mip/array bounds are only known at recording time.
+struct TextureRangeBounds{
+    u64 mipBegin = 0u;
+    u64 mipEnd = 0u;
+    u64 arrayBegin = 0u;
+    u64 arrayEnd = 0u;
+};
+
+inline constexpr usize s_InvalidTrackedCompiledResourceStateIndex = Limit<usize>::s_Max;
+
+struct TrackedTextureStateFragment{
+    GpuTaskResourceRange range;
+    const TrackedCompiledResourceState* state = nullptr;
+    usize stateIndex = s_InvalidTrackedCompiledResourceStateIndex;
+};
+
+[[nodiscard]] static bool TextureRangeBoundsFrom(
+    const GpuTaskResourceRange& range,
+    TextureRangeBounds& outBounds
+)noexcept{
+    const TextureSubresourceSet& texture = range.textureSubresources;
+    outBounds = TextureRangeBounds{
+        .mipBegin = texture.baseMipLevel,
+        .mipEnd = RangeEnd(texture.baseMipLevel, texture.numMipLevels, TextureSubresourceSet::AllMipLevels),
+        .arrayBegin = texture.baseArraySlice,
+        .arrayEnd = RangeEnd(texture.baseArraySlice, texture.numArraySlices, TextureSubresourceSet::AllArraySlices),
+    };
+    return outBounds.mipBegin < outBounds.mipEnd && outBounds.arrayBegin < outBounds.arrayEnd;
+}
+
+[[nodiscard]] static bool TextureRangeBoundsTo(
+    const TextureRangeBounds& bounds,
+    GpuTaskResourceRange& outRange
+)noexcept{
+    if(
+        bounds.mipBegin >= bounds.mipEnd
+        || bounds.arrayBegin >= bounds.arrayEnd
+        || bounds.mipBegin > Limit<MipLevel>::s_Max
+        || bounds.arrayBegin > Limit<ArraySlice>::s_Max
+    )
+        return false;
+
+    const u64 mipCount = bounds.mipEnd == Limit<u64>::s_Max
+        ? TextureSubresourceSet::AllMipLevels
+        : bounds.mipEnd - bounds.mipBegin
+    ;
+    const u64 arrayCount = bounds.arrayEnd == Limit<u64>::s_Max
+        ? TextureSubresourceSet::AllArraySlices
+        : bounds.arrayEnd - bounds.arrayBegin
+    ;
+    if(
+        mipCount == 0u
+        || arrayCount == 0u
+        || mipCount > Limit<MipLevel>::s_Max
+        || arrayCount > Limit<ArraySlice>::s_Max
+        || (bounds.mipEnd != Limit<u64>::s_Max && mipCount == TextureSubresourceSet::AllMipLevels)
+        || (bounds.arrayEnd != Limit<u64>::s_Max && arrayCount == TextureSubresourceSet::AllArraySlices)
+    )
+        return false;
+
+    outRange = GpuTaskResourceRange{
+        .textureSubresources = TextureSubresourceSet{
+            static_cast<MipLevel>(bounds.mipBegin),
+            static_cast<MipLevel>(mipCount),
+            static_cast<ArraySlice>(bounds.arrayBegin),
+            static_cast<ArraySlice>(arrayCount),
+        },
+    };
+    return true;
+}
+
+[[nodiscard]] static bool IntersectTextureRangeBounds(
+    const TextureRangeBounds& lhs,
+    const TextureRangeBounds& rhs,
+    TextureRangeBounds& outIntersection
+)noexcept{
+    outIntersection = TextureRangeBounds{
+        .mipBegin = lhs.mipBegin > rhs.mipBegin ? lhs.mipBegin : rhs.mipBegin,
+        .mipEnd = lhs.mipEnd < rhs.mipEnd ? lhs.mipEnd : rhs.mipEnd,
+        .arrayBegin = lhs.arrayBegin > rhs.arrayBegin ? lhs.arrayBegin : rhs.arrayBegin,
+        .arrayEnd = lhs.arrayEnd < rhs.arrayEnd ? lhs.arrayEnd : rhs.arrayEnd,
+    };
+    return outIntersection.mipBegin < outIntersection.mipEnd
+        && outIntersection.arrayBegin < outIntersection.arrayEnd
+    ;
+}
+
+static void AppendTextureRangeRemainder(
+    const TextureRangeBounds& outer,
+    const TextureRangeBounds& cut,
+    Vector<TextureRangeBounds, Alloc::ScratchArena>& outRanges
+){
+    TextureRangeBounds intersection;
+    if(!IntersectTextureRangeBounds(outer, cut, intersection)){
+        outRanges.push_back(outer);
+        return;
+    }
+
+    if(outer.mipBegin < intersection.mipBegin){
+        outRanges.push_back(TextureRangeBounds{
+            .mipBegin = outer.mipBegin,
+            .mipEnd = intersection.mipBegin,
+            .arrayBegin = outer.arrayBegin,
+            .arrayEnd = outer.arrayEnd,
+        });
+    }
+    if(intersection.mipEnd < outer.mipEnd){
+        outRanges.push_back(TextureRangeBounds{
+            .mipBegin = intersection.mipEnd,
+            .mipEnd = outer.mipEnd,
+            .arrayBegin = outer.arrayBegin,
+            .arrayEnd = outer.arrayEnd,
+        });
+    }
+    if(outer.arrayBegin < intersection.arrayBegin){
+        outRanges.push_back(TextureRangeBounds{
+            .mipBegin = intersection.mipBegin,
+            .mipEnd = intersection.mipEnd,
+            .arrayBegin = outer.arrayBegin,
+            .arrayEnd = intersection.arrayBegin,
+        });
+    }
+    if(intersection.arrayEnd < outer.arrayEnd){
+        outRanges.push_back(TextureRangeBounds{
+            .mipBegin = intersection.mipBegin,
+            .mipEnd = intersection.mipEnd,
+            .arrayBegin = intersection.arrayEnd,
+            .arrayEnd = outer.arrayEnd,
+        });
+    }
+}
+
+static void AppendTextureStateFragmentsInStateOrder(
+    const Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& discovered,
+    const usize stateCount,
+    Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& outFragments
+){
+    outFragments.clear();
+    outFragments.reserve(discovered.size());
+    for(usize stateIndex = 0u; stateIndex < stateCount; ++stateIndex){
+        for(const TrackedTextureStateFragment& fragment : discovered){
+            if(fragment.stateIndex == stateIndex)
+                outFragments.push_back(fragment);
+        }
+    }
+    for(const TrackedTextureStateFragment& fragment : discovered){
+        if(!fragment.state)
+            outFragments.push_back(fragment);
+    }
+}
+
+// Walk newest-to-oldest and consume only still-uncovered portions of the requested rectangle. A selected state
+// therefore owns exactly the terminal cells that it actually produced; the remaining cells retain their declared
+// graph initial state rather than inheriting an unrelated adjacent producer.
+[[nodiscard]] static bool CollectLatestTextureStateFragments(
+    const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
+    const GpuGraphResourceId& resource,
+    const GpuTaskResourceRange& requestedRange,
+    Alloc::ScratchArena& scratchArena,
+    Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& outFragments
+){
+    TextureRangeBounds requestedBounds;
+    if(!TextureRangeBoundsFrom(requestedRange, requestedBounds))
+        return false;
+
+    Vector<TextureRangeBounds, Alloc::ScratchArena> uncovered(scratchArena);
+    Vector<TextureRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
+    Vector<TrackedTextureStateFragment, Alloc::ScratchArena> discovered(scratchArena);
+    uncovered.push_back(requestedBounds);
+
+    for(usize stateIndex = trackedStates.size(); stateIndex > 0u && !uncovered.empty(); --stateIndex){
+        const TrackedCompiledResourceState& state = trackedStates[stateIndex - 1u];
+        if(state.resource != resource)
+            continue;
+
+        TextureRangeBounds stateBounds;
+        if(!TextureRangeBoundsFrom(state.range, stateBounds))
+            return false;
+
+        remainders.clear();
+        for(const TextureRangeBounds& uncoveredRange : uncovered){
+            TextureRangeBounds intersection;
+            if(!IntersectTextureRangeBounds(uncoveredRange, stateBounds, intersection)){
+                remainders.push_back(uncoveredRange);
+                continue;
+            }
+
+            GpuTaskResourceRange fragmentRange;
+            if(!TextureRangeBoundsTo(intersection, fragmentRange))
+                return false;
+            discovered.push_back(TrackedTextureStateFragment{
+                .range = fragmentRange,
+                .state = &state,
+                .stateIndex = stateIndex - 1u,
+            });
+            AppendTextureRangeRemainder(uncoveredRange, intersection, remainders);
+        }
+        uncovered.clear();
+        uncovered.reserve(remainders.size());
+        for(const TextureRangeBounds& remainder : remainders)
+            uncovered.push_back(remainder);
+    }
+
+    for(const TextureRangeBounds& uncoveredRange : uncovered){
+        GpuTaskResourceRange fragmentRange;
+        if(!TextureRangeBoundsTo(uncoveredRange, fragmentRange))
+            return false;
+        discovered.push_back(TrackedTextureStateFragment{
+            .range = fragmentRange,
+        });
+    }
+
+    AppendTextureStateFragmentsInStateOrder(discovered, trackedStates.size(), outFragments);
+    return true;
+}
+
+// Terminal graph-to-external exports have no one requested range. Subtract the union of every later declared
+// texture state from each earlier range, leaving only the portions whose final state snapshot still belongs to that
+// earlier task. This uses the same symbolic rectangle representation as inter-task consumer fan-in.
+[[nodiscard]] static bool CollectTerminalTextureStateFragments(
+    const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
+    const GpuGraphResourceId& resource,
+    Alloc::ScratchArena& scratchArena,
+    Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& outFragments
+){
+    Vector<TextureRangeBounds, Alloc::ScratchArena> covered(scratchArena);
+    Vector<TextureRangeBounds, Alloc::ScratchArena> remaining(scratchArena);
+    Vector<TextureRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
+    Vector<TrackedTextureStateFragment, Alloc::ScratchArena> discovered(scratchArena);
+
+    for(usize stateIndex = trackedStates.size(); stateIndex > 0u; --stateIndex){
+        const TrackedCompiledResourceState& state = trackedStates[stateIndex - 1u];
+        if(state.resource != resource)
+            continue;
+
+        TextureRangeBounds stateBounds;
+        if(!TextureRangeBoundsFrom(state.range, stateBounds))
+            return false;
+
+        remaining.clear();
+        remaining.push_back(stateBounds);
+        for(const TextureRangeBounds& coveredRange : covered){
+            remainders.clear();
+            for(const TextureRangeBounds& remainingRange : remaining)
+                AppendTextureRangeRemainder(remainingRange, coveredRange, remainders);
+            remaining.clear();
+            remaining.reserve(remainders.size());
+            for(const TextureRangeBounds& remainder : remainders)
+                remaining.push_back(remainder);
+            if(remaining.empty())
+                break;
+        }
+
+        for(const TextureRangeBounds& terminalRange : remaining){
+            GpuTaskResourceRange fragmentRange;
+            if(!TextureRangeBoundsTo(terminalRange, fragmentRange))
+                return false;
+            discovered.push_back(TrackedTextureStateFragment{
+                .range = fragmentRange,
+                .state = &state,
+                .stateIndex = stateIndex - 1u,
+            });
+        }
+        covered.push_back(stateBounds);
+    }
+
+    AppendTextureStateFragmentsInStateOrder(discovered, trackedStates.size(), outFragments);
+    return true;
+}
 
 struct PendingCompiledEpilogueBarrier{
     GpuTaskId task;
@@ -1247,10 +1557,12 @@ bool GpuTaskGraphCompiler::compile(
         topology.queueCount == 0u
         || !topology.queues
         || options.packetizationPolicy >= GpuTaskGraphPacketizationPolicy::kCount
+        || !graph.validForDeviceGeneration(topology.queues[0].id.deviceGeneration)
     )
         return false;
 
     outCompiledGraph.m_generation = graph.generation();
+    outCompiledGraph.m_planGeneration = AllocateCompiledPlanGeneration();
     outCompiledGraph.m_deviceGeneration = topology.queues[0].id.deviceGeneration;
     outCompiledGraph.m_graphTaskCount = graph.taskCount();
     outCompiledGraph.m_tasks.reserve(graph.taskCount());
@@ -1284,6 +1596,7 @@ bool GpuTaskGraphCompiler::compile(
             return false;
         }
         if(resource.initialOwnerHandoffSourceCount != 0u){
+            const Texture* const typedTexture = graph.textureForResource(resource.id);
             if(
                 resource.type != GpuGraphResourceType::Texture
                 || !resource.initialOwnerHandoffSources
@@ -1299,9 +1612,10 @@ bool GpuTaskGraphCompiler::compile(
                 const GpuTaskGraphInitialOwnerHandoffSourceView& source =
                     resource.initialOwnerHandoffSources[sourceIndex]
                 ;
+                GpuTaskResourceRange plannedSourceRange;
                 const GpuPhysicalQueueInfo* const sourceQueueInfo = outCompiledGraph.queueInfo(source.sourceQueue);
                 if(
-                    !IsValidTextureRange(source.range.textureSubresources)
+                    !ResolveTextureRangeForPlanning(typedTexture, source.range, plannedSourceRange)
                     || !source.sourceQueue.valid()
                     || !source.destinationQueue.valid()
                     || !sourceQueueInfo
@@ -1455,7 +1769,7 @@ bool GpuTaskGraphCompiler::compile(
             if(precedingPacketAllowsMerge){
                 packetID = GpuSubmissionPacketId{
                     static_cast<u32>(outCompiledGraph.m_packets.size() - 1u),
-                    outCompiledGraph.m_generation,
+                    outCompiledGraph.m_planGeneration,
                 };
                 ++precedingPacket.taskCount;
             }
@@ -1464,7 +1778,7 @@ bool GpuTaskGraphCompiler::compile(
         if(!packetID.valid()){
             packetID = GpuSubmissionPacketId{
                 static_cast<u32>(outCompiledGraph.m_packets.size()),
-                outCompiledGraph.m_generation,
+                outCompiledGraph.m_planGeneration,
             };
             outCompiledGraph.m_packets.push_back(GpuSubmissionPacket{
                 .queue = assignment->queue,
@@ -1487,9 +1801,11 @@ bool GpuTaskGraphCompiler::compile(
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena> trackedResourceStates(scratchArena);
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena> pendingEpilogueBarriers(scratchArena);
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialOwnershipDependencies(scratchArena);
+    Vector<TrackedTextureStateFragment, Alloc::ScratchArena> stateFragments(scratchArena);
     trackedResourceStates.reserve(graph.taskCount());
     pendingEpilogueBarriers.reserve(graph.taskCount());
     initialOwnershipDependencies.reserve(graph.taskCount());
+    stateFragments.reserve(graph.taskCount());
     // The construction pass appended one compiled task for each entry in this stable order, and no later phase
     // mutates that vector. Preserve the prior fail-closed contract while avoiding a re-scan for every task.
     const GraphicsVector<GpuTaskId>& topologicalOrder = outAnalysis.topologicalOrder();
@@ -1532,21 +1848,298 @@ bool GpuTaskGraphCompiler::compile(
                 return false;
             }
 
+            const Texture* const typedTexture = resource.type == GpuGraphResourceType::Texture
+                ? graph.textureForResource(use.resource)
+                : nullptr
+            ;
+            GpuTaskResourceRange plannedRange = use.range;
+            if(
+                resource.type == GpuGraphResourceType::Texture
+                && !ResolveTextureRangeForPlanning(typedTexture, use.range, plannedRange)
+            ){
+                outCompiledGraph.reset();
+                return false;
+            }
+
             // A task owns its internal resource ordering.  Only its first declared use becomes a packet-boundary
             // transition; later conflicting uses remain local CommandList work inside the task thunk.
             bool alreadyPlannedByTask = false;
             for(usize previousUseIndex = 0u; previousUseIndex < useIndex; ++previousUseIndex){
                 const GpuTaskResourceUse& previousUse = task.resourceUses[previousUseIndex];
+                if(previousUse.resource != use.resource)
+                    continue;
+
+                GpuTaskResourceRange plannedPreviousRange = previousUse.range;
                 if(
-                    previousUse.resource == use.resource
-                    && RangesOverlap(resource, previousUse.range, use.range)
+                    resource.type == GpuGraphResourceType::Texture
+                    && !ResolveTextureRangeForPlanning(typedTexture, previousUse.range, plannedPreviousRange)
                 ){
+                    outCompiledGraph.reset();
+                    return false;
+                }
+                if(RangesOverlap(resource, plannedPreviousRange, plannedRange)){
                     alreadyPlannedByTask = true;
                     break;
                 }
             }
             if(alreadyPlannedByTask)
                 continue;
+
+            if(resource.type == GpuGraphResourceType::Texture){
+                stateFragments.clear();
+                if(!CollectLatestTextureStateFragments(
+                    trackedResourceStates,
+                    use.resource,
+                    plannedRange,
+                    scratchArena,
+                    stateFragments
+                )){
+                    outCompiledGraph.reset();
+                    return false;
+                }
+
+                bool hasInitialStateFragment = false;
+                for(const TrackedTextureStateFragment& fragment : stateFragments){
+                    if(!fragment.state){
+                        hasInitialStateFragment = true;
+                        break;
+                    }
+                }
+
+                const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSource = nullptr;
+                bool usesInitialOwnerOnlyHandoff = false;
+                GpuCompiledBarrierType::Enum initialOwnerAcquireType = GpuCompiledBarrierType::kCount;
+                if(hasInitialStateFragment){
+                    if(
+                        resource.initialOwnerReleaseDestinationQueue.valid()
+                        && resource.initialOwnerReleaseDestinationQueue != compiledTask->queue
+                    ){
+                        // Preserve the existing fail-closed contract for descriptor-owned external sources: the
+                        // caller must not broaden one graph use across two ownership releases and let compiler
+                        // fragmentation guess which completion/state snapshot applies to the untouched cells.
+                        outCompiledGraph.reset();
+                        return false;
+                    }
+                    if(resource.initialOwnerHandoffSourceCount != 0u){
+                        initialOwnerHandoffSource = FindInitialOwnerHandoffSource(
+                            resource,
+                            typedTexture,
+                            plannedRange,
+                            compiledTask->queue
+                        );
+                        if(!initialOwnerHandoffSource){
+                            outCompiledGraph.reset();
+                            return false;
+                        }
+                        initialOwnerAcquireType = OwnershipAcquireBarrierType(resource.type);
+                        if(initialOwnerAcquireType >= GpuCompiledBarrierType::kCount){
+                            outCompiledGraph.reset();
+                            return false;
+                        }
+                        initialOwnershipDependencies.push_back(GpuTaskExternalDependencyEdge{
+                            .completion = initialOwnerHandoffSource->completion,
+                            .consumer = taskID,
+                        });
+                    }
+                    else if(
+                        resource.initialOwnerQueue.valid()
+                        && resource.initialOwnerQueue != compiledTask->queue
+                    ){
+                        if(
+                            !resource.initialOwnerReleaseDestinationQueue.valid()
+                            || resource.initialOwnerReleaseDestinationQueue != compiledTask->queue
+                            || !resource.initialOwnerCompletion.valid()
+                            || !resource.initialOwnerStateSource
+                        ){
+                            // Owner-only imports retain the original exact-queue restriction. A different first
+                            // consumer needs all three explicit pieces of an external handoff: fixed destination,
+                            // completion, and exported native state source.
+                            outCompiledGraph.reset();
+                            return false;
+                        }
+                        initialOwnerAcquireType = OwnershipAcquireBarrierType(resource.type);
+                        if(initialOwnerAcquireType >= GpuCompiledBarrierType::kCount){
+                            outCompiledGraph.reset();
+                            return false;
+                        }
+                        usesInitialOwnerOnlyHandoff = true;
+                        initialOwnershipDependencies.push_back(GpuTaskExternalDependencyEdge{
+                            .completion = resource.initialOwnerCompletion,
+                            .consumer = taskID,
+                        });
+                    }
+                }
+
+                for(const TrackedTextureStateFragment& fragment : stateFragments){
+                    const TrackedCompiledResourceState* const previousState = fragment.state;
+                    const ResourceStates::Mask before = previousState ? previousState->state : resource.initialState;
+                    const bool hasInitialOwnerStateSeed =
+                        !previousState
+                        && (initialOwnerHandoffSource != nullptr || usesInitialOwnerOnlyHandoff)
+                    ;
+                    // An initial-owner handoff opens the packet with its immutable producer snapshot, so that
+                    // snapshot already materializes the native starting state. Ordinary initial fragments still
+                    // need an explicit marker: their declared state can differ from creation metadata and can be
+                    // a no-op transition whose state must survive into the packet snapshot.
+                    const bool materializesGraphInitialState =
+                        !previousState
+                        && !hasInitialOwnerStateSeed
+                        && resource.initialState != ResourceStates::Unknown
+                    ;
+                    if(!previousState && initialOwnerHandoffSource){
+                        // The descriptor's one selected source has already been proven to cover the complete
+                        // original use. Emit only the unseeded fragment range so its immutable snapshot does not
+                        // overwrite a graph-internal producer's adjacent subresources during packet fan-in.
+                        outCompiledGraph.m_prologueBarriers.push_back(GpuCompiledBarrier{
+                            .resource = use.resource,
+                            .range = fragment.range,
+                            .before = before,
+                            .after = before,
+                            .sourceQueue = initialOwnerHandoffSource->sourceQueue,
+                            .destinationQueue = compiledTask->queue,
+                            .type = initialOwnerAcquireType,
+                            .isInitialOwnerHandoff = true,
+                        });
+                    }
+                    else if(!previousState && usesInitialOwnerOnlyHandoff){
+                        // This marker imports the descriptor-owned snapshot before normal graph state fragments,
+                        // allowing CommandList::open to emit the paired acquire only for the uncovered range.
+                        outCompiledGraph.m_prologueBarriers.push_back(GpuCompiledBarrier{
+                            .resource = use.resource,
+                            .range = fragment.range,
+                            .before = before,
+                            .after = before,
+                            .sourceQueue = resource.initialOwnerQueue,
+                            .destinationQueue = compiledTask->queue,
+                            .type = initialOwnerAcquireType,
+                            .isInitialOwnerHandoff = true,
+                        });
+                    }
+
+                    const bool needsUavDependency =
+                        previousState
+                        && before == ResourceStates::UnorderedAccess
+                        && use.requiredState == ResourceStates::UnorderedAccess
+                        && (IsWriteAccess(previousState->access) || IsWriteAccess(use.access))
+                    ;
+                    if(previousState){
+                        const GpuSubmissionPacketId sourcePacket = outCompiledGraph.packetForTask(previousState->task);
+                        if(!sourcePacket.valid()){
+                            outCompiledGraph.reset();
+                            return false;
+                        }
+                        if(sourcePacket != compiledTask->packet){
+                            const GpuPhysicalQueueInfo* const sourceQueue = outCompiledGraph.queueInfo(
+                                previousState->queue
+                            );
+                            const GpuPhysicalQueueInfo* const destinationQueue = outCompiledGraph.queueInfo(
+                                compiledTask->queue
+                            );
+                            if(!sourceQueue || !destinationQueue){
+                                outCompiledGraph.reset();
+                                return false;
+                            }
+                            const bool differentQueueFamilies = sourceQueue->familyIndex != destinationQueue->familyIndex;
+                            const bool resourceUsesConcurrentSharing = ResourceUsesConcurrentQueueSharing(
+                                resource.queueSharing,
+                                topology
+                            );
+                            const bool concurrentQueuePair = ResourceSharesQueuePairConcurrently(
+                                resource.queueSharing,
+                                topology,
+                                *sourceQueue,
+                                *destinationQueue
+                            );
+                            if(differentQueueFamilies && resourceUsesConcurrentSharing && !concurrentQueuePair){
+                                // The resource was created concurrent for another family set. Vulkan cannot
+                                // transfer ownership to an omitted family, so fail compilation instead of
+                                // recording invalid work.
+                                outCompiledGraph.reset();
+                                return false;
+                            }
+
+                            const bool requiresExclusiveOwnershipHandoff =
+                                !resourceUsesConcurrentSharing
+                                && differentQueueFamilies
+                            ;
+                            if(requiresExclusiveOwnershipHandoff){
+                                const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
+                                const GpuCompiledBarrierType::Enum acquireType = OwnershipAcquireBarrierType(resource.type);
+                                if(
+                                    releaseType >= GpuCompiledBarrierType::kCount
+                                    || acquireType >= GpuCompiledBarrierType::kCount
+                                ){
+                                    outCompiledGraph.reset();
+                                    return false;
+                                }
+                                pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
+                                    .task = previousState->task,
+                                    .barrier = GpuCompiledBarrier{
+                                        .resource = use.resource,
+                                        .range = fragment.range,
+                                        .before = before,
+                                        .after = before,
+                                        .sourceQueue = previousState->queue,
+                                        .destinationQueue = compiledTask->queue,
+                                        .type = releaseType,
+                                    },
+                                });
+                                outCompiledGraph.m_prologueBarriers.push_back(GpuCompiledBarrier{
+                                    .resource = use.resource,
+                                    .range = fragment.range,
+                                    .before = before,
+                                    .after = before,
+                                    .sourceQueue = previousState->queue,
+                                    .destinationQueue = compiledTask->queue,
+                                    .type = acquireType,
+                                });
+                            }
+                            const bool readOnlySameState =
+                                previousState->access == GpuTaskResourceAccess::Read
+                                && use.access == GpuTaskResourceAccess::Read
+                                && before == use.requiredState
+                                && !needsUavDependency
+                            ;
+                            const bool mayOmitInternalStateSeed =
+                                use.hasIndependentStateSource
+                                && readOnlySameState
+                                && concurrentQueuePair
+                            ;
+                            if(!mayOmitInternalStateSeed){
+                                outCompiledGraph.m_prologueStateSeeds.push_back(GpuPacketStateSeed{
+                                    .resource = use.resource,
+                                    .range = fragment.range,
+                                    .sourcePacket = sourcePacket,
+                                });
+                            }
+                        }
+                    }
+                    if(materializesGraphInitialState || before != use.requiredState || needsUavDependency){
+                        outCompiledGraph.m_prologueBarriers.push_back(GpuCompiledBarrier{
+                            .resource = use.resource,
+                            .range = fragment.range,
+                            .before = before,
+                            .after = use.requiredState,
+                            .sourceQueue = previousState ? previousState->queue : compiledTask->queue,
+                            .destinationQueue = compiledTask->queue,
+                            .type = needsUavDependency
+                                ? UavBarrierType(resource.type)
+                                : TransitionBarrierType(resource.type),
+                            .isGraphInitialState = materializesGraphInitialState,
+                        });
+                    }
+                }
+
+                trackedResourceStates.push_back(TrackedCompiledResourceState{
+                    .resource = use.resource,
+                    .range = plannedRange,
+                    .state = use.requiredState,
+                    .access = use.access,
+                    .task = taskID,
+                    .queue = compiledTask->queue,
+                });
+                continue;
+            }
 
             const TrackedCompiledResourceState* previousState = nullptr;
             for(usize stateIndex = trackedResourceStates.size(); stateIndex > 0u; --stateIndex){
@@ -1561,6 +2154,25 @@ bool GpuTaskGraphCompiler::compile(
             }
 
             const ResourceStates::Mask before = previousState ? previousState->state : resource.initialState;
+            // An initial-owner handoff opens the packet with its immutable producer snapshot, so that snapshot
+            // already materializes the native starting state. Ordinary first uses still need an explicit marker:
+            // the graph declaration may differ from the resource's creation metadata and can also be a no-op
+            // transition whose state must survive into the packet snapshot.
+            const bool hasInitialOwnerStateSeed =
+                !previousState
+                && (
+                    resource.initialOwnerHandoffSourceCount != 0u
+                    || (
+                        resource.initialOwnerReleaseDestinationQueue.valid()
+                        && resource.initialOwnerStateSource != nullptr
+                    )
+                )
+            ;
+            const bool materializesGraphInitialState =
+                !previousState
+                && !hasInitialOwnerStateSeed
+                && resource.initialState != ResourceStates::Unknown
+            ;
             if(
                 !previousState
                 && resource.initialOwnerReleaseDestinationQueue.valid()
@@ -1574,6 +2186,7 @@ bool GpuTaskGraphCompiler::compile(
             if(!previousState && resource.initialOwnerHandoffSourceCount != 0u){
                 const GpuTaskGraphInitialOwnerHandoffSourceView* const source = FindInitialOwnerHandoffSource(
                     resource,
+                    nullptr,
                     use.range,
                     compiledTask->queue
                 );
@@ -1741,7 +2354,7 @@ bool GpuTaskGraphCompiler::compile(
                     }
                 }
             }
-            if(before != use.requiredState || needsUavDependency){
+            if(materializesGraphInitialState || before != use.requiredState || needsUavDependency){
                 outCompiledGraph.m_prologueBarriers.push_back(GpuCompiledBarrier{
                     .resource = use.resource,
                     .range = use.range,
@@ -1749,9 +2362,10 @@ bool GpuTaskGraphCompiler::compile(
                     .after = use.requiredState,
                     .sourceQueue = previousState ? previousState->queue : compiledTask->queue,
                     .destinationQueue = compiledTask->queue,
-                    .type = before == use.requiredState
+                    .type = needsUavDependency
                         ? UavBarrierType(resource.type)
                         : TransitionBarrierType(resource.type),
+                    .isGraphInitialState = materializesGraphInitialState,
                 });
             }
 
@@ -1773,10 +2387,9 @@ bool GpuTaskGraphCompiler::compile(
     }
 
     // Imported texture/buffer/acceleration-structure metadata can require a graph-owned terminal state for code
-    // that resumes outside this
-    // compiled graph. Emit one explicit export for every declared range with no later overlapping graph use. The
-    // runtime lowers an export through the native state tracker and retains it even when it was already in the
-    // required state, so the accepted packet snapshot is authoritative without a renderer-side final-state bridge.
+    // that resumes outside this compiled graph. Texture exports retain every terminal subresource fragment; buffers
+    // and acceleration structures remain whole-allocation. The runtime lowers each export through the native state
+    // tracker and retains the requested state even when no native transition was required.
     for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
         const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
         if(resource.externalFinalState == ResourceStates::Unknown)
@@ -1799,34 +2412,11 @@ bool GpuTaskGraphCompiler::compile(
             outCompiledGraph.m_externalResourceExportSources.size()
         );
         u32 externalExportSourceCount = 0u;
-        for(usize stateIndex = 0u; stateIndex < trackedResourceStates.size(); ++stateIndex){
-            const TrackedCompiledResourceState& state = trackedResourceStates[stateIndex];
-            if(state.resource != resource.id)
-                continue;
-
-            bool hasLaterOverlappingUse = false;
-            for(usize laterStateIndex = stateIndex + 1u;
-                laterStateIndex < trackedResourceStates.size();
-                ++laterStateIndex
-            ){
-                const TrackedCompiledResourceState& later = trackedResourceStates[laterStateIndex];
-                if(
-                    later.resource == resource.id
-                    && RangesOverlap(resource, state.range, later.range)
-                ){
-                    hasLaterOverlappingUse = true;
-                    break;
-                }
-            }
-            if(hasLaterOverlappingUse)
-                continue;
-
+        const auto appendTerminalState = [&](const TrackedCompiledResourceState& state, const GpuTaskResourceRange& terminalRange){
             if(hasExternalFinalRelease){
                 const GpuSubmissionPacketId terminalPacket = outCompiledGraph.packetForTask(state.task);
-                if(!terminalPacket.valid()){
-                    outCompiledGraph.reset();
+                if(!terminalPacket.valid())
                     return false;
-                }
                 if(!externalExportTask.valid()){
                     externalExportTask = state.task;
                     externalExportPacket = terminalPacket;
@@ -1849,15 +2439,13 @@ bool GpuTaskGraphCompiler::compile(
                         externalExportPacket != terminalPacket
                         || externalExportSourceQueue != state.queue
                     )
-                ){
-                    outCompiledGraph.reset();
+                )
                     return false;
-                }
                 outCompiledGraph.m_externalResourceExportSources.push_back(
                     GpuCompiledExternalResourceExportSource{
                         .producerTask = state.task,
                         .sourceQueue = state.queue,
-                        .range = state.range,
+                        .range = terminalRange,
                     }
                 );
                 ++externalExportSourceCount;
@@ -1867,7 +2455,7 @@ bool GpuTaskGraphCompiler::compile(
                 .task = state.task,
                 .barrier = GpuCompiledBarrier{
                     .resource = state.resource,
-                    .range = state.range,
+                    .range = terminalRange,
                     .before = state.state,
                     .after = resource.externalFinalState,
                     .sourceQueue = state.queue,
@@ -1877,17 +2465,15 @@ bool GpuTaskGraphCompiler::compile(
             });
             if(hasExternalFinalRelease && state.queue != resource.externalFinalReleaseDestinationQueue){
                 const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
-                if(releaseType >= GpuCompiledBarrierType::kCount){
-                    outCompiledGraph.reset();
+                if(releaseType >= GpuCompiledBarrierType::kCount)
                     return false;
-                }
                 // Export the exact final state before ownership moves. Native lowering therefore captures the same
                 // state in the released snapshot and the paired Vulkan queue-family release barrier.
                 pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
                     .task = state.task,
                     .barrier = GpuCompiledBarrier{
                         .resource = state.resource,
-                        .range = state.range,
+                        .range = terminalRange,
                         .before = resource.externalFinalState,
                         .after = resource.externalFinalState,
                         .sourceQueue = state.queue,
@@ -1897,6 +2483,54 @@ bool GpuTaskGraphCompiler::compile(
                 });
             }
             hasTerminalDeclaredRange = true;
+            return true;
+        };
+
+        if(resource.type == GpuGraphResourceType::Texture){
+            stateFragments.clear();
+            if(!CollectTerminalTextureStateFragments(
+                trackedResourceStates,
+                resource.id,
+                scratchArena,
+                stateFragments
+            )){
+                outCompiledGraph.reset();
+                return false;
+            }
+            for(const TrackedTextureStateFragment& fragment : stateFragments){
+                if(!fragment.state || !appendTerminalState(*fragment.state, fragment.range)){
+                    outCompiledGraph.reset();
+                    return false;
+                }
+            }
+        }
+        else{
+            for(usize stateIndex = 0u; stateIndex < trackedResourceStates.size(); ++stateIndex){
+                const TrackedCompiledResourceState& state = trackedResourceStates[stateIndex];
+                if(state.resource != resource.id)
+                    continue;
+
+                bool hasLaterOverlappingUse = false;
+                for(usize laterStateIndex = stateIndex + 1u;
+                    laterStateIndex < trackedResourceStates.size();
+                    ++laterStateIndex
+                ){
+                    const TrackedCompiledResourceState& later = trackedResourceStates[laterStateIndex];
+                    if(
+                        later.resource == resource.id
+                        && RangesOverlap(resource, state.range, later.range)
+                    ){
+                        hasLaterOverlappingUse = true;
+                        break;
+                    }
+                }
+                if(hasLaterOverlappingUse)
+                    continue;
+                if(!appendTerminalState(state, state.range)){
+                    outCompiledGraph.reset();
+                    return false;
+                }
+            }
         }
         if(!hasTerminalDeclaredRange){
             // A final-state requirement cannot be published from an untouched or state-unknown resource. Reject
@@ -1943,7 +2577,7 @@ bool GpuTaskGraphCompiler::compile(
         GpuSubmissionPacket& consumerPacket = outCompiledGraph.m_packets[consumerPacketIndex];
         const GpuSubmissionPacketId consumerPacketID{
             static_cast<u32>(consumerPacketIndex),
-            outCompiledGraph.m_generation,
+            outCompiledGraph.m_planGeneration,
         };
         consumerPacket.dependencyOffset = static_cast<u32>(outCompiledGraph.m_packetDependencies.size());
         const auto appendPacketDependency = [&](const GpuSubmissionPacketId producerPacket){
@@ -1952,7 +2586,7 @@ bool GpuTaskGraphCompiler::compile(
             if(
                 !producerPacket.valid()
                 || producerPacket.index >= consumerPacketIndex
-                || producerPacket.generation != outCompiledGraph.m_generation
+                || producerPacket.generation != outCompiledGraph.m_planGeneration
             )
                 return false;
 
@@ -2042,9 +2676,9 @@ bool GpuTaskGraphCompiler::compile(
             ];
             if(
                 dependency.consumer.index != packetIndex
-                || dependency.consumer.generation != outCompiledGraph.m_generation
+                || dependency.consumer.generation != outCompiledGraph.m_planGeneration
                 || dependency.producer.index >= packetIndex
-                || dependency.producer.generation != outCompiledGraph.m_generation
+                || dependency.producer.generation != outCompiledGraph.m_planGeneration
             ){
                 outCompiledGraph.reset();
                 return false;

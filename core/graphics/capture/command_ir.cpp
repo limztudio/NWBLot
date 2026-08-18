@@ -30,7 +30,6 @@ namespace __hidden_gpu_command_ir{
         || !record.task.valid()
         || !record.packet.valid()
         || !record.queue.valid()
-        || record.task.generation != record.packet.generation
         || !record.destination.valid()
         || record.destination.generation != record.task.generation
     )
@@ -163,10 +162,11 @@ static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum
 [[nodiscard]] static bool DecodeContext(
     const GpuCommandIrRecordContext& context,
     const u64 graphGeneration,
+    const u64 planGeneration,
     GpuCommandIrBuiltinTaskRecord& outRecord
 )noexcept{
     outRecord.task = GpuTaskId{ context.taskIndex, graphGeneration };
-    outRecord.packet = GpuSubmissionPacketId{ context.packetIndex, graphGeneration };
+    outRecord.packet = GpuSubmissionPacketId{ context.packetIndex, planGeneration };
     outRecord.queue = GpuPhysicalQueueId{ context.queueIndex, context.queueDeviceGeneration };
     return outRecord.task.valid() && outRecord.packet.valid() && outRecord.queue.valid();
 }
@@ -851,30 +851,41 @@ GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)no
         fail(GpuCommandIrStreamValidationError::NullData, 0u, Limit<u64>::s_Max);
         return;
     }
-    if(m_bytes.size() < sizeof(GpuCommandIrStreamHeader)){
+    if(m_bytes.size() < sizeof(GpuCommandIrStreamHeaderPrefix)){
         fail(GpuCommandIrStreamValidationError::TruncatedStreamHeader, 0u, Limit<u64>::s_Max);
         return;
     }
 
     usize cursor = 0u;
-    GpuCommandIrStreamHeader header;
-    if(!ReadPOD(m_bytes, cursor, header)){
+    GpuCommandIrStreamHeaderPrefix prefix;
+    if(!ReadPOD(m_bytes, cursor, prefix)){
         fail(GpuCommandIrStreamValidationError::TruncatedStreamHeader, 0u, Limit<u64>::s_Max);
         return;
     }
-    if(header.magic != s_GpuCommandIrStreamMagic){
+    if(prefix.magic != s_GpuCommandIrStreamMagic){
         fail(GpuCommandIrStreamValidationError::InvalidMagic, 0u, Limit<u64>::s_Max);
         return;
     }
     if(
-        header.version < s_GpuCommandIrStreamFirstSupportedVersion
-        || header.version > s_GpuCommandIrStreamVersion
+        prefix.version < s_GpuCommandIrStreamFirstSupportedVersion
+        || prefix.version > s_GpuCommandIrStreamVersion
     ){
         fail(GpuCommandIrStreamValidationError::UnsupportedVersion, 0u, Limit<u64>::s_Max);
         return;
     }
-    if(header.reserved != 0u){
+    if(prefix.reserved != 0u){
         fail(GpuCommandIrStreamValidationError::InvalidHeaderReserved, 0u, Limit<u64>::s_Max);
+        return;
+    }
+    if(m_bytes.size() < sizeof(GpuCommandIrStreamHeader)){
+        fail(GpuCommandIrStreamValidationError::TruncatedStreamHeader, 0u, Limit<u64>::s_Max);
+        return;
+    }
+
+    cursor = 0u;
+    GpuCommandIrStreamHeader header;
+    if(!ReadPOD(m_bytes, cursor, header)){
+        fail(GpuCommandIrStreamValidationError::TruncatedStreamHeader, 0u, Limit<u64>::s_Max);
         return;
     }
     if(header.payloadBytes > static_cast<u64>(Limit<usize>::s_Max)){
@@ -894,6 +905,13 @@ GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)no
         fail(GpuCommandIrStreamValidationError::InvalidGraphGeneration, 0u, Limit<u64>::s_Max);
         return;
     }
+    if(
+        (header.recordCount == 0u && header.planGeneration != 0u)
+        || (header.recordCount != 0u && header.planGeneration == 0u)
+    ){
+        fail(GpuCommandIrStreamValidationError::InvalidPlanGeneration, 0u, Limit<u64>::s_Max);
+        return;
+    }
     if(header.recordCount > header.payloadBytes / sizeof(GpuCommandIrHeader)){
         fail(GpuCommandIrStreamValidationError::InvalidRecordCount, 0u, Limit<u64>::s_Max);
         return;
@@ -903,6 +921,7 @@ GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)no
     m_payloadEnd = m_bytes.size();
     m_streamVersion = header.version;
     m_graphGeneration = header.graphGeneration;
+    m_planGeneration = header.planGeneration;
     m_recordCount = header.recordCount;
 }
 
@@ -989,7 +1008,7 @@ GpuCommandIrStreamReadStatus::Enum GpuCommandIrStreamReader::next(
             return GpuCommandIrStreamReadStatus::Error;
         }
         decoded.opcode = GpuCommandIrOpcode::CopyBuffer;
-        decodedRecord = DecodeContext(record.context, m_graphGeneration, decoded)
+        decodedRecord = DecodeContext(record.context, m_graphGeneration, m_planGeneration, decoded)
             && DecodeResource(record.sourceResourceIndex, m_graphGeneration, decoded.source)
             && DecodeResource(record.destinationResourceIndex, m_graphGeneration, decoded.destination)
             && record.dataSizeBytes != 0u
@@ -1007,7 +1026,7 @@ GpuCommandIrStreamReadStatus::Enum GpuCommandIrStreamReader::next(
             return GpuCommandIrStreamReadStatus::Error;
         }
         decoded.opcode = GpuCommandIrOpcode::CopyTexture;
-        decodedRecord = DecodeContext(record.context, m_graphGeneration, decoded)
+        decodedRecord = DecodeContext(record.context, m_graphGeneration, m_planGeneration, decoded)
             && DecodeResource(record.sourceResourceIndex, m_graphGeneration, decoded.source)
             && DecodeResource(record.destinationResourceIndex, m_graphGeneration, decoded.destination)
         ;
@@ -1023,7 +1042,7 @@ GpuCommandIrStreamReadStatus::Enum GpuCommandIrStreamReader::next(
             return GpuCommandIrStreamReadStatus::Error;
         }
         decoded.opcode = GpuCommandIrOpcode::ClearBuffer;
-        decodedRecord = DecodeContext(record.context, m_graphGeneration, decoded)
+        decodedRecord = DecodeContext(record.context, m_graphGeneration, m_planGeneration, decoded)
             && DecodeResource(record.destinationResourceIndex, m_graphGeneration, decoded.destination)
         ;
         decoded.uintClearValue = UIntColor(record.clearValue);
@@ -1037,7 +1056,7 @@ GpuCommandIrStreamReadStatus::Enum GpuCommandIrStreamReader::next(
             return GpuCommandIrStreamReadStatus::Error;
         }
         decoded.opcode = GpuCommandIrOpcode::ClearTexture;
-        decodedRecord = DecodeContext(record.context, m_graphGeneration, decoded)
+        decodedRecord = DecodeContext(record.context, m_graphGeneration, m_planGeneration, decoded)
             && DecodeResource(record.destinationResourceIndex, m_graphGeneration, decoded.destination)
             && ValidateClearTextureRecord(record)
         ;
@@ -1062,7 +1081,7 @@ GpuCommandIrStreamReadStatus::Enum GpuCommandIrStreamReader::next(
             return GpuCommandIrStreamReadStatus::Error;
         }
         decoded.opcode = GpuCommandIrOpcode::ClearTextureRectUInt;
-        decodedRecord = DecodeContext(record.context, m_graphGeneration, decoded)
+        decodedRecord = DecodeContext(record.context, m_graphGeneration, m_planGeneration, decoded)
             && DecodeResource(record.destinationResourceIndex, m_graphGeneration, decoded.destination)
             && ValidateClearTextureRectUIntRecord(record)
         ;
@@ -1138,6 +1157,11 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
             GpuCommandIrReplayError::InvalidCompiledGraph,
             streamValidation
         );
+    if(!graph.validForDeviceGeneration(compiledGraph.deviceGeneration()))
+        return __hidden_gpu_command_ir::ReplayFailure(
+            GpuCommandIrReplayError::InvalidCompiledGraph,
+            streamValidation
+        );
     if(!compiledGraph.validPacket(packet))
         return __hidden_gpu_command_ir::ReplayFailure(GpuCommandIrReplayError::InvalidPacket, streamValidation);
 
@@ -1164,6 +1188,12 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
     if(reader.recordCount() != 0u && reader.graphGeneration() != graph.generation()){
         return __hidden_gpu_command_ir::ReplayFailure(
             GpuCommandIrReplayError::GraphGenerationMismatch,
+            streamValidation
+        );
+    }
+    if(reader.recordCount() != 0u && reader.planGeneration() != compiledGraph.planGeneration()){
+        return __hidden_gpu_command_ir::ReplayFailure(
+            GpuCommandIrReplayError::PlanGenerationMismatch,
             streamValidation
         );
     }
@@ -1251,7 +1281,14 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
             result.streamValidation
         );
     }
-    if(commandList.getDescription().queueType != queue->queueClass){
+    const CommandListParameters& commandListDescription = commandList.getDescription();
+    if(commandListDescription.physicalQueue.deviceGeneration != compiledGraph.deviceGeneration()){
+        return __hidden_gpu_command_ir::ReplayFailure(
+            GpuCommandIrReplayError::CommandListQueueMismatch,
+            result.streamValidation
+        );
+    }
+    if(commandListDescription.queueType != queue->queueClass){
         return __hidden_gpu_command_ir::ReplayFailure(
             GpuCommandIrReplayError::CommandListQueueMismatch,
             result.streamValidation
@@ -1342,7 +1379,14 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
             result.streamValidation
         );
     }
-    if(commandList.getDescription().queueType != queue->queueClass){
+    const CommandListParameters& commandListDescription = commandList.getDescription();
+    if(commandListDescription.physicalQueue.deviceGeneration != compiledGraph.deviceGeneration()){
+        return __hidden_gpu_command_ir::ReplayFailure(
+            GpuCommandIrReplayError::CommandListQueueMismatch,
+            result.streamValidation
+        );
+    }
+    if(commandListDescription.queueType != queue->queueClass){
         return __hidden_gpu_command_ir::ReplayFailure(
             GpuCommandIrReplayError::CommandListQueueMismatch,
             result.streamValidation
@@ -1414,6 +1458,7 @@ void GpuCommandIrCapture::reset()noexcept{
     m_records.clear();
     m_commandBytes.resize(sizeof(GpuCommandIrStreamHeader));
     m_graphGeneration = 0u;
+    m_planGeneration = 0u;
     writeStreamHeader();
 }
 
@@ -1434,6 +1479,7 @@ void GpuCommandIrCapture::rollback(const usize recordCount)noexcept{
     m_records.resize(recordCount);
     m_commandBytes.resize(byteOffset);
     m_graphGeneration = m_records.empty() ? 0u : m_records[0u].task.generation;
+    m_planGeneration = m_records.empty() ? 0u : m_records[0u].packet.generation;
     writeStreamHeader();
 }
 
@@ -1548,6 +1594,8 @@ bool GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
 
     if(m_graphGeneration != 0u && m_graphGeneration != record.task.generation)
         return false;
+    if(m_planGeneration != 0u && m_planGeneration != record.packet.generation)
+        return false;
     const usize recordCountBefore = m_records.size();
     const usize byteCountBefore = m_commandBytes.size();
     try{
@@ -1567,6 +1615,8 @@ bool GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
 
     if(m_graphGeneration == 0u)
         m_graphGeneration = record.task.generation;
+    if(m_planGeneration == 0u)
+        m_planGeneration = record.packet.generation;
     writeStreamHeader();
     return true;
 }
@@ -1669,6 +1719,7 @@ void GpuCommandIrCapture::writeStreamHeader()noexcept{
     NWB_ASSERT(m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader));
     GpuCommandIrStreamHeader header;
     header.graphGeneration = m_graphGeneration;
+    header.planGeneration = m_planGeneration;
     header.recordCount = static_cast<u64>(m_records.size());
     header.payloadBytes = static_cast<u64>(m_commandBytes.size() - sizeof(GpuCommandIrStreamHeader));
     NWB_MEMCPY(m_commandBytes.data(), sizeof(header), &header, sizeof(header));

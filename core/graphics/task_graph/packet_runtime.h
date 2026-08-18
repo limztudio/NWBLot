@@ -117,6 +117,7 @@ private:
     PacketRecordingScratch m_serialRecordingScratch;
     GraphicsVector<PacketRecordingScratch> m_packetRecordingScratch;
     u64 m_generation = 0u;
+    u64 m_planGeneration = 0u;
     u16 m_deviceGeneration = 0u;
     bool m_valid = false;
 };
@@ -297,6 +298,9 @@ struct GpuTaskGraphExternalResourceHandoffRange{
 // ranges came from one packet. This value borrows transaction-owned storage and remains valid until that transaction
 // resets or the same resource handoff is queried again.
 struct GpuTaskGraphExternalResourceHandoff{
+    // The handoff borrows recorded/transaction state from one immutable compiled plan.  A same-graph recompile
+    // must not let a caller publish its prior packet state or completion tokens through the replacement plan.
+    u64 planGeneration = 0u;
     GpuGraphResourceId resource;
     // One-producer compatibility fields. These are invalid for a true multi-producer handoff; use `producers` and
     // `waitTokens` instead.
@@ -506,6 +510,7 @@ private:
     GraphicsVector<LatestAcceptedQueueToken> m_latestAcceptedQueueTokens;
     mutable GraphicsVector<ExternalResourceHandoffScratch> m_externalResourceHandoffScratch;
     u64 m_generation = 0u;
+    u64 m_planGeneration = 0u;
     u16 m_deviceGeneration = 0u;
     u64 m_acceptedSubmissionCount = 0u;
     bool m_valid = false;

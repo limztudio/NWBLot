@@ -200,7 +200,15 @@ Device::Device(const DeviceDesc& desc)
     , m_gpuCrashTracker(desc.allocator.getObjectArena())
     , m_gpuCrashReportArena(VulkanArenaScope::s_GpuCrashReportArena, Alloc::PersistentArena::StructureAlignedSize(s_GpuCrashReportArenaSize))
     , m_gpuCrashVendorBinaryArena(VulkanArenaScope::s_GpuCrashVendorBinaryArena, Alloc::PersistentArena::StructureAlignedSize(s_MaxDeviceFaultVendorBinaryBytes))
-    , m_context(desc.allocator, desc.threadPool, desc.instance, desc.physicalDevice, desc.device, desc.allocationCallbacks)
+    , m_context(
+        desc.allocator,
+        desc.threadPool,
+        desc.instance,
+        desc.physicalDevice,
+        desc.device,
+        desc.allocationCallbacks,
+        m_deviceGeneration
+    )
     , m_allocator(m_context)
     , m_descriptorBufferManager(m_context, m_allocator)
     , m_gpuDescriptorHeap(*this)

@@ -1525,6 +1525,26 @@ ResourceStates::Mask StateTracker::getBufferState(Buffer* buffer)const{
     return getTransientBufferState(*buffer, state) ? state : ResourceStates::Unknown;
 }
 
+bool StateTracker::hasExplicitTextureSubresourceState(
+    Texture* const texture,
+    const ArraySlice arraySlice,
+    const MipLevel mipLevel
+)const{
+    if(!texture)
+        return false;
+    if(m_permanentTextureStates.find(texture) != m_permanentTextureStates.end())
+        return true;
+    return m_textureStates.find(TextureSubresourceStateKey{ texture, mipLevel, arraySlice }) != m_textureStates.end();
+}
+
+bool StateTracker::hasExplicitBufferState(Buffer* const buffer)const{
+    if(!buffer)
+        return false;
+    return m_permanentBufferStates.find(buffer) != m_permanentBufferStates.end()
+        || m_bufferStates.find(buffer) != m_bufferStates.end()
+    ;
+}
+
 bool StateTracker::getTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel, ResourceStates::Mask& outState)const{
     outState = ResourceStates::Unknown;
 
@@ -1718,6 +1738,18 @@ ResourceStates::Mask CommandList::getTextureSubresourceState(Texture* texture, A
 
 ResourceStates::Mask CommandList::getBufferState(Buffer* buffer){
     return m_stateTracker.getBufferState(buffer);
+}
+
+bool CommandList::hasExplicitTextureSubresourceState(
+    Texture* const texture,
+    const ArraySlice arraySlice,
+    const MipLevel mipLevel
+)const{
+    return m_stateTracker.hasExplicitTextureSubresourceState(texture, arraySlice, mipLevel);
+}
+
+bool CommandList::hasExplicitBufferState(Buffer* const buffer)const{
+    return m_stateTracker.hasExplicitBufferState(buffer);
 }
 
 

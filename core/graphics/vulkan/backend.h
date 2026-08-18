@@ -545,6 +545,7 @@ struct VulkanContext{
     VkInstance instance = VK_NULL_HANDLE;
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     VkDevice device = VK_NULL_HANDLE;
+    u16 deviceGeneration = 0u;
     VkAllocationCallbacks* allocationCallbacks = nullptr;
     VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 
@@ -617,8 +618,9 @@ struct VulkanContext{
     } extensions;
 
 
-    explicit VulkanContext(GraphicsAllocator& allocatorRef, Alloc::ThreadPool& threadPoolRef)
-        : objectArena(allocatorRef.getObjectArena())
+    explicit VulkanContext(GraphicsAllocator& allocatorRef, Alloc::ThreadPool& threadPoolRef, u16 generation = 0u)
+        : deviceGeneration(generation)
+        , objectArena(allocatorRef.getObjectArena())
         , allocator(allocatorRef)
         , threadPool(threadPoolRef)
     {}
@@ -628,10 +630,12 @@ struct VulkanContext{
         VkInstance inst,
         VkPhysicalDevice physDev,
         VkDevice dev,
-        VkAllocationCallbacks* allocCb)
+        VkAllocationCallbacks* allocCb,
+        u16 generation = 0u)
         : instance(inst)
         , physicalDevice(physDev)
         , device(dev)
+        , deviceGeneration(generation)
         , allocationCallbacks(allocCb)
         , objectArena(allocatorRef.getObjectArena())
         , allocator(allocatorRef)
@@ -1038,6 +1042,7 @@ public:
 public:
     [[nodiscard]] const BufferDesc& getDescription()const{ return m_desc; }
     [[nodiscard]] GpuVirtualAddress getGpuVirtualAddress()const{ return m_deviceAddress; }
+    [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
 
 
 private:
@@ -1139,6 +1144,7 @@ public:
 
 public:
     [[nodiscard]] const TextureDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     Object getNativeHandle(ObjectType objectType);
     Object getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool);
 
@@ -1721,6 +1727,7 @@ public:
 
 public:
     [[nodiscard]] const GraphicsPipelineDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     [[nodiscard]] const FramebufferInfo& getFramebufferInfo()const{ return m_framebufferInfo; }
     Object getNativeHandle(ObjectType objectType);
 
@@ -1750,6 +1757,7 @@ public:
 
 public:
     [[nodiscard]] const ComputePipelineDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     Object getNativeHandle(ObjectType objectType);
 
 
@@ -1777,6 +1785,7 @@ public:
 
 public:
     [[nodiscard]] const MeshletPipelineDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     [[nodiscard]] const FramebufferInfo& getFramebufferInfo()const{ return m_framebufferInfo; }
     Object getNativeHandle(ObjectType objectType);
 
@@ -1807,6 +1816,7 @@ public:
 
 public:
     [[nodiscard]] const RayTracingPipelineDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     RayTracingShaderTableHandle createShaderTable();
     Object getNativeHandle(ObjectType objectType);
 
@@ -1945,6 +1955,7 @@ public:
 
 public:
     [[nodiscard]] const RayTracingAccelStructDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     [[nodiscard]] u64 getDeviceAddress()const{ return m_deviceAddress; }
     // Exposed for explicit scheduling handoffs.
     [[nodiscard]] Buffer* getBackingBuffer()const{ return m_buffer.get(); }
@@ -2039,6 +2050,10 @@ public:
     [[nodiscard]] bool isPermanentBuffer(Buffer& buffer)const;
     [[nodiscard]] ResourceStates::Mask getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
     [[nodiscard]] ResourceStates::Mask getBufferState(Buffer* buffer)const;
+    // Explicit state comes from this command list or an imported packet handoff. A keep-initial-state descriptor
+    // fallback deliberately does not count: graph lowering can still declare the first known graph state.
+    [[nodiscard]] bool hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
+    [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer)const;
 
     void beginTrackingTexture(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingBuffer(Buffer* buffer, ResourceStates::Mask state);
@@ -2235,6 +2250,8 @@ public:
     void beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits);
     ResourceStates::Mask getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel);
     ResourceStates::Mask getBufferState(Buffer* buffer);
+    [[nodiscard]] bool hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
+    [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer)const;
 
     Device& getDevice(){ return m_device; }
     const CommandListParameters& getDescription(){ return m_desc; }

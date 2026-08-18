@@ -44,13 +44,14 @@ void GpuCompiledGraph::reset(){
     m_externalResourceExportSources.clear();
     m_queueTopology.clear();
     m_generation = 0u;
+    m_planGeneration = 0u;
     m_deviceGeneration = 0u;
     m_graphTaskCount = 0u;
     m_valid = false;
 }
 
 bool GpuCompiledGraph::validFor(const GpuTaskGraph& graph)const noexcept{
-    return m_valid
+    return valid()
         && m_generation == graph.generation()
         && m_graphTaskCount == graph.taskCount()
         && m_tasks.size() == m_graphTaskCount
@@ -63,7 +64,7 @@ bool GpuCompiledGraph::validFor(const GpuTaskGraph& graph)const noexcept{
 }
 
 bool GpuCompiledGraph::validPacket(const GpuSubmissionPacketId& packetID)const noexcept{
-    return packetID.valid() && packetID.generation == m_generation && packetID.index < m_packets.size();
+    return valid() && packetID.valid() && packetID.generation == m_planGeneration && packetID.index < m_packets.size();
 }
 
 bool GpuCompiledGraph::validPacketRange(const GpuSubmissionPacketRange& range)const noexcept{
@@ -75,7 +76,7 @@ bool GpuCompiledGraph::validPacketRange(const GpuSubmissionPacketRange& range)co
 
 GpuSubmissionPacketId GpuCompiledGraph::packetIdAt(const usize index)const noexcept{
     return index < m_packets.size()
-        ? GpuSubmissionPacketId{ static_cast<u32>(index), m_generation }
+        ? GpuSubmissionPacketId{ static_cast<u32>(index), m_planGeneration }
         : GpuSubmissionPacketId{}
     ;
 }

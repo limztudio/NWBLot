@@ -1382,8 +1382,11 @@ GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, con
     }
 
     const GpuGraphResourceId resource = appendResource(resolvedDesc);
-    if(resource.valid())
-        m_resources[resource.index].texture = texture;
+    if(resource.valid()){
+        GpuGraphResourceNode& importedResource = m_resources[resource.index];
+        importedResource.texture = texture;
+        importedResource.deviceGeneration = texture->getDeviceGeneration();
+    }
     return resource;
 }
 
@@ -1413,8 +1416,11 @@ GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const 
     }
 
     const GpuGraphResourceId resource = appendResource(resolvedDesc);
-    if(resource.valid())
-        m_resources[resource.index].buffer = buffer;
+    if(resource.valid()){
+        GpuGraphResourceNode& importedResource = m_resources[resource.index];
+        importedResource.buffer = buffer;
+        importedResource.deviceGeneration = buffer->getDeviceGeneration();
+    }
     return resource;
 }
 
@@ -1469,8 +1475,11 @@ GpuGraphResourceId GpuTaskGraph::importAccelStruct(
     }
 
     const GpuGraphResourceId resource = appendResource(resolvedDesc);
-    if(resource.valid())
-        m_resources[resource.index].accelStruct = accelStruct;
+    if(resource.valid()){
+        GpuGraphResourceNode& importedResource = m_resources[resource.index];
+        importedResource.accelStruct = accelStruct;
+        importedResource.deviceGeneration = accelStruct->getDeviceGeneration();
+    }
     return resource;
 }
 
@@ -1539,8 +1548,11 @@ GpuGraphPipelineId GpuTaskGraph::importGraphicsPipeline(
     }
 
     const GpuGraphPipelineId id = appendPipeline(desc);
-    if(id.valid())
-        m_pipelines[id.index].graphicsPipeline = pipeline;
+    if(id.valid()){
+        GpuGraphPipelineNode& importedPipeline = m_pipelines[id.index];
+        importedPipeline.graphicsPipeline = pipeline;
+        importedPipeline.deviceGeneration = pipeline->getDeviceGeneration();
+    }
     return id;
 }
 
@@ -1563,8 +1575,11 @@ GpuGraphPipelineId GpuTaskGraph::importComputePipeline(
     }
 
     const GpuGraphPipelineId id = appendPipeline(desc);
-    if(id.valid())
-        m_pipelines[id.index].computePipeline = pipeline;
+    if(id.valid()){
+        GpuGraphPipelineNode& importedPipeline = m_pipelines[id.index];
+        importedPipeline.computePipeline = pipeline;
+        importedPipeline.deviceGeneration = pipeline->getDeviceGeneration();
+    }
     return id;
 }
 
@@ -1587,8 +1602,11 @@ GpuGraphPipelineId GpuTaskGraph::importMeshletPipeline(
     }
 
     const GpuGraphPipelineId id = appendPipeline(desc);
-    if(id.valid())
-        m_pipelines[id.index].meshletPipeline = pipeline;
+    if(id.valid()){
+        GpuGraphPipelineNode& importedPipeline = m_pipelines[id.index];
+        importedPipeline.meshletPipeline = pipeline;
+        importedPipeline.deviceGeneration = pipeline->getDeviceGeneration();
+    }
     return id;
 }
 
@@ -1611,8 +1629,11 @@ GpuGraphPipelineId GpuTaskGraph::importRayTracingPipeline(
     }
 
     const GpuGraphPipelineId id = appendPipeline(desc);
-    if(id.valid())
-        m_pipelines[id.index].rayTracingPipeline = pipeline;
+    if(id.valid()){
+        GpuGraphPipelineNode& importedPipeline = m_pipelines[id.index];
+        importedPipeline.rayTracingPipeline = pipeline;
+        importedPipeline.deviceGeneration = pipeline->getDeviceGeneration();
+    }
     return id;
 }
 
@@ -1646,6 +1667,30 @@ void GpuTaskGraph::reset(){
     m_uploadBlobs.clear();
     m_markerText.clear();
     m_generation = __hidden_gpu_task_graph::AllocateGeneration();
+}
+
+bool GpuTaskGraph::validForDeviceGeneration(const u16 deviceGeneration)const noexcept{
+    if(deviceGeneration == 0u)
+        return false;
+
+    for(const GpuGraphResourceNode& resource : m_resources){
+        if(
+            (resource.texture != nullptr && resource.deviceGeneration != deviceGeneration)
+            || (resource.buffer != nullptr && resource.deviceGeneration != deviceGeneration)
+            || (resource.accelStruct != nullptr && resource.deviceGeneration != deviceGeneration)
+        )
+            return false;
+    }
+    for(const GpuGraphPipelineNode& pipeline : m_pipelines){
+        if(
+            (pipeline.graphicsPipeline != nullptr && pipeline.deviceGeneration != deviceGeneration)
+            || (pipeline.computePipeline != nullptr && pipeline.deviceGeneration != deviceGeneration)
+            || (pipeline.meshletPipeline != nullptr && pipeline.deviceGeneration != deviceGeneration)
+            || (pipeline.rayTracingPipeline != nullptr && pipeline.deviceGeneration != deviceGeneration)
+        )
+            return false;
+    }
+    return true;
 }
 
 bool GpuTaskGraph::validTask(const GpuTaskId& id)const noexcept{
@@ -1860,6 +1905,30 @@ bool GpuTaskGraph::applyCompiledBarrier(
     case GpuCompiledBarrierType::TextureUav:
         if(resource.type != GpuGraphResourceType::Texture || !resource.texture)
             return false;
+        if(barrier.isGraphInitialState){
+            if(barrier.before == ResourceStates::Unknown)
+                return false;
+            const TextureSubresourceSet subresources = barrier.range.textureSubresources.resolve(
+                resource.texture->getDescription(),
+                TextureSubresourceMipResolve::Range
+            );
+            const MipLevel mipEnd = subresources.baseMipLevel + subresources.numMipLevels;
+            const ArraySlice arrayEnd = subresources.baseArraySlice + subresources.numArraySlices;
+            for(ArraySlice arraySlice = subresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+                for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+                    // CommandList::open can seed this exact subresource from an external handoff. Preserve that
+                    // producer truth, but do not mistake a keep-initial-state descriptor fallback for a packet
+                    // handoff: the graph declaration is authoritative when no explicit tracker state exists.
+                    if(commandList.hasExplicitTextureSubresourceState(resource.texture.get(), arraySlice, mipLevel))
+                        continue;
+                    commandList.beginTrackingTextureState(
+                        resource.texture.get(),
+                        TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u),
+                        barrier.before
+                    );
+                }
+            }
+        }
         commandList.setTextureState(
             resource.texture.get(),
             barrier.range.textureSubresources,
@@ -1870,6 +1939,12 @@ bool GpuTaskGraph::applyCompiledBarrier(
     case GpuCompiledBarrierType::BufferUav:
         if(resource.type != GpuGraphResourceType::Buffer || !resource.buffer)
             return false;
+        if(barrier.isGraphInitialState){
+            if(barrier.before == ResourceStates::Unknown)
+                return false;
+            if(!commandList.hasExplicitBufferState(resource.buffer.get()))
+                commandList.beginTrackingBufferState(resource.buffer.get(), barrier.before);
+        }
         commandList.setBufferState(resource.buffer.get(), barrier.after);
         return true;
     case GpuCompiledBarrierType::TextureStateExport:
@@ -1911,6 +1986,15 @@ bool GpuTaskGraph::applyCompiledBarrier(
     case GpuCompiledBarrierType::AccelStructUav:
         if(resource.type != GpuGraphResourceType::AccelStruct || !resource.accelStruct)
             return false;
+        if(barrier.isGraphInitialState){
+            if(barrier.before == ResourceStates::Unknown)
+                return false;
+            Buffer* const backingBuffer = resource.accelStruct->getBackingBuffer();
+            if(!backingBuffer)
+                return false;
+            if(!commandList.hasExplicitBufferState(backingBuffer))
+                commandList.beginTrackingBufferState(backingBuffer, barrier.before);
+        }
         commandList.setAccelStructState(resource.accelStruct.get(), barrier.after);
         return true;
     case GpuCompiledBarrierType::TextureOwnershipRelease:{
@@ -2169,6 +2253,8 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
                 flags |= GpuTaskGraphTelemetryNodeFlag::AssignedDedicatedQueue;
             if(assignment->reason == GpuTaskQueueAssignmentReason::Fallback)
                 flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentFallback;
+            if(assignment->reason == GpuTaskQueueAssignmentReason::SameClassRouting)
+                flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentSameClassRouting;
         }
         taskNodes.push_back(builder.addPass(task.identity, task.markerLabel, flags));
     }

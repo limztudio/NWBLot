@@ -94,9 +94,12 @@ public:
 public:
     void reset();
 
-    [[nodiscard]] bool valid()const noexcept{ return m_valid; }
+    [[nodiscard]] bool valid()const noexcept{ return m_valid && m_planGeneration != 0u; }
     [[nodiscard]] bool validFor(const GpuTaskGraph& graph)const noexcept;
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
+    // Graph tasks/resources retain generation(), while compiler-owned packet identities use this immutable-plan
+    // generation so a same-graph recompile cannot alias old native recording or submission state.
+    [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
     [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
     [[nodiscard]] usize taskCount()const noexcept{ return m_tasks.size(); }
     [[nodiscard]] usize packetCount()const noexcept{ return m_packets.size(); }
@@ -106,7 +109,7 @@ public:
     // consumes this order so each packet observes already-recorded and accepted internal producers.
     [[nodiscard]] GpuSubmissionPacketId packetIdAt(usize index)const noexcept;
     // Derives an inclusive contiguous compiler-order range from packet handles. This keeps callers independent from
-    // the compiler's raw packet indices while still rejecting handles from another graph generation.
+    // the compiler's raw packet indices while still rejecting handles from another immutable compiled plan.
     [[nodiscard]] GpuSubmissionPacketRange packetRange(
         const GpuSubmissionPacketId& first,
         const GpuSubmissionPacketId& last
@@ -173,6 +176,7 @@ private:
     GraphicsVector<GpuCompiledExternalResourceExportSource> m_externalResourceExportSources;
     GraphicsVector<GpuPhysicalQueueInfo> m_queueTopology;
     u64 m_generation = 0u;
+    u64 m_planGeneration = 0u;
     u16 m_deviceGeneration = 0u;
     usize m_graphTaskCount = 0u;
     bool m_valid = false;

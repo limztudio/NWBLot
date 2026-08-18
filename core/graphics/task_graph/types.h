@@ -97,6 +97,7 @@ namespace GpuTaskGraphTelemetryNodeFlag{
         AssignedDedicatedQueue = 1u << 2u,
         QueueAssignmentFallback = 1u << 3u,
         AssignedTransferQueue = 1u << 5u,
+        QueueAssignmentSameClassRouting = 1u << 6u,
     };
 };
 
@@ -197,8 +198,9 @@ inline constexpr bool operator!=(const GpuExternalCompletionId& lhs, const GpuEx
     return !(lhs == rhs);
 }
 
-// A packet is the compiler-generated unit of native recording and queue submission.  Like graph handles, packet
-// IDs are tied to one graph generation so a recorded or accepted packet can never be reused after reset().
+// A packet is the compiler-generated unit of native recording and queue submission.  Its generation identifies one
+// immutable compiled plan rather than the declared graph, so recompiling one unchanged graph still invalidates
+// packet-local recording, submission, timing, hook, and capture handles.
 struct GpuSubmissionPacketId{
     u32 index = Limit<u32>::s_Max;
     u64 generation = 0u;
@@ -307,6 +309,10 @@ struct GpuCompiledBarrier{
     GpuPhysicalQueueId sourceQueue;
     GpuPhysicalQueueId destinationQueue;
     GpuCompiledBarrierType::Enum type = GpuCompiledBarrierType::TextureTransition;
+    // A first-use state declared by the graph rather than inherited from a graph-internal producer. Lowering may
+    // initialize an otherwise unknown native tracker from `before`, but an imported packet state handoff remains
+    // authoritative when CommandList::open already supplied one.
+    bool isGraphInitialState = false;
     // Only the first use of an imported external ownership handoff consumes the descriptor-owned state source.
     // Later graph-internal ownership acquires use their producer packet snapshot instead.
     bool isInitialOwnerHandoff = false;

@@ -151,6 +151,7 @@ private:
         TextureHandle texture;
         BufferHandle buffer;
         RayTracingAccelStructHandle accelStruct;
+        u16 deviceGeneration = 0u;
         // The graph retains its own immutable copy for late recording. Keep the declaration source identity
         // separately so repeated typed imports continue to reject incompatible external handoff metadata.
         CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
@@ -186,6 +187,7 @@ private:
         ComputePipelineHandle computePipeline;
         MeshletPipelineHandle meshletPipeline;
         RayTracingPipelineHandle rayTracingPipeline;
+        u16 deviceGeneration = 0u;
     };
 
     struct GpuExternalCompletionNode{
@@ -335,6 +337,7 @@ public:
     void reset();
 
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
+    [[nodiscard]] bool validForDeviceGeneration(u16 deviceGeneration)const noexcept;
     [[nodiscard]] bool validTask(const GpuTaskId& id)const noexcept;
     [[nodiscard]] bool validResource(const GpuGraphResourceId& id)const noexcept;
     [[nodiscard]] bool validResourceSet(const GpuGraphResourceSetId& id)const noexcept;

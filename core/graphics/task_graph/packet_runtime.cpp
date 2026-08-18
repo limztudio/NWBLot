@@ -203,20 +203,75 @@ bool GpuTaskGraphExternalCompletionToken::validFor(const GpuCompiledGraph& compi
 }
 
 bool GpuTaskGraphExternalResourceHandoff::validFor(const GpuCompiledGraph& compiledGraph)const noexcept{
-    return compiledGraph.valid()
-        && resource.valid()
-        && resource.generation == compiledGraph.generation()
-        && producerTask.valid()
-        && producerTask.generation == compiledGraph.generation()
-        && sourceQueue.valid()
-        && sourceQueue.deviceGeneration == compiledGraph.deviceGeneration()
-        && destinationQueue.valid()
-        && destinationQueue.deviceGeneration == compiledGraph.deviceGeneration()
-        && finalState != ResourceStates::Unknown
-        && token.valid()
-        && token.matchesPhysicalQueue(sourceQueue.index, sourceQueue.deviceGeneration)
-        && stateSource
-        && stateSource->valid()
+    if(
+        !compiledGraph.valid()
+        || !resource.valid()
+        || resource.generation != compiledGraph.generation()
+        || !destinationQueue.valid()
+        || destinationQueue.deviceGeneration != compiledGraph.deviceGeneration()
+        || !compiledGraph.queueInfo(destinationQueue)
+        || finalState == ResourceStates::Unknown
+        || terminalRangeCount == 0u
+        || producerCount == 0u
+        || !producers
+        || waitTokenCount == 0u
+        || !waitTokens
+        || !stateSource
+        || !stateSource->valid()
+    )
+        return false;
+
+    for(usize producerIndex = 0u; producerIndex < producerCount; ++producerIndex){
+        const GpuTaskGraphExternalResourceHandoffProducer& producer = producers[producerIndex];
+        const GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer.producerTask);
+        const GpuPhysicalQueueInfo* const sourceQueueInfo = compiledGraph.queueInfo(producer.sourceQueue);
+        if(
+            !producer.producerTask.valid()
+            || producer.producerTask.generation != compiledGraph.generation()
+            || !compiledProducer
+            || compiledProducer->queue != producer.sourceQueue
+            || !producer.sourceQueue.valid()
+            || producer.sourceQueue.deviceGeneration != compiledGraph.deviceGeneration()
+            || !sourceQueueInfo
+            || !producer.token.valid()
+            || producer.token.queue != sourceQueueInfo->queueClass
+            || !producer.token.matchesPhysicalQueue(
+                producer.sourceQueue.index,
+                producer.sourceQueue.deviceGeneration
+            )
+        )
+            return false;
+
+        bool coveredByWait = false;
+        for(usize waitIndex = 0u; waitIndex < waitTokenCount; ++waitIndex){
+            const QueueSubmissionToken& wait = waitTokens[waitIndex];
+            if(
+                !wait.valid()
+                || !wait.hasPhysicalQueueIdentity()
+                || wait.deviceGeneration != compiledGraph.deviceGeneration()
+            )
+                return false;
+            coveredByWait = coveredByWait || (
+                wait.queue == producer.token.queue
+                && wait.physicalQueueIndex == producer.token.physicalQueueIndex
+                && wait.deviceGeneration == producer.token.deviceGeneration
+                && wait.value >= producer.token.value
+            );
+        }
+        if(!coveredByWait)
+            return false;
+    }
+
+    if(producerCount != 1u)
+        return !producerTask.valid() && !sourceQueue.valid() && !token.valid();
+
+    const GpuTaskGraphExternalResourceHandoffProducer& producer = producers[0u];
+    return producerTask == producer.producerTask
+        && sourceQueue == producer.sourceQueue
+        && token.queue == producer.token.queue
+        && token.value == producer.token.value
+        && token.physicalQueueIndex == producer.token.physicalQueueIndex
+        && token.deviceGeneration == producer.token.deviceGeneration
     ;
 }
 
@@ -1134,6 +1189,7 @@ bool GpuNativePacketRecorder::recordTaskRangeInReadyFrontiers(
 void GpuGraphSubmissionTransaction::reset(const GpuCompiledGraph& compiledGraph){
     m_packets.clear();
     m_latestAcceptedQueueTokens.clear();
+    m_externalResourceHandoffScratch.clear();
     m_generation = compiledGraph.generation();
     m_deviceGeneration = compiledGraph.deviceGeneration();
     m_acceptedSubmissionCount = 0u;
@@ -1141,6 +1197,18 @@ void GpuGraphSubmissionTransaction::reset(const GpuCompiledGraph& compiledGraph)
     if(!m_valid)
         return;
     m_packets.resize(compiledGraph.packetCount());
+    m_externalResourceHandoffScratch.reserve(compiledGraph.externalResourceExportCount());
+    for(usize exportIndex = 0u; exportIndex < compiledGraph.externalResourceExportCount(); ++exportIndex){
+        const GpuCompiledExternalResourceExport* const exportInfo = compiledGraph.externalResourceExportAt(exportIndex);
+        if(!exportInfo || !exportInfo->resource.valid()){
+            m_packets.clear();
+            m_externalResourceHandoffScratch.clear();
+            m_valid = false;
+            return;
+        }
+        ExternalResourceHandoffScratch& scratch = m_externalResourceHandoffScratch.emplace_back(m_arena);
+        scratch.resource = exportInfo->resource;
+    }
 }
 
 bool GpuGraphSubmissionTransaction::validFor(const GpuCompiledGraph& compiledGraph)const noexcept{
@@ -1149,6 +1217,7 @@ bool GpuGraphSubmissionTransaction::validFor(const GpuCompiledGraph& compiledGra
         && m_generation == compiledGraph.generation()
         && m_deviceGeneration == compiledGraph.deviceGeneration()
         && m_packets.size() == compiledGraph.packetCount()
+        && m_externalResourceHandoffScratch.size() == compiledGraph.externalResourceExportCount()
     ;
 }
 
@@ -1262,6 +1331,211 @@ QueueSubmissionToken GpuGraphSubmissionTransaction::taskToken(
 }
 
 GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResourceHandoff(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuRecordedGraph& recordedGraph,
+    const GpuGraphResourceId resource
+)const noexcept{
+    if(
+        !validFor(compiledGraph)
+        || !compiledGraph.validFor(graph)
+        || !recordedGraph.validFor(compiledGraph)
+    )
+        return {};
+
+    const GpuCompiledExternalResourceExport* const exportInfo = compiledGraph.externalResourceExport(resource);
+    const GpuCompiledExternalResourceExportSource* const sources = exportInfo
+        ? compiledGraph.externalResourceExportSources(*exportInfo)
+        : nullptr
+    ;
+    if(!exportInfo || !sources || exportInfo->sourceCount == 0u)
+        return {};
+
+    ExternalResourceHandoffScratch* scratch = nullptr;
+    for(ExternalResourceHandoffScratch& candidate : m_externalResourceHandoffScratch){
+        if(candidate.resource == resource){
+            scratch = &candidate;
+            break;
+        }
+    }
+    if(!scratch)
+        return {};
+    scratch->reset();
+
+    const auto appendProducer = [&](const GpuCompiledExternalResourceExportSource& source){
+        const GpuSubmissionPacketId packet = compiledGraph.packetForTask(source.producerTask);
+        const QueueSubmissionToken producerToken = taskToken(compiledGraph, source.producerTask);
+        if(
+            !packet.valid()
+            || !source.sourceQueue.valid()
+            || !producerToken.valid()
+            || !producerToken.matchesPhysicalQueue(
+                source.sourceQueue.index,
+                source.sourceQueue.deviceGeneration
+            )
+            || !recordedGraph.taskFinalStateSeed(compiledGraph, source.producerTask)
+        )
+            return false;
+
+        bool foundProducer = false;
+        for(const GpuTaskGraphExternalResourceHandoffProducer& producer : scratch->producers){
+            if(compiledGraph.packetForTask(producer.producerTask) != packet)
+                continue;
+            if(
+                producer.sourceQueue != source.sourceQueue
+                || producer.token.queue != producerToken.queue
+                || producer.token.value != producerToken.value
+                || producer.token.physicalQueueIndex != producerToken.physicalQueueIndex
+                || producer.token.deviceGeneration != producerToken.deviceGeneration
+            )
+                return false;
+            foundProducer = true;
+            break;
+        }
+        if(!foundProducer){
+            scratch->producers.push_back(GpuTaskGraphExternalResourceHandoffProducer{
+                .producerTask = source.producerTask,
+                .sourceQueue = source.sourceQueue,
+                .token = producerToken,
+            });
+        }
+
+        for(QueueSubmissionToken& wait : scratch->waitTokens){
+            if(
+                wait.physicalQueueIndex != producerToken.physicalQueueIndex
+                || wait.deviceGeneration != producerToken.deviceGeneration
+            )
+                continue;
+            if(wait.queue != producerToken.queue)
+                return false;
+            if(producerToken.value > wait.value)
+                wait = producerToken;
+            return true;
+        }
+        scratch->waitTokens.push_back(producerToken);
+        return true;
+    };
+
+    for(u32 sourceIndex = 0u; sourceIndex < exportInfo->sourceCount; ++sourceIndex){
+        if(!appendProducer(sources[sourceIndex]))
+            return {};
+    }
+    if(scratch->producers.empty() || scratch->waitTokens.empty())
+        return {};
+
+    const CommandListResourceStateHandoff* stateSource = nullptr;
+    if(scratch->producers.size() == 1u){
+        stateSource = recordedGraph.taskFinalStateSeed(
+            compiledGraph,
+            scratch->producers[0u].producerTask
+        );
+    }
+    else{
+        const GpuTaskGraphResourceView graphResource = graph.resourceAt(resource.index);
+        if(graphResource.id != resource)
+            return {};
+
+        const CommandListResourceStateHandoff* firstSourceStates = nullptr;
+        for(u32 sourceIndex = 0u; sourceIndex < exportInfo->sourceCount; ++sourceIndex){
+            const GpuCompiledExternalResourceExportSource& source = sources[sourceIndex];
+            const CommandListResourceStateHandoff* const sourceStates = recordedGraph.taskFinalStateSeed(
+                compiledGraph,
+                source.producerTask
+            );
+            if(!sourceStates || !sourceStates->valid())
+                return {};
+            if(!firstSourceStates)
+                firstSourceStates = sourceStates;
+
+            CommandListResourceStateHandoff& stateSubset = scratch->stateBranches.emplace_back(scratch->m_arena);
+            switch(graphResource.type){
+            case GpuGraphResourceType::Texture:{
+                Texture* const texture = graph.textureForResource(resource);
+                if(!texture || !stateSubset.buildTextureRangeSubset(
+                    *sourceStates,
+                    texture,
+                    source.range.textureSubresources
+                ))
+                    return {};
+                break;
+            }
+            case GpuGraphResourceType::Buffer:{
+                Buffer* const buffer = graph.bufferForResource(resource);
+                Buffer* const buffers[] = { buffer };
+                if(!buffer || !stateSubset.buildResourceSubset(
+                    *sourceStates,
+                    nullptr,
+                    0u,
+                    buffers,
+                    LengthOf(buffers)
+                ))
+                    return {};
+                break;
+            }
+            case GpuGraphResourceType::AccelStruct:{
+                RayTracingAccelStruct* const accelStruct = graph.accelStructForResource(resource);
+                Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
+                Buffer* const buffers[] = { backingBuffer };
+                if(!backingBuffer || !stateSubset.buildResourceSubset(
+                    *sourceStates,
+                    nullptr,
+                    0u,
+                    buffers,
+                    LengthOf(buffers)
+                ))
+                    return {};
+                break;
+            }
+            default:
+                return {};
+            }
+            // A terminal export reasserts its required final state, so an absent range means the recorded packet
+            // cannot safely publish this source. Never reconstruct it from a descriptor creation state.
+            if(stateSubset.empty())
+                return {};
+        }
+        // Start from a valid, resource-empty base.  This lets buildFanIn verify that independent terminal ranges
+        // are actually disjoint (including ownership metadata) rather than treating an earlier branch as the base
+        // and accidentally allowing a later branch to overwrite it.
+        scratch->stateBranchPointers.clear();
+        scratch->stateBranchPointers.reserve(scratch->stateBranches.size());
+        for(const CommandListResourceStateHandoff& branch : scratch->stateBranches)
+            scratch->stateBranchPointers.push_back(&branch);
+        if(
+            !firstSourceStates
+            || !scratch->stateSource.buildResourceSubset(*firstSourceStates, nullptr, 0u, nullptr, 0u)
+            || !scratch->stateMerge.buildFanIn(
+                scratch->stateSource,
+                scratch->stateBranchPointers.data(),
+                scratch->stateBranchPointers.size()
+            )
+            || !scratch->stateSource.copyFrom(scratch->stateMerge)
+        )
+            return {};
+        stateSource = &scratch->stateSource;
+    }
+    if(!stateSource || !stateSource->valid())
+        return {};
+
+    GpuTaskGraphExternalResourceHandoff handoff;
+    handoff.resource = exportInfo->resource;
+    handoff.destinationQueue = exportInfo->destinationQueue;
+    handoff.finalState = exportInfo->finalState;
+    handoff.producers = scratch->producers.data();
+    handoff.producerCount = scratch->producers.size();
+    handoff.waitTokens = scratch->waitTokens.data();
+    handoff.waitTokenCount = scratch->waitTokens.size();
+    handoff.terminalRangeCount = exportInfo->sourceCount;
+    handoff.stateSource = stateSource;
+    if(handoff.producerCount == 1u){
+        handoff.producerTask = handoff.producers[0u].producerTask;
+        handoff.sourceQueue = handoff.producers[0u].sourceQueue;
+        handoff.token = handoff.producers[0u].token;
+    }
+    return handoff.validFor(compiledGraph) ? handoff : GpuTaskGraphExternalResourceHandoff{};
+}
+
+GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResourceHandoff(
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,
     const GpuGraphResourceId resource
@@ -1270,17 +1544,60 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
         return {};
 
     const GpuCompiledExternalResourceExport* const exportInfo = compiledGraph.externalResourceExport(resource);
-    if(!exportInfo)
+    if(
+        !exportInfo
+        || !exportInfo->producerTask.valid()
+        || !exportInfo->sourceQueue.valid()
+        || exportInfo->sourceCount == 0u
+    )
         return {};
 
+    ExternalResourceHandoffScratch* scratch = nullptr;
+    for(ExternalResourceHandoffScratch& candidate : m_externalResourceHandoffScratch){
+        if(candidate.resource == resource){
+            scratch = &candidate;
+            break;
+        }
+    }
+    if(!scratch)
+        return {};
+    scratch->reset();
+
+    const QueueSubmissionToken producerToken = taskToken(compiledGraph, exportInfo->producerTask);
+    const CommandListResourceStateHandoff* const stateSource = recordedGraph.taskFinalStateSeed(
+        compiledGraph,
+        exportInfo->producerTask
+    );
+    if(
+        !producerToken.valid()
+        || !producerToken.matchesPhysicalQueue(
+            exportInfo->sourceQueue.index,
+            exportInfo->sourceQueue.deviceGeneration
+        )
+        || !stateSource
+        || !stateSource->valid()
+    )
+        return {};
+
+    scratch->producers.push_back(GpuTaskGraphExternalResourceHandoffProducer{
+        .producerTask = exportInfo->producerTask,
+        .sourceQueue = exportInfo->sourceQueue,
+        .token = producerToken,
+    });
+    scratch->waitTokens.push_back(producerToken);
     GpuTaskGraphExternalResourceHandoff handoff;
     handoff.resource = exportInfo->resource;
     handoff.producerTask = exportInfo->producerTask;
     handoff.sourceQueue = exportInfo->sourceQueue;
     handoff.destinationQueue = exportInfo->destinationQueue;
     handoff.finalState = exportInfo->finalState;
-    handoff.token = taskToken(compiledGraph, exportInfo->producerTask);
-    handoff.stateSource = recordedGraph.taskFinalStateSeed(compiledGraph, exportInfo->producerTask);
+    handoff.token = producerToken;
+    handoff.producers = scratch->producers.data();
+    handoff.producerCount = scratch->producers.size();
+    handoff.waitTokens = scratch->waitTokens.data();
+    handoff.waitTokenCount = scratch->waitTokens.size();
+    handoff.terminalRangeCount = exportInfo->sourceCount;
+    handoff.stateSource = stateSource;
     return handoff.validFor(compiledGraph) ? handoff : GpuTaskGraphExternalResourceHandoff{};
 }
 

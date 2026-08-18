@@ -270,17 +270,38 @@ struct GpuTaskGraphExternalCompletionToken{
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
 };
 
-// Acceptance-gated graph-to-external handoff for an imported texture or buffer. The descriptor fixes the external
-// destination before compilation; this result supplies the one terminal producer token and the native state source
-// that a direct consumer or a later graph import must consume. It deliberately has no packet ID so callers do not
-// reconstruct compiler packet topology merely to continue an ownership handoff.
+// One accepted terminal packet that contributes to a graph-to-external resource handoff. Several disjoint texture
+// subresource ranges may be published by different packets; a consumer waits on the returned compact token frontier
+// before opening the handoff's merged native state source.
+struct GpuTaskGraphExternalResourceHandoffProducer{
+    GpuTaskId producerTask;
+    GpuPhysicalQueueId sourceQueue;
+    QueueSubmissionToken token;
+};
+
+// Acceptance-gated graph-to-external handoff for an imported texture, buffer, or acceleration structure. The
+// descriptor fixes the external destination before compilation. `producers` records the semantic terminal packet
+// sources, while `waitTokens` is the compact physical-queue frontier required by a direct consumer. For a true
+// multi-producer export, `stateSource` contains the exact union of terminal exported ranges; a one-packet export
+// preserves its original packet snapshot. The legacy scalar producer fields remain populated only when all terminal
+// ranges came from one packet. This value borrows transaction-owned storage and remains valid until that transaction
+// resets or the same resource handoff is queried again.
 struct GpuTaskGraphExternalResourceHandoff{
     GpuGraphResourceId resource;
+    // One-producer compatibility fields. These are invalid for a true multi-producer handoff; use `producers` and
+    // `waitTokens` instead.
     GpuTaskId producerTask;
     GpuPhysicalQueueId sourceQueue;
     GpuPhysicalQueueId destinationQueue;
     ResourceStates::Mask finalState = ResourceStates::Unknown;
     QueueSubmissionToken token;
+    const GpuTaskGraphExternalResourceHandoffProducer* producers = nullptr;
+    usize producerCount = 0u;
+    const QueueSubmissionToken* waitTokens = nullptr;
+    usize waitTokenCount = 0u;
+    // Number of exact terminal resource ranges merged into `stateSource`. This may exceed `producerCount` when
+    // several terminal tasks were packet-merged.
+    usize terminalRangeCount = 0u;
     const CommandListResourceStateHandoff* stateSource = nullptr;
 
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
@@ -358,8 +379,10 @@ struct GpuTaskGraphTaskRecordedCallback{
 class GpuGraphSubmissionTransaction final : NoCopy{
 public:
     explicit GpuGraphSubmissionTransaction(GraphicsArena& arena)
-        : m_packets(arena)
+        : m_arena(arena)
+        , m_packets(arena)
         , m_latestAcceptedQueueTokens(arena)
+        , m_externalResourceHandoffScratch(arena)
     {}
 
 
@@ -397,8 +420,18 @@ public:
         const GpuCompiledGraph& compiledGraph,
         GpuTaskId task
     )const noexcept;
-    // Publishes the exact external final-state/ownership handoff only after the compiler-selected producer packet
-    // accepted. The compiled graph rejects resource exports that would require more than one producer token.
+    // Publishes the exact external final-state/ownership handoff only after every compiler-selected terminal
+    // producer packet accepted. Multi-producer exports retain all semantic producers, compact their waits to one
+    // latest token per physical queue, and merge the exact terminal state ranges without exposing packet IDs.
+    [[nodiscard]] GpuTaskGraphExternalResourceHandoff externalResourceHandoff(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuRecordedGraph& recordedGraph,
+        GpuGraphResourceId resource
+    )const noexcept;
+    // Source-compatible one-producer query. A true multi-producer texture export requires the graph-aware overload
+    // above so it can filter and merge the exact terminal ranges; this legacy form deliberately returns invalid for
+    // that case instead of publishing a partial state snapshot.
     [[nodiscard]] GpuTaskGraphExternalResourceHandoff externalResourceHandoff(
         const GpuCompiledGraph& compiledGraph,
         const GpuRecordedGraph& recordedGraph,
@@ -421,8 +454,43 @@ private:
         QueueSubmissionToken token;
     };
 
+    // Each compiled external release receives stable transaction-owned query storage.  The merged state is rebuilt
+    // only when its resource is queried, while the outer vector is fully allocated at reset so a handoff for one
+    // resource remains valid when another resource is queried.
+    struct ExternalResourceHandoffScratch final : NoCopy{
+        explicit ExternalResourceHandoffScratch(GraphicsArena& arena)
+            : m_arena(arena)
+            , stateSource(arena)
+            , stateMerge(arena)
+            , stateBranches(arena)
+            , stateBranchPointers(arena)
+            , producers(arena)
+            , waitTokens(arena)
+        {}
+
+        void reset(){
+            stateSource.reset();
+            stateMerge.reset();
+            stateBranches.clear();
+            stateBranchPointers.clear();
+            producers.clear();
+            waitTokens.clear();
+        }
+
+        GraphicsArena& m_arena;
+        GpuGraphResourceId resource;
+        CommandListResourceStateHandoff stateSource;
+        CommandListResourceStateHandoff stateMerge;
+        GraphicsVector<CommandListResourceStateHandoff> stateBranches;
+        GraphicsVector<const CommandListResourceStateHandoff*> stateBranchPointers;
+        GraphicsVector<GpuTaskGraphExternalResourceHandoffProducer> producers;
+        GraphicsVector<QueueSubmissionToken> waitTokens;
+    };
+
+    GraphicsArena& m_arena;
     GraphicsVector<GpuPacketRuntime> m_packets;
     GraphicsVector<LatestAcceptedQueueToken> m_latestAcceptedQueueTokens;
+    mutable GraphicsVector<ExternalResourceHandoffScratch> m_externalResourceHandoffScratch;
     u64 m_generation = 0u;
     u16 m_deviceGeneration = 0u;
     u64 m_acceptedSubmissionCount = 0u;

@@ -59,13 +59,26 @@ struct GpuCompiledTask{
     u32 epilogueBarrierCount = 0u;
 };
 
-// One accepted packet may publish an imported texture/buffer to code outside this graph. The compiler creates this
-// only for an explicit external-final release declaration, and rejects resource ranges that would need more than
-// one producer packet so consumers never have to infer a multi-token handoff.
+// One terminal declared range that contributes to an explicit graph-to-external release.  Textures may have
+// several disjoint terminal subresource ranges, potentially recorded by different packets and physical queues.
+// The runtime turns every source into one acceptance-gated producer token and merges their exact exported state
+// ranges before handing the texture to native code. Buffer and AS releases remain one-packet because their native
+// tracking is whole-allocation.
+struct GpuCompiledExternalResourceExportSource{
+    GpuTaskId producerTask;
+    GpuPhysicalQueueId sourceQueue;
+    GpuTaskResourceRange range;
+};
+
+// Imported texture/buffer/AS graph-to-external release metadata.  `producerTask`/`sourceQueue` retain the
+// original one-producer convenience contract whenever every terminal range resolves to the same packet.  Callers
+// that need the complete contract must consume `sourceCount` sources through externalResourceExportSources().
 struct GpuCompiledExternalResourceExport{
     GpuGraphResourceId resource;
     GpuTaskId producerTask;
     GpuPhysicalQueueId sourceQueue;
+    u32 sourceOffset = 0u;
+    u32 sourceCount = 0u;
     GpuPhysicalQueueId destinationQueue;
     ResourceStates::Mask finalState = ResourceStates::Unknown;
 };
@@ -134,10 +147,15 @@ public:
     [[nodiscard]] const GpuPacketStateSeed* taskPrologueStateSeeds(const GpuTaskId& task)const noexcept;
     [[nodiscard]] const GpuCompiledBarrier* taskPrologueBarriers(const GpuTaskId& task)const noexcept;
     [[nodiscard]] const GpuCompiledBarrier* taskEpilogueBarriers(const GpuTaskId& task)const noexcept;
-    // Resolves the one terminal packet that publishes this imported resource to its declared external destination.
-    // No result means the resource did not request a graph-to-external handoff in this compiled generation.
+    // Resolves the terminal graph-to-external release declaration for this imported resource. No result means the
+    // resource did not request a graph-to-external handoff in this compiled generation.
     [[nodiscard]] const GpuCompiledExternalResourceExport* externalResourceExport(
         const GpuGraphResourceId& resource
+    )const noexcept;
+    [[nodiscard]] usize externalResourceExportCount()const noexcept{ return m_externalResourceExports.size(); }
+    [[nodiscard]] const GpuCompiledExternalResourceExport* externalResourceExportAt(usize index)const noexcept;
+    [[nodiscard]] const GpuCompiledExternalResourceExportSource* externalResourceExportSources(
+        const GpuCompiledExternalResourceExport& exportInfo
     )const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* queueInfo(const GpuPhysicalQueueId& queue)const noexcept;
 
@@ -152,6 +170,7 @@ private:
     GraphicsVector<GpuCompiledBarrier> m_prologueBarriers;
     GraphicsVector<GpuCompiledBarrier> m_epilogueBarriers;
     GraphicsVector<GpuCompiledExternalResourceExport> m_externalResourceExports;
+    GraphicsVector<GpuCompiledExternalResourceExportSource> m_externalResourceExportSources;
     GraphicsVector<GpuPhysicalQueueInfo> m_queueTopology;
     u64 m_generation = 0u;
     u16 m_deviceGeneration = 0u;

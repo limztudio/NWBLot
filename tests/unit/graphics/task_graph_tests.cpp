@@ -3660,7 +3660,7 @@ TEST(GpuTaskGraph, ExportsExclusiveAccelStructOwnershipToExternalQueue){
 }
 
 
-TEST(GpuTaskGraph, RejectsExternalFinalOwnershipExportWithMultipleTerminalPackets){
+TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuPhysicalQueueInfo queues[] = {
@@ -3724,14 +3724,52 @@ TEST(GpuTaskGraph, RejectsExternalFinalOwnershipExportWithMultipleTerminalPacket
         .setQueue(computeRequest)
         .setResourceUses(&computeUse, 1u)
     ;
-    ASSERT_TRUE(graph.addTask(graphicsDesc).valid());
-    ASSERT_TRUE(graph.addTask(computeDesc).valid());
+    const Graphics::GpuTaskId graphicsTask = graph.addTask(graphicsDesc);
+    const Graphics::GpuTaskId computeTask = graph.addTask(computeDesc);
+    ASSERT_TRUE(graphicsTask.valid());
+    ASSERT_TRUE(computeTask.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    EXPECT_FALSE(compiledGraph.valid());
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuCompiledExternalResourceExport* const exportInfo = compiledGraph.externalResourceExport(texture);
+    ASSERT_NE(exportInfo, nullptr);
+    EXPECT_EQ(exportInfo->resource, texture);
+    EXPECT_EQ(exportInfo->destinationQueue, queues[1u].id);
+    EXPECT_EQ(exportInfo->finalState, Graphics::ResourceStates::ShaderResource);
+    // No singular semantic producer exists: each mip's terminal range belongs to a different packet and queue.
+    EXPECT_FALSE(exportInfo->producerTask.valid());
+    EXPECT_FALSE(exportInfo->sourceQueue.valid());
+    ASSERT_EQ(exportInfo->sourceCount, 2u);
+    const Graphics::GpuCompiledExternalResourceExportSource* const sources =
+        compiledGraph.externalResourceExportSources(*exportInfo)
+    ;
+    ASSERT_NE(sources, nullptr);
+    EXPECT_EQ(sources[0u].producerTask, graphicsTask);
+    EXPECT_EQ(sources[0u].sourceQueue, queues[0u].id);
+    EXPECT_EQ(sources[0u].range.textureSubresources, graphicsUse.range.textureSubresources);
+    EXPECT_EQ(sources[1u].producerTask, computeTask);
+    EXPECT_EQ(sources[1u].sourceQueue, queues[1u].id);
+    EXPECT_EQ(sources[1u].range.textureSubresources, computeUse.range.textureSubresources);
+
+    const Graphics::GpuCompiledTask* const compiledGraphics = compiledGraph.findTask(graphicsTask);
+    const Graphics::GpuCompiledTask* const compiledCompute = compiledGraph.findTask(computeTask);
+    ASSERT_NE(compiledGraphics, nullptr);
+    ASSERT_NE(compiledCompute, nullptr);
+    EXPECT_EQ(compiledGraphics->queue, queues[0u].id);
+    EXPECT_EQ(compiledCompute->queue, queues[1u].id);
+    ASSERT_EQ(compiledGraphics->epilogueBarrierCount, 2u);
+    ASSERT_EQ(compiledCompute->epilogueBarrierCount, 1u);
+    const Graphics::GpuCompiledBarrier* const graphicsBarriers = compiledGraph.taskEpilogueBarriers(graphicsTask);
+    const Graphics::GpuCompiledBarrier* const computeBarriers = compiledGraph.taskEpilogueBarriers(computeTask);
+    ASSERT_NE(graphicsBarriers, nullptr);
+    ASSERT_NE(computeBarriers, nullptr);
+    EXPECT_EQ(graphicsBarriers[0u].type, Graphics::GpuCompiledBarrierType::TextureStateExport);
+    EXPECT_EQ(graphicsBarriers[1u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipRelease);
+    EXPECT_EQ(graphicsBarriers[1u].destinationQueue, queues[1u].id);
+    EXPECT_EQ(computeBarriers[0u].type, Graphics::GpuCompiledBarrierType::TextureStateExport);
 }
 
 

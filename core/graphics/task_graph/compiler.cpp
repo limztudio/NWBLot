@@ -1229,6 +1229,7 @@ bool GpuTaskGraphCompiler::compile(
     outCompiledGraph.m_prologueBarriers.reserve(graph.taskCount());
     outCompiledGraph.m_epilogueBarriers.reserve(graph.taskCount());
     outCompiledGraph.m_externalResourceExports.reserve(graph.resourceCount());
+    outCompiledGraph.m_externalResourceExportSources.reserve(graph.resourceCount());
     outCompiledGraph.m_queueTopology.reserve(topology.queueCount);
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex)
         outCompiledGraph.m_queueTopology.push_back(topology.queues[queueIndex]);
@@ -1691,6 +1692,11 @@ bool GpuTaskGraphCompiler::compile(
         GpuTaskId externalExportTask;
         GpuSubmissionPacketId externalExportPacket;
         GpuPhysicalQueueId externalExportSourceQueue;
+        bool externalExportUsesOnePacket = true;
+        const u32 externalExportSourceOffset = static_cast<u32>(
+            outCompiledGraph.m_externalResourceExportSources.size()
+        );
+        u32 externalExportSourceCount = 0u;
         for(usize stateIndex = 0u; stateIndex < trackedResourceStates.size(); ++stateIndex){
             const TrackedCompiledResourceState& state = trackedResourceStates[stateIndex];
             if(state.resource != resource.id)
@@ -1728,12 +1734,31 @@ bool GpuTaskGraphCompiler::compile(
                     externalExportPacket != terminalPacket
                     || externalExportSourceQueue != state.queue
                 ){
-                    // An external recipient receives one completion token and one native state snapshot. Require
-                    // every terminal declared range to close in one packet until a deliberate multi-token export
-                    // contract is designed and proven.
+                    externalExportUsesOnePacket = false;
+                }
+                // Texture ownership and state snapshots are subresource-granular, so disjoint terminal mips may
+                // safely arrive from different physical queues. Buffer and acceleration-structure state tracking
+                // remains whole-allocation, so two packet-local external releases would publish contradictory native
+                // ownership/state snapshots even when their declared byte ranges do not overlap. Keep that existing
+                // rejection until range-granular Buffer/AS native handoffs exist.
+                if(
+                    resource.type != GpuGraphResourceType::Texture
+                    && (
+                        externalExportPacket != terminalPacket
+                        || externalExportSourceQueue != state.queue
+                    )
+                ){
                     outCompiledGraph.reset();
                     return false;
                 }
+                outCompiledGraph.m_externalResourceExportSources.push_back(
+                    GpuCompiledExternalResourceExportSource{
+                        .producerTask = state.task,
+                        .sourceQueue = state.queue,
+                        .range = state.range,
+                    }
+                );
+                ++externalExportSourceCount;
             }
 
             pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
@@ -1778,14 +1803,21 @@ bool GpuTaskGraphCompiler::compile(
             return false;
         }
         if(hasExternalFinalRelease){
-            if(!externalExportTask.valid() || !externalExportPacket.valid() || !externalExportSourceQueue.valid()){
+            if(
+                !externalExportTask.valid()
+                || !externalExportPacket.valid()
+                || !externalExportSourceQueue.valid()
+                || externalExportSourceCount == 0u
+            ){
                 outCompiledGraph.reset();
                 return false;
             }
             outCompiledGraph.m_externalResourceExports.push_back(GpuCompiledExternalResourceExport{
                 .resource = resource.id,
-                .producerTask = externalExportTask,
-                .sourceQueue = externalExportSourceQueue,
+                .producerTask = externalExportUsesOnePacket ? externalExportTask : GpuTaskId{},
+                .sourceQueue = externalExportUsesOnePacket ? externalExportSourceQueue : GpuPhysicalQueueId{},
+                .sourceOffset = externalExportSourceOffset,
+                .sourceCount = externalExportSourceCount,
                 .destinationQueue = resource.externalFinalReleaseDestinationQueue,
                 .finalState = resource.externalFinalState,
             });

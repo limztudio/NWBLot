@@ -26,6 +26,7 @@ GpuCompiledGraph::GpuCompiledGraph(GraphicsArena& arena)
     , m_prologueBarriers(arena)
     , m_epilogueBarriers(arena)
     , m_externalResourceExports(arena)
+    , m_externalResourceExportSources(arena)
     , m_queueTopology(arena)
 {}
 
@@ -40,6 +41,7 @@ void GpuCompiledGraph::reset(){
     m_prologueBarriers.clear();
     m_epilogueBarriers.clear();
     m_externalResourceExports.clear();
+    m_externalResourceExportSources.clear();
     m_queueTopology.clear();
     m_generation = 0u;
     m_deviceGeneration = 0u;
@@ -298,6 +300,24 @@ const GpuCompiledExternalResourceExport* GpuCompiledGraph::externalResourceExpor
             return &exportInfo;
     }
     return nullptr;
+}
+
+const GpuCompiledExternalResourceExport* GpuCompiledGraph::externalResourceExportAt(
+    const usize index
+)const noexcept{
+    return index < m_externalResourceExports.size() ? &m_externalResourceExports[index] : nullptr;
+}
+
+const GpuCompiledExternalResourceExportSource* GpuCompiledGraph::externalResourceExportSources(
+    const GpuCompiledExternalResourceExport& exportInfo
+)const noexcept{
+    if(
+        exportInfo.sourceCount == 0u
+        || exportInfo.sourceOffset > m_externalResourceExportSources.size()
+        || exportInfo.sourceCount > m_externalResourceExportSources.size() - exportInfo.sourceOffset
+    )
+        return nullptr;
+    return m_externalResourceExportSources.data() + exportInfo.sourceOffset;
 }
 
 const GpuPhysicalQueueInfo* GpuCompiledGraph::queueInfo(const GpuPhysicalQueueId& queue)const noexcept{

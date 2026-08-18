@@ -1673,12 +1673,27 @@ bool GpuTaskGraph::validForDeviceGeneration(const u16 deviceGeneration)const noe
     if(deviceGeneration == 0u)
         return false;
 
+    const auto validStateSource = [deviceGeneration](const CommandListResourceStateHandoff* const states){
+        // Invalid declarations intentionally remain a record-time failure so legacy callers retain their existing
+        // diagnostic. A valid snapshot, however, must never cross a native Device lifetime.
+        return !states || !states->valid() || states->validForDeviceGeneration(deviceGeneration);
+    };
+
+    for(const GpuTaskExternalStateSource& source : m_externalStateSources){
+        if(!validStateSource(source.states))
+            return false;
+    }
     for(const GpuGraphResourceNode& resource : m_resources){
         if(
             (resource.texture != nullptr && resource.deviceGeneration != deviceGeneration)
             || (resource.buffer != nullptr && resource.deviceGeneration != deviceGeneration)
             || (resource.accelStruct != nullptr && resource.deviceGeneration != deviceGeneration)
+            || !validStateSource(resource.initialOwnerStateSource)
         )
+            return false;
+    }
+    for(const GpuTaskGraphInitialOwnerHandoffSourceView& source : m_initialOwnerHandoffSources){
+        if(!validStateSource(source.stateSource))
             return false;
     }
     for(const GpuGraphPipelineNode& pipeline : m_pipelines){

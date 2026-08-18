@@ -400,6 +400,18 @@ struct PacketLifecycleTask{
     }
 };
 
+struct NativeRecordProbeTask{
+    struct Payload{
+        u32* recordCount = nullptr;
+    };
+
+    static bool record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&){
+        if(payload.recordCount)
+            ++*payload.recordCount;
+        return true;
+    }
+};
+
 inline constexpr Graphics::GpuTaskId s_CommandIrTask{ 4u, 17u };
 inline constexpr Graphics::GpuSubmissionPacketId s_CommandIrPacket{ 2u, 19u };
 inline constexpr Graphics::GpuPhysicalQueueId s_CommandIrQueue{ 1u, 3u };
@@ -612,6 +624,139 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
 
     graph.reset();
     EXPECT_EQ(discardedCount, 1u);
+}
+
+TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
+    TestArena testArena;
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    const Graphics::GpuTaskGraphCompiler compiler;
+
+    const auto expectMissingTypedImport = [&](
+        const Name& identity,
+        const AStringView label,
+        const Graphics::GpuGraphResourceType::Enum type,
+        const Graphics::ResourceStates::Mask requiredState
+    ){
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId resource = graph.importResource(
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(type)
+                .setInitialState(Graphics::ResourceStates::Common)
+        );
+        ASSERT_TRUE(resource.valid());
+
+        const Graphics::GpuTaskResourceUse use{
+            .resource = resource,
+            .range = {},
+            .requiredState = requiredState,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        };
+        Graphics::GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setResourceUses(&use, 1u)
+        ;
+        u32 recordCount = 0u;
+        const Graphics::GpuTaskId task = graph.addTask<NativeRecordProbeTask>(
+            desc,
+            NativeRecordProbeTask::Payload{ .recordCount = &recordCount }
+        );
+        ASSERT_TRUE(task.valid());
+        EXPECT_TRUE(graph.taskAt(task.index).hasPayload);
+        EXPECT_TRUE(graph.taskAt(task.index).hasRecordPayload);
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
+        EXPECT_FALSE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+        EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceUse);
+        EXPECT_EQ(analysis.diagnostic().task, task);
+        EXPECT_EQ(analysis.diagnostic().resource, resource);
+        EXPECT_FALSE(analysis.valid());
+        EXPECT_FALSE(assignments.valid());
+        EXPECT_FALSE(compiledGraph.valid());
+        EXPECT_EQ(recordCount, 0u);
+
+        Graphics::GpuTaskGraphCompileOptions metadataOptions;
+        metadataOptions.allowMetadataOnlyTasks = true;
+        EXPECT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions));
+        EXPECT_TRUE(analysis.valid());
+        EXPECT_TRUE(assignments.valid());
+        EXPECT_TRUE(compiledGraph.validFor(graph));
+        EXPECT_EQ(recordCount, 0u);
+    };
+
+    expectMissingTypedImport(
+        Name("tests/task_graph/native_metadata_texture"),
+        "Native Metadata Texture",
+        Graphics::GpuGraphResourceType::Texture,
+        Graphics::ResourceStates::ShaderResource
+    );
+    expectMissingTypedImport(
+        Name("tests/task_graph/native_metadata_buffer"),
+        "Native Metadata Buffer",
+        Graphics::GpuGraphResourceType::Buffer,
+        Graphics::ResourceStates::ShaderResource
+    );
+    expectMissingTypedImport(
+        Name("tests/task_graph/native_metadata_accel_struct"),
+        "Native Metadata Accel Struct",
+        Graphics::GpuGraphResourceType::AccelStruct,
+        Graphics::ResourceStates::AccelStructRead
+    );
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId unusedTexture = AddTextureMetadata(
+            graph,
+            Name("tests/task_graph/native_unused_metadata_texture"),
+            "Native Unused Metadata Texture"
+        );
+        const Graphics::GpuGraphResourceId hazardDomain = AddHazardDomain(
+            graph,
+            Name("tests/task_graph/native_hazard_domain"),
+            "Native Hazard Domain"
+        );
+        ASSERT_TRUE(unusedTexture.valid());
+        ASSERT_TRUE(hazardDomain.valid());
+
+        const Graphics::GpuTaskResourceUse use{
+            .resource = hazardDomain,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Common,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc desc;
+        desc
+            .setIdentity(Name("tests/task_graph/native_hazard_domain_task"))
+            .setMarkerLabel("Native Hazard Domain Task")
+            .setResourceUses(&use, 1u)
+        ;
+        u32 recordCount = 0u;
+        const Graphics::GpuTaskId task = graph.addTask<NativeRecordProbeTask>(
+            desc,
+            NativeRecordProbeTask::Payload{ .recordCount = &recordCount }
+        );
+        ASSERT_TRUE(task.valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
+        EXPECT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+        EXPECT_TRUE(analysis.valid());
+        EXPECT_TRUE(assignments.valid());
+        EXPECT_TRUE(compiledGraph.validFor(graph));
+        EXPECT_EQ(recordCount, 0u);
+    }
 }
 
 TEST(GpuTaskGraph, ResolvesTypedPayloadLifecycleOnlyOnceWhenGraphIsAbandoned){
@@ -5028,6 +5173,151 @@ TEST(GpuTaskGraph, CompilesMultiSourceInitialTextureOwnershipHandoff){
         ASSERT_EQ(compiledGraph.packet(compiledMip1->packet).externalDependencyCount, 1u);
         EXPECT_EQ(mip0Dependencies[0u], graphicsCompletion);
         EXPECT_EQ(mip1Dependencies[0u], computeCompletion);
+    }
+
+    {
+        // A later broad use contains a mip already owned locally by this task and a tail owned by another external
+        // queue. Source matching must use only that first-use tail, not reject the original all-mip declaration.
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuExternalCompletionId mipZeroCompletion = graph.importExternalCompletion(
+            Graphics::GpuExternalCompletionDesc{}
+                .setIdentity(Name("tests/task_graph/multi_owner_overlapping_mip_zero_completion"))
+                .setMarkerLabel("Multi Owner Overlapping Mip Zero Completion")
+        );
+        const Graphics::GpuExternalCompletionId tailCompletion = graph.importExternalCompletion(
+            Graphics::GpuExternalCompletionDesc{}
+                .setIdentity(Name("tests/task_graph/multi_owner_overlapping_tail_completion"))
+                .setMarkerLabel("Multi Owner Overlapping Tail Completion")
+        );
+        ASSERT_TRUE(mipZeroCompletion.valid());
+        ASSERT_TRUE(tailCompletion.valid());
+
+        Graphics::CommandListResourceStateHandoff mipZeroState(testArena.arena);
+        Graphics::CommandListResourceStateHandoff tailState(testArena.arena);
+        const Graphics::QueueSubmissionToken mipZeroToken{
+            .queue = Graphics::CommandQueue::Graphics,
+            .value = 7u,
+            .physicalQueueIndex = queues[0u].id.index,
+            .deviceGeneration = queues[0u].id.deviceGeneration,
+        };
+        const Graphics::QueueSubmissionToken tailToken{
+            .queue = Graphics::CommandQueue::Compute,
+            .value = 11u,
+            .physicalQueueIndex = queues[1u].id.index,
+            .deviceGeneration = queues[1u].id.deviceGeneration,
+        };
+        const Graphics::GpuTaskResourceRange mipZeroRange{
+            .textureSubresources = Graphics::TextureSubresourceSet(
+                0u,
+                1u,
+                0u,
+                Graphics::TextureSubresourceSet::AllArraySlices
+            ),
+        };
+        const Graphics::GpuTaskResourceRange tailRange{
+            .textureSubresources = Graphics::TextureSubresourceSet(
+                1u,
+                Graphics::TextureSubresourceSet::AllMipLevels,
+                0u,
+                Graphics::TextureSubresourceSet::AllArraySlices
+            ),
+        };
+        const Graphics::GpuGraphInitialOwnerHandoffSourceDesc sources[] = {
+            Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
+                .range = mipZeroRange,
+                .sourceQueue = queues[0u].id,
+                .destinationQueue = queues[0u].id,
+                .completion = mipZeroCompletion,
+                .minimumCompletionToken = mipZeroToken,
+                .stateSource = &mipZeroState,
+            },
+            Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
+                .range = tailRange,
+                .sourceQueue = queues[1u].id,
+                .destinationQueue = queues[0u].id,
+                .completion = tailCompletion,
+                .minimumCompletionToken = tailToken,
+                .stateSource = &tailState,
+            },
+        };
+        const Graphics::GpuGraphResourceId texture = graph.importResource(
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/multi_owner_overlapping_texture"))
+                .setMarkerLabel("Multi Owner Overlapping Texture")
+                .setType(Graphics::GpuGraphResourceType::Texture)
+                .setInitialState(Graphics::ResourceStates::ShaderResource)
+                .setInitialOwnerHandoffSources(sources, LengthOf(sources))
+        );
+        ASSERT_TRUE(texture.valid());
+
+        const Graphics::GpuTaskResourceUse uses[] = {
+            Graphics::GpuTaskResourceUse{
+                .resource = texture,
+                .range = mipZeroRange,
+                .requiredState = Graphics::ResourceStates::ShaderResource,
+                .access = Graphics::GpuTaskResourceAccess::Read,
+            },
+            Graphics::GpuTaskResourceUse{
+                .resource = texture,
+                .range = Graphics::GpuTaskResourceRange{
+                    .textureSubresources = Graphics::s_AllSubresources,
+                },
+                .requiredState = Graphics::ResourceStates::ShaderResource,
+                .access = Graphics::GpuTaskResourceAccess::Read,
+            },
+        };
+        Graphics::GpuTaskDesc taskDesc;
+        taskDesc
+            .setIdentity(Name("tests/task_graph/multi_owner_overlapping_task"))
+            .setMarkerLabel("Multi Owner Overlapping Task")
+            .setQueue(graphicsQueue)
+            .setResourceUses(uses, LengthOf(uses))
+        ;
+        const Graphics::GpuTaskId task = graph.addTask(taskDesc);
+        ASSERT_TRUE(task.valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        ASSERT_NE(compiledTask, nullptr);
+        ASSERT_EQ(compiledTask->prologueBarrierCount, 2u);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        ASSERT_NE(barriers, nullptr);
+        bool hasMipZeroAcquire = false;
+        bool hasTailAcquire = false;
+        for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            hasMipZeroAcquire = hasMipZeroAcquire || (
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire
+                && barrier.isInitialOwnerHandoff
+                && barrier.range.textureSubresources == mipZeroRange.textureSubresources
+                && barrier.sourceQueue == queues[0u].id
+                && barrier.destinationQueue == queues[0u].id
+            );
+            hasTailAcquire = hasTailAcquire || (
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire
+                && barrier.isInitialOwnerHandoff
+                && barrier.range.textureSubresources == tailRange.textureSubresources
+                && barrier.sourceQueue == queues[1u].id
+                && barrier.destinationQueue == queues[0u].id
+            );
+        }
+        EXPECT_TRUE(hasMipZeroAcquire);
+        EXPECT_TRUE(hasTailAcquire);
+
+        const Graphics::GpuExternalCompletionId* const dependencies = compiledGraph.packetExternalDependencies(
+            compiledTask->packet
+        );
+        ASSERT_NE(dependencies, nullptr);
+        ASSERT_EQ(compiledGraph.packet(compiledTask->packet).externalDependencyCount, 2u);
+        const bool hasMipZeroCompletion = dependencies[0u] == mipZeroCompletion || dependencies[1u] == mipZeroCompletion;
+        const bool hasTailCompletion = dependencies[0u] == tailCompletion || dependencies[1u] == tailCompletion;
+        EXPECT_TRUE(hasMipZeroCompletion);
+        EXPECT_TRUE(hasTailCompletion);
     }
 
     {
@@ -26464,6 +26754,247 @@ TEST(GpuTaskGraph, PlansPacketBoundaryTransitionsAndUavDependencies){
     EXPECT_EQ(shaderBarrier[0].type, Graphics::GpuCompiledBarrierType::TextureTransition);
     EXPECT_EQ(shaderBarrier[0].before, Graphics::ResourceStates::UnorderedAccess);
     EXPECT_EQ(shaderBarrier[0].after, Graphics::ResourceStates::ShaderResource);
+}
+
+
+TEST(GpuTaskGraph, TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExports){
+    TestArena testArena;
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId texture = AddTextureMetadata(
+            graph,
+            Name("tests/task_graph/intra_task_final_state_consumer"),
+            "Intra-Task Final State Consumer"
+        );
+        ASSERT_TRUE(texture.valid());
+
+        const Graphics::GpuTaskResourceUse producerUses[] = {
+            Graphics::GpuTaskResourceUse{
+                .resource = texture,
+                .range = {},
+                .requiredState = Graphics::ResourceStates::ShaderResource,
+                .access = Graphics::GpuTaskResourceAccess::Read,
+            },
+            Graphics::GpuTaskResourceUse{
+                .resource = texture,
+                .range = {},
+                .requiredState = Graphics::ResourceStates::RenderTarget,
+                .access = Graphics::GpuTaskResourceAccess::Write,
+            },
+        };
+        const Graphics::GpuTaskResourceUse consumerUse{
+            .resource = texture,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        };
+        const Graphics::GpuTaskId producer = AddTask(
+            graph,
+            Name("tests/task_graph/intra_task_final_state_producer"),
+            "Intra-Task Final State Producer",
+            nullptr,
+            0u,
+            producerUses,
+            LengthOf(producerUses)
+        );
+        const Graphics::GpuTaskId consumer = AddTask(
+            graph,
+            Name("tests/task_graph/intra_task_final_state_consumer_task"),
+            "Intra-Task Final State Consumer Task",
+            nullptr,
+            0u,
+            &consumerUse,
+            1u
+        );
+        ASSERT_TRUE(producer.valid());
+        ASSERT_TRUE(consumer.valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+        const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+        const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+        ASSERT_NE(compiledProducer, nullptr);
+        ASSERT_NE(compiledConsumer, nullptr);
+        EXPECT_NE(compiledProducer->packet, compiledConsumer->packet);
+        ASSERT_EQ(compiledProducer->prologueBarrierCount, 1u);
+        ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
+        ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
+
+        const Graphics::GpuCompiledBarrier* const producerBarrier = compiledGraph.taskPrologueBarriers(producer);
+        const Graphics::GpuPacketStateSeed* const consumerSeed = compiledGraph.taskPrologueStateSeeds(consumer);
+        const Graphics::GpuCompiledBarrier* const consumerBarrier = compiledGraph.taskPrologueBarriers(consumer);
+        ASSERT_NE(producerBarrier, nullptr);
+        ASSERT_NE(consumerSeed, nullptr);
+        ASSERT_NE(consumerBarrier, nullptr);
+        EXPECT_EQ(producerBarrier[0u].after, Graphics::ResourceStates::ShaderResource);
+        EXPECT_EQ(consumerSeed[0u].sourcePacket, compiledProducer->packet);
+        EXPECT_EQ(consumerBarrier[0u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
+        EXPECT_EQ(consumerBarrier[0u].before, Graphics::ResourceStates::RenderTarget);
+        EXPECT_EQ(consumerBarrier[0u].after, Graphics::ResourceStates::ShaderResource);
+    }
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId texture = graph.importResource(
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/intra_task_final_state_export"))
+                .setMarkerLabel("Intra-Task Final State Export")
+                .setType(Graphics::GpuGraphResourceType::Texture)
+                .setInitialState(Graphics::ResourceStates::Common)
+                .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
+        );
+        ASSERT_TRUE(texture.valid());
+
+        const Graphics::GpuTaskResourceUse uses[] = {
+            Graphics::GpuTaskResourceUse{
+                .resource = texture,
+                .range = {},
+                .requiredState = Graphics::ResourceStates::ShaderResource,
+                .access = Graphics::GpuTaskResourceAccess::Read,
+            },
+            Graphics::GpuTaskResourceUse{
+                .resource = texture,
+                .range = {},
+                .requiredState = Graphics::ResourceStates::RenderTarget,
+                .access = Graphics::GpuTaskResourceAccess::Write,
+            },
+        };
+        const Graphics::GpuTaskId producer = AddTask(
+            graph,
+            Name("tests/task_graph/intra_task_final_state_export_task"),
+            "Intra-Task Final State Export Task",
+            nullptr,
+            0u,
+            uses,
+            LengthOf(uses)
+        );
+        ASSERT_TRUE(producer.valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+        const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+        ASSERT_NE(compiledProducer, nullptr);
+        ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
+        const Graphics::GpuCompiledBarrier* const exportBarrier = compiledGraph.taskEpilogueBarriers(producer);
+        ASSERT_NE(exportBarrier, nullptr);
+        EXPECT_EQ(exportBarrier[0u].type, Graphics::GpuCompiledBarrierType::TextureStateExport);
+        EXPECT_EQ(exportBarrier[0u].before, Graphics::ResourceStates::RenderTarget);
+        EXPECT_EQ(exportBarrier[0u].after, Graphics::ResourceStates::ShaderResource);
+    }
+}
+
+
+// A later whole-texture declaration may overlap a prior local mip while still introducing new mips. The task owns
+// the mip-zero transition, but the newly declared tail must still materialize the graph's declared initial state.
+TEST(GpuTaskGraph, PlansGraphInitialStateForUncoveredLaterTextureSubresourcesWithinTask){
+    TestArena testArena;
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId texture = graph.importResource(
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/intra_task_first_use_texture_tail"))
+            .setMarkerLabel("Intra-Task First-Use Texture Tail")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopySource)
+    );
+    ASSERT_TRUE(texture.valid());
+
+    const Graphics::GpuTaskResourceRange mipZeroRange{
+        .textureSubresources = Graphics::TextureSubresourceSet(
+            0u,
+            1u,
+            0u,
+            Graphics::TextureSubresourceSet::AllArraySlices
+        ),
+    };
+    const Graphics::GpuTaskResourceRange allMipsRange{
+        .textureSubresources = Graphics::s_AllSubresources,
+    };
+    const Graphics::GpuTaskResourceRange unplannedTailRange{
+        .textureSubresources = Graphics::TextureSubresourceSet(
+            1u,
+            Graphics::TextureSubresourceSet::AllMipLevels,
+            0u,
+            Graphics::TextureSubresourceSet::AllArraySlices
+        ),
+    };
+    const Graphics::GpuTaskResourceUse uses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = texture,
+            .range = mipZeroRange,
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = texture,
+            .range = allMipsRange,
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuTaskId task = AddTask(
+        graph,
+        Name("tests/task_graph/intra_task_first_use_texture_tail_task"),
+        "Intra-Task First-Use Texture Tail Task",
+        nullptr,
+        0u,
+        uses,
+        LengthOf(uses)
+    );
+    ASSERT_TRUE(task.valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+    ASSERT_NE(compiledTask, nullptr);
+    ASSERT_EQ(compiledTask->prologueBarrierCount, 2u);
+    const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+    ASSERT_NE(barriers, nullptr);
+
+    bool hasMipZeroInitialBarrier = false;
+    bool hasTailInitialBarrier = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == texture
+            && barrier.before == Graphics::ResourceStates::CopySource
+            && barrier.after == Graphics::ResourceStates::CopyDest
+            && barrier.isGraphInitialState
+            && barrier.range.textureSubresources == mipZeroRange.textureSubresources
+        )
+            hasMipZeroInitialBarrier = true;
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == texture
+            && barrier.before == Graphics::ResourceStates::CopySource
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+            && barrier.isGraphInitialState
+            && barrier.range.textureSubresources == unplannedTailRange.textureSubresources
+        )
+            hasTailInitialBarrier = true;
+    }
+    EXPECT_TRUE(hasMipZeroInitialBarrier);
+    EXPECT_TRUE(hasTailInitialBarrier);
 }
 
 

@@ -53,7 +53,11 @@ bool CommandListResourceStateHandoff::buildFanIn(
     if(this == &base)
         return false;
 
-    if(!base.valid() || (branchCount != 0u && !branches)){
+    if(
+        !base.valid()
+        || base.m_deviceGeneration == 0u
+        || (branchCount != 0u && !branches)
+    ){
         reset();
         return false;
     }
@@ -63,13 +67,18 @@ bool CommandListResourceStateHandoff::buildFanIn(
         if(branch == this)
             return false;
 
-        if(!branch || !branch->valid()){
+        if(
+            !branch
+            || !branch->valid()
+            || branch->m_deviceGeneration != base.m_deviceGeneration
+        ){
             reset();
             return false;
         }
     }
 
     reset();
+    m_deviceGeneration = base.m_deviceGeneration;
 
     auto& arena = m_textureStates.get_allocator().arena();
     using namespace __hidden_command_list_state_handoff;
@@ -298,6 +307,7 @@ bool CommandListResourceStateHandoff::buildResourceSubset(
     if(
         this == &source
         || !source.valid()
+        || source.m_deviceGeneration == 0u
         || (textureCount != 0u && !textures)
         || (bufferCount != 0u && !buffers)
     ){
@@ -325,6 +335,7 @@ bool CommandListResourceStateHandoff::buildResourceSubset(
     };
 
     reset();
+    m_deviceGeneration = source.m_deviceGeneration;
     for(const TextureState& state : source.m_textureStates){
         if(containsTexture(state.texture))
             m_textureStates.push_back(state);
@@ -359,7 +370,12 @@ bool CommandListResourceStateHandoff::buildTextureRangeSubset(
     Texture* const texture,
     const TextureSubresourceSet subresources
 ){
-    if(this == &source || !source.valid() || !texture){
+    if(
+        this == &source
+        || !source.valid()
+        || source.m_deviceGeneration == 0u
+        || !texture
+    ){
         reset();
         return false;
     }
@@ -379,6 +395,7 @@ bool CommandListResourceStateHandoff::buildTextureRangeSubset(
     };
 
     reset();
+    m_deviceGeneration = source.m_deviceGeneration;
     for(const TextureState& state : source.m_textureStates){
         if(state.texture == texture && contains(state.mipLevel, state.arraySlice))
             m_textureStates.push_back(state);
@@ -393,10 +410,10 @@ bool CommandListResourceStateHandoff::buildTextureRangeSubset(
 
 bool CommandListResourceStateHandoff::copyFrom(const CommandListResourceStateHandoff& source){
     if(this == &source)
-        return source.valid();
+        return source.valid() && source.m_deviceGeneration != 0u;
 
     reset();
-    if(!source.valid())
+    if(!source.valid() || source.m_deviceGeneration == 0u)
         return false;
 
     m_textureStates.reserve(source.m_textureStates.size());
@@ -411,6 +428,7 @@ bool CommandListResourceStateHandoff::copyFrom(const CommandListResourceStateHan
     m_permanentBufferStates.reserve(source.m_permanentBufferStates.size());
     for(const BufferState& state : source.m_permanentBufferStates)
         m_permanentBufferStates.push_back(state);
+    m_deviceGeneration = source.m_deviceGeneration;
     m_valid = true;
     return true;
 }
@@ -633,6 +651,10 @@ void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state
 }
 
 bool CommandList::importResourceStateHandoff(const CommandListResourceStateHandoff& states){
+    if(!states.validForDeviceGeneration(m_context.deviceGeneration)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff belongs to a retired device generation"));
+        return false;
+    }
     NWB_ASSERT(states.m_valid);
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_StateHandoffArena);
@@ -940,6 +962,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         });
     }
 
+    states.m_deviceGeneration = m_context.deviceGeneration;
     states.m_valid = true;
 }
 

@@ -145,9 +145,16 @@ public:
         m_bufferStates.clear();
         m_permanentTextureStates.clear();
         m_permanentBufferStates.clear();
+        m_deviceGeneration = 0u;
         m_valid = false;
     }
     [[nodiscard]] bool valid()const{ return m_valid; }
+    [[nodiscard]] u16 deviceGeneration()const noexcept{ return m_deviceGeneration; }
+    // State snapshots retain raw backend-resource pointers.  Preserve the producer Device identity so a stale
+    // snapshot can be rejected before any of those pointers are inspected after device recreation.
+    [[nodiscard]] bool validForDeviceGeneration(const u16 deviceGeneration)const noexcept{
+        return m_valid && deviceGeneration != 0u && m_deviceGeneration == deviceGeneration;
+    }
 
     // Builds a post-branch state snapshot from a normalized base snapshot and the final states exported by
     // independently recorded branches. Every branch must have been opened from base, and the caller must submit
@@ -188,6 +195,7 @@ private:
     GraphicsVector<BufferState> m_bufferStates;
     GraphicsVector<PermanentTextureState> m_permanentTextureStates;
     GraphicsVector<BufferState> m_permanentBufferStates;
+    u16 m_deviceGeneration = 0u;
     bool m_valid = false;
 };
 

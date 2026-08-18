@@ -111,7 +111,7 @@ inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph
             const CommandListResourceStateHandoff* const states =
                 binding.externalStateSources[sourceIndex].states
             ;
-            if(!states || !states->valid())
+            if(!states || !states->validForDeviceGeneration(compiledGraph.deviceGeneration()))
                 return false;
         }
     }
@@ -207,6 +207,7 @@ inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph
                             )
                             || token.value < multiSource->minimumCompletionToken.value
                             || !multiSource->stateSource
+                            || !multiSource->stateSource->validForDeviceGeneration(compiledGraph.deviceGeneration())
                         )
                         : (
                             resource.initialOwnerQueue != barrier.sourceQueue
@@ -298,7 +299,7 @@ bool GpuTaskGraphExternalResourceHandoff::validFor(const GpuCompiledGraph& compi
         || waitTokenCount == 0u
         || !waitTokens
         || !stateSource
-        || !stateSource->valid()
+        || !stateSource->validForDeviceGeneration(compiledGraph.deviceGeneration())
         || !terminalRanges
     )
         return false;
@@ -394,7 +395,10 @@ const CommandListResourceStateHandoff* GpuRecordedGraph::packetFinalStateSeed(
     const GpuSubmissionPacketId& packet
 )const noexcept{
     const CommandListResourceStateHandoff* const stateSeed = packetStateSeed(packet);
-    return find(packet) && stateSeed && stateSeed->valid() ? stateSeed : nullptr;
+    return find(packet) && stateSeed && stateSeed->validForDeviceGeneration(m_deviceGeneration)
+        ? stateSeed
+        : nullptr
+    ;
 }
 
 const CommandListResourceStateHandoff* GpuRecordedGraph::taskFinalStateSeed(
@@ -509,7 +513,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     ){
         if(
             !sourceStates
-            || !sourceStates->valid()
+            || !sourceStates->validForDeviceGeneration(compiledGraph.deviceGeneration())
             || (sourceTaskCount != 0u && !sourceTasks)
         )
             return false;
@@ -583,7 +587,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         ;
         if(
             !sourceStates
-            || !sourceStates->valid()
+            || !sourceStates->validForDeviceGeneration(compiledGraph.deviceGeneration())
             || (
                 multiSource
                     ? (
@@ -748,7 +752,7 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         for(u32 seedIndex = 0u; seedIndex < compiledTask->prologueStateSeedCount; ++seedIndex){
             const GpuPacketStateSeed& seed = stateSeeds[seedIndex];
             const CommandListResourceStateHandoff* const sourceStates = packetStateSeed(seed.sourcePacket);
-            if(!sourceStates || !sourceStates->valid())
+            if(!sourceStates || !sourceStates->validForDeviceGeneration(compiledGraph.deviceGeneration()))
                 return false;
 
             // An empty subset means the producer thunk never tracked a resource it declared as a state source.  Do
@@ -1585,7 +1589,7 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
                 compiledGraph,
                 source.producerTask
             );
-            if(!sourceStates || !sourceStates->valid())
+            if(!sourceStates || !sourceStates->validForDeviceGeneration(compiledGraph.deviceGeneration()))
                 return {};
             if(!firstSourceStates)
                 firstSourceStates = sourceStates;
@@ -1657,7 +1661,7 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
             return {};
         stateSource = &scratch->stateSource;
     }
-    if(!stateSource || !stateSource->valid())
+    if(!stateSource || !stateSource->validForDeviceGeneration(compiledGraph.deviceGeneration()))
         return {};
 
     GpuTaskGraphExternalResourceHandoff handoff;
@@ -1725,7 +1729,7 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
             exportInfo->sourceQueue.deviceGeneration
         )
         || !stateSource
-        || !stateSource->valid()
+        || !stateSource->validForDeviceGeneration(compiledGraph.deviceGeneration())
     )
         return {};
 

@@ -218,6 +218,7 @@ protected:
             GTEST_SKIP() << "Descriptor-buffer round-trip: no usable validation-enabled headless Vulkan device on this host; skipping suite.";
             return;
         }
+        s_validationBackedDeviceInitialized = true;
 
         auto& device = s_scope->graphics().getDevice();
         auto& mgr = device.getDescriptorBufferManager();
@@ -232,8 +233,15 @@ protected:
 
     static void TearDownTestSuite(){
         s_scope.reset();
+        // Keep unavailable GPU/layer configurations as intentional skips, but a successfully initialized
+        // validation-backed runtime must not emit an error while tests or device teardown run.
+        if(s_validationBackedDeviceInitialized && s_logger.has_value()){
+            EXPECT_FALSE(s_logger->sawMessageContaining(NWB_TEXT("Vulkan debug: [severity=error")))
+                << "validation-enabled descriptor-buffer smoke emitted a Vulkan severity=error message";
+        }
         s_loggerGuard.reset();
         s_logger.reset();
+        s_validationBackedDeviceInitialized = false;
     }
 
     [[nodiscard]] static GraphicsBackend::Device& device(){
@@ -245,11 +253,13 @@ protected:
     [[nodiscard]] static Alloc::GlobalArena& arena(){ return s_scope->arena(); }
 
 protected:
+    static bool s_validationBackedDeviceInitialized;
     static UniquePtr<HeadlessGraphicsScope> s_scope;
     static Optional<CapturingLogger> s_logger;
     static Optional<Common::LoggerRegistrationGuard> s_loggerGuard;
 };
 
+bool DescriptorBufferRoundTripTest::s_validationBackedDeviceInitialized = false;
 UniquePtr<HeadlessGraphicsScope> DescriptorBufferRoundTripTest::s_scope;
 Optional<CapturingLogger> DescriptorBufferRoundTripTest::s_logger;
 Optional<Common::LoggerRegistrationGuard> DescriptorBufferRoundTripTest::s_loggerGuard;
@@ -3136,6 +3146,117 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
     ));
     EXPECT_NE(replacementToken.deviceGeneration, retiredToken.deviceGeneration);
     ASSERT_TRUE(secondDevice.waitForIdle());
+}
+
+
+// A native state handoff retains raw resource pointers. After its producer device is retired those pointers may
+// already be dangling, so graph declaration must reject the otherwise-valid snapshot by generation before packet
+// recording can inspect its resource state.
+TEST_F(DescriptorBufferRoundTripTest, RejectsStaleResourceStateHandoffAfterActualDeviceRecreation){
+    HeadlessGraphicsScope recoveryScope;
+    if(!recoveryScope.initialize())
+        GTEST_SKIP() << "Resource-state handoff recreation: no usable headless Vulkan device on this host.";
+
+    auto& firstDevice = recoveryScope.graphics().getDevice();
+    const u16 firstDeviceGeneration = firstDevice.getDeviceGeneration();
+    CommandListResourceStateHandoff staleStates(recoveryScope.arena());
+    {
+        const BufferHandle oldBuffer = firstDevice.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setInitialState(ResourceStates::Common)
+        );
+        ASSERT_NE(oldBuffer.get(), nullptr);
+
+        const CommandListHandle producer = firstDevice.createCommandList();
+        ASSERT_NE(producer.get(), nullptr);
+        producer->open();
+        producer->setBufferState(oldBuffer.get(), ResourceStates::CopyDest);
+        producer->close(&staleStates);
+        ASSERT_TRUE(staleStates.valid());
+        EXPECT_EQ(staleStates.deviceGeneration(), firstDeviceGeneration);
+    }
+
+    recoveryScope.graphics().destroy();
+    ASSERT_TRUE(recoveryScope.graphics().createHeadlessDevice());
+    auto& secondDevice = recoveryScope.graphics().getDevice();
+    const u16 secondDeviceGeneration = secondDevice.getDeviceGeneration();
+    ASSERT_NE(secondDeviceGeneration, firstDeviceGeneration);
+    EXPECT_TRUE(staleStates.valid());
+    EXPECT_FALSE(staleStates.validForDeviceGeneration(secondDeviceGeneration));
+
+    const BufferHandle replacementBuffer = secondDevice.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(replacementBuffer.get(), nullptr);
+
+    GpuTaskGraph graph(recoveryScope.arena());
+    const GpuGraphResourceId resource = graph.importBuffer(
+        replacementBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/stale_handoff_replacement_buffer"))
+            .setMarkerLabel("Stale Handoff Replacement Buffer")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(resource.valid());
+
+    const GpuTaskResourceUse uses[] = {
+        GpuTaskResourceUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = ResourceStates::CopyDest,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    const GpuTaskExternalStateSource stateSources[] = {
+        GpuTaskExternalStateSource{ .states = &staleStates },
+    };
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/descriptor_buffer/stale_handoff_consumer"))
+        .setMarkerLabel("Stale Handoff Consumer")
+        .setQueue(graphicsQueue)
+        .setExternalStateSources(stateSources, LengthOf(stateSources))
+        .setResourceUses(uses, LengthOf(uses))
+    ;
+    bool shouldRecord = true;
+    bool attempted = false;
+    const GpuTaskId task = graph.addTask<NativePacketCaptureRetryTask>(
+        desc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &attempted,
+        }
+    );
+    ASSERT_TRUE(task.valid());
+
+    const GpuTaskGraphTaskView taskView = graph.taskAt(task.index);
+    ASSERT_EQ(taskView.externalStateSourceCount, 1u);
+    ASSERT_NE(taskView.externalStateSources, nullptr);
+    ASSERT_NE(taskView.externalStateSources[0u].states, &staleStates);
+    ASSERT_NE(taskView.externalStateSources[0u].states, nullptr);
+    EXPECT_EQ(taskView.externalStateSources[0u].states->deviceGeneration(), firstDeviceGeneration);
+    EXPECT_FALSE(graph.validForDeviceGeneration(secondDeviceGeneration));
+
+    const GpuPhysicalQueueTopology topology = secondDevice.getPhysicalQueueTopology();
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    GpuTaskGraphAnalysis analysis(recoveryScope.arena());
+    GpuTaskGraphQueueAssignments assignments(recoveryScope.arena());
+    GpuCompiledGraph compiledGraph(recoveryScope.arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/stale_handoff_recreate_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    EXPECT_FALSE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    EXPECT_FALSE(attempted);
 }
 
 

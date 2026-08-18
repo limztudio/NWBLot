@@ -633,6 +633,61 @@ static void AppendTextureRangeRemainder(
     }
 }
 
+// One task owns transitions between its own commands, but only for subresources it already declared earlier in that
+// task. A later overlapping range can also introduce previously untouched cells, which still need the graph's
+// packet-boundary state source or declared initial state before native task recording begins.
+[[nodiscard]] static bool CollectTextureFirstUseRangesWithinTask(
+    const GpuTaskGraphTaskView& task,
+    const usize useIndex,
+    const GpuGraphResourceId& resource,
+    const Texture* const texture,
+    const GpuTaskResourceRange& range,
+    Alloc::ScratchArena& scratchArena,
+    Vector<GpuTaskResourceRange, Alloc::ScratchArena>& outRanges
+){
+    outRanges.clear();
+
+    TextureRangeBounds requestedBounds;
+    if(!TextureRangeBoundsFrom(range, requestedBounds))
+        return false;
+
+    Vector<TextureRangeBounds, Alloc::ScratchArena> uncovered(scratchArena);
+    Vector<TextureRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
+    uncovered.push_back(requestedBounds);
+
+    for(usize previousUseIndex = 0u; previousUseIndex < useIndex && !uncovered.empty(); ++previousUseIndex){
+        const GpuTaskResourceUse& previousUse = task.resourceUses[previousUseIndex];
+        if(previousUse.resource != resource)
+            continue;
+
+        GpuTaskResourceRange previousRange;
+        if(!ResolveTextureRangeForPlanning(texture, previousUse.range, previousRange))
+            return false;
+
+        TextureRangeBounds previousBounds;
+        if(!TextureRangeBoundsFrom(previousRange, previousBounds))
+            return false;
+
+        remainders.clear();
+        for(const TextureRangeBounds& uncoveredRange : uncovered)
+            AppendTextureRangeRemainder(uncoveredRange, previousBounds, remainders);
+
+        uncovered.clear();
+        uncovered.reserve(remainders.size());
+        for(const TextureRangeBounds& remainder : remainders)
+            uncovered.push_back(remainder);
+    }
+
+    outRanges.reserve(uncovered.size());
+    for(const TextureRangeBounds& uncoveredRange : uncovered){
+        GpuTaskResourceRange firstUseRange;
+        if(!TextureRangeBoundsTo(uncoveredRange, firstUseRange))
+            return false;
+        outRanges.push_back(firstUseRange);
+    }
+    return true;
+}
+
 static void AppendTextureStateFragmentsInStateOrder(
     const Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& discovered,
     const usize stateCount,
@@ -652,24 +707,25 @@ static void AppendTextureStateFragmentsInStateOrder(
     }
 }
 
-// Walk newest-to-oldest and consume only still-uncovered portions of the requested rectangle. A selected state
+// Walk newest-to-oldest and consume only still-uncovered portions of the requested ranges. A selected state
 // therefore owns exactly the terminal cells that it actually produced; the remaining cells retain their declared
 // graph initial state rather than inheriting an unrelated adjacent producer.
 [[nodiscard]] static bool CollectLatestTextureStateFragments(
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
     const GpuGraphResourceId& resource,
-    const GpuTaskResourceRange& requestedRange,
+    const Vector<GpuTaskResourceRange, Alloc::ScratchArena>& requestedRanges,
     Alloc::ScratchArena& scratchArena,
     Vector<TrackedTextureStateFragment, Alloc::ScratchArena>& outFragments
 ){
-    TextureRangeBounds requestedBounds;
-    if(!TextureRangeBoundsFrom(requestedRange, requestedBounds))
-        return false;
-
     Vector<TextureRangeBounds, Alloc::ScratchArena> uncovered(scratchArena);
     Vector<TextureRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
     Vector<TrackedTextureStateFragment, Alloc::ScratchArena> discovered(scratchArena);
-    uncovered.push_back(requestedBounds);
+    for(const GpuTaskResourceRange& requestedRange : requestedRanges){
+        TextureRangeBounds requestedBounds;
+        if(!TextureRangeBoundsFrom(requestedRange, requestedBounds))
+            return false;
+        uncovered.push_back(requestedBounds);
+    }
 
     for(usize stateIndex = trackedStates.size(); stateIndex > 0u && !uncovered.empty(); --stateIndex){
         const TrackedCompiledResourceState& state = trackedStates[stateIndex - 1u];
@@ -1537,16 +1593,46 @@ bool GpuTaskGraphCompiler::compile(
     if(!options.allowMetadataOnlyTasks){
         for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
             const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
-            if(task.hasPayload && task.hasRecordPayload)
-                continue;
+            if(!task.hasPayload || !task.hasRecordPayload){
+                outAssignments.reset();
+                outAnalysis.m_diagnostic.status = GpuTaskGraphAnalysisStatus::MissingTaskRecordPayload;
+                outAnalysis.m_diagnostic.task = task.id;
+                outAnalysis.m_diagnostic.relatedTask = {};
+                outAnalysis.m_diagnostic.resource = {};
+                outAnalysis.m_valid = false;
+                return false;
+            }
 
-            outAssignments.reset();
-            outAnalysis.m_diagnostic.status = GpuTaskGraphAnalysisStatus::MissingTaskRecordPayload;
-            outAnalysis.m_diagnostic.task = task.id;
-            outAnalysis.m_diagnostic.relatedTask = {};
-            outAnalysis.m_diagnostic.resource = {};
-            outAnalysis.m_valid = false;
-            return false;
+            for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
+                const GpuTaskResourceUse& use = task.resourceUses[useIndex];
+                const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
+                switch(resource.type){
+                case GpuGraphResourceType::Texture:
+                    if(graph.textureForResource(use.resource))
+                        continue;
+                    break;
+                case GpuGraphResourceType::Buffer:
+                    if(graph.bufferForResource(use.resource))
+                        continue;
+                    break;
+                case GpuGraphResourceType::AccelStruct:
+                    if(graph.accelStructForResource(use.resource))
+                        continue;
+                    break;
+                case GpuGraphResourceType::HazardDomain:
+                    continue;
+                default:
+                    break;
+                }
+
+                outAssignments.reset();
+                outAnalysis.m_diagnostic.status = GpuTaskGraphAnalysisStatus::InvalidResourceUse;
+                outAnalysis.m_diagnostic.task = task.id;
+                outAnalysis.m_diagnostic.relatedTask = {};
+                outAnalysis.m_diagnostic.resource = use.resource;
+                outAnalysis.m_valid = false;
+                return false;
+            }
         }
     }
 
@@ -1802,10 +1888,12 @@ bool GpuTaskGraphCompiler::compile(
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena> pendingEpilogueBarriers(scratchArena);
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialOwnershipDependencies(scratchArena);
     Vector<TrackedTextureStateFragment, Alloc::ScratchArena> stateFragments(scratchArena);
+    Vector<GpuTaskResourceRange, Alloc::ScratchArena> taskFirstUseRanges(scratchArena);
     trackedResourceStates.reserve(graph.taskCount());
     pendingEpilogueBarriers.reserve(graph.taskCount());
     initialOwnershipDependencies.reserve(graph.taskCount());
     stateFragments.reserve(graph.taskCount());
+    taskFirstUseRanges.reserve(graph.taskCount());
     // The construction pass appended one compiled task for each entry in this stable order, and no later phase
     // mutates that vector. Preserve the prior fail-closed contract while avoiding a re-scan for every task.
     const GraphicsVector<GpuTaskId>& topologicalOrder = outAnalysis.topologicalOrder();
@@ -1861,36 +1949,55 @@ bool GpuTaskGraphCompiler::compile(
                 return false;
             }
 
-            // A task owns its internal resource ordering.  Only its first declared use becomes a packet-boundary
-            // transition; later conflicting uses remain local CommandList work inside the task thunk.
+            // A task owns its internal resource ordering. Texture portions already declared earlier in this task
+            // remain local CommandList work, while newly introduced subresources still receive normal graph seeds
+            // and transitions. Buffers and acceleration structures retain their intentionally whole-resource path.
             bool alreadyPlannedByTask = false;
-            for(usize previousUseIndex = 0u; previousUseIndex < useIndex; ++previousUseIndex){
-                const GpuTaskResourceUse& previousUse = task.resourceUses[previousUseIndex];
-                if(previousUse.resource != use.resource)
-                    continue;
+            if(resource.type != GpuGraphResourceType::Texture){
+                for(usize previousUseIndex = 0u; previousUseIndex < useIndex; ++previousUseIndex){
+                    const GpuTaskResourceUse& previousUse = task.resourceUses[previousUseIndex];
+                    if(previousUse.resource != use.resource)
+                        continue;
 
-                GpuTaskResourceRange plannedPreviousRange = previousUse.range;
-                if(
-                    resource.type == GpuGraphResourceType::Texture
-                    && !ResolveTextureRangeForPlanning(typedTexture, previousUse.range, plannedPreviousRange)
-                ){
+                    if(RangesOverlap(resource, previousUse.range, plannedRange)){
+                        alreadyPlannedByTask = true;
+                        break;
+                    }
+                }
+            }
+            if(alreadyPlannedByTask){
+                // The task thunk owns this local transition, but the declared final state/access must still become
+                // the source for later tasks, packet seeds, ownership handoffs, and terminal exports.  Do not emit
+                // another packet-boundary barrier for it here.
+                trackedResourceStates.push_back(TrackedCompiledResourceState{
+                    .resource = use.resource,
+                    .range = plannedRange,
+                    .state = use.requiredState,
+                    .access = use.access,
+                    .task = taskID,
+                    .queue = compiledTask->queue,
+                });
+                continue;
+            }
+
+            if(resource.type == GpuGraphResourceType::Texture){
+                if(!CollectTextureFirstUseRangesWithinTask(
+                    task,
+                    useIndex,
+                    use.resource,
+                    typedTexture,
+                    plannedRange,
+                    scratchArena,
+                    taskFirstUseRanges
+                )){
                     outCompiledGraph.reset();
                     return false;
                 }
-                if(RangesOverlap(resource, plannedPreviousRange, plannedRange)){
-                    alreadyPlannedByTask = true;
-                    break;
-                }
-            }
-            if(alreadyPlannedByTask)
-                continue;
-
-            if(resource.type == GpuGraphResourceType::Texture){
                 stateFragments.clear();
                 if(!CollectLatestTextureStateFragments(
                     trackedResourceStates,
                     use.resource,
-                    plannedRange,
+                    taskFirstUseRanges,
                     scratchArena,
                     stateFragments
                 )){
@@ -1898,80 +2005,70 @@ bool GpuTaskGraphCompiler::compile(
                     return false;
                 }
 
-                bool hasInitialStateFragment = false;
-                for(const TrackedTextureStateFragment& fragment : stateFragments){
-                    if(!fragment.state){
-                        hasInitialStateFragment = true;
-                        break;
-                    }
-                }
-
-                const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSource = nullptr;
-                bool usesInitialOwnerOnlyHandoff = false;
-                GpuCompiledBarrierType::Enum initialOwnerAcquireType = GpuCompiledBarrierType::kCount;
-                if(hasInitialStateFragment){
-                    if(
-                        resource.initialOwnerReleaseDestinationQueue.valid()
-                        && resource.initialOwnerReleaseDestinationQueue != compiledTask->queue
-                    ){
-                        // Preserve the existing fail-closed contract for descriptor-owned external sources: the
-                        // caller must not broaden one graph use across two ownership releases and let compiler
-                        // fragmentation guess which completion/state snapshot applies to the untouched cells.
-                        outCompiledGraph.reset();
-                        return false;
-                    }
-                    if(resource.initialOwnerHandoffSourceCount != 0u){
-                        initialOwnerHandoffSource = FindInitialOwnerHandoffSource(
-                            resource,
-                            typedTexture,
-                            plannedRange,
-                            compiledTask->queue
-                        );
-                        if(!initialOwnerHandoffSource){
-                            outCompiledGraph.reset();
-                            return false;
-                        }
-                        initialOwnerAcquireType = OwnershipAcquireBarrierType(resource.type);
-                        if(initialOwnerAcquireType >= GpuCompiledBarrierType::kCount){
-                            outCompiledGraph.reset();
-                            return false;
-                        }
-                        initialOwnershipDependencies.push_back(GpuTaskExternalDependencyEdge{
-                            .completion = initialOwnerHandoffSource->completion,
-                            .consumer = taskID,
-                        });
-                    }
-                    else if(
-                        resource.initialOwnerQueue.valid()
-                        && resource.initialOwnerQueue != compiledTask->queue
-                    ){
-                        if(
-                            !resource.initialOwnerReleaseDestinationQueue.valid()
-                            || resource.initialOwnerReleaseDestinationQueue != compiledTask->queue
-                            || !resource.initialOwnerCompletion.valid()
-                            || !resource.initialOwnerStateSource
-                        ){
-                            // Owner-only imports retain the original exact-queue restriction. A different first
-                            // consumer needs all three explicit pieces of an external handoff: fixed destination,
-                            // completion, and exported native state source.
-                            outCompiledGraph.reset();
-                            return false;
-                        }
-                        initialOwnerAcquireType = OwnershipAcquireBarrierType(resource.type);
-                        if(initialOwnerAcquireType >= GpuCompiledBarrierType::kCount){
-                            outCompiledGraph.reset();
-                            return false;
-                        }
-                        usesInitialOwnerOnlyHandoff = true;
-                        initialOwnershipDependencies.push_back(GpuTaskExternalDependencyEdge{
-                            .completion = resource.initialOwnerCompletion,
-                            .consumer = taskID,
-                        });
-                    }
-                }
-
                 for(const TrackedTextureStateFragment& fragment : stateFragments){
                     const TrackedCompiledResourceState* const previousState = fragment.state;
+                    const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSource = nullptr;
+                    bool usesInitialOwnerOnlyHandoff = false;
+                    GpuCompiledBarrierType::Enum initialOwnerAcquireType = GpuCompiledBarrierType::kCount;
+                    if(!previousState){
+                        if(
+                            resource.initialOwnerReleaseDestinationQueue.valid()
+                            && resource.initialOwnerReleaseDestinationQueue != compiledTask->queue
+                        ){
+                            // The descriptor's release destination stays authoritative. Resolve ownership only for
+                            // the exact first-use fragment so an earlier local task use cannot broaden the source.
+                            outCompiledGraph.reset();
+                            return false;
+                        }
+                        if(resource.initialOwnerHandoffSourceCount != 0u){
+                            initialOwnerHandoffSource = FindInitialOwnerHandoffSource(
+                                resource,
+                                typedTexture,
+                                fragment.range,
+                                compiledTask->queue
+                            );
+                            if(!initialOwnerHandoffSource){
+                                outCompiledGraph.reset();
+                                return false;
+                            }
+                            initialOwnerAcquireType = OwnershipAcquireBarrierType(resource.type);
+                            if(initialOwnerAcquireType >= GpuCompiledBarrierType::kCount){
+                                outCompiledGraph.reset();
+                                return false;
+                            }
+                            initialOwnershipDependencies.push_back(GpuTaskExternalDependencyEdge{
+                                .completion = initialOwnerHandoffSource->completion,
+                                .consumer = taskID,
+                            });
+                        }
+                        else if(
+                            resource.initialOwnerQueue.valid()
+                            && resource.initialOwnerQueue != compiledTask->queue
+                        ){
+                            if(
+                                !resource.initialOwnerReleaseDestinationQueue.valid()
+                                || resource.initialOwnerReleaseDestinationQueue != compiledTask->queue
+                                || !resource.initialOwnerCompletion.valid()
+                                || !resource.initialOwnerStateSource
+                            ){
+                                // Owner-only imports retain the original exact-queue restriction. A different first
+                                // consumer needs all three explicit pieces of an external handoff: fixed destination,
+                                // completion, and exported native state source.
+                                outCompiledGraph.reset();
+                                return false;
+                            }
+                            initialOwnerAcquireType = OwnershipAcquireBarrierType(resource.type);
+                            if(initialOwnerAcquireType >= GpuCompiledBarrierType::kCount){
+                                outCompiledGraph.reset();
+                                return false;
+                            }
+                            usesInitialOwnerOnlyHandoff = true;
+                            initialOwnershipDependencies.push_back(GpuTaskExternalDependencyEdge{
+                                .completion = resource.initialOwnerCompletion,
+                                .consumer = taskID,
+                            });
+                        }
+                    }
                     const ResourceStates::Mask before = previousState ? previousState->state : resource.initialState;
                     const bool hasInitialOwnerStateSeed =
                         !previousState
@@ -1987,8 +2084,8 @@ bool GpuTaskGraphCompiler::compile(
                         && resource.initialState != ResourceStates::Unknown
                     ;
                     if(!previousState && initialOwnerHandoffSource){
-                        // The descriptor's one selected source has already been proven to cover the complete
-                        // original use. Emit only the unseeded fragment range so its immutable snapshot does not
+                        // The descriptor's one selected source has already been proven to cover this fragment.
+                        // Emit only the unseeded fragment range so its immutable snapshot does not
                         // overwrite a graph-internal producer's adjacent subresources during packet fan-in.
                         outCompiledGraph.m_prologueBarriers.push_back(GpuCompiledBarrier{
                             .resource = use.resource,

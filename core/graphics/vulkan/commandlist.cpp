@@ -60,6 +60,11 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot open command list from an invalid resource-state handoff"));
         return;
     }
+    if(initialStates && !initialStates->validForDeviceGeneration(m_context.deviceGeneration)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot open command list from a resource-state handoff from a retired device generation"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot open command list from a resource-state handoff from a retired device generation"));
+        return;
+    }
 
     Queue* queue = m_device.getQueue(m_desc.physicalQueue);
     if(!queue){

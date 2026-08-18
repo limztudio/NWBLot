@@ -2,4 +2,4 @@ package: oneTBB
 version: 2023.1.0 (tag v2023.1.0, commit 3046c8b0c29df995980003ea24f4d78c80ec0c8d)
 updated_utc: 2026-08-04T16:18:30Z
 source: https://github.com/oneapi-src/oneTBB/archive/refs/tags/v2023.1.0.zip
-notes: Intel oneTBB task scheduler / scalable allocator. Vendored include/ and src/{tbb,tbbmalloc,tbbbind,tbbmalloc_proxy} only; NWB CMake normalizes custom dbg/opt/fin configurations for imported Linux TBB auxiliary targets as well as tbb and tbbmalloc.
+notes: Intel oneTBB task scheduler / scalable allocator. Vendored include/ and src/{tbb,tbbmalloc,tbbbind,tbbmalloc_proxy} only; NWB CMake normalizes custom dbg/opt/fin configurations for imported Linux TBB auxiliary targets as well as tbb and tbbmalloc. The Windows nwb_vendor_tbb source list retains numa_allocation.cpp so its exported interleaved NUMA allocation symbols resolve at link time.

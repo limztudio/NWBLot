@@ -4134,6 +4134,239 @@ TEST(GpuTaskGraph, CompilesExplicitInitialExclusiveOwnershipHandoff){
     }
 }
 
+TEST(GpuTaskGraph, CompilesMultiSourceInitialTextureOwnershipHandoff){
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    const Graphics::GpuQueueRequest graphicsQueue{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+
+    const auto addTextureUse = [&](
+        Graphics::GpuTaskGraph& graph,
+        const Graphics::GpuGraphResourceId resource,
+        const Graphics::TextureSubresourceSet range,
+        const Name& identity,
+        const AStringView label
+    ){
+        const Graphics::GpuTaskResourceUse use{
+            .resource = resource,
+            .range = Graphics::GpuTaskResourceRange{
+                .textureSubresources = range,
+            },
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        };
+        Graphics::GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(graphicsQueue)
+            .setResourceUses(&use, 1u)
+        ;
+        return graph.addTask(desc);
+    };
+
+    {
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuExternalCompletionId graphicsCompletion = graph.importExternalCompletion(
+            Graphics::GpuExternalCompletionDesc{}
+                .setIdentity(Name("tests/task_graph/multi_owner_graphics_completion"))
+                .setMarkerLabel("Multi Owner Graphics Completion")
+        );
+        const Graphics::GpuExternalCompletionId computeCompletion = graph.importExternalCompletion(
+            Graphics::GpuExternalCompletionDesc{}
+                .setIdentity(Name("tests/task_graph/multi_owner_compute_completion"))
+                .setMarkerLabel("Multi Owner Compute Completion")
+        );
+        ASSERT_TRUE(graphicsCompletion.valid());
+        ASSERT_TRUE(computeCompletion.valid());
+
+        Graphics::CommandListResourceStateHandoff graphicsState(testArena.arena);
+        Graphics::CommandListResourceStateHandoff computeState(testArena.arena);
+        const Graphics::QueueSubmissionToken graphicsToken{
+            .queue = Graphics::CommandQueue::Graphics,
+            .value = 7u,
+            .physicalQueueIndex = queues[0u].id.index,
+            .deviceGeneration = queues[0u].id.deviceGeneration,
+        };
+        const Graphics::QueueSubmissionToken computeToken{
+            .queue = Graphics::CommandQueue::Compute,
+            .value = 11u,
+            .physicalQueueIndex = queues[1u].id.index,
+            .deviceGeneration = queues[1u].id.deviceGeneration,
+        };
+        const Graphics::GpuGraphInitialOwnerHandoffSourceDesc sources[] = {
+            Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
+                .range = Graphics::GpuTaskResourceRange{
+                    .textureSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+                },
+                .sourceQueue = queues[0u].id,
+                .destinationQueue = queues[0u].id,
+                .completion = graphicsCompletion,
+                .minimumCompletionToken = graphicsToken,
+                .stateSource = &graphicsState,
+            },
+            Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
+                .range = Graphics::GpuTaskResourceRange{
+                    .textureSubresources = Graphics::TextureSubresourceSet(1u, 1u, 0u, 1u),
+                },
+                .sourceQueue = queues[1u].id,
+                .destinationQueue = queues[0u].id,
+                .completion = computeCompletion,
+                .minimumCompletionToken = computeToken,
+                .stateSource = &computeState,
+            },
+        };
+        const Graphics::GpuGraphResourceId texture = graph.importResource(
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/multi_owner_texture"))
+                .setMarkerLabel("Multi Owner Texture")
+                .setType(Graphics::GpuGraphResourceType::Texture)
+                .setInitialState(Graphics::ResourceStates::ShaderResource)
+                .setInitialOwnerHandoffSources(sources, LengthOf(sources))
+        );
+        ASSERT_TRUE(texture.valid());
+        const Graphics::GpuTaskGraphResourceView imported = graph.resourceAt(texture.index);
+        ASSERT_EQ(imported.initialOwnerHandoffSourceCount, LengthOf(sources));
+        ASSERT_NE(imported.initialOwnerHandoffSources, nullptr);
+        EXPECT_NE(imported.initialOwnerHandoffSources[0u].stateSource, &graphicsState);
+        EXPECT_NE(imported.initialOwnerHandoffSources[1u].stateSource, &computeState);
+        EXPECT_FALSE(imported.initialOwnerHandoffSources[0u].stateSource->valid());
+        EXPECT_FALSE(imported.initialOwnerHandoffSources[1u].stateSource->valid());
+
+        const Graphics::GpuTaskId mip0Task = addTextureUse(
+            graph,
+            texture,
+            sources[0u].range.textureSubresources,
+            Name("tests/task_graph/multi_owner_mip0"),
+            "Multi Owner Mip 0"
+        );
+        const Graphics::GpuTaskId mip1Task = addTextureUse(
+            graph,
+            texture,
+            sources[1u].range.textureSubresources,
+            Name("tests/task_graph/multi_owner_mip1"),
+            "Multi Owner Mip 1"
+        );
+        ASSERT_TRUE(mip0Task.valid());
+        ASSERT_TRUE(mip1Task.valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+        const Graphics::GpuCompiledTask* const compiledMip0 = compiledGraph.findTask(mip0Task);
+        const Graphics::GpuCompiledTask* const compiledMip1 = compiledGraph.findTask(mip1Task);
+        ASSERT_NE(compiledMip0, nullptr);
+        ASSERT_NE(compiledMip1, nullptr);
+        ASSERT_EQ(compiledMip0->prologueBarrierCount, 1u);
+        ASSERT_EQ(compiledMip1->prologueBarrierCount, 1u);
+        const Graphics::GpuCompiledBarrier* const mip0Barrier = compiledGraph.taskPrologueBarriers(mip0Task);
+        const Graphics::GpuCompiledBarrier* const mip1Barrier = compiledGraph.taskPrologueBarriers(mip1Task);
+        ASSERT_NE(mip0Barrier, nullptr);
+        ASSERT_NE(mip1Barrier, nullptr);
+        EXPECT_EQ(mip0Barrier[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire);
+        EXPECT_TRUE(mip0Barrier[0u].isInitialOwnerHandoff);
+        EXPECT_EQ(mip0Barrier[0u].sourceQueue, queues[0u].id);
+        EXPECT_EQ(mip0Barrier[0u].destinationQueue, queues[0u].id);
+        EXPECT_EQ(mip1Barrier[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire);
+        EXPECT_TRUE(mip1Barrier[0u].isInitialOwnerHandoff);
+        EXPECT_EQ(mip1Barrier[0u].sourceQueue, queues[1u].id);
+        EXPECT_EQ(mip1Barrier[0u].destinationQueue, queues[0u].id);
+
+        const Graphics::GpuExternalCompletionId* const mip0Dependencies =
+            compiledGraph.packetExternalDependencies(compiledMip0->packet)
+        ;
+        const Graphics::GpuExternalCompletionId* const mip1Dependencies =
+            compiledGraph.packetExternalDependencies(compiledMip1->packet)
+        ;
+        ASSERT_NE(mip0Dependencies, nullptr);
+        ASSERT_NE(mip1Dependencies, nullptr);
+        ASSERT_EQ(compiledGraph.packet(compiledMip0->packet).externalDependencyCount, 1u);
+        ASSERT_EQ(compiledGraph.packet(compiledMip1->packet).externalDependencyCount, 1u);
+        EXPECT_EQ(mip0Dependencies[0u], graphicsCompletion);
+        EXPECT_EQ(mip1Dependencies[0u], computeCompletion);
+    }
+
+    {
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
+            Graphics::GpuExternalCompletionDesc{}
+                .setIdentity(Name("tests/task_graph/multi_owner_ambiguous_completion"))
+                .setMarkerLabel("Multi Owner Ambiguous Completion")
+        );
+        ASSERT_TRUE(completion.valid());
+        Graphics::CommandListResourceStateHandoff state(testArena.arena);
+        const Graphics::QueueSubmissionToken graphicsToken{
+            .queue = Graphics::CommandQueue::Graphics,
+            .value = 7u,
+            .physicalQueueIndex = queues[0u].id.index,
+            .deviceGeneration = queues[0u].id.deviceGeneration,
+        };
+        const Graphics::QueueSubmissionToken computeToken{
+            .queue = Graphics::CommandQueue::Compute,
+            .value = 11u,
+            .physicalQueueIndex = queues[1u].id.index,
+            .deviceGeneration = queues[1u].id.deviceGeneration,
+        };
+        const Graphics::GpuGraphInitialOwnerHandoffSourceDesc sources[] = {
+            Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
+                .range = Graphics::GpuTaskResourceRange{
+                    .textureSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+                },
+                .sourceQueue = queues[0u].id,
+                .destinationQueue = queues[0u].id,
+                .completion = completion,
+                .minimumCompletionToken = graphicsToken,
+                .stateSource = &state,
+            },
+            Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
+                .range = Graphics::GpuTaskResourceRange{
+                    .textureSubresources = Graphics::TextureSubresourceSet(1u, 1u, 0u, 1u),
+                },
+                .sourceQueue = queues[1u].id,
+                .destinationQueue = queues[0u].id,
+                .completion = completion,
+                .minimumCompletionToken = computeToken,
+                .stateSource = &state,
+            },
+        };
+        const Graphics::GpuGraphResourceId texture = graph.importResource(
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/multi_owner_ambiguous_texture"))
+                .setMarkerLabel("Multi Owner Ambiguous Texture")
+                .setType(Graphics::GpuGraphResourceType::Texture)
+                .setInitialState(Graphics::ResourceStates::ShaderResource)
+                .setInitialOwnerHandoffSources(sources, LengthOf(sources))
+        );
+        ASSERT_TRUE(texture.valid());
+        ASSERT_TRUE(addTextureUse(
+            graph,
+            texture,
+            Graphics::s_AllSubresources,
+            Name("tests/task_graph/multi_owner_ambiguous_use"),
+            "Multi Owner Ambiguous Use"
+        ).valid());
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(compiledGraph.valid());
+    }
+}
+
 TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

@@ -279,6 +279,16 @@ struct GpuTaskGraphExternalResourceHandoffProducer{
     QueueSubmissionToken token;
 };
 
+// One exact terminal range that contributes to a graph-to-external handoff. A later graph can turn each range into
+// an immutable initial-owner source with the corresponding graph-local completion token; direct native consumers
+// normally use the compact `waitTokens` frontier instead.
+struct GpuTaskGraphExternalResourceHandoffRange{
+    GpuTaskResourceRange range;
+    GpuTaskId producerTask;
+    GpuPhysicalQueueId sourceQueue;
+    QueueSubmissionToken token;
+};
+
 // Acceptance-gated graph-to-external handoff for an imported texture, buffer, or acceleration structure. The
 // descriptor fixes the external destination before compilation. `producers` records the semantic terminal packet
 // sources, while `waitTokens` is the compact physical-queue frontier required by a direct consumer. For a true
@@ -302,6 +312,7 @@ struct GpuTaskGraphExternalResourceHandoff{
     // Number of exact terminal resource ranges merged into `stateSource`. This may exceed `producerCount` when
     // several terminal tasks were packet-merged.
     usize terminalRangeCount = 0u;
+    const GpuTaskGraphExternalResourceHandoffRange* terminalRanges = nullptr;
     const CommandListResourceStateHandoff* stateSource = nullptr;
 
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
@@ -465,6 +476,7 @@ private:
             , stateBranches(arena)
             , stateBranchPointers(arena)
             , producers(arena)
+            , terminalRanges(arena)
             , waitTokens(arena)
         {}
 
@@ -474,6 +486,7 @@ private:
             stateBranches.clear();
             stateBranchPointers.clear();
             producers.clear();
+            terminalRanges.clear();
             waitTokens.clear();
         }
 
@@ -484,6 +497,7 @@ private:
         GraphicsVector<CommandListResourceStateHandoff> stateBranches;
         GraphicsVector<const CommandListResourceStateHandoff*> stateBranchPointers;
         GraphicsVector<GpuTaskGraphExternalResourceHandoffProducer> producers;
+        GraphicsVector<GpuTaskGraphExternalResourceHandoffRange> terminalRanges;
         GraphicsVector<QueueSubmissionToken> waitTokens;
     };
 

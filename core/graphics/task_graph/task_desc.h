@@ -87,6 +87,22 @@ struct GpuTaskSchedulingHint{
     bool allowCrossFamilySameClassQueueRouting = false;
 };
 
+// One immutable external ownership source for an imported texture range. Multiple sources let a later graph consume
+// a prior graph's disjoint terminal texture exports without collapsing them into one fake physical owner. Every
+// source supplies its exact releasing queue, the fixed first-consumer queue, a graph-local external completion, and
+// the native state snapshot that recorded the release. Buffer and AS ownership remain whole-allocation and use the
+// single-owner fields below instead.
+struct GpuGraphInitialOwnerHandoffSourceDesc{
+    GpuTaskResourceRange range;
+    GpuPhysicalQueueId sourceQueue;
+    GpuPhysicalQueueId destinationQueue;
+    GpuExternalCompletionId completion;
+    // The later graph may wait on a newer token from this exact physical queue, but never an earlier one. This
+    // prevents an externally supplied completion from aliasing the source queue while racing the terminal export.
+    QueueSubmissionToken minimumCompletionToken;
+    const CommandListResourceStateHandoff* stateSource = nullptr;
+};
+
 // A resource may be metadata-only during the shadow-graph phase, or may retain an imported engine handle through
 // one of GpuTaskGraph's typed import overloads. The latter is the required path before graph recording is enabled.
 struct GpuGraphResourceDesc{
@@ -116,6 +132,10 @@ struct GpuGraphResourceDesc{
     GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
     GpuExternalCompletionId initialOwnerCompletion;
     const CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
+    // Texture-only multi-producer companion to the single-owner fields above. Sources must be non-overlapping and
+    // must not be mixed with those legacy fields; the graph copies every state source at declaration time.
+    const GpuGraphInitialOwnerHandoffSourceDesc* initialOwnerHandoffSources = nullptr;
+    usize initialOwnerHandoffSourceCount = 0u;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
 
     constexpr GpuGraphResourceDesc& setIdentity(const Name& value){ identity = value; return *this; }
@@ -128,6 +148,14 @@ struct GpuGraphResourceDesc{
     constexpr GpuGraphResourceDesc& setInitialOwnerReleaseDestinationQueue(const GpuPhysicalQueueId value){ initialOwnerReleaseDestinationQueue = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerCompletion(const GpuExternalCompletionId value){ initialOwnerCompletion = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerStateSource(const CommandListResourceStateHandoff* const value){ initialOwnerStateSource = value; return *this; }
+    constexpr GpuGraphResourceDesc& setInitialOwnerHandoffSources(
+        const GpuGraphInitialOwnerHandoffSourceDesc* const values,
+        const usize count
+    ){
+        initialOwnerHandoffSources = values;
+        initialOwnerHandoffSourceCount = count;
+        return *this;
+    }
     constexpr GpuGraphResourceDesc& setQueueSharing(const ResourceQueueSharing::Mask value){ queueSharing = value; return *this; }
 };
 

@@ -25,6 +25,57 @@ namespace __hidden_gpu_packet_runtime{
 
 inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph/packet_recording_frontier");
 
+[[nodiscard]] static u64 TextureRangeEnd(
+    const u32 base,
+    const u32 count,
+    const u32 all
+)noexcept{
+    return count == all ? Limit<u64>::s_Max : static_cast<u64>(base) + static_cast<u64>(count);
+}
+
+[[nodiscard]] static bool TextureRangeContains(
+    const TextureSubresourceSet& outer,
+    const TextureSubresourceSet& inner
+)noexcept{
+    return outer.baseMipLevel <= inner.baseMipLevel
+        && TextureRangeEnd(outer.baseMipLevel, outer.numMipLevels, TextureSubresourceSet::AllMipLevels)
+            >= TextureRangeEnd(inner.baseMipLevel, inner.numMipLevels, TextureSubresourceSet::AllMipLevels)
+        && outer.baseArraySlice <= inner.baseArraySlice
+        && TextureRangeEnd(outer.baseArraySlice, outer.numArraySlices, TextureSubresourceSet::AllArraySlices)
+            >= TextureRangeEnd(inner.baseArraySlice, inner.numArraySlices, TextureSubresourceSet::AllArraySlices)
+    ;
+}
+
+[[nodiscard]] static const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(
+    const GpuTaskGraphResourceView& resource,
+    const GpuCompiledBarrier& barrier
+)noexcept{
+    if(
+        resource.initialOwnerHandoffSourceCount == 0u
+        || !resource.initialOwnerHandoffSources
+        || resource.type != GpuGraphResourceType::Texture
+    )
+        return nullptr;
+
+    const GpuTaskGraphInitialOwnerHandoffSourceView* result = nullptr;
+    for(usize sourceIndex = 0u;
+        sourceIndex < resource.initialOwnerHandoffSourceCount;
+        ++sourceIndex
+    ){
+        const GpuTaskGraphInitialOwnerHandoffSourceView& source = resource.initialOwnerHandoffSources[sourceIndex];
+        if(
+            source.sourceQueue != barrier.sourceQueue
+            || source.destinationQueue != barrier.destinationQueue
+            || !TextureRangeContains(source.range.textureSubresources, barrier.range.textureSubresources)
+        )
+            continue;
+        if(result)
+            return nullptr;
+        result = &source;
+    }
+    return result;
+}
+
 #if defined(NWB_DEBUG)
 [[nodiscard]] bool HasQueueCapabilities(
     const GpuQueueCapability::Mask available,
@@ -131,13 +182,36 @@ inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph
                 return false;
 
             const GpuTaskGraphResourceView resource = graph.resourceAt(barrier.resource.index);
-            if(resource.initialOwnerCompletion != completion)
+            const GpuTaskGraphInitialOwnerHandoffSourceView* const multiSource =
+                FindInitialOwnerHandoffSource(resource, barrier)
+            ;
+            if(resource.initialOwnerHandoffSourceCount != 0u && !multiSource)
+                return false;
+            if(multiSource && multiSource->completion != completion)
+                continue;
+            if(!multiSource && resource.initialOwnerCompletion != completion)
                 continue;
             const GpuPhysicalQueueInfo* const sourceQueue = compiledGraph.queueInfo(barrier.sourceQueue);
             if(
                 !sourceQueue
-                || resource.initialOwnerQueue != barrier.sourceQueue
-                || resource.initialOwnerReleaseDestinationQueue != barrier.destinationQueue
+                || (
+                    multiSource
+                        ? (
+                            multiSource->sourceQueue != barrier.sourceQueue
+                            || multiSource->destinationQueue != barrier.destinationQueue
+                            || !multiSource->minimumCompletionToken.valid()
+                            || !multiSource->minimumCompletionToken.matchesPhysicalQueue(
+                                barrier.sourceQueue.index,
+                                barrier.sourceQueue.deviceGeneration
+                            )
+                            || token.value < multiSource->minimumCompletionToken.value
+                            || !multiSource->stateSource
+                        )
+                        : (
+                            resource.initialOwnerQueue != barrier.sourceQueue
+                            || resource.initialOwnerReleaseDestinationQueue != barrier.destinationQueue
+                        )
+                )
                 || token.queue != sourceQueue->queueClass
                 || !token.matchesPhysicalQueue(barrier.sourceQueue.index, barrier.sourceQueue.deviceGeneration)
             )
@@ -218,6 +292,7 @@ bool GpuTaskGraphExternalResourceHandoff::validFor(const GpuCompiledGraph& compi
         || !waitTokens
         || !stateSource
         || !stateSource->valid()
+        || !terminalRanges
     )
         return false;
 
@@ -259,6 +334,25 @@ bool GpuTaskGraphExternalResourceHandoff::validFor(const GpuCompiledGraph& compi
             );
         }
         if(!coveredByWait)
+            return false;
+    }
+
+    for(usize rangeIndex = 0u; rangeIndex < terminalRangeCount; ++rangeIndex){
+        const GpuTaskGraphExternalResourceHandoffRange& range = terminalRanges[rangeIndex];
+        bool matchesProducer = false;
+        for(usize producerIndex = 0u; producerIndex < producerCount; ++producerIndex){
+            const GpuTaskGraphExternalResourceHandoffProducer& producer = producers[producerIndex];
+            matchesProducer = matchesProducer || (
+                compiledGraph.packetForTask(range.producerTask)
+                    == compiledGraph.packetForTask(producer.producerTask)
+                && range.sourceQueue == producer.sourceQueue
+                && range.token.queue == producer.token.queue
+                && range.token.value == producer.token.value
+                && range.token.physicalQueueIndex == producer.token.physicalQueueIndex
+                && range.token.deviceGeneration == producer.token.deviceGeneration
+            );
+        }
+        if(!matchesProducer)
             return false;
     }
 
@@ -471,12 +565,29 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
 
     const auto appendInitialOwnerStateSource = [&](const GpuCompiledBarrier& barrier){
         const GpuTaskGraphResourceView resource = graph.resourceAt(barrier.resource.index);
-        const CommandListResourceStateHandoff* const sourceStates = resource.initialOwnerStateSource;
+        const GpuTaskGraphInitialOwnerHandoffSourceView* const multiSource =
+            __hidden_gpu_packet_runtime::FindInitialOwnerHandoffSource(resource, barrier)
+        ;
+        if(resource.initialOwnerHandoffSourceCount != 0u && !multiSource)
+            return false;
+        const CommandListResourceStateHandoff* const sourceStates = multiSource
+            ? multiSource->stateSource
+            : resource.initialOwnerStateSource
+        ;
         if(
             !sourceStates
             || !sourceStates->valid()
-            || resource.initialOwnerQueue != barrier.sourceQueue
-            || resource.initialOwnerReleaseDestinationQueue != barrier.destinationQueue
+            || (
+                multiSource
+                    ? (
+                        multiSource->sourceQueue != barrier.sourceQueue
+                        || multiSource->destinationQueue != barrier.destinationQueue
+                    )
+                    : (
+                        resource.initialOwnerQueue != barrier.sourceQueue
+                        || resource.initialOwnerReleaseDestinationQueue != barrier.destinationQueue
+                    )
+            )
         )
             return false;
 
@@ -544,7 +655,12 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             )
                 continue;
             const GpuTaskGraphResourceView resource = graph.resourceAt(barrier.resource.index);
-            if(!resource.initialOwnerCompletion.valid())
+            const GpuTaskGraphInitialOwnerHandoffSourceView* const multiSource =
+                __hidden_gpu_packet_runtime::FindInitialOwnerHandoffSource(resource, barrier)
+            ;
+            if(resource.initialOwnerHandoffSourceCount != 0u && !multiSource)
+                return false;
+            if(!multiSource && !resource.initialOwnerCompletion.valid())
                 continue;
             if(!appendInitialOwnerStateSource(barrier))
                 return false;
@@ -1399,6 +1515,12 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
                 .token = producerToken,
             });
         }
+        scratch->terminalRanges.push_back(GpuTaskGraphExternalResourceHandoffRange{
+            .range = source.range,
+            .producerTask = source.producerTask,
+            .sourceQueue = source.sourceQueue,
+            .token = producerToken,
+        });
 
         for(QueueSubmissionToken& wait : scratch->waitTokens){
             if(
@@ -1526,6 +1648,7 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
     handoff.waitTokens = scratch->waitTokens.data();
     handoff.waitTokenCount = scratch->waitTokens.size();
     handoff.terminalRangeCount = exportInfo->sourceCount;
+    handoff.terminalRanges = scratch->terminalRanges.data();
     handoff.stateSource = stateSource;
     if(handoff.producerCount == 1u){
         handoff.producerTask = handoff.producers[0u].producerTask;
@@ -1544,8 +1667,13 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
         return {};
 
     const GpuCompiledExternalResourceExport* const exportInfo = compiledGraph.externalResourceExport(resource);
+    const GpuCompiledExternalResourceExportSource* const sources = exportInfo
+        ? compiledGraph.externalResourceExportSources(*exportInfo)
+        : nullptr
+    ;
     if(
         !exportInfo
+        || !sources
         || !exportInfo->producerTask.valid()
         || !exportInfo->sourceQueue.valid()
         || exportInfo->sourceCount == 0u
@@ -1584,6 +1712,21 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
         .sourceQueue = exportInfo->sourceQueue,
         .token = producerToken,
     });
+    for(u32 sourceIndex = 0u; sourceIndex < exportInfo->sourceCount; ++sourceIndex){
+        const GpuCompiledExternalResourceExportSource& source = sources[sourceIndex];
+        if(
+            source.sourceQueue != exportInfo->sourceQueue
+            || compiledGraph.packetForTask(source.producerTask)
+                != compiledGraph.packetForTask(exportInfo->producerTask)
+        )
+            return {};
+        scratch->terminalRanges.push_back(GpuTaskGraphExternalResourceHandoffRange{
+            .range = source.range,
+            .producerTask = source.producerTask,
+            .sourceQueue = source.sourceQueue,
+            .token = producerToken,
+        });
+    }
     scratch->waitTokens.push_back(producerToken);
     GpuTaskGraphExternalResourceHandoff handoff;
     handoff.resource = exportInfo->resource;
@@ -1597,6 +1740,7 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
     handoff.waitTokens = scratch->waitTokens.data();
     handoff.waitTokenCount = scratch->waitTokens.size();
     handoff.terminalRangeCount = exportInfo->sourceCount;
+    handoff.terminalRanges = scratch->terminalRanges.data();
     handoff.stateSource = stateSource;
     return handoff.validFor(compiledGraph) ? handoff : GpuTaskGraphExternalResourceHandoff{};
 }

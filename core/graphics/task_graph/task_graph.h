@@ -49,6 +49,18 @@ struct GpuTaskGraphTaskView{
     bool hasRecordPayload = false;
 };
 
+// Graph-owned immutable view of one texture range released by external work. State sources are copied while the
+// resource is declared, so an accepted source graph or native producer may retire its original handoff before this
+// graph records its first consumer packet.
+struct GpuTaskGraphInitialOwnerHandoffSourceView{
+    GpuTaskResourceRange range;
+    GpuPhysicalQueueId sourceQueue;
+    GpuPhysicalQueueId destinationQueue;
+    GpuExternalCompletionId completion;
+    QueueSubmissionToken minimumCompletionToken;
+    const CommandListResourceStateHandoff* stateSource = nullptr;
+};
+
 struct GpuTaskGraphResourceView{
     GpuGraphResourceId id;
     Name identity = NAME_NONE;
@@ -62,6 +74,10 @@ struct GpuTaskGraphResourceView{
     GpuExternalCompletionId initialOwnerCompletion;
     // For imported exclusive-owner handoffs this is a graph-owned immutable snapshot, captured at declaration.
     const CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
+    // Texture-only multi-producer ownership handoff sources. A first graph use must be fully covered by exactly one
+    // source that names its selected physical consumer queue; broad or ambiguous uses fail compilation.
+    const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSources = nullptr;
+    usize initialOwnerHandoffSourceCount = 0u;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     bool hasBackendResource = false;
 };
@@ -135,6 +151,8 @@ private:
         ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
+        u32 initialOwnerHandoffSourceOffset = 0u;
+        u32 initialOwnerHandoffSourceCount = 0u;
         GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
         GpuPhysicalQueueId initialOwnerQueue;
         GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
@@ -421,6 +439,7 @@ private:
     GraphicsVector<CommandListResourceStateHandoff*> m_externalStateSnapshots;
     GraphicsVector<GpuTaskResourceUse> m_resourceUses;
     GraphicsVector<GpuGraphResourceNode> m_resources;
+    GraphicsVector<GpuTaskGraphInitialOwnerHandoffSourceView> m_initialOwnerHandoffSources;
     GraphicsVector<GpuGraphResourceSetNode> m_resourceSets;
     GraphicsVector<GpuGraphResourceId> m_resourceSetMembers;
     GraphicsVector<GpuGraphPipelineNode> m_pipelines;

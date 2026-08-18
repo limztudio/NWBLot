@@ -481,6 +481,14 @@ struct ClearTextureRectUIntTask{
     const CommandListResourceStateHandoff* const initialOwnerStateSourceIdentity,
     const GpuGraphResourceDesc& desc
 )noexcept{
+    // Re-importing a multi-producer source through the ordinary typed-import overload could silently exchange one
+    // of its immutable ownership snapshots. Require callers to reuse its graph resource ID instead.
+    if(
+        resource.initialOwnerHandoffSourceCount != 0u
+        || desc.initialOwnerHandoffSources
+        || desc.initialOwnerHandoffSourceCount != 0u
+    )
+        return false;
     return resource.identity == desc.identity
         && resource.type == desc.type
         && resource.initialState == desc.initialState
@@ -491,6 +499,44 @@ struct ClearTextureRectUIntTask{
         && resource.initialOwnerCompletion == desc.initialOwnerCompletion
         && initialOwnerStateSourceIdentity == desc.initialOwnerStateSource
         && resource.queueSharing == desc.queueSharing;
+}
+
+[[nodiscard]] static bool ValidTextureRange(const TextureSubresourceSet& range)noexcept{
+    return range.numMipLevels != 0u && range.numArraySlices != 0u;
+}
+
+[[nodiscard]] static u64 TextureRangeEnd(const u32 base, const u32 count, const u32 all)noexcept{
+    return count == all ? Limit<u64>::s_Max : static_cast<u64>(base) + static_cast<u64>(count);
+}
+
+[[nodiscard]] static bool TextureRangesOverlap(
+    const TextureSubresourceSet& lhs,
+    const TextureSubresourceSet& rhs
+)noexcept{
+    const u64 lhsMipEnd = TextureRangeEnd(
+        lhs.baseMipLevel,
+        lhs.numMipLevels,
+        TextureSubresourceSet::AllMipLevels
+    );
+    const u64 rhsMipEnd = TextureRangeEnd(
+        rhs.baseMipLevel,
+        rhs.numMipLevels,
+        TextureSubresourceSet::AllMipLevels
+    );
+    const u64 lhsArrayEnd = TextureRangeEnd(
+        lhs.baseArraySlice,
+        lhs.numArraySlices,
+        TextureSubresourceSet::AllArraySlices
+    );
+    const u64 rhsArrayEnd = TextureRangeEnd(
+        rhs.baseArraySlice,
+        rhs.numArraySlices,
+        TextureSubresourceSet::AllArraySlices
+    );
+    return lhs.baseMipLevel < rhsMipEnd
+        && rhs.baseMipLevel < lhsMipEnd
+        && lhs.baseArraySlice < rhsArrayEnd
+        && rhs.baseArraySlice < lhsArrayEnd;
 }
 
 [[nodiscard]] static bool CompatiblePipelineMetadata(
@@ -636,6 +682,7 @@ GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
     , m_externalStateSnapshots(arena)
     , m_resourceUses(arena)
     , m_resources(arena)
+    , m_initialOwnerHandoffSources(arena)
     , m_resourceSets(arena)
     , m_resourceSetMembers(arena)
     , m_pipelines(arena)
@@ -1524,6 +1571,7 @@ void GpuTaskGraph::reset(){
     m_externalStateSources.clear();
     m_resourceUses.clear();
     m_resources.clear();
+    m_initialOwnerHandoffSources.clear();
     m_resourceSets.clear();
     m_resourceSetMembers.clear();
     m_pipelines.clear();
@@ -1602,6 +1650,10 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
         .initialOwnerReleaseDestinationQueue = resource.initialOwnerReleaseDestinationQueue,
         .initialOwnerCompletion = resource.initialOwnerCompletion,
         .initialOwnerStateSource = resource.initialOwnerStateSource,
+        .initialOwnerHandoffSources = resource.initialOwnerHandoffSourceCount != 0u
+            ? m_initialOwnerHandoffSources.data() + resource.initialOwnerHandoffSourceOffset
+            : nullptr,
+        .initialOwnerHandoffSourceCount = resource.initialOwnerHandoffSourceCount,
         .queueSharing = resource.queueSharing,
         .hasBackendResource = resource.texture != nullptr || resource.buffer != nullptr || resource.accelStruct != nullptr,
     };
@@ -2219,6 +2271,10 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
         || desc.initialOwnerCompletion.valid()
         || desc.initialOwnerStateSource != nullptr
     ;
+    const bool hasMultiInitialOwnerHandoff =
+        desc.initialOwnerHandoffSources != nullptr
+        || desc.initialOwnerHandoffSourceCount != 0u
+    ;
     const bool hasExternalFinalRelease = desc.externalFinalReleaseDestinationQueue.valid();
     if(
         !desc.identity
@@ -2239,6 +2295,20 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
                     && desc.type != GpuGraphResourceType::Buffer
                     && desc.type != GpuGraphResourceType::AccelStruct
                 )
+            )
+        )
+        || (
+            hasMultiInitialOwnerHandoff
+            && (
+                desc.type != GpuGraphResourceType::Texture
+                || !desc.initialOwnerHandoffSources
+                || desc.initialOwnerHandoffSourceCount == 0u
+                || hasInitialOwnerHandoff
+                || desc.initialOwnerQueue.valid()
+                || desc.initialState == ResourceStates::Unknown
+                || desc.queueSharing != ResourceQueueSharing::Exclusive
+                || desc.initialOwnerHandoffSourceCount
+                    > static_cast<usize>(Limit<u32>::s_Max) - m_initialOwnerHandoffSources.size()
             )
         )
         || (
@@ -2263,6 +2333,33 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
     )
         return {};
 
+    if(hasMultiInitialOwnerHandoff){
+        for(usize sourceIndex = 0u; sourceIndex < desc.initialOwnerHandoffSourceCount; ++sourceIndex){
+            const GpuGraphInitialOwnerHandoffSourceDesc& source = desc.initialOwnerHandoffSources[sourceIndex];
+            if(
+                !__hidden_gpu_task_graph::ValidTextureRange(source.range.textureSubresources)
+                || !source.sourceQueue.valid()
+                || !source.destinationQueue.valid()
+                || !source.completion.valid()
+                || !validExternalCompletion(source.completion)
+                || !source.minimumCompletionToken.valid()
+                || !source.minimumCompletionToken.matchesPhysicalQueue(
+                    source.sourceQueue.index,
+                    source.sourceQueue.deviceGeneration
+                )
+                || !source.stateSource
+            )
+                return {};
+            for(usize previousSourceIndex = 0u; previousSourceIndex < sourceIndex; ++previousSourceIndex){
+                if(__hidden_gpu_task_graph::TextureRangesOverlap(
+                    source.range.textureSubresources,
+                    desc.initialOwnerHandoffSources[previousSourceIndex].range.textureSubresources
+                ))
+                    return {};
+            }
+        }
+    }
+
     // Initial-owner imports previously borrowed this producer snapshot until late recording. Freeze it while the
     // resource is declared instead, so the declaration owns the exact state metadata. Preserve an invalid snapshot
     // as invalid so the established record-time diagnostic remains intact for malformed legacy callers.
@@ -2280,9 +2377,52 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
         }
     }
 
+    const usize initialOwnerHandoffSourceOffset = m_initialOwnerHandoffSources.size();
+    const auto discardInitialOwnerHandoffSources = [&]{
+        while(m_initialOwnerHandoffSources.size() > initialOwnerHandoffSourceOffset){
+            GpuTaskGraphInitialOwnerHandoffSourceView& source = m_initialOwnerHandoffSources.back();
+            if(source.stateSource)
+                DestroyArenaObject(m_arena, const_cast<CommandListResourceStateHandoff*>(source.stateSource));
+            m_initialOwnerHandoffSources.pop_back();
+        }
+    };
+    if(hasMultiInitialOwnerHandoff){
+        m_initialOwnerHandoffSources.reserve(
+            m_initialOwnerHandoffSources.size() + desc.initialOwnerHandoffSourceCount
+        );
+        for(usize sourceIndex = 0u; sourceIndex < desc.initialOwnerHandoffSourceCount; ++sourceIndex){
+            const GpuGraphInitialOwnerHandoffSourceDesc& source = desc.initialOwnerHandoffSources[sourceIndex];
+            CommandListResourceStateHandoff* const stateSnapshot =
+                NewArenaObject<CommandListResourceStateHandoff>(m_arena, m_arena)
+            ;
+            if(!stateSnapshot){
+                discardInitialOwnerHandoffSources();
+                if(initialOwnerStateSnapshot)
+                    DestroyArenaObject(m_arena, initialOwnerStateSnapshot);
+                return {};
+            }
+            if(source.stateSource->valid() && !stateSnapshot->copyFrom(*source.stateSource)){
+                DestroyArenaObject(m_arena, stateSnapshot);
+                discardInitialOwnerHandoffSources();
+                if(initialOwnerStateSnapshot)
+                    DestroyArenaObject(m_arena, initialOwnerStateSnapshot);
+                return {};
+            }
+            m_initialOwnerHandoffSources.push_back(GpuTaskGraphInitialOwnerHandoffSourceView{
+                .range = source.range,
+                .sourceQueue = source.sourceQueue,
+                .destinationQueue = source.destinationQueue,
+                .completion = source.completion,
+                .minimumCompletionToken = source.minimumCompletionToken,
+                .stateSource = stateSnapshot,
+            });
+        }
+    }
+
     u32 markerLabelOffset = 0u;
     u32 markerLabelSize = 0u;
     if(!appendMarkerLabel(desc.markerLabel, markerLabelOffset, markerLabelSize)){
+        discardInitialOwnerHandoffSources();
         if(initialOwnerStateSnapshot)
             DestroyArenaObject(m_arena, initialOwnerStateSnapshot);
         return {};
@@ -2299,6 +2439,8 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
     resource.initialOwnerCompletion = desc.initialOwnerCompletion;
     resource.initialOwnerStateSource = initialOwnerStateSnapshot;
     resource.initialOwnerStateSourceIdentity = desc.initialOwnerStateSource;
+    resource.initialOwnerHandoffSourceOffset = static_cast<u32>(initialOwnerHandoffSourceOffset);
+    resource.initialOwnerHandoffSourceCount = static_cast<u32>(desc.initialOwnerHandoffSourceCount);
     resource.queueSharing = desc.queueSharing;
     resource.markerLabelOffset = markerLabelOffset;
     resource.markerLabelSize = markerLabelSize;
@@ -2444,6 +2586,12 @@ void GpuTaskGraph::destroyResourceStateSnapshots()noexcept{
         resource.initialOwnerStateSource = nullptr;
         resource.initialOwnerStateSourceIdentity = nullptr;
     }
+    for(GpuTaskGraphInitialOwnerHandoffSourceView& source : m_initialOwnerHandoffSources){
+        if(source.stateSource)
+            DestroyArenaObject(m_arena, const_cast<CommandListResourceStateHandoff*>(source.stateSource));
+        source.stateSource = nullptr;
+    }
+    m_initialOwnerHandoffSources.clear();
 }
 
 

@@ -404,6 +404,37 @@ inline constexpr u64 s_LargeTaskQueueCostWeight = 8u;
     ;
 }
 
+[[nodiscard]] static const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(
+    const GpuTaskGraphResourceView& resource,
+    const GpuTaskResourceRange& firstUseRange,
+    const GpuPhysicalQueueId& destinationQueue
+)noexcept{
+    if(
+        resource.initialOwnerHandoffSourceCount == 0u
+        || !resource.initialOwnerHandoffSources
+    )
+        return nullptr;
+
+    const GpuTaskGraphInitialOwnerHandoffSourceView* result = nullptr;
+    for(usize sourceIndex = 0u;
+        sourceIndex < resource.initialOwnerHandoffSourceCount;
+        ++sourceIndex
+    ){
+        const GpuTaskGraphInitialOwnerHandoffSourceView& source = resource.initialOwnerHandoffSources[sourceIndex];
+        if(
+            source.destinationQueue != destinationQueue
+            || !RangeContains(resource, source.range, firstUseRange)
+        )
+            continue;
+        // One first graph use must have one exact external owner. A broader range that straddles two released mips
+        // cannot safely select one state source or one completion token, so reject it rather than guessing.
+        if(result)
+            return nullptr;
+        result = &source;
+    }
+    return result;
+}
+
 [[nodiscard]] static bool IncludesEdge(
     const GpuTaskDependencyEdge& edge,
     const bool explicitOnly
@@ -1252,6 +1283,44 @@ bool GpuTaskGraphCompiler::compile(
             outCompiledGraph.reset();
             return false;
         }
+        if(resource.initialOwnerHandoffSourceCount != 0u){
+            if(
+                resource.type != GpuGraphResourceType::Texture
+                || !resource.initialOwnerHandoffSources
+                || ResourceUsesConcurrentQueueSharing(resource.queueSharing, topology)
+            ){
+                outCompiledGraph.reset();
+                return false;
+            }
+            for(usize sourceIndex = 0u;
+                sourceIndex < resource.initialOwnerHandoffSourceCount;
+                ++sourceIndex
+            ){
+                const GpuTaskGraphInitialOwnerHandoffSourceView& source =
+                    resource.initialOwnerHandoffSources[sourceIndex]
+                ;
+                const GpuPhysicalQueueInfo* const sourceQueueInfo = outCompiledGraph.queueInfo(source.sourceQueue);
+                if(
+                    !IsValidTextureRange(source.range.textureSubresources)
+                    || !source.sourceQueue.valid()
+                    || !source.destinationQueue.valid()
+                    || !sourceQueueInfo
+                    || !outCompiledGraph.queueInfo(source.destinationQueue)
+                    || !graph.validExternalCompletion(source.completion)
+                    || !source.minimumCompletionToken.valid()
+                    || source.minimumCompletionToken.queue != sourceQueueInfo->queueClass
+                    || !source.minimumCompletionToken.matchesPhysicalQueue(
+                        source.sourceQueue.index,
+                        source.sourceQueue.deviceGeneration
+                    )
+                    || !source.stateSource
+                ){
+                    outCompiledGraph.reset();
+                    return false;
+                }
+            }
+            continue;
+        }
         if(!resource.initialOwnerQueue.valid())
             continue;
         const bool hasInitialOwnerHandoff = resource.initialOwnerReleaseDestinationQueue.valid();
@@ -1502,7 +1571,40 @@ bool GpuTaskGraphCompiler::compile(
                 outCompiledGraph.reset();
                 return false;
             }
-            if(!previousState && resource.initialOwnerQueue.valid() && resource.initialOwnerQueue != compiledTask->queue){
+            if(!previousState && resource.initialOwnerHandoffSourceCount != 0u){
+                const GpuTaskGraphInitialOwnerHandoffSourceView* const source = FindInitialOwnerHandoffSource(
+                    resource,
+                    use.range,
+                    compiledTask->queue
+                );
+                if(!source){
+                    outCompiledGraph.reset();
+                    return false;
+                }
+                const GpuCompiledBarrierType::Enum acquireType = OwnershipAcquireBarrierType(resource.type);
+                if(acquireType >= GpuCompiledBarrierType::kCount){
+                    outCompiledGraph.reset();
+                    return false;
+                }
+                // The packet recorder imports the exact immutable source range before prologue lowering. This marker
+                // keeps one source owner and one completion bound to every first consumer range, including a
+                // same-physical-queue source whose timeline wait still proves the external producer accepted.
+                outCompiledGraph.m_prologueBarriers.push_back(GpuCompiledBarrier{
+                    .resource = use.resource,
+                    .range = use.range,
+                    .before = before,
+                    .after = before,
+                    .sourceQueue = source->sourceQueue,
+                    .destinationQueue = compiledTask->queue,
+                    .type = acquireType,
+                    .isInitialOwnerHandoff = true,
+                });
+                initialOwnershipDependencies.push_back(GpuTaskExternalDependencyEdge{
+                    .completion = source->completion,
+                    .consumer = taskID,
+                });
+            }
+            else if(!previousState && resource.initialOwnerQueue.valid() && resource.initialOwnerQueue != compiledTask->queue){
                 if(
                     !resource.initialOwnerReleaseDestinationQueue.valid()
                     || resource.initialOwnerReleaseDestinationQueue != compiledTask->queue

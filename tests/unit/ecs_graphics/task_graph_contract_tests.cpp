@@ -136,6 +136,63 @@ TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){
 }
 
 
+// The renderer label must enumerate the immutable compiled plan, not the live Device registry: the transaction
+// telemetry is generation-bound to that plan. Keep only terminal-work queues so idle topology entries do not turn
+// the persistent FrameGraph label into zero-only noise.
+TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString commandHeaderSource;
+    AString compiledGraphHeaderSource;
+    AString compiledGraphSource;
+    AString frameGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "rhi" / "command.h", commandHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "task_graph" / "compiled_graph.h", compiledGraphHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "task_graph" / "compiled_graph.cpp", compiledGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "frame_graph_export.cpp", frameGraphSource));
+    const AStringView commandHeader(commandHeaderSource.data(), commandHeaderSource.size());
+    const AStringView compiledGraphHeader(compiledGraphHeaderSource.data(), compiledGraphHeaderSource.size());
+    const AStringView compiledGraph(compiledGraphSource.data(), compiledGraphSource.size());
+    const AStringView frameGraph(frameGraphSource.data(), frameGraphSource.size());
+
+    EXPECT_TRUE(ContainsText(commandHeader, "Borrowed immutable topology view; its producer owns the storage."));
+    EXPECT_TRUE(ContainsText(compiledGraphHeader, "GpuPhysicalQueueTopology queueTopology()const noexcept;"));
+    EXPECT_TRUE(ContainsText(compiledGraphHeader, "Borrowed immutable-plan topology view."));
+    EXPECT_TRUE(ContainsText(compiledGraphHeader, "serialize access\n    // with reset/recompile"));
+    EXPECT_TRUE(ContainsText(compiledGraph, "if(!valid())\n        return {};"));
+    EXPECT_TRUE(ContainsText(compiledGraph, ".queues = m_queueTopology.empty() ? nullptr : m_queueTopology.data(),"));
+    EXPECT_TRUE(ContainsText(compiledGraph, ".queueCount = m_queueTopology.size(),"));
+
+    EXPECT_TRUE(ContainsText(frameGraph, "m_deferredLightingCompiledGraph.queueTopology()"));
+    EXPECT_FALSE(ContainsText(frameGraph, "getPhysicalQueueTopology()"));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "m_deferredLightingSubmissionTransaction.physicalQueueSubmissionStatistics(\n"
+        "                    m_deferredLightingCompiledGraph,\n"
+        "                    queueInfo.id\n"
+        "                )"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "if(\n"
+        "                !queueStatistics.valid()\n"
+        "                || (queueStatistics.acceptedPacketCount == 0u && queueStatistics.rejectedPacketCount == 0u)\n"
+        "            )"
+    ));
+    EXPECT_TRUE(ContainsText(frameGraph, "Physical queue index={} generation={} class={}:"));
+    EXPECT_TRUE(ContainsText(frameGraph, "accepted packets={} accepted tasks={} rejected packets={} rejected tasks={}"));
+    EXPECT_TRUE(ContainsText(frameGraph, "native submissions={} rejected submit paths={} command lists={}"));
+    EXPECT_TRUE(ContainsText(frameGraph, "planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={}"));
+    EXPECT_TRUE(ContainsText(frameGraph, "accepted frontier={} CPU={:.3f} ms"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.queue.index,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.queue.deviceGeneration,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "__hidden_frame_graph_export::PhysicalQueueClassLabel(queueStatistics.queueClass),"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.rejectedSubmissionCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.submissionSeconds * 1000.0"));
+}
+
+
 // MeshSkinning has a complete primary-Graphics serial chain with one terminal timing submission. It can therefore
 // let FrontierScored coalesce its cheap immediate successors without reinstating per-task merge hints.
 TEST(EcsGraphics, MeshSkinningUsesFrontierScoredSerialPacketization){

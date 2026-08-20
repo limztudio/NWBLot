@@ -8146,6 +8146,12 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     ASSERT_TRUE(compiledGraph.validFor(graph));
     ASSERT_EQ(compiledGraph.taskCount(), 4u);
     ASSERT_EQ(compiledGraph.packetCount(), 4u);
+    const Graphics::GpuPhysicalQueueTopology compiledQueueTopology = compiledGraph.queueTopology();
+    ASSERT_NE(compiledQueueTopology.queues, nullptr);
+    ASSERT_EQ(compiledQueueTopology.queueCount, LengthOf(queues));
+    EXPECT_EQ(compiledQueueTopology.queues[0u].id, queues[0u].id);
+    EXPECT_EQ(compiledQueueTopology.queues[1u].id, queues[1u].id);
+    EXPECT_EQ(compiledQueueTopology.queues[2u].id, queues[2u].id);
 
     const Graphics::GpuTaskGraphCompileStatistics& compileStatistics = compiledGraph.compileStatistics();
     ASSERT_TRUE(compileStatistics.valid());
@@ -8509,6 +8515,10 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         transaction.packetRuntime(recoveryPacket)->state,
         Graphics::GpuPacketRuntimeState::Accepted
     );
+    compiledGraph.reset();
+    const Graphics::GpuPhysicalQueueTopology resetQueueTopology = compiledGraph.queueTopology();
+    EXPECT_EQ(resetQueueTopology.queues, nullptr);
+    EXPECT_EQ(resetQueueTopology.queueCount, 0u);
 }
 
 

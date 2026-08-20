@@ -19,6 +19,35 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_frame_graph_export{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static AStringView PhysicalQueueClassLabel(const Core::CommandQueue::Enum queueClass)noexcept{
+    switch(queueClass){
+    case Core::CommandQueue::Graphics:
+        return "Graphics";
+    case Core::CommandQueue::Compute:
+        return "Compute";
+    case Core::CommandQueue::Transfer:
+        return "Transfer";
+    default:
+        return "Unknown";
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder){
     if(!m_deferredState.m_targets.valid())
         return false;
@@ -97,6 +126,45 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             recordingStatistics.graphBarrierRecordingSeconds * 1000.0,
             recordingStatistics.taskRecordSeconds * 1000.0
         );
+
+        // This borrows the immutable compiled-plan topology under the same renderer-side serialization contract as
+        // deferredTaskGraphRuntimeStatistics(). In particular, do not replace this with the mutable live Device
+        // registry while a later recompile can change the packet plan that owns these transaction snapshots.
+        const Core::GpuPhysicalQueueTopology queueTopology = m_deferredLightingCompiledGraph.queueTopology();
+        for(usize queueIndex = 0u; queueIndex < queueTopology.queueCount; ++queueIndex){
+            const Core::GpuPhysicalQueueInfo& queueInfo = queueTopology.queues[queueIndex];
+            const Core::GpuTaskGraphPhysicalQueueSubmissionStatistics queueStatistics =
+                m_deferredLightingSubmissionTransaction.physicalQueueSubmissionStatistics(
+                    m_deferredLightingCompiledGraph,
+                    queueInfo.id
+                );
+            if(
+                !queueStatistics.valid()
+                || (queueStatistics.acceptedPacketCount == 0u && queueStatistics.rejectedPacketCount == 0u)
+            )
+                continue;
+
+            StringAppendFormat(
+                m_frameGraphRendererLabel,
+                "\nPhysical queue index={} generation={} class={}: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} native submissions={} rejected submit paths={} command lists={} planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={} accepted frontier={} CPU={:.3f} ms",
+                queueStatistics.queue.index,
+                queueStatistics.queue.deviceGeneration,
+                __hidden_frame_graph_export::PhysicalQueueClassLabel(queueStatistics.queueClass),
+                queueStatistics.acceptedPacketCount,
+                queueStatistics.acceptedTaskCount,
+                queueStatistics.rejectedPacketCount,
+                queueStatistics.rejectedTaskCount,
+                queueStatistics.nativeSubmissionCount,
+                queueStatistics.rejectedSubmissionCount,
+                queueStatistics.nativeCommandListCount,
+                queueStatistics.plannedWaitTokenCount,
+                queueStatistics.sameQueueWaitElisionCount,
+                queueStatistics.timelineWaitCount,
+                queueStatistics.mergedTimelineWaitCount,
+                queueStatistics.acceptedFrontierSubmissionCount,
+                queueStatistics.submissionSeconds * 1000.0
+            );
+        }
     }
     else
         m_frameGraphRendererLabel += "Renderer Frame";

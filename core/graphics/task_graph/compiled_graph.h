@@ -269,6 +269,9 @@ public:
         const GpuCompiledExternalResourceExport& exportInfo
     )const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* queueInfo(const GpuPhysicalQueueId& queue)const noexcept;
+    // Borrowed immutable-plan topology view. It is empty after reset/invalid compilation; callers serialize access
+    // with reset/recompile and consume or copy queue identities before that compiled-plan storage can change.
+    [[nodiscard]] GpuPhysicalQueueTopology queueTopology()const noexcept;
 
 
 private:

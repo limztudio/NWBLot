@@ -71,7 +71,8 @@ struct GpuPhysicalQueueInfo{
     bool dedicated = false;
 };
 
-// Borrowed immutable registry view. The producing Device owns the storage for its entire lifetime.
+// Borrowed immutable topology view; its producer owns the storage. A compiled-graph view becomes invalid at
+// reset/recompile.
 struct GpuPhysicalQueueTopology{
     const GpuPhysicalQueueInfo* queues = nullptr;
     usize queueCount = 0u;

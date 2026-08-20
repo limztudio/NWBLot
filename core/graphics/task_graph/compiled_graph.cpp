@@ -356,6 +356,15 @@ const GpuPhysicalQueueInfo* GpuCompiledGraph::queueInfo(const GpuPhysicalQueueId
     return nullptr;
 }
 
+GpuPhysicalQueueTopology GpuCompiledGraph::queueTopology()const noexcept{
+    if(!valid())
+        return {};
+    return GpuPhysicalQueueTopology{
+        .queues = m_queueTopology.empty() ? nullptr : m_queueTopology.data(),
+        .queueCount = m_queueTopology.size(),
+    };
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

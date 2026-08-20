@@ -456,9 +456,15 @@ struct GpuTaskGraphSubmissionStatistics{
     usize acceptedPacketCount = 0u;
     // Includes every task in an accepted packet, including the manual diagnostic acceptance seam above.
     usize acceptedTaskCount = 0u;
+    // Counts each packet when this transaction reaches its terminal Rejected state. Repeated cleanup against an
+    // already terminal packet does not contribute another sample.
+    usize rejectedPacketCount = 0u;
+    // Includes every declared task in a packet when that packet reaches terminal Rejected state.
+    usize rejectedTaskCount = 0u;
     usize nativeSubmissionCount = 0u;
-    // A failure after the graph submission reservation. This can occur before the backend sees a native submit (for
-    // example while a timing ticket validates), so it is deliberately not labelled as a Vulkan rejection.
+    // The narrower native-submit failure subset of rejectedPacketCount. This can occur before the backend sees a
+    // native submit (for example while a timing ticket validates), so it is deliberately not labelled as a Vulkan
+    // rejection.
     usize rejectedSubmissionCount = 0u;
     usize nativeCommandListCount = 0u;
     usize plannedWaitTokenCount = 0u;

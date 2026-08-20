@@ -1982,8 +1982,11 @@ void GpuGraphSubmissionTransaction::rejectPacket(
         ScopedLock lock(m_mutex);
         if(validForLocked(compiledGraph) && packetID.index < m_packets.size()){
             GpuPacketRuntime& runtime = m_packets[packetID.index];
-            if(runtime.state == GpuPacketRuntimeState::Rejecting)
+            if(runtime.state == GpuPacketRuntimeState::Rejecting){
                 runtime.state = GpuPacketRuntimeState::Rejected;
+                ++m_submissionStatistics.rejectedPacketCount;
+                m_submissionStatistics.rejectedTaskCount += packet.taskCount;
+            }
         }
     }
 }
@@ -2032,6 +2035,8 @@ void GpuGraphSubmissionTransaction::rejectSubmittingPacket(
         GpuPacketRuntime& runtime = m_packets[packetID.index];
         if(runtime.state == GpuPacketRuntimeState::Submitting){
             runtime.state = GpuPacketRuntimeState::Rejected;
+            ++m_submissionStatistics.rejectedPacketCount;
+            m_submissionStatistics.rejectedTaskCount += packet.taskCount;
             ++m_submissionStatistics.rejectedSubmissionCount;
         }
     }

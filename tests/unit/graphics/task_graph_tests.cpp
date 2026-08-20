@@ -8381,6 +8381,11 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     transaction.rejectTask(graph, compiledGraph, second);
     EXPECT_EQ(acceptedCount, 2u);
     EXPECT_EQ(discardedCount, 1u);
+    const Graphics::GpuTaskGraphSubmissionStatistics rejectedTaskStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(rejectedTaskStatistics.valid());
+    EXPECT_EQ(rejectedTaskStatistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(rejectedTaskStatistics.rejectedTaskCount, 1u);
+    EXPECT_EQ(rejectedTaskStatistics.rejectedSubmissionCount, 0u);
     ASSERT_NE(transaction.packetRuntime(secondPacket), nullptr);
     EXPECT_EQ(
         transaction.packetRuntime(secondPacket)->state,
@@ -8391,6 +8396,14 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         transaction.packetRuntime(recoveryPacket)->state,
         Graphics::GpuPacketRuntimeState::Declared
     );
+
+    // Rejecting the same semantic task resolves its packet only once, so the terminal cleanup telemetry remains
+    // stable while the independent recovery tail stays available.
+    transaction.rejectTask(graph, compiledGraph, second);
+    const Graphics::GpuTaskGraphSubmissionStatistics repeatedRejectedTaskStatistics = transaction.submissionStatistics();
+    EXPECT_EQ(repeatedRejectedTaskStatistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(repeatedRejectedTaskStatistics.rejectedTaskCount, 1u);
+    EXPECT_EQ(repeatedRejectedTaskStatistics.rejectedSubmissionCount, 0u);
 
     Core::Alloc::ScratchArena recoveryScratchArena(s_TaskGraphScratchArena);
     Vector<Graphics::QueueSubmissionToken, Core::Alloc::ScratchArena> recoveryWaitTokens(recoveryScratchArena);
@@ -8421,6 +8434,10 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_EQ(acceptedToken.value, recoveryToken.value);
     ASSERT_NE(transaction.latestAcceptedToken(recoveryQueue), nullptr);
     EXPECT_EQ(transaction.latestAcceptedToken(recoveryQueue)->value, recoveryToken.value);
+    const Graphics::GpuTaskGraphSubmissionStatistics recoveredTaskStatistics = transaction.submissionStatistics();
+    EXPECT_EQ(recoveredTaskStatistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(recoveredTaskStatistics.rejectedTaskCount, 1u);
+    EXPECT_EQ(recoveredTaskStatistics.rejectedSubmissionCount, 0u);
 
     EXPECT_TRUE(transaction.discardUnaccepted(graph, compiledGraph));
     EXPECT_EQ(acceptedCount, 3u);
@@ -8631,12 +8648,21 @@ TEST(GpuTaskGraph, DiscardsUnacceptedPayloadsAfterPacketRecordFailureCleanup){
     EXPECT_TRUE(transaction.discardUnaccepted(graph, compiledGraph, graph.recordingAttemptGeneration()));
     EXPECT_EQ(acceptedCount, 0u);
     EXPECT_EQ(discardedCount, 2u);
+    const Graphics::GpuTaskGraphSubmissionStatistics cleanupStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(cleanupStatistics.valid());
+    EXPECT_EQ(cleanupStatistics.rejectedPacketCount, 2u);
+    EXPECT_EQ(cleanupStatistics.rejectedTaskCount, 2u);
+    EXPECT_EQ(cleanupStatistics.rejectedSubmissionCount, 0u);
     ASSERT_NE(transaction.packetRuntime(firstPacket), nullptr);
     ASSERT_NE(transaction.packetRuntime(secondPacket), nullptr);
     EXPECT_EQ(transaction.packetRuntime(firstPacket)->state, Graphics::GpuPacketRuntimeState::Rejected);
     EXPECT_EQ(transaction.packetRuntime(secondPacket)->state, Graphics::GpuPacketRuntimeState::Rejected);
 
     EXPECT_TRUE(transaction.discardUnaccepted(graph, compiledGraph, graph.recordingAttemptGeneration()));
+    const Graphics::GpuTaskGraphSubmissionStatistics repeatedCleanupStatistics = transaction.submissionStatistics();
+    EXPECT_EQ(repeatedCleanupStatistics.rejectedPacketCount, 2u);
+    EXPECT_EQ(repeatedCleanupStatistics.rejectedTaskCount, 2u);
+    EXPECT_EQ(repeatedCleanupStatistics.rejectedSubmissionCount, 0u);
     graph.reset();
     EXPECT_EQ(discardedCount, 2u);
 }
@@ -9556,6 +9582,26 @@ TEST(GpuTaskGraph, MergesExplicitCompatibleSuccessorIntoOnePacket){
         compiledGraph.packetizationDecisionForTask(finalSuffix),
         Graphics::GpuTaskPacketizationDecision::MergedExplicit
     );
+
+    // Rejecting a semantic task resolves its full merged native packet, so task cleanup telemetry must retain the
+    // packet's complete task cardinality rather than count only the selected task.
+    Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
+    transaction.reset(compiledGraph);
+    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(prefixPacket);
+    ASSERT_NE(packetTasks, nullptr);
+    ASSERT_TRUE(graph.beginRecordingAttempt(compiledGraph, packetTasks, packet.taskCount));
+    transaction.rejectTask(graph, compiledGraph, suffix, graph.recordingAttemptGeneration());
+    const Graphics::GpuTaskGraphSubmissionStatistics mergedRejectedStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(mergedRejectedStatistics.valid());
+    EXPECT_EQ(mergedRejectedStatistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(mergedRejectedStatistics.rejectedTaskCount, 3u);
+    EXPECT_EQ(mergedRejectedStatistics.rejectedSubmissionCount, 0u);
+
+    transaction.rejectTask(graph, compiledGraph, finalSuffix, graph.recordingAttemptGeneration());
+    const Graphics::GpuTaskGraphSubmissionStatistics repeatedMergedRejectedStatistics = transaction.submissionStatistics();
+    EXPECT_EQ(repeatedMergedRejectedStatistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(repeatedMergedRejectedStatistics.rejectedTaskCount, 3u);
+    EXPECT_EQ(repeatedMergedRejectedStatistics.rejectedSubmissionCount, 0u);
 }
 
 

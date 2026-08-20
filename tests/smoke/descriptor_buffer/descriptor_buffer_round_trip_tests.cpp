@@ -40274,6 +40274,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     EXPECT_EQ(rejectedSubmissionStatistics.acceptedPacketCount, 1u);
     EXPECT_EQ(rejectedSubmissionStatistics.acceptedTaskCount, 1u);
     EXPECT_EQ(rejectedSubmissionStatistics.nativeSubmissionCount, 1u);
+    EXPECT_EQ(rejectedSubmissionStatistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(rejectedSubmissionStatistics.rejectedTaskCount, 1u);
     EXPECT_EQ(rejectedSubmissionStatistics.rejectedSubmissionCount, 1u);
     EXPECT_EQ(rejectedSubmissionStatistics.acceptedFrontierSubmissionCount, 0u);
     EXPECT_FALSE(recoveryRecorded);
@@ -40304,6 +40306,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     EXPECT_EQ(recoveredSubmissionStatistics.acceptedPacketCount, 2u);
     EXPECT_EQ(recoveredSubmissionStatistics.acceptedTaskCount, 2u);
     EXPECT_EQ(recoveredSubmissionStatistics.nativeSubmissionCount, 2u);
+    EXPECT_EQ(recoveredSubmissionStatistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(recoveredSubmissionStatistics.rejectedTaskCount, 1u);
     EXPECT_EQ(recoveredSubmissionStatistics.rejectedSubmissionCount, 1u);
     EXPECT_EQ(recoveredSubmissionStatistics.acceptedFrontierSubmissionCount, 1u);
     // The recovery packet joins the accepted frontier semantically, but its only accepted producer is on this same

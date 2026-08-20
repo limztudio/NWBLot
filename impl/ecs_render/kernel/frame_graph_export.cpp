@@ -52,7 +52,7 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             "Declarations: resource sets={} resource-set members={} direct uses={} declared set uses={} expanded set-member uses={} materialized uses={}\n"
             "Data: payload objects={} payload object bytes={} upload blobs={} upload blob bytes={}\n"
             "Recording: packets={} tasks={} command lists={} barriers={} parallel={}\n"
-            "Submission: accepted={} submissions={} command lists={} waits={} rejected={}\n"
+            "Submission: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} submissions={} command lists={} waits={} failed submissions={}\n"
             "CPU: compile={:.3f} ms record={:.3f} ms submit={:.3f} ms\n"
             "CPU compile phases: analysis={:.3f} ms queue assignment={:.3f} ms planning={:.3f} ms\n"
             "CPU recording phases: command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task recording={:.3f} ms",
@@ -76,6 +76,9 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             recordingStatistics.barrierCount,
             recordingStatistics.parallelPacketCount,
             submissionStatistics.acceptedPacketCount,
+            submissionStatistics.acceptedTaskCount,
+            submissionStatistics.rejectedPacketCount,
+            submissionStatistics.rejectedTaskCount,
             submissionStatistics.nativeSubmissionCount,
             submissionStatistics.nativeCommandListCount,
             submissionStatistics.timelineWaitCount,

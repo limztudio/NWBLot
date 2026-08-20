@@ -15850,6 +15850,73 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
     EXPECT_TRUE(device.waitForIdle());
 }
 
+TEST_F(DescriptorBufferRoundTripTest, BuiltInResolveTextureTaskRejectsSingleSampleSourceAtDeclaration){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const TextureDesc resolveTextureDesc = TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Format::RGBA8_UNORM)
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+    ;
+    auto source = device.createTexture(resolveTextureDesc);
+    auto destination = device.createTexture(resolveTextureDesc);
+    ASSERT_NE(source.get(), nullptr);
+    ASSERT_NE(destination.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId sourceResource = graph.importTexture(
+        source,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/built_in_resolve_source"))
+            .setMarkerLabel("Built-In Resolve Source")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId destinationResource = graph.importTexture(
+        destination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/built_in_resolve_destination"))
+            .setMarkerLabel("Built-In Resolve Destination")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(sourceResource.valid());
+    ASSERT_TRUE(destinationResource.valid());
+
+    GpuTaskDesc resolveTaskDesc;
+    resolveTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/built_in_resolve_texture"))
+        .setMarkerLabel("Built-In Resolve Texture")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Transfer,
+            GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+    const GpuResolveTextureTaskRegion resolveRegions[] = {
+        GpuResolveTextureTaskRegion{
+            .source = sourceResource,
+            .destination = destinationResource,
+        },
+    };
+    QueueSubmissionToken acceptedToken{
+        .queue = CommandQueue::Graphics,
+        .value = 1u,
+        .physicalQueueIndex = 0u,
+        .deviceGeneration = 1u,
+    };
+    EXPECT_FALSE(graph.addResolveTextureTask(
+        resolveTaskDesc,
+        GpuResolveTextureTaskDesc{
+            .regions = resolveRegions,
+            .regionCount = LengthOf(resolveRegions),
+            .acceptedToken = &acceptedToken,
+        }
+    ).valid());
+    EXPECT_FALSE(acceptedToken.valid());
+    EXPECT_EQ(graph.taskCount(), 0u);
+}
+
 
 // Upload blobs copy caller bytes at declaration, then record through the ordinary CommandList staging allocator.
 // Mutating the original stack storage before late packet recording must therefore not affect the submitted upload.

@@ -609,6 +609,67 @@ struct ClearTextureRectUIntTask{
         && rhs.baseArraySlice < lhsArrayEnd;
 }
 
+[[nodiscard]] static bool ResolveTextureContractValid(
+    const TextureDesc& sourceDesc,
+    const TextureSubresourceSet& sourceSubresources,
+    const TextureDesc& destinationDesc,
+    const TextureSubresourceSet& destinationSubresources,
+    TextureSubresourceSet& outResolvedSourceSubresources,
+    TextureSubresourceSet& outResolvedDestinationSubresources
+)noexcept{
+    if(
+        sourceDesc.sampleCount <= 1u
+        || destinationDesc.sampleCount != 1u
+        || sourceDesc.format != destinationDesc.format
+    )
+        return false;
+
+    const FormatInfo& formatInfo = GetFormatInfo(sourceDesc.format);
+    if(formatInfo.hasDepth || formatInfo.hasStencil)
+        return false;
+
+    outResolvedSourceSubresources = sourceSubresources.resolve(
+        sourceDesc,
+        TextureSubresourceMipResolve::Range
+    );
+    outResolvedDestinationSubresources = destinationSubresources.resolve(
+        destinationDesc,
+        TextureSubresourceMipResolve::Range
+    );
+    if(
+        !ValidTextureRange(outResolvedSourceSubresources)
+        || !ValidTextureRange(outResolvedDestinationSubresources)
+        || outResolvedSourceSubresources.numMipLevels != outResolvedDestinationSubresources.numMipLevels
+        || outResolvedSourceSubresources.numArraySlices != outResolvedDestinationSubresources.numArraySlices
+    )
+        return false;
+
+    for(MipLevel mipOffset = 0u; mipOffset < outResolvedSourceSubresources.numMipLevels; ++mipOffset){
+        const MipLevel sourceMipLevel = outResolvedSourceSubresources.baseMipLevel + mipOffset;
+        const MipLevel destinationMipLevel = outResolvedDestinationSubresources.baseMipLevel + mipOffset;
+        const u32 sourceWidth = Max<u32>(sourceDesc.width >> sourceMipLevel, 1u);
+        const u32 sourceHeight = Max<u32>(sourceDesc.height >> sourceMipLevel, 1u);
+        const u32 sourceDepth = sourceDesc.dimension == TextureDimension::Texture3D
+            ? Max<u32>(sourceDesc.depth >> sourceMipLevel, 1u)
+            : 1u
+        ;
+        const u32 destinationWidth = Max<u32>(destinationDesc.width >> destinationMipLevel, 1u);
+        const u32 destinationHeight = Max<u32>(destinationDesc.height >> destinationMipLevel, 1u);
+        const u32 destinationDepth = destinationDesc.dimension == TextureDimension::Texture3D
+            ? Max<u32>(destinationDesc.depth >> destinationMipLevel, 1u)
+            : 1u
+        ;
+        if(
+            sourceWidth != destinationWidth
+            || sourceHeight != destinationHeight
+            || sourceDepth != destinationDepth
+        )
+            return false;
+    }
+
+    return true;
+}
+
 [[nodiscard]] static bool CompatiblePipelineMetadata(
     const GpuTaskGraphPipelineView& pipeline,
     const GpuGraphPipelineDesc& desc
@@ -1043,20 +1104,30 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
         }
         const GpuGraphResourceNode& sourceResource = m_resources[region.source.index];
         const GpuGraphResourceNode& destinationResource = m_resources[region.destination.index];
+        TextureSubresourceSet resolvedSourceSubresources;
+        TextureSubresourceSet resolvedDestinationSubresources;
         valid = region.source != region.destination
             && sourceResource.type == GpuGraphResourceType::Texture
             && destinationResource.type == GpuGraphResourceType::Texture
             && sourceResource.texture
             && destinationResource.texture
+            && __hidden_gpu_task_graph::ResolveTextureContractValid(
+                sourceResource.texture->getDescription(),
+                region.sourceSubresources,
+                destinationResource.texture->getDescription(),
+                region.destinationSubresources,
+                resolvedSourceSubresources,
+                resolvedDestinationSubresources
+            )
             && appendResourceUse(
                 region.source,
-                region.sourceSubresources,
+                resolvedSourceSubresources,
                 ResourceStates::ResolveSource,
                 GpuTaskResourceAccess::Read
             )
             && appendResourceUse(
                 region.destination,
-                region.destinationSubresources,
+                resolvedDestinationSubresources,
                 ResourceStates::ResolveDest,
                 GpuTaskResourceAccess::Write
             )
@@ -1065,10 +1136,10 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
             payload->resolves.push_back(ResolveTask::Resolve{
                 .sourceResource = region.source,
                 .source = sourceResource.texture,
-                .sourceSubresources = region.sourceSubresources,
+                .sourceSubresources = resolvedSourceSubresources,
                 .destinationResource = region.destination,
                 .destination = destinationResource.texture,
-                .destinationSubresources = region.destinationSubresources,
+                .destinationSubresources = resolvedDestinationSubresources,
             });
         }
     }

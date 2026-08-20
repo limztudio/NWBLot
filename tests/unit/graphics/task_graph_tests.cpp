@@ -1478,6 +1478,140 @@ TEST(GpuTaskGraph, ResolveTextureTaskRequiresTypedTextureImports){
     EXPECT_EQ(graph.taskCount(), 0u);
 }
 
+TEST(GpuTaskGraph, ResolveTextureTaskPreflightsTypedTextureContract){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+    Graphics::Texture* const sourceObject = NewArenaObject<Graphics::Texture>(testArena.arena, context, allocator);
+    Graphics::Texture* const destinationObject = NewArenaObject<Graphics::Texture>(testArena.arena, context, allocator);
+    ASSERT_NE(sourceObject, nullptr);
+    ASSERT_NE(destinationObject, nullptr);
+    Graphics::TextureHandle source(
+        sourceObject,
+        Graphics::TextureHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::TextureHandle destination(
+        destinationObject,
+        Graphics::TextureHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::TextureDesc& sourceDescription = const_cast<Graphics::TextureDesc&>(source->getDescription());
+    Graphics::TextureDesc& destinationDescription = const_cast<Graphics::TextureDesc&>(destination->getDescription());
+    const Graphics::TextureDesc validSourceDescription = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Graphics::Format::RGBA8_UNORM)
+        .setSampleCount(4u)
+        .setInitialState(Graphics::ResourceStates::Common)
+    ;
+    const Graphics::TextureDesc validDestinationDescription = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Graphics::Format::RGBA8_UNORM)
+        .setSampleCount(1u)
+        .setInitialState(Graphics::ResourceStates::Common)
+    ;
+    sourceDescription = validSourceDescription;
+    destinationDescription = validDestinationDescription;
+
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId sourceResource = graph.importTexture(
+        source,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/resolve_contract_source"))
+            .setMarkerLabel("Resolve Contract Source")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::Common)
+    );
+    const Graphics::GpuGraphResourceId destinationResource = graph.importTexture(
+        destination,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/resolve_contract_destination"))
+            .setMarkerLabel("Resolve Contract Destination")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::Common)
+    );
+    ASSERT_TRUE(sourceResource.valid());
+    ASSERT_TRUE(destinationResource.valid());
+
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/resolve_contract"))
+        .setMarkerLabel("Resolve Contract")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+    Graphics::GpuResolveTextureTaskRegion region{
+        .source = sourceResource,
+        .destination = destinationResource,
+    };
+    Graphics::QueueSubmissionToken acceptedToken{
+        .queue = Graphics::CommandQueue::Graphics,
+        .value = 1u,
+        .physicalQueueIndex = 0u,
+        .deviceGeneration = 1u,
+    };
+    const Graphics::GpuResolveTextureTaskDesc resolveDesc{
+        .regions = &region,
+        .regionCount = 1u,
+        .acceptedToken = &acceptedToken,
+    };
+
+    sourceDescription.setSampleCount(1u);
+    EXPECT_FALSE(graph.addResolveTextureTask(desc, resolveDesc).valid());
+    EXPECT_FALSE(acceptedToken.valid());
+
+    sourceDescription = validSourceDescription;
+    destinationDescription.setSampleCount(4u);
+    EXPECT_FALSE(graph.addResolveTextureTask(desc, resolveDesc).valid());
+
+    destinationDescription = validDestinationDescription;
+    destinationDescription.setFormat(Graphics::Format::RGBA8_UINT);
+    EXPECT_FALSE(graph.addResolveTextureTask(desc, resolveDesc).valid());
+
+    destinationDescription = validDestinationDescription;
+    sourceDescription.setFormat(Graphics::Format::D24S8);
+    destinationDescription.setFormat(Graphics::Format::D24S8);
+    EXPECT_FALSE(graph.addResolveTextureTask(desc, resolveDesc).valid());
+
+    sourceDescription = validSourceDescription;
+    destinationDescription = validDestinationDescription;
+    sourceDescription
+        .setDimension(Graphics::TextureDimension::Texture2DMSArray)
+        .setArraySize(2u)
+    ;
+    destinationDescription
+        .setDimension(Graphics::TextureDimension::Texture2DArray)
+        .setArraySize(2u)
+    ;
+    region.sourceSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 2u);
+    region.destinationSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
+    EXPECT_FALSE(graph.addResolveTextureTask(desc, resolveDesc).valid());
+
+    sourceDescription = validSourceDescription;
+    destinationDescription = validDestinationDescription;
+    destinationDescription.setWidth(8u);
+    region.sourceSubresources = {};
+    region.destinationSubresources = {};
+    EXPECT_FALSE(graph.addResolveTextureTask(desc, resolveDesc).valid());
+    EXPECT_EQ(graph.taskCount(), 0u);
+
+    sourceDescription = validSourceDescription;
+    destinationDescription = validDestinationDescription;
+    const Graphics::GpuTaskId task = graph.addResolveTextureTask(desc, resolveDesc);
+    ASSERT_TRUE(task.valid());
+    ASSERT_EQ(graph.taskAt(task.index).resourceUseCount, 2u);
+    EXPECT_EQ(graph.taskAt(task.index).resourceUses[0u].requiredState, Graphics::ResourceStates::ResolveSource);
+    EXPECT_EQ(graph.taskAt(task.index).resourceUses[1u].requiredState, Graphics::ResourceStates::ResolveDest);
+}
+
 TEST(GpuTaskGraph, CopyBufferTaskRequiresTypedBufferImports){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

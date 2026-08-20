@@ -46459,6 +46459,22 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksAuxiliaryGra
     ;
     ASSERT_TRUE(heap.initialize(heapDesc));
 
+    const GpuDescriptorHeapLifecycleStatistics initialStatistics = heap.lifecycleStatistics();
+    EXPECT_TRUE(initialStatistics.initialized);
+    EXPECT_EQ(initialStatistics.resourceCapacity, 2u);
+    EXPECT_EQ(initialStatistics.samplerCapacity, 1u);
+    if(heap.hasAccelStructLayout())
+        EXPECT_GT(initialStatistics.accelStructCapacity, 0u);
+    else
+        EXPECT_EQ(initialStatistics.accelStructCapacity, 0u);
+    EXPECT_EQ(initialStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(initialStatistics.samplerLiveSlotCount, 0u);
+    EXPECT_EQ(initialStatistics.accelStructLiveSlotCount, 0u);
+    EXPECT_EQ(initialStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(initialStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(initialStatistics.unsubmittedHeapUseCount, 0u);
+    EXPECT_EQ(initialStatistics.abandonedHeapUseCount, 0u);
+
     ShaderDesc shaderDesc(multiQueueScope.arena());
     shaderDesc
         .setShaderType(ShaderType::Compute)
@@ -46495,6 +46511,15 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksAuxiliaryGra
     ASSERT_TRUE(heap.write(handle, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
     EXPECT_EQ(storageBuffer->getReferenceCount(), 2u);
 
+    const GpuDescriptorHeapLifecycleStatistics allocatedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(allocatedStatistics.resourceLiveSlotCount, 1u);
+    EXPECT_EQ(allocatedStatistics.samplerLiveSlotCount, 0u);
+    EXPECT_EQ(allocatedStatistics.accelStructLiveSlotCount, 0u);
+    EXPECT_EQ(allocatedStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(allocatedStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(allocatedStatistics.unsubmittedHeapUseCount, 0u);
+    EXPECT_EQ(allocatedStatistics.abandonedHeapUseCount, 0u);
+
     CommandListParameters parameters;
     parameters.setPhysicalQueue(auxiliaryGraphicsQueue->id);
     auto commandList = device.createCommandList(parameters);
@@ -46504,8 +46529,25 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksAuxiliaryGra
     commandList->close();
     ASSERT_TRUE(commandList->hasCommandBuffer());
 
+    const GpuDescriptorHeapLifecycleStatistics recordedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(recordedStatistics.resourceLiveSlotCount, 1u);
+    EXPECT_EQ(recordedStatistics.samplerLiveSlotCount, 0u);
+    EXPECT_EQ(recordedStatistics.accelStructLiveSlotCount, 0u);
+    EXPECT_EQ(recordedStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(recordedStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(recordedStatistics.unsubmittedHeapUseCount, 1u);
+    EXPECT_EQ(recordedStatistics.abandonedHeapUseCount, 0u);
+
     heap.free(handle);
     heap.collectRetired();
+    const GpuDescriptorHeapLifecycleStatistics retiredStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(retiredStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(retiredStatistics.samplerLiveSlotCount, 0u);
+    EXPECT_EQ(retiredStatistics.accelStructLiveSlotCount, 0u);
+    EXPECT_EQ(retiredStatistics.pendingRetiredSlotCount, 1u);
+    EXPECT_EQ(retiredStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(retiredStatistics.unsubmittedHeapUseCount, 1u);
+    EXPECT_EQ(retiredStatistics.abandonedHeapUseCount, 0u);
     EXPECT_EQ(storageBuffer->getReferenceCount(), 2u)
         << "an unsubmitted auxiliary command buffer lost its descriptor resource";
 
@@ -46521,9 +46563,31 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksAuxiliaryGra
         auxiliaryGraphicsQueue->id.index,
         auxiliaryGraphicsQueue->id.deviceGeneration
     ));
+
+    // Lifecycle telemetry stays aggregate: acceptance is visible without exposing an individual queue identity.
+    const GpuDescriptorHeapLifecycleStatistics acceptedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(acceptedStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(acceptedStatistics.samplerLiveSlotCount, 0u);
+    EXPECT_EQ(acceptedStatistics.accelStructLiveSlotCount, 0u);
+    EXPECT_EQ(acceptedStatistics.pendingRetiredSlotCount, 1u);
+    EXPECT_EQ(acceptedStatistics.acceptedHeapUseCount, 1u);
+    EXPECT_EQ(acceptedStatistics.unsubmittedHeapUseCount, 0u);
+    EXPECT_EQ(acceptedStatistics.abandonedHeapUseCount, 0u);
     ASSERT_TRUE(device.waitForIdle());
 
     heap.collectRetired();
+    const GpuDescriptorHeapLifecycleStatistics completedStatistics = heap.lifecycleStatistics();
+    EXPECT_TRUE(completedStatistics.initialized);
+    EXPECT_EQ(completedStatistics.resourceCapacity, initialStatistics.resourceCapacity);
+    EXPECT_EQ(completedStatistics.samplerCapacity, initialStatistics.samplerCapacity);
+    EXPECT_EQ(completedStatistics.accelStructCapacity, initialStatistics.accelStructCapacity);
+    EXPECT_EQ(completedStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(completedStatistics.samplerLiveSlotCount, 0u);
+    EXPECT_EQ(completedStatistics.accelStructLiveSlotCount, 0u);
+    EXPECT_EQ(completedStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(completedStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(completedStatistics.unsubmittedHeapUseCount, 0u);
+    EXPECT_EQ(completedStatistics.abandonedHeapUseCount, 0u);
     EXPECT_EQ(storageBuffer->getReferenceCount(), 1u)
         << "descriptor retirement queried the primary Graphics timeline instead of the auxiliary physical queue";
 

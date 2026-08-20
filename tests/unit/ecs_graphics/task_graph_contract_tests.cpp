@@ -121,6 +121,7 @@ TEST(EcsGraphics, MeshSkinningUsesFrontierScoredSerialPacketization){
     EXPECT_TRUE(ContainsText(skinning, "compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierScored;"));
     EXPECT_TRUE(ContainsText(skinning, "compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions)"));
     EXPECT_EQ(CountText(skinning, "mergeWithPrevious"), 0u);
+    EXPECT_EQ(CountText(skinning, "scheduling.frontierScoredMergeDomain = Name(\"mesh_skinning.serial\");"), 2u);
     EXPECT_EQ(CountText(skinning, "setDependencies(&terminalTask, 1u);"), 4u);
     EXPECT_TRUE(ContainsText(skinning, "if(compiledGraph.packetCount() != 1u)"));
     EXPECT_TRUE(ContainsText(skinning, "const Core::GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);"));

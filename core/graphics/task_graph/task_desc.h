@@ -89,6 +89,9 @@ struct GpuTaskSchedulingHint{
     // same-class routing so an application can keep historical measurement scoped to a small, proven-safe subset.
     // Timing feedback itself remains same-family only and never manufactures an ownership-transfer route.
     bool allowTimingFeedbackRouting = false;
+    // FrontierScored automatic coalescing requires this nonempty domain to match every task already in the
+    // preceding packet. Empty domains are never scored-merge eligible; explicit mergeWithPrevious ignores it.
+    Name frontierScoredMergeDomain = {};
 };
 
 // Optional dimensions for immutable timing-history keys. Variant distinguishes compatible task implementations;

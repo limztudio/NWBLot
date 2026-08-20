@@ -85,6 +85,7 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Run
     scheduling.avoidQueueCrossing = true;
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
+    scheduling.frontierScoredMergeDomain = Name("mesh_skinning.serial");
     return scheduling;
 }
 
@@ -106,6 +107,7 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Run
     scheduling.avoidQueueCrossing = true;
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
+    scheduling.frontierScoredMergeDomain = Name("mesh_skinning.serial");
     return scheduling;
 }
 

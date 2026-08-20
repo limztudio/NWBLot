@@ -17905,6 +17905,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
     selectorScheduling.avoidQueueCrossing = true;
     selectorScheduling.forceSubmissionBoundary = false;
     selectorScheduling.allowPacketMerge = true;
+    selectorScheduling.frontierScoredMergeDomain = Name("tests/descriptor_buffer/skinning_bindless_selector");
     QueueSubmissionToken selectorAcceptedToken;
     const GpuTaskId selectorTask = graph.addUploadBufferTask(
         GpuTaskDesc{}
@@ -18205,6 +18206,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesWithGraphC
     paletteScheduling.avoidQueueCrossing = true;
     paletteScheduling.forceSubmissionBoundary = false;
     paletteScheduling.allowPacketMerge = true;
+    paletteScheduling.frontierScoredMergeDomain = Name("tests/descriptor_buffer/skinning_rest_copy");
     GpuTaskDesc paletteDesc;
     paletteDesc
         .setIdentity(Name("tests/descriptor_buffer/skinning_palette_upload"))
@@ -35517,6 +35519,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningDeformationHandoffStaysI
     deformationScheduling.avoidQueueCrossing = true;
     deformationScheduling.forceSubmissionBoundary = false;
     deformationScheduling.allowPacketMerge = true;
+    deformationScheduling.frontierScoredMergeDomain = Name("tests/descriptor_buffer/skinning_stage_handoff");
     const GpuTaskResourceUse deformationUses[] = {
         GpuTaskResourceUse{
             .resource = skinnedPositionResource,

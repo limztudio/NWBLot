@@ -62,6 +62,7 @@ namespace GpuTaskPacketizationDecision{
         CrossQueueConsumerFrontier,
         MergedExplicit,
         MergedFrontierScored,
+        ScoredMergeDomainMismatch,
 
         kCount,
     };

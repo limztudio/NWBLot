@@ -2181,6 +2181,26 @@ bool GpuTaskGraphCompiler::compile(
                 precedingPacketAllowsMerge = precedingTaskAllowsMerge;
             }
             if(precedingPacketAllowsMerge && scoredMergeRequested){
+                const Name& frontierScoredMergeDomain = task.scheduling.frontierScoredMergeDomain;
+                bool precedingPacketMatchesScoredMergeDomain = static_cast<bool>(frontierScoredMergeDomain);
+                for(u32 precedingTaskIndex = 0u;
+                    precedingPacketMatchesScoredMergeDomain && precedingTaskIndex < precedingPacket.taskCount;
+                    ++precedingTaskIndex
+                ){
+                    const GpuTaskId precedingTask = outCompiledGraph.m_packetTasks[
+                        precedingPacket.taskOffset + precedingTaskIndex
+                    ];
+                    const GpuTaskGraphTaskView preceding = graph.taskAt(precedingTask.index);
+                    precedingPacketMatchesScoredMergeDomain =
+                        static_cast<bool>(preceding.scheduling.frontierScoredMergeDomain)
+                        && preceding.scheduling.frontierScoredMergeDomain == frontierScoredMergeDomain
+                    ;
+                }
+                if(!precedingPacketMatchesScoredMergeDomain)
+                    packetizationDecision = GpuTaskPacketizationDecision::ScoredMergeDomainMismatch;
+                precedingPacketAllowsMerge = precedingPacketMatchesScoredMergeDomain;
+            }
+            if(precedingPacketAllowsMerge && scoredMergeRequested){
                 // A score is useful only for an actual immediate serial chain. Never use packet coalescing to
                 // manufacture an order between unrelated work, and keep Medium/Large work independently
                 // accept/recoverable unless its owner deliberately asks for an explicit merge.

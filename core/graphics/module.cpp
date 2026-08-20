@@ -28,6 +28,7 @@ namespace __hidden_graphics{
 
 using UploadBytes = Vector<u8, Alloc::GlobalArena>;
 constexpr u32 s_DefaultWaveLaneCount = 64u;
+inline constexpr Name s_GraphicsFrameCpuTimingScope("graphics.frame");
 // Before per-upload timing exists, retain small setup copies on Graphics. Large asset payloads are the first
 // Transfer migration target; callers that know a small upload benefits from a dedicated transport can still request
 // CommandQueue::Transfer explicitly.
@@ -1036,11 +1037,22 @@ Graphics::Graphics(
     Alloc::JobSystem& jobSystem,
     Perf::TimingSink& gpuTiming
 )
+    : Graphics(allocator, threadPool, jobSystem, gpuTiming, nullptr)
+{}
+
+Graphics::Graphics(
+    GraphicsAllocator& allocator,
+    Alloc::ThreadPool& threadPool,
+    Alloc::JobSystem& jobSystem,
+    Perf::TimingSink& gpuTiming,
+    Perf::TimingSink* const cpuTiming
+)
     : m_allocator(allocator)
     , m_threadPool(threadPool)
     , m_jobSystem(jobSystem)
     , m_deviceCreationParams(m_allocator.getObjectArena())
     , m_gpuTiming(m_allocator.getObjectArena(), gpuTiming)
+    , m_cpuTiming(cpuTiming)
     , m_backend(MakeNotNullUnique(MakeGlobalUnique<Backend>(m_allocator.getObjectArena(), m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool)))
     , m_renderPasses(m_allocator.getObjectArena())
     , m_swapChainFramebuffers(m_allocator.getObjectArena())
@@ -1539,8 +1551,28 @@ bool Graphics::shouldRenderUnfocused()const{
 }
 
 bool Graphics::runFrame(){
-    if(!m_frameSubmissionSuspended)
-        return animateRenderPresent();
+    // This deliberately spans the complete logical graphics frame: normal presentation, headless no-window work,
+    // and submission-suspended maintenance. Keep future phase scopes separate so they do not overlap this base
+    // measurement. Record only a successful call so a failed frame can never be published with a later one.
+    const bool recordFrameTiming = m_cpuTiming && m_cpuTiming->enabled();
+    Perf::TimingScopeId frameTimingScope;
+    Timer frameTimingBegin;
+    const u64 sampleFrameIndex = m_frameIndex;
+    if(recordFrameTiming){
+        frameTimingScope = m_cpuTiming->registerScope(__hidden_graphics::s_GraphicsFrameCpuTimingScope);
+        frameTimingBegin = TimerNow();
+    }
+
+    if(!m_frameSubmissionSuspended){
+        const bool rendered = animateRenderPresent();
+        if(rendered && recordFrameTiming)
+            m_cpuTiming->recordSample(
+                frameTimingScope,
+                DurationInSeconds<f64>(TimerNow(), frameTimingBegin),
+                sampleFrameIndex
+            );
+        return rendered;
+    }
 
     // Do not let a capture hold hide a device-loss/recreation request. No backend beginFrame, render, or present call
     // is made here, so the last completed frame stays on screen while the platform loop remains responsive.
@@ -1554,6 +1586,12 @@ bool Graphics::runFrame(){
     }
 
     YieldThread();
+    if(recordFrameTiming)
+        m_cpuTiming->recordSample(
+            frameTimingScope,
+            DurationInSeconds<f64>(TimerNow(), frameTimingBegin),
+            sampleFrameIndex
+        );
     return true;
 }
 

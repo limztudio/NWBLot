@@ -147,6 +147,13 @@ public:
         Alloc::JobSystem& jobSystem,
         Perf::TimingSink& gpuTiming
     );
+    Graphics(
+        GraphicsAllocator& allocator,
+        Alloc::ThreadPool& threadPool,
+        Alloc::JobSystem& jobSystem,
+        Perf::TimingSink& gpuTiming,
+        Perf::TimingSink* cpuTiming
+    );
     ~Graphics();
 
 
@@ -315,6 +322,9 @@ private:
     DeviceCreationParameters m_deviceCreationParams;
     SwapChainRuntimeState m_swapChainState;
     GpuTimingRecorder m_gpuTiming;
+    // Optional and non-owning: Frame's perf Session owns this sink and outlives Graphics. It is used only by the
+    // main-thread runFrame boundary; packet recording and setup workers intentionally remain outside this sink.
+    Perf::TimingSink* m_cpuTiming = nullptr;
 
 private:
     NotNullUniquePtr<Backend, BackendOwner::deleter_type> m_backend;

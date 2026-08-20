@@ -25,6 +25,7 @@
 #include <core/alloc/general.h>
 #include <core/alloc/thread.h>
 #include <core/alloc/job.h>
+#include <core/frame/module.h>
 #include <core/graphics/module.h>
 #include <core/graphics/api.h>
 #include <core/graphics/capture/command_ir.h>
@@ -296,6 +297,62 @@ bool DescriptorBufferRoundTripTest::s_validationBackedDeviceInitialized = false;
 UniquePtr<HeadlessGraphicsScope> DescriptorBufferRoundTripTest::s_scope;
 Optional<CapturingLogger> DescriptorBufferRoundTripTest::s_logger;
 Optional<Common::LoggerRegistrationGuard> DescriptorBufferRoundTripTest::s_loggerGuard;
+
+
+struct FrameCpuTimingCallbackState{
+    u32 invocationCount = 0u;
+};
+
+[[nodiscard]] static bool RunFrameCpuTimingCallback(void* const userData, const f32 delta){
+    static_cast<void>(delta);
+
+    auto* const state = static_cast<FrameCpuTimingCallbackState*>(userData);
+    if(!state)
+        return false;
+
+    ++state->invocationCount;
+    return true;
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, FramePublishesMainThreadCpuTimingScopes){
+    Frame frame(nullptr, 1u, 1u);
+    ASSERT_TRUE(frame.graphics().setDebugRuntimeEnabled(true));
+    ASSERT_TRUE(frame.graphics().setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()));
+    if(!frame.graphics().createHeadlessDevice())
+        GTEST_SKIP() << "Frame CPU timing: no usable headless Vulkan device on this host.";
+
+    FrameCpuTimingCallbackState callbackState;
+    frame.setProjectUpdateCallback(&RunFrameCpuTimingCallback, &callbackState);
+
+    ASSERT_TRUE(frame.update(0.f));
+    EXPECT_EQ(callbackState.invocationCount, 1u);
+    const Perf::TimingView disabledTiming = frame.perfSession().cpuTimingView();
+    EXPECT_EQ(disabledTiming.scopeCount(), 0u);
+    EXPECT_FALSE(disabledTiming.stats(Name("frame.project_update")).valid());
+    EXPECT_FALSE(disabledTiming.stats(Name("graphics.frame")).valid());
+
+    Perf::CaptureOptions cpuCapture;
+    cpuCapture.enabled = true;
+    cpuCapture.cpuTiming = true;
+    frame.setPerfCapture(cpuCapture);
+
+    const u64 sampleFrameIndex = frame.graphics().getFrameIndex();
+    ASSERT_TRUE(frame.update(0.f));
+    EXPECT_EQ(callbackState.invocationCount, 2u);
+
+    const Perf::TimingView cpuTiming = frame.perfSession().cpuTimingView();
+    const Perf::TimingStats& projectUpdateStats = cpuTiming.stats(Name("frame.project_update"));
+    const Perf::TimingStats& graphicsFrameStats = cpuTiming.stats(Name("graphics.frame"));
+    EXPECT_EQ(projectUpdateStats.sampleCount, 1u);
+    EXPECT_EQ(projectUpdateStats.firstSampleFrameIndex, sampleFrameIndex);
+    EXPECT_EQ(projectUpdateStats.lastSampleFrameIndex, sampleFrameIndex);
+    EXPECT_EQ(projectUpdateStats.publishFrameIndex, sampleFrameIndex);
+    EXPECT_EQ(graphicsFrameStats.sampleCount, 1u);
+    EXPECT_EQ(graphicsFrameStats.firstSampleFrameIndex, sampleFrameIndex);
+    EXPECT_EQ(graphicsFrameStats.lastSampleFrameIndex, sampleFrameIndex);
+    EXPECT_EQ(graphicsFrameStats.publishFrameIndex, sampleFrameIndex);
+}
 
 
 [[nodiscard]] static TextureHandle CreateConcurrentTestTexture(

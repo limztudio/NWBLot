@@ -2120,6 +2120,7 @@ bool GpuTaskGraphCompiler::compile(
         }
     }
 
+    const Timer packetizationBegin = TimerNow();
     // Tasks retain one exact acceptance and synchronization point by default. An explicitly opted-in successor may
     // share its immediately preceding compatible packet, preserving task order while retaining one submission for a
     // temporary imported/native recording bridge. The separate FrontierScored policy is deliberately opt-in too:
@@ -2308,7 +2309,9 @@ bool GpuTaskGraphCompiler::compile(
             .packetizationDecision = packetizationDecision,
         });
     }
+    const f64 packetizationSeconds = DurationInSeconds<f64>(TimerNow(), packetizationBegin);
 
+    const Timer resourceStatePlanningBegin = TimerNow();
     // Start with graph-planned packet state seeds, transitions, UAV dependencies, and exclusive-family ownership
     // releases. A state seed selects the actual final-state snapshot of a graph-internal producer, so it also carries
     // the release destination into CommandList::open where the paired Vulkan acquire is emitted before the consumer.
@@ -3111,7 +3114,9 @@ bool GpuTaskGraphCompiler::compile(
             - compiledTask.epilogueBarrierOffset
         ;
     }
+    const f64 resourceStatePlanningSeconds = DurationInSeconds<f64>(TimerNow(), resourceStatePlanningBegin);
 
+    const Timer packetDependencyPlanningBegin = TimerNow();
     for(usize consumerPacketIndex = 0u; consumerPacketIndex < outCompiledGraph.m_packets.size(); ++consumerPacketIndex){
         GpuSubmissionPacket& consumerPacket = outCompiledGraph.m_packets[consumerPacketIndex];
         const GpuSubmissionPacketId consumerPacketID{
@@ -3255,6 +3260,7 @@ bool GpuTaskGraphCompiler::compile(
         };
         outCompiledGraph.m_hasPresentEndpoint = true;
     }
+    const f64 packetDependencyPlanningSeconds = DurationInSeconds<f64>(TimerNow(), packetDependencyPlanningBegin);
 
     GpuTaskGraphCompileStatistics& statistics = outCompiledGraph.m_compileStatistics;
     statistics.graphGeneration = outCompiledGraph.m_generation;
@@ -3370,6 +3376,9 @@ bool GpuTaskGraphCompiler::compile(
     statistics.analysisSeconds = analysisSeconds;
     statistics.queueAssignmentSeconds = queueAssignmentSeconds;
     statistics.planningSeconds = DurationInSeconds<f64>(TimerNow(), planningBegin);
+    statistics.packetizationSeconds = packetizationSeconds;
+    statistics.resourceStatePlanningSeconds = resourceStatePlanningSeconds;
+    statistics.packetDependencyPlanningSeconds = packetDependencyPlanningSeconds;
     statistics.totalSeconds = DurationInSeconds<f64>(TimerNow(), compileBegin);
 
     outCompiledGraph.m_valid = true;

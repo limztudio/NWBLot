@@ -177,6 +177,11 @@ struct GpuTaskGraphCompileStatistics{
     usize payloadObjectBytes = 0u;
     usize uploadBlobCount = 0u;
     usize uploadBlobBytes = 0u;
+    // planningSeconds remains the umbrella duration. These detail buckets cover only their named core planning
+    // passes, so callers must not expect them to sum to planningSeconds.
+    f64 packetizationSeconds = 0.0;
+    f64 resourceStatePlanningSeconds = 0.0;
+    f64 packetDependencyPlanningSeconds = 0.0;
 
     [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
 };

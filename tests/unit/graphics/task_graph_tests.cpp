@@ -8198,6 +8198,9 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_GE(compileStatistics.analysisSeconds, 0.0);
     EXPECT_GE(compileStatistics.queueAssignmentSeconds, 0.0);
     EXPECT_GE(compileStatistics.planningSeconds, 0.0);
+    EXPECT_GE(compileStatistics.packetizationSeconds, 0.0);
+    EXPECT_GE(compileStatistics.resourceStatePlanningSeconds, 0.0);
+    EXPECT_GE(compileStatistics.packetDependencyPlanningSeconds, 0.0);
     EXPECT_GE(compileStatistics.totalSeconds, 0.0);
 
     const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
@@ -8563,6 +8566,9 @@ TEST(GpuTaskGraph, PublishesDeclarationStructureStatisticsOnlyForAcceptedPlans){
     EXPECT_EQ(resetStatistics.payloadObjectBytes, 0u);
     EXPECT_EQ(resetStatistics.uploadBlobCount, 0u);
     EXPECT_EQ(resetStatistics.uploadBlobBytes, 0u);
+    EXPECT_EQ(resetStatistics.packetizationSeconds, 0.0);
+    EXPECT_EQ(resetStatistics.resourceStatePlanningSeconds, 0.0);
+    EXPECT_EQ(resetStatistics.packetDependencyPlanningSeconds, 0.0);
 
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuTaskGraphQueueTopology invalidTopology{};
@@ -8580,6 +8586,9 @@ TEST(GpuTaskGraph, PublishesDeclarationStructureStatisticsOnlyForAcceptedPlans){
     EXPECT_EQ(failedStatistics.payloadObjectBytes, 0u);
     EXPECT_EQ(failedStatistics.uploadBlobCount, 0u);
     EXPECT_EQ(failedStatistics.uploadBlobBytes, 0u);
+    EXPECT_EQ(failedStatistics.packetizationSeconds, 0.0);
+    EXPECT_EQ(failedStatistics.resourceStatePlanningSeconds, 0.0);
+    EXPECT_EQ(failedStatistics.packetDependencyPlanningSeconds, 0.0);
 }
 
 

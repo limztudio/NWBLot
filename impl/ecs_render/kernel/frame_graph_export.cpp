@@ -55,6 +55,7 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             "Submission: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} submissions={} command lists={} waits={} failed submissions={}\n"
             "CPU: compile={:.3f} ms record={:.3f} ms submit={:.3f} ms\n"
             "CPU compile phases: analysis={:.3f} ms queue assignment={:.3f} ms planning={:.3f} ms\n"
+            "CPU planning detail: packetization={:.3f} ms resource states={:.3f} ms packet dependencies={:.3f} ms\n"
             "CPU recording phases: command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task recording={:.3f} ms",
             compileStatistics.taskCount,
             compileStatistics.packetCount,
@@ -89,6 +90,9 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             compileStatistics.analysisSeconds * 1000.0,
             compileStatistics.queueAssignmentSeconds * 1000.0,
             compileStatistics.planningSeconds * 1000.0,
+            compileStatistics.packetizationSeconds * 1000.0,
+            compileStatistics.resourceStatePlanningSeconds * 1000.0,
+            compileStatistics.packetDependencyPlanningSeconds * 1000.0,
             recordingStatistics.commandListAcquisitionSeconds * 1000.0,
             recordingStatistics.graphBarrierRecordingSeconds * 1000.0,
             recordingStatistics.taskRecordSeconds * 1000.0

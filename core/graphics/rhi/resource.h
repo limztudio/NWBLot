@@ -115,6 +115,10 @@ namespace ResourceStates{
     };
 
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
+
+    [[nodiscard]] constexpr bool HasUnorderedAccess(const Mask states)noexcept{
+        return (states & UnorderedAccess) != Unknown;
+    }
 };
 
 typedef u32 MipLevel;

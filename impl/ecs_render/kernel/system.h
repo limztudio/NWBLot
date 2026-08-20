@@ -297,6 +297,7 @@ private:
         const Core::GpuGraphResourceId* softwareBvhBuildStateResources,
         usize softwareBvhBuildStateResourceCount,
         bool softwareTraceResourcesPrepared,
+        Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] bool declareDeferredGraphicsPrefixTasks(
@@ -335,7 +336,6 @@ private:
         const Core::GpuGraphResourceId* shadowTraceGeometryResources,
         usize shadowTraceGeometryResourceCount,
         Core::GpuGraphResourceSetId shadowTraceGeometrySet,
-        Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
         Optional<Core::GpuTimingMeasure>& deferredClearTiming,
         ECSRenderDetail::DeferredClearTimingRecordState& deferredClearTimingState,
@@ -681,6 +681,9 @@ private:
     // separately named because lagged-history copies may begin from it while the overlay finishes on Graphics.
     Core::GpuTaskId m_deferredPresentationOverlayTask;
     Core::GpuTaskId m_deferredPresentTask;
+    // The graph-owned terminal Graphics task records the published frame-timing endpoint and owns the swap-chain
+    // signal after Deferred Present and any optional presentation contributor.
+    Core::GpuTaskId m_deferredFrameTimingEndTask;
     Core::GpuTaskId m_deferredLaggedLightingHistoryTask;
     // Recovery stays unrecorded until a later packet rejects. Its graph-owned submission join waits for every latest
     // accepted non-Graphics physical queue while Graphics queue order covers the accepted prefix.

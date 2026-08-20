@@ -151,6 +151,69 @@ TEST(EcsGraphics, OnlyTerminalPresentationRetainsAPacketIdentity){
 }
 
 
+// The frame timing query must record its published endpoint after the optional presentation contributor. A rejected
+// endpoint remains recoverable through the separate non-publishing recovery task instead of silently publishing a
+// partial frame duration.
+TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemSource;
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", systemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    const usize deferredPresentOffset = taskGraph.find("struct DeferredPresentGraphTask");
+    const usize frameTimingEndOffset = taskGraph.find("struct FrameTimingEndGraphTask", deferredPresentOffset);
+    const usize recoveryOffset = taskGraph.find("struct FrameRecoveryGraphTask");
+    const usize shadowPrepareOffset = taskGraph.find("struct ShadowPrepareGraphTask");
+    const usize meshViewSetupOffset = taskGraph.find("struct MeshViewSetupGraphTask", shadowPrepareOffset);
+    ASSERT_NE(deferredPresentOffset, AStringView::npos);
+    ASSERT_NE(frameTimingEndOffset, AStringView::npos);
+    ASSERT_NE(recoveryOffset, AStringView::npos);
+    ASSERT_NE(shadowPrepareOffset, AStringView::npos);
+    ASSERT_NE(meshViewSetupOffset, AStringView::npos);
+    ASSERT_LT(deferredPresentOffset, frameTimingEndOffset);
+    ASSERT_LT(shadowPrepareOffset, meshViewSetupOffset);
+
+    const AStringView deferredPresent = taskGraph.substr(deferredPresentOffset, frameTimingEndOffset - deferredPresentOffset);
+    EXPECT_FALSE(ContainsText(deferredPresent, "frameTimingTransaction"));
+    EXPECT_FALSE(ContainsText(deferredPresent, "recordEnd(commandList)"));
+    EXPECT_TRUE(ContainsText(taskGraph, "render.frame_timing_end"));
+    EXPECT_TRUE(ContainsText(taskGraph, "setDependencies(&frameTimingEndDependency, 1u)"));
+    EXPECT_TRUE(ContainsText(taskGraph, "frameTimingTransaction->recordEnd(commandList)"));
+
+    const AStringView shadowPrepare = taskGraph.substr(shadowPrepareOffset, meshViewSetupOffset - shadowPrepareOffset);
+    EXPECT_TRUE(ContainsText(shadowPrepare, "frameTimingTransaction->begin("));
+    const AStringView meshViewSetup = taskGraph.substr(meshViewSetupOffset, deferredPresentOffset - meshViewSetupOffset);
+    EXPECT_FALSE(ContainsText(meshViewSetup, "frameTimingTransaction->begin("));
+
+    const AStringView recovery = taskGraph.substr(recoveryOffset, deferredPresentOffset - recoveryOffset);
+    EXPECT_TRUE(ContainsText(recovery, "frameTimingTransaction->recordEnd(commandList)"));
+    EXPECT_TRUE(ContainsText(recovery, "confirmEndSubmission(false)"));
+    EXPECT_TRUE(ContainsText(system, "const Core::GpuTaskId terminalPresentationTask = m_deferredFrameTimingEndTask;"));
+    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredFrameTimingEndTask)"));
+
+    const usize shadowPrepareAcceptanceOffset = system.find("const auto acceptShadowPrepareTask = [](");
+    ASSERT_NE(shadowPrepareAcceptanceOffset, AStringView::npos);
+    const usize shadowPreparePrefixAcceptedOffset = system.find(
+        "const bool shadowPreparePrefixAccepted =",
+        shadowPrepareAcceptanceOffset
+    );
+    ASSERT_NE(shadowPreparePrefixAcceptedOffset, AStringView::npos);
+    const AStringView shadowPrepareAcceptance = system.substr(
+        shadowPrepareAcceptanceOffset,
+        shadowPreparePrefixAcceptedOffset - shadowPrepareAcceptanceOffset
+    );
+    EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, "context->frameTimingTransaction->confirmBeginSubmission()"));
+    EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, ".task = m_deferredShadowPrepareTask,"));
+    EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, ".invoke = acceptShadowPrepareTask,"));
+    EXPECT_FALSE(ContainsText(system, "acceptGraphicsPrefixBeginTask"));
+}
+
+
 // Late recovery, readback, and history tasks own their record/submit/reject sequencing in the generic runtime.
 // Keep the renderer limited to payload validation, timing arming, and device-recreation policy rather than
 // reconstructing compiler packet ranges around every late tail.

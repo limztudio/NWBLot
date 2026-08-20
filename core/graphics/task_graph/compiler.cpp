@@ -2129,8 +2129,8 @@ bool GpuTaskGraphCompiler::compile(
 
                     const bool needsUavDependency =
                         previousState
-                        && before == ResourceStates::UnorderedAccess
-                        && use.requiredState == ResourceStates::UnorderedAccess
+                        && before == use.requiredState
+                        && ResourceStates::HasUnorderedAccess(before)
                         && (IsWriteAccess(previousState->access) || IsWriteAccess(use.access))
                     ;
                     if(previousState){
@@ -2373,8 +2373,8 @@ bool GpuTaskGraphCompiler::compile(
             }
             const bool needsUavDependency =
                 previousState
-                && before == ResourceStates::UnorderedAccess
-                && use.requiredState == ResourceStates::UnorderedAccess
+                && before == use.requiredState
+                && ResourceStates::HasUnorderedAccess(before)
                 && (IsWriteAccess(previousState->access) || IsWriteAccess(use.access))
             ;
             if(

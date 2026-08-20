@@ -100,6 +100,7 @@ struct ShadowPrepareGraphTask{
     struct Payload{
         RendererSystem* renderer = nullptr;
         DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool deferredBindlessSlotsWereUploaded = false;
         bool currentBindlessSlotsGraphOwned = false;
@@ -119,11 +120,17 @@ struct ShadowPrepareGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.renderer || !payload.targets || !payload.timingTicket)
+        if(!payload.renderer || !payload.targets || !payload.frameTimingTransaction || !payload.timingTicket)
             return false;
 
         RendererSystem& renderer = *payload.renderer;
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        if(!payload.frameTimingTransaction->begin(
+            RendererGpuTimingScope::s_Frame,
+            renderer.m_graphics.getDevice(),
+            commandList
+        ))
+            return false;
         renderer.m_preparedShadowVisibilityReady = false;
         // The compiled ConstantBuffer use established this packet's selector state before this thunk records. The
         // retained descriptor-visible state is also ConstantBuffer, so normal graph frames need no native bridge.
@@ -296,11 +303,10 @@ struct ShadowPrepareHybridSoftwareTailGraphTask{
 
 
 // Mesh-view setup is the first native graphics-prefix task. The immutable data upload immediately following this
-// preamble is a built-in graph task; this payload retains only frame-timing ownership.
+// preamble is a built-in graph task; the first accepted Shadow Preparation packet already owns frame timing.
 struct MeshViewSetupGraphTask{
     struct Payload{
         RendererSystem* renderer = nullptr;
-        Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncPrefixTiming = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* asyncPrefixTimingSpansOnePacket = nullptr;
@@ -318,7 +324,6 @@ struct MeshViewSetupGraphTask{
         );
         if(
             !payload.renderer
-            || !payload.frameTimingTransaction
             || !payload.asyncPrefixTiming
             || !payload.timingTicket
             || !*payload.timingTicket
@@ -337,11 +342,6 @@ struct MeshViewSetupGraphTask{
         if(recordsGraphicsFrameMarker)
             commandList.beginMarker(RendererGpuTimingScope::s_Frame.markerLabel);
 
-        const bool frameTimingStarted = payload.frameTimingTransaction->begin(
-            RendererGpuTimingScope::s_Frame,
-            renderer.m_graphics.getDevice(),
-            commandList
-        );
         if(shadowVisibilityRunsOnCompute && *payload.asyncPrefixTimingSpansOnePacket){
             payload.asyncPrefixTiming->emplace(
                 renderer.m_graphics.gpuTiming(),
@@ -354,7 +354,7 @@ struct MeshViewSetupGraphTask{
 
         if(recordsGraphicsFrameMarker)
             commandList.endMarker();
-        return frameTimingStarted;
+        return true;
     }
 };
 
@@ -4017,7 +4017,6 @@ struct DeferredPresentGraphTask{
         Core::Graphics* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::Framebuffer* presentationFramebuffer = nullptr;
-        Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncFinalTiming = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const Core::GpuTaskId* shadowVisibilityTask = nullptr;
@@ -4039,7 +4038,6 @@ struct DeferredPresentGraphTask{
             || !payload.graphics
             || !payload.targets
             || !payload.presentationFramebuffer
-            || !payload.frameTimingTransaction
             || !payload.timingTicket
             || !shadowVisibilityQueue
             || (shadowVisibilityRunsOnCompute && !payload.asyncFinalTiming)
@@ -4062,14 +4060,30 @@ struct DeferredPresentGraphTask{
             *payload.targets,
             payload.presentationFramebuffer
         );
-        const bool frameTimingEnded = presentRecorded
-            && payload.frameTimingTransaction->recordEnd(commandList)
-        ;
         if(shadowVisibilityRunsOnCompute && presentRecorded && payload.asyncFinalTiming->has_value()){
             payload.asyncFinalTiming->value().finishTiming(commandList);
             payload.asyncFinalTiming->reset();
         }
-        return presentRecorded && frameTimingEnded;
+        return presentRecorded;
+    }
+};
+
+
+// This graph-owned terminal task records the published frame-timing endpoint after every presentation contributor.
+// It intentionally has no discarded hook: a rejected endpoint must remain available to FrameRecoveryGraphTask's
+// non-publishing recovery submission.
+struct FrameTimingEndGraphTask{
+    struct Payload{
+        Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        return payload.frameTimingTransaction && payload.frameTimingTransaction->recordEnd(commandList);
     }
 };
 
@@ -4545,6 +4559,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     const Core::GpuGraphResourceId* const softwareBvhBuildStateResources,
     const usize softwareBvhBuildStateResourceCount,
     const bool softwareTraceResourcesPrepared,
+    Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace RendererTaskGraphDetail;
@@ -5619,6 +5634,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         ECSRenderDetail::ShadowPrepareGraphTask::Payload{
             .renderer = this,
             .targets = &deferredTargets,
+            .frameTimingTransaction = &frameTimingTransaction,
             .timingTicket = &timingTicket,
             .deferredBindlessSlotsWereUploaded = deferredTargets.bindless.slotsUploaded,
             .currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned,
@@ -5795,7 +5811,6 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     const Core::GpuGraphResourceId* const shadowTraceGeometryResources,
     const usize shadowTraceGeometryResourceCount,
     const Core::GpuGraphResourceSetId shadowTraceGeometrySet,
-    Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
     Optional<Core::GpuTimingMeasure>& deferredClearTiming,
     ECSRenderDetail::DeferredClearTimingRecordState& deferredClearTimingState,
@@ -5945,7 +5960,6 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         meshViewSetupDesc,
         ECSRenderDetail::MeshViewSetupGraphTask::Payload{
             .renderer = this,
-            .frameTimingTransaction = &frameTimingTransaction,
             .asyncPrefixTiming = &asyncPrefixTiming,
             .timingTicket = timingTicketSlot(PrefixTimingSlot::MeshViewSetup),
             .asyncPrefixTimingSpansOnePacket = asyncPrefixTimingSpansOnePacket,
@@ -10776,6 +10790,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredCompositeTask = {};
     m_deferredPresentationOverlayTask = {};
     m_deferredPresentTask = {};
+    m_deferredFrameTimingEndTask = {};
     m_deferredLaggedLightingHistoryTask = {};
     m_deferredFrameRecoveryTask = {};
     m_deferredSurfelGiCounterReadbackCompletion = {};
@@ -11448,6 +11463,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         softwareBvhBuildStateResources.data(),
         softwareBvhBuildStateResources.size(),
         softwareTraceResourcesPrepared,
+        frameTimingTransaction,
         shadowPrepareTimingTicket
     )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation packet"));
@@ -11496,7 +11512,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         traceGeometryResources.data(),
         traceGeometryResources.size(),
         shadowTraceGeometrySet,
-        frameTimingTransaction,
         asyncPrefixTiming,
         deferredClearTiming,
         deferredClearTimingState,
@@ -16402,7 +16417,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .graphics = &m_graphics,
             .targets = &deferredTargets,
             .presentationFramebuffer = presentationFramebuffer,
-            .frameTimingTransaction = &frameTimingTransaction,
             .asyncFinalTiming = &asyncFinalTiming,
             .timingTicket = &presentTimingTicket,
             .shadowVisibilityTask = &m_deferredShadowVisibilityTask,
@@ -16414,8 +16428,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     }
 
     // UI/overlay work must be declared before the independent diagnostic and history-copy tails. Its explicit
-    // dependency on Deferred Present therefore gives the shared graph the real final Graphics packet instead of
-    // leaving Graphics::render() to submit a later untracked backbuffer write.
+    // dependency on Deferred Present makes it the final presentation contributor that the timing endpoint follows,
+    // instead of leaving Graphics::render() to submit a later untracked backbuffer write.
     m_deferredPresentationOverlayRequired =
         m_preparedTaskGraphPresentationContributor
         && m_preparedTaskGraphPresentationContributor->hasTaskGraphPresentationWork()
@@ -16431,6 +16445,36 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: presentation contributor did not declare its final graph task"));
             return;
         }
+    }
+
+    // The critical-path query must end after the last graph-owned presentation contributor, while recovery keeps a
+    // separate non-publishing endpoint for a rejected suffix. The distinct packet is also the only packet that may
+    // carry the swap-chain presentation signal.
+    const Core::GpuTaskId frameTimingEndDependency = m_deferredPresentationOverlayTask.valid()
+        ? m_deferredPresentationOverlayTask
+        : m_deferredPresentTask
+    ;
+    Core::GpuTaskSchedulingHint frameTimingEndScheduling;
+    frameTimingEndScheduling.cost = Core::GpuTaskCostHint::Tiny;
+    frameTimingEndScheduling.forceSubmissionBoundary = true;
+    frameTimingEndScheduling.allowPacketMerge = false;
+    Core::GpuTaskDesc frameTimingEndDesc;
+    frameTimingEndDesc
+        .setIdentity(Name("render.frame_timing_end"))
+        .setMarkerLabel("Frame Timing End")
+        .setQueue(GraphicsQueueRequest())
+        .setScheduling(frameTimingEndScheduling)
+        .setDependencies(&frameTimingEndDependency, 1u)
+    ;
+    m_deferredFrameTimingEndTask = m_deferredLightingTaskGraph.addTask<FrameTimingEndGraphTask>(
+        frameTimingEndDesc,
+        FrameTimingEndGraphTask::Payload{
+            .frameTimingTransaction = &frameTimingTransaction,
+        }
+    );
+    if(!m_deferredFrameTimingEndTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred frame-timing endpoint graph task"));
+        return;
     }
 
     // Keep this diagnostic after the normal Present path in declaration order. Its only dependency is Surfel GI,

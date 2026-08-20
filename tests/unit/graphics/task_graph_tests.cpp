@@ -28296,6 +28296,115 @@ TEST(GpuTaskGraph, PlansPacketBoundaryTransitionsAndUavDependencies){
 }
 
 
+TEST(GpuTaskGraph, PlansCompositeUavDependencies){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId texture = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/composite_uav_texture"),
+        "Composite UAV Texture"
+    );
+    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/composite_uav_buffer"),
+        "Composite UAV Buffer"
+    );
+    ASSERT_TRUE(texture.valid());
+    ASSERT_TRUE(buffer.valid());
+
+    const Graphics::ResourceStates::Mask compositeState =
+        Graphics::ResourceStates::UnorderedAccess | Graphics::ResourceStates::ShaderResource
+    ;
+    const Graphics::GpuTaskResourceUse producerUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = texture,
+            .range = {},
+            .requiredState = compositeState,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = buffer,
+            .range = {},
+            .requiredState = compositeState,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskResourceUse consumerUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = texture,
+            .range = {},
+            .requiredState = compositeState,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = buffer,
+            .range = {},
+            .requiredState = compositeState,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuTaskId producer = AddTask(
+        graph,
+        Name("tests/task_graph/composite_uav_producer"),
+        "Composite UAV Producer",
+        nullptr,
+        0u,
+        producerUses,
+        LengthOf(producerUses)
+    );
+    const Graphics::GpuTaskId consumer = AddTask(
+        graph,
+        Name("tests/task_graph/composite_uav_consumer"),
+        "Composite UAV Consumer",
+        nullptr,
+        0u,
+        consumerUses,
+        LengthOf(consumerUses)
+    );
+    ASSERT_TRUE(producer.valid());
+    ASSERT_TRUE(consumer.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledConsumer, nullptr);
+    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 2u);
+    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
+
+    const Graphics::GpuCompiledBarrier* const consumerBarriers = compiledGraph.taskPrologueBarriers(consumer);
+    ASSERT_NE(consumerBarriers, nullptr);
+    bool hasTextureUavBarrier = false;
+    bool hasBufferUavBarrier = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledConsumer->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = consumerBarriers[barrierIndex];
+        hasTextureUavBarrier = hasTextureUavBarrier || (
+            barrier.resource == texture
+            && barrier.type == Graphics::GpuCompiledBarrierType::TextureUav
+            && barrier.before == compositeState
+            && barrier.after == compositeState
+        );
+        hasBufferUavBarrier = hasBufferUavBarrier || (
+            barrier.resource == buffer
+            && barrier.type == Graphics::GpuCompiledBarrierType::BufferUav
+            && barrier.before == compositeState
+            && barrier.after == compositeState
+        );
+    }
+    EXPECT_TRUE(hasTextureUavBarrier);
+    EXPECT_TRUE(hasBufferUavBarrier);
+}
+
+
 TEST(GpuTaskGraph, TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExports){
     TestArena testArena;
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };

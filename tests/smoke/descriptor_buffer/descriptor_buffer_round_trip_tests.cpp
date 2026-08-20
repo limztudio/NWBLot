@@ -43546,11 +43546,13 @@ TEST_F(DescriptorBufferRoundTripTest, StateFanInRejectsConflictingBranchFinalSta
 }
 
 
-// Independent primary command lists use distinct Vulkan command pools. Start both recording jobs at the same latch
-// so this exercises the worker-thread path instead of merely submitting them in a fixed order on the main thread.
+// Independent primary command lists use distinct Vulkan command-pool shards. Start both recording jobs at the same
+// latch, then record a second batch after timeline retirement to cover worker-affine recycler reuse.
 TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcurrentlyOnGraphicsWorkers){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
     auto firstBuffer = device.createBuffer(
         BufferDesc()
             .setByteSize(256u)
@@ -43566,10 +43568,22 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
     ASSERT_NE(firstBuffer.get(), nullptr);
     ASSERT_NE(secondBuffer.get(), nullptr);
 
-    auto firstCommandList = device.createCommandList();
-    auto secondCommandList = device.createCommandList();
+    CommandListParameters firstParameters;
+    firstParameters
+        .setPhysicalQueue(graphicsQueue)
+        .setRecordingWorkerIndex(1u)
+    ;
+    CommandListParameters secondParameters;
+    secondParameters
+        .setPhysicalQueue(graphicsQueue)
+        .setRecordingWorkerIndex(2u)
+    ;
+    auto firstCommandList = device.createCommandList(firstParameters);
+    auto secondCommandList = device.createCommandList(secondParameters);
     ASSERT_NE(firstCommandList.get(), nullptr);
     ASSERT_NE(secondCommandList.get(), nullptr);
+    EXPECT_EQ(firstCommandList->getDescription().recordingWorkerIndex, 1u);
+    EXPECT_EQ(secondCommandList->getDescription().recordingWorkerIndex, 2u);
 
     Latch recordingStarted(2);
     bool firstRecorded = false;
@@ -43602,6 +43616,39 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
     bool submitted = false;
     EXPECT_GT(device.executeCommandLists(commandLists, 2u, CommandQueue::Graphics, &submitted), 0u);
     EXPECT_TRUE(submitted);
+    EXPECT_TRUE(device.waitForIdle());
+    device.runGarbageCollection();
+
+    Latch reusedRecordingStarted(2);
+    firstRecorded = false;
+    secondRecorded = false;
+    const Graphics::JobHandle reusedFirstJob = graphics.scheduleGraphicsJob([&](){
+        reusedRecordingStarted.count_down();
+        reusedRecordingStarted.wait();
+        firstCommandList->open();
+        firstCommandList->setBufferState(firstBuffer.get(), ResourceStates::CopyDest);
+        firstCommandList->close();
+        firstRecorded = true;
+    });
+    const Graphics::JobHandle reusedSecondJob = graphics.scheduleGraphicsJob([&](){
+        reusedRecordingStarted.count_down();
+        reusedRecordingStarted.wait();
+        secondCommandList->open();
+        secondCommandList->setBufferState(secondBuffer.get(), ResourceStates::CopyDest);
+        secondCommandList->close();
+        secondRecorded = true;
+    });
+    ASSERT_TRUE(reusedFirstJob.valid());
+    ASSERT_TRUE(reusedSecondJob.valid());
+
+    graphics.waitJob(reusedFirstJob);
+    graphics.waitJob(reusedSecondJob);
+    EXPECT_TRUE(firstRecorded);
+    EXPECT_TRUE(secondRecorded);
+
+    bool reusedSubmitted = false;
+    EXPECT_GT(device.executeCommandLists(commandLists, 2u, CommandQueue::Graphics, &reusedSubmitted), 0u);
+    EXPECT_TRUE(reusedSubmitted);
     EXPECT_TRUE(device.waitForIdle());
 }
 

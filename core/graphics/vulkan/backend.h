@@ -795,15 +795,26 @@ private:
     struct WorkerCommandArena{
         u32 recordingWorkerIndex = 0u;
         VkCommandPool commandPool = VK_NULL_HANDLE;
+        Futex mutex;
+        List<TrackedCommandBufferPtr, Alloc::GlobalArena> commandBuffersPool;
+
+
+        WorkerCommandArena(Alloc::GlobalArena& arena, const u32 workerIndex)
+            : recordingWorkerIndex(workerIndex)
+            , commandBuffersPool(arena)
+        {}
     };
 
     // Requires m_mutex. Releases native command-buffer resource/staging references only after the queue timeline
-    // has completed their submission, then preserves each worker-affine lease in the reusable pool.
+    // has completed their submission, then preserves each worker-affine lease in its own reusable pool.
     void collectCompletedCommandBuffers();
     // Default/direct lease zero stays private per command buffer because external callers may record it from
     // unrelated threads. Explicit graph workers use one Vulkan pool shard per physical queue and worker index.
-    [[nodiscard]] TrackedCommandBufferPtr createCommandBuffer(u32 recordingWorkerIndex);
-    [[nodiscard]] VkCommandPool getOrCreateWorkerCommandPool(u32 recordingWorkerIndex);
+    [[nodiscard]] TrackedCommandBufferPtr createCommandBuffer(VkCommandPool commandPool, u32 recordingWorkerIndex);
+    [[nodiscard]] WorkerCommandArena* findWorkerCommandArena(u32 recordingWorkerIndex);
+    [[nodiscard]] WorkerCommandArena* getOrCreateWorkerCommandArena(u32 recordingWorkerIndex);
+    [[nodiscard]] TrackedCommandBufferPtr getOrCreateDirectCommandBuffer();
+    [[nodiscard]] TrackedCommandBufferPtr getOrCreateWorkerCommandBuffer(u32 recordingWorkerIndex);
     void destroyWorkerCommandArenas();
     void clearPendingSemaphores();
     void recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf);
@@ -821,18 +832,19 @@ private:
     u32 m_queueFamilyIndex;
 
     Futex m_mutex;
+    Futex m_workerCommandArenasMutex;
     Vector<VkSemaphore, Alloc::GlobalArena> m_waitSemaphores;
     Vector<u64, Alloc::GlobalArena> m_waitSemaphoreValues;
     Vector<VkSemaphore, Alloc::GlobalArena> m_signalSemaphores;
     Vector<u64, Alloc::GlobalArena> m_signalSemaphoreValues;
 
-    u64 m_lastRecordingID = 0;
+    Atomic<u64> m_lastRecordingID = 0u;
     u64 m_lastSubmittedID = 0;
     u64 m_lastFinishedID = 0;
 
     List<TrackedCommandBufferPtr, Alloc::GlobalArena> m_commandBuffersInFlight;
     List<TrackedCommandBufferPtr, Alloc::GlobalArena> m_commandBuffersPool;
-    Vector<WorkerCommandArena, Alloc::GlobalArena> m_workerCommandArenas;
+    Vector<WorkerCommandArena*, Alloc::GlobalArena> m_workerCommandArenas;
 };
 
 

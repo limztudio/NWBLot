@@ -115,7 +115,7 @@ Queue::Queue(
     , m_waitSemaphoreValues(context.objectArena)
     , m_signalSemaphores(context.objectArena)
     , m_signalSemaphoreValues(context.objectArena)
-    , m_lastRecordingID(0)
+    , m_lastRecordingID(0u)
     , m_lastSubmittedID(0)
     , m_lastFinishedID(0)
     , m_commandBuffersInFlight(context.objectArena)
@@ -157,26 +157,91 @@ Queue::~Queue(){
     }
 }
 
-VkCommandPool Queue::getOrCreateWorkerCommandPool(const u32 recordingWorkerIndex){
+TrackedCommandBufferPtr Queue::createCommandBuffer(const VkCommandPool commandPool, const u32 recordingWorkerIndex){
+    const bool ownsCommandPool = recordingWorkerIndex == 0u;
+    if(!ownsCommandPool && commandPool == VK_NULL_HANDLE){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Cannot create a worker command buffer without a command pool for physical queue {} worker {}"),
+            m_physicalQueue.index,
+            recordingWorkerIndex
+        );
+        return nullptr;
+    }
+
+    auto* cmdBuf = NewArenaObject<TrackedCommandBuffer>(
+        m_context.objectArena,
+        m_context,
+        m_queueFamilyIndex,
+        commandPool,
+        ownsCommandPool
+    );
+    if(!cmdBuf){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to allocate command-buffer tracking storage for physical queue {} worker {}"),
+            m_physicalQueue.index,
+            recordingWorkerIndex
+        );
+        return nullptr;
+    }
+    if(!cmdBuf->m_cmdBuf){
+        DestroyArenaObject(m_context.objectArena, cmdBuf);
+        return nullptr;
+    }
+
+    cmdBuf->m_recordingID = m_lastRecordingID.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+    cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
+    return TrackedCommandBufferPtr(cmdBuf, TrackedCommandBufferPtr::deleter_type(&m_context.objectArena), AdoptRef);
+}
+
+
+Queue::WorkerCommandArena* Queue::findWorkerCommandArena(const u32 recordingWorkerIndex){
     NWB_ASSERT(recordingWorkerIndex != 0u);
     if(recordingWorkerIndex == 0u)
-        return VK_NULL_HANDLE;
+        return nullptr;
 
-    for(const WorkerCommandArena& arena : m_workerCommandArenas){
-        if(arena.recordingWorkerIndex == recordingWorkerIndex)
-            return arena.commandPool;
+    ScopedLock lock(m_workerCommandArenasMutex);
+    for(WorkerCommandArena* const arena : m_workerCommandArenas){
+        if(arena && arena->recordingWorkerIndex == recordingWorkerIndex)
+            return arena;
+    }
+    return nullptr;
+}
+
+
+Queue::WorkerCommandArena* Queue::getOrCreateWorkerCommandArena(const u32 recordingWorkerIndex){
+    NWB_ASSERT(recordingWorkerIndex != 0u);
+    if(recordingWorkerIndex == 0u)
+        return nullptr;
+
+    ScopedLock lock(m_workerCommandArenasMutex);
+    for(WorkerCommandArena* const arena : m_workerCommandArenas){
+        if(arena && arena->recordingWorkerIndex == recordingWorkerIndex)
+            return arena;
+    }
+
+    auto* const arena = NewArenaObject<WorkerCommandArena>(
+        m_context.objectArena,
+        m_context.objectArena,
+        recordingWorkerIndex
+    );
+    if(!arena){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to allocate command-arena storage for physical queue {} worker {}"),
+            m_physicalQueue.index,
+            recordingWorkerIndex
+        );
+        return nullptr;
     }
 
     auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
     poolInfo.queueFamilyIndex = m_queueFamilyIndex;
     poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT | VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
 
-    VkCommandPool commandPool = VK_NULL_HANDLE;
     const VkResult createResult = vkCreateCommandPool(
         m_context.device,
         &poolInfo,
         m_context.allocationCallbacks,
-        &commandPool
+        &arena->commandPool
     );
     if(createResult != VK_SUCCESS){
         NWB_LOGGER_ERROR(
@@ -185,53 +250,16 @@ VkCommandPool Queue::getOrCreateWorkerCommandPool(const u32 recordingWorkerIndex
             recordingWorkerIndex,
             ResultToString(createResult)
         );
-        return VK_NULL_HANDLE;
-    }
-
-    m_workerCommandArenas.push_back(WorkerCommandArena{
-        .recordingWorkerIndex = recordingWorkerIndex,
-        .commandPool = commandPool,
-    });
-    return commandPool;
-}
-
-void Queue::destroyWorkerCommandArenas(){
-    for(WorkerCommandArena& arena : m_workerCommandArenas){
-        if(arena.commandPool){
-            vkDestroyCommandPool(m_context.device, arena.commandPool, m_context.allocationCallbacks);
-            arena.commandPool = VK_NULL_HANDLE;
-        }
-    }
-    m_workerCommandArenas.clear();
-}
-
-TrackedCommandBufferPtr Queue::createCommandBuffer(const u32 recordingWorkerIndex){
-    const bool usesWorkerArena = recordingWorkerIndex != 0u;
-    const VkCommandPool commandPool = usesWorkerArena
-        ? getOrCreateWorkerCommandPool(recordingWorkerIndex)
-        : VK_NULL_HANDLE
-    ;
-    if(usesWorkerArena && commandPool == VK_NULL_HANDLE)
-        return nullptr;
-
-    auto* cmdBuf = NewArenaObject<TrackedCommandBuffer>(
-        m_context.objectArena,
-        m_context,
-        m_queueFamilyIndex,
-        commandPool,
-        !usesWorkerArena
-    );
-    if(!cmdBuf->m_cmdBuf){
-        DestroyArenaObject(m_context.objectArena, cmdBuf);
+        DestroyArenaObject(m_context.objectArena, arena);
         return nullptr;
     }
 
-    cmdBuf->m_recordingID = ++m_lastRecordingID;
-    cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
-    return TrackedCommandBufferPtr(cmdBuf, TrackedCommandBufferPtr::deleter_type(&m_context.objectArena), AdoptRef);
+    m_workerCommandArenas.push_back(arena);
+    return arena;
 }
 
-TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(const u32 recordingWorkerIndex){
+
+TrackedCommandBufferPtr Queue::getOrCreateDirectCommandBuffer(){
     ScopedLock lock(m_mutex);
 
     updateLastFinishedID();
@@ -239,7 +267,7 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(const u32 recordingWorke
 
     auto available = m_commandBuffersPool.end();
     for(auto it = m_commandBuffersPool.begin(); it != m_commandBuffersPool.end(); ++it){
-        if(*it && (*it)->m_recordingWorkerIndex == recordingWorkerIndex){
+        if(*it && (*it)->m_recordingWorkerIndex == 0u){
             available = it;
             break;
         }
@@ -249,21 +277,83 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(const u32 recordingWorke
         m_commandBuffersPool.erase(available);
 
         if(!cmdBuf || cmdBuf->m_cmdBuf == VK_NULL_HANDLE)
-            return createCommandBuffer(recordingWorkerIndex);
+            return createCommandBuffer(VK_NULL_HANDLE, 0u);
 
         const VkResult res = vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
         if(res != VK_SUCCESS){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset command buffer, creating a new one: {}"), ResultToString(res));
-            return createCommandBuffer(recordingWorkerIndex);
+            return createCommandBuffer(VK_NULL_HANDLE, 0u);
         }
 
-        cmdBuf->m_recordingID = ++m_lastRecordingID;
-        cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
+        cmdBuf->m_recordingID = m_lastRecordingID.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+        cmdBuf->m_recordingWorkerIndex = 0u;
 
         return cmdBuf;
     }
 
-    return createCommandBuffer(recordingWorkerIndex);
+    return createCommandBuffer(VK_NULL_HANDLE, 0u);
+}
+
+
+TrackedCommandBufferPtr Queue::getOrCreateWorkerCommandBuffer(const u32 recordingWorkerIndex){
+    WorkerCommandArena* const arena = getOrCreateWorkerCommandArena(recordingWorkerIndex);
+    if(!arena)
+        return nullptr;
+
+    // Each explicit worker owns this native pool shard. Do not take m_mutex here: submission/timeline retirement
+    // remains serialized there, while allocation and reset stay independent for ready-frontier recording workers.
+    ScopedLock lock(arena->mutex);
+
+    if(!arena->commandBuffersPool.empty()){
+        auto available = arena->commandBuffersPool.begin();
+        TrackedCommandBufferPtr cmdBuf = Move(*available);
+        arena->commandBuffersPool.erase(available);
+
+        if(!cmdBuf || cmdBuf->m_cmdBuf == VK_NULL_HANDLE)
+            return createCommandBuffer(arena->commandPool, recordingWorkerIndex);
+
+        const VkResult res = vkResetCommandBuffer(cmdBuf->m_cmdBuf, 0);
+        if(res != VK_SUCCESS){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reset worker command buffer, creating a new one: {}"), ResultToString(res));
+            return createCommandBuffer(arena->commandPool, recordingWorkerIndex);
+        }
+
+        cmdBuf->m_recordingID = m_lastRecordingID.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+        cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
+        return cmdBuf;
+    }
+
+    // Queue timeline polling/reclamation occurs in Device::runGarbageCollection(). An empty worker shard grows
+    // instead of taking the queue submission lock and serializing parallel ready-frontier recording.
+    return createCommandBuffer(arena->commandPool, recordingWorkerIndex);
+}
+
+
+TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(const u32 recordingWorkerIndex){
+    if(recordingWorkerIndex == 0u)
+        return getOrCreateDirectCommandBuffer();
+
+    return getOrCreateWorkerCommandBuffer(recordingWorkerIndex);
+}
+
+
+void Queue::destroyWorkerCommandArenas(){
+    ScopedLock workerArenasLock(m_workerCommandArenasMutex);
+    for(WorkerCommandArena* const arena : m_workerCommandArenas){
+        if(!arena)
+            continue;
+
+        {
+            ScopedLock arenaLock(arena->mutex);
+            arena->commandBuffersPool.clear();
+            if(arena->commandPool){
+                vkDestroyCommandPool(m_context.device, arena->commandPool, m_context.allocationCallbacks);
+                arena->commandPool = VK_NULL_HANDLE;
+            }
+        }
+        DestroyArenaObject(m_context.objectArena, arena);
+    }
+    m_workerCommandArenas.clear();
 }
 
 void Queue::collectCompletedCommandBuffers(){
@@ -566,7 +656,28 @@ void Queue::recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf){
         return;
 
     cmdBuf->clearTrackedReferences();
-    m_commandBuffersPool.push_back(Move(cmdBuf));
+    if(cmdBuf->m_recordingWorkerIndex == 0u){
+        m_commandBuffersPool.push_back(Move(cmdBuf));
+        return;
+    }
+
+    WorkerCommandArena* const workerArena = findWorkerCommandArena(cmdBuf->m_recordingWorkerIndex);
+    if(!workerArena){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Cannot recycle command buffer because physical queue {} worker {} no longer has a command arena"),
+            m_physicalQueue.index,
+            cmdBuf->m_recordingWorkerIndex
+        );
+        NWB_ASSERT_MSG(false, NWB_TEXT("Worker command buffer lost its owning command arena"));
+        m_commandBuffersPool.push_back(Move(cmdBuf));
+        return;
+    }
+
+    // Queue submission/timeline retirement holds m_mutex before arriving here. It may take a worker arena lock,
+    // but worker recording never takes m_mutex, so the lock order cannot form a cycle.
+    ScopedLock lock(workerArena->mutex);
+
+    workerArena->commandBuffersPool.push_back(Move(cmdBuf));
 }
 
 

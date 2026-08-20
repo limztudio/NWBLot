@@ -373,6 +373,7 @@ void RendererSystem::invalidateResources(){
     m_deferredCompositeTask = {};
     m_deferredPresentationOverlayTask = {};
     m_deferredPresentTask = {};
+    m_deferredFrameTimingEndTask = {};
     m_deferredLaggedLightingHistoryTask = {};
     m_deferredFrameRecoveryTask = {};
     m_deferredSurfelGiCounterReadbackCompletion = {};
@@ -685,6 +686,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredCompositeTask = {};
     m_deferredPresentationOverlayTask = {};
     m_deferredPresentTask = {};
+    m_deferredFrameTimingEndTask = {};
     m_deferredLaggedLightingHistoryTask = {};
     m_deferredFrameRecoveryTask = {};
     m_deferredSurfelGiCounterReadbackCompletion = {};
@@ -2168,10 +2170,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLaggedLightingHistorySlotsUploadTask
         )
     ;
-    const Core::GpuTaskId terminalPresentationTask = m_deferredPresentationOverlayTask.valid()
-        ? m_deferredPresentationOverlayTask
-        : m_deferredPresentTask
-    ;
+    const Core::GpuTaskId terminalPresentationTask = m_deferredFrameTimingEndTask;
     // Presentation is the sole renderer policy that still needs the exact compiler packet: it owns the binary
     // swap-chain signal. All ordinary record/submit readiness below resolves through semantic task anchors.
     const Core::GpuSubmissionPacketId terminalPresentationPacket =
@@ -2182,6 +2181,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredCompositeTask);
     const Core::GpuPhysicalQueueInfo* const deferredPresentQueue =
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredPresentTask);
+    const Core::GpuPhysicalQueueInfo* const deferredPresentationOverlayQueue =
+        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredPresentationOverlayTask);
     const Core::GpuPhysicalQueueInfo* const terminalPresentationQueue =
         m_deferredLightingCompiledGraph.queueInfoForTask(terminalPresentationTask);
     const Core::GpuPhysicalQueueInfo* const deferredLaggedLightingHistoryQueue =
@@ -2459,9 +2460,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         + (captureLaggedLightingHistory ? __hidden_renderer_system::s_SinglePacketCount : 0u)
     ;
     // A presentation contributor may declare graph-owned setup uploads between Deferred Present and its terminal
-    // Graphics overlay.  The renderer still requires the scene Present endpoint and (when requested) one final
-    // overlay packet, while the compiler owns the exact number and routing of the intervening uploads.
+    // Graphics overlay. The renderer requires the scene Present endpoint, a separate final timing/signal endpoint,
+    // and (when requested) one overlay packet, while the compiler owns intervening upload packet routing.
     const usize minimumTerminalPresentationPacketCount = __hidden_renderer_system::s_SinglePacketCount
+        + __hidden_renderer_system::s_SinglePacketCount
         + (m_deferredPresentationOverlayRequired ? __hidden_renderer_system::s_PresentationOverlayPacketCount : 0u);
     const auto discardGraphicsPrefixTimingTickets = [&graphicsPrefixOwnedTimingTickets](){
         for(Core::GpuTimingSubmissionTicket* const timingTicket : graphicsPrefixOwnedTimingTickets)
@@ -2627,6 +2629,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredLightingTask.valid()
         || !m_deferredCompositeTask.valid()
         || !m_deferredPresentTask.valid()
+        || !m_deferredFrameTimingEndTask.valid()
         || (m_deferredPresentationOverlayRequired != m_deferredPresentationOverlayTask.valid())
         || !m_deferredFrameRecoveryTask.valid()
         || (m_deferredSurfelGiCounterReadbackCompletion.valid()
@@ -2643,12 +2646,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !laggedLightingHistorySlotsUploadMergedIntoLightingPacket
         || !taskIsCompiled(m_deferredCompositeTask)
         || !taskIsCompiled(m_deferredPresentTask)
+        || !taskIsCompiled(m_deferredFrameTimingEndTask)
         || (m_deferredPresentationOverlayRequired && !taskIsCompiled(m_deferredPresentationOverlayTask))
         || !terminalPresentationPacket.valid()
         || !taskIsCompiled(m_deferredFrameRecoveryTask)
         || !deferredLightingQueue
         || !deferredCompositeQueue
         || !deferredPresentQueue
+        || (m_deferredPresentationOverlayRequired && !deferredPresentationOverlayQueue)
         || !terminalPresentationQueue
         || !deferredFrameRecoveryQueue
         // The acquired swap-chain semaphore is attached to the primary physical Graphics transport. The task
@@ -2656,6 +2661,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         // a backbuffer writer or its final presentation signal without an acquired-image/share contract for it.
         || !primaryGraphicsQueue.valid()
         || deferredPresentQueue->id != primaryGraphicsQueue
+        || (m_deferredPresentationOverlayRequired
+            && deferredPresentationOverlayQueue->id != primaryGraphicsQueue)
         || terminalPresentationQueue->id != primaryGraphicsQueue
         || !shadowPreparePacketRange.valid()
         || shadowPreparePacketRange.packetCount != __hidden_renderer_system::s_SinglePacketCount
@@ -2698,6 +2705,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || (laggedAsyncLightingSchedule && deferredLightingQueue->queueClass != Core::CommandQueue::Compute)
         || (laggedAsyncLightingSchedule && deferredCompositeQueue->queueClass != Core::CommandQueue::Graphics)
         || deferredPresentQueue->queueClass != Core::CommandQueue::Graphics
+        || (m_deferredPresentationOverlayRequired
+            && deferredPresentationOverlayQueue->queueClass != Core::CommandQueue::Graphics)
         || terminalPresentationQueue->queueClass != Core::CommandQueue::Graphics
         || deferredFrameRecoveryQueue->queueClass != Core::CommandQueue::Graphics
     ){
@@ -3387,6 +3396,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredLightingTask.valid()
         && m_deferredCompositeTask.valid()
         && m_deferredPresentTask.valid()
+        && m_deferredFrameTimingEndTask.valid()
         && (!m_deferredPresentationOverlayRequired || (
             m_deferredPresentationOverlayTask.valid()
             && taskIsCompiled(m_deferredPresentationOverlayTask)
@@ -3400,6 +3410,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && taskIsCompiled(m_deferredLightingTask)
         && taskIsCompiled(m_deferredCompositeTask)
         && taskIsCompiled(m_deferredPresentTask)
+        && taskIsCompiled(m_deferredFrameTimingEndTask)
         && terminalPresentationPacket.valid()
         && taskIsCompiled(m_deferredFrameRecoveryTask)
         && deferredFrameRecoveryQueue
@@ -3885,10 +3896,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const bool terminalPresentationReady =
             m_deferredLightingTaskGraphValid
             && m_deferredPresentTask.valid()
+            && m_deferredFrameTimingEndTask.valid()
             && m_deferredSurfelGiTask.valid()
             && m_deferredCompositeTask.valid()
             && (!m_deferredPresentationOverlayRequired || m_deferredPresentationOverlayTask.valid())
             && taskIsCompiled(m_deferredPresentTask)
+            && taskIsCompiled(m_deferredFrameTimingEndTask)
             && terminalPresentationPacket.valid()
             && terminalPresentationPacketRange.valid()
             && terminalPresentationPacketRange.packetCount >= LengthOf(deferredPresentTimingTickets)
@@ -4201,10 +4214,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             PrefixTimingAcceptanceContext* const context = static_cast<PrefixTimingAcceptanceContext*>(rawContext);
             if(!context)
                 return false;
-            if(!context->renderer){
+            if(!context->frameTimingTransaction || !context->renderer){
                 context->shadowPrepareStateReady = false;
                 return false;
             }
+
+            // Shadow Preparation is the first accepted normal-frame packet, including graph-owned setup uploads
+            // merged into that packet. Confirm this endpoint before any later accepted-state validation can reject.
+            context->frameTimingTransaction->confirmBeginSubmission();
 
             RendererSystem& renderer = *context->renderer;
             if(!context->shadowPrepareHasLiveStateBuffers){
@@ -4244,27 +4261,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             }
             return true;
         };
-        const auto acceptGraphicsPrefixBeginTask = [](
-            void* const rawContext,
-            const Core::QueueSubmissionToken& token
-        ) -> bool {
-            static_cast<void>(token);
-            PrefixTimingAcceptanceContext* const context = static_cast<PrefixTimingAcceptanceContext*>(rawContext);
-            if(!context || !context->frameTimingTransaction)
-                return false;
-            context->frameTimingTransaction->confirmBeginSubmission();
-            return true;
-        };
         const Core::GpuTaskGraphTaskAcceptedCallback shadowPreparePrefixAcceptedCallbacks[] = {
             Core::GpuTaskGraphTaskAcceptedCallback{
                 .task = m_deferredShadowPrepareTask,
                 .context = &prefixTimingAcceptance,
                 .invoke = acceptShadowPrepareTask,
-            },
-            Core::GpuTaskGraphTaskAcceptedCallback{
-                .task = m_graphicsPrefixMeshViewSetupTask,
-                .context = &prefixTimingAcceptance,
-                .invoke = acceptGraphicsPrefixBeginTask,
             },
         };
         const bool shadowPreparePrefixAccepted =

@@ -572,7 +572,7 @@ VkBufferMemoryBarrier2 BuildBufferOwnershipAcquireBarrier(
 }
 
 bool NeedsTextureStateBarrier(const ResourceStates::Mask oldState, const ResourceStates::Mask stateBits, const bool uavBarrierEnabled){
-    return oldState != stateBits || (oldState == ResourceStates::UnorderedAccess && uavBarrierEnabled);
+    return oldState != stateBits || (oldState == stateBits && uavBarrierEnabled);
 }
 
 void AppendTextureStateBarrier(
@@ -1181,7 +1181,7 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
     bool firstSubresource = true;
     bool needsBarrier = false;
     bool usePerSubresourceBarriers = false;
-    const bool uavBarrierEnabled = stateBits == ResourceStates::UnorderedAccess && m_stateTracker.isUavBarrierEnabledForTexture(texture);
+    const bool uavBarrierEnabled = ResourceStates::HasUnorderedAccess(stateBits) && m_stateTracker.isUavBarrierEnabledForTexture(texture);
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
     const usize subresourceCount = static_cast<usize>(resolvedSubresources.numMipLevels) * static_cast<usize>(resolvedSubresources.numArraySlices);
@@ -1298,8 +1298,8 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
         return;
 
     const bool needsUavBarrier =
-        oldState == ResourceStates::UnorderedAccess
-        && stateBits == ResourceStates::UnorderedAccess
+        oldState == stateBits
+        && ResourceStates::HasUnorderedAccess(stateBits)
         && m_stateTracker.isUavBarrierEnabledForBuffer(buffer)
     ;
 

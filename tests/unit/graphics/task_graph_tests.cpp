@@ -4908,6 +4908,48 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
         compiledGraph.taskPrologueBarriers(consumer)[0u].type,
         Graphics::GpuCompiledBarrierType::BufferTransition
     );
+
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics primaryQueueCompileStatistics =
+        compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
+    ;
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics secondaryQueueCompileStatistics =
+        compiledGraph.physicalQueueCompileStatistics(queues[1u].id)
+    ;
+    ASSERT_TRUE(primaryQueueCompileStatistics.valid());
+    ASSERT_TRUE(secondaryQueueCompileStatistics.valid());
+    EXPECT_EQ(primaryQueueCompileStatistics.queue, queues[0u].id);
+    EXPECT_EQ(secondaryQueueCompileStatistics.queue, queues[1u].id);
+    EXPECT_EQ(primaryQueueCompileStatistics.queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(secondaryQueueCompileStatistics.queueClass, Graphics::CommandQueue::Graphics);
+    const Graphics::GpuTaskGraphCompileStatistics& compileStatistics = compiledGraph.compileStatistics();
+    EXPECT_EQ(
+        primaryQueueCompileStatistics.taskCount + secondaryQueueCompileStatistics.taskCount,
+        compileStatistics.taskCount
+    );
+    EXPECT_EQ(
+        primaryQueueCompileStatistics.taskCount + secondaryQueueCompileStatistics.taskCount,
+        compileStatistics.taskCountByQueueClass[Graphics::CommandQueue::Graphics]
+    );
+    EXPECT_EQ(
+        primaryQueueCompileStatistics.packetCount + secondaryQueueCompileStatistics.packetCount,
+        compileStatistics.packetCount
+    );
+    EXPECT_EQ(
+        primaryQueueCompileStatistics.packetCount + secondaryQueueCompileStatistics.packetCount,
+        compileStatistics.packetCountByQueueClass[Graphics::CommandQueue::Graphics]
+    );
+    EXPECT_EQ(
+        primaryQueueCompileStatistics.mergedTaskCount + secondaryQueueCompileStatistics.mergedTaskCount,
+        compileStatistics.mergedTaskCount
+    );
+    EXPECT_EQ(
+        primaryQueueCompileStatistics.prologueBarrierCount + secondaryQueueCompileStatistics.prologueBarrierCount,
+        compileStatistics.prologueBarrierCount
+    );
+    EXPECT_EQ(
+        primaryQueueCompileStatistics.epilogueBarrierCount + secondaryQueueCompileStatistics.epilogueBarrierCount,
+        compileStatistics.epilogueBarrierCount
+    );
 }
 
 
@@ -5808,6 +5850,21 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
     EXPECT_EQ(acquireAndTransition[0u].sourceQueue, queues[0u].id);
     EXPECT_EQ(acquireAndTransition[0u].destinationQueue, queues[1u].id);
     EXPECT_EQ(acquireAndTransition[1u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
+
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics producerQueueCompileStatistics =
+        compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
+    ;
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics consumerQueueCompileStatistics =
+        compiledGraph.physicalQueueCompileStatistics(queues[1u].id)
+    ;
+    ASSERT_TRUE(producerQueueCompileStatistics.valid());
+    ASSERT_TRUE(consumerQueueCompileStatistics.valid());
+    EXPECT_EQ(producerQueueCompileStatistics.taskCount, 1u);
+    EXPECT_EQ(consumerQueueCompileStatistics.taskCount, 1u);
+    EXPECT_EQ(producerQueueCompileStatistics.prologueBarrierCount, 1u);
+    EXPECT_EQ(producerQueueCompileStatistics.epilogueBarrierCount, 1u);
+    EXPECT_EQ(consumerQueueCompileStatistics.prologueBarrierCount, 2u);
+    EXPECT_EQ(consumerQueueCompileStatistics.epilogueBarrierCount, 0u);
 }
 
 
@@ -8729,9 +8786,15 @@ TEST(GpuTaskGraph, PublishesFiniteDeclarationTimingOnlyForAcceptedPlans){
     ).valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    Graphics::GpuPhysicalQueueInfo idleQueue = GraphicsQueue(1u);
+    idleQueue.queueIndex = 1u;
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        queue,
+        idleQueue,
+    };
     const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
+        .queues = queues,
+        .queueCount = LengthOf(queues),
     };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
@@ -8741,6 +8804,36 @@ TEST(GpuTaskGraph, PublishesFiniteDeclarationTimingOnlyForAcceptedPlans){
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
     ASSERT_TRUE(compiledGraph.compileStatistics().valid());
     EXPECT_EQ(compiledGraph.compileStatistics().declarationSeconds, 0.0);
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics firstQueueCompileStatistics =
+        compiledGraph.physicalQueueCompileStatistics(queue.id)
+    ;
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics idleQueueCompileStatistics =
+        compiledGraph.physicalQueueCompileStatistics(idleQueue.id)
+    ;
+    ASSERT_TRUE(firstQueueCompileStatistics.valid());
+    ASSERT_TRUE(idleQueueCompileStatistics.valid());
+    EXPECT_EQ(firstQueueCompileStatistics.graphGeneration, compiledGraph.generation());
+    EXPECT_EQ(firstQueueCompileStatistics.planGeneration, compiledGraph.planGeneration());
+    EXPECT_EQ(firstQueueCompileStatistics.deviceGeneration, compiledGraph.deviceGeneration());
+    EXPECT_EQ(firstQueueCompileStatistics.queue, queue.id);
+    EXPECT_EQ(firstQueueCompileStatistics.queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(firstQueueCompileStatistics.taskCount, 1u);
+    EXPECT_EQ(firstQueueCompileStatistics.packetCount, 1u);
+    EXPECT_EQ(idleQueueCompileStatistics.queue, idleQueue.id);
+    EXPECT_EQ(idleQueueCompileStatistics.taskCount, 0u);
+    EXPECT_EQ(idleQueueCompileStatistics.packetCount, 0u);
+    EXPECT_EQ(idleQueueCompileStatistics.mergedTaskCount, 0u);
+    EXPECT_EQ(idleQueueCompileStatistics.prologueBarrierCount, 0u);
+    EXPECT_EQ(idleQueueCompileStatistics.epilogueBarrierCount, 0u);
+    const Graphics::GpuPhysicalQueueId staleQueue{
+        queue.id.index,
+        static_cast<u16>(queue.id.deviceGeneration + 1u),
+    };
+    EXPECT_FALSE(compiledGraph.physicalQueueCompileStatistics(staleQueue).valid());
+    const Graphics::GpuPhysicalQueueId nonPlanQueue{ 2u, compiledGraph.deviceGeneration() };
+    ASSERT_TRUE(nonPlanQueue.valid());
+    EXPECT_FALSE(compiledGraph.physicalQueueCompileStatistics(nonPlanQueue).valid());
+    const u64 firstPlanGeneration = firstQueueCompileStatistics.planGeneration;
 
     constexpr f64 s_DeclarationSeconds = 0.125;
     options.declarationSeconds = s_DeclarationSeconds;
@@ -8753,13 +8846,20 @@ TEST(GpuTaskGraph, PublishesFiniteDeclarationTimingOnlyForAcceptedPlans){
     const Graphics::GpuTaskGraphCompileStatistics& resetStatistics = compiledGraph.compileStatistics();
     EXPECT_FALSE(resetStatistics.valid());
     EXPECT_EQ(resetStatistics.declarationSeconds, 0.0);
+    EXPECT_FALSE(compiledGraph.physicalQueueCompileStatistics(queue.id).valid());
 
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics recompiledQueueCompileStatistics =
+        compiledGraph.physicalQueueCompileStatistics(queue.id)
+    ;
+    ASSERT_TRUE(recompiledQueueCompileStatistics.valid());
+    EXPECT_NE(recompiledQueueCompileStatistics.planGeneration, firstPlanGeneration);
     const Graphics::GpuTaskGraphQueueTopology invalidTopology{};
     EXPECT_FALSE(Compile(graph, analysis, invalidTopology, assignments, compiledGraph, options));
     const Graphics::GpuTaskGraphCompileStatistics& failedStatistics = compiledGraph.compileStatistics();
     EXPECT_FALSE(failedStatistics.valid());
     EXPECT_EQ(failedStatistics.declarationSeconds, 0.0);
+    EXPECT_FALSE(compiledGraph.physicalQueueCompileStatistics(queue.id).valid());
 
     const f64 invalidDeclarationSeconds[] = {
         -0.125,
@@ -9775,6 +9875,17 @@ TEST(GpuTaskGraph, MergesExplicitCompatibleSuccessorIntoOnePacket){
         compiledGraph.packetizationDecisionForTask(finalSuffix),
         Graphics::GpuTaskPacketizationDecision::MergedExplicit
     );
+
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics queueCompileStatistics =
+        compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
+    ;
+    ASSERT_TRUE(queueCompileStatistics.valid());
+    EXPECT_EQ(queueCompileStatistics.queue, queues[0u].id);
+    EXPECT_EQ(queueCompileStatistics.taskCount, 3u);
+    EXPECT_EQ(queueCompileStatistics.packetCount, 1u);
+    EXPECT_EQ(queueCompileStatistics.mergedTaskCount, 2u);
+    EXPECT_EQ(queueCompileStatistics.prologueBarrierCount, 0u);
+    EXPECT_EQ(queueCompileStatistics.epilogueBarrierCount, 0u);
 
     // Rejecting a semantic task resolves its full merged native packet, so task cleanup telemetry must retain the
     // packet's complete task cardinality rather than count only the selected task.

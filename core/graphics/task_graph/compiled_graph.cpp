@@ -346,6 +346,42 @@ const GpuCompiledExternalResourceExportSource* GpuCompiledGraph::externalResourc
     return m_externalResourceExportSources.data() + exportInfo.sourceOffset;
 }
 
+GpuTaskGraphPhysicalQueueCompileStatistics GpuCompiledGraph::physicalQueueCompileStatistics(
+    const GpuPhysicalQueueId& queue
+)const noexcept{
+    if(!valid())
+        return {};
+
+    const GpuPhysicalQueueInfo* const queueInfo = this->queueInfo(queue);
+    if(!queueInfo || queueInfo->queueClass >= CommandQueue::kCount)
+        return {};
+
+    GpuTaskGraphPhysicalQueueCompileStatistics statistics{
+        .graphGeneration = m_generation,
+        .planGeneration = m_planGeneration,
+        .deviceGeneration = m_deviceGeneration,
+        .queue = queue,
+        .queueClass = queueInfo->queueClass,
+    };
+    for(const GpuCompiledTask& task : m_tasks){
+        if(task.queue != queue)
+            continue;
+
+        ++statistics.taskCount;
+        statistics.prologueBarrierCount += task.prologueBarrierCount;
+        statistics.epilogueBarrierCount += task.epilogueBarrierCount;
+    }
+    for(const GpuSubmissionPacket& packet : m_packets){
+        if(packet.queue != queue)
+            continue;
+
+        ++statistics.packetCount;
+        if(packet.taskCount > 1u)
+            statistics.mergedTaskCount += packet.taskCount - 1u;
+    }
+    return statistics;
+}
+
 const GpuPhysicalQueueInfo* GpuCompiledGraph::queueInfo(const GpuPhysicalQueueId& queue)const noexcept{
     if(!queue.valid() || queue.deviceGeneration != m_deviceGeneration)
         return nullptr;

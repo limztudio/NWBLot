@@ -189,6 +189,33 @@ struct GpuTaskGraphCompileStatistics{
 };
 
 
+// Immutable-by-value accepted-plan telemetry for one exact physical queue. Barrier counts belong to the compiled
+// task that lowers them: a cross-queue ownership release therefore belongs to its producer queue, while the
+// matching acquire belongs to its consumer queue.
+struct GpuTaskGraphPhysicalQueueCompileStatistics{
+    u64 graphGeneration = 0u;
+    u64 planGeneration = 0u;
+    u16 deviceGeneration = 0u;
+    GpuPhysicalQueueId queue;
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
+    usize taskCount = 0u;
+    usize packetCount = 0u;
+    usize mergedTaskCount = 0u;
+    usize prologueBarrierCount = 0u;
+    usize epilogueBarrierCount = 0u;
+
+    [[nodiscard]] bool valid()const noexcept{
+        return graphGeneration != 0u
+            && planGeneration != 0u
+            && deviceGeneration != 0u
+            && queue.valid()
+            && queue.deviceGeneration == deviceGeneration
+            && queueClass < CommandQueue::kCount
+        ;
+    }
+};
+
+
 class GpuCompiledGraph final : NoCopy{
     friend class GpuTaskGraphCompiler;
 
@@ -269,6 +296,12 @@ public:
     [[nodiscard]] const GpuCompiledExternalResourceExport* externalResourceExportAt(usize index)const noexcept;
     [[nodiscard]] const GpuCompiledExternalResourceExportSource* externalResourceExportSources(
         const GpuCompiledExternalResourceExport& exportInfo
+    )const noexcept;
+    // Builds a value snapshot from immutable accepted-plan storage. A topology queue with no tasks or packets
+    // returns a valid zero snapshot; stale, non-plan, reset, and failed-plan queries return an invalid result.
+    // Callers externally serialize this scan with reset/recompile.
+    [[nodiscard]] GpuTaskGraphPhysicalQueueCompileStatistics physicalQueueCompileStatistics(
+        const GpuPhysicalQueueId& queue
     )const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* queueInfo(const GpuPhysicalQueueId& queue)const noexcept;
     // Borrowed immutable-plan topology view. It is empty after reset/invalid compilation; callers serialize access

@@ -4234,6 +4234,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             bool shadowPrepareHasLiveStateBuffers = false;
             bool shadowPrepareStateCandidateRequired = false;
             bool shadowPrepareStateReady = true;
+            // A required state-source loss follows accepted native work, so rendering must stop until device
+            // recreation rather than retrying the backing generation with its stale Common descriptor seed.
+            bool shadowPrepareStateLostAfterAcceptance = false;
         };
         PrefixTimingAcceptanceContext prefixTimingAcceptance{
             .frameTimingTransaction = &frameTimingTransaction,
@@ -4272,8 +4275,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     renderer.m_shadowPreparePersistentState.reset();
                     return true;
                 }
-                // The packet is already accepted, so preserve the last accepted source rather than replacing it
-                // with a partial generation. Re-pend the semantic plan for a conservative rebuild next frame.
+                // The packet is already accepted, so its native state cannot safely fall back to the previous
+                // generation. The outer submission path must stop until device recreation.
+                context->shadowPrepareStateLostAfterAcceptance = true;
                 renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();
                 context->shadowPrepareStateReady = false;
                 return false;
@@ -4287,9 +4291,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     // only after that graph-owned source exists for the next frame.
                     renderer.m_raytracingSystem.confirmPreparedSceneTlasBuild();
                     renderer.m_raytracingSystem.confirmPreparedMeshBlasBuilds();
+                    renderer.m_raytracingSystem.confirmAcceptedShadowPrepareAccelStructStateHandoffs();
                     renderer.m_raytracingSystem.confirmPreparedMeshSwBvhBuilds();
                 }
                 else{
+                    context->shadowPrepareStateLostAfterAcceptance = true;
                     renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();
                     context->shadowPrepareStateReady = false;
                     return false;
@@ -4372,7 +4378,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ){
             const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardRenderPackets();
-            if(!recovered)
+            if(!recovered || prefixTimingAcceptance.shadowPrepareStateLostAfterAcceptance)
                 failFrameRenderRecovery();
             return;
         }

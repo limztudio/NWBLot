@@ -88,6 +88,7 @@ struct PreparedMeshBlasBuild{
     u32 refitsAfterBuild = 0u;
     bool runtimeMesh = false;
     bool firstBuild = false;
+    bool backingFresh = false;
     bool performRefit = false;
 };
 
@@ -356,7 +357,13 @@ public:
     // Opaque and healthy hybrid hardware TLAS work records from this frozen preflight plan in Shadow Preparation.
     // Its static cache becomes valid only after that packet accepts; a hybrid record miss retries direct TLAS work.
     [[nodiscard]] bool preparedSceneTlasBuildReady()const noexcept;
+    // Only a newly allocated backing generation has a descriptor-native source. Every graph import uses this
+    // current-generation query so direct and frozen paths agree; retained generations deliberately remain Unknown
+    // until the accepted Shadow Preparation state handoff supplies their native state.
+    [[nodiscard]] Core::ResourceStates::Mask sceneTlasBackingInitialState()const noexcept;
     void confirmPreparedSceneTlasBuild()noexcept;
+    // Direct fallback recording cannot publish native state until its Shadow Preparation packet accepts.
+    void confirmAcceptedShadowPrepareAccelStructStateHandoffs()noexcept;
     // Opaque and independent hybrid hardware BLAS build/refit choices retain their selected handles through
     // recording. Hybrid mismatch falls back to the established direct loop; only Shadow Preparation acceptance
     // publishes a frozen plan's mesh-cache progress.

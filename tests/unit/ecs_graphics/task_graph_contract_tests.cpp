@@ -1697,6 +1697,214 @@ TEST(EcsGraphics, HybridHardwareFallbackRestoreUsesGraphOwnedBlobsWhenFrozen){
 }
 
 
+// A fresh acceleration-structure backing allocation has the device descriptor's Common state; a retained backing
+// instead needs the exact accepted Shadow Preparation handoff. Keep freshness tied to the physical generation so a
+// discarded plan retries Common while an accepted packet never fabricates AccelStructRead.
+TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    AString rayTracingHeaderSource;
+    AString rayTracingSource;
+    AString swBvhSource;
+    AString meshTypesSource;
+    AString rendererStateHeaderSource;
+    AString rendererStateSource;
+    AString systemSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "renderer_mesh_types.h", meshTypesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.h", rendererStateHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_state.cpp", rendererStateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", systemSource));
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
+    const AStringView rayTracing(rayTracingSource.data(), rayTracingSource.size());
+    const AStringView swBvh(swBvhSource.data(), swBvhSource.size());
+    const AStringView meshTypes(meshTypesSource.data(), meshTypesSource.size());
+    const AStringView rendererStateHeader(rendererStateHeaderSource.data(), rendererStateHeaderSource.size());
+    const AStringView rendererState(rendererStateSource.data(), rendererStateSource.size());
+    const AStringView system(systemSource.data(), systemSource.size());
+
+    EXPECT_TRUE(ContainsText(meshTypes, "bool blasBackingFresh = false;"));
+    EXPECT_TRUE(ContainsText(meshTypes, "bool blasBackingStateHandoffPending = false;"));
+    EXPECT_TRUE(ContainsText(rayTracingHeader, "bool backingFresh = false;"));
+    EXPECT_TRUE(ContainsText(swBvh, "outBuild.backingFresh = meshResources.blasBackingFresh;"));
+    EXPECT_TRUE(ContainsText(swBvh, "meshResources.blasBackingFresh != build.backingFresh"));
+    EXPECT_EQ(CountText(swBvh, "meshResources.blasBackingFresh = true;"), 1u);
+    EXPECT_TRUE(ContainsText(
+        swBvh,
+        "if(meshResources.blasBackingFresh)\n"
+        "        meshResources.blasBackingStateHandoffPending = true;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        swBvh,
+        "meshResources.blasBackingFresh = false;\n"
+        "        meshResources.blasBackingStateHandoffPending = false;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        taskGraph,
+        "const Core::ResourceStates::Mask blasInitialState = build.backingFresh\n"
+        "                ? Core::ResourceStates::Common\n"
+        "                : Core::ResourceStates::Unknown\n"
+        "            ;"
+    ));
+    EXPECT_TRUE(ContainsText(taskGraph, "AccelStructResourceDesc(blasIdentity, \"Prepared Mesh BLAS\").setInitialState(blasInitialState)"));
+    EXPECT_TRUE(ContainsText(
+        taskGraph,
+        "const Core::ResourceStates::Mask blasInitialState = mesh.blasBackingFresh\n"
+        "            ? Core::ResourceStates::Common\n"
+        "            : Core::ResourceStates::Unknown\n"
+        "        ;"
+    ));
+    EXPECT_TRUE(ContainsText(taskGraph, "AccelStructResourceDesc(blasIdentity, \"Mesh BLAS\").setInitialState(blasInitialState)"));
+
+    EXPECT_TRUE(ContainsText(rendererStateHeader, "bool m_tlasBackingFresh = false;"));
+    EXPECT_TRUE(ContainsText(rendererStateHeader, "bool m_tlasBackingStateHandoffPending = false;"));
+    EXPECT_TRUE(ContainsText(rendererState, "m_tlasBackingFresh = false;"));
+    EXPECT_TRUE(ContainsText(rendererState, "m_tlasBackingStateHandoffPending = false;"));
+    EXPECT_TRUE(ContainsText(swBvh, "rayTracingState().m_tlasBackingFresh = true;"));
+    EXPECT_TRUE(ContainsText(
+        swBvh,
+        "if(rayTracingState().m_tlasBackingFresh)\n"
+        "            rayTracingState().m_tlasBackingStateHandoffPending = true;"
+    ));
+    EXPECT_TRUE(ContainsText(rayTracingHeader, "sceneTlasBackingInitialState()const noexcept"));
+    EXPECT_FALSE(ContainsText(rayTracingHeader, "preparedSceneTlasBuildInitialState()const noexcept"));
+    EXPECT_TRUE(ContainsText(
+        rayTracing,
+        "return state.m_tlasBackingFresh\n"
+        "        ? Core::ResourceStates::Common\n"
+        "        : Core::ResourceStates::Unknown\n"
+        "    ;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        rayTracing,
+        "if(preparedTlasMatchesCurrent){\n"
+        "        state.m_tlasBackingFresh = false;\n"
+        "        state.m_tlasBackingStateHandoffPending = false;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        rayTracing,
+        "if(state.m_tlasBackingFresh && state.m_tlasBackingStateHandoffPending){\n"
+        "        state.m_tlasBackingFresh = false;\n"
+        "        state.m_tlasBackingStateHandoffPending = false;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        rayTracing,
+        "if(meshResources.blasBackingFresh && meshResources.blasBackingStateHandoffPending){\n"
+        "            meshResources.blasBackingFresh = false;\n"
+        "            meshResources.blasBackingStateHandoffPending = false;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        taskGraph,
+        "const Core::ResourceStates::Mask sceneTlasInitialState = m_raytracingSystem.sceneTlasBackingInitialState();"
+    ));
+    EXPECT_TRUE(ContainsText(taskGraph, "AccelStructResourceDesc(Name(\"render.deferred_effects.tlas\"), \"Scene TLAS\").setInitialState(sceneTlasInitialState)"));
+    EXPECT_EQ(CountText(taskGraph, "AccelStructResourceDesc(Name(\"render.deferred_effects.tlas\"), \"Scene TLAS\")"), 4u);
+    EXPECT_EQ(CountText(taskGraph, "sceneTlasBackingInitialState()"), 4u);
+    EXPECT_EQ(
+        CountText(taskGraph, ".setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())"),
+        3u
+    );
+
+    const usize clearPreparedSceneTlasOffset = rayTracing.find("void RendererRayTracingSystem::clearPreparedSceneTlasBuild()noexcept");
+    const usize capturePreparedSceneTlasOffset = rayTracing.find(
+        "bool RendererRayTracingSystem::capturePreparedSceneTlasBuild(",
+        clearPreparedSceneTlasOffset
+    );
+    const usize discardPreflightOffset = rayTracing.find("void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexcept");
+    const usize preflightOffset = rayTracing.find(
+        "bool RendererRayTracingSystem::preflightShadowVisibilityResources(",
+        discardPreflightOffset
+    );
+    const usize commitPersistentStateOffset = system.find("renderer.m_shadowPreparePersistentState.commit(");
+    const usize confirmSceneTlasOffset = system.find("renderer.m_raytracingSystem.confirmPreparedSceneTlasBuild();");
+    const usize confirmMeshBlasOffset = system.find("renderer.m_raytracingSystem.confirmPreparedMeshBlasBuilds();");
+    const usize confirmDirectHandoffOffset = system.find(
+        "renderer.m_raytracingSystem.confirmAcceptedShadowPrepareAccelStructStateHandoffs();"
+    );
+    ASSERT_NE(clearPreparedSceneTlasOffset, AStringView::npos);
+    ASSERT_NE(capturePreparedSceneTlasOffset, AStringView::npos);
+    ASSERT_NE(discardPreflightOffset, AStringView::npos);
+    ASSERT_NE(preflightOffset, AStringView::npos);
+    ASSERT_NE(commitPersistentStateOffset, AStringView::npos);
+    ASSERT_NE(confirmSceneTlasOffset, AStringView::npos);
+    ASSERT_NE(confirmMeshBlasOffset, AStringView::npos);
+    ASSERT_NE(confirmDirectHandoffOffset, AStringView::npos);
+    EXPECT_FALSE(ContainsText(
+        rayTracing.substr(clearPreparedSceneTlasOffset, capturePreparedSceneTlasOffset - clearPreparedSceneTlasOffset),
+        "m_tlasBackingFresh"
+    ));
+    EXPECT_TRUE(ContainsText(
+        rayTracing.substr(discardPreflightOffset, preflightOffset - discardPreflightOffset),
+        "clearPreparedSceneTlasBuild();"
+    ));
+    EXPECT_TRUE(ContainsText(
+        rayTracing.substr(discardPreflightOffset, preflightOffset - discardPreflightOffset),
+        "m_tlasBackingStateHandoffPending = false;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        rayTracing.substr(discardPreflightOffset, preflightOffset - discardPreflightOffset),
+        "meshResources.blasBackingStateHandoffPending = false;"
+    ));
+    EXPECT_FALSE(ContainsText(
+        rayTracing.substr(discardPreflightOffset, preflightOffset - discardPreflightOffset),
+        "m_tlasBackingFresh = false;"
+    ));
+    EXPECT_FALSE(ContainsText(
+        rayTracing.substr(discardPreflightOffset, preflightOffset - discardPreflightOffset),
+        "meshResources.blasBackingFresh = false;"
+    ));
+    // A missing or rejected candidate occurs after native packet acceptance. Retain plan cleanup, but force the
+    // established device-recreation recovery path before any fresh backing can be retried with Common.
+    EXPECT_TRUE(ContainsText(system, "bool shadowPrepareStateLostAfterAcceptance = false;"));
+    EXPECT_EQ(CountText(system, "context->shadowPrepareStateLostAfterAcceptance = true;"), 2u);
+    EXPECT_TRUE(ContainsText(
+        system,
+        "context->shadowPrepareStateLostAfterAcceptance = true;\n"
+        "                renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();\n"
+        "                context->shadowPrepareStateReady = false;\n"
+        "                return false;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "context->shadowPrepareStateLostAfterAcceptance = true;\n"
+        "                    renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();\n"
+        "                    context->shadowPrepareStateReady = false;\n"
+        "                    return false;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "if(!recovered || prefixTimingAcceptance.shadowPrepareStateLostAfterAcceptance)\n"
+        "                failFrameRenderRecovery();"
+    ));
+    const usize stateLossAfterAcceptanceOffset = system.find("context->shadowPrepareStateLostAfterAcceptance = true;");
+    const usize commitStateLossOffset = system.find(
+        "context->shadowPrepareStateLostAfterAcceptance = true;",
+        commitPersistentStateOffset
+    );
+    const usize stateLossRecoveryGuardOffset = system.find(
+        "if(!recovered || prefixTimingAcceptance.shadowPrepareStateLostAfterAcceptance)"
+    );
+    const usize stateLossRecoveryOffset = system.find("failFrameRenderRecovery();", stateLossRecoveryGuardOffset);
+    ASSERT_NE(stateLossAfterAcceptanceOffset, AStringView::npos);
+    ASSERT_NE(commitStateLossOffset, AStringView::npos);
+    ASSERT_NE(stateLossRecoveryGuardOffset, AStringView::npos);
+    ASSERT_NE(stateLossRecoveryOffset, AStringView::npos);
+    EXPECT_LT(commitPersistentStateOffset, confirmSceneTlasOffset);
+    EXPECT_LT(confirmSceneTlasOffset, confirmMeshBlasOffset);
+    EXPECT_LT(confirmMeshBlasOffset, confirmDirectHandoffOffset);
+    EXPECT_LT(stateLossAfterAcceptanceOffset, stateLossRecoveryGuardOffset);
+    EXPECT_LT(commitPersistentStateOffset, commitStateLossOffset);
+    EXPECT_LT(commitStateLossOffset, stateLossRecoveryGuardOffset);
+    EXPECT_LT(stateLossRecoveryGuardOffset, stateLossRecoveryOffset);
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

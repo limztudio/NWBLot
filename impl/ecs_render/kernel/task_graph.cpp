@@ -5415,9 +5415,15 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     if(meshBlasBuildsGraphOwned){
         for(const PreparedMeshBlasBuild& build : preparedMeshBlasBuilds){
             const Name blasIdentity = DeriveName(build.meshName, AStringView(":blas"));
+            // Only this backing generation's first graph build knows native Common. Retained BLAS storage must
+            // import the accepted Shadow Preparation binding; Unknown deliberately rejects a missing handoff.
+            const Core::ResourceStates::Mask blasInitialState = build.backingFresh
+                ? Core::ResourceStates::Common
+                : Core::ResourceStates::Unknown
+            ;
             const Core::GpuGraphResourceId blas = m_deferredLightingTaskGraph.importAccelStruct(
                 build.blas,
-                AccelStructResourceDesc(blasIdentity, "Prepared Mesh BLAS")
+                AccelStructResourceDesc(blasIdentity, "Prepared Mesh BLAS").setInitialState(blasInitialState)
             );
             resourcesImported = resourcesImported && blas.valid();
             if(blas.valid()){
@@ -5544,9 +5550,12 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
 
     Core::GpuGraphResourceId sceneTlas;
     if(m_rayTracingState.m_tlas){
+        // Every import observes the current backing generation. Fresh direct and frozen paths know native Common;
+        // retained storage remains Unknown until the accepted packet-state binding supplies its final native state.
+        const Core::ResourceStates::Mask sceneTlasInitialState = m_raytracingSystem.sceneTlasBackingInitialState();
         sceneTlas = m_deferredLightingTaskGraph.importAccelStruct(
             m_rayTracingState.m_tlas,
-            AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
+            AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS").setInitialState(sceneTlasInitialState)
         );
         resourcesImported = resourcesImported && sceneTlas.valid();
         if(sceneTlas.valid()){
@@ -5573,9 +5582,13 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             continue;
 
         const Name blasIdentity = DeriveName(mesh.meshName, AStringView(":blas"));
+        const Core::ResourceStates::Mask blasInitialState = mesh.blasBackingFresh
+            ? Core::ResourceStates::Common
+            : Core::ResourceStates::Unknown
+        ;
         const Core::GpuGraphResourceId blas = m_deferredLightingTaskGraph.importAccelStruct(
             mesh.blas,
-            AccelStructResourceDesc(blasIdentity, "Mesh BLAS")
+            AccelStructResourceDesc(blasIdentity, "Mesh BLAS").setInitialState(blasInitialState)
         );
         resourcesImported = resourcesImported && blas.valid();
         if(blas.valid()){
@@ -8361,6 +8374,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         const Core::GpuGraphResourceId tlas = m_deferredLightingTaskGraph.importAccelStruct(
             m_rayTracingState.m_tlas,
             AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
+                .setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())
         );
         optionalResourcesImported = optionalResourcesImported && tlas.valid();
         if(tlas.valid()){
@@ -10211,6 +10225,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             tlas = m_deferredLightingTaskGraph.importAccelStruct(
                 m_rayTracingState.m_tlas,
                 AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
+                    .setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())
             );
             optionalResourcesImported = tlas.valid();
             if(optionalResourcesImported){
@@ -12186,6 +12201,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             const Core::GpuGraphResourceId tlas = m_deferredLightingTaskGraph.importAccelStruct(
                 m_rayTracingState.m_tlas,
                 AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
+                    .setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())
             );
             optionalResourcesImported = optionalResourcesImported && tlas.valid();
             if(tlas.valid()){

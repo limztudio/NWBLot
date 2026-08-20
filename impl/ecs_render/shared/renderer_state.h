@@ -309,6 +309,10 @@ struct RtSceneBvhState{
     usize m_sceneInstanceCapacity = 0u;
 
     Core::RayTracingAccelStructHandle m_tlas;
+    // A new backing generation begins in Common until native direct recording or an accepted Shadow Preparation
+    // handoff records its final state. This remains true across discarded frozen plans.
+    bool m_tlasBackingFresh = false;
+    bool m_tlasBackingStateHandoffPending = false;
     Core::BindingLayoutHandle m_bvhSortBindingLayout;
     Core::ShaderHandle m_bvhSortShader;
     Core::ComputePipelineHandle m_bvhSortPipeline;

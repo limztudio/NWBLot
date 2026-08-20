@@ -1086,17 +1086,28 @@ bool RendererRayTracingSystem::preparedSceneTlasBuildReady()const noexcept{
     return m_preparedSceneTlasReady;
 }
 
+Core::ResourceStates::Mask RendererRayTracingSystem::sceneTlasBackingInitialState()const noexcept{
+    const auto& state = rayTracingState();
+    return state.m_tlasBackingFresh
+        ? Core::ResourceStates::Common
+        : Core::ResourceStates::Unknown
+    ;
+}
+
 void RendererRayTracingSystem::confirmPreparedSceneTlasBuild()noexcept{
     if(!m_preparedSceneTlasReady)
         return;
 
     auto& state = rayTracingState();
-    if(
+    const bool preparedTlasMatchesCurrent =
         state.m_tlas.get() == m_preparedSceneTlas.get()
         && state.m_tlas
         && state.m_tlas->getBackingBufferHandle().get() == m_preparedSceneTlasBackingBuffer.get()
         && state.m_tlasMaxInstances == m_preparedSceneTlasMaxInstances
         && state.m_tlasHeapHandle == m_preparedSceneTlasHeapHandle
+    ;
+    if(
+        preparedTlasMatchesCurrent
         && m_preparedSceneTlasStatic
     ){
         state.m_tlasStaticSceneHash = m_preparedSceneTlasStaticSceneHash;
@@ -1104,7 +1115,30 @@ void RendererRayTracingSystem::confirmPreparedSceneTlasBuild()noexcept{
     }
     else
         state.m_tlasStaticSceneHashValid = false;
+    // This callback follows the accepted persistent-state handoff. A later graph import must use that binding
+    // rather than reasserting Common for this backing generation.
+    if(preparedTlasMatchesCurrent){
+        state.m_tlasBackingFresh = false;
+        state.m_tlasBackingStateHandoffPending = false;
+    }
     clearPreparedSceneTlasBuild();
+}
+
+void RendererRayTracingSystem::confirmAcceptedShadowPrepareAccelStructStateHandoffs()noexcept{
+    auto& state = rayTracingState();
+    if(state.m_tlasBackingFresh && state.m_tlasBackingStateHandoffPending){
+        state.m_tlasBackingFresh = false;
+        state.m_tlasBackingStateHandoffPending = false;
+    }
+
+    auto& meshes = meshState().m_meshes;
+    for(auto it = meshes.begin(); it != meshes.end(); ++it){
+        MeshResources& meshResources = it.value();
+        if(meshResources.blasBackingFresh && meshResources.blasBackingStateHandoffPending){
+            meshResources.blasBackingFresh = false;
+            meshResources.blasBackingStateHandoffPending = false;
+        }
+    }
 }
 
 bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(){
@@ -1397,6 +1431,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     clearPreparedSceneTlasBuild();
     clearPreparedMeshBlasBuilds();
     clearPreparedMeshSwBvhBuilds();
+    rayTracingState().m_tlasBackingStateHandoffPending = false;
     m_shadowVisibilityPreparedTargets = nullptr;
     m_shadowVisibilityResourcesPreflighted = false;
     m_shadowVisibilityHardwareSupported = false;
@@ -1421,6 +1456,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     auto& meshes = meshState().m_meshes;
     for(auto it = meshes.begin(); it != meshes.end(); ++it){
         MeshResources& meshResources = it.value();
+        meshResources.blasBackingStateHandoffPending = false;
         if(meshResources.blas)
             meshResources.blasBuildPending = true;
         if(meshResources.swBvhNodeBuffer || meshResources.swBvhParentBuffer){

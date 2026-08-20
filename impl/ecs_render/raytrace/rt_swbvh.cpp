@@ -317,6 +317,7 @@ template<typename RayTracingState>
     outBuild.refitsAfterBuild = performRefit ? (meshResources.blasRefitsSinceRebuild + 1u) : 0u;
     outBuild.runtimeMesh = meshResources.runtimeMesh;
     outBuild.firstBuild = firstBuild;
+    outBuild.backingFresh = meshResources.blasBackingFresh;
     outBuild.performRefit = performRefit;
     return true;
 }
@@ -336,6 +337,7 @@ template<typename RayTracingState>
         || meshResources.blas->getBackingBufferHandle().get() != build.blasBackingBuffer.get()
         || meshResources.meshletPrimitiveIndexCount != build.indexCount
         || meshResources.blasBuildPending != build.firstBuild
+        || meshResources.blasBackingFresh != build.backingFresh
         || meshResources.blasRefitsSinceRebuild != build.refitsBeforeBuild
     )
         return false;
@@ -559,6 +561,9 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds()noexcept{
 
         MeshResources& meshResources = found.value();
         meshResources.blasBuildPending = false;
+        // The accepted Shadow Preparation state handoff now owns this generation's native final state.
+        meshResources.blasBackingFresh = false;
+        meshResources.blasBackingStateHandoffPending = false;
         meshResources.blasRefitsSinceRebuild = build.refitsAfterBuild;
         if(build.firstBuild){
             NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)")
@@ -1241,6 +1246,8 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             rayTracingState().m_tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
         }
         rayTracingState().m_tlas = Move(tlas);
+        rayTracingState().m_tlasBackingFresh = true;
+        rayTracingState().m_tlasBackingStateHandoffPending = false;
         rayTracingState().m_tlasMaxInstances = capacity;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created scene TLAS (capacity {} instances)")
             , static_cast<u64>(capacity)
@@ -1260,6 +1267,8 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         );
         commandList->setAccelStructState(rayTracingState().m_tlas.get(), Core::ResourceStates::AccelStructRead);
         commandList->commitBarriers();
+        if(rayTracingState().m_tlasBackingFresh)
+            rayTracingState().m_tlasBackingStateHandoffPending = true;
     }
     rayTracingState().m_tlasDeviceAddress = rayTracingState().m_tlas->getDeviceAddress();
 
@@ -2177,6 +2186,8 @@ bool RendererRayTracingSystem::prepareMeshBlasResources(MeshResources& meshResou
         return false;
     }
     meshResources.blas = Move(blas);
+    meshResources.blasBackingFresh = true;
+    meshResources.blasBackingStateHandoffPending = false;
     meshResources.blasRefitsSinceRebuild = 0u;
     return true;
 }
@@ -2189,6 +2200,8 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
     )
         return false;
 
+    if(meshResources.blasBackingFresh)
+        meshResources.blasBackingStateHandoffPending = true;
     meshResources.blasRefitsSinceRebuild = build.refitsAfterBuild;
     if(build.firstBuild){
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)")

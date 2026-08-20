@@ -87,6 +87,12 @@ struct MeshResources : public RuntimeMeshBuffers{
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;
     bool blasBuildPending = false;
+    // A newly allocated backing store starts in Common until a direct build or accepted graph handoff publishes
+    // its native state. Retained generations must use that accepted state rather than a descriptor guess.
+    bool blasBackingFresh = false;
+    // Direct recording only queues a state handoff. This marker is consumed after Shadow Preparation accepts and
+    // cleared on discard so a rejected backing allocation remains Common for its retry.
+    bool blasBackingStateHandoffPending = false;
     bool swBvhBuildPending = false;     // static mesh awaiting its one-time software BVH build
     bool swBvhTopologyBuilt = false;    // a full software BVH build initialized the persistent topology
     u64 runtimeMeshVersion = 0u;

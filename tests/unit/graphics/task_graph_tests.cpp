@@ -5863,8 +5863,12 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
     EXPECT_EQ(consumerQueueCompileStatistics.taskCount, 1u);
     EXPECT_EQ(producerQueueCompileStatistics.prologueBarrierCount, 1u);
     EXPECT_EQ(producerQueueCompileStatistics.epilogueBarrierCount, 1u);
+    EXPECT_EQ(producerQueueCompileStatistics.ownershipReleaseBarrierCount, 1u);
+    EXPECT_EQ(producerQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
     EXPECT_EQ(consumerQueueCompileStatistics.prologueBarrierCount, 2u);
     EXPECT_EQ(consumerQueueCompileStatistics.epilogueBarrierCount, 0u);
+    EXPECT_EQ(consumerQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
+    EXPECT_EQ(consumerQueueCompileStatistics.ownershipAcquireBarrierCount, 1u);
 }
 
 
@@ -6205,6 +6209,19 @@ TEST(GpuTaskGraph, RoutesAccelStructAcrossQueueFamiliesWithOwnershipAndStateSeed
     EXPECT_EQ(acquireAndTransition[1u].type, Graphics::GpuCompiledBarrierType::AccelStructTransition);
     EXPECT_EQ(acquireAndTransition[1u].before, Graphics::ResourceStates::AccelStructWrite);
     EXPECT_EQ(acquireAndTransition[1u].after, Graphics::ResourceStates::AccelStructRead);
+
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics producerQueueCompileStatistics =
+        compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
+    ;
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics consumerQueueCompileStatistics =
+        compiledGraph.physicalQueueCompileStatistics(queues[1u].id)
+    ;
+    ASSERT_TRUE(producerQueueCompileStatistics.valid());
+    ASSERT_TRUE(consumerQueueCompileStatistics.valid());
+    EXPECT_EQ(producerQueueCompileStatistics.ownershipReleaseBarrierCount, 1u);
+    EXPECT_EQ(producerQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
+    EXPECT_EQ(consumerQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
+    EXPECT_EQ(consumerQueueCompileStatistics.ownershipAcquireBarrierCount, 1u);
 }
 
 
@@ -6374,6 +6391,19 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
     EXPECT_EQ(barriers[1u].after, Graphics::ResourceStates::ShaderResource);
     EXPECT_EQ(barriers[1u].sourceQueue, queues[0u].id);
     EXPECT_EQ(barriers[1u].destinationQueue, queues[1u].id);
+
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics sourceQueueCompileStatistics =
+        compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
+    ;
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics destinationQueueCompileStatistics =
+        compiledGraph.physicalQueueCompileStatistics(queues[1u].id)
+    ;
+    ASSERT_TRUE(sourceQueueCompileStatistics.valid());
+    ASSERT_TRUE(destinationQueueCompileStatistics.valid());
+    EXPECT_EQ(sourceQueueCompileStatistics.ownershipReleaseBarrierCount, 1u);
+    EXPECT_EQ(sourceQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
+    EXPECT_EQ(destinationQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
+    EXPECT_EQ(destinationQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
 }
 
 
@@ -7092,6 +7122,19 @@ TEST(GpuTaskGraph, CompilesExplicitInitialExclusiveOwnershipHandoff){
         EXPECT_TRUE(barriers[0u].isInitialOwnerHandoff);
         EXPECT_EQ(barriers[1u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
         EXPECT_FALSE(barriers[1u].isGraphInitialState);
+
+        const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics sourceQueueCompileStatistics =
+            compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
+        ;
+        const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics destinationQueueCompileStatistics =
+            compiledGraph.physicalQueueCompileStatistics(queues[1u].id)
+        ;
+        ASSERT_TRUE(sourceQueueCompileStatistics.valid());
+        ASSERT_TRUE(destinationQueueCompileStatistics.valid());
+        EXPECT_EQ(sourceQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
+        EXPECT_EQ(sourceQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
+        EXPECT_EQ(destinationQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
+        EXPECT_EQ(destinationQueueCompileStatistics.ownershipAcquireBarrierCount, 1u);
 
         const Graphics::GpuSubmissionPacketId packet = compiledTask->packet;
         ASSERT_TRUE(packet.valid());
@@ -8825,6 +8868,8 @@ TEST(GpuTaskGraph, PublishesFiniteDeclarationTimingOnlyForAcceptedPlans){
     EXPECT_EQ(idleQueueCompileStatistics.mergedTaskCount, 0u);
     EXPECT_EQ(idleQueueCompileStatistics.prologueBarrierCount, 0u);
     EXPECT_EQ(idleQueueCompileStatistics.epilogueBarrierCount, 0u);
+    EXPECT_EQ(idleQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
+    EXPECT_EQ(idleQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
     const Graphics::GpuPhysicalQueueId staleQueue{
         queue.id.index,
         static_cast<u16>(queue.id.deviceGeneration + 1u),
@@ -31489,6 +31534,20 @@ TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
     EXPECT_FALSE(acquire[0u].isInitialOwnerHandoff);
     EXPECT_EQ(stateSeed[0u].resource, pair.texture);
     EXPECT_EQ(stateSeed[0u].sourcePacket, compiledProducer->packet);
+
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics producerQueueCompileStatistics =
+        compiledGraph.physicalQueueCompileStatistics(compiledProducer->queue)
+    ;
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics consumerQueueCompileStatistics =
+        compiledGraph.physicalQueueCompileStatistics(compiledConsumer->queue)
+    ;
+    ASSERT_TRUE(producerQueueCompileStatistics.valid());
+    ASSERT_TRUE(consumerQueueCompileStatistics.valid());
+    EXPECT_EQ(producerQueueCompileStatistics.ownershipReleaseBarrierCount, 1u);
+    EXPECT_EQ(producerQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
+    EXPECT_EQ(consumerQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
+    EXPECT_EQ(consumerQueueCompileStatistics.ownershipAcquireBarrierCount, 1u);
+
     ASSERT_EQ(compiledGraph.packet(compiledConsumer->packet).dependencyCount, 1u);
     EXPECT_EQ(
         compiledGraph.packetDependencies(compiledConsumer->packet)[0u].producer,

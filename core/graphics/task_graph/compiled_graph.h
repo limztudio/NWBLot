@@ -203,6 +203,8 @@ struct GpuTaskGraphPhysicalQueueCompileStatistics{
     usize mergedTaskCount = 0u;
     usize prologueBarrierCount = 0u;
     usize epilogueBarrierCount = 0u;
+    usize ownershipReleaseBarrierCount = 0u;
+    usize ownershipAcquireBarrierCount = 0u;
 
     [[nodiscard]] bool valid()const noexcept{
         return graphGeneration != 0u

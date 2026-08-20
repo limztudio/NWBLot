@@ -363,6 +363,36 @@ GpuTaskGraphPhysicalQueueCompileStatistics GpuCompiledGraph::physicalQueueCompil
         .queue = queue,
         .queueClass = queueInfo->queueClass,
     };
+    const auto countOwnershipBarriers = [&statistics](
+        const GraphicsVector<GpuCompiledBarrier>& barriers,
+        const u32 barrierOffset,
+        const u32 barrierCount
+    ){
+        if(
+            barrierCount == 0u
+            || barrierOffset > barriers.size()
+            || barrierCount > barriers.size() - barrierOffset
+        )
+            return;
+
+        const GpuCompiledBarrier* const taskBarriers = barriers.data() + barrierOffset;
+        for(u32 barrierIndex = 0u; barrierIndex < barrierCount; ++barrierIndex){
+            switch(taskBarriers[barrierIndex].type){
+            case GpuCompiledBarrierType::TextureOwnershipRelease:
+            case GpuCompiledBarrierType::BufferOwnershipRelease:
+            case GpuCompiledBarrierType::AccelStructOwnershipRelease:
+                ++statistics.ownershipReleaseBarrierCount;
+                break;
+            case GpuCompiledBarrierType::TextureOwnershipAcquire:
+            case GpuCompiledBarrierType::BufferOwnershipAcquire:
+            case GpuCompiledBarrierType::AccelStructOwnershipAcquire:
+                ++statistics.ownershipAcquireBarrierCount;
+                break;
+            default:
+                break;
+            }
+        }
+    };
     for(const GpuCompiledTask& task : m_tasks){
         if(task.queue != queue)
             continue;
@@ -370,6 +400,8 @@ GpuTaskGraphPhysicalQueueCompileStatistics GpuCompiledGraph::physicalQueueCompil
         ++statistics.taskCount;
         statistics.prologueBarrierCount += task.prologueBarrierCount;
         statistics.epilogueBarrierCount += task.epilogueBarrierCount;
+        countOwnershipBarriers(m_prologueBarriers, task.prologueBarrierOffset, task.prologueBarrierCount);
+        countOwnershipBarriers(m_epilogueBarriers, task.epilogueBarrierOffset, task.epilogueBarrierCount);
     }
     for(const GpuSubmissionPacket& packet : m_packets){
         if(packet.queue != queue)

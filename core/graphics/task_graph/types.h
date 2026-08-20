@@ -309,9 +309,9 @@ struct GpuCompiledBarrier{
     GpuPhysicalQueueId sourceQueue;
     GpuPhysicalQueueId destinationQueue;
     GpuCompiledBarrierType::Enum type = GpuCompiledBarrierType::TextureTransition;
-    // A first-use state declared by the graph rather than inherited from a graph-internal producer. Lowering may
-    // initialize an otherwise unknown native tracker from `before`, but an imported packet state handoff remains
-    // authoritative when CommandList::open already supplied one.
+    // A first-use marker. A known graph declaration initializes an otherwise unknown native tracker from `before`.
+    // An Unknown Read/ReadWrite first use instead requires an explicit native source at recording time; an imported
+    // packet state handoff remains authoritative when CommandList::open already supplied one.
     bool isGraphInitialState = false;
     // Only the first use of an imported external ownership handoff consumes the descriptor-owned state source.
     // Later graph-internal ownership acquires use their producer packet snapshot instead.

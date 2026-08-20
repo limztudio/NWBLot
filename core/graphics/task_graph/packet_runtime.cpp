@@ -79,6 +79,76 @@ inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph
     return result;
 }
 
+[[nodiscard]] static bool HasExplicitKnownInitialState(
+    const GpuTaskGraph& graph,
+    const GpuCompiledBarrier& barrier,
+    CommandList& commandList
+){
+    if(!graph.validResource(barrier.resource))
+        return false;
+
+    const GpuTaskGraphResourceView resource = graph.resourceAt(barrier.resource.index);
+    if(resource.id != barrier.resource || !resource.hasBackendResource)
+        return false;
+
+    switch(resource.type){
+    case GpuGraphResourceType::Texture:{
+        Texture* const texture = graph.textureForResource(barrier.resource);
+        if(!texture)
+            return false;
+
+        const TextureDesc& description = texture->getDescription();
+        const TextureSubresourceSet subresources = barrier.range.textureSubresources.resolve(
+            description,
+            TextureSubresourceMipResolve::Range
+        );
+        const u64 mipEnd = static_cast<u64>(subresources.baseMipLevel) + subresources.numMipLevels;
+        const u64 arrayEnd = static_cast<u64>(subresources.baseArraySlice) + subresources.numArraySlices;
+        if(
+            subresources.numMipLevels == 0u
+            || subresources.numArraySlices == 0u
+            || mipEnd > description.mipLevels
+            || arrayEnd > description.arraySize
+        )
+            return false;
+
+        for(ArraySlice arraySlice = subresources.baseArraySlice;
+            static_cast<u64>(arraySlice) < arrayEnd;
+            ++arraySlice
+        ){
+            for(MipLevel mipLevel = subresources.baseMipLevel;
+                static_cast<u64>(mipLevel) < mipEnd;
+                ++mipLevel
+            ){
+                if(
+                    !commandList.hasExplicitTextureSubresourceState(texture, arraySlice, mipLevel)
+                    || commandList.getTextureSubresourceState(texture, arraySlice, mipLevel) == ResourceStates::Unknown
+                )
+                    return false;
+            }
+        }
+        return true;
+    }
+    case GpuGraphResourceType::Buffer:{
+        Buffer* const buffer = graph.bufferForResource(barrier.resource);
+        return buffer
+            && commandList.hasExplicitBufferState(buffer)
+            && commandList.getBufferState(buffer) != ResourceStates::Unknown
+        ;
+    }
+    case GpuGraphResourceType::AccelStruct:{
+        RayTracingAccelStruct* const accelStruct = graph.accelStructForResource(barrier.resource);
+        Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
+        return backingBuffer
+            && commandList.hasExplicitBufferState(backingBuffer)
+            && commandList.getBufferState(backingBuffer) != ResourceStates::Unknown
+        ;
+    }
+    default:
+        return false;
+    }
+}
+
 #if defined(NWB_DEBUG)
 [[nodiscard]] bool HasQueueCapabilities(
     const GpuQueueCapability::Mask available,
@@ -212,6 +282,13 @@ inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph
                         : (
                             resource.initialOwnerQueue != barrier.sourceQueue
                             || resource.initialOwnerReleaseDestinationQueue != barrier.destinationQueue
+                            || !resource.initialOwnerMinimumCompletionToken.valid()
+                            || resource.initialOwnerMinimumCompletionToken.queue != sourceQueue->queueClass
+                            || !resource.initialOwnerMinimumCompletionToken.matchesPhysicalQueue(
+                                barrier.sourceQueue.index,
+                                barrier.sourceQueue.deviceGeneration
+                            )
+                            || token.value < resource.initialOwnerMinimumCompletionToken.value
                         )
                 )
                 || token.queue != sourceQueue->queueClass
@@ -931,8 +1008,29 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
             recorded = false;
             break;
         }
-        for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex)
-            recorded = graph.applyCompiledBarrier(compiledGraph, prologueBarriers[barrierIndex], *commandList);
+        for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const GpuCompiledBarrier& barrier = prologueBarriers[barrierIndex];
+            if(barrier.isGraphInitialState && barrier.before == ResourceStates::Unknown){
+                if(!__hidden_gpu_packet_runtime::HasExplicitKnownInitialState(graph, barrier, *commandList)){
+                    const GpuTaskGraphResourceView resource = graph.resourceAt(barrier.resource.index);
+                    NWB_LOGGER_ERROR(
+                        NWB_TEXT("Gpu task graph: rejecting task '{}' because first-read resource '{}' has no explicit initial native state source")
+                        , StringConvert(taskView.markerLabel)
+                        , StringConvert(resource.markerLabel)
+                    );
+                    recorded = false;
+                    break;
+                }
+
+                // The immutable marker made record-time validation mandatory. The imported source is now
+                // authoritative, so lower a local copy without asking graph-initial lowering to seed Unknown.
+                GpuCompiledBarrier loweredBarrier = barrier;
+                loweredBarrier.isGraphInitialState = false;
+                recorded = graph.applyCompiledBarrier(compiledGraph, loweredBarrier, *commandList);
+            }
+            else
+                recorded = graph.applyCompiledBarrier(compiledGraph, barrier, *commandList);
+        }
         // A retained state that already matches the compiler plan still needs a native tracker entry. Otherwise a
         // later packet cannot import that graph-declared resource state, and a renderer thunk would need a redundant
         // direct transition merely to publish its handoff.

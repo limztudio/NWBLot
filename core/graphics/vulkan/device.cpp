@@ -46,14 +46,13 @@ static Atomic<u32> s_NextDeviceGeneration{ 1u };
     return generation;
 }
 
-[[nodiscard]] static constexpr GpuQueueCapability::Mask QueueCapabilities(
+[[nodiscard]] static constexpr GpuQueueCapability::Mask MinimumQueueCapabilities(
     const CommandQueue::Enum queue
 )noexcept{
     switch(queue){
     case CommandQueue::Graphics:
         return static_cast<GpuQueueCapability::Mask>(
             static_cast<u8>(GpuQueueCapability::Graphics)
-            | static_cast<u8>(GpuQueueCapability::Compute)
             | static_cast<u8>(GpuQueueCapability::Transfer)
         );
     case CommandQueue::Compute:
@@ -66,6 +65,23 @@ static Atomic<u32> s_NextDeviceGeneration{ 1u };
     default:
         return GpuQueueCapability::None;
     }
+}
+
+[[nodiscard]] static constexpr GpuQueueCapability::Mask QueueCapabilitiesForQueueFlags(
+    const VkQueueFlags queueFlags
+)noexcept{
+    u8 capabilities = 0u;
+    if((queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0u){
+        capabilities |= static_cast<u8>(GpuQueueCapability::Graphics);
+        capabilities |= static_cast<u8>(GpuQueueCapability::Transfer);
+    }
+    if((queueFlags & VK_QUEUE_COMPUTE_BIT) != 0u){
+        capabilities |= static_cast<u8>(GpuQueueCapability::Compute);
+        capabilities |= static_cast<u8>(GpuQueueCapability::Transfer);
+    }
+    if((queueFlags & VK_QUEUE_TRANSFER_BIT) != 0u)
+        capabilities |= static_cast<u8>(GpuQueueCapability::Transfer);
+    return static_cast<GpuQueueCapability::Mask>(capabilities);
 }
 
 static AStringView TrimGpuCrashText(const AStringView text){
@@ -233,12 +249,38 @@ Device::Device(const DeviceDesc& desc)
     }
     else{
         // Preserve construction compatibility for older callers while assigning registry IDs independently from
-        // CommandQueue ordinals.
+        // CommandQueue ordinals. The grouped fields carry family identity, so retain a Graphics+Compute legacy
+        // fallback when that real family supports it instead of degrading every old caller to Graphics-only.
+        u32 legacyQueueFamilyCount = 0u;
+        if(m_context.physicalDevice != VK_NULL_HANDLE)
+            vkGetPhysicalDeviceQueueFamilyProperties(m_context.physicalDevice, &legacyQueueFamilyCount, nullptr);
+        Alloc::ScratchArena legacyQueueArena(VulkanArenaScope::s_QueueFamilyQueryArena);
+        Vector<VkQueueFamilyProperties, Alloc::ScratchArena> legacyQueueFamilies(legacyQueueFamilyCount, legacyQueueArena);
+        if(!legacyQueueFamilies.empty()){
+            vkGetPhysicalDeviceQueueFamilyProperties(
+                m_context.physicalDevice,
+                &legacyQueueFamilyCount,
+                legacyQueueFamilies.data()
+            );
+        }
+        const auto capabilitiesForLegacyQueue = [&legacyQueueFamilies](
+            const i32 queueFamily,
+            const CommandQueue::Enum queueClass
+        ){
+            if(
+                queueFamily < 0
+                || static_cast<usize>(queueFamily) >= legacyQueueFamilies.size()
+            )
+                return VulkanDetail::MinimumQueueCapabilities(queueClass);
+            return VulkanDetail::QueueCapabilitiesForQueueFlags(
+                legacyQueueFamilies[static_cast<usize>(queueFamily)].queueFlags
+            );
+        };
         const VulkanPhysicalQueueDesc legacyQueues[] = {
             VulkanPhysicalQueueDesc{
                 .queue = desc.graphicsQueue,
                 .queueClass = CommandQueue::Graphics,
-                .capabilities = VulkanDetail::QueueCapabilities(CommandQueue::Graphics),
+                .capabilities = capabilitiesForLegacyQueue(desc.graphicsQueueIndex, CommandQueue::Graphics),
                 .familyIndex = desc.graphicsQueueIndex >= 0
                     ? static_cast<u32>(desc.graphicsQueueIndex)
                     : Limit<u32>::s_Max,
@@ -249,7 +291,7 @@ Device::Device(const DeviceDesc& desc)
             VulkanPhysicalQueueDesc{
                 .queue = desc.computeQueue,
                 .queueClass = CommandQueue::Compute,
-                .capabilities = VulkanDetail::QueueCapabilities(CommandQueue::Compute),
+                .capabilities = capabilitiesForLegacyQueue(desc.computeQueueIndex, CommandQueue::Compute),
                 .familyIndex = desc.computeQueueIndex >= 0
                     ? static_cast<u32>(desc.computeQueueIndex)
                     : Limit<u32>::s_Max,
@@ -260,7 +302,7 @@ Device::Device(const DeviceDesc& desc)
             VulkanPhysicalQueueDesc{
                 .queue = desc.transferQueue,
                 .queueClass = CommandQueue::Transfer,
-                .capabilities = VulkanDetail::QueueCapabilities(CommandQueue::Transfer),
+                .capabilities = capabilitiesForLegacyQueue(desc.transferQueueIndex, CommandQueue::Transfer),
                 .familyIndex = desc.transferQueueIndex >= 0
                     ? static_cast<u32>(desc.transferQueueIndex)
                     : Limit<u32>::s_Max,
@@ -757,14 +799,29 @@ void Device::savePipelineCacheData(){
 
 bool Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc){
     const u32 queueClassIndex = static_cast<u32>(desc.queueClass);
-    const u8 requiredCapabilities = static_cast<u8>(VulkanDetail::QueueCapabilities(desc.queueClass));
+    const u8 requiredCapabilities = static_cast<u8>(VulkanDetail::MinimumQueueCapabilities(desc.queueClass));
     const u8 providedCapabilities = static_cast<u8>(desc.capabilities);
+    const u8 knownCapabilities = static_cast<u8>(
+        static_cast<u8>(GpuQueueCapability::Graphics)
+        | static_cast<u8>(GpuQueueCapability::Compute)
+        | static_cast<u8>(GpuQueueCapability::Transfer)
+    );
+    const u8 graphicsOrComputeCapabilities = static_cast<u8>(
+        static_cast<u8>(GpuQueueCapability::Graphics)
+        | static_cast<u8>(GpuQueueCapability::Compute)
+    );
+    const bool missingRequiredTransferCapability =
+        (providedCapabilities & graphicsOrComputeCapabilities) != 0u
+        && (providedCapabilities & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
+    ;
     if(
         desc.queue == VK_NULL_HANDLE
         || queueClassIndex >= static_cast<u32>(CommandQueue::kCount)
         || desc.familyIndex == Limit<u32>::s_Max
         || requiredCapabilities == 0u
         || (providedCapabilities & requiredCapabilities) != requiredCapabilities
+        || (providedCapabilities & static_cast<u8>(~knownCapabilities)) != 0u
+        || missingRequiredTransferCapability
         || m_physicalQueueInfos.size() >= static_cast<usize>(Limit<u16>::s_Max)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing invalid physical queue registry entry."));

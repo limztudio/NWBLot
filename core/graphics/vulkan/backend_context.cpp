@@ -50,6 +50,26 @@ static constexpr f32 s_Hdr10MinimumLuminance = 0.005f;
 static constexpr f32 s_Hdr10MaximumFrameAverageLightLevel = 400.0f;
 static constexpr u32 s_Hdr10MetadataSwapChainCount = 1u;
 
+// Vulkan guarantees transfer support for Graphics and Compute families, but a Graphics family does not imply
+// Compute support. Keep the physical registry faithful to the family flags so cross-family Graphics queues cannot
+// receive Compute work merely because the primary Graphics family can execute it.
+[[nodiscard]] static constexpr GpuQueueCapability::Mask QueueCapabilitiesForQueueFlags(
+    const VkQueueFlags queueFlags
+)noexcept{
+    u8 capabilities = 0u;
+    if((queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0u){
+        capabilities |= static_cast<u8>(GpuQueueCapability::Graphics);
+        capabilities |= static_cast<u8>(GpuQueueCapability::Transfer);
+    }
+    if((queueFlags & VK_QUEUE_COMPUTE_BIT) != 0u){
+        capabilities |= static_cast<u8>(GpuQueueCapability::Compute);
+        capabilities |= static_cast<u8>(GpuQueueCapability::Transfer);
+    }
+    if((queueFlags & VK_QUEUE_TRANSFER_BIT) != 0u)
+        capabilities |= static_cast<u8>(GpuQueueCapability::Transfer);
+    return static_cast<GpuQueueCapability::Mask>(capabilities);
+}
+
 static ScratchStringStream MakeScratchStringStream(Alloc::ScratchArena& arena){
     return ScratchStringStream(std::ios_base::out, arena);
 }
@@ -1036,6 +1056,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
             if(
                 queueFamily.queueCount > 0
                 && (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+                && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
             )
                 m_graphicsQueueFamily = i;
         }
@@ -1950,25 +1971,17 @@ bool BackendContext::createVulkanDevice(){
     if(createDedicatedTransferQueue)
         vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_transferQueueFamily), s_TransferQueueIndex, &m_transferQueue);
 
-    const auto capabilitiesForSameClassQueue = [](const CommandQueue::Enum queueClass){
-        switch(queueClass){
-        case CommandQueue::Graphics:
-            return static_cast<GpuQueueCapability::Mask>(
-                static_cast<u8>(GpuQueueCapability::Graphics)
-                | static_cast<u8>(GpuQueueCapability::Compute)
-                | static_cast<u8>(GpuQueueCapability::Transfer)
-            );
-        case CommandQueue::Compute:
-            return static_cast<GpuQueueCapability::Mask>(
-                static_cast<u8>(GpuQueueCapability::Compute)
-                | static_cast<u8>(GpuQueueCapability::Transfer)
-            );
-        case CommandQueue::Transfer:
-            return static_cast<GpuQueueCapability::Mask>(GpuQueueCapability::Transfer);
-        default:
+    const auto capabilitiesForSameClassQueue = [&physicalQueueFamilies](const i32 queueFamily){
+        if(
+            queueFamily == s_InvalidQueueFamilyIndex
+            || static_cast<usize>(queueFamily) >= physicalQueueFamilies.size()
+        ){
             NWB_ASSERT(false);
-            return static_cast<GpuQueueCapability::Mask>(GpuQueueCapability::None);
+            return GpuQueueCapability::None;
         }
+        return VulkanDetail::QueueCapabilitiesForQueueFlags(
+            physicalQueueFamilies[static_cast<usize>(queueFamily)].queueFlags
+        );
     };
     const auto registerSameClassQueues = [
         this,
@@ -1997,7 +2010,7 @@ bool BackendContext::createVulkanDevice(){
             m_sameClassQueues.push_back(VulkanPhysicalQueueDesc{
                 .queue = queue,
                 .queueClass = queueClass,
-                .capabilities = capabilitiesForSameClassQueue(queueClass),
+                .capabilities = capabilitiesForSameClassQueue(request.family),
                 .familyIndex = static_cast<u32>(request.family),
                 .queueIndex = request.queueIndex,
                 .dedicated = queueClass != CommandQueue::Graphics,
@@ -2672,15 +2685,39 @@ bool BackendContext::createDevice(){
     }
     deviceDesc.asyncComputeLaneEnabled = m_asyncComputeLaneEnabled;
     deviceDesc.transferQueueEnabled = m_transferQueueEnabled;
-    const GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<GpuQueueCapability::Mask>(
+    uint32_t physicalQueueFamilyCount = 0u;
+    vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysicalDevice, &physicalQueueFamilyCount, nullptr);
+    Vector<VkQueueFamilyProperties, Alloc::ScratchArena> physicalQueueFamilies(physicalQueueFamilyCount, scratchArena);
+    vkGetPhysicalDeviceQueueFamilyProperties(
+        m_vulkanPhysicalDevice,
+        &physicalQueueFamilyCount,
+        physicalQueueFamilies.data()
+    );
+    const auto queueCapabilitiesForFamily = [&physicalQueueFamilies](const i32 queueFamily){
+        if(
+            queueFamily == s_InvalidQueueFamilyIndex
+            || static_cast<usize>(queueFamily) >= physicalQueueFamilies.size()
+        )
+            return GpuQueueCapability::None;
+        return VulkanDetail::QueueCapabilitiesForQueueFlags(
+            physicalQueueFamilies[static_cast<usize>(queueFamily)].queueFlags
+        );
+    };
+    const GpuQueueCapability::Mask graphicsQueueCapabilities = queueCapabilitiesForFamily(m_graphicsQueueFamily);
+    const GpuQueueCapability::Mask computeQueueCapabilities = queueCapabilitiesForFamily(m_computeQueueFamily);
+    const GpuQueueCapability::Mask transferQueueCapabilities = queueCapabilitiesForFamily(m_transferQueueFamily);
+    const GpuQueueCapability::Mask requiredGraphicsQueueCapabilities = static_cast<GpuQueueCapability::Mask>(
         static_cast<u8>(GpuQueueCapability::Graphics)
         | static_cast<u8>(GpuQueueCapability::Compute)
         | static_cast<u8>(GpuQueueCapability::Transfer)
     );
-    const GpuQueueCapability::Mask computeQueueCapabilities = static_cast<GpuQueueCapability::Mask>(
-        static_cast<u8>(GpuQueueCapability::Compute)
-        | static_cast<u8>(GpuQueueCapability::Transfer)
-    );
+    if(
+        (static_cast<u8>(graphicsQueueCapabilities) & static_cast<u8>(requiredGraphicsQueueCapabilities))
+        != static_cast<u8>(requiredGraphicsQueueCapabilities)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: selected primary Graphics queue family does not support Graphics, Compute, and Transfer."));
+        return false;
+    }
     Vector<VulkanPhysicalQueueDesc, Alloc::ScratchArena> physicalQueues{scratchArena};
     physicalQueues.reserve(1u + m_sameClassQueues.size() + 2u);
     const auto appendSameClassQueues = [this, &physicalQueues](const CommandQueue::Enum queueClass){
@@ -2715,7 +2752,7 @@ bool BackendContext::createDevice(){
         physicalQueues.push_back(VulkanPhysicalQueueDesc{
             .queue = m_transferQueue,
             .queueClass = CommandQueue::Transfer,
-            .capabilities = GpuQueueCapability::Transfer,
+            .capabilities = transferQueueCapabilities,
             .familyIndex = static_cast<u32>(m_transferQueueFamily),
             .queueIndex = s_TransferQueueIndex,
             .dedicated = true,

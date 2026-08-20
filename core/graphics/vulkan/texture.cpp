@@ -1489,7 +1489,7 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear depth/stencil texture"), NWB_TEXT("texture is null"), textureResource))
         return;
 #if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Transfer);
+    recordTaskCapability(GpuQueueCapability::Graphics);
 #endif
 
     Texture& texture = *textureResource;
@@ -1664,10 +1664,6 @@ void CommandList::clearDepthStencilTextureBox(
         return;
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear depth/stencil texture box"), NWB_TEXT("texture is null"), textureResource))
         return;
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Transfer);
-#endif
-
     Texture& texture = *textureResource;
     const TextureDesc& desc = texture.m_desc;
     if(!__hidden_vulkan_texture::ValidateTextureDepthStencilClearAspects(
@@ -1688,6 +1684,9 @@ void CommandList::clearDepthStencilTextureBox(
     }
 
     if(m_renderPassActive || desc.sampleCount != 1u){
+#if defined(NWB_DEBUG)
+        recordTaskCapability(GpuQueueCapability::Graphics);
+#endif
         const Box resolvedBox = __hidden_vulkan_texture::ResolveTextureClearBox(desc, resolvedSubresources.baseMipLevel, box);
         if(__hidden_vulkan_texture::TextureClearBoxEmpty(resolvedBox))
             return;
@@ -1714,6 +1713,9 @@ void CommandList::clearDepthStencilTextureBox(
     if(desc.dimension == TextureDimension::Texture3D)
         return;
 
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Transfer);
+#endif
     u8 depthPattern[__hidden_vulkan_texture::s_TextureClearDepthPatternBytes] = {};
     u32 depthPatternSize = 0u;
     if(clearDepth && !__hidden_vulkan_texture::BuildTextureDepthClearPattern(desc.format, depth, depthPattern, depthPatternSize)){
@@ -2082,7 +2084,7 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("resolve texture"), NWB_TEXT("resource is invalid"), destResource, srcResource))
         return;
 #if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Transfer);
+    recordTaskCapability(GpuQueueCapability::Graphics);
 #endif
 
     Texture& dest = *destResource;
@@ -2184,9 +2186,6 @@ void CommandList::clearColorTexture(
 ){
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear texture"), NWB_TEXT("texture is null"), textureResource))
         return;
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Transfer);
-#endif
 #if !defined(NWB_DEBUG)
     static_cast<void>(valueName);
 #endif
@@ -2207,12 +2206,18 @@ void CommandList::clearColorTexture(
         return;
 
     if(m_renderPassActive){
+#if defined(NWB_DEBUG)
+        recordTaskCapability(GpuQueueCapability::Graphics);
+#endif
         const Rect fullRect(0, Limit<i32>::s_Max, 0, Limit<i32>::s_Max);
         if(clearActiveRenderPassColorTextureRect(texture, resolvedSubresources, fullRect, clearValue, valueName))
             retainResource(textureResource);
         return;
     }
 
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Compute);
+#endif
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
     if(texture.m_desc.dimension != TextureDimension::Texture3D && resolvedSubresources.numArraySlices > 1u){
         Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
@@ -2240,9 +2245,6 @@ void CommandList::clearColorTextureBox(
         return;
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear texture box"), NWB_TEXT("texture is null"), textureResource))
         return;
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Transfer);
-#endif
 #if !defined(NWB_DEBUG)
     static_cast<void>(valueName);
 #endif
@@ -2264,12 +2266,18 @@ void CommandList::clearColorTextureBox(
     ))
         return;
 
-    if(__hidden_vulkan_texture::TextureClearBoxCoversSubresources(desc, resolvedSubresources, box)){
+    if(
+        (m_renderPassActive || desc.sampleCount != 1u)
+        && __hidden_vulkan_texture::TextureClearBoxCoversSubresources(desc, resolvedSubresources, box)
+    ){
         clearColorTexture(textureResource, resolvedSubresources, valueName, clearValue, integerValue, signedIntegerValue);
         return;
     }
 
     if(m_renderPassActive || desc.sampleCount != 1u){
+#if defined(NWB_DEBUG)
+        recordTaskCapability(GpuQueueCapability::Graphics);
+#endif
         const Box resolvedBox = __hidden_vulkan_texture::ResolveTextureClearBox(desc, resolvedSubresources.baseMipLevel, box);
         if(__hidden_vulkan_texture::TextureClearBoxEmpty(resolvedBox))
             return;
@@ -2286,6 +2294,9 @@ void CommandList::clearColorTextureBox(
         return;
     }
 
+#if defined(NWB_DEBUG)
+    recordTaskCapability(GpuQueueCapability::Transfer);
+#endif
     u8 clearPattern[__hidden_vulkan_texture::s_TextureClearMaxPatternBytes] = {};
     u32 clearPatternSize = 0u;
     const bool patternReady = !integerValue

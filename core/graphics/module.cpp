@@ -240,6 +240,48 @@ struct SetupUploadReadinessBridgeGraphTask{
     }
 };
 
+// A standalone graph does not own a renderer finalization packet.  Predeclare this no-op Graphics tail so a later
+// normal-packet rejection can join every already-accepted physical queue before this synchronous call returns.
+struct StandaloneTaskGraphRecoveryTask{
+    struct Payload{};
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(payload);
+        static_cast<void>(commandList);
+        static_cast<void>(context);
+        return true;
+    }
+};
+
+[[nodiscard]] static GpuTaskId DeclareStandaloneTaskGraphRecoveryTask(GpuTaskGraph& graph){
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Tiny;
+    scheduling.overlapPreferred = false;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    scheduling.joinsAcceptedQueueFrontier = true;
+    GpuTaskDesc recoveryDesc;
+    recoveryDesc
+        .setIdentity(Name("graphics.standalone_task_graph.recovery"))
+        .setMarkerLabel("Standalone Task Graph Recovery")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(scheduling)
+    ;
+    return graph.addTask<StandaloneTaskGraphRecoveryTask>(
+        recoveryDesc,
+        StandaloneTaskGraphRecoveryTask::Payload{}
+    );
+}
+
 [[nodiscard]] static GpuTaskId DeclareSetupUploadReadinessBridgeTasks(
     GpuTaskGraph& graph,
     GraphicsBackend::Device& device,
@@ -296,13 +338,15 @@ struct SetupUploadReadinessBridgeGraphTask{
 
 template<typename DeclareTask>
 [[nodiscard]] static bool SubmitGraphOwnedStandaloneTask(
-    GraphicsBackend::Device& device,
+    const Graphics& graphics,
     GraphicsArena& graphArena,
     DeclareTask&& declareTask,
     QueueSubmissionToken& outSubmissionToken,
     const GpuPhysicalQueueId requiredTerminalQueue = {}
 ){
     outSubmissionToken = {};
+
+    auto& device = graphics.getDevice();
 
     const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
     if(!topology.queues || topology.queueCount == 0u)
@@ -311,6 +355,9 @@ template<typename DeclareTask>
     GpuTaskGraph graph(graphArena);
     const GpuTaskId terminalTask = declareTask(graph);
     if(!terminalTask.valid())
+        return false;
+    const GpuTaskId recoveryTask = DeclareStandaloneTaskGraphRecoveryTask(graph);
+    if(!recoveryTask.valid())
         return false;
 
     GpuTaskGraphAnalysis analysis(graphArena);
@@ -324,9 +371,36 @@ template<typename DeclareTask>
         return false;
 
     const GpuSubmissionPacketId terminalPacket = compiledGraph.packetForTask(terminalTask);
-    if(!terminalPacket.valid())
+    const GpuSubmissionPacketId recoveryPacket = compiledGraph.packetForTask(recoveryTask);
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    if(
+        !terminalPacket.valid()
+        || !recoveryPacket.valid()
+        || !graphicsQueue.valid()
+        || compiledGraph.packetCount() < 2u
+        || terminalPacket == recoveryPacket
+        || recoveryPacket.index == 0u
+        || recoveryPacket != compiledGraph.packetIdAt(compiledGraph.packetCount() - 1u)
+        || !compiledGraph.taskJoinsAcceptedQueueFrontier(recoveryTask)
+    )
         return false;
     if(requiredTerminalQueue.valid() && compiledGraph.packet(terminalPacket).queue != requiredTerminalQueue)
+        return false;
+
+    const GpuSubmissionPacket& recoveryPacketPlan = compiledGraph.packet(recoveryPacket);
+    if(
+        recoveryPacketPlan.queue != graphicsQueue
+        || recoveryPacketPlan.dependencyCount != 0u
+        || recoveryPacketPlan.externalDependencyCount != 0u
+        || !recoveryPacketPlan.joinsAcceptedQueueFrontier
+    )
+        return false;
+
+    const GpuSubmissionPacketRange normalPacketRange = compiledGraph.packetRange(
+        compiledGraph.packetIdAt(0u),
+        compiledGraph.packetIdAt(recoveryPacket.index - 1u)
+    );
+    if(!compiledGraph.validPacketRange(normalPacketRange))
         return false;
 
     transaction.reset(compiledGraph);
@@ -334,7 +408,7 @@ template<typename DeclareTask>
     if(!recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        compiledGraph.allPacketRange(),
+        normalPacketRange,
         nullptr,
         0u,
         recordedGraph
@@ -348,7 +422,7 @@ template<typename DeclareTask>
         graph,
         compiledGraph,
         recordedGraph,
-        compiledGraph.allPacketRange(),
+        normalPacketRange,
         nullptr,
         0u,
         nullptr,
@@ -356,18 +430,30 @@ template<typename DeclareTask>
         transaction,
         scratchArena
     )){
+        const bool recovered = !transaction.hasAcceptedPackets() || submitter.recordAndSubmitAcceptedFrontierTask(
+            graph,
+            compiledGraph,
+            recorder,
+            recordedGraph,
+            recoveryTask,
+            transaction,
+            scratchArena
+        );
         transaction.discardUnaccepted(graph, compiledGraph);
         outSubmissionToken = {};
+        if(!recovered)
+            graphics.requestDeviceRecreation();
         return false;
     }
 
     outSubmissionToken = transaction.packetToken(terminalPacket);
+    transaction.discardUnaccepted(graph, compiledGraph);
     return outSubmissionToken.valid();
 }
 
 template<typename DeclareTask>
 [[nodiscard]] static bool SubmitGraphOwnedSetupUpload(
-    GraphicsBackend::Device& device,
+    const Graphics& graphics,
     GraphicsArena& graphArena,
     const ResourceQueueSharing::Mask queueSharing,
     const CommandQueue::Enum uploadQueue,
@@ -377,9 +463,10 @@ template<typename DeclareTask>
     const GpuPhysicalQueueId requiredTerminalQueue = {}
 ){
     outUploadToken = {};
+    auto& device = graphics.getDevice();
     QueueSubmissionToken terminalToken;
     if(!SubmitGraphOwnedStandaloneTask(
-        device,
+        graphics,
         graphArena,
         [&device, queueSharing, uploadQueue, bridgePrimaryUploadQueue, &declareTask](GpuTaskGraph& graph){
             const GpuTaskId uploadTask = declareTask(graph);
@@ -456,17 +543,18 @@ struct FrameTimingResetGraphTask{
 }
 
 [[nodiscard]] static bool SubmitGraphOwnedFrameTimingReset(
-    GraphicsBackend::Device& device,
+    const Graphics& graphics,
     GraphicsArena& graphArena,
     GpuTimingRecorder& timing
 ){
+    auto& device = graphics.getDevice();
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     if(!graphicsQueue.valid())
         return false;
 
     QueueSubmissionToken acceptedToken;
     if(!SubmitGraphOwnedStandaloneTask(
-        device,
+        graphics,
         graphArena,
         [&timing](GpuTaskGraph& graph){
             GpuTaskDesc resetDesc;
@@ -1080,7 +1168,7 @@ void Graphics::setPipelineCacheDirectory(const Path& directory){
     m_deviceCreationParams.pipelineCacheDirectory = directory;
 }
 
-void Graphics::requestDeviceRecreation(){
+void Graphics::requestDeviceRecreation()const{
     if(m_deviceRecreationRequested)
         return;
 
@@ -1344,7 +1432,7 @@ bool Graphics::prepareFramePreamble(){
         // The task's accepted callback reenables only the pools covered by the successfully submitted packet.
         m_gpuTiming.discardFrameReset();
         if(!__hidden_graphics::SubmitGraphOwnedFrameTimingReset(
-            device,
+            *this,
             m_allocator.getObjectArena(),
             m_gpuTiming
         )){
@@ -1551,7 +1639,7 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
 
     QueueSubmissionToken uploadToken;
     const bool submitted = __hidden_graphics::SubmitGraphOwnedSetupUpload(
-        device,
+        *this,
         m_allocator.getObjectArena(),
         uploadDesc.queueSharing,
         uploadQueue,
@@ -1642,7 +1730,7 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
 
     QueueSubmissionToken uploadToken;
     const bool submitted = __hidden_graphics::SubmitGraphOwnedSetupUpload(
-        device,
+        *this,
         m_allocator.getObjectArena(),
         uploadDesc.queueSharing,
         uploadQueue,
@@ -1710,7 +1798,7 @@ bool Graphics::submitStandaloneTaskGraph(
         return false;
 
     return __hidden_graphics::SubmitGraphOwnedStandaloneTask(
-        getDevice(),
+        *this,
         m_allocator.getObjectArena(),
         [userData, declareTask](GpuTaskGraph& graph){
             return declareTask(userData, graph);
@@ -1749,7 +1837,7 @@ bool Graphics::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
         sameClassRouting = {};
     QueueSubmissionToken uploadToken;
     const bool submitted = __hidden_graphics::SubmitGraphOwnedSetupUpload(
-        device,
+        *this,
         m_allocator.getObjectArena(),
         textureDesc.queueSharing,
         uploadQueue,

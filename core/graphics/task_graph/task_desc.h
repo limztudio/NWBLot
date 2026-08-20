@@ -131,6 +131,9 @@ struct GpuGraphResourceDesc{
     // consumer packet.
     GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
     GpuExternalCompletionId initialOwnerCompletion;
+    // The bound completion may advance on the same source queue, but it must never precede this release token.
+    // This makes the legacy whole-resource handoff as race-safe as the texture multi-source form above.
+    QueueSubmissionToken initialOwnerMinimumCompletionToken;
     const CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
     // Texture-only multi-producer companion to the single-owner fields above. Sources must be non-overlapping and
     // must not be mixed with those legacy fields; the graph copies every state source at declaration time.
@@ -147,6 +150,7 @@ struct GpuGraphResourceDesc{
     constexpr GpuGraphResourceDesc& setInitialOwnerQueue(const GpuPhysicalQueueId value){ initialOwnerQueue = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerReleaseDestinationQueue(const GpuPhysicalQueueId value){ initialOwnerReleaseDestinationQueue = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerCompletion(const GpuExternalCompletionId value){ initialOwnerCompletion = value; return *this; }
+    constexpr GpuGraphResourceDesc& setInitialOwnerMinimumCompletionToken(const QueueSubmissionToken& value){ initialOwnerMinimumCompletionToken = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerStateSource(const CommandListResourceStateHandoff* const value){ initialOwnerStateSource = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerHandoffSources(
         const GpuGraphInitialOwnerHandoffSourceDesc* const values,

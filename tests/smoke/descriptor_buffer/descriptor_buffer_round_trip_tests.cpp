@@ -444,6 +444,134 @@ struct StandaloneGraphTextureUploadContext{
 }
 #endif
 
+#if !defined(NWB_FINAL)
+// The public standalone boundary normally owns no renderer tail.  This probe makes a Transfer packet accept before
+// a dependent Graphics packet is rejected, then arms the backend's one-shot wait capture from that rejection so it
+// observes the standalone helper's subsequently submitted recovery frontier exactly.
+struct StandaloneGraphAcceptedFrontierRecoveryCompletionTask{
+    struct Payload{
+        GraphicsBackend::Device& device;
+        bool* recorded = nullptr;
+        bool* accepted = nullptr;
+        bool* discarded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(commandList);
+        static_cast<void>(context);
+        if(payload.recorded)
+            *payload.recorded = true;
+        return true;
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(payload.accepted)
+            *payload.accepted = token.valid();
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.discarded)
+            *payload.discarded = true;
+
+        payload.device.clearSubmissionWaitTokensForTesting();
+        payload.device.armSubmissionWaitCaptureForTesting();
+    }
+};
+
+struct StandaloneGraphAcceptedFrontierRecoveryContext{
+    BufferHandle destination;
+    const void* bytes = nullptr;
+    usize byteCount = 0u;
+    GraphicsBackend::Device& device;
+    QueueSubmissionToken* acceptedTransferToken = nullptr;
+    bool* graphicsRecorded = nullptr;
+    bool* graphicsAccepted = nullptr;
+    bool* graphicsDiscarded = nullptr;
+};
+
+[[nodiscard]] static GpuTaskId DeclareStandaloneGraphAcceptedFrontierRecovery(
+    void* const rawContext,
+    GpuTaskGraph& graph
+){
+    StandaloneGraphAcceptedFrontierRecoveryContext* const context =
+        static_cast<StandaloneGraphAcceptedFrontierRecoveryContext*>(rawContext)
+    ;
+    if(
+        !context
+        || !context->destination
+        || !context->bytes
+        || context->byteCount == 0u
+    )
+        return {};
+
+    const GpuGraphResourceId destination = graph.importBuffer(
+        context->destination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests.standalone_graph_accepted_frontier_recovery.destination"))
+            .setMarkerLabel("Standalone Accepted Frontier Recovery Destination")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+    );
+    const GpuUploadBlobId source = graph.copyUploadData(context->bytes, context->byteCount, alignof(u32));
+    if(!destination.valid() || !source.valid())
+        return {};
+
+    GpuTaskSchedulingHint packetScheduling;
+    packetScheduling.cost = GpuTaskCostHint::Tiny;
+    packetScheduling.overlapPreferred = false;
+    packetScheduling.forceSubmissionBoundary = true;
+    packetScheduling.allowPacketMerge = false;
+    const GpuQueueRequest transferRequest{
+        GpuQueueCapability::Transfer,
+        GpuQueuePreference::Transfer,
+        false,
+        false,
+    };
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const GpuTaskId transferTask = graph.addUploadBufferTask(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests.standalone_graph_accepted_frontier_recovery.transfer"))
+            .setMarkerLabel("Standalone Accepted Frontier Recovery Transfer")
+            .setQueue(transferRequest)
+            .setScheduling(packetScheduling),
+        GpuUploadBufferTaskDesc{
+            .source = source,
+            .destination = destination,
+            .finalState = ResourceStates::CopyDest,
+            .acceptedToken = context->acceptedTransferToken,
+        }
+    );
+    if(!transferTask.valid())
+        return {};
+
+    const GpuTaskId suffixTask = graph.addTask<StandaloneGraphAcceptedFrontierRecoveryCompletionTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests.standalone_graph_accepted_frontier_recovery.graphics"))
+            .setMarkerLabel("Standalone Accepted Frontier Recovery Graphics")
+            .setQueue(graphicsRequest)
+            .setScheduling(packetScheduling)
+            .setDependencies(&transferTask, 1u),
+        StandaloneGraphAcceptedFrontierRecoveryCompletionTask::Payload{
+            .device = context->device,
+            .recorded = context->graphicsRecorded,
+            .accepted = context->graphicsAccepted,
+            .discarded = context->graphicsDiscarded,
+        }
+    );
+    return suffixTask;
+}
+#endif
+
 
 // These compact graph tasks model skinning's descriptor-visible compute endpoint. They deliberately perform no
 // synthetic native submission: their packet-local barriers publish the required compute states, and the task's
@@ -4615,6 +4743,20 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
 
     CommandListParameters computeParams;
     computeParams.setRenderLane(RenderLane::AsyncCompute);
+    const CommandListHandle computePrimer = device.createCommandList(computeParams);
+    ASSERT_NE(computePrimer.get(), nullptr);
+    computePrimer->open();
+    computePrimer->close();
+    CommandList* const primerLists[] = { computePrimer.get() };
+    const QueueSubmissionToken primerToken = device.executeCommandLists(
+        primerLists,
+        LengthOf(primerLists),
+        computeQueue,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(primerToken.valid());
+    ASSERT_TRUE(primerToken.matchesPhysicalQueue(computeQueue.index, computeQueue.deviceGeneration));
+
     CommandListResourceStateHandoff computeState(asyncScope.arena());
     const CommandListHandle computeProducer = device.createCommandList(computeParams);
     ASSERT_NE(computeProducer.get(), nullptr);
@@ -4632,6 +4774,7 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
     );
     ASSERT_TRUE(producerToken.valid());
     ASSERT_TRUE(producerToken.matchesPhysicalQueue(computeQueue.index, computeQueue.deviceGeneration));
+    ASSERT_GT(producerToken.value, primerToken.value);
 
     GpuTaskGraph graph(asyncScope.arena());
     const GpuExternalCompletionId completion = graph.importExternalCompletion(
@@ -4650,6 +4793,7 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
             .setInitialOwnerQueue(computeQueue)
             .setInitialOwnerReleaseDestinationQueue(graphicsQueue)
             .setInitialOwnerCompletion(completion)
+            .setInitialOwnerMinimumCompletionToken(producerToken)
             .setInitialOwnerStateSource(&computeState)
     );
     ASSERT_TRUE(resource.valid());
@@ -4746,6 +4890,26 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
         packet,
         wrongExternalTokens,
         LengthOf(wrongExternalTokens),
+        transaction,
+        scratchArena
+    ));
+    EXPECT_FALSE(transaction.packetToken(packet).valid());
+    transaction.reset(compiledGraph);
+    QueueSubmissionToken staleToken = producerToken;
+    --staleToken.value;
+    const GpuTaskGraphExternalCompletionToken staleExternalTokens[] = {
+        GpuTaskGraphExternalCompletionToken{
+            .completion = completion,
+            .token = staleToken,
+        },
+    };
+    EXPECT_FALSE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        packet,
+        staleExternalTokens,
+        LengthOf(staleExternalTokens),
         transaction,
         scratchArena
     ));
@@ -40671,6 +40835,129 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAc
     EXPECT_TRUE(accepted);
     EXPECT_FALSE(acceptedDiscarded);
     EXPECT_TRUE(device.waitForIdle());
+#endif
+}
+
+
+// The generic public standalone path must neither discard an already accepted Transfer packet nor leave it without a
+// Graphics-side frontier when a later Graphics packet rejects. A second rejection proves the fail-closed recreation
+// latch engages when that recovery packet itself cannot be accepted.
+TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphRecoversAcceptedTransferFrontierOrRequestsRecreation){
+#if defined(NWB_FINAL)
+    GTEST_SKIP() << "standalone graph recovery coverage requires test submission overrides";
+#else
+    HeadlessGraphicsScope transferScope;
+    ASSERT_TRUE(transferScope.setTransferQueueEnabled(true));
+    if(!transferScope.initialize())
+        GTEST_SKIP() << "Standalone recovery: no usable dedicated-transfer headless Vulkan device on this host.";
+
+    auto& graphics = transferScope.graphics();
+    auto& device = graphics.getDevice();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueId transferQueue = device.getPrimaryPhysicalQueue(CommandQueue::Transfer);
+    if(
+        !device.getQueue(CommandQueue::Transfer)
+        || !transferQueue.valid()
+        || transferQueue == graphicsQueue
+        || device.getQueueFamilyIndex(transferQueue) == device.getQueueFamilyIndex(graphicsQueue)
+    ){
+        GTEST_SKIP() << "Standalone recovery: adapter has no dedicated transfer-only queue family.";
+    }
+    ASSERT_TRUE(graphicsQueue.valid());
+    ASSERT_TRUE(device.matchesPhysicalQueueIdentity(graphicsQueue));
+    ASSERT_TRUE(device.matchesPhysicalQueueIdentity(transferQueue));
+
+    static constexpr u32 s_TransferWords[] = {
+        0x1e35a7c9u,
+        0x73b4d2f0u,
+        0x0badbeefu,
+        0x9e3779b9u,
+    };
+    const BufferHandle recoveredDestination = device.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(s_TransferWords))
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+    );
+    ASSERT_NE(recoveredDestination.get(), nullptr);
+
+    QueueSubmissionToken acceptedTransferToken;
+    bool graphicsRecorded = false;
+    bool graphicsAccepted = false;
+    bool graphicsDiscarded = false;
+    StandaloneGraphAcceptedFrontierRecoveryContext recoveredContext{
+        .destination = recoveredDestination,
+        .bytes = s_TransferWords,
+        .byteCount = sizeof(s_TransferWords),
+        .device = device,
+        .acceptedTransferToken = &acceptedTransferToken,
+        .graphicsRecorded = &graphicsRecorded,
+        .graphicsAccepted = &graphicsAccepted,
+        .graphicsDiscarded = &graphicsDiscarded,
+    };
+    QueueSubmissionToken terminalToken;
+    device.clearSubmissionWaitTokensForTesting();
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    EXPECT_FALSE(graphics.submitStandaloneTaskGraph(
+        &recoveredContext,
+        &DeclareStandaloneGraphAcceptedFrontierRecovery,
+        terminalToken,
+        graphicsQueue
+    ));
+    EXPECT_FALSE(terminalToken.valid());
+    EXPECT_TRUE(graphicsRecorded);
+    EXPECT_FALSE(graphicsAccepted);
+    EXPECT_TRUE(graphicsDiscarded);
+    ASSERT_TRUE(acceptedTransferToken.valid());
+    EXPECT_EQ(acceptedTransferToken.queue, CommandQueue::Transfer);
+    EXPECT_TRUE(acceptedTransferToken.matchesPhysicalQueue(transferQueue.index, transferQueue.deviceGeneration));
+    EXPECT_FALSE(graphics.isDeviceRecreationRequested());
+    ASSERT_EQ(device.lastSubmissionWaitTokenCountForTesting(graphicsQueue), 1u);
+    const QueueSubmissionToken recoveryWait = device.lastSubmissionWaitTokenForTesting(graphicsQueue, 0u);
+    EXPECT_EQ(recoveryWait.queue, CommandQueue::Transfer);
+    EXPECT_EQ(recoveryWait.value, acceptedTransferToken.value);
+    EXPECT_EQ(recoveryWait.physicalQueueIndex, transferQueue.index);
+    EXPECT_EQ(recoveryWait.deviceGeneration, transferQueue.deviceGeneration);
+    ASSERT_TRUE(device.waitForIdle());
+
+    const BufferHandle unrecoveredDestination = device.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(s_TransferWords))
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+    );
+    ASSERT_NE(unrecoveredDestination.get(), nullptr);
+
+    QueueSubmissionToken unrecoveredTransferToken;
+    bool unrecoveredGraphicsRecorded = false;
+    bool unrecoveredGraphicsAccepted = false;
+    bool unrecoveredGraphicsDiscarded = false;
+    StandaloneGraphAcceptedFrontierRecoveryContext unrecoveredContext{
+        .destination = unrecoveredDestination,
+        .bytes = s_TransferWords,
+        .byteCount = sizeof(s_TransferWords),
+        .device = device,
+        .acceptedTransferToken = &unrecoveredTransferToken,
+        .graphicsRecorded = &unrecoveredGraphicsRecorded,
+        .graphicsAccepted = &unrecoveredGraphicsAccepted,
+        .graphicsDiscarded = &unrecoveredGraphicsDiscarded,
+    };
+    QueueSubmissionToken unrecoveredTerminalToken;
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    EXPECT_FALSE(graphics.submitStandaloneTaskGraph(
+        &unrecoveredContext,
+        &DeclareStandaloneGraphAcceptedFrontierRecovery,
+        unrecoveredTerminalToken,
+        graphicsQueue
+    ));
+    EXPECT_FALSE(unrecoveredTerminalToken.valid());
+    EXPECT_TRUE(unrecoveredGraphicsRecorded);
+    EXPECT_FALSE(unrecoveredGraphicsAccepted);
+    EXPECT_TRUE(unrecoveredGraphicsDiscarded);
+    EXPECT_TRUE(unrecoveredTransferToken.valid());
+    EXPECT_TRUE(graphics.isDeviceRecreationRequested());
+    ASSERT_TRUE(device.waitForIdle());
 #endif
 }
 

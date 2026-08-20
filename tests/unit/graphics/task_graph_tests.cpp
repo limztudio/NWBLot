@@ -1191,6 +1191,193 @@ TEST(GpuStateTracker, DistinguishesRetainedDescriptorFallbackFromExplicitState){
     EXPECT_EQ(stateTracker.getBufferState(buffer.get()), Graphics::ResourceStates::CopyDest);
 }
 
+TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+
+    Graphics::Buffer* const readWriteBufferObject = NewArenaObject<Graphics::Buffer>(
+        testArena.arena,
+        context,
+        allocator
+    );
+    Graphics::Buffer* const writeBufferObject = NewArenaObject<Graphics::Buffer>(
+        testArena.arena,
+        context,
+        allocator
+    );
+    Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+        testArena.arena,
+        context,
+        allocator
+    );
+    Graphics::RayTracingAccelStruct* const accelStructObject = NewArenaObject<Graphics::RayTracingAccelStruct>(
+        testArena.arena,
+        context
+    );
+    ASSERT_NE(readWriteBufferObject, nullptr);
+    ASSERT_NE(writeBufferObject, nullptr);
+    ASSERT_NE(textureObject, nullptr);
+    ASSERT_NE(accelStructObject, nullptr);
+    Graphics::BufferHandle readWriteBuffer(
+        readWriteBufferObject,
+        Graphics::BufferHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::BufferHandle writeBuffer(
+        writeBufferObject,
+        Graphics::BufferHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::TextureHandle texture(
+        textureObject,
+        Graphics::TextureHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::RayTracingAccelStructHandle accelStruct(
+        accelStructObject,
+        Graphics::RayTracingAccelStructHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::BufferDesc& readWriteBufferDescription = const_cast<Graphics::BufferDesc&>(
+        readWriteBuffer->getDescription()
+    );
+    readWriteBufferDescription.setInitialState(Graphics::ResourceStates::Unknown);
+    Graphics::BufferDesc& writeBufferDescription = const_cast<Graphics::BufferDesc&>(writeBuffer->getDescription());
+    writeBufferDescription.setInitialState(Graphics::ResourceStates::Unknown);
+    Graphics::TextureDesc& textureDescription = const_cast<Graphics::TextureDesc&>(texture->getDescription());
+    textureDescription
+        .setMipLevels(2u)
+        .setArraySize(2u)
+        .setDimension(Graphics::TextureDimension::Texture2DArray)
+    ;
+
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId textureResource = graph.importTexture(
+        texture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/unknown_first_read_texture"))
+            .setMarkerLabel("Unknown First Read Texture")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::Unknown)
+    );
+    const Graphics::GpuGraphResourceId bufferResource = graph.importBuffer(
+        readWriteBuffer,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/unknown_first_read_buffer"))
+            .setMarkerLabel("Unknown First Read Buffer")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::Unknown)
+    );
+    const Graphics::GpuGraphResourceId accelStructResource = graph.importAccelStruct(
+        accelStruct,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/unknown_first_read_accel_struct"))
+            .setMarkerLabel("Unknown First Read Accel Struct")
+            .setType(Graphics::GpuGraphResourceType::AccelStruct)
+            .setInitialState(Graphics::ResourceStates::Unknown)
+    );
+    const Graphics::GpuGraphResourceId writeResource = graph.importBuffer(
+        writeBuffer,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/unknown_first_write_buffer"))
+            .setMarkerLabel("Unknown First Write Buffer")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::Unknown)
+    );
+    ASSERT_TRUE(textureResource.valid());
+    ASSERT_TRUE(bufferResource.valid());
+    ASSERT_TRUE(accelStructResource.valid());
+    ASSERT_TRUE(writeResource.valid());
+
+    const Graphics::GpuTaskResourceUse uses[]{
+        Graphics::GpuTaskResourceUse{
+            .resource = textureResource,
+            .range = Graphics::GpuTaskResourceRange{
+                .textureSubresources = Graphics::TextureSubresourceSet(1u, 1u, 1u, 1u),
+            },
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = bufferResource,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = accelStructResource,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::AccelStructRead,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = writeResource,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskId task = AddTask(
+        graph,
+        Name("tests/task_graph/unknown_first_read"),
+        "Unknown First Read",
+        nullptr,
+        0u,
+        uses,
+        LengthOf(uses)
+    );
+    ASSERT_TRUE(task.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[]{ GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const auto findPrologueBarrier = [&](const Graphics::GpuGraphResourceId resource) -> const Graphics::GpuCompiledBarrier*{
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        if(!compiledTask || !barriers)
+            return nullptr;
+        for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            if(barriers[barrierIndex].resource == resource)
+                return &barriers[barrierIndex];
+        }
+        return nullptr;
+    };
+
+    const Graphics::GpuCompiledBarrier* const textureBarrier = findPrologueBarrier(textureResource);
+    ASSERT_NE(textureBarrier, nullptr);
+    EXPECT_EQ(textureBarrier->before, Graphics::ResourceStates::Unknown);
+    EXPECT_TRUE(textureBarrier->isGraphInitialState);
+    EXPECT_EQ(
+        textureBarrier->range.textureSubresources,
+        Graphics::TextureSubresourceSet(1u, 1u, 1u, 1u)
+    );
+
+    const Graphics::GpuCompiledBarrier* const bufferBarrier = findPrologueBarrier(bufferResource);
+    ASSERT_NE(bufferBarrier, nullptr);
+    EXPECT_EQ(bufferBarrier->before, Graphics::ResourceStates::Unknown);
+    EXPECT_TRUE(bufferBarrier->isGraphInitialState);
+
+    const Graphics::GpuCompiledBarrier* const accelStructBarrier = findPrologueBarrier(accelStructResource);
+    ASSERT_NE(accelStructBarrier, nullptr);
+    EXPECT_EQ(accelStructBarrier->before, Graphics::ResourceStates::Unknown);
+    EXPECT_TRUE(accelStructBarrier->isGraphInitialState);
+
+    const Graphics::GpuCompiledBarrier* const writeBarrier = findPrologueBarrier(writeResource);
+    ASSERT_NE(writeBarrier, nullptr);
+    EXPECT_EQ(writeBarrier->before, Graphics::ResourceStates::Unknown);
+    EXPECT_FALSE(writeBarrier->isGraphInitialState);
+}
+
 TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
     constexpr u16 s_SourceDeviceGeneration = 7u;
     constexpr u16 s_TargetDeviceGeneration = 8u;
@@ -1437,6 +1624,199 @@ TEST(GpuTaskGraph, CopyTextureTaskRequiresTypedTextureImports){
     EXPECT_EQ(graph.taskCount(), 0u);
 }
 
+TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+    Graphics::Texture* const sourceObject = NewArenaObject<Graphics::Texture>(testArena.arena, context, allocator);
+    Graphics::Texture* const destinationObject = NewArenaObject<Graphics::Texture>(testArena.arena, context, allocator);
+    ASSERT_NE(sourceObject, nullptr);
+    ASSERT_NE(destinationObject, nullptr);
+    Graphics::TextureHandle source(
+        sourceObject,
+        Graphics::TextureHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::TextureHandle destination(
+        destinationObject,
+        Graphics::TextureHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::TextureDesc& sourceDescription = const_cast<Graphics::TextureDesc&>(source->getDescription());
+    Graphics::TextureDesc& destinationDescription = const_cast<Graphics::TextureDesc&>(destination->getDescription());
+    const Graphics::TextureDesc validDescription = Graphics::TextureDesc()
+        .setWidth(8u)
+        .setHeight(8u)
+        .setArraySize(2u)
+        .setMipLevels(2u)
+        .setFormat(Graphics::Format::RGBA8_UNORM)
+        .setDimension(Graphics::TextureDimension::Texture2DArray)
+        .setInitialState(Graphics::ResourceStates::Common)
+    ;
+    sourceDescription = validDescription;
+    destinationDescription = validDescription;
+
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId sourceResource = graph.importTexture(
+        source,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/copy_contract_source"))
+            .setMarkerLabel("Copy Contract Source")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::Common)
+    );
+    const Graphics::GpuGraphResourceId destinationResource = graph.importTexture(
+        destination,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/copy_contract_destination"))
+            .setMarkerLabel("Copy Contract Destination")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::Common)
+    );
+    ASSERT_TRUE(sourceResource.valid());
+    ASSERT_TRUE(destinationResource.valid());
+
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/copy_contract"))
+        .setMarkerLabel("Copy Contract")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+    Graphics::GpuCopyTextureTaskRegion region{
+        .source = sourceResource,
+        .sourceSlice = {},
+        .destination = destinationResource,
+        .destinationSlice = {},
+    };
+    Graphics::QueueSubmissionToken acceptedToken{
+        .queue = Graphics::CommandQueue::Graphics,
+        .value = 1u,
+        .physicalQueueIndex = 0u,
+        .deviceGeneration = 1u,
+    };
+    const Graphics::GpuCopyTextureTaskDesc copyDesc{
+        .regions = &region,
+        .regionCount = 1u,
+        .acceptedToken = &acceptedToken,
+    };
+    const auto expectRejected = [&]{
+        EXPECT_FALSE(graph.addCopyTextureTask(desc, copyDesc).valid());
+        EXPECT_FALSE(acceptedToken.valid());
+        EXPECT_EQ(graph.taskCount(), 0u);
+    };
+
+    region.sourceSlice.setMipLevel(2u);
+    expectRejected();
+
+    region.sourceSlice = {};
+    region.sourceSlice.setArraySlice(2u);
+    expectRejected();
+
+    region.sourceSlice = {};
+    region.sourceSlice.setOrigin(7u, 0u, 0u).setSize(2u, 1u, 1u);
+    expectRejected();
+
+    region.sourceSlice = {};
+    destinationDescription.setSampleCount(4u);
+    expectRejected();
+
+    destinationDescription = validDescription;
+    destinationDescription.setWidth(16u);
+    expectRejected();
+
+    destinationDescription = validDescription;
+    destinationDescription.setFormat(Graphics::Format::RGBA8_UINT);
+    expectRejected();
+
+    sourceDescription.setFormat(Graphics::Format::UNKNOWN);
+    destinationDescription.setFormat(Graphics::Format::UNKNOWN);
+    expectRejected();
+
+    sourceDescription = validDescription;
+    destinationDescription = validDescription;
+    sourceDescription
+        .setDimension(Graphics::TextureDimension::Texture1D)
+        .setHeight(1u)
+        .setDepth(1u)
+        .setArraySize(1u)
+    ;
+    destinationDescription
+        .setDimension(Graphics::TextureDimension::Texture2D)
+        .setHeight(1u)
+        .setDepth(1u)
+        .setArraySize(1u)
+    ;
+    expectRejected();
+
+    sourceDescription = validDescription;
+    destinationDescription = validDescription;
+    Graphics::TextureSlice mipOneSlice;
+    mipOneSlice.setMipLevel(1u).setArraySlice(1u);
+    const Graphics::GpuCopyTextureTaskRegion validRegions[]{
+        Graphics::GpuCopyTextureTaskRegion{
+            .source = sourceResource,
+            .sourceSlice = {},
+            .destination = destinationResource,
+            .destinationSlice = {},
+        },
+        Graphics::GpuCopyTextureTaskRegion{
+            .source = sourceResource,
+            .sourceSlice = mipOneSlice,
+            .destination = destinationResource,
+            .destinationSlice = mipOneSlice,
+        },
+        Graphics::GpuCopyTextureTaskRegion{
+            .source = sourceResource,
+            .sourceSlice = {},
+            .destination = destinationResource,
+            .destinationSlice = {},
+        },
+    };
+    const Graphics::GpuTaskId task = graph.addCopyTextureTask(
+        desc,
+        Graphics::GpuCopyTextureTaskDesc{
+            .regions = validRegions,
+            .regionCount = LengthOf(validRegions),
+            .acceptedToken = &acceptedToken,
+        }
+    );
+    ASSERT_TRUE(task.valid());
+    ASSERT_EQ(graph.taskAt(task.index).resourceUseCount, 6u);
+    const Graphics::GpuTaskResourceUse* const uses = graph.taskAt(task.index).resourceUses;
+    ASSERT_NE(uses, nullptr);
+    EXPECT_EQ(uses[0u].resource, sourceResource);
+    EXPECT_EQ(uses[0u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
+    EXPECT_EQ(uses[0u].requiredState, Graphics::ResourceStates::CopySource);
+    EXPECT_EQ(uses[0u].access, Graphics::GpuTaskResourceAccess::Read);
+    EXPECT_EQ(uses[1u].resource, destinationResource);
+    EXPECT_EQ(uses[1u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
+    EXPECT_EQ(uses[1u].requiredState, Graphics::ResourceStates::CopyDest);
+    EXPECT_EQ(uses[1u].access, Graphics::GpuTaskResourceAccess::Write);
+    EXPECT_EQ(uses[2u].resource, sourceResource);
+    EXPECT_EQ(uses[2u].range.textureSubresources, Graphics::TextureSubresourceSet(1u, 1u, 1u, 1u));
+    EXPECT_EQ(uses[2u].requiredState, Graphics::ResourceStates::CopySource);
+    EXPECT_EQ(uses[2u].access, Graphics::GpuTaskResourceAccess::Read);
+    EXPECT_EQ(uses[3u].resource, destinationResource);
+    EXPECT_EQ(uses[3u].range.textureSubresources, Graphics::TextureSubresourceSet(1u, 1u, 1u, 1u));
+    EXPECT_EQ(uses[3u].requiredState, Graphics::ResourceStates::CopyDest);
+    EXPECT_EQ(uses[3u].access, Graphics::GpuTaskResourceAccess::Write);
+    EXPECT_EQ(uses[4u].resource, sourceResource);
+    EXPECT_EQ(uses[4u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
+    EXPECT_EQ(uses[4u].requiredState, Graphics::ResourceStates::CopySource);
+    EXPECT_EQ(uses[4u].access, Graphics::GpuTaskResourceAccess::Read);
+    EXPECT_EQ(uses[5u].resource, destinationResource);
+    EXPECT_EQ(uses[5u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
+    EXPECT_EQ(uses[5u].requiredState, Graphics::ResourceStates::CopyDest);
+    EXPECT_EQ(uses[5u].access, Graphics::GpuTaskResourceAccess::Write);
+}
+
 TEST(GpuTaskGraph, ResolveTextureTaskRequiresTypedTextureImports){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -1458,8 +1838,8 @@ TEST(GpuTaskGraph, ResolveTextureTaskRequiresTypedTextureImports){
         .setIdentity(Name("tests/task_graph/built_in_resolve"))
         .setMarkerLabel("Built-In Resolve")
         .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueuePreference::Transfer,
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueuePreference::Graphics,
             true,
             true,
         })
@@ -1503,6 +1883,7 @@ TEST(GpuTaskGraph, ResolveTextureTaskPreflightsTypedTextureContract){
     const Graphics::TextureDesc validSourceDescription = Graphics::TextureDesc()
         .setWidth(4u)
         .setHeight(4u)
+        .setMipLevels(2u)
         .setFormat(Graphics::Format::RGBA8_UNORM)
         .setSampleCount(4u)
         .setInitialState(Graphics::ResourceStates::Common)
@@ -1510,6 +1891,7 @@ TEST(GpuTaskGraph, ResolveTextureTaskPreflightsTypedTextureContract){
     const Graphics::TextureDesc validDestinationDescription = Graphics::TextureDesc()
         .setWidth(4u)
         .setHeight(4u)
+        .setMipLevels(2u)
         .setFormat(Graphics::Format::RGBA8_UNORM)
         .setSampleCount(1u)
         .setInitialState(Graphics::ResourceStates::Common)
@@ -1542,8 +1924,8 @@ TEST(GpuTaskGraph, ResolveTextureTaskPreflightsTypedTextureContract){
         .setIdentity(Name("tests/task_graph/resolve_contract"))
         .setMarkerLabel("Resolve Contract")
         .setQueue(Graphics::GpuQueueRequest{
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueuePreference::Transfer,
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueuePreference::Graphics,
             true,
             true,
         })
@@ -1563,6 +1945,20 @@ TEST(GpuTaskGraph, ResolveTextureTaskPreflightsTypedTextureContract){
         .regionCount = 1u,
         .acceptedToken = &acceptedToken,
     };
+
+    Graphics::GpuTaskDesc transferOnlyDesc = desc;
+    transferOnlyDesc
+        .setIdentity(Name("tests/task_graph/resolve_contract_transfer_only"))
+        .setMarkerLabel("Resolve Contract Transfer Only")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+    EXPECT_FALSE(graph.addResolveTextureTask(transferOnlyDesc, resolveDesc).valid());
+    EXPECT_FALSE(acceptedToken.valid());
 
     sourceDescription.setSampleCount(1u);
     EXPECT_FALSE(graph.addResolveTextureTask(desc, resolveDesc).valid());
@@ -1597,6 +1993,21 @@ TEST(GpuTaskGraph, ResolveTextureTaskPreflightsTypedTextureContract){
 
     sourceDescription = validSourceDescription;
     destinationDescription = validDestinationDescription;
+    sourceDescription
+        .setDimension(Graphics::TextureDimension::Texture2DMS)
+        .setMipLevels(1u)
+    ;
+    destinationDescription
+        .setDimension(Graphics::TextureDimension::Texture3D)
+        .setDepth(1u)
+        .setMipLevels(1u)
+    ;
+    region.sourceSubresources = {};
+    region.destinationSubresources = {};
+    EXPECT_FALSE(graph.addResolveTextureTask(desc, resolveDesc).valid());
+
+    sourceDescription = validSourceDescription;
+    destinationDescription = validDestinationDescription;
     destinationDescription.setWidth(8u);
     region.sourceSubresources = {};
     region.destinationSubresources = {};
@@ -1605,11 +2016,893 @@ TEST(GpuTaskGraph, ResolveTextureTaskPreflightsTypedTextureContract){
 
     sourceDescription = validSourceDescription;
     destinationDescription = validDestinationDescription;
-    const Graphics::GpuTaskId task = graph.addResolveTextureTask(desc, resolveDesc);
+    const Graphics::GpuResolveTextureTaskRegion validRegions[]{
+        Graphics::GpuResolveTextureTaskRegion{
+            .source = sourceResource,
+            .sourceSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+            .destination = destinationResource,
+            .destinationSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+        },
+        Graphics::GpuResolveTextureTaskRegion{
+            .source = sourceResource,
+            .sourceSubresources = Graphics::TextureSubresourceSet(1u, 1u, 0u, 1u),
+            .destination = destinationResource,
+            .destinationSubresources = Graphics::TextureSubresourceSet(1u, 1u, 0u, 1u),
+        },
+    };
+    const Graphics::GpuTaskId task = graph.addResolveTextureTask(
+        desc,
+        Graphics::GpuResolveTextureTaskDesc{
+            .regions = validRegions,
+            .regionCount = LengthOf(validRegions),
+            .acceptedToken = &acceptedToken,
+        }
+    );
     ASSERT_TRUE(task.valid());
-    ASSERT_EQ(graph.taskAt(task.index).resourceUseCount, 2u);
-    EXPECT_EQ(graph.taskAt(task.index).resourceUses[0u].requiredState, Graphics::ResourceStates::ResolveSource);
-    EXPECT_EQ(graph.taskAt(task.index).resourceUses[1u].requiredState, Graphics::ResourceStates::ResolveDest);
+    ASSERT_EQ(graph.taskAt(task.index).resourceUseCount, 4u);
+    const Graphics::GpuTaskResourceUse* const uses = graph.taskAt(task.index).resourceUses;
+    ASSERT_NE(uses, nullptr);
+    EXPECT_EQ(uses[0u].resource, sourceResource);
+    EXPECT_EQ(uses[0u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
+    EXPECT_EQ(uses[0u].requiredState, Graphics::ResourceStates::ResolveSource);
+    EXPECT_EQ(uses[0u].access, Graphics::GpuTaskResourceAccess::Read);
+    EXPECT_EQ(uses[1u].resource, destinationResource);
+    EXPECT_EQ(uses[1u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
+    EXPECT_EQ(uses[1u].requiredState, Graphics::ResourceStates::ResolveDest);
+    EXPECT_EQ(uses[1u].access, Graphics::GpuTaskResourceAccess::Write);
+    EXPECT_EQ(uses[2u].resource, sourceResource);
+    EXPECT_EQ(uses[2u].range.textureSubresources, Graphics::TextureSubresourceSet(1u, 1u, 0u, 1u));
+    EXPECT_EQ(uses[2u].requiredState, Graphics::ResourceStates::ResolveSource);
+    EXPECT_EQ(uses[2u].access, Graphics::GpuTaskResourceAccess::Read);
+    EXPECT_EQ(uses[3u].resource, destinationResource);
+    EXPECT_EQ(uses[3u].range.textureSubresources, Graphics::TextureSubresourceSet(1u, 1u, 0u, 1u));
+    EXPECT_EQ(uses[3u].requiredState, Graphics::ResourceStates::ResolveDest);
+    EXPECT_EQ(uses[3u].access, Graphics::GpuTaskResourceAccess::Write);
+}
+
+TEST(GpuTaskGraph, UploadBufferTaskPreflightsNativeAlignmentContract){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+    Graphics::Buffer* const destinationObject = NewArenaObject<Graphics::Buffer>(testArena.arena, context, allocator);
+    ASSERT_NE(destinationObject, nullptr);
+    Graphics::BufferHandle destination(
+        destinationObject,
+        Graphics::BufferHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::BufferDesc& destinationDescription = const_cast<Graphics::BufferDesc&>(destination->getDescription());
+    destinationDescription = Graphics::BufferDesc()
+        .setByteSize(8u)
+        .setInitialState(Graphics::ResourceStates::Common)
+    ;
+
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId destinationResource = graph.importBuffer(
+        destination,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/upload_buffer_alignment_destination"))
+            .setMarkerLabel("Upload Buffer Alignment Destination")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::Common)
+    );
+    ASSERT_TRUE(destinationResource.valid());
+
+    const u8 uploadBytes[] = { 0u, 1u, 2u, 3u };
+    const Graphics::GpuUploadBlobId alignedBlob = graph.copyUploadData(uploadBytes, sizeof(uploadBytes), alignof(u32));
+    const Graphics::GpuUploadBlobId unalignedBlob = graph.copyUploadData(
+        uploadBytes,
+        sizeof(uploadBytes) - 1u,
+        alignof(u8)
+    );
+    ASSERT_TRUE(alignedBlob.valid());
+    ASSERT_TRUE(unalignedBlob.valid());
+
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/upload_buffer_alignment"))
+        .setMarkerLabel("Upload Buffer Alignment")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+    EXPECT_FALSE(graph.addUploadBufferTask(
+        desc,
+        Graphics::GpuUploadBufferTaskDesc{
+            .source = alignedBlob,
+            .destination = destinationResource,
+            .destinationOffsetBytes = 1u,
+            .finalState = Graphics::ResourceStates::CopyDest,
+        }
+    ).valid());
+    EXPECT_FALSE(graph.addUploadBufferTask(
+        desc,
+        Graphics::GpuUploadBufferTaskDesc{
+            .source = unalignedBlob,
+            .destination = destinationResource,
+            .destinationOffsetBytes = 0u,
+            .finalState = Graphics::ResourceStates::CopyDest,
+        }
+    ).valid());
+    EXPECT_EQ(graph.taskCount(), 0u);
+
+    EXPECT_TRUE(graph.addUploadBufferTask(
+        desc,
+        Graphics::GpuUploadBufferTaskDesc{
+            .source = alignedBlob,
+            .destination = destinationResource,
+            .destinationOffsetBytes = 4u,
+            .finalState = Graphics::ResourceStates::CopyDest,
+        }
+    ).valid());
+    EXPECT_EQ(graph.taskCount(), 1u);
+}
+
+TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+    const auto createBuffer = [&](const Graphics::BufferDesc& sourceDescription){
+        Graphics::Buffer* const bufferObject = NewArenaObject<Graphics::Buffer>(
+            testArena.arena,
+            context,
+            allocator
+        );
+        if(!bufferObject)
+            return Graphics::BufferHandle{};
+
+        Graphics::BufferHandle buffer(
+            bufferObject,
+            Graphics::BufferHandle::deleter_type(&testArena.arena),
+            AdoptRef
+        );
+        Graphics::BufferDesc& destinationDescription = const_cast<Graphics::BufferDesc&>(buffer->getDescription());
+        destinationDescription = sourceDescription;
+        return buffer;
+    };
+
+    const Graphics::BufferDesc copySourceDescription = Graphics::BufferDesc()
+        .setByteSize(sizeof(u32))
+        .setInitialState(Graphics::ResourceStates::CopySource)
+        .setKeepInitialState(true)
+    ;
+    const Graphics::BufferDesc copyDestinationDescription = Graphics::BufferDesc()
+        .setByteSize(sizeof(u32))
+        .setInitialState(Graphics::ResourceStates::CopyDest)
+        .setKeepInitialState(true)
+    ;
+    Graphics::BufferHandle source = createBuffer(copySourceDescription);
+    Graphics::BufferHandle destination = createBuffer(copyDestinationDescription);
+    Graphics::BufferHandle laterSource = createBuffer(copySourceDescription);
+    Graphics::BufferHandle laterDestination = createBuffer(copyDestinationDescription);
+    ASSERT_NE(source.get(), nullptr);
+    ASSERT_NE(destination.get(), nullptr);
+    ASSERT_NE(laterSource.get(), nullptr);
+    ASSERT_NE(laterDestination.get(), nullptr);
+    Graphics::BufferDesc& destinationDescription = const_cast<Graphics::BufferDesc&>(destination->getDescription());
+    Graphics::BufferDesc& laterSourceDescription = const_cast<Graphics::BufferDesc&>(laterSource->getDescription());
+    Graphics::BufferDesc& laterDestinationDescription = const_cast<Graphics::BufferDesc&>(
+        laterDestination->getDescription()
+    );
+    laterSourceDescription.setInitialState(Graphics::ResourceStates::Common);
+    laterDestinationDescription.setInitialState(Graphics::ResourceStates::Common);
+
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId sourceResource = graph.importBuffer(
+        source,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/retained_copy_buffer_source"))
+            .setMarkerLabel("Retained Copy Buffer Source")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::CopySource)
+    );
+    const Graphics::GpuGraphResourceId destinationResource = graph.importBuffer(
+        destination,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/retained_copy_buffer_destination"))
+            .setMarkerLabel("Retained Copy Buffer Destination")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    const Graphics::GpuGraphResourceId laterSourceResource = graph.importBuffer(
+        laterSource,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/retained_copy_buffer_later_source"))
+            .setMarkerLabel("Retained Copy Buffer Later Source")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::CopySource)
+    );
+    const Graphics::GpuGraphResourceId laterDestinationResource = graph.importBuffer(
+        laterDestination,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/retained_copy_buffer_later_destination"))
+            .setMarkerLabel("Retained Copy Buffer Later Destination")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    ASSERT_TRUE(sourceResource.valid());
+    ASSERT_TRUE(destinationResource.valid());
+    ASSERT_TRUE(laterSourceResource.valid());
+    ASSERT_TRUE(laterDestinationResource.valid());
+
+    Graphics::GpuTaskDesc desc;
+    desc.setQueue(Graphics::GpuQueueRequest{
+        Graphics::GpuQueueCapability::Transfer,
+        Graphics::GpuQueuePreference::Transfer,
+        true,
+        true,
+    });
+    const Graphics::GpuCopyBufferTaskRegion badSourceRegions[]{
+        Graphics::GpuCopyBufferTaskRegion{
+            .source = sourceResource,
+            .sourceOffsetBytes = 0u,
+            .destination = destinationResource,
+            .destinationOffsetBytes = 0u,
+            .dataSizeBytes = sizeof(u32),
+        },
+        Graphics::GpuCopyBufferTaskRegion{
+            .source = laterSourceResource,
+            .sourceOffsetBytes = 0u,
+            .destination = destinationResource,
+            .destinationOffsetBytes = 0u,
+            .dataSizeBytes = sizeof(u32),
+        },
+    };
+    desc
+        .setIdentity(Name("tests/task_graph/retained_copy_buffer_bad_source"))
+        .setMarkerLabel("Retained Copy Buffer Bad Source")
+    ;
+    EXPECT_FALSE(graph.addCopyBufferTask(
+        desc,
+        Graphics::GpuCopyBufferTaskDesc{
+            .regions = badSourceRegions,
+            .regionCount = LengthOf(badSourceRegions),
+        }
+    ).valid());
+
+    laterSourceDescription.setInitialState(Graphics::ResourceStates::CopySource);
+    const Graphics::GpuCopyBufferTaskRegion badDestinationRegions[]{
+        Graphics::GpuCopyBufferTaskRegion{
+            .source = sourceResource,
+            .sourceOffsetBytes = 0u,
+            .destination = destinationResource,
+            .destinationOffsetBytes = 0u,
+            .dataSizeBytes = sizeof(u32),
+        },
+        Graphics::GpuCopyBufferTaskRegion{
+            .source = sourceResource,
+            .sourceOffsetBytes = 0u,
+            .destination = laterDestinationResource,
+            .destinationOffsetBytes = 0u,
+            .dataSizeBytes = sizeof(u32),
+        },
+    };
+    desc
+        .setIdentity(Name("tests/task_graph/retained_copy_buffer_bad_destination"))
+        .setMarkerLabel("Retained Copy Buffer Bad Destination")
+    ;
+    EXPECT_FALSE(graph.addCopyBufferTask(
+        desc,
+        Graphics::GpuCopyBufferTaskDesc{
+            .regions = badDestinationRegions,
+            .regionCount = LengthOf(badDestinationRegions),
+        }
+    ).valid());
+
+    destinationDescription.setInitialState(Graphics::ResourceStates::Common);
+    Graphics::GpuClearBufferTaskDesc clearDesc;
+    clearDesc.destination = destinationResource;
+    desc
+        .setIdentity(Name("tests/task_graph/retained_clear_buffer_bad_destination"))
+        .setMarkerLabel("Retained Clear Buffer Bad Destination")
+    ;
+    EXPECT_FALSE(graph.addClearBufferTask(desc, clearDesc).valid());
+    EXPECT_EQ(graph.taskCount(), 0u);
+
+    destinationDescription.setInitialState(Graphics::ResourceStates::CopyDest);
+    laterDestinationDescription.setInitialState(Graphics::ResourceStates::CopyDest);
+    const Graphics::GpuCopyBufferTaskRegion validRegions[]{
+        Graphics::GpuCopyBufferTaskRegion{
+            .source = sourceResource,
+            .sourceOffsetBytes = 0u,
+            .destination = destinationResource,
+            .destinationOffsetBytes = 0u,
+            .dataSizeBytes = sizeof(u32),
+        },
+        Graphics::GpuCopyBufferTaskRegion{
+            .source = laterSourceResource,
+            .sourceOffsetBytes = 0u,
+            .destination = laterDestinationResource,
+            .destinationOffsetBytes = 0u,
+            .dataSizeBytes = sizeof(u32),
+        },
+    };
+    desc
+        .setIdentity(Name("tests/task_graph/retained_copy_buffer_valid"))
+        .setMarkerLabel("Retained Copy Buffer Valid")
+    ;
+    EXPECT_TRUE(graph.addCopyBufferTask(
+        desc,
+        Graphics::GpuCopyBufferTaskDesc{
+            .regions = validRegions,
+            .regionCount = LengthOf(validRegions),
+        }
+    ).valid());
+    desc
+        .setIdentity(Name("tests/task_graph/retained_clear_buffer_valid"))
+        .setMarkerLabel("Retained Clear Buffer Valid")
+    ;
+    EXPECT_TRUE(graph.addClearBufferTask(desc, clearDesc).valid());
+    EXPECT_EQ(graph.taskCount(), 2u);
+}
+
+TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForTexturePrimitives){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+    const auto createTexture = [&](const Graphics::TextureDesc& sourceDescription){
+        Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+            testArena.arena,
+            context,
+            allocator
+        );
+        if(!textureObject)
+            return Graphics::TextureHandle{};
+
+        Graphics::TextureHandle texture(
+            textureObject,
+            Graphics::TextureHandle::deleter_type(&testArena.arena),
+            AdoptRef
+        );
+        Graphics::TextureDesc& destinationDescription = const_cast<Graphics::TextureDesc&>(
+            texture->getDescription()
+        );
+        destinationDescription = sourceDescription;
+        return texture;
+    };
+
+    const Graphics::TextureDesc copySourceDesc = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Graphics::Format::RGBA8_UNORM)
+        .setInitialState(Graphics::ResourceStates::CopySource)
+        .setKeepInitialState(true)
+    ;
+    const Graphics::TextureDesc copyDestinationDesc = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Graphics::Format::RGBA8_UNORM)
+        .setInitialState(Graphics::ResourceStates::CopyDest)
+        .setKeepInitialState(true)
+    ;
+    const Graphics::TextureDesc resolveSourceDesc = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Graphics::Format::RGBA8_UNORM)
+        .setSampleCount(4u)
+        .setInitialState(Graphics::ResourceStates::ResolveSource)
+        .setKeepInitialState(true)
+    ;
+    const Graphics::TextureDesc resolveDestinationDesc = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Graphics::Format::RGBA8_UNORM)
+        .setInitialState(Graphics::ResourceStates::ResolveDest)
+        .setKeepInitialState(true)
+    ;
+    const Graphics::TextureDesc rectDestinationDesc = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Graphics::Format::RGBA8_UINT)
+        .setInitialState(Graphics::ResourceStates::CopyDest)
+        .setKeepInitialState(true)
+    ;
+    Graphics::TextureHandle copySource = createTexture(copySourceDesc);
+    Graphics::TextureHandle copyDestination = createTexture(copyDestinationDesc);
+    Graphics::TextureHandle copyLaterSource = createTexture(copySourceDesc);
+    Graphics::TextureHandle copyLaterDestination = createTexture(copyDestinationDesc);
+    Graphics::TextureHandle resolveSource = createTexture(resolveSourceDesc);
+    Graphics::TextureHandle resolveDestination = createTexture(resolveDestinationDesc);
+    Graphics::TextureHandle resolveLaterSource = createTexture(resolveSourceDesc);
+    Graphics::TextureHandle resolveLaterDestination = createTexture(resolveDestinationDesc);
+    Graphics::TextureHandle rectDestination = createTexture(rectDestinationDesc);
+    ASSERT_NE(copySource.get(), nullptr);
+    ASSERT_NE(copyDestination.get(), nullptr);
+    ASSERT_NE(copyLaterSource.get(), nullptr);
+    ASSERT_NE(copyLaterDestination.get(), nullptr);
+    ASSERT_NE(resolveSource.get(), nullptr);
+    ASSERT_NE(resolveDestination.get(), nullptr);
+    ASSERT_NE(resolveLaterSource.get(), nullptr);
+    ASSERT_NE(resolveLaterDestination.get(), nullptr);
+    ASSERT_NE(rectDestination.get(), nullptr);
+    Graphics::TextureDesc& copyDestinationDescription = const_cast<Graphics::TextureDesc&>(
+        copyDestination->getDescription()
+    );
+    Graphics::TextureDesc& copyLaterSourceDescription = const_cast<Graphics::TextureDesc&>(
+        copyLaterSource->getDescription()
+    );
+    Graphics::TextureDesc& copyLaterDestinationDescription = const_cast<Graphics::TextureDesc&>(
+        copyLaterDestination->getDescription()
+    );
+    Graphics::TextureDesc& resolveLaterSourceDescription = const_cast<Graphics::TextureDesc&>(
+        resolveLaterSource->getDescription()
+    );
+    Graphics::TextureDesc& resolveLaterDestinationDescription = const_cast<Graphics::TextureDesc&>(
+        resolveLaterDestination->getDescription()
+    );
+    Graphics::TextureDesc& rectDestinationDescription = const_cast<Graphics::TextureDesc&>(
+        rectDestination->getDescription()
+    );
+    copyLaterSourceDescription.setInitialState(Graphics::ResourceStates::Common);
+    copyLaterDestinationDescription.setInitialState(Graphics::ResourceStates::Common);
+    resolveLaterSourceDescription.setInitialState(Graphics::ResourceStates::Common);
+    resolveLaterDestinationDescription.setInitialState(Graphics::ResourceStates::Common);
+
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId copySourceResource = graph.importTexture(
+        copySource,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/retained_copy_texture_source"))
+            .setMarkerLabel("Retained Copy Texture Source")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopySource)
+    );
+    const Graphics::GpuGraphResourceId copyDestinationResource = graph.importTexture(
+        copyDestination,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/retained_copy_texture_destination"))
+            .setMarkerLabel("Retained Copy Texture Destination")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    const Graphics::GpuGraphResourceId copyLaterSourceResource = graph.importTexture(
+        copyLaterSource,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/retained_copy_texture_later_source"))
+            .setMarkerLabel("Retained Copy Texture Later Source")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopySource)
+    );
+    const Graphics::GpuGraphResourceId copyLaterDestinationResource = graph.importTexture(
+        copyLaterDestination,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/retained_copy_texture_later_destination"))
+            .setMarkerLabel("Retained Copy Texture Later Destination")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    const Graphics::GpuGraphResourceId resolveSourceResource = graph.importTexture(
+        resolveSource,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/retained_resolve_texture_source"))
+            .setMarkerLabel("Retained Resolve Texture Source")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::ResolveSource)
+    );
+    const Graphics::GpuGraphResourceId resolveDestinationResource = graph.importTexture(
+        resolveDestination,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/retained_resolve_texture_destination"))
+            .setMarkerLabel("Retained Resolve Texture Destination")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::ResolveDest)
+    );
+    const Graphics::GpuGraphResourceId resolveLaterSourceResource = graph.importTexture(
+        resolveLaterSource,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/retained_resolve_texture_later_source"))
+            .setMarkerLabel("Retained Resolve Texture Later Source")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::ResolveSource)
+    );
+    const Graphics::GpuGraphResourceId resolveLaterDestinationResource = graph.importTexture(
+        resolveLaterDestination,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/retained_resolve_texture_later_destination"))
+            .setMarkerLabel("Retained Resolve Texture Later Destination")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::ResolveDest)
+    );
+    const Graphics::GpuGraphResourceId rectDestinationResource = graph.importTexture(
+        rectDestination,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/retained_rect_clear_texture_destination"))
+            .setMarkerLabel("Retained Rect Clear Texture Destination")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    ASSERT_TRUE(copySourceResource.valid());
+    ASSERT_TRUE(copyDestinationResource.valid());
+    ASSERT_TRUE(copyLaterSourceResource.valid());
+    ASSERT_TRUE(copyLaterDestinationResource.valid());
+    ASSERT_TRUE(resolveSourceResource.valid());
+    ASSERT_TRUE(resolveDestinationResource.valid());
+    ASSERT_TRUE(resolveLaterSourceResource.valid());
+    ASSERT_TRUE(resolveLaterDestinationResource.valid());
+    ASSERT_TRUE(rectDestinationResource.valid());
+
+    Graphics::GpuTaskDesc desc;
+    desc.setQueue(Graphics::GpuQueueRequest{
+        Graphics::GpuQueueCapability::Transfer,
+        Graphics::GpuQueuePreference::Transfer,
+        true,
+        true,
+    });
+    Graphics::GpuTaskDesc resolveTaskDesc = desc;
+    resolveTaskDesc.setQueue(Graphics::GpuQueueRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        true,
+        true,
+    });
+    const Graphics::GpuCopyTextureTaskRegion copyBadSourceRegions[]{
+        Graphics::GpuCopyTextureTaskRegion{
+            .source = copySourceResource,
+            .sourceSlice = {},
+            .destination = copyDestinationResource,
+            .destinationSlice = {},
+        },
+        Graphics::GpuCopyTextureTaskRegion{
+            .source = copyLaterSourceResource,
+            .sourceSlice = {},
+            .destination = copyDestinationResource,
+            .destinationSlice = {},
+        },
+    };
+    desc
+        .setIdentity(Name("tests/task_graph/retained_copy_texture_bad_source"))
+        .setMarkerLabel("Retained Copy Texture Bad Source")
+    ;
+    EXPECT_FALSE(graph.addCopyTextureTask(
+        desc,
+        Graphics::GpuCopyTextureTaskDesc{
+            .regions = copyBadSourceRegions,
+            .regionCount = LengthOf(copyBadSourceRegions),
+        }
+    ).valid());
+
+    copyLaterSourceDescription.setInitialState(Graphics::ResourceStates::CopySource);
+    const Graphics::GpuCopyTextureTaskRegion copyBadDestinationRegions[]{
+        Graphics::GpuCopyTextureTaskRegion{
+            .source = copySourceResource,
+            .sourceSlice = {},
+            .destination = copyDestinationResource,
+            .destinationSlice = {},
+        },
+        Graphics::GpuCopyTextureTaskRegion{
+            .source = copySourceResource,
+            .sourceSlice = {},
+            .destination = copyLaterDestinationResource,
+            .destinationSlice = {},
+        },
+    };
+    desc
+        .setIdentity(Name("tests/task_graph/retained_copy_texture_bad_destination"))
+        .setMarkerLabel("Retained Copy Texture Bad Destination")
+    ;
+    EXPECT_FALSE(graph.addCopyTextureTask(
+        desc,
+        Graphics::GpuCopyTextureTaskDesc{
+            .regions = copyBadDestinationRegions,
+            .regionCount = LengthOf(copyBadDestinationRegions),
+        }
+    ).valid());
+
+    const Graphics::GpuResolveTextureTaskRegion resolveBadSourceRegions[]{
+        Graphics::GpuResolveTextureTaskRegion{
+            .source = resolveSourceResource,
+            .sourceSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+            .destination = resolveDestinationResource,
+            .destinationSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+        },
+        Graphics::GpuResolveTextureTaskRegion{
+            .source = resolveLaterSourceResource,
+            .sourceSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+            .destination = resolveDestinationResource,
+            .destinationSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+        },
+    };
+    resolveTaskDesc
+        .setIdentity(Name("tests/task_graph/retained_resolve_texture_bad_source"))
+        .setMarkerLabel("Retained Resolve Texture Bad Source")
+    ;
+    EXPECT_FALSE(graph.addResolveTextureTask(
+        resolveTaskDesc,
+        Graphics::GpuResolveTextureTaskDesc{
+            .regions = resolveBadSourceRegions,
+            .regionCount = LengthOf(resolveBadSourceRegions),
+        }
+    ).valid());
+
+    resolveLaterSourceDescription.setInitialState(Graphics::ResourceStates::ResolveSource);
+    const Graphics::GpuResolveTextureTaskRegion resolveBadDestinationRegions[]{
+        Graphics::GpuResolveTextureTaskRegion{
+            .source = resolveSourceResource,
+            .sourceSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+            .destination = resolveDestinationResource,
+            .destinationSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+        },
+        Graphics::GpuResolveTextureTaskRegion{
+            .source = resolveSourceResource,
+            .sourceSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+            .destination = resolveLaterDestinationResource,
+            .destinationSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+        },
+    };
+    resolveTaskDesc
+        .setIdentity(Name("tests/task_graph/retained_resolve_texture_bad_destination"))
+        .setMarkerLabel("Retained Resolve Texture Bad Destination")
+    ;
+    EXPECT_FALSE(graph.addResolveTextureTask(
+        resolveTaskDesc,
+        Graphics::GpuResolveTextureTaskDesc{
+            .regions = resolveBadDestinationRegions,
+            .regionCount = LengthOf(resolveBadDestinationRegions),
+        }
+    ).valid());
+
+    copyDestinationDescription.setInitialState(Graphics::ResourceStates::Common);
+    Graphics::GpuClearTextureTaskDesc clearDesc;
+    clearDesc.destination = copyDestinationResource;
+    clearDesc.subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
+    clearDesc.valueType = Graphics::GpuClearTextureTaskValueType::Float;
+    desc
+        .setIdentity(Name("tests/task_graph/retained_clear_texture_bad_destination"))
+        .setMarkerLabel("Retained Clear Texture Bad Destination")
+    ;
+    EXPECT_FALSE(graph.addClearTextureTask(desc, clearDesc).valid());
+
+    rectDestinationDescription.setInitialState(Graphics::ResourceStates::Common);
+    Graphics::GpuClearTextureRectUIntTaskDesc clearRectDesc;
+    clearRectDesc.destination = rectDestinationResource;
+    clearRectDesc.subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
+    clearRectDesc.rect = Graphics::Rect(4, 4);
+    desc
+        .setIdentity(Name("tests/task_graph/retained_rect_clear_texture_bad_destination"))
+        .setMarkerLabel("Retained Rect Clear Texture Bad Destination")
+    ;
+    EXPECT_FALSE(graph.addClearTextureRectUIntTask(desc, clearRectDesc).valid());
+    EXPECT_EQ(graph.taskCount(), 0u);
+
+    copyDestinationDescription.setInitialState(Graphics::ResourceStates::CopyDest);
+    copyLaterDestinationDescription.setInitialState(Graphics::ResourceStates::CopyDest);
+    resolveLaterDestinationDescription.setInitialState(Graphics::ResourceStates::ResolveDest);
+    rectDestinationDescription.setInitialState(Graphics::ResourceStates::CopyDest);
+    const Graphics::GpuCopyTextureTaskRegion copyValidRegions[]{
+        Graphics::GpuCopyTextureTaskRegion{
+            .source = copySourceResource,
+            .sourceSlice = {},
+            .destination = copyDestinationResource,
+            .destinationSlice = {},
+        },
+        Graphics::GpuCopyTextureTaskRegion{
+            .source = copyLaterSourceResource,
+            .sourceSlice = {},
+            .destination = copyLaterDestinationResource,
+            .destinationSlice = {},
+        },
+    };
+    const Graphics::GpuResolveTextureTaskRegion resolveValidRegions[]{
+        Graphics::GpuResolveTextureTaskRegion{
+            .source = resolveSourceResource,
+            .sourceSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+            .destination = resolveDestinationResource,
+            .destinationSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+        },
+        Graphics::GpuResolveTextureTaskRegion{
+            .source = resolveLaterSourceResource,
+            .sourceSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+            .destination = resolveLaterDestinationResource,
+            .destinationSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+        },
+    };
+    desc
+        .setIdentity(Name("tests/task_graph/retained_copy_texture_valid"))
+        .setMarkerLabel("Retained Copy Texture Valid")
+    ;
+    EXPECT_TRUE(graph.addCopyTextureTask(
+        desc,
+        Graphics::GpuCopyTextureTaskDesc{
+            .regions = copyValidRegions,
+            .regionCount = LengthOf(copyValidRegions),
+        }
+    ).valid());
+    resolveTaskDesc
+        .setIdentity(Name("tests/task_graph/retained_resolve_texture_valid"))
+        .setMarkerLabel("Retained Resolve Texture Valid")
+    ;
+    EXPECT_TRUE(graph.addResolveTextureTask(
+        resolveTaskDesc,
+        Graphics::GpuResolveTextureTaskDesc{
+            .regions = resolveValidRegions,
+            .regionCount = LengthOf(resolveValidRegions),
+        }
+    ).valid());
+    desc
+        .setIdentity(Name("tests/task_graph/retained_clear_texture_valid"))
+        .setMarkerLabel("Retained Clear Texture Valid")
+    ;
+    EXPECT_TRUE(graph.addClearTextureTask(desc, clearDesc).valid());
+    desc
+        .setIdentity(Name("tests/task_graph/retained_rect_clear_texture_valid"))
+        .setMarkerLabel("Retained Rect Clear Texture Valid")
+    ;
+    EXPECT_TRUE(graph.addClearTextureRectUIntTask(desc, clearRectDesc).valid());
+    EXPECT_EQ(graph.taskCount(), 4u);
+}
+
+TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+    const auto createTexture = [&](const Graphics::TextureDesc& sourceDescription){
+        Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+            testArena.arena,
+            context,
+            allocator
+        );
+        if(!textureObject)
+            return Graphics::TextureHandle{};
+
+        Graphics::TextureHandle texture(
+            textureObject,
+            Graphics::TextureHandle::deleter_type(&testArena.arena),
+            AdoptRef
+        );
+        Graphics::TextureDesc& destinationDescription = const_cast<Graphics::TextureDesc&>(
+            texture->getDescription()
+        );
+        destinationDescription = sourceDescription;
+        return texture;
+    };
+    const Graphics::TextureDesc colorDescription = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Graphics::Format::RGBA8_UINT)
+        .setInitialState(Graphics::ResourceStates::CopyDest)
+    ;
+    const Graphics::TextureDesc depthDescription = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Graphics::Format::D24S8)
+        .setInitialState(Graphics::ResourceStates::CopyDest)
+    ;
+    Graphics::TextureHandle colorTexture = createTexture(colorDescription);
+    Graphics::TextureHandle depthTexture = createTexture(depthDescription);
+    ASSERT_NE(colorTexture.get(), nullptr);
+    ASSERT_NE(depthTexture.get(), nullptr);
+
+    Graphics::GpuTaskDesc transferDesc;
+    transferDesc
+        .setIdentity(Name("tests/task_graph/full_clear_transfer_input"))
+        .setMarkerLabel("Full Clear Transfer Input")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+
+    Graphics::GpuTaskGraph colorGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId colorResource = colorGraph.importTexture(
+        colorTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/full_clear_color"))
+            .setMarkerLabel("Full Clear Color")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    ASSERT_TRUE(colorResource.valid());
+    Graphics::GpuClearTextureTaskDesc colorClear;
+    colorClear.destination = colorResource;
+    colorClear.subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
+    colorClear.valueType = Graphics::GpuClearTextureTaskValueType::UInt;
+    const Graphics::GpuTaskId colorTask = colorGraph.addClearTextureTask(transferDesc, colorClear);
+    ASSERT_TRUE(colorTask.valid());
+    EXPECT_EQ(
+        colorGraph.taskAt(colorTask.index).queue.requiredCapabilities,
+        QueueCapabilities(
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueueCapability::Compute,
+            Graphics::GpuQueueCapability::Graphics
+        )
+    );
+
+    Graphics::GpuClearTextureRectUIntTaskDesc colorRectClear;
+    colorRectClear.destination = colorResource;
+    colorRectClear.subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
+    colorRectClear.rect = Graphics::Rect(4, 4);
+    Graphics::GpuTaskDesc rectTransferDesc = transferDesc;
+    rectTransferDesc
+        .setIdentity(Name("tests/task_graph/rect_clear_transfer_input"))
+        .setMarkerLabel("Rect Clear Transfer Input")
+    ;
+    const Graphics::GpuTaskId colorRectTask = colorGraph.addClearTextureRectUIntTask(
+        rectTransferDesc,
+        colorRectClear
+    );
+    ASSERT_TRUE(colorRectTask.valid());
+    EXPECT_EQ(
+        colorGraph.taskAt(colorRectTask.index).queue.requiredCapabilities,
+        QueueCapabilities(
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueueCapability::Compute,
+            Graphics::GpuQueueCapability::Graphics
+        )
+    );
+
+    Graphics::GpuTaskGraph depthGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId depthResource = depthGraph.importTexture(
+        depthTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/full_clear_depth"))
+            .setMarkerLabel("Full Clear Depth")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    ASSERT_TRUE(depthResource.valid());
+    Graphics::GpuClearTextureTaskDesc depthClear;
+    depthClear.destination = depthResource;
+    depthClear.subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
+    depthClear.valueType = Graphics::GpuClearTextureTaskValueType::DepthStencil;
+    depthClear.clearDepth = true;
+    const Graphics::GpuTaskId depthTask = depthGraph.addClearTextureTask(transferDesc, depthClear);
+    ASSERT_TRUE(depthTask.valid());
+    EXPECT_EQ(
+        depthGraph.taskAt(depthTask.index).queue.requiredCapabilities,
+        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+    );
+
+    const auto expectCompileRejected = [&](const Graphics::GpuTaskGraph& graph, const Graphics::GpuPhysicalQueueInfo& queue){
+        const Graphics::GpuPhysicalQueueInfo queues[] = { queue };
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = queues,
+            .queueCount = LengthOf(queues),
+        };
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    };
+    const auto expectCompiledOn = [&](
+        const Graphics::GpuTaskGraph& graph,
+        const Graphics::GpuTaskId task,
+        const Graphics::GpuPhysicalQueueInfo& queue,
+        const Graphics::CommandQueue::Enum expectedQueue
+    ){
+        const Graphics::GpuPhysicalQueueInfo queues[] = { queue };
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = queues,
+            .queueCount = LengthOf(queues),
+        };
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
+        ASSERT_NE(assignment, nullptr);
+        EXPECT_EQ(assignment->queueClass, expectedQueue);
+    };
+
+    expectCompileRejected(colorGraph, DedicatedTransferQueue());
+    expectCompileRejected(colorGraph, DedicatedComputeQueue());
+    expectCompiledOn(colorGraph, colorTask, GraphicsQueue(), Graphics::CommandQueue::Graphics);
+    expectCompiledOn(colorGraph, colorRectTask, GraphicsQueue(), Graphics::CommandQueue::Graphics);
+    expectCompileRejected(depthGraph, DedicatedTransferQueue());
+    expectCompileRejected(depthGraph, DedicatedComputeQueue());
+    expectCompiledOn(depthGraph, depthTask, GraphicsQueue(), Graphics::CommandQueue::Graphics);
 }
 
 TEST(GpuTaskGraph, CopyBufferTaskRequiresTypedBufferImports){
@@ -5103,6 +6396,12 @@ TEST(GpuTaskGraph, CompilesExplicitInitialExclusiveOwnershipHandoff){
         );
         ASSERT_TRUE(completion.valid());
         Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
+        const Graphics::QueueSubmissionToken minimumCompletionToken{
+            .queue = Graphics::CommandQueue::Graphics,
+            .value = 7u,
+            .physicalQueueIndex = queues[0u].id.index,
+            .deviceGeneration = queues[0u].id.deviceGeneration,
+        };
         const Graphics::GpuGraphResourceId resource = graph.importResource(
             Graphics::GpuGraphResourceDesc{}
                 .setIdentity(Name("tests/task_graph/initial_owner_handoff"))
@@ -5112,6 +6411,7 @@ TEST(GpuTaskGraph, CompilesExplicitInitialExclusiveOwnershipHandoff){
                 .setInitialOwnerQueue(queues[0u].id)
                 .setInitialOwnerReleaseDestinationQueue(queues[1u].id)
                 .setInitialOwnerCompletion(completion)
+                .setInitialOwnerMinimumCompletionToken(minimumCompletionToken)
                 .setInitialOwnerStateSource(&stateSource)
         );
         ASSERT_TRUE(resource.valid());
@@ -5119,6 +6419,10 @@ TEST(GpuTaskGraph, CompilesExplicitInitialExclusiveOwnershipHandoff){
         EXPECT_EQ(view.initialOwnerQueue, queues[0u].id);
         EXPECT_EQ(view.initialOwnerReleaseDestinationQueue, queues[1u].id);
         EXPECT_EQ(view.initialOwnerCompletion, completion);
+        EXPECT_EQ(view.initialOwnerMinimumCompletionToken.queue, minimumCompletionToken.queue);
+        EXPECT_EQ(view.initialOwnerMinimumCompletionToken.value, minimumCompletionToken.value);
+        EXPECT_EQ(view.initialOwnerMinimumCompletionToken.physicalQueueIndex, minimumCompletionToken.physicalQueueIndex);
+        EXPECT_EQ(view.initialOwnerMinimumCompletionToken.deviceGeneration, minimumCompletionToken.deviceGeneration);
         ASSERT_NE(view.initialOwnerStateSource, nullptr);
         EXPECT_NE(view.initialOwnerStateSource, &stateSource);
         EXPECT_FALSE(view.initialOwnerStateSource->valid());
@@ -5163,11 +6467,59 @@ TEST(GpuTaskGraph, CompilesExplicitInitialExclusiveOwnershipHandoff){
         Graphics::GpuTaskGraph graph(testArena.arena);
         const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
             Graphics::GpuExternalCompletionDesc{}
+                .setIdentity(Name("tests/task_graph/initial_owner_missing_minimum_completion"))
+                .setMarkerLabel("Initial Owner Missing Minimum Completion")
+        );
+        ASSERT_TRUE(completion.valid());
+        Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
+        EXPECT_FALSE(graph.importResource(
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/initial_owner_missing_minimum"))
+                .setMarkerLabel("Initial Owner Missing Minimum")
+                .setType(Graphics::GpuGraphResourceType::Buffer)
+                .setInitialState(Graphics::ResourceStates::Common)
+                .setInitialOwnerQueue(queues[0u].id)
+                .setInitialOwnerReleaseDestinationQueue(queues[1u].id)
+                .setInitialOwnerCompletion(completion)
+                .setInitialOwnerStateSource(&stateSource)
+        ).valid());
+
+        const Graphics::QueueSubmissionToken wrongSourceToken{
+            .queue = Graphics::CommandQueue::Compute,
+            .value = 7u,
+            .physicalQueueIndex = queues[1u].id.index,
+            .deviceGeneration = queues[1u].id.deviceGeneration,
+        };
+        EXPECT_FALSE(graph.importResource(
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/initial_owner_wrong_minimum_source"))
+                .setMarkerLabel("Initial Owner Wrong Minimum Source")
+                .setType(Graphics::GpuGraphResourceType::Buffer)
+                .setInitialState(Graphics::ResourceStates::Common)
+                .setInitialOwnerQueue(queues[0u].id)
+                .setInitialOwnerReleaseDestinationQueue(queues[1u].id)
+                .setInitialOwnerCompletion(completion)
+                .setInitialOwnerMinimumCompletionToken(wrongSourceToken)
+                .setInitialOwnerStateSource(&stateSource)
+        ).valid());
+    }
+
+    {
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
+            Graphics::GpuExternalCompletionDesc{}
                 .setIdentity(Name("tests/task_graph/initial_owner_wrong_destination_completion"))
                 .setMarkerLabel("Initial Owner Wrong Destination Completion")
         );
         ASSERT_TRUE(completion.valid());
         Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
+        const Graphics::QueueSubmissionToken minimumCompletionToken{
+            .queue = Graphics::CommandQueue::Graphics,
+            .value = 7u,
+            .physicalQueueIndex = queues[0u].id.index,
+            .deviceGeneration = queues[0u].id.deviceGeneration,
+        };
         const Graphics::GpuGraphResourceId resource = graph.importResource(
             Graphics::GpuGraphResourceDesc{}
                 .setIdentity(Name("tests/task_graph/initial_owner_wrong_destination"))
@@ -5177,6 +6529,7 @@ TEST(GpuTaskGraph, CompilesExplicitInitialExclusiveOwnershipHandoff){
                 .setInitialOwnerQueue(queues[0u].id)
                 .setInitialOwnerReleaseDestinationQueue(queues[1u].id)
                 .setInitialOwnerCompletion(completion)
+                .setInitialOwnerMinimumCompletionToken(minimumCompletionToken)
                 .setInitialOwnerStateSource(&stateSource)
         );
         ASSERT_TRUE(resource.valid());

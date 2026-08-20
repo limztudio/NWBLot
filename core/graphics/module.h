@@ -177,7 +177,7 @@ public:
     // A render pass uses this when an accepted cross-queue release cannot be recovered safely. The current graphics
     // generation then stops before another pass or presentation can use indeterminate ownership; its owner must
     // tear down and recreate the device/resources before resuming.
-    void requestDeviceRecreation();
+    void requestDeviceRecreation()const;
     [[nodiscard]] bool isDeviceRecreationRequested()const noexcept{ return m_deviceRecreationRequested; }
     void updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
     void destroy();
@@ -320,7 +320,7 @@ private:
     bool m_windowIsInFocus = true;
     bool m_requestedVSync = false;
     bool m_instanceCreated = false;
-    bool m_deviceRecreationRequested = false;
+    mutable bool m_deviceRecreationRequested = false;
     bool m_frameSubmissionSuspended = false;
 
     List<IRenderPass*, Alloc::GlobalArena> m_renderPasses;

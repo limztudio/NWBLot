@@ -72,6 +72,7 @@ struct GpuTaskGraphResourceView{
     GpuPhysicalQueueId initialOwnerQueue;
     GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
     GpuExternalCompletionId initialOwnerCompletion;
+    QueueSubmissionToken initialOwnerMinimumCompletionToken;
     // For imported exclusive-owner handoffs this is a graph-owned immutable snapshot, captured at declaration.
     const CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
     // Texture-only multi-producer ownership handoff sources. A first graph use must be fully covered by exactly one
@@ -157,6 +158,7 @@ private:
         CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
         const CommandListResourceStateHandoff* initialOwnerStateSourceIdentity = nullptr;
         GpuExternalCompletionId initialOwnerCompletion;
+        QueueSubmissionToken initialOwnerMinimumCompletionToken;
         ResourceStates::Mask initialState = ResourceStates::Unknown;
         ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
         u32 markerLabelOffset = 0u;
@@ -226,7 +228,7 @@ public:
     [[nodiscard]] GpuTaskId addCopyTextureTask(const GpuTaskDesc& desc, const GpuCopyTextureTaskDesc& copyDesc);
 
     // Adds a graph-owned native texture-resolve task. The helper derives ResolveSource/ResolveDest resource uses
-    // from its regions and retains the imported textures through recording, so desc must declare Transfer capability
+    // from its regions and retains the imported textures through recording, so desc must declare Graphics capability
     // and must not provide separate resource uses.
     [[nodiscard]] GpuTaskId addResolveTextureTask(const GpuTaskDesc& desc, const GpuResolveTextureTaskDesc& resolveDesc);
 
@@ -250,11 +252,12 @@ public:
 
     // Adds a graph-owned native texture clear. The helper retains the imported texture and derives its CopyDest
     // write declaration, so desc must declare Transfer capability and must not provide separate resource uses.
+    // It augments full color clears with Compute and Graphics capability, and depth/stencil clears with Graphics.
     [[nodiscard]] GpuTaskId addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc);
 
     // Adds a graph-owned native rectangular unsigned-integer texture clear. The helper retains the imported texture
     // and derives its exact subresource CopyDest write declaration, so desc must declare Transfer capability and
-    // must not provide separate resource uses.
+    // must not provide separate resource uses. It also adds Compute and Graphics for dynamic native clear routes.
     [[nodiscard]] GpuTaskId addClearTextureRectUIntTask(
         const GpuTaskDesc& desc,
         const GpuClearTextureRectUIntTaskDesc& clearDesc

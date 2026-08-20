@@ -567,6 +567,10 @@ struct ClearTextureRectUIntTask{
         && resource.initialOwnerQueue == desc.initialOwnerQueue
         && resource.initialOwnerReleaseDestinationQueue == desc.initialOwnerReleaseDestinationQueue
         && resource.initialOwnerCompletion == desc.initialOwnerCompletion
+        && resource.initialOwnerMinimumCompletionToken.queue == desc.initialOwnerMinimumCompletionToken.queue
+        && resource.initialOwnerMinimumCompletionToken.value == desc.initialOwnerMinimumCompletionToken.value
+        && resource.initialOwnerMinimumCompletionToken.physicalQueueIndex == desc.initialOwnerMinimumCompletionToken.physicalQueueIndex
+        && resource.initialOwnerMinimumCompletionToken.deviceGeneration == desc.initialOwnerMinimumCompletionToken.deviceGeneration
         && initialOwnerStateSourceIdentity == desc.initialOwnerStateSource
         && resource.queueSharing == desc.queueSharing;
 }
@@ -609,6 +613,79 @@ struct ClearTextureRectUIntTask{
         && rhs.baseArraySlice < lhsArrayEnd;
 }
 
+template<typename ResourceDesc>
+[[nodiscard]] static bool BuiltInTaskStateMatchesRetainedInitialState(
+    const ResourceDesc& resourceDesc,
+    const ResourceStates::Mask requiredState
+)noexcept{
+    // CommandList::close restores retained resources to their descriptor state. A primitive task can publish its
+    // native built-in state only when that restoration is a no-op.
+    return !resourceDesc.keepInitialState || resourceDesc.initialState == requiredState;
+}
+
+[[nodiscard]] static TextureDimension::Enum CopyTextureImageType(const TextureDimension::Enum dimension)noexcept{
+    switch(dimension){
+    case TextureDimension::Texture1D:
+    case TextureDimension::Texture1DArray:
+        return TextureDimension::Texture1D;
+    case TextureDimension::Texture2D:
+    case TextureDimension::Texture2DArray:
+    case TextureDimension::TextureCube:
+    case TextureDimension::TextureCubeArray:
+    case TextureDimension::Texture2DMS:
+    case TextureDimension::Texture2DMSArray:
+        return TextureDimension::Texture2D;
+    case TextureDimension::Texture3D:
+        return TextureDimension::Texture3D;
+    default:
+        return TextureDimension::Unknown;
+    }
+}
+
+[[nodiscard]] static bool CopyTextureContractValid(
+    const TextureDesc& sourceDesc,
+    const TextureSlice& sourceSlice,
+    const TextureDesc& destinationDesc,
+    const TextureSlice& destinationSlice,
+    TextureSlice& outResolvedSourceSlice,
+    TextureSlice& outResolvedDestinationSlice
+)noexcept{
+    const TextureDimension::Enum sourceImageType = CopyTextureImageType(sourceDesc.dimension);
+    const TextureDimension::Enum destinationImageType = CopyTextureImageType(destinationDesc.dimension);
+    GraphicsBackend::VulkanDetail::TextureFormatBlockLayout sourceLayout;
+    GraphicsBackend::VulkanDetail::TextureFormatBlockLayout destinationLayout;
+    if(
+        sourceImageType == TextureDimension::Unknown
+        || destinationImageType == TextureDimension::Unknown
+        || sourceImageType != destinationImageType
+        || sourceDesc.format != destinationDesc.format
+        || sourceDesc.sampleCount != destinationDesc.sampleCount
+        || !GraphicsBackend::VulkanDetail::GetTextureFormatBlockLayout(GetFormatInfo(sourceDesc.format), sourceLayout)
+        || !GraphicsBackend::VulkanDetail::GetTextureFormatBlockLayout(
+            GetFormatInfo(destinationDesc.format),
+            destinationLayout
+        )
+        || !GraphicsBackend::VulkanDetail::IsTextureSliceInBounds(
+            sourceDesc,
+            sourceSlice,
+            sourceLayout,
+            &outResolvedSourceSlice
+        )
+        || !GraphicsBackend::VulkanDetail::IsTextureSliceInBounds(
+            destinationDesc,
+            destinationSlice,
+            destinationLayout,
+            &outResolvedDestinationSlice
+        )
+    )
+        return false;
+
+    return outResolvedSourceSlice.width == outResolvedDestinationSlice.width
+        && outResolvedSourceSlice.height == outResolvedDestinationSlice.height
+        && outResolvedSourceSlice.depth == outResolvedDestinationSlice.depth
+    ;
+}
+
 [[nodiscard]] static bool ResolveTextureContractValid(
     const TextureDesc& sourceDesc,
     const TextureSubresourceSet& sourceSubresources,
@@ -617,8 +694,13 @@ struct ClearTextureRectUIntTask{
     TextureSubresourceSet& outResolvedSourceSubresources,
     TextureSubresourceSet& outResolvedDestinationSubresources
 )noexcept{
+    const TextureDimension::Enum sourceImageType = CopyTextureImageType(sourceDesc.dimension);
+    const TextureDimension::Enum destinationImageType = CopyTextureImageType(destinationDesc.dimension);
     if(
-        sourceDesc.sampleCount <= 1u
+        sourceImageType == TextureDimension::Unknown
+        || destinationImageType == TextureDimension::Unknown
+        || sourceImageType != destinationImageType
+        || sourceDesc.sampleCount <= 1u
         || destinationDesc.sampleCount != 1u
         || sourceDesc.format != destinationDesc.format
     )
@@ -899,6 +981,14 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
             && destinationResource.type == GpuGraphResourceType::Buffer
             && sourceResource.buffer
             && destinationResource.buffer
+            && __hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+                sourceResource.buffer->getDescription(),
+                ResourceStates::CopySource
+            )
+            && __hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+                destinationResource.buffer->getDescription(),
+                ResourceStates::CopyDest
+            )
             && validCopyRange(sourceResource.buffer->getDescription(), region.sourceOffsetBytes, region.dataSizeBytes)
             && validCopyRange(destinationResource.buffer->getDescription(), region.destinationOffsetBytes, region.dataSizeBytes)
             && appendResourceUse(region.source, ResourceStates::CopySource, GpuTaskResourceAccess::Read)
@@ -970,17 +1060,24 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
 
     GraphicsVector<GpuTaskResourceUse> resourceUses(m_arena);
     resourceUses.reserve(copyDesc.regionCount * 2u);
-    const auto appendResourceUse = [&](const GpuGraphResourceId resource, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access){
+    const auto appendResourceUse = [&](
+        const GpuGraphResourceId resource,
+        const TextureSubresourceSet& subresources,
+        const ResourceStates::Mask state,
+        const GpuTaskResourceAccess::Enum access
+    ){
         for(const GpuTaskResourceUse& existing : resourceUses){
             if(existing.resource != resource)
                 continue;
+
             // A primitive copy cannot safely read and write the same imported image inside one task. Keep that
             // sequencing explicit in separate tasks instead of silently weakening its graph declarations.
-            return existing.requiredState == state && existing.access == access;
+            if(existing.requiredState != state || existing.access != access)
+                return false;
         }
         resourceUses.push_back(GpuTaskResourceUse{
             .resource = resource,
-            .range = {},
+            .range = { .textureSubresources = subresources },
             .requiredState = state,
             .access = access,
         });
@@ -996,22 +1093,50 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
         }
         const GpuGraphResourceNode& sourceResource = m_resources[region.source.index];
         const GpuGraphResourceNode& destinationResource = m_resources[region.destination.index];
+        TextureSlice resolvedSourceSlice;
+        TextureSlice resolvedDestinationSlice;
         valid = region.source != region.destination
             && sourceResource.type == GpuGraphResourceType::Texture
             && destinationResource.type == GpuGraphResourceType::Texture
             && sourceResource.texture
             && destinationResource.texture
-            && appendResourceUse(region.source, ResourceStates::CopySource, GpuTaskResourceAccess::Read)
-            && appendResourceUse(region.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write)
+            && __hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+                sourceResource.texture->getDescription(),
+                ResourceStates::CopySource
+            )
+            && __hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+                destinationResource.texture->getDescription(),
+                ResourceStates::CopyDest
+            )
+            && __hidden_gpu_task_graph::CopyTextureContractValid(
+                sourceResource.texture->getDescription(),
+                region.sourceSlice,
+                destinationResource.texture->getDescription(),
+                region.destinationSlice,
+                resolvedSourceSlice,
+                resolvedDestinationSlice
+            )
+            && appendResourceUse(
+                region.source,
+                TextureSubresourceSet(resolvedSourceSlice.mipLevel, 1u, resolvedSourceSlice.arraySlice, 1u),
+                ResourceStates::CopySource,
+                GpuTaskResourceAccess::Read
+            )
+            && appendResourceUse(
+                region.destination,
+                TextureSubresourceSet(resolvedDestinationSlice.mipLevel, 1u, resolvedDestinationSlice.arraySlice, 1u),
+                ResourceStates::CopyDest,
+                GpuTaskResourceAccess::Write
+            )
         ;
         if(valid){
             payload->copies.push_back(CopyTask::Copy{
                 .sourceResource = region.source,
                 .source = sourceResource.texture,
-                .sourceSlice = region.sourceSlice,
+                .sourceSlice = resolvedSourceSlice,
                 .destinationResource = region.destination,
                 .destination = destinationResource.texture,
-                .destinationSlice = region.destinationSlice,
+                .destinationSlice = resolvedDestinationSlice,
             });
         }
     }
@@ -1059,7 +1184,7 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
         || resolveDesc.regionCount == 0u
         || resolveDesc.regionCount > Limit<u32>::s_Max
         || resolveDesc.regionCount > Limit<usize>::s_Max / 2u
-        || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
+        || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Graphics)) == 0u
     )
         return {};
 
@@ -1111,6 +1236,14 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
             && destinationResource.type == GpuGraphResourceType::Texture
             && sourceResource.texture
             && destinationResource.texture
+            && __hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+                sourceResource.texture->getDescription(),
+                ResourceStates::ResolveSource
+            )
+            && __hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+                destinationResource.texture->getDescription(),
+                ResourceStates::ResolveDest
+            )
             && __hidden_gpu_task_graph::ResolveTextureContractValid(
                 sourceResource.texture->getDescription(),
                 region.sourceSubresources,
@@ -1230,8 +1363,8 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
     if(
         uploadDesc.destinationOffsetBytes > destinationDesc.byteSize
         || source->bytes.size() > destinationDesc.byteSize - uploadDesc.destinationOffsetBytes
-        // vkCmdCopyBuffer requires every region offset and size to be four-byte aligned. The staging allocator
-        // already provides an aligned source offset; reject graph inputs that cannot form a valid native region.
+        // Keep declaration acceptance aligned with CommandList::tryWriteBuffer so a built-in upload cannot fail
+        // only during late packet recording.
         || (uploadDesc.destinationOffsetBytes & (sizeof(u32) - 1u)) != 0u
         || (source->bytes.size() & (sizeof(u32) - 1u)) != 0u
         // CommandList::close restores keepInitialState resources after recording. Any different graph-visible final
@@ -1381,6 +1514,10 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
         || !destinationResource.buffer
         || destinationResource.buffer->getDescription().byteSize == 0u
         || (destinationResource.buffer->getDescription().byteSize & (sizeof(u32) - 1u)) != 0u
+        || !__hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+            destinationResource.buffer->getDescription(),
+            ResourceStates::CopyDest
+        )
     )
         return {};
 
@@ -1445,6 +1582,10 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         // vkCmdClear*Image cannot operate on multisampled images outside a render pass. This primitive helper has no
         // framebuffer/render-pass lowering, so preserve its transfer-only contract by rejecting MSAA up front.
         || destinationResource.texture->getDescription().sampleCount != 1u
+        || !__hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+            destinationResource.texture->getDescription(),
+            ResourceStates::CopyDest
+        )
     )
         return {};
     if(!__hidden_gpu_task_graph::ClearTextureValueMatchesFormat(
@@ -1479,6 +1620,16 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         .access = GpuTaskResourceAccess::Write,
     };
     GpuTaskDesc resolvedDesc = desc;
+    // A full color clear may use vkCmdClearColorImage outside rendering or an attachment clear inside it. Keep
+    // both Compute and Graphics in the conservative graph contract; depth/stencil always requires Graphics.
+    // The caller's Transfer requirement remains part of the primitive API contract.
+    resolvedDesc.queue.requiredCapabilities |= clearDesc.valueType == GpuClearTextureTaskValueType::DepthStencil
+        ? GpuQueueCapability::Graphics
+        : static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Graphics)
+        )
+    ;
     resolvedDesc.setResourceUses(&resourceUse, 1u);
     const GpuTaskId task = appendTask(
         resolvedDesc,
@@ -1523,6 +1674,10 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
         // vkCmdClear*Image cannot operate on multisampled images outside a render pass. This primitive helper has no
         // framebuffer/render-pass lowering, so preserve its transfer-only contract by rejecting MSAA up front.
         || destinationResource.texture->getDescription().sampleCount != 1u
+        || !__hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+            destinationResource.texture->getDescription(),
+            ResourceStates::CopyDest
+        )
     )
         return {};
     const GpuClearTextureTaskDesc formatValidation{
@@ -1559,6 +1714,13 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
         .access = GpuTaskResourceAccess::Write,
     };
     GpuTaskDesc resolvedDesc = desc;
+    // The single-sample transfer route is normally selected, but a merged packet may instead clear an active
+    // color attachment, while the native full-clear route is Compute-capable. Keep every permitted route inside
+    // the immutable graph declaration rather than trusting the recorder's dynamic command-list state.
+    resolvedDesc.queue.requiredCapabilities |= static_cast<GpuQueueCapability::Mask>(
+        static_cast<u8>(GpuQueueCapability::Compute)
+        | static_cast<u8>(GpuQueueCapability::Graphics)
+    );
     resolvedDesc.setResourceUses(&resourceUse, 1u);
     const GpuTaskId task = appendTask(
         resolvedDesc,
@@ -2017,6 +2179,7 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
         .initialOwnerQueue = resource.initialOwnerQueue,
         .initialOwnerReleaseDestinationQueue = resource.initialOwnerReleaseDestinationQueue,
         .initialOwnerCompletion = resource.initialOwnerCompletion,
+        .initialOwnerMinimumCompletionToken = resource.initialOwnerMinimumCompletionToken,
         .initialOwnerStateSource = resource.initialOwnerStateSource,
         .initialOwnerHandoffSources = resource.initialOwnerHandoffSourceCount != 0u
             ? m_initialOwnerHandoffSources.data() + resource.initialOwnerHandoffSourceOffset
@@ -2695,6 +2858,7 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
     const bool hasInitialOwnerHandoff =
         desc.initialOwnerReleaseDestinationQueue.valid()
         || desc.initialOwnerCompletion.valid()
+        || desc.initialOwnerMinimumCompletionToken.valid()
         || desc.initialOwnerStateSource != nullptr
     ;
     const bool hasMultiInitialOwnerHandoff =
@@ -2751,6 +2915,11 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
                 || desc.initialOwnerReleaseDestinationQueue == desc.initialOwnerQueue
                 || !desc.initialOwnerCompletion.valid()
                 || !validExternalCompletion(desc.initialOwnerCompletion)
+                || !desc.initialOwnerMinimumCompletionToken.valid()
+                || !desc.initialOwnerMinimumCompletionToken.matchesPhysicalQueue(
+                    desc.initialOwnerQueue.index,
+                    desc.initialOwnerQueue.deviceGeneration
+                )
                 || !desc.initialOwnerStateSource
                 || desc.initialState == ResourceStates::Unknown
             )
@@ -2863,6 +3032,7 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
     resource.initialOwnerQueue = desc.initialOwnerQueue;
     resource.initialOwnerReleaseDestinationQueue = desc.initialOwnerReleaseDestinationQueue;
     resource.initialOwnerCompletion = desc.initialOwnerCompletion;
+    resource.initialOwnerMinimumCompletionToken = desc.initialOwnerMinimumCompletionToken;
     resource.initialOwnerStateSource = initialOwnerStateSnapshot;
     resource.initialOwnerStateSourceIdentity = desc.initialOwnerStateSource;
     resource.initialOwnerHandoffSourceOffset = static_cast<u32>(initialOwnerHandoffSourceOffset);

@@ -1724,14 +1724,21 @@ bool GpuTaskGraphCompiler::compile(
         if(!resource.initialOwnerQueue.valid())
             continue;
         const bool hasInitialOwnerHandoff = resource.initialOwnerReleaseDestinationQueue.valid();
+        const GpuPhysicalQueueInfo* const initialOwnerQueueInfo = outCompiledGraph.queueInfo(resource.initialOwnerQueue);
         if(
             ResourceUsesConcurrentQueueSharing(resource.queueSharing, topology)
-            || !outCompiledGraph.queueInfo(resource.initialOwnerQueue)
+            || !initialOwnerQueueInfo
             || (
                 hasInitialOwnerHandoff
                 && (
                     !outCompiledGraph.queueInfo(resource.initialOwnerReleaseDestinationQueue)
                     || !graph.validExternalCompletion(resource.initialOwnerCompletion)
+                    || !resource.initialOwnerMinimumCompletionToken.valid()
+                    || resource.initialOwnerMinimumCompletionToken.queue != initialOwnerQueueInfo->queueClass
+                    || !resource.initialOwnerMinimumCompletionToken.matchesPhysicalQueue(
+                        resource.initialOwnerQueue.index,
+                        resource.initialOwnerQueue.deviceGeneration
+                    )
                     || !resource.initialOwnerStateSource
                 )
             )
@@ -2083,6 +2090,13 @@ bool GpuTaskGraphCompiler::compile(
                         && !hasInitialOwnerStateSeed
                         && resource.initialState != ResourceStates::Unknown
                     ;
+                    const bool requiresExplicitInitialStateSource =
+                        !previousState
+                        && !hasInitialOwnerStateSeed
+                        && resource.hasBackendResource
+                        && resource.initialState == ResourceStates::Unknown
+                        && IsReadAccess(use.access)
+                    ;
                     if(!previousState && initialOwnerHandoffSource){
                         // The descriptor's one selected source has already been proven to cover this fragment.
                         // Emit only the unseeded fragment range so its immutable snapshot does not
@@ -2222,7 +2236,7 @@ bool GpuTaskGraphCompiler::compile(
                             .type = needsUavDependency
                                 ? UavBarrierType(resource.type)
                                 : TransitionBarrierType(resource.type),
-                            .isGraphInitialState = materializesGraphInitialState,
+                            .isGraphInitialState = materializesGraphInitialState || requiresExplicitInitialStateSource,
                         });
                     }
                 }
@@ -2269,6 +2283,13 @@ bool GpuTaskGraphCompiler::compile(
                 !previousState
                 && !hasInitialOwnerStateSeed
                 && resource.initialState != ResourceStates::Unknown
+            ;
+            const bool requiresExplicitInitialStateSource =
+                !previousState
+                && !hasInitialOwnerStateSeed
+                && resource.hasBackendResource
+                && resource.initialState == ResourceStates::Unknown
+                && IsReadAccess(use.access)
             ;
             if(
                 !previousState
@@ -2462,7 +2483,7 @@ bool GpuTaskGraphCompiler::compile(
                     .type = needsUavDependency
                         ? UavBarrierType(resource.type)
                         : TransitionBarrierType(resource.type),
-                    .isGraphInitialState = materializesGraphInitialState,
+                    .isGraphInitialState = materializesGraphInitialState || requiresExplicitInitialStateSource,
                 });
             }
 

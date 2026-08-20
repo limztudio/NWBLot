@@ -8147,6 +8147,59 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     ASSERT_EQ(compiledGraph.taskCount(), 4u);
     ASSERT_EQ(compiledGraph.packetCount(), 4u);
 
+    const Graphics::GpuTaskGraphCompileStatistics& compileStatistics = compiledGraph.compileStatistics();
+    ASSERT_TRUE(compileStatistics.valid());
+    EXPECT_EQ(compileStatistics.graphGeneration, compiledGraph.generation());
+    EXPECT_EQ(compileStatistics.planGeneration, compiledGraph.planGeneration());
+    EXPECT_EQ(compileStatistics.deviceGeneration, compiledGraph.deviceGeneration());
+    EXPECT_EQ(compileStatistics.taskCount, compiledGraph.taskCount());
+    EXPECT_EQ(compileStatistics.resourceCount, graph.resourceCount());
+    EXPECT_EQ(compileStatistics.resourceUseCount, 1u);
+    EXPECT_EQ(compileStatistics.explicitDependencyCount, 1u);
+    EXPECT_EQ(compileStatistics.inferredDependencyCount, 0u);
+    EXPECT_EQ(compileStatistics.declaredExternalDependencyCount, 1u);
+    EXPECT_EQ(compileStatistics.initialOwnershipExternalDependencyCount, 0u);
+    EXPECT_EQ(compileStatistics.externalDependencyCount, 1u);
+    EXPECT_EQ(compileStatistics.packetCount, compiledGraph.packetCount());
+    EXPECT_EQ(compileStatistics.packetDependencyCount, 1u);
+    EXPECT_EQ(compileStatistics.packetExternalDependencyCount, 1u);
+    EXPECT_EQ(compileStatistics.crossQueuePacketDependencyCount, 1u);
+    EXPECT_EQ(compileStatistics.crossFamilyPacketDependencyCount, 1u);
+    EXPECT_EQ(compileStatistics.mergedTaskCount, 0u);
+    EXPECT_EQ(compileStatistics.recordingFrontierCount, 2u);
+    EXPECT_EQ(
+        compileStatistics.taskCountByQueueClass[Graphics::CommandQueue::Graphics],
+        2u
+    );
+    EXPECT_EQ(
+        compileStatistics.taskCountByQueueClass[Graphics::CommandQueue::Compute],
+        1u
+    );
+    EXPECT_EQ(
+        compileStatistics.taskCountByQueueClass[Graphics::CommandQueue::Transfer],
+        1u
+    );
+    EXPECT_EQ(
+        compileStatistics.packetCountByQueueClass[Graphics::CommandQueue::Graphics],
+        2u
+    );
+    EXPECT_EQ(
+        compileStatistics.packetCountByQueueClass[Graphics::CommandQueue::Compute],
+        1u
+    );
+    EXPECT_EQ(
+        compileStatistics.packetCountByQueueClass[Graphics::CommandQueue::Transfer],
+        1u
+    );
+    usize packetizationDecisionCount = 0u;
+    for(const usize count : compileStatistics.packetizationDecisionCounts)
+        packetizationDecisionCount += count;
+    EXPECT_EQ(packetizationDecisionCount, compiledGraph.taskCount());
+    EXPECT_GE(compileStatistics.analysisSeconds, 0.0);
+    EXPECT_GE(compileStatistics.queueAssignmentSeconds, 0.0);
+    EXPECT_GE(compileStatistics.planningSeconds, 0.0);
+    EXPECT_GE(compileStatistics.totalSeconds, 0.0);
+
     const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
     const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(second);
     const Graphics::GpuSubmissionPacketId transferPacket = compiledGraph.packetForTask(transfer);

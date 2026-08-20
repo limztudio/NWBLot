@@ -47,6 +47,7 @@ void GpuCompiledGraph::reset(){
     m_planGeneration = 0u;
     m_deviceGeneration = 0u;
     m_graphTaskCount = 0u;
+    m_compileStatistics = {};
     m_valid = false;
 }
 

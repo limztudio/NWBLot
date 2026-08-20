@@ -1095,6 +1095,25 @@ TEST_F(DescriptorBufferRoundTripTest, SameClassGraphicsQueuesRouteGraphPacketsAn
     ));
     ASSERT_TRUE(device.waitForIdle());
 
+    const GpuTaskGraphCompileStatistics& compileStatistics = compiledGraph.compileStatistics();
+    ASSERT_TRUE(compileStatistics.valid());
+    EXPECT_EQ(compileStatistics.crossQueuePacketDependencyCount, 1u);
+    EXPECT_EQ(compileStatistics.crossFamilyPacketDependencyCount, 0u);
+    const GpuTaskGraphRecordingStatistics recordingStatistics = recordedGraph.recordingStatistics(compiledGraph);
+    ASSERT_TRUE(recordingStatistics.valid());
+    EXPECT_EQ(recordingStatistics.packetCount, 2u);
+    EXPECT_EQ(recordingStatistics.commandListCount, 2u);
+    const GpuTaskGraphSubmissionStatistics submissionStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(submissionStatistics.valid());
+    EXPECT_EQ(submissionStatistics.acceptedTaskCount, 2u);
+    EXPECT_EQ(submissionStatistics.nativeSubmissionCount, 2u);
+    EXPECT_EQ(submissionStatistics.plannedWaitTokenCount, 1u);
+    EXPECT_EQ(submissionStatistics.sameQueueWaitElisionCount, 0u);
+    EXPECT_EQ(submissionStatistics.timelineWaitCount, 1u);
+    EXPECT_EQ(submissionStatistics.mergedTimelineWaitCount, 0u);
+    EXPECT_EQ(submissionStatistics.nativeSubmissionCountByQueueClass[CommandQueue::Graphics], 2u);
+    EXPECT_EQ(submissionStatistics.timelineWaitCountByQueueClass[CommandQueue::Graphics], 1u);
+
     const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
     ASSERT_NE(copiedWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
@@ -37661,6 +37680,22 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     const GpuTaskGraphCompiler compiler;
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
     ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const GpuTaskGraphCompileStatistics& compileStatistics = compiledGraph.compileStatistics();
+    ASSERT_TRUE(compileStatistics.valid());
+    EXPECT_EQ(compileStatistics.taskCount, 2u);
+    EXPECT_EQ(compileStatistics.resourceCount, 1u);
+    EXPECT_EQ(compileStatistics.packetCount, 2u);
+    EXPECT_EQ(compileStatistics.explicitDependencyCount, 1u);
+    EXPECT_GE(compileStatistics.inferredDependencyCount, 1u);
+    EXPECT_EQ(compileStatistics.packetDependencyCount, 1u);
+    EXPECT_EQ(compileStatistics.crossQueuePacketDependencyCount, 0u);
+    EXPECT_GE(compileStatistics.prologueBarrierCount, 1u);
+    EXPECT_EQ(compileStatistics.taskCountByQueueClass[CommandQueue::Graphics], 2u);
+    EXPECT_EQ(compileStatistics.packetCountByQueueClass[CommandQueue::Graphics], 2u);
+    EXPECT_GE(compileStatistics.analysisSeconds, 0.0);
+    EXPECT_GE(compileStatistics.queueAssignmentSeconds, 0.0);
+    EXPECT_GE(compileStatistics.planningSeconds, 0.0);
+    EXPECT_GE(compileStatistics.totalSeconds, 0.0);
     const GpuSubmissionPacketId writerPacket = compiledGraph.packetForTask(writer);
     const GpuSubmissionPacketId readerPacket = compiledGraph.packetForTask(reader);
     ASSERT_TRUE(writerPacket.valid());
@@ -37689,6 +37724,28 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     ));
     EXPECT_TRUE(writerRecorded);
     EXPECT_TRUE(readerRecorded);
+    const GpuTaskGraphRecordingStatistics recordingStatistics = recordedGraph.recordingStatistics(compiledGraph);
+    ASSERT_TRUE(recordingStatistics.valid());
+    EXPECT_EQ(recordingStatistics.graphGeneration, compiledGraph.generation());
+    EXPECT_EQ(recordingStatistics.planGeneration, compiledGraph.planGeneration());
+    EXPECT_EQ(recordingStatistics.deviceGeneration, compiledGraph.deviceGeneration());
+    EXPECT_EQ(recordingStatistics.packetCount, 2u);
+    EXPECT_EQ(recordingStatistics.taskCount, 2u);
+    EXPECT_EQ(recordingStatistics.commandListCount, 2u);
+    EXPECT_EQ(
+        recordingStatistics.barrierCount,
+        compileStatistics.prologueBarrierCount + compileStatistics.epilogueBarrierCount
+    );
+    EXPECT_EQ(recordingStatistics.parallelPacketCount, 0u);
+    EXPECT_GE(recordingStatistics.recordingSeconds, 0.0);
+
+    // A recording artifact alone cannot be combined with an unbound transaction snapshot from this plan: aggregate
+    // telemetry is attempt-scoped, just like packet submission itself.
+    EXPECT_FALSE(CollectGpuTaskGraphRuntimeStatistics(
+        compiledGraph,
+        recordedGraph,
+        transaction
+    ).valid());
 
     GpuRecordedGraph rejectedOverrideGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecordDesc outsideRangeOverride[] = {
@@ -37886,6 +37943,36 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     EXPECT_EQ(acceptanceObserver.lastPacket, readerPacket);
     EXPECT_TRUE(transaction.packetToken(readerPacket).valid());
     EXPECT_TRUE(device.waitForIdle());
+
+    const GpuTaskGraphSubmissionStatistics submissionStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(submissionStatistics.valid());
+    EXPECT_EQ(submissionStatistics.graphGeneration, compiledGraph.generation());
+    EXPECT_EQ(submissionStatistics.planGeneration, compiledGraph.planGeneration());
+    EXPECT_EQ(submissionStatistics.deviceGeneration, compiledGraph.deviceGeneration());
+    EXPECT_EQ(submissionStatistics.acceptedPacketCount, 2u);
+    EXPECT_EQ(submissionStatistics.acceptedTaskCount, 2u);
+    EXPECT_EQ(submissionStatistics.nativeSubmissionCount, 2u);
+    EXPECT_EQ(submissionStatistics.rejectedSubmissionCount, 0u);
+    EXPECT_EQ(submissionStatistics.nativeCommandListCount, 2u);
+    EXPECT_EQ(submissionStatistics.plannedWaitTokenCount, 1u);
+    EXPECT_EQ(submissionStatistics.sameQueueWaitElisionCount, 1u);
+    EXPECT_EQ(submissionStatistics.timelineWaitCount, 0u);
+    EXPECT_EQ(submissionStatistics.mergedTimelineWaitCount, 0u);
+    EXPECT_EQ(submissionStatistics.acceptedFrontierSubmissionCount, 0u);
+    EXPECT_EQ(submissionStatistics.nativeSubmissionCountByQueueClass[CommandQueue::Graphics], 2u);
+    EXPECT_EQ(submissionStatistics.nativeCommandListCountByQueueClass[CommandQueue::Graphics], 2u);
+    EXPECT_EQ(submissionStatistics.timelineWaitCountByQueueClass[CommandQueue::Graphics], 0u);
+    EXPECT_GE(submissionStatistics.submissionSeconds, 0.0);
+
+    const GpuTaskGraphRuntimeStatistics runtimeStatistics = CollectGpuTaskGraphRuntimeStatistics(
+        compiledGraph,
+        recordedGraph,
+        transaction
+    );
+    ASSERT_TRUE(runtimeStatistics.valid());
+    EXPECT_EQ(runtimeStatistics.compile.packetCount, 2u);
+    EXPECT_EQ(runtimeStatistics.recording.commandListCount, 2u);
+    EXPECT_EQ(runtimeStatistics.submission.nativeSubmissionCount, 2u);
 }
 
 
@@ -39861,6 +39948,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     ));
     ASSERT_NE(transaction.packetRuntime(finalPacket), nullptr);
     EXPECT_EQ(transaction.packetRuntime(finalPacket)->state, GpuPacketRuntimeState::Rejected);
+    const GpuTaskGraphSubmissionStatistics rejectedSubmissionStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(rejectedSubmissionStatistics.valid());
+    EXPECT_EQ(rejectedSubmissionStatistics.acceptedPacketCount, 1u);
+    EXPECT_EQ(rejectedSubmissionStatistics.acceptedTaskCount, 1u);
+    EXPECT_EQ(rejectedSubmissionStatistics.nativeSubmissionCount, 1u);
+    EXPECT_EQ(rejectedSubmissionStatistics.rejectedSubmissionCount, 1u);
+    EXPECT_EQ(rejectedSubmissionStatistics.acceptedFrontierSubmissionCount, 0u);
     EXPECT_FALSE(recoveryRecorded);
     EXPECT_FALSE(recoveryAccepted);
     EXPECT_FALSE(recoveryDiscarded);
@@ -39884,6 +39978,18 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     EXPECT_FALSE(recoveryArmed);
     EXPECT_FALSE(recoveryRetiresTiming);
     EXPECT_FALSE(frameTransaction.needsRetirement());
+    const GpuTaskGraphSubmissionStatistics recoveredSubmissionStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(recoveredSubmissionStatistics.valid());
+    EXPECT_EQ(recoveredSubmissionStatistics.acceptedPacketCount, 2u);
+    EXPECT_EQ(recoveredSubmissionStatistics.acceptedTaskCount, 2u);
+    EXPECT_EQ(recoveredSubmissionStatistics.nativeSubmissionCount, 2u);
+    EXPECT_EQ(recoveredSubmissionStatistics.rejectedSubmissionCount, 1u);
+    EXPECT_EQ(recoveredSubmissionStatistics.acceptedFrontierSubmissionCount, 1u);
+    // The recovery packet joins the accepted frontier semantically, but its only accepted producer is on this same
+    // physical queue, so queue order removes the otherwise redundant timeline wait before native submission.
+    EXPECT_EQ(recoveredSubmissionStatistics.plannedWaitTokenCount, 0u);
+    EXPECT_EQ(recoveredSubmissionStatistics.sameQueueWaitElisionCount, 0u);
+    EXPECT_EQ(recoveredSubmissionStatistics.timelineWaitCount, 0u);
 
     EXPECT_TRUE(transaction.discardUnaccepted(
         graph,

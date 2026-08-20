@@ -105,6 +105,56 @@ struct GpuCompiledExternalResourceExport{
 };
 
 
+// Immutable compiler-side telemetry for one concrete task-graph plan. These counters describe only the accepted
+// compiler output: failed or superseded plans retain an empty snapshot, so tooling never has to reconcile partial
+// barrier/packet data with a later generation.
+struct GpuTaskGraphCompileStatistics{
+    static constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::kCount);
+    static constexpr usize s_PacketizationDecisionCount = static_cast<usize>(GpuTaskPacketizationDecision::kCount);
+
+    u64 graphGeneration = 0u;
+    u64 planGeneration = 0u;
+    u16 deviceGeneration = 0u;
+    usize taskCount = 0u;
+    usize resourceCount = 0u;
+    usize resourceUseCount = 0u;
+    // These are analysis categories, not a disjoint scheduling-edge partition: one task pair can have both an
+    // explicit declaration and inferred resource reason, so callers must not sum them as a final edge count.
+    usize explicitDependencyCount = 0u;
+    usize inferredDependencyCount = 0u;
+    usize declaredExternalDependencyCount = 0u;
+    // Initial-ownership completion reasons before per-packet completion-token deduplication.
+    usize initialOwnershipExternalDependencyCount = 0u;
+    // Total resolved task-to-packet external completion edges, including compiler-created initial-ownership waits.
+    usize externalDependencyCount = 0u;
+    usize packetCount = 0u;
+    usize packetDependencyCount = 0u;
+    usize packetExternalDependencyCount = 0u;
+    usize crossQueuePacketDependencyCount = 0u;
+    usize crossFamilyPacketDependencyCount = 0u;
+    usize mergedTaskCount = 0u;
+    usize prologueStateSeedCount = 0u;
+    usize prologueBarrierCount = 0u;
+    usize epilogueBarrierCount = 0u;
+    usize transitionBarrierCount = 0u;
+    usize uavBarrierCount = 0u;
+    usize ownershipReleaseBarrierCount = 0u;
+    usize ownershipAcquireBarrierCount = 0u;
+    usize stateExportBarrierCount = 0u;
+    // Recording-frontier depth: max packet recordingFrontier plus one, rather than the number of packets.
+    usize recordingFrontierCount = 0u;
+    usize taskCountByQueueClass[s_QueueClassCount] = {};
+    usize packetCountByQueueClass[s_QueueClassCount] = {};
+    usize packetizationDecisionCounts[s_PacketizationDecisionCount] = {};
+    f64 analysisSeconds = 0.0;
+    f64 queueAssignmentSeconds = 0.0;
+    f64 planningSeconds = 0.0;
+    f64 totalSeconds = 0.0;
+
+    [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
+};
+
+
 class GpuCompiledGraph final : NoCopy{
     friend class GpuTaskGraphCompiler;
 
@@ -178,6 +228,7 @@ public:
         const GpuGraphResourceId& resource
     )const noexcept;
     [[nodiscard]] usize externalResourceExportCount()const noexcept{ return m_externalResourceExports.size(); }
+    [[nodiscard]] const GpuTaskGraphCompileStatistics& compileStatistics()const noexcept{ return m_compileStatistics; }
     [[nodiscard]] const GpuCompiledExternalResourceExport* externalResourceExportAt(usize index)const noexcept;
     [[nodiscard]] const GpuCompiledExternalResourceExportSource* externalResourceExportSources(
         const GpuCompiledExternalResourceExport& exportInfo
@@ -201,6 +252,7 @@ private:
     u64 m_planGeneration = 0u;
     u16 m_deviceGeneration = 0u;
     usize m_graphTaskCount = 0u;
+    GpuTaskGraphCompileStatistics m_compileStatistics;
     bool m_valid = false;
 };
 

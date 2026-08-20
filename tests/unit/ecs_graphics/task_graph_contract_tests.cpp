@@ -55,6 +55,28 @@ static TestPath RepoRoot(TestArena& testArena){
 }
 
 
+// Compile, recording, and accepted-submission statistics live with the immutable graph artifacts. Keep the renderer
+// bridge by-value so debug tooling can inspect one coherent generation without reaching into private packet storage.
+TEST(EcsGraphics, DeferredGraphExposesRuntimeTelemetryArtifacts){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemHeaderSource;
+    AString systemSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", systemHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", systemSource));
+    const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
+    const AStringView system(systemSource.data(), systemSource.size());
+
+    EXPECT_TRUE(ContainsText(systemHeader, "deferredTaskGraphRuntimeStatistics()const noexcept"));
+    EXPECT_TRUE(ContainsText(system, "Core::GpuTaskGraphRuntimeStatistics RendererSystem::deferredTaskGraphRuntimeStatistics()const noexcept"));
+    EXPECT_TRUE(ContainsText(system, "Core::CollectGpuTaskGraphRuntimeStatistics("));
+    EXPECT_TRUE(ContainsText(system, "m_deferredLightingCompiledGraph,"));
+    EXPECT_TRUE(ContainsText(system, "m_deferredLightingRecordedGraph,"));
+    EXPECT_TRUE(ContainsText(system, "m_deferredLightingSubmissionTransaction"));
+}
+
+
 // Caustics and Surfel GI choose a semantic producer task at graph declaration. Keep their normal-frame merge and
 // presence validation task-based so a later packet split cannot leak compiler packet identities back into the
 // renderer's effect policy.

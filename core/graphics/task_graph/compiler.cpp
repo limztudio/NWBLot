@@ -9,6 +9,7 @@
 #include <core/graphics/backend_selection.h>
 
 #include <global/atomic.h>
+#include <global/timer.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1893,8 +1894,11 @@ bool GpuTaskGraphCompiler::compile(
     using namespace __hidden_gpu_task_graph_compiler;
 
     outCompiledGraph.reset();
+    const Timer compileBegin = TimerNow();
+    const Timer analysisBegin = compileBegin;
     if(!analyze(graph, outAnalysis, scratchArena))
         return false;
+    const f64 analysisSeconds = DurationInSeconds<f64>(TimerNow(), analysisBegin);
 
     if(!options.allowMetadataOnlyTasks){
         for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
@@ -1942,8 +1946,11 @@ bool GpuTaskGraphCompiler::compile(
         }
     }
 
+    const Timer queueAssignmentBegin = TimerNow();
     if(!assignQueues(graph, outAnalysis, topology, outAssignments, options.queueAssignmentOptions))
         return false;
+    const f64 queueAssignmentSeconds = DurationInSeconds<f64>(TimerNow(), queueAssignmentBegin);
+    const Timer planningBegin = TimerNow();
 
     if(
         topology.queueCount == 0u
@@ -3147,6 +3154,109 @@ bool GpuTaskGraphCompiler::compile(
         }
         packet.recordingFrontier = frontier;
     }
+
+    GpuTaskGraphCompileStatistics& statistics = outCompiledGraph.m_compileStatistics;
+    statistics.graphGeneration = outCompiledGraph.m_generation;
+    statistics.planGeneration = outCompiledGraph.m_planGeneration;
+    statistics.deviceGeneration = outCompiledGraph.m_deviceGeneration;
+    statistics.taskCount = graph.taskCount();
+    statistics.resourceCount = graph.resourceCount();
+    statistics.explicitDependencyCount = outAnalysis.explicitEdgeCount();
+    statistics.inferredDependencyCount = outAnalysis.inferredEdgeCount();
+    statistics.declaredExternalDependencyCount = outAnalysis.externalDependencies().size();
+    statistics.packetCount = outCompiledGraph.m_packets.size();
+    statistics.packetDependencyCount = outCompiledGraph.m_packetDependencies.size();
+    statistics.packetExternalDependencyCount = outCompiledGraph.m_packetExternalDependencies.size();
+    statistics.externalDependencyCount = statistics.packetExternalDependencyCount;
+    statistics.initialOwnershipExternalDependencyCount = initialOwnershipDependencies.size();
+    statistics.prologueStateSeedCount = outCompiledGraph.m_prologueStateSeeds.size();
+    statistics.prologueBarrierCount = outCompiledGraph.m_prologueBarriers.size();
+    statistics.epilogueBarrierCount = outCompiledGraph.m_epilogueBarriers.size();
+    for(const GpuCompiledTask& compiledTask : outCompiledGraph.m_tasks){
+        const GpuTaskGraphTaskView task = graph.taskAt(compiledTask.task.index);
+        statistics.resourceUseCount += task.resourceUseCount;
+        if(compiledTask.packetizationDecision < GpuTaskPacketizationDecision::kCount)
+            ++statistics.packetizationDecisionCounts[compiledTask.packetizationDecision];
+
+        const GpuPhysicalQueueInfo* const queue = outCompiledGraph.queueInfo(compiledTask.queue);
+        if(queue && queue->queueClass < CommandQueue::kCount)
+            ++statistics.taskCountByQueueClass[queue->queueClass];
+    }
+    for(usize packetIndex = 0u; packetIndex < outCompiledGraph.m_packets.size(); ++packetIndex){
+        const GpuSubmissionPacket& packet = outCompiledGraph.m_packets[packetIndex];
+        if(packet.taskCount > 1u)
+            statistics.mergedTaskCount += packet.taskCount - 1u;
+        if(packet.recordingFrontier != Limit<u32>::s_Max)
+            statistics.recordingFrontierCount = Max(
+                statistics.recordingFrontierCount,
+                static_cast<usize>(packet.recordingFrontier) + 1u
+            );
+
+        const GpuPhysicalQueueInfo* const queue = outCompiledGraph.queueInfo(packet.queue);
+        if(queue && queue->queueClass < CommandQueue::kCount)
+            ++statistics.packetCountByQueueClass[queue->queueClass];
+
+        const GpuPacketDependency* const dependencies = packet.dependencyCount > 0u
+            ? outCompiledGraph.m_packetDependencies.data() + packet.dependencyOffset
+            : nullptr
+        ;
+        for(u32 dependencyIndex = 0u; dependencies && dependencyIndex < packet.dependencyCount; ++dependencyIndex){
+            const GpuPacketDependency& dependency = dependencies[dependencyIndex];
+            if(
+                !dependency.producer.valid()
+                || dependency.producer.generation != outCompiledGraph.m_planGeneration
+                || dependency.producer.index >= outCompiledGraph.m_packets.size()
+            )
+                continue;
+            const GpuSubmissionPacket& producer = outCompiledGraph.m_packets[dependency.producer.index];
+            if(producer.queue == packet.queue)
+                continue;
+
+            ++statistics.crossQueuePacketDependencyCount;
+            const GpuPhysicalQueueInfo* const producerQueue = outCompiledGraph.queueInfo(producer.queue);
+            if(producerQueue && queue && producerQueue->familyIndex != queue->familyIndex)
+                ++statistics.crossFamilyPacketDependencyCount;
+        }
+    }
+    const auto countBarriers = [&](const GraphicsVector<GpuCompiledBarrier>& barriers){
+        for(const GpuCompiledBarrier& barrier : barriers){
+            switch(barrier.type){
+            case GpuCompiledBarrierType::TextureTransition:
+            case GpuCompiledBarrierType::BufferTransition:
+            case GpuCompiledBarrierType::AccelStructTransition:
+                ++statistics.transitionBarrierCount;
+                break;
+            case GpuCompiledBarrierType::TextureUav:
+            case GpuCompiledBarrierType::BufferUav:
+            case GpuCompiledBarrierType::AccelStructUav:
+                ++statistics.uavBarrierCount;
+                break;
+            case GpuCompiledBarrierType::TextureOwnershipRelease:
+            case GpuCompiledBarrierType::BufferOwnershipRelease:
+            case GpuCompiledBarrierType::AccelStructOwnershipRelease:
+                ++statistics.ownershipReleaseBarrierCount;
+                break;
+            case GpuCompiledBarrierType::TextureOwnershipAcquire:
+            case GpuCompiledBarrierType::BufferOwnershipAcquire:
+            case GpuCompiledBarrierType::AccelStructOwnershipAcquire:
+                ++statistics.ownershipAcquireBarrierCount;
+                break;
+            case GpuCompiledBarrierType::TextureStateExport:
+            case GpuCompiledBarrierType::BufferStateExport:
+            case GpuCompiledBarrierType::AccelStructStateExport:
+                ++statistics.stateExportBarrierCount;
+                break;
+            default:
+                break;
+            }
+        }
+    };
+    countBarriers(outCompiledGraph.m_prologueBarriers);
+    countBarriers(outCompiledGraph.m_epilogueBarriers);
+    statistics.analysisSeconds = analysisSeconds;
+    statistics.queueAssignmentSeconds = queueAssignmentSeconds;
+    statistics.planningSeconds = DurationInSeconds<f64>(TimerNow(), planningBegin);
+    statistics.totalSeconds = DurationInSeconds<f64>(TimerNow(), compileBegin);
 
     outCompiledGraph.m_valid = true;
     return true;

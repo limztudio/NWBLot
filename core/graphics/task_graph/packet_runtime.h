@@ -39,9 +39,32 @@ struct GpuRecordedPacket{
     CommandListHandle ownedCommandLists[s_MaxCommandLists] = {};
     CommandList* commandLists[s_MaxCommandLists] = {};
     u8 commandListCount = 0u;
+    // These fields are written before commandListCount publishes the slot. They intentionally describe the packet
+    // after graph lowering, so compile tooling can distinguish declared work from the native work that was recorded.
+    u32 taskCount = 0u;
+    u32 barrierCount = 0u;
+    f64 recordingSeconds = 0.0;
     // Zero is serial/default recording. Nonzero values identify the ready-frontier worker lease that opened this
     // packet's native command list; kept for transactional diagnostics and worker-affinity smoke coverage.
     u32 recordingWorkerIndex = 0u;
+};
+
+
+// Immutable snapshot assembled from successfully published native packet slots. Recording can be parallel, so
+// recordingSeconds is the sum of per-packet CPU work rather than elapsed wall-clock time for the whole frontier.
+struct GpuTaskGraphRecordingStatistics{
+    u64 graphGeneration = 0u;
+    u64 planGeneration = 0u;
+    u64 recordingAttemptGeneration = 0u;
+    u16 deviceGeneration = 0u;
+    usize packetCount = 0u;
+    usize taskCount = 0u;
+    usize commandListCount = 0u;
+    usize barrierCount = 0u;
+    usize parallelPacketCount = 0u;
+    f64 recordingSeconds = 0.0;
+
+    [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
 };
 
 
@@ -86,6 +109,9 @@ public:
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
     [[nodiscard]] bool validFor(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)const noexcept;
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept{ return m_recordingAttemptGeneration; }
+    // Like reset()/find(), this aggregate inspection is externally serialized with recording and reset. Individual
+    // packet slots are published only after their native list and counters are complete.
+    [[nodiscard]] GpuTaskGraphRecordingStatistics recordingStatistics(const GpuCompiledGraph& compiledGraph)const noexcept;
     [[nodiscard]] const GpuRecordedPacket* find(const GpuSubmissionPacketId& packet)const noexcept;
     // Read-only export for a later graph or cross-frame state cache that needs this packet's actual native final
     // state. Graph-internal consumers use compiler-produced state seeds instead.
@@ -408,6 +434,39 @@ struct GpuTaskGraphTaskRecordedCallback{
 };
 
 
+// Transaction-owned native submission telemetry. Wait counts describe graph-provided timeline tokens after applying
+// the same physical-queue elision and per-producer merge rules as Device::executeCommandLists(); backend-internal
+// waits outside this graph submission are intentionally excluded.
+struct GpuTaskGraphSubmissionStatistics{
+    static constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::kCount);
+
+    u64 graphGeneration = 0u;
+    u64 planGeneration = 0u;
+    u64 recordingAttemptGeneration = 0u;
+    u16 deviceGeneration = 0u;
+    // Includes accepted diagnostic/manual packet completion in addition to submitter-owned native submissions.
+    usize acceptedPacketCount = 0u;
+    // Includes every task in an accepted packet, including the manual diagnostic acceptance seam above.
+    usize acceptedTaskCount = 0u;
+    usize nativeSubmissionCount = 0u;
+    // A failure after the graph submission reservation. This can occur before the backend sees a native submit (for
+    // example while a timing ticket validates), so it is deliberately not labelled as a Vulkan rejection.
+    usize rejectedSubmissionCount = 0u;
+    usize nativeCommandListCount = 0u;
+    usize plannedWaitTokenCount = 0u;
+    usize sameQueueWaitElisionCount = 0u;
+    usize timelineWaitCount = 0u;
+    usize mergedTimelineWaitCount = 0u;
+    usize acceptedFrontierSubmissionCount = 0u;
+    usize nativeSubmissionCountByQueueClass[s_QueueClassCount] = {};
+    usize nativeCommandListCountByQueueClass[s_QueueClassCount] = {};
+    usize timelineWaitCountByQueueClass[s_QueueClassCount] = {};
+    f64 submissionSeconds = 0.0;
+
+    [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
+};
+
+
 class GpuGraphSubmissionTransaction final : NoCopy{
     friend class GpuTaskGraphSubmitter;
 
@@ -479,6 +538,7 @@ public:
     )noexcept;
 
     [[nodiscard]] bool hasAcceptedPackets()const noexcept;
+    [[nodiscard]] GpuTaskGraphSubmissionStatistics submissionStatistics()const noexcept;
     [[nodiscard]] QueueSubmissionToken packetToken(const GpuSubmissionPacketId& packet)const noexcept;
     // Resolves the current compiler packet for semantic graph work before returning its accepted submission token.
     // This is generation-checked so renderer lifecycle code cannot treat a task from an older compiled graph as
@@ -518,6 +578,15 @@ public:
 
 
 private:
+    struct NativeSubmissionInfo{
+        usize commandListCount = 0u;
+        usize plannedWaitTokenCount = 0u;
+        usize sameQueueWaitElisionCount = 0u;
+        usize timelineWaitCount = 0u;
+        usize mergedTimelineWaitCount = 0u;
+        f64 submissionSeconds = 0.0;
+    };
+
     // Reserves native submission before Device::executeCommandLists() begins. While a packet is Submitting,
     // transaction cancellation cannot run its discarded callback or claim the graph for a retry.
     [[nodiscard]] bool beginPacketSubmission(
@@ -532,7 +601,8 @@ private:
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
         const QueueSubmissionToken& token,
-        GpuTaskPacketSubmissionLease& lease
+        GpuTaskPacketSubmissionLease& lease,
+        const NativeSubmissionInfo* nativeSubmissionInfo = nullptr
     )noexcept;
     void rejectSubmittingPacket(
         GpuTaskGraph& graph,
@@ -600,9 +670,41 @@ private:
     u64 m_recordingAttemptGeneration = 0u;
     u16 m_deviceGeneration = 0u;
     u64 m_acceptedSubmissionCount = 0u;
+    GpuTaskGraphSubmissionStatistics m_submissionStatistics;
     bool m_valid = false;
     mutable Futex m_mutex;
 };
+
+
+struct GpuTaskGraphRuntimeStatistics{
+    GpuTaskGraphCompileStatistics compile;
+    GpuTaskGraphRecordingStatistics recording;
+    GpuTaskGraphSubmissionStatistics submission;
+
+    [[nodiscard]] bool valid()const noexcept{
+        return compile.valid()
+            && recording.valid()
+            && submission.valid()
+            && compile.graphGeneration == recording.graphGeneration
+            && compile.graphGeneration == submission.graphGeneration
+            && compile.planGeneration == recording.planGeneration
+            && compile.planGeneration == submission.planGeneration
+            && compile.deviceGeneration == recording.deviceGeneration
+            && compile.deviceGeneration == submission.deviceGeneration
+            && recording.recordingAttemptGeneration != 0u
+            && recording.recordingAttemptGeneration == submission.recordingAttemptGeneration
+        ;
+    }
+};
+
+
+// The returned values are immutable copies, but callers serialize this helper with recorded-graph recording/reset,
+// exactly like GpuRecordedGraph::recordingStatistics(). Transaction submission data itself is mutex-protected.
+[[nodiscard]] GpuTaskGraphRuntimeStatistics CollectGpuTaskGraphRuntimeStatistics(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuRecordedGraph& recordedGraph,
+    const GpuGraphSubmissionTransaction& transaction
+)noexcept;
 
 
 class GpuTaskGraphSubmitter final : NoCopy{

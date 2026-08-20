@@ -124,6 +124,15 @@ bool RendererSystem::setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingF
 }
 
 
+Core::GpuTaskGraphRuntimeStatistics RendererSystem::deferredTaskGraphRuntimeStatistics()const noexcept{
+    return Core::CollectGpuTaskGraphRuntimeStatistics(
+        m_deferredLightingCompiledGraph,
+        m_deferredLightingRecordedGraph,
+        m_deferredLightingSubmissionTransaction
+    );
+}
+
+
 #if !defined(NWB_FINAL)
 void RendererSystem::forceHybridSceneTraversalFallbackForTesting()noexcept{
     m_raytracingSystem.forceHybridSceneTraversalFallbackForTesting();

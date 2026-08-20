@@ -1396,6 +1396,118 @@ TEST_F(DescriptorBufferRoundTripTest, SameClassGraphicsQueuesRouteGraphPacketsAn
     EXPECT_EQ(submissionStatistics.nativeSubmissionCountByQueueClass[CommandQueue::Graphics], 2u);
     EXPECT_EQ(submissionStatistics.timelineWaitCountByQueueClass[CommandQueue::Graphics], 1u);
 
+    const GpuTaskGraphPhysicalQueueSubmissionStatistics primaryQueueStatistics =
+        transaction.physicalQueueSubmissionStatistics(
+            compiledGraph,
+            primaryGraphicsQueue
+        );
+    const GpuTaskGraphPhysicalQueueSubmissionStatistics secondaryQueueStatistics =
+        transaction.physicalQueueSubmissionStatistics(
+            compiledGraph,
+            secondaryGraphicsQueue->id
+        );
+    ASSERT_TRUE(primaryQueueStatistics.valid());
+    ASSERT_TRUE(secondaryQueueStatistics.valid());
+    EXPECT_EQ(primaryQueueStatistics.graphGeneration, compiledGraph.generation());
+    EXPECT_EQ(primaryQueueStatistics.planGeneration, compiledGraph.planGeneration());
+    EXPECT_EQ(primaryQueueStatistics.recordingAttemptGeneration, recordedGraph.recordingAttemptGeneration());
+    EXPECT_EQ(primaryQueueStatistics.deviceGeneration, compiledGraph.deviceGeneration());
+    EXPECT_EQ(primaryQueueStatistics.queue, primaryGraphicsQueue);
+    EXPECT_EQ(secondaryQueueStatistics.queue, secondaryGraphicsQueue->id);
+    EXPECT_NE(primaryQueueStatistics.queue, secondaryQueueStatistics.queue);
+    EXPECT_EQ(primaryQueueStatistics.queueClass, CommandQueue::Graphics);
+    EXPECT_EQ(secondaryQueueStatistics.queueClass, CommandQueue::Graphics);
+    EXPECT_EQ(primaryQueueStatistics.acceptedPacketCount, 1u);
+    EXPECT_EQ(primaryQueueStatistics.acceptedTaskCount, 1u);
+    EXPECT_EQ(primaryQueueStatistics.rejectedPacketCount, 0u);
+    EXPECT_EQ(primaryQueueStatistics.nativeSubmissionCount, 1u);
+    EXPECT_EQ(primaryQueueStatistics.nativeCommandListCount, 1u);
+    EXPECT_EQ(primaryQueueStatistics.plannedWaitTokenCount, 0u);
+    EXPECT_EQ(primaryQueueStatistics.sameQueueWaitElisionCount, 0u);
+    EXPECT_EQ(primaryQueueStatistics.timelineWaitCount, 0u);
+    EXPECT_EQ(primaryQueueStatistics.mergedTimelineWaitCount, 0u);
+    EXPECT_EQ(primaryQueueStatistics.acceptedFrontierSubmissionCount, 0u);
+    EXPECT_GE(primaryQueueStatistics.submissionSeconds, 0.0);
+    EXPECT_EQ(secondaryQueueStatistics.acceptedPacketCount, 1u);
+    EXPECT_EQ(secondaryQueueStatistics.acceptedTaskCount, 1u);
+    EXPECT_EQ(secondaryQueueStatistics.rejectedPacketCount, 0u);
+    EXPECT_EQ(secondaryQueueStatistics.nativeSubmissionCount, 1u);
+    EXPECT_EQ(secondaryQueueStatistics.nativeCommandListCount, 1u);
+    EXPECT_EQ(secondaryQueueStatistics.plannedWaitTokenCount, 1u);
+    EXPECT_EQ(secondaryQueueStatistics.sameQueueWaitElisionCount, 0u);
+    EXPECT_EQ(secondaryQueueStatistics.timelineWaitCount, 1u);
+    EXPECT_EQ(secondaryQueueStatistics.mergedTimelineWaitCount, 0u);
+    EXPECT_EQ(secondaryQueueStatistics.acceptedFrontierSubmissionCount, 0u);
+    EXPECT_GE(secondaryQueueStatistics.submissionSeconds, 0.0);
+    // These snapshots are taken after synchronous submission has returned, so their sum matches this aggregate
+    // snapshot without a concurrent transaction mutation window.
+    EXPECT_EQ(
+        primaryQueueStatistics.acceptedPacketCount + secondaryQueueStatistics.acceptedPacketCount,
+        submissionStatistics.acceptedPacketCount
+    );
+    EXPECT_EQ(
+        primaryQueueStatistics.acceptedTaskCount + secondaryQueueStatistics.acceptedTaskCount,
+        submissionStatistics.acceptedTaskCount
+    );
+    EXPECT_EQ(
+        primaryQueueStatistics.rejectedPacketCount + secondaryQueueStatistics.rejectedPacketCount,
+        submissionStatistics.rejectedPacketCount
+    );
+    EXPECT_EQ(
+        primaryQueueStatistics.rejectedTaskCount + secondaryQueueStatistics.rejectedTaskCount,
+        submissionStatistics.rejectedTaskCount
+    );
+    EXPECT_EQ(
+        primaryQueueStatistics.nativeSubmissionCount + secondaryQueueStatistics.nativeSubmissionCount,
+        submissionStatistics.nativeSubmissionCount
+    );
+    EXPECT_EQ(
+        primaryQueueStatistics.rejectedSubmissionCount + secondaryQueueStatistics.rejectedSubmissionCount,
+        submissionStatistics.rejectedSubmissionCount
+    );
+    EXPECT_EQ(
+        primaryQueueStatistics.nativeCommandListCount + secondaryQueueStatistics.nativeCommandListCount,
+        submissionStatistics.nativeCommandListCount
+    );
+    EXPECT_EQ(
+        primaryQueueStatistics.plannedWaitTokenCount + secondaryQueueStatistics.plannedWaitTokenCount,
+        submissionStatistics.plannedWaitTokenCount
+    );
+    EXPECT_EQ(
+        primaryQueueStatistics.sameQueueWaitElisionCount + secondaryQueueStatistics.sameQueueWaitElisionCount,
+        submissionStatistics.sameQueueWaitElisionCount
+    );
+    EXPECT_EQ(
+        primaryQueueStatistics.timelineWaitCount + secondaryQueueStatistics.timelineWaitCount,
+        submissionStatistics.timelineWaitCount
+    );
+    EXPECT_EQ(
+        primaryQueueStatistics.mergedTimelineWaitCount + secondaryQueueStatistics.mergedTimelineWaitCount,
+        submissionStatistics.mergedTimelineWaitCount
+    );
+    EXPECT_EQ(
+        primaryQueueStatistics.acceptedFrontierSubmissionCount
+            + secondaryQueueStatistics.acceptedFrontierSubmissionCount,
+        submissionStatistics.acceptedFrontierSubmissionCount
+    );
+    EXPECT_NEAR(
+        primaryQueueStatistics.submissionSeconds + secondaryQueueStatistics.submissionSeconds,
+        submissionStatistics.submissionSeconds,
+        0.000001
+    );
+    EXPECT_EQ(
+        primaryQueueStatistics.nativeSubmissionCount + secondaryQueueStatistics.nativeSubmissionCount,
+        submissionStatistics.nativeSubmissionCountByQueueClass[CommandQueue::Graphics]
+    );
+    EXPECT_EQ(
+        primaryQueueStatistics.nativeCommandListCount + secondaryQueueStatistics.nativeCommandListCount,
+        submissionStatistics.nativeCommandListCountByQueueClass[CommandQueue::Graphics]
+    );
+    EXPECT_EQ(
+        primaryQueueStatistics.timelineWaitCount + secondaryQueueStatistics.timelineWaitCount,
+        submissionStatistics.timelineWaitCountByQueueClass[CommandQueue::Graphics]
+    );
+
     const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
     ASSERT_NE(copiedWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
@@ -38320,6 +38432,32 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     EXPECT_EQ(submissionStatistics.timelineWaitCountByQueueClass[CommandQueue::Graphics], 0u);
     EXPECT_GE(submissionStatistics.submissionSeconds, 0.0);
 
+    const GpuTaskGraphPhysicalQueueSubmissionStatistics queueStatistics =
+        transaction.physicalQueueSubmissionStatistics(
+            compiledGraph,
+            queue.id
+        );
+    ASSERT_TRUE(queueStatistics.valid());
+    EXPECT_EQ(queueStatistics.graphGeneration, compiledGraph.generation());
+    EXPECT_EQ(queueStatistics.planGeneration, compiledGraph.planGeneration());
+    EXPECT_EQ(queueStatistics.recordingAttemptGeneration, recordedGraph.recordingAttemptGeneration());
+    EXPECT_EQ(queueStatistics.deviceGeneration, compiledGraph.deviceGeneration());
+    EXPECT_EQ(queueStatistics.queue, queue.id);
+    EXPECT_EQ(queueStatistics.queueClass, CommandQueue::Graphics);
+    EXPECT_EQ(queueStatistics.acceptedPacketCount, 2u);
+    EXPECT_EQ(queueStatistics.acceptedTaskCount, 2u);
+    EXPECT_EQ(queueStatistics.rejectedPacketCount, 0u);
+    EXPECT_EQ(queueStatistics.rejectedTaskCount, 0u);
+    EXPECT_EQ(queueStatistics.nativeSubmissionCount, 2u);
+    EXPECT_EQ(queueStatistics.rejectedSubmissionCount, 0u);
+    EXPECT_EQ(queueStatistics.nativeCommandListCount, 2u);
+    EXPECT_EQ(queueStatistics.plannedWaitTokenCount, 1u);
+    EXPECT_EQ(queueStatistics.sameQueueWaitElisionCount, 1u);
+    EXPECT_EQ(queueStatistics.timelineWaitCount, 0u);
+    EXPECT_EQ(queueStatistics.mergedTimelineWaitCount, 0u);
+    EXPECT_EQ(queueStatistics.acceptedFrontierSubmissionCount, 0u);
+    EXPECT_GE(queueStatistics.submissionSeconds, 0.0);
+
     const GpuTaskGraphRuntimeStatistics runtimeStatistics = CollectGpuTaskGraphRuntimeStatistics(
         compiledGraph,
         recordedGraph,
@@ -41234,6 +41372,19 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_EQ(transaction.packetRuntime(rejectedSuffixPacket)->state, GpuPacketRuntimeState::Rejected);
     ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
     EXPECT_EQ(transaction.packetRuntime(recoveryPacket)->state, GpuPacketRuntimeState::Declared);
+    const GpuTaskGraphPhysicalQueueSubmissionStatistics rejectedGraphicsQueueStatistics =
+        transaction.physicalQueueSubmissionStatistics(
+            compiledGraph,
+            graphicsQueue
+        );
+    ASSERT_TRUE(rejectedGraphicsQueueStatistics.valid());
+    EXPECT_EQ(rejectedGraphicsQueueStatistics.queue, graphicsQueue);
+    EXPECT_EQ(rejectedGraphicsQueueStatistics.acceptedPacketCount, 0u);
+    EXPECT_EQ(rejectedGraphicsQueueStatistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(rejectedGraphicsQueueStatistics.rejectedTaskCount, 1u);
+    EXPECT_EQ(rejectedGraphicsQueueStatistics.nativeSubmissionCount, 0u);
+    EXPECT_EQ(rejectedGraphicsQueueStatistics.rejectedSubmissionCount, 1u);
+    EXPECT_EQ(rejectedGraphicsQueueStatistics.nativeCommandListCount, 0u);
 
     Vector<QueueSubmissionToken, Alloc::ScratchArena> recoveryWaitTokens(scratchArena);
     ASSERT_TRUE(transaction.appendAcceptedQueueFrontierWaitTokens(graphicsQueue, recoveryWaitTokens));
@@ -41268,6 +41419,26 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_EQ(recoveryToken.queue, CommandQueue::Graphics);
     EXPECT_TRUE(recoveryToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
     ASSERT_TRUE(device.waitForIdle());
+
+    const GpuTaskGraphPhysicalQueueSubmissionStatistics recoveredGraphicsQueueStatistics =
+        transaction.physicalQueueSubmissionStatistics(
+            compiledGraph,
+            graphicsQueue
+        );
+    ASSERT_TRUE(recoveredGraphicsQueueStatistics.valid());
+    EXPECT_EQ(recoveredGraphicsQueueStatistics.acceptedPacketCount, 1u);
+    EXPECT_EQ(recoveredGraphicsQueueStatistics.acceptedTaskCount, 1u);
+    EXPECT_EQ(recoveredGraphicsQueueStatistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(recoveredGraphicsQueueStatistics.rejectedTaskCount, 1u);
+    EXPECT_EQ(recoveredGraphicsQueueStatistics.nativeSubmissionCount, 1u);
+    EXPECT_EQ(recoveredGraphicsQueueStatistics.rejectedSubmissionCount, 1u);
+    EXPECT_EQ(recoveredGraphicsQueueStatistics.nativeCommandListCount, 1u);
+    EXPECT_EQ(recoveredGraphicsQueueStatistics.plannedWaitTokenCount, 1u);
+    EXPECT_EQ(recoveredGraphicsQueueStatistics.sameQueueWaitElisionCount, 0u);
+    EXPECT_EQ(recoveredGraphicsQueueStatistics.timelineWaitCount, 1u);
+    EXPECT_EQ(recoveredGraphicsQueueStatistics.mergedTimelineWaitCount, 0u);
+    EXPECT_EQ(recoveredGraphicsQueueStatistics.acceptedFrontierSubmissionCount, 1u);
+    EXPECT_GE(recoveredGraphicsQueueStatistics.submissionSeconds, 0.0);
 
     EXPECT_TRUE(transaction.discardUnaccepted(
         graph,

@@ -310,6 +310,19 @@ namespace GpuPacketRuntimeState{
 struct GpuPacketRuntime{
     GpuPacketRuntimeState::Enum state = GpuPacketRuntimeState::Declared;
     QueueSubmissionToken token;
+    // Native counters are committed only after the graph lifecycle accepts the submission. Direct diagnostic packet
+    // acceptance remains visible through `state`/`token`, while these fields intentionally stay empty because no
+    // Device::executeCommandLists() call occurred.
+    usize nativeCommandListCount = 0u;
+    usize plannedWaitTokenCount = 0u;
+    usize sameQueueWaitElisionCount = 0u;
+    usize timelineWaitCount = 0u;
+    usize mergedTimelineWaitCount = 0u;
+    f64 submissionSeconds = 0.0;
+    bool hasNativeSubmission = false;
+    // A post-reservation submit-path failure is terminally rejected, but ordinary discard/rejection never sets this
+    // flag. It can occur before the backend execute call, such as while validating a timing ticket.
+    bool nativeSubmissionRejected = false;
 };
 
 struct GpuTaskGraphExternalCompletionToken{
@@ -481,6 +494,44 @@ struct GpuTaskGraphSubmissionStatistics{
 };
 
 
+// Immutable-by-value native submission telemetry for one exact physical queue in one graph transaction. The queue
+// identity includes its device generation, so an auxiliary same-class queue or a recreated device cannot alias this
+// result. Native-success counters intentionally exclude manual diagnostic packet acceptance. `rejectedSubmissionCount`
+// separately reports packets rejected after the transaction reserves the submit path, including a failure before
+// the backend execute call.
+struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
+    u64 graphGeneration = 0u;
+    u64 planGeneration = 0u;
+    u64 recordingAttemptGeneration = 0u;
+    u16 deviceGeneration = 0u;
+    GpuPhysicalQueueId queue;
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
+    usize acceptedPacketCount = 0u;
+    usize acceptedTaskCount = 0u;
+    usize rejectedPacketCount = 0u;
+    usize rejectedTaskCount = 0u;
+    usize nativeSubmissionCount = 0u;
+    usize rejectedSubmissionCount = 0u;
+    usize nativeCommandListCount = 0u;
+    usize plannedWaitTokenCount = 0u;
+    usize sameQueueWaitElisionCount = 0u;
+    usize timelineWaitCount = 0u;
+    usize mergedTimelineWaitCount = 0u;
+    usize acceptedFrontierSubmissionCount = 0u;
+    f64 submissionSeconds = 0.0;
+
+    [[nodiscard]] bool valid()const noexcept{
+        return graphGeneration != 0u
+            && planGeneration != 0u
+            && deviceGeneration != 0u
+            && queue.valid()
+            && queue.deviceGeneration == deviceGeneration
+            && queueClass < CommandQueue::kCount
+        ;
+    }
+};
+
+
 class GpuGraphSubmissionTransaction final : NoCopy{
     friend class GpuTaskGraphSubmitter;
 
@@ -553,6 +604,14 @@ public:
 
     [[nodiscard]] bool hasAcceptedPackets()const noexcept;
     [[nodiscard]] GpuTaskGraphSubmissionStatistics submissionStatistics()const noexcept;
+    // Aggregates one full physical-queue snapshot while holding the transaction mutex. Invalid/stale queue IDs and
+    // a transaction from another compiled plan return an empty result instead of borrowing packet-runtime storage.
+    // The result owns every transaction field, but aggregation borrows compiled-graph plan storage. Callers must
+    // externally serialize this query with compiled-graph reset/recompile, matching recorded-graph statistics.
+    [[nodiscard]] GpuTaskGraphPhysicalQueueSubmissionStatistics physicalQueueSubmissionStatistics(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuPhysicalQueueId& queue
+    )const noexcept;
     [[nodiscard]] QueueSubmissionToken packetToken(const GpuSubmissionPacketId& packet)const noexcept;
     // Resolves the current compiler packet for semantic graph work before returning its accepted submission token.
     // This is generation-checked so renderer lifecycle code cannot treat a task from an older compiled graph as

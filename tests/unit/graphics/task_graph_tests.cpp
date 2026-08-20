@@ -8339,6 +8339,43 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_EQ(discardedCount, 0u);
     EXPECT_EQ(acceptedToken.queue, firstToken.queue);
     EXPECT_EQ(acceptedToken.value, firstToken.value);
+    const Graphics::GpuTaskGraphPhysicalQueueSubmissionStatistics firstQueueStatistics =
+        transaction.physicalQueueSubmissionStatistics(
+            compiledGraph,
+            firstQueue
+        );
+    ASSERT_TRUE(firstQueueStatistics.valid());
+    EXPECT_EQ(firstQueueStatistics.graphGeneration, compiledGraph.generation());
+    EXPECT_EQ(firstQueueStatistics.planGeneration, compiledGraph.planGeneration());
+    EXPECT_EQ(firstQueueStatistics.recordingAttemptGeneration, graph.recordingAttemptGeneration());
+    EXPECT_EQ(firstQueueStatistics.deviceGeneration, compiledGraph.deviceGeneration());
+    EXPECT_EQ(firstQueueStatistics.queue, firstQueue);
+    EXPECT_EQ(firstQueueStatistics.queueClass, Graphics::CommandQueue::Compute);
+    EXPECT_EQ(firstQueueStatistics.acceptedPacketCount, 1u);
+    EXPECT_EQ(firstQueueStatistics.acceptedTaskCount, 1u);
+    EXPECT_EQ(firstQueueStatistics.rejectedPacketCount, 0u);
+    EXPECT_EQ(firstQueueStatistics.rejectedTaskCount, 0u);
+    // Direct diagnostic acceptance has no Device::executeCommandLists() result to attribute.
+    EXPECT_EQ(firstQueueStatistics.nativeSubmissionCount, 0u);
+    EXPECT_EQ(firstQueueStatistics.rejectedSubmissionCount, 0u);
+    EXPECT_EQ(firstQueueStatistics.nativeCommandListCount, 0u);
+    EXPECT_EQ(firstQueueStatistics.plannedWaitTokenCount, 0u);
+    EXPECT_EQ(firstQueueStatistics.timelineWaitCount, 0u);
+    EXPECT_EQ(firstQueueStatistics.acceptedFrontierSubmissionCount, 0u);
+    EXPECT_EQ(firstQueueStatistics.submissionSeconds, 0.0);
+    const Graphics::GpuPhysicalQueueId staleFirstQueue{
+        firstQueue.index,
+        static_cast<u16>(
+            firstQueue.deviceGeneration == Limit<u16>::s_Max
+                ? 1u
+                : firstQueue.deviceGeneration + 1u
+        ),
+    };
+    EXPECT_FALSE(transaction.physicalQueueSubmissionStatistics(compiledGraph, staleFirstQueue).valid());
+    // A current-generation ID is still invalid when the compiled plan has no matching physical topology entry.
+    const Graphics::GpuPhysicalQueueId nonPlanQueue{ 3u, compiledGraph.deviceGeneration() };
+    EXPECT_TRUE(nonPlanQueue.valid());
+    EXPECT_FALSE(transaction.physicalQueueSubmissionStatistics(compiledGraph, nonPlanQueue).valid());
     ASSERT_NE(transaction.latestAcceptedToken(compiledGraph.packet(firstPacket).queue), nullptr);
     EXPECT_EQ(transaction.latestAcceptedToken(compiledGraph.packet(firstPacket).queue)->value, firstToken.value);
     EXPECT_EQ(transaction.latestAcceptedToken(recoveryQueue), nullptr);
@@ -8389,6 +8426,20 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_EQ(rejectedTaskStatistics.rejectedPacketCount, 1u);
     EXPECT_EQ(rejectedTaskStatistics.rejectedTaskCount, 1u);
     EXPECT_EQ(rejectedTaskStatistics.rejectedSubmissionCount, 0u);
+    const Graphics::GpuPhysicalQueueId secondQueue = compiledGraph.packet(secondPacket).queue;
+    const Graphics::GpuTaskGraphPhysicalQueueSubmissionStatistics secondQueueStatistics =
+        transaction.physicalQueueSubmissionStatistics(
+            compiledGraph,
+            secondQueue
+        );
+    ASSERT_TRUE(secondQueueStatistics.valid());
+    EXPECT_EQ(secondQueueStatistics.queue, secondQueue);
+    EXPECT_EQ(secondQueueStatistics.queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(secondQueueStatistics.acceptedPacketCount, 0u);
+    EXPECT_EQ(secondQueueStatistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(secondQueueStatistics.rejectedTaskCount, 1u);
+    EXPECT_EQ(secondQueueStatistics.nativeSubmissionCount, 0u);
+    EXPECT_EQ(secondQueueStatistics.rejectedSubmissionCount, 0u);
     ASSERT_NE(transaction.packetRuntime(secondPacket), nullptr);
     EXPECT_EQ(
         transaction.packetRuntime(secondPacket)->state,
@@ -8407,6 +8458,14 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_EQ(repeatedRejectedTaskStatistics.rejectedPacketCount, 1u);
     EXPECT_EQ(repeatedRejectedTaskStatistics.rejectedTaskCount, 1u);
     EXPECT_EQ(repeatedRejectedTaskStatistics.rejectedSubmissionCount, 0u);
+    const Graphics::GpuTaskGraphPhysicalQueueSubmissionStatistics repeatedSecondQueueStatistics =
+        transaction.physicalQueueSubmissionStatistics(
+            compiledGraph,
+            secondQueue
+        );
+    EXPECT_EQ(repeatedSecondQueueStatistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(repeatedSecondQueueStatistics.rejectedTaskCount, 1u);
+    EXPECT_EQ(repeatedSecondQueueStatistics.rejectedSubmissionCount, 0u);
 
     Core::Alloc::ScratchArena recoveryScratchArena(s_TaskGraphScratchArena);
     Vector<Graphics::QueueSubmissionToken, Core::Alloc::ScratchArena> recoveryWaitTokens(recoveryScratchArena);

@@ -29,6 +29,12 @@ namespace __hidden_graphics{
 using UploadBytes = Vector<u8, Alloc::GlobalArena>;
 constexpr u32 s_DefaultWaveLaneCount = 64u;
 inline constexpr Name s_GraphicsFrameCpuTimingScope("graphics.frame");
+inline constexpr Name s_GraphicsAnimateCpuTimingScope("graphics.animate");
+inline constexpr Name s_GraphicsBeginFrameCpuTimingScope("graphics.begin_frame");
+inline constexpr Name s_GraphicsFramePreambleCpuTimingScope("graphics.frame_preamble");
+inline constexpr Name s_GraphicsRenderCpuTimingScope("graphics.render");
+inline constexpr Name s_GraphicsPresentCpuTimingScope("graphics.present");
+inline constexpr Name s_GraphicsGarbageCollectCpuTimingScope("graphics.garbage_collect");
 // Before per-upload timing exists, retain small setup copies on Graphics. Large asset payloads are the first
 // Transfer migration target; callers that know a small upload benefits from a dedicated transport can still request
 // CommandQueue::Transfer explicitly.
@@ -1020,6 +1026,46 @@ constexpr bool IsFp16CoopVecFormat(const CooperativeVectorMatMulFormatCombo& com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct Graphics::CpuTimingPhaseBatch final : NoCopy{
+private:
+    struct PhaseTiming{
+        Name scopeName = NAME_NONE;
+        f64 seconds = 0.0;
+    };
+
+    static constexpr u32 s_MaxPhaseCount = 6u;
+    Array<PhaseTiming, s_MaxPhaseCount> m_phases = {};
+    u32 m_phaseCount = 0u;
+
+
+public:
+    void stage(const Name& scopeName, const Timer begin){
+        NWB_ASSERT(m_phaseCount < s_MaxPhaseCount);
+        if(m_phaseCount >= s_MaxPhaseCount)
+            return;
+
+        PhaseTiming& phase = m_phases[m_phaseCount];
+        phase.scopeName = scopeName;
+        phase.seconds = DurationInSeconds<f64>(TimerNow(), begin);
+        ++m_phaseCount;
+    }
+
+    void flush(Perf::TimingSink& timing, const u64 sampleFrameIndex)const{
+        if(!timing.enabled())
+            return;
+
+        for(u32 phaseIndex = 0u; phaseIndex < m_phaseCount; ++phaseIndex){
+            const PhaseTiming& phase = m_phases[phaseIndex];
+            const Perf::TimingScopeId scope = timing.registerScope(phase.scopeName);
+            timing.recordSample(scope, phase.seconds, sampleFrameIndex);
+        }
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void Graphics::BackBufferResizingCallback(void* userData){
     if(auto* graphics = static_cast<Graphics*>(userData))
         graphics->backBufferResizing();
@@ -1552,8 +1598,8 @@ bool Graphics::shouldRenderUnfocused()const{
 
 bool Graphics::runFrame(){
     // This deliberately spans the complete logical graphics frame: normal presentation, headless no-window work,
-    // and submission-suspended maintenance. Keep future phase scopes separate so they do not overlap this base
-    // measurement. Record only a successful call so a failed frame can never be published with a later one.
+    // and submission-suspended maintenance. Detailed phase scopes sit within this aggregate, so consumers must not
+    // sum them with it. Record only a successful call so a failed frame can never be published with a later one.
     const bool recordFrameTiming = m_cpuTiming && m_cpuTiming->enabled();
     Perf::TimingScopeId frameTimingScope;
     Timer frameTimingBegin;
@@ -1564,13 +1610,19 @@ bool Graphics::runFrame(){
     }
 
     if(!m_frameSubmissionSuspended){
-        const bool rendered = animateRenderPresent();
-        if(rendered && recordFrameTiming)
+        if(!recordFrameTiming)
+            return animateRenderPresent();
+
+        CpuTimingPhaseBatch phaseTiming;
+        const bool rendered = animateRenderPresentInternal(&phaseTiming);
+        if(rendered){
             m_cpuTiming->recordSample(
                 frameTimingScope,
                 DurationInSeconds<f64>(TimerNow(), frameTimingBegin),
                 sampleFrameIndex
             );
+            phaseTiming.flush(*m_cpuTiming, sampleFrameIndex);
+        }
         return rendered;
     }
 
@@ -1596,6 +1648,10 @@ bool Graphics::runFrame(){
 }
 
 bool Graphics::animateRenderPresent(){
+    return animateRenderPresentInternal(nullptr);
+}
+
+bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTiming){
     if(m_deviceRecreationRequested)
         return false;
 
@@ -1616,7 +1672,12 @@ bool Graphics::animateRenderPresent(){
             m_prevDPIScaleFactorY = m_dpiScaleFactorY;
         }
 
+        Timer animateBegin;
+        if(phaseTiming)
+            animateBegin = TimerNow();
         animate(elapsedTime);
+        if(phaseTiming)
+            phaseTiming->stage(__hidden_graphics::s_GraphicsAnimateCpuTimingScope, animateBegin);
 
         if(m_frameIndex > 0 || !m_skipRenderOnFirstFrame){
             const BackBufferResizeCallbacks resizeCallbacks = {
@@ -1624,14 +1685,31 @@ bool Graphics::animateRenderPresent(){
                 &Graphics::BackBufferResizingCallback,
                 &Graphics::BackBufferResizedCallback,
             };
-            if(m_backend->beginFrame(resizeCallbacks)){
-                if(!prepareFramePreamble()){
+            Timer beginFrameBegin;
+            if(phaseTiming)
+                beginFrameBegin = TimerNow();
+            const bool frameBegan = m_backend->beginFrame(resizeCallbacks);
+            if(phaseTiming)
+                phaseTiming->stage(__hidden_graphics::s_GraphicsBeginFrameCpuTimingScope, beginFrameBegin);
+            if(frameBegan){
+                Timer framePreambleBegin;
+                if(phaseTiming)
+                    framePreambleBegin = TimerNow();
+                const bool preamblePrepared = prepareFramePreamble();
+                if(phaseTiming)
+                    phaseTiming->stage(__hidden_graphics::s_GraphicsFramePreambleCpuTimingScope, framePreambleBegin);
+                if(!preamblePrepared){
                     if(device.isDeviceLost())
                         requestDeviceRecreation();
                     return false;
                 }
 
+                Timer renderBegin;
+                if(phaseTiming)
+                    renderBegin = TimerNow();
                 render();
+                if(phaseTiming)
+                    phaseTiming->stage(__hidden_graphics::s_GraphicsRenderCpuTimingScope, renderBegin);
 
                 if(m_deviceRecreationRequested || device.isDeviceLost()){
                     if(device.isDeviceLost())
@@ -1639,7 +1717,13 @@ bool Graphics::animateRenderPresent(){
                     return false;
                 }
 
-                if(!m_backend->present()){
+                Timer presentBegin;
+                if(phaseTiming)
+                    presentBegin = TimerNow();
+                const bool presented = m_backend->present();
+                if(phaseTiming)
+                    phaseTiming->stage(__hidden_graphics::s_GraphicsPresentCpuTimingScope, presentBegin);
+                if(!presented){
                     if(device.isDeviceLost())
                         requestDeviceRecreation();
                     return false;
@@ -1657,7 +1741,12 @@ bool Graphics::animateRenderPresent(){
 
     YieldThread();
 
+    Timer garbageCollectionBegin;
+    if(phaseTiming)
+        garbageCollectionBegin = TimerNow();
     device.runGarbageCollection();
+    if(phaseTiming)
+        phaseTiming->stage(__hidden_graphics::s_GraphicsGarbageCollectCpuTimingScope, garbageCollectionBegin);
     if(device.isDeviceLost()){
         requestDeviceRecreation();
         return false;

@@ -331,6 +331,12 @@ TEST_F(DescriptorBufferRoundTripTest, FramePublishesMainThreadCpuTimingScopes){
     EXPECT_EQ(disabledTiming.scopeCount(), 0u);
     EXPECT_FALSE(disabledTiming.stats(Name("frame.project_update")).valid());
     EXPECT_FALSE(disabledTiming.stats(Name("graphics.frame")).valid());
+    EXPECT_FALSE(disabledTiming.stats(Name("graphics.animate")).valid());
+    EXPECT_FALSE(disabledTiming.stats(Name("graphics.begin_frame")).valid());
+    EXPECT_FALSE(disabledTiming.stats(Name("graphics.frame_preamble")).valid());
+    EXPECT_FALSE(disabledTiming.stats(Name("graphics.render")).valid());
+    EXPECT_FALSE(disabledTiming.stats(Name("graphics.present")).valid());
+    EXPECT_FALSE(disabledTiming.stats(Name("graphics.garbage_collect")).valid());
 
     Perf::CaptureOptions cpuCapture;
     cpuCapture.enabled = true;
@@ -344,6 +350,8 @@ TEST_F(DescriptorBufferRoundTripTest, FramePublishesMainThreadCpuTimingScopes){
     const Perf::TimingView cpuTiming = frame.perfSession().cpuTimingView();
     const Perf::TimingStats& projectUpdateStats = cpuTiming.stats(Name("frame.project_update"));
     const Perf::TimingStats& graphicsFrameStats = cpuTiming.stats(Name("graphics.frame"));
+    const Perf::TimingStats& garbageCollectStats = cpuTiming.stats(Name("graphics.garbage_collect"));
+    EXPECT_EQ(cpuTiming.scopeCount(), 3u);
     EXPECT_EQ(projectUpdateStats.sampleCount, 1u);
     EXPECT_EQ(projectUpdateStats.firstSampleFrameIndex, sampleFrameIndex);
     EXPECT_EQ(projectUpdateStats.lastSampleFrameIndex, sampleFrameIndex);
@@ -352,6 +360,33 @@ TEST_F(DescriptorBufferRoundTripTest, FramePublishesMainThreadCpuTimingScopes){
     EXPECT_EQ(graphicsFrameStats.firstSampleFrameIndex, sampleFrameIndex);
     EXPECT_EQ(graphicsFrameStats.lastSampleFrameIndex, sampleFrameIndex);
     EXPECT_EQ(graphicsFrameStats.publishFrameIndex, sampleFrameIndex);
+    EXPECT_EQ(garbageCollectStats.sampleCount, 1u);
+    EXPECT_EQ(garbageCollectStats.firstSampleFrameIndex, graphicsFrameStats.firstSampleFrameIndex);
+    EXPECT_EQ(garbageCollectStats.lastSampleFrameIndex, graphicsFrameStats.lastSampleFrameIndex);
+    EXPECT_EQ(garbageCollectStats.publishFrameIndex, graphicsFrameStats.publishFrameIndex);
+    EXPECT_FALSE(cpuTiming.stats(Name("graphics.animate")).valid());
+    EXPECT_FALSE(cpuTiming.stats(Name("graphics.begin_frame")).valid());
+    EXPECT_FALSE(cpuTiming.stats(Name("graphics.frame_preamble")).valid());
+    EXPECT_FALSE(cpuTiming.stats(Name("graphics.render")).valid());
+    EXPECT_FALSE(cpuTiming.stats(Name("graphics.present")).valid());
+
+    frame.graphics().setFrameSubmissionSuspended(true);
+    const u64 suspendedFrameIndex = frame.graphics().getFrameIndex();
+    ASSERT_TRUE(frame.update(0.f));
+
+    const Perf::TimingView suspendedCpuTiming = frame.perfSession().cpuTimingView();
+    const Perf::TimingStats& suspendedGraphicsFrameStats = suspendedCpuTiming.stats(Name("graphics.frame"));
+    EXPECT_EQ(suspendedCpuTiming.scopeCount(), 3u);
+    EXPECT_EQ(suspendedGraphicsFrameStats.sampleCount, 1u);
+    EXPECT_EQ(suspendedGraphicsFrameStats.firstSampleFrameIndex, suspendedFrameIndex);
+    EXPECT_EQ(suspendedGraphicsFrameStats.lastSampleFrameIndex, suspendedFrameIndex);
+    EXPECT_EQ(suspendedGraphicsFrameStats.publishFrameIndex, suspendedFrameIndex);
+    EXPECT_FALSE(suspendedCpuTiming.stats(Name("graphics.garbage_collect")).valid());
+    EXPECT_FALSE(suspendedCpuTiming.stats(Name("graphics.animate")).valid());
+    EXPECT_FALSE(suspendedCpuTiming.stats(Name("graphics.begin_frame")).valid());
+    EXPECT_FALSE(suspendedCpuTiming.stats(Name("graphics.frame_preamble")).valid());
+    EXPECT_FALSE(suspendedCpuTiming.stats(Name("graphics.render")).valid());
+    EXPECT_FALSE(suspendedCpuTiming.stats(Name("graphics.present")).valid());
 }
 
 

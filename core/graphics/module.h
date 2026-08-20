@@ -136,6 +136,10 @@ public:
 
 
 private:
+    // runFrame creates this on the stack only for a capture-enabled normal frame. It stages phase values without
+    // touching the TimingSink, so a failed frame cannot make a partial phase scope observable.
+    struct CpuTimingPhaseBatch;
+
     static void BackBufferResizingCallback(void* userData);
     static void BackBufferResizedCallback(void* userData);
 
@@ -313,6 +317,10 @@ public:
     void notifyPointerScaleChanged()const;
     [[nodiscard]] bool shouldRenderUnfocused()const;
     bool animateRenderPresent();
+
+
+private:
+    bool animateRenderPresentInternal(CpuTimingPhaseBatch* phaseTiming);
 
 
 private:

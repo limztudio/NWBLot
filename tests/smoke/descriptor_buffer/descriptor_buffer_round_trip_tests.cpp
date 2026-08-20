@@ -1072,6 +1072,79 @@ struct WorkerAffinedPacketTask{
 };
 
 
+struct DescriptorHeapStorageBufferDispatchPushConstants{
+    u32 storageBufferSlot = 0u;
+    u32 seed = 0u;
+    u32 pad0 = 0u;
+    u32 pad1 = 0u;
+};
+static_assert(sizeof(DescriptorHeapStorageBufferDispatchPushConstants) == sizeof(u32) * 4u);
+static_assert(NWB_BINDLESS_HEAP_RESOURCE_SET == 8u);
+static_assert(NWB_BINDLESS_HEAP_SAMPLER_SET == 9u);
+static_assert(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER == 3u);
+
+
+// Test-only embedded Vulkan 1.3 compute module. Generated in a temporary file with glslc
+// --target-env=vulkan1.3 -fshader-stage=compute -O and validated by spirv-val --target-env vulkan1.3.
+// It deliberately resolves the production runtime StorageBuffer table at set 8 / binding 3.
+static constexpr u32 s_DescriptorHeapStorageBufferDispatchSpirv[] = {
+    0x07230203u, 0x00010600u, 0x000d000bu, 0x00000026u, 0x00000000u,
+    0x00020011u, 0x00000001u, 0x00020011u, 0x000014b5u, 0x00020011u, 0x000014b6u, 0x00020011u, 0x000014bcu,
+    0x0006000bu, 0x00000001u, 0x4c534c47u, 0x6474732eu, 0x3035342eu, 0x00000000u,
+    0x0003000eu, 0x00000000u, 0x00000001u,
+    0x0008000fu, 0x00000005u, 0x00000004u, 0x6e69616du, 0x00000000u, 0x0000000bu, 0x00000014u, 0x00000017u,
+    0x00060010u, 0x00000004u, 0x00000011u, 0x00000001u, 0x00000001u, 0x00000001u,
+    0x00040047u, 0x0000000bu, 0x0000000bu, 0x0000001cu,
+    0x00040047u, 0x00000010u, 0x00000006u, 0x00000004u,
+    0x00030047u, 0x00000011u, 0x00000002u,
+    0x00050048u, 0x00000011u, 0x00000000u, 0x00000023u, 0x00000000u,
+    0x00040047u, 0x00000014u, 0x00000021u, 0x00000003u,
+    0x00040047u, 0x00000014u, 0x00000022u, 0x00000008u,
+    0x00030047u, 0x00000015u, 0x00000002u,
+    0x00050048u, 0x00000015u, 0x00000000u, 0x00000023u, 0x00000000u,
+    0x00050048u, 0x00000015u, 0x00000001u, 0x00000023u, 0x00000004u,
+    0x00050048u, 0x00000015u, 0x00000002u, 0x00000023u, 0x00000008u,
+    0x00050048u, 0x00000015u, 0x00000003u, 0x00000023u, 0x0000000cu,
+    0x00030047u, 0x0000001du, 0x000014b4u,
+    0x00030047u, 0x00000025u, 0x000014b4u,
+    0x00020013u, 0x00000002u,
+    0x00030021u, 0x00000003u, 0x00000002u,
+    0x00040015u, 0x00000006u, 0x00000020u, 0x00000000u,
+    0x00040017u, 0x00000009u, 0x00000006u, 0x00000003u,
+    0x00040020u, 0x0000000au, 0x00000001u, 0x00000009u,
+    0x0004003bu, 0x0000000au, 0x0000000bu, 0x00000001u,
+    0x0004002bu, 0x00000006u, 0x0000000cu, 0x00000000u,
+    0x00040020u, 0x0000000du, 0x00000001u, 0x00000006u,
+    0x0003001du, 0x00000010u, 0x00000006u,
+    0x0003001eu, 0x00000011u, 0x00000010u,
+    0x0003001du, 0x00000012u, 0x00000011u,
+    0x00040020u, 0x00000013u, 0x0000000cu, 0x00000012u,
+    0x0004003bu, 0x00000013u, 0x00000014u, 0x0000000cu,
+    0x0006001eu, 0x00000015u, 0x00000006u, 0x00000006u, 0x00000006u, 0x00000006u,
+    0x00040020u, 0x00000016u, 0x00000009u, 0x00000015u,
+    0x0004003bu, 0x00000016u, 0x00000017u, 0x00000009u,
+    0x00040015u, 0x00000018u, 0x00000020u, 0x00000001u,
+    0x0004002bu, 0x00000018u, 0x00000019u, 0x00000000u,
+    0x00040020u, 0x0000001au, 0x00000009u, 0x00000006u,
+    0x0004002bu, 0x00000018u, 0x0000001fu, 0x00000001u,
+    0x00040020u, 0x00000024u, 0x0000000cu, 0x00000006u,
+    0x00050036u, 0x00000002u, 0x00000004u, 0x00000000u, 0x00000003u,
+    0x000200f8u, 0x00000005u,
+    0x00050041u, 0x0000000du, 0x0000000eu, 0x0000000bu, 0x0000000cu,
+    0x0004003du, 0x00000006u, 0x0000000fu, 0x0000000eu,
+    0x00050041u, 0x0000001au, 0x0000001bu, 0x00000017u, 0x00000019u,
+    0x0004003du, 0x00000006u, 0x0000001cu, 0x0000001bu,
+    0x00040053u, 0x00000006u, 0x0000001du, 0x0000001cu,
+    0x00050041u, 0x0000001au, 0x00000020u, 0x00000017u, 0x0000001fu,
+    0x0004003du, 0x00000006u, 0x00000021u, 0x00000020u,
+    0x00050080u, 0x00000006u, 0x00000023u, 0x00000021u, 0x0000000fu,
+    0x00070041u, 0x00000024u, 0x00000025u, 0x00000014u, 0x0000001du, 0x00000019u, 0x0000000fu,
+    0x0003003eu, 0x00000025u, 0x00000023u,
+    0x000100fdu,
+    0x00010038u,
+};
+
+
 // Minimal Vulkan 1.3 compute shader: `void main(){}`. The retirement test needs a real pipeline layout containing
 // the heap's explicit set-8/9 layouts so CommandList::bindDescriptorBufferHeap records an actual heap use.
 static constexpr u32 s_DescriptorHeapRetirementComputeSpirv[] = {
@@ -45955,6 +46028,121 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetiredAndDoubleFreed
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     EXPECT_NE(first, second);
+}
+
+
+// The production heap is the only descriptor transport: an indexed write through its runtime StorageBuffer table
+// must reach a CPU-readable UAV without falling back to a classic descriptor set.
+TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapStorageBufferDispatchesAndReadsBack){
+    constexpr u32 dispatchWordCount = 4u;
+    constexpr u32 dispatchSeed = 0x4e57424cu;
+
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
+    ASSERT_TRUE(heap.getResourceLayout());
+    ASSERT_TRUE(heap.getSamplerLayout());
+
+    EXPECT_EQ(heap.getResourceSetIndex(), static_cast<u32>(NWB_BINDLESS_HEAP_RESOURCE_SET));
+    EXPECT_EQ(heap.getSamplerSetIndex(), static_cast<u32>(NWB_BINDLESS_HEAP_SAMPLER_SET));
+    EXPECT_EQ(
+        heap.getRegisterSlot(GpuDescriptorClass::StorageBuffer),
+        static_cast<u32>(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER)
+    );
+
+    BindingLayoutDesc pushLayoutDesc(DescriptorBufferRoundTripTest::arena());
+    pushLayoutDesc
+        .setVisibility(ShaderType::Compute)
+        .addItem(BindingLayoutItem::PushConstants(0u, sizeof(DescriptorHeapStorageBufferDispatchPushConstants)))
+    ;
+    auto pushLayout = device.createBindingLayout(pushLayoutDesc);
+    ASSERT_TRUE(pushLayout);
+    EXPECT_TRUE(pushLayout->isDescriptorBufferCompatible());
+    EXPECT_EQ(pushLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_TRUE(pushLayout->getDescriptorBufferBindingOffsets().empty());
+
+    ShaderDesc shaderDesc(DescriptorBufferRoundTripTest::arena());
+    shaderDesc
+        .setShaderType(ShaderType::Compute)
+        .setDebugName(Name{"tests/descriptor_buffer/global_heap_storage_dispatch"})
+    ;
+    auto shader = device.createShader(
+        shaderDesc,
+        s_DescriptorHeapStorageBufferDispatchSpirv,
+        sizeof(s_DescriptorHeapStorageBufferDispatchSpirv)
+    );
+    ASSERT_TRUE(shader);
+
+    ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(shader)
+        .addBindingLayout(pushLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
+    ;
+    auto pipeline = device.createComputePipeline(pipelineDesc);
+    ASSERT_TRUE(pipeline);
+
+    auto storageBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setCpuAccess(CpuAccessMode::Read)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(storageBuffer);
+
+    const GpuDescriptorHandle storageBufferHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(storageBufferHandle.valid());
+    EXPECT_EQ(storageBufferHandle.descriptorClass(), GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(heap.write(storageBufferHandle, DescriptorWriteItem::RawBuffer_UAV(0u, storageBuffer.get())));
+
+    const DescriptorHeapStorageBufferDispatchPushConstants pushConstants{
+        storageBufferHandle.slot(),
+        dispatchSeed,
+        0u,
+        0u
+    };
+    auto commandList = device.createCommandList();
+    ASSERT_TRUE(commandList);
+    commandList->open();
+    commandList->setBufferState(storageBuffer.get(), ResourceStates::UnorderedAccess);
+
+    ComputeState computeState;
+    computeState.setPipeline(pipeline.get());
+    commandList->setComputeState(computeState);
+    heap.bindCompute(*commandList, *pipeline);
+    commandList->setPushConstants(&pushConstants, sizeof(pushConstants));
+    commandList->dispatch(dispatchWordCount, 1u, 1u);
+    commandList->close();
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+
+    CommandList* commandLists[] = { commandList.get() };
+    const QueueSubmissionToken submissionToken = device.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(submissionToken.valid());
+    const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(primaryGraphicsQueue.valid());
+    EXPECT_EQ(submissionToken.queue, CommandQueue::Graphics);
+    EXPECT_TRUE(submissionToken.matchesPhysicalQueue(
+        primaryGraphicsQueue.index,
+        primaryGraphicsQueue.deviceGeneration
+    ));
+    ASSERT_TRUE(device.waitForIdle());
+
+    const u32* const outputWords = static_cast<const u32*>(device.mapBuffer(storageBuffer.get(), CpuAccessMode::Read));
+    ASSERT_NE(outputWords, nullptr);
+    for(u32 wordIndex = 0u; wordIndex < dispatchWordCount; ++wordIndex)
+        EXPECT_EQ(outputWords[wordIndex], dispatchSeed + wordIndex);
+    device.unmapBuffer(storageBuffer.get());
+
+    heap.free(storageBufferHandle);
+    heap.collectRetired();
 }
 
 

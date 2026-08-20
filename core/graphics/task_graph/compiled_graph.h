@@ -119,9 +119,9 @@ struct GpuCompiledPresentEndpoint{
 };
 
 
-// Immutable compiler-side telemetry for one concrete task-graph plan. These counters describe only the accepted
-// compiler output: failed or superseded plans retain an empty snapshot, so tooling never has to reconcile partial
-// barrier/packet data with a later generation.
+// Immutable accepted-plan telemetry for one concrete task-graph plan. Core compiler counters and the sanitized
+// caller-provided declaration duration publish only after success; failed or superseded plans retain an empty
+// snapshot, so tooling never has to reconcile partial barrier/packet data with a later generation.
 struct GpuTaskGraphCompileStatistics{
     static constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::kCount);
     static constexpr usize s_PacketizationDecisionCount = static_cast<usize>(GpuTaskPacketizationDecision::kCount);
@@ -160,6 +160,8 @@ struct GpuTaskGraphCompileStatistics{
     usize taskCountByQueueClass[s_QueueClassCount] = {};
     usize packetCountByQueueClass[s_QueueClassCount] = {};
     usize packetizationDecisionCounts[s_PacketizationDecisionCount] = {};
+    // Sanitized caller-measured graph declaration/build wall time. totalSeconds covers the core compiler only.
+    f64 declarationSeconds = 0.0;
     f64 analysisSeconds = 0.0;
     f64 queueAssignmentSeconds = 0.0;
     f64 planningSeconds = 0.0;

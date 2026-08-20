@@ -9,6 +9,7 @@
 #include <core/graphics/backend_selection.h>
 
 #include <global/atomic.h>
+#include <global/simplemath.h>
 #include <global/timer.h>
 
 
@@ -3373,6 +3374,10 @@ bool GpuTaskGraphCompiler::compile(
     };
     countBarriers(outCompiledGraph.m_prologueBarriers);
     countBarriers(outCompiledGraph.m_epilogueBarriers);
+    statistics.declarationSeconds = IsFinite(options.declarationSeconds) && options.declarationSeconds >= 0.0
+        ? options.declarationSeconds
+        : 0.0
+    ;
     statistics.analysisSeconds = analysisSeconds;
     statistics.queueAssignmentSeconds = queueAssignmentSeconds;
     statistics.planningSeconds = DurationInSeconds<f64>(TimerNow(), planningBegin);

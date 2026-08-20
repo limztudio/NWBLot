@@ -115,6 +115,9 @@ struct GpuTaskGraphCompileOptions{
     // Native packet recording requires every task to retain a payload and record thunk. Tooling-only callers that
     // compile metadata graphs may opt out explicitly; executable graph paths must retain the default.
     bool allowMetadataOnlyTasks = false;
+    // Caller-owned wall time spent declaring/building the graph before this compiler begins. Accepted plans retain
+    // finite nonnegative values separately from the compiler-only total duration; other values normalize to zero.
+    f64 declarationSeconds = 0.0;
 };
 
 

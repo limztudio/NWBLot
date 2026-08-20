@@ -8719,6 +8719,63 @@ TEST(GpuTaskGraph, PublishesDeclarationStructureStatisticsOnlyForAcceptedPlans){
 }
 
 
+TEST(GpuTaskGraph, PublishesFiniteDeclarationTimingOnlyForAcceptedPlans){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    ASSERT_TRUE(AddTask(
+        graph,
+        Name("tests/task_graph/declaration_seconds"),
+        "Declaration Seconds"
+    ).valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    Graphics::GpuTaskGraphCompileOptions options;
+
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
+    ASSERT_TRUE(compiledGraph.compileStatistics().valid());
+    EXPECT_EQ(compiledGraph.compileStatistics().declarationSeconds, 0.0);
+
+    constexpr f64 s_DeclarationSeconds = 0.125;
+    options.declarationSeconds = s_DeclarationSeconds;
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
+    const Graphics::GpuTaskGraphCompileStatistics& acceptedStatistics = compiledGraph.compileStatistics();
+    ASSERT_TRUE(acceptedStatistics.valid());
+    EXPECT_EQ(acceptedStatistics.declarationSeconds, s_DeclarationSeconds);
+
+    compiledGraph.reset();
+    const Graphics::GpuTaskGraphCompileStatistics& resetStatistics = compiledGraph.compileStatistics();
+    EXPECT_FALSE(resetStatistics.valid());
+    EXPECT_EQ(resetStatistics.declarationSeconds, 0.0);
+
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
+    const Graphics::GpuTaskGraphQueueTopology invalidTopology{};
+    EXPECT_FALSE(Compile(graph, analysis, invalidTopology, assignments, compiledGraph, options));
+    const Graphics::GpuTaskGraphCompileStatistics& failedStatistics = compiledGraph.compileStatistics();
+    EXPECT_FALSE(failedStatistics.valid());
+    EXPECT_EQ(failedStatistics.declarationSeconds, 0.0);
+
+    const f64 invalidDeclarationSeconds[] = {
+        -0.125,
+        Limit<f64>::s_Infinity,
+        Limit<f64>::s_QuietNaN,
+    };
+    for(const f64 declarationSeconds : invalidDeclarationSeconds){
+        options.declarationSeconds = declarationSeconds;
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
+        const Graphics::GpuTaskGraphCompileStatistics& invalidStatistics = compiledGraph.compileStatistics();
+        EXPECT_TRUE(invalidStatistics.valid());
+        EXPECT_EQ(invalidStatistics.declarationSeconds, 0.0);
+    }
+}
+
+
 TEST(GpuTaskGraph, DiscardsUnacceptedPayloadsAfterPacketRecordFailureCleanup){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

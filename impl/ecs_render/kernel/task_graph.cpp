@@ -12,6 +12,8 @@
 
 #include <core/graphics/gpu_timing.h>
 
+#include <global/timer.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -10901,6 +10903,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredLightingCompiledGraph.reset();
     m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
     m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
+    // This renderer-owned declaration/build attempt starts after stale graph artifacts are discarded and ends
+    // immediately before core compilation, whose total duration remains separate.
+    const Timer declarationBegin = TimerNow();
 
     const auto& device = graphics().getDevice();
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
@@ -16691,6 +16696,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     // the true cross-queue frontier while preserving the compiler's declaration-derived dependency order.
     compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierSafe;
     m_deferredTaskTimingFeedback.configureCompileOptions(compileOptions, m_graphics.getFrameIndex());
+    compileOptions.declarationSeconds = DurationInSeconds<f64>(TimerNow(), declarationBegin);
     if(!compiler.compile(
         m_deferredLightingTaskGraph,
         m_deferredLightingTaskGraphAnalysis,

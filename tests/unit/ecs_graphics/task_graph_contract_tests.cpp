@@ -103,7 +103,8 @@ TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){
     EXPECT_TRUE(ContainsText(frameGraph, "\"Data: payload objects={} payload object bytes={} upload blobs={} upload blob bytes={}\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"Recording: packets={} tasks={} command lists={} barriers={} parallel={}\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"Submission: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} submissions={} command lists={} waits={} failed submissions={}\\n\""));
-    EXPECT_TRUE(ContainsText(frameGraph, "\"CPU: compile={:.3f} ms record={:.3f} ms submit={:.3f} ms\\n\""));
+    EXPECT_TRUE(ContainsText(frameGraph, "\"CPU: declaration={:.3f} ms compile={:.3f} ms record={:.3f} ms submit={:.3f} ms\\n\""));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.declarationSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "\"CPU compile phases: analysis={:.3f} ms queue assignment={:.3f} ms planning={:.3f} ms\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"CPU planning detail: packetization={:.3f} ms resource states={:.3f} ms packet dependencies={:.3f} ms\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"CPU recording phases: command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task recording={:.3f} ms\""));
@@ -133,6 +134,45 @@ TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){
     EXPECT_TRUE(ContainsText(frameGraph, "submissionStatistics.rejectedSubmissionCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "m_frameGraphRendererLabel += \"Renderer Frame\";"));
     EXPECT_TRUE(ContainsText(frameGraph, "AStringView(m_frameGraphRendererLabel.data(), m_frameGraphRendererLabel.size())"));
+}
+
+
+// Renderer-side graph declaration is intentionally separate from core compilation, and a failed attempt must not
+// publish its elapsed time because the compiler only publishes the supplied value with a completed immutable plan.
+TEST(EcsGraphics, DeferredGraphMeasuresDeclarationAttemptBeforeCoreCompile){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    const usize lightingOffset = taskGraph.find("void RendererSystem::buildDeferredLightingTaskGraph");
+    const usize resetOffset = taskGraph.find(
+        "m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);",
+        lightingOffset
+    );
+    const usize declarationBeginOffset = taskGraph.find("const Timer declarationBegin = TimerNow();", resetOffset);
+    const usize feedbackOffset = taskGraph.find(
+        "m_deferredTaskTimingFeedback.configureCompileOptions(",
+        declarationBeginOffset
+    );
+    const usize declarationEndOffset = taskGraph.find(
+        "compileOptions.declarationSeconds = DurationInSeconds<f64>(TimerNow(), declarationBegin);",
+        feedbackOffset
+    );
+    const usize compilerOffset = taskGraph.find("if(!compiler.compile(", declarationEndOffset);
+    ASSERT_NE(lightingOffset, AStringView::npos);
+    ASSERT_NE(resetOffset, AStringView::npos);
+    ASSERT_NE(declarationBeginOffset, AStringView::npos);
+    ASSERT_NE(feedbackOffset, AStringView::npos);
+    ASSERT_NE(declarationEndOffset, AStringView::npos);
+    ASSERT_NE(compilerOffset, AStringView::npos);
+    EXPECT_TRUE(ContainsText(taskGraph, "#include <global/timer.h>"));
+    EXPECT_LT(resetOffset, declarationBeginOffset);
+    EXPECT_LT(declarationBeginOffset, feedbackOffset);
+    EXPECT_LT(feedbackOffset, declarationEndOffset);
+    EXPECT_LT(declarationEndOffset, compilerOffset);
 }
 
 

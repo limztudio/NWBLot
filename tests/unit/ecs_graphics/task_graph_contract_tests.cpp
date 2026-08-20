@@ -175,21 +175,43 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
+        "m_deferredLightingRecordedGraph.physicalQueueRecordingStatistics(\n"
+        "                    m_deferredLightingCompiledGraph,\n"
+        "                    queueInfo.id\n"
+        "                )"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
         "if(\n"
         "                !queueStatistics.valid()\n"
         "                || (queueStatistics.acceptedPacketCount == 0u && queueStatistics.rejectedPacketCount == 0u)\n"
         "            )"
     ));
+    EXPECT_TRUE(ContainsText(frameGraph, "if(!queueRecordingStatistics.valid())\n                continue;"));
+    EXPECT_FALSE(ContainsText(frameGraph, "queueRecordingStatistics.packetCount == 0u"));
     EXPECT_TRUE(ContainsText(frameGraph, "Physical queue index={} generation={} class={}:"));
     EXPECT_TRUE(ContainsText(frameGraph, "accepted packets={} accepted tasks={} rejected packets={} rejected tasks={}"));
     EXPECT_TRUE(ContainsText(frameGraph, "native submissions={} rejected submit paths={} command lists={}"));
     EXPECT_TRUE(ContainsText(frameGraph, "planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={}"));
     EXPECT_TRUE(ContainsText(frameGraph, "accepted frontier={} CPU={:.3f} ms"));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "  Recording: packets={} tasks={} command lists={} barriers={} parallel={} CPU command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task recording={:.3f} ms total={:.3f} ms"
+    ));
     EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.queue.index,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.queue.deviceGeneration,"));
     EXPECT_TRUE(ContainsText(frameGraph, "__hidden_frame_graph_export::PhysicalQueueClassLabel(queueStatistics.queueClass),"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.rejectedSubmissionCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.submissionSeconds * 1000.0"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.packetCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.taskCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.commandListCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.barrierCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.parallelPacketCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.commandListAcquisitionSeconds * 1000.0,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.graphBarrierRecordingSeconds * 1000.0,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.taskRecordSeconds * 1000.0,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.recordingSeconds * 1000.0"));
 }
 
 

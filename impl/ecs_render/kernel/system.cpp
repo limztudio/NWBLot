@@ -80,6 +80,7 @@ RendererSystem::RendererSystem(
     , m_deferredLightingCompiledGraph(arena)
     , m_deferredLightingRecordedGraph(arena)
     , m_deferredLightingSubmissionTransaction(arena)
+    , m_deferredTaskTimingFeedback(arena, graphics)
     , m_meshState(arena)
     , m_materialState(arena)
     , m_rayTracingState(arena)
@@ -111,8 +112,16 @@ RendererSystem::RendererSystem(
     readAccess<StaticCsgMeshComponent>();
     readAccess<SkinnedCsgMeshComponent>();
     readAccess<CsgCutterComponent>();
+    m_deferredTaskTimingFeedback.activate();
 }
-RendererSystem::~RendererSystem(){}
+RendererSystem::~RendererSystem(){
+    m_deferredTaskTimingFeedback.deactivate();
+}
+
+
+bool RendererSystem::setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy){
+    return m_deferredTaskTimingFeedback.setPolicy(policy);
+}
 
 
 #if !defined(NWB_FINAL)
@@ -258,6 +267,7 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
 }
 
 void RendererSystem::invalidateResources(){
+    m_deferredTaskTimingFeedback.reset();
     m_preparedCsgFrameState = CsgFrameState{};
     m_preparedCsgFrameStateValid = false;
     m_preparedHasTransparentRenderers = false;

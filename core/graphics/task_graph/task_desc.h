@@ -85,6 +85,18 @@ struct GpuTaskSchedulingHint{
     // because exclusive resource uses cross that boundary through compiler-owned release/acquire ownership pairs.
     // It has no effect unless allowSameClassQueueRouting is also set.
     bool allowCrossFamilySameClassQueueRouting = false;
+    // Enables timing-history routing and bounded calibration for this task. This is separate from ordinary
+    // same-class routing so an application can keep historical measurement scoped to a small, proven-safe subset.
+    // Timing feedback itself remains same-family only and never manufactures an ownership-transfer route.
+    bool allowTimingFeedbackRouting = false;
+};
+
+// Optional dimensions for immutable timing-history keys. Variant distinguishes compatible task implementations;
+// resolutionClass groups a renderer-defined resolution bucket or exact target extent. Both default to zero for
+// existing declarations that intentionally use one stable timing dimension.
+struct GpuTaskTimingMetadata{
+    u32 variant = 0u;
+    u32 resolutionClass = 0u;
 };
 
 // One immutable external ownership source for an imported texture range. Multiple sources let a later graph consume
@@ -223,6 +235,8 @@ struct GpuTaskDesc{
     usize resourceUseCount = 0u;
     const GpuTaskResourceSetUse* resourceSetUses = nullptr;
     usize resourceSetUseCount = 0u;
+    // Appended so positional aggregate initializers retain their existing field layout.
+    GpuTaskTimingMetadata timing;
 
     constexpr GpuTaskDesc& setIdentity(const Name& value){ identity = value; return *this; }
     constexpr GpuTaskDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
@@ -249,6 +263,7 @@ struct GpuTaskDesc{
         resourceSetUseCount = count;
         return *this;
     }
+    constexpr GpuTaskDesc& setTimingMetadata(const GpuTaskTimingMetadata& value){ timing = value; return *this; }
 };
 
 // Primitive native copies remain task-level operations: they are scheduled, packetized, and synchronized by the

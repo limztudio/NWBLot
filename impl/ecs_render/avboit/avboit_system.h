@@ -124,8 +124,18 @@ public:
         // mixed CSG streams retain their local dispatch/raster interleaving.
         bool accumulationCsgComputeEmulationOutputStatesGraphOwned = false
     );
-    void dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets);
-    void dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets);
+    void dispatchAvboitDepthWarp(
+        Core::CommandList& commandList,
+        AvboitFrameTargets& targets,
+        Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution,
+        bool* timingRecorded = nullptr
+    );
+    void dispatchAvboitIntegration(
+        Core::CommandList& commandList,
+        AvboitFrameTargets& targets,
+        Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution,
+        bool* timingRecorded = nullptr
+    );
 
 private:
     void renderPreparedTransparentCsgIntervals(

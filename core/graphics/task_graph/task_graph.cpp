@@ -2333,6 +2333,7 @@ GpuTaskGraphTaskView GpuTaskGraph::taskAt(const usize index)const{
         .markerLabel = markerLabel(task.markerLabelOffset, task.markerLabelSize),
         .queue = task.queue,
         .scheduling = task.scheduling,
+        .timing = task.timing,
         .dependencies = task.dependencyCount > 0u ? m_dependencies.data() + task.dependencyOffset : nullptr,
         .dependencyCount = task.dependencyCount,
         .externalDependencies = task.externalDependencyCount > 0u
@@ -3624,6 +3625,7 @@ GpuTaskId GpuTaskGraph::appendTask(
     task.identity = desc.identity;
     task.queue = desc.queue;
     task.scheduling = desc.scheduling;
+    task.timing = desc.timing;
     task.markerLabelOffset = markerLabelOffset;
     task.markerLabelSize = markerLabelSize;
     task.dependencyOffset = static_cast<u32>(m_dependencies.size());

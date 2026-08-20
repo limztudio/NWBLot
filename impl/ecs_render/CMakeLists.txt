@@ -12,6 +12,7 @@ target_link_libraries(nwb_ecs_render_components INTERFACE
 nwb_declare_static_library(nwb_ecs_render)
 target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/kernel/system.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/kernel/task_timing_feedback.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_pass.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_target_bindings.cpp"
@@ -53,6 +54,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/kernel/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit.h"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/system.h"
+    "${CMAKE_CURRENT_LIST_DIR}/kernel/task_timing_feedback.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/material/material_shader_variants_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/mesh_view_private.h"

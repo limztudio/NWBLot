@@ -37,6 +37,7 @@ struct GpuTaskGraphTaskView{
     AStringView markerLabel;
     GpuQueueRequest queue;
     GpuTaskSchedulingHint scheduling;
+    GpuTaskTimingMetadata timing;
     const GpuTaskId* dependencies = nullptr;
     usize dependencyCount = 0u;
     const GpuExternalCompletionId* externalDependencies = nullptr;
@@ -213,6 +214,7 @@ private:
         Name identity = NAME_NONE;
         GpuQueueRequest queue;
         GpuTaskSchedulingHint scheduling;
+        GpuTaskTimingMetadata timing;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
         u32 dependencyOffset = 0u;

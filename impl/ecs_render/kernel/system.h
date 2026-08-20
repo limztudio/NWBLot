@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/kernel/components.h>
+#include <impl/ecs_render/kernel/task_timing_feedback.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/shared/renderer_state.h>
 #include <impl/ecs_render/kernel/subsystems.h>
@@ -267,6 +268,7 @@ public:
         resetLaggedLightingHistoryTracking();
     }
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept{ return m_frameLaggedAsyncLightingEnabled; }
+    [[nodiscard]] bool setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
 #if !defined(NWB_FINAL)
     // Test-only proxy; keep the ray-tracing subsystem itself private to ordinary renderer callers.
     void forceHybridSceneTraversalFallbackForTesting()noexcept;
@@ -493,6 +495,9 @@ private:
     Core::GpuCompiledGraph m_deferredLightingCompiledGraph;
     Core::GpuRecordedGraph m_deferredLightingRecordedGraph;
     Core::GpuGraphSubmissionTransaction m_deferredLightingSubmissionTransaction;
+    // Query completion is asynchronous, so this bridge owns accepted-route attribution and exposes only immutable
+    // history to the next graph compile. Its policy is disabled by default.
+    RendererTaskTimingFeedback m_deferredTaskTimingFeedback;
     // Optional immutable target-generation selector upload. It must merge into Shadow Preparation's first
     // Graphics packet so its acceptance commits the CPU residency bit atomically with the first consumer.
     Core::GpuTaskId m_deferredBindlessSlotsUploadTask;

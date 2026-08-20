@@ -567,8 +567,21 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     }
 }
 
-void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets){
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_AvboitDepthWarp, graphics().getDevice(), commandList);
+void RendererAvboitSystem::dispatchAvboitDepthWarp(
+    Core::CommandList& commandList,
+    AvboitFrameTargets& targets,
+    const Core::GpuTimingSampleAttribution timingAttribution,
+    bool* const timingRecorded
+){
+    Core::GpuTimingMeasure timing(
+        graphics().gpuTiming(),
+        RendererGpuTimingScope::s_AvboitDepthWarp,
+        graphics().getDevice(),
+        commandList,
+        timingAttribution
+    );
+    if(timingRecorded)
+        *timingRecorded = timing.valid();
 
     // The graph records the coverage read and warp/control writes as packet-boundary state; this thunk contains only
     // the native dispatch itself.
@@ -585,9 +598,22 @@ void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandLis
     );
 }
 
-void RendererAvboitSystem::dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets){
+void RendererAvboitSystem::dispatchAvboitIntegration(
+    Core::CommandList& commandList,
+    AvboitFrameTargets& targets,
+    const Core::GpuTimingSampleAttribution timingAttribution,
+    bool* const timingRecorded
+){
     const u32 pixelCount = targets.lowWidth * targets.lowHeight;
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_AvboitIntegration, graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(
+        graphics().gpuTiming(),
+        RendererGpuTimingScope::s_AvboitIntegration,
+        graphics().getDevice(),
+        commandList,
+        timingAttribution
+    );
+    if(timingRecorded)
+        *timingRecorded = timing.valid();
 
     // The graph records packed-extinction reads and the Texture3D UAV write as packet-boundary state; this thunk
     // contains only the native dispatch itself.

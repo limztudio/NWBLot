@@ -2680,6 +2680,21 @@ static void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
     scheduling.allowCrossFamilySameClassQueueRouting = true;
 }
 
+// Integration scales with the low-resolution AVBOIT target. Keep its history buckets stable across small dynamic
+// resolution changes without blending materially different dispatch sizes. Depth Warp has a fixed virtual-slice
+// dispatch, so its default zero resolution class remains intentional.
+[[nodiscard]] static Core::GpuTaskTimingMetadata AvboitIntegrationTimingMetadata(const AvboitFrameTargets& targets){
+    constexpr u32 s_ResolutionBucketPixels = 64u;
+    const auto bucketDimension = [](const u32 dimension){
+        constexpr u32 s_MaxPackedResolutionBucket = 0xffffu;
+        const u32 bucket = dimension / s_ResolutionBucketPixels + (dimension % s_ResolutionBucketPixels != 0u ? 1u : 0u);
+        return Min(bucket, s_MaxPackedResolutionBucket);
+    };
+    return Core::GpuTaskTimingMetadata{
+        .resolutionClass = bucketDimension(targets.lowWidth) | (bucketDimension(targets.lowHeight) << 16u),
+    };
+}
+
 // Material raster callbacks may first generate vertices with a compute-emulation dispatch, then issue ordinary
 // Graphics work. They must stay on the primary Graphics transport, but their declaration must include both command
 // capabilities so debug recording can reject a genuinely incompatible route rather than the valid emulation path.
@@ -3269,6 +3284,9 @@ struct AvboitDepthWarpGraphTask{
         RendererAvboitSystem* avboitSystem = nullptr;
         AvboitFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        RendererTaskTimingFeedback* timingFeedback = nullptr;
+        const Core::GpuTimingScopeDefinition* timingScope = nullptr;
+        mutable Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution;
     };
 
     [[nodiscard]] static bool record(
@@ -3276,13 +3294,50 @@ struct AvboitDepthWarpGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        static_cast<void>(context);
         if(!payload.avboitSystem || !payload.targets || !payload.timingTicket)
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        payload.avboitSystem->dispatchAvboitDepthWarp(commandList, *payload.targets);
+        bool timingRecorded = false;
+        if(payload.timingFeedback && payload.timingScope){
+            const Core::GpuPhysicalQueueInfo* const queueInfo = context.graph.queueInfo(context.queue);
+            if(queueInfo){
+                const Core::GpuTaskGraphTaskView task = context.taskGraph.taskAt(context.task.index);
+                payload.timingAttribution = payload.timingFeedback->beginSample(
+                    payload.timingScope->identity,
+                    Core::GpuTaskTimingKey{
+                        .task = task.identity,
+                        .variant = task.timing.variant,
+                        .resolutionClass = task.timing.resolutionClass,
+                        .queue = queueInfo->queueClass,
+                    },
+                    context.queue
+                );
+            }
+        }
+        payload.avboitSystem->dispatchAvboitDepthWarp(
+            commandList,
+            *payload.targets,
+            payload.timingAttribution,
+            &timingRecorded
+        );
+        if(!timingRecorded && payload.timingFeedback){
+            payload.timingFeedback->discardRecording(payload.timingAttribution);
+            payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
+        }
         return true;
+    }
+
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        if(payload.timingFeedback)
+            payload.timingFeedback->acceptSubmission(payload.timingAttribution, token);
+        payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.timingFeedback)
+            payload.timingFeedback->discardRecording(payload.timingAttribution);
+        payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
     }
 };
 
@@ -3630,6 +3685,9 @@ struct AvboitIntegrationGraphTask{
         RendererAvboitSystem* avboitSystem = nullptr;
         AvboitFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        RendererTaskTimingFeedback* timingFeedback = nullptr;
+        const Core::GpuTimingScopeDefinition* timingScope = nullptr;
+        mutable Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution;
     };
 
     [[nodiscard]] static bool record(
@@ -3637,13 +3695,50 @@ struct AvboitIntegrationGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        static_cast<void>(context);
         if(!payload.avboitSystem || !payload.targets || !payload.timingTicket)
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        payload.avboitSystem->dispatchAvboitIntegration(commandList, *payload.targets);
+        bool timingRecorded = false;
+        if(payload.timingFeedback && payload.timingScope){
+            const Core::GpuPhysicalQueueInfo* const queueInfo = context.graph.queueInfo(context.queue);
+            if(queueInfo){
+                const Core::GpuTaskGraphTaskView task = context.taskGraph.taskAt(context.task.index);
+                payload.timingAttribution = payload.timingFeedback->beginSample(
+                    payload.timingScope->identity,
+                    Core::GpuTaskTimingKey{
+                        .task = task.identity,
+                        .variant = task.timing.variant,
+                        .resolutionClass = task.timing.resolutionClass,
+                        .queue = queueInfo->queueClass,
+                    },
+                    context.queue
+                );
+            }
+        }
+        payload.avboitSystem->dispatchAvboitIntegration(
+            commandList,
+            *payload.targets,
+            payload.timingAttribution,
+            &timingRecorded
+        );
+        if(!timingRecorded && payload.timingFeedback){
+            payload.timingFeedback->discardRecording(payload.timingAttribution);
+            payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
+        }
         return true;
+    }
+
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        if(payload.timingFeedback)
+            payload.timingFeedback->acceptSubmission(payload.timingAttribution, token);
+        payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.timingFeedback)
+            payload.timingFeedback->discardRecording(payload.timingAttribution);
+        payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
     }
 };
 
@@ -14218,6 +14313,12 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     // can cross it; Graphics raster/interleaving packets retain their existing primary-Graphics policy.
     EnableSameFamilyComputeEffectRouting(avboitComputeScheduling, false);
     EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling);
+    // Only the split AVBOIT Compute packets have accepted timestamp attribution and an intentionally bounded
+    // calibration route. Ordinary same-class routing remains available to other effects without history feedback.
+    avboitComputeScheduling.allowTimingFeedbackRouting = true;
+    const Core::GpuTaskTimingMetadata avboitIntegrationTiming =
+        AvboitIntegrationTimingMetadata(deferredTargets.avboit)
+    ;
     Core::GpuTaskId avboitDepthWarpCompletionTask = m_deferredAvboitOccupancyTask;
     if(splitAvboitStages){
         const Core::GpuTaskResourceUse depthWarpResourceUses[] = {
@@ -14233,6 +14334,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .setMarkerLabel("AVBOIT Depth Warp")
             .setQueue(ComputeQueueRequest())
             .setScheduling(avboitComputeScheduling)
+            .setTimingMetadata({})
             .setDependencies(preDependency, LengthOf(preDependency))
             .setResourceUses(depthWarpResourceUses, LengthOf(depthWarpResourceUses))
         ;
@@ -14242,6 +14344,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 .avboitSystem = &m_avboitSystem,
                 .targets = &deferredTargets.avboit,
                 .timingTicket = &avboitDepthWarpTimingTicket,
+                .timingFeedback = &m_deferredTaskTimingFeedback,
+                .timingScope = &RendererGpuTimingScope::s_AvboitDepthWarp,
             }
         );
         if(!m_deferredAvboitDepthWarpTask.valid()){
@@ -15186,6 +15290,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .setMarkerLabel("AVBOIT Integration")
             .setQueue(ComputeQueueRequest())
             .setScheduling(avboitComputeScheduling)
+            .setTimingMetadata(avboitIntegrationTiming)
         ;
     }
     else{
@@ -15216,6 +15321,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .timingTicket = splitAvboitStages
                 ? &avboitIntegrationTimingTicket
                 : &avboitPreTimingTicket,
+            .timingFeedback = splitAvboitStages ? &m_deferredTaskTimingFeedback : nullptr,
+            .timingScope = splitAvboitStages ? &RendererGpuTimingScope::s_AvboitIntegration : nullptr,
         }
     );
     if(!m_deferredAvboitIntegrationTask.valid()){
@@ -16576,6 +16683,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     // A graphics prefix can now split immediately after work that enables a different physical queue. This exposes
     // the true cross-queue frontier while preserving the compiler's declaration-derived dependency order.
     compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    m_deferredTaskTimingFeedback.configureCompileOptions(compileOptions, m_graphics.getFrameIndex());
     if(!compiler.compile(
         m_deferredLightingTaskGraph,
         m_deferredLightingTaskGraphAnalysis,

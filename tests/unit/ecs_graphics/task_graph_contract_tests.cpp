@@ -726,6 +726,69 @@ TEST(EcsGraphics, SplitAvboitComputePacketsPermitCrossFamilyRouting){
 }
 
 
+// Queue timing feedback is deliberately opt-in, but the two graph-owned AVBOIT Compute tasks must route accepted
+// timestamp samples back into the next immutable compiler snapshot. Keep this source-level contract focused on the
+// renderer boundary rather than coupling it to one physical queue topology.
+TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemHeaderSource;
+    AString timingFeedbackHeaderSource;
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", systemHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_timing_feedback.h", timingFeedbackHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
+    const AStringView timingFeedbackHeader(timingFeedbackHeaderSource.data(), timingFeedbackHeaderSource.size());
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    EXPECT_TRUE(ContainsText(timingFeedbackHeader, "class RendererTaskTimingFeedback final"));
+    EXPECT_TRUE(ContainsText(systemHeader, "RendererTaskTimingFeedback m_deferredTaskTimingFeedback"));
+
+    const usize lightingOffset = taskGraph.find("void RendererSystem::buildDeferredLightingTaskGraph");
+    const usize compilerOffset = taskGraph.find("if(!compiler.compile(", lightingOffset);
+    const usize feedbackOffset = taskGraph.find("m_deferredTaskTimingFeedback.configureCompileOptions(", lightingOffset);
+    ASSERT_NE(lightingOffset, AStringView::npos);
+    ASSERT_NE(compilerOffset, AStringView::npos);
+    ASSERT_NE(feedbackOffset, AStringView::npos);
+    EXPECT_LT(feedbackOffset, compilerOffset);
+
+    const usize depthWarpOffset = taskGraph.find("struct AvboitDepthWarpGraphTask");
+    const usize extinctionComputeEmulationOffset = taskGraph.find(
+        "struct AvboitExtinctionComputeEmulationGraphTask",
+        depthWarpOffset
+    );
+    const usize integrationOffset = taskGraph.find("struct AvboitIntegrationGraphTask", extinctionComputeEmulationOffset);
+    const usize accumulationOffset = taskGraph.find("struct AvboitAccumulationGraphTask", integrationOffset);
+    ASSERT_NE(depthWarpOffset, AStringView::npos);
+    ASSERT_NE(extinctionComputeEmulationOffset, AStringView::npos);
+    ASSERT_NE(integrationOffset, AStringView::npos);
+    ASSERT_NE(accumulationOffset, AStringView::npos);
+    ASSERT_LT(depthWarpOffset, extinctionComputeEmulationOffset);
+    ASSERT_LT(extinctionComputeEmulationOffset, integrationOffset);
+    ASSERT_LT(integrationOffset, accumulationOffset);
+    const AStringView depthWarp = taskGraph.substr(depthWarpOffset, extinctionComputeEmulationOffset - depthWarpOffset);
+    const AStringView integration = taskGraph.substr(integrationOffset, accumulationOffset - integrationOffset);
+
+    for(const AStringView task : { depthWarp, integration }){
+        EXPECT_TRUE(ContainsText(task, ".timingFeedback"));
+        EXPECT_TRUE(ContainsText(task, ".timingScope"));
+        EXPECT_TRUE(ContainsText(task, "beginSample("));
+        EXPECT_TRUE(ContainsText(task, "static void accepted("));
+        EXPECT_TRUE(ContainsText(task, "acceptSubmission("));
+        EXPECT_TRUE(ContainsText(task, "static void discarded("));
+        EXPECT_TRUE(ContainsText(task, "discardRecording("));
+    }
+
+    const AStringView lighting = taskGraph.substr(lightingOffset);
+    EXPECT_TRUE(ContainsText(lighting, "allowTimingFeedbackRouting = true"));
+    EXPECT_TRUE(ContainsText(lighting, ".timingFeedback = &m_deferredTaskTimingFeedback"));
+    EXPECT_TRUE(ContainsText(lighting, ".timingFeedback = splitAvboitStages ? &m_deferredTaskTimingFeedback : nullptr"));
+    EXPECT_TRUE(ContainsText(lighting, ".setTimingMetadata(avboitIntegrationTiming)"));
+}
+
+
 // Scene-light and shading constants are prepared before graph declaration and published from accepted graph work.
 // The previous direct compatibility writer had no callers, so keep it retired instead of letting an unreachable
 // native state/submit bridge silently return to the deferred subsystem.

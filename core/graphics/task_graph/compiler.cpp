@@ -364,7 +364,8 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 }
 
 [[nodiscard]] static bool AllowsTimingFeedbackRouting(const GpuTaskGraphTaskView& task)noexcept{
-    return task.scheduling.allowSameClassQueueRouting
+    return task.scheduling.allowTimingFeedbackRouting
+        && task.scheduling.allowSameClassQueueRouting
         && task.scheduling.overlapPreferred
         && !task.scheduling.avoidQueueCrossing
     ;
@@ -516,6 +517,57 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
         }
     }
     return result;
+}
+
+// Calibration is deliberately bounded and narrower than adaptive selection. It only visits already-legal
+// same-family routes until each has enough accepted samples, then ordinary hysteresis resumes. Returning the
+// incumbent is meaningful: it reserves this frame for a baseline sample instead of switching on incomplete data.
+[[nodiscard]] static const GpuPhysicalQueueInfo* FindTimingFeedbackCalibrationQueue(
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& incumbent,
+    const GpuTaskTimingKey& key,
+    const GpuTaskTimingHistorySnapshot& historySnapshot,
+    const GpuTaskTimingFeedbackPolicy& policy,
+    const u64 frameIndex
+)noexcept{
+    if(
+        policy.calibrationIntervalFrames == 0u
+        || frameIndex % policy.calibrationIntervalFrames != 0u
+        || !AllowsTimingFeedbackRouting(task)
+    )
+        return nullptr;
+
+    const auto sampleCountFor = [&](const GpuPhysicalQueueInfo& queue){
+        const GpuTaskTimingHistory* const history = historySnapshot.find(key, queue.id);
+        return history ? history->sampleCount : 0u;
+    };
+
+    const GpuPhysicalQueueInfo* result = &incumbent;
+    u32 resultSampleCount = sampleCountFor(incumbent);
+    bool needsCalibration = resultSampleCount < policy.minimumSampleCount;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+        if(candidate.id == incumbent.id || !IsLegalTimingFeedbackRoute(task, incumbent, candidate))
+            continue;
+
+        const u32 candidateSampleCount = sampleCountFor(candidate);
+        if(candidateSampleCount >= policy.minimumSampleCount)
+            continue;
+
+        needsCalibration = true;
+        if(
+            candidateSampleCount < resultSampleCount
+            || (
+                candidateSampleCount == resultSampleCount
+                && IsBetterQueue(candidate, result)
+            )
+        ){
+            result = &candidate;
+            resultSampleCount = candidateSampleCount;
+        }
+    }
+    return needsCalibration ? result : nullptr;
 }
 
 [[nodiscard]] static bool IsReadAccess(const GpuTaskResourceAccess::Enum access)noexcept{
@@ -1753,11 +1805,10 @@ bool GpuTaskGraphCompiler::assignQueues(
         if(selectedQueue != initiallySelectedQueue)
             reason = GpuTaskQueueAssignmentReason::SameClassRouting;
 
-        // Task declarations currently supply one semantic identity but no renderer-owned pipeline-variant or
-        // resolution-class metadata. Zero retains the stable default dimension until that timing producer is wired;
-        // the history key still separates every task identity and selected broad queue class today.
         const GpuTaskTimingKey timingKey{
             .task = task.identity,
+            .variant = task.timing.variant,
+            .resolutionClass = task.timing.resolutionClass,
             .queue = selectedQueue->queueClass,
         };
         const GpuTaskTimingQueueOverride* const timingOverride = FindGpuTaskTimingQueueOverride(
@@ -1780,10 +1831,7 @@ bool GpuTaskGraphCompiler::assignQueues(
             }
         }
         else if(HasUsableTimingFeedback(options, topology.queues[0u].id.deviceGeneration)){
-            const GpuPhysicalQueueInfo* const timingQueue = FindTimingFeedbackQueue(
-                graph,
-                analysis,
-                outAssignments.m_assignments,
+            const GpuPhysicalQueueInfo* const calibrationQueue = FindTimingFeedbackCalibrationQueue(
                 topology,
                 task,
                 *selectedQueue,
@@ -1792,9 +1840,29 @@ bool GpuTaskGraphCompiler::assignQueues(
                 *options.timingFeedbackPolicy,
                 options.timingFrameIndex
             );
-            if(timingQueue){
-                selectedQueue = timingQueue;
-                reason = GpuTaskQueueAssignmentReason::SameClassRouting;
+            if(calibrationQueue){
+                if(calibrationQueue != selectedQueue){
+                    selectedQueue = calibrationQueue;
+                    reason = GpuTaskQueueAssignmentReason::SameClassRouting;
+                }
+            }
+            else{
+                const GpuPhysicalQueueInfo* const timingQueue = FindTimingFeedbackQueue(
+                    graph,
+                    analysis,
+                    outAssignments.m_assignments,
+                    topology,
+                    task,
+                    *selectedQueue,
+                    timingKey,
+                    *options.timingHistory,
+                    *options.timingFeedbackPolicy,
+                    options.timingFrameIndex
+                );
+                if(timingQueue){
+                    selectedQueue = timingQueue;
+                    reason = GpuTaskQueueAssignmentReason::SameClassRouting;
+                }
             }
         }
 

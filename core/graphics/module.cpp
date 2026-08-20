@@ -1454,7 +1454,7 @@ bool Graphics::prepareFramePreamble(){
     // Materialize and reset every declared timer-query pool before any pass preparation can record a timestamp.
     // Per-pass preparation submits skinning and shadow packets, so this must remain ahead of it as well as every
     // later render packet on the same GPU timeline.
-    if(m_gpuTiming.queryCollectionEnabled()){
+    if(m_gpuTiming.collectionActive()){
         if(!m_gpuTiming.materializeRequestedQueries(device))
             NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to materialize one or more requested GPU-timing query pools"));
 

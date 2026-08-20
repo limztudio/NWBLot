@@ -176,9 +176,9 @@ TEST(EcsGraphics, DeferredGraphMeasuresDeclarationAttemptBeforeCoreCompile){
 }
 
 
-// The renderer label must enumerate the immutable compiled plan, not the live Device registry: the transaction
-// telemetry is generation-bound to that plan. Keep only terminal-work queues so idle topology entries do not turn
-// the persistent FrameGraph label into zero-only noise.
+// The renderer label must enumerate the immutable compiled plan, not the live Device registry: compile, transaction,
+// and recording telemetry are generation-bound to that plan. Keep only terminal-work queues so idle topology entries
+// do not turn the persistent FrameGraph label into zero-only noise.
 TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -200,10 +200,15 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     EXPECT_TRUE(ContainsText(compiledGraphHeader, "GpuPhysicalQueueTopology queueTopology()const noexcept;"));
     EXPECT_TRUE(ContainsText(compiledGraphHeader, "Borrowed immutable-plan topology view."));
     EXPECT_TRUE(ContainsText(compiledGraphHeader, "serialize access\n    // with reset/recompile"));
+    EXPECT_TRUE(ContainsText(
+        compiledGraphHeader,
+        "GpuTaskGraphPhysicalQueueCompileStatistics physicalQueueCompileStatistics("
+    ));
     EXPECT_TRUE(ContainsText(compiledGraph, "if(!valid())\n        return {};"));
     EXPECT_TRUE(ContainsText(compiledGraph, ".queues = m_queueTopology.empty() ? nullptr : m_queueTopology.data(),"));
     EXPECT_TRUE(ContainsText(compiledGraph, ".queueCount = m_queueTopology.size(),"));
 
+    EXPECT_TRUE(ContainsText(frameGraph, "if(deferredRuntimeStatistics.valid()){"));
     EXPECT_TRUE(ContainsText(frameGraph, "m_deferredLightingCompiledGraph.queueTopology()"));
     EXPECT_FALSE(ContainsText(frameGraph, "getPhysicalQueueTopology()"));
     EXPECT_TRUE(ContainsText(
@@ -212,6 +217,10 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
         "                    m_deferredLightingCompiledGraph,\n"
         "                    queueInfo.id\n"
         "                )"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "m_deferredLightingCompiledGraph.physicalQueueCompileStatistics(queueInfo.id)"
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
@@ -227,13 +236,40 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
         "                || (queueStatistics.acceptedPacketCount == 0u && queueStatistics.rejectedPacketCount == 0u)\n"
         "            )"
     ));
+    EXPECT_TRUE(ContainsText(frameGraph, "if(!queueCompileStatistics.valid())\n                continue;"));
     EXPECT_TRUE(ContainsText(frameGraph, "if(!queueRecordingStatistics.valid())\n                continue;"));
+    const usize terminalSubmissionGateOffset = frameGraph.find(
+        "queueStatistics.acceptedPacketCount == 0u && queueStatistics.rejectedPacketCount == 0u"
+    );
+    const usize queueCompileQueryOffset = frameGraph.find(
+        "m_deferredLightingCompiledGraph.physicalQueueCompileStatistics(queueInfo.id)"
+    );
+    const usize queueCompileGateOffset = frameGraph.find("queueCompileStatistics.valid()");
+    const usize queueRecordingQueryOffset = frameGraph.find(
+        "m_deferredLightingRecordedGraph.physicalQueueRecordingStatistics("
+    );
+    const usize queueRecordingGateOffset = frameGraph.find("queueRecordingStatistics.valid()");
+    ASSERT_NE(terminalSubmissionGateOffset, AStringView::npos);
+    ASSERT_NE(queueCompileQueryOffset, AStringView::npos);
+    ASSERT_NE(queueCompileGateOffset, AStringView::npos);
+    ASSERT_NE(queueRecordingQueryOffset, AStringView::npos);
+    ASSERT_NE(queueRecordingGateOffset, AStringView::npos);
+    EXPECT_LT(terminalSubmissionGateOffset, queueCompileQueryOffset);
+    EXPECT_LT(queueCompileQueryOffset, queueCompileGateOffset);
+    EXPECT_LT(queueCompileGateOffset, queueRecordingQueryOffset);
+    EXPECT_LT(queueRecordingQueryOffset, queueRecordingGateOffset);
+    EXPECT_FALSE(ContainsText(frameGraph, "queueCompileStatistics.taskCount == 0u"));
+    EXPECT_FALSE(ContainsText(frameGraph, "queueCompileStatistics.packetCount == 0u"));
     EXPECT_FALSE(ContainsText(frameGraph, "queueRecordingStatistics.packetCount == 0u"));
     EXPECT_TRUE(ContainsText(frameGraph, "Physical queue index={} generation={} class={}:"));
     EXPECT_TRUE(ContainsText(frameGraph, "accepted packets={} accepted tasks={} rejected packets={} rejected tasks={}"));
     EXPECT_TRUE(ContainsText(frameGraph, "native submissions={} rejected submit paths={} command lists={}"));
     EXPECT_TRUE(ContainsText(frameGraph, "planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={}"));
     EXPECT_TRUE(ContainsText(frameGraph, "accepted frontier={} CPU={:.3f} ms"));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "  Compile plan: tasks={} packets={} merged tasks={} prologue barriers={} epilogue barriers={}"
+    ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
         "  Recording: packets={} tasks={} command lists={} barriers={} parallel={} CPU command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task recording={:.3f} ms total={:.3f} ms"
@@ -243,6 +279,11 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     EXPECT_TRUE(ContainsText(frameGraph, "__hidden_frame_graph_export::PhysicalQueueClassLabel(queueStatistics.queueClass),"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.rejectedSubmissionCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.submissionSeconds * 1000.0"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueCompileStatistics.taskCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueCompileStatistics.packetCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueCompileStatistics.mergedTaskCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueCompileStatistics.prologueBarrierCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueCompileStatistics.epilogueBarrierCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.packetCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.taskCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.commandListCount,"));

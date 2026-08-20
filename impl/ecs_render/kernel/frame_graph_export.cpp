@@ -128,11 +128,11 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             recordingStatistics.taskRecordSeconds * 1000.0
         );
 
-        // This borrows the immutable compiled-plan topology and recorded packet slots under the same renderer-side
-        // serialization contract as deferredTaskGraphRuntimeStatistics(). Native recording, including joined ready-
-        // frontier workers, and recorded-graph reset/recompile must not overlap these value snapshots. In particular,
-        // do not replace this with the mutable live Device registry while a later recompile can change the packet plan
-        // that owns these transaction snapshots.
+        // This borrows immutable compiled-plan topology and entries plus recorded packet slots under the same renderer-
+        // side serialization contract as deferredTaskGraphRuntimeStatistics(). Native recording, including joined
+        // ready-frontier workers, and compiled/recorded-graph reset/recompile must not overlap these value snapshots.
+        // In particular, do not replace this with the mutable live Device registry while a later recompile can change
+        // the packet plan that owns these transaction snapshots.
         const Core::GpuPhysicalQueueTopology queueTopology = m_deferredLightingCompiledGraph.queueTopology();
         for(usize queueIndex = 0u; queueIndex < queueTopology.queueCount; ++queueIndex){
             const Core::GpuPhysicalQueueInfo& queueInfo = queueTopology.queues[queueIndex];
@@ -146,6 +146,11 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
                 || (queueStatistics.acceptedPacketCount == 0u && queueStatistics.rejectedPacketCount == 0u)
             )
                 continue;
+            const Core::GpuTaskGraphPhysicalQueueCompileStatistics queueCompileStatistics =
+                m_deferredLightingCompiledGraph.physicalQueueCompileStatistics(queueInfo.id)
+            ;
+            if(!queueCompileStatistics.valid())
+                continue;
             const Core::GpuTaskGraphPhysicalQueueRecordingStatistics queueRecordingStatistics =
                 m_deferredLightingRecordedGraph.physicalQueueRecordingStatistics(
                     m_deferredLightingCompiledGraph,
@@ -157,6 +162,7 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             StringAppendFormat(
                 m_frameGraphRendererLabel,
                 "\nPhysical queue index={} generation={} class={}: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} native submissions={} rejected submit paths={} command lists={} planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={} accepted frontier={} CPU={:.3f} ms"
+                "\n  Compile plan: tasks={} packets={} merged tasks={} prologue barriers={} epilogue barriers={}"
                 "\n  Recording: packets={} tasks={} command lists={} barriers={} parallel={} CPU command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task recording={:.3f} ms total={:.3f} ms",
                 queueStatistics.queue.index,
                 queueStatistics.queue.deviceGeneration,
@@ -174,6 +180,11 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
                 queueStatistics.mergedTimelineWaitCount,
                 queueStatistics.acceptedFrontierSubmissionCount,
                 queueStatistics.submissionSeconds * 1000.0,
+                queueCompileStatistics.taskCount,
+                queueCompileStatistics.packetCount,
+                queueCompileStatistics.mergedTaskCount,
+                queueCompileStatistics.prologueBarrierCount,
+                queueCompileStatistics.epilogueBarrierCount,
                 queueRecordingStatistics.packetCount,
                 queueRecordingStatistics.taskCount,
                 queueRecordingStatistics.commandListCount,

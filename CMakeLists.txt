@@ -78,7 +78,7 @@ if((WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NWB_BUILD_TESTBED)
 endif()
 
 if(NWB_BUILD_TESTS)
-    enable_testing()
+    include(CTest)
     add_subdirectory(tests)
 endif()
 

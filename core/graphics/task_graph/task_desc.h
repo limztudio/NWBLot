@@ -274,6 +274,22 @@ struct GpuCopyTextureTaskDesc{
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 
+// Resolve operations are task-level primitives with explicit source/destination state declarations. The helper
+// retains both textures until late recording and records directly through CommandList after queue assignment.
+struct GpuResolveTextureTaskRegion{
+    GpuGraphResourceId source;
+    TextureSubresourceSet sourceSubresources = s_AllSubresources;
+    GpuGraphResourceId destination;
+    TextureSubresourceSet destinationSubresources = s_AllSubresources;
+};
+
+struct GpuResolveTextureTaskDesc{
+    const GpuResolveTextureTaskRegion* regions = nullptr;
+    usize regionCount = 0u;
+    // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
+    QueueSubmissionToken* acceptedToken = nullptr;
+};
+
 
 // Caller bytes are copied into a graph-owned upload blob before declaration. The task records that blob through the
 // existing CommandList staging path, so the blob is not a second persistent GPU upload allocator. `finalState`

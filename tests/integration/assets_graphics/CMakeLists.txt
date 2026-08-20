@@ -38,4 +38,9 @@ target_link_libraries(nwb_assets_graphics_tests PRIVATE
     nwb_common
     nwb_alloc
 )
-set_tests_properties(nwb_assets_graphics_tests PROPERTIES RUN_SERIAL TRUE)
+# This suite deliberately performs many isolated shader-volume cooks. Keep its serial fixture/cache contract and
+# give the complete integration binary enough time on hosts where Slang compilation is slower than CTest's default.
+set_tests_properties(nwb_assets_graphics_tests PROPERTIES
+    RUN_SERIAL TRUE
+    TIMEOUT 3600
+)

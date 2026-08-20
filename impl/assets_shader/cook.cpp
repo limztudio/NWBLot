@@ -83,6 +83,7 @@ static constexpr AStringView s_SpirvBaselineCapabilities[]{
 };
 static constexpr usize s_BaseCompilerArgumentCount = 16u + sizeof(s_SpirvBaselineCapabilities) / sizeof(s_SpirvBaselineCapabilities[0]) * 2u;
 static constexpr usize s_MaxTargetProfileCapabilityCount = 1u;
+static constexpr usize s_MaxOptimizationArgumentCount = 1u;
 
 struct NormalizedDependencyRootAlias{
     Path root;
@@ -166,6 +167,55 @@ static bool TryMapTargetProfileToSlangArguments(
     }
 
     return false;
+}
+
+static bool TryParseShaderOptimizationLevel(
+    const AStringView text,
+    ShaderOptimizationLevel::Enum& outOptimizationLevel
+){
+    if(text == "none"){
+        outOptimizationLevel = ShaderOptimizationLevel::None;
+        return true;
+    }
+    if(text == "default"){
+        outOptimizationLevel = ShaderOptimizationLevel::Default;
+        return true;
+    }
+    if(text == "high"){
+        outOptimizationLevel = ShaderOptimizationLevel::High;
+        return true;
+    }
+    if(text == "maximal"){
+        outOptimizationLevel = ShaderOptimizationLevel::Maximal;
+        return true;
+    }
+
+    outOptimizationLevel = ShaderOptimizationLevel::kCount;
+    return false;
+}
+
+[[nodiscard]] static AStringView ShaderOptimizationLevelText(
+    const ShaderOptimizationLevel::Enum optimizationLevel
+){
+    switch(optimizationLevel){
+    case ShaderOptimizationLevel::None: return "none";
+    case ShaderOptimizationLevel::Default: return "default";
+    case ShaderOptimizationLevel::High: return "high";
+    case ShaderOptimizationLevel::Maximal: return "maximal";
+    default: return {};
+    }
+}
+
+[[nodiscard]] static AStringView SlangOptimizationArgument(
+    const ShaderOptimizationLevel::Enum optimizationLevel
+){
+    switch(optimizationLevel){
+    case ShaderOptimizationLevel::None: return "-O0";
+    case ShaderOptimizationLevel::Default: return {};
+    case ShaderOptimizationLevel::High: return "-O2";
+    case ShaderOptimizationLevel::Maximal: return "-O3";
+    default: return {};
+    }
 }
 
 template<typename ArenaT, typename ArgumentVectorT>
@@ -537,6 +587,14 @@ public:
             NWB_LOGGER_ERROR(NWB_TEXT("Unsupported shader target profile '{}' in entry '{}'"), StringConvert(request.targetProfile), StringConvert(request.shaderName));
             return false;
         }
+        const AStringView optimizationArgument = SlangOptimizationArgument(request.optimizationLevel);
+        if(request.optimizationLevel >= ShaderOptimizationLevel::kCount){
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader '{}' uses an invalid optimization level {}")
+                , StringConvert(request.shaderName)
+                , static_cast<u32>(request.optimizationLevel)
+            );
+            return false;
+        }
 
         Path diagnosticsPath = request.outputPath;
         diagnosticsPath += ".diag";
@@ -564,6 +622,7 @@ public:
         arguments.reserve(
             s_BaseCompilerArgumentCount
             + s_MaxTargetProfileCapabilityCount * 2u
+            + s_MaxOptimizationArgumentCount
             + compilerIncludeDirectories.size() * 2u
             + static_cast<usize>(request.defineCount)
         );
@@ -578,6 +637,8 @@ public:
         PushCompilerArgument(argumentArena, arguments, "-fvk-use-entrypoint-name");
         PushCompilerArgument(argumentArena, arguments, "-warnings-as-errors");
         PushCompilerArgument(argumentArena, arguments, "all");
+        if(!optimizationArgument.empty())
+            PushCompilerArgument(argumentArena, arguments, optimizationArgument);
         PushCompilerArgument(argumentArena, arguments, "-profile");
         PushCompilerArgument(argumentArena, arguments, slangTargetProfile);
         if(!targetProfileCapability.empty()){
@@ -1285,7 +1346,7 @@ bool ShaderCook::parseShaderMeta(
         nwbFilePath,
         asset,
         "Shader meta",
-        { "stage", "target_profile", "entry_point", "include_roots", "defines", "emit_mesh_compute_shadow" }
+        { "stage", "target_profile", "optimization_level", "entry_point", "include_roots", "defines", "emit_mesh_compute_shadow" }
     ))
         return false;
     if(!__hidden_shader_cook::ParseCompactStringField(nwbFilePath, asset, "stage", outEntry.stage))
@@ -1303,6 +1364,27 @@ bool ShaderCook::parseShaderMeta(
         NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported target_profile '{}'"),
             PathToString<tchar>(nwbFilePath),
             StringConvert(outEntry.targetProfile.c_str())
+        );
+        return false;
+    }
+    const Metascript::Value* optimizationLevelValue = nullptr;
+    if(!__hidden_shader_cook::FindOptionalStringField(
+        nwbFilePath,
+        asset,
+        "optimization_level",
+        optimizationLevelValue
+    ))
+        return false;
+    if(
+        optimizationLevelValue
+        && !__hidden_shader_cook::TryParseShaderOptimizationLevel(
+            AStringView(optimizationLevelValue->asString().data(), optimizationLevelValue->asString().size()),
+            outEntry.optimizationLevel
+        )
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported optimization_level '{}'"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(AStringView(optimizationLevelValue->asString().data(), optimizationLevelValue->asString().size()))
         );
         return false;
     }
@@ -1670,7 +1752,7 @@ bool ShaderCook::computeSourceChecksum(
     u64& outChecksum,
     Alloc::ScratchArena& scratchArena
 ){
-    static constexpr AStringView s_ChecksumVersionTag = "shader-source-v2";
+    static constexpr AStringView s_ChecksumVersionTag = "shader-source-v3";
     const u8 newlineByte = '\n';
 
     outChecksum = FNV64_OFFSET_BASIS;
@@ -1685,6 +1767,7 @@ bool ShaderCook::computeSourceChecksum(
     appendChecksumLine(entry.stage.view());
     appendChecksumLine(entry.archiveStage.view());
     appendChecksumLine(entry.targetProfile.view());
+    appendChecksumLine(__hidden_shader_cook::ShaderOptimizationLevelText(entry.optimizationLevel));
     appendChecksumLine(AStringView(entry.entryPoint));
     appendChecksumLine(variantSignature);
     if(entry.implicitDefines.size() <= 1u){

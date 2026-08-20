@@ -1243,7 +1243,14 @@ static Path AssetsGraphicsTestRepoRoot(TestArena& testArena){
 }
 
 static Path AssetsGraphicsTestCaseRoot(TestArena& testArena, const AStringView caseName){
-    return AssetsGraphicsTestRepoRoot(testArena) / "__build_obj" / "nwb_assets_graphics_tests" / AssetsGraphicsTestConfigurationName() / AString(caseName);
+    // Object-cache paths append a wide asset-type hash and cache key. This target is RUN_SERIAL and each cook
+    // fixture clears its root, so retain fixture isolation through a compact config-plus-case key that keeps every
+    // generated Windows path below MAX_PATH.
+    AString caseKey;
+    caseKey.reserve(1u + s_HexU32DigitCount);
+    caseKey += AssetsGraphicsTestConfigurationName()[0u];
+    AppendHexU32(static_cast<u32>(ComputeFnv64Text(caseName)), caseKey);
+    return AssetsGraphicsTestRepoRoot(testArena) / "__build_obj" / "c" / "a" / caseKey;
 }
 
 static bool PrepareAssetsGraphicsCaseRoot(TestArena& testArena, const AStringView caseName, Path& outRoot){

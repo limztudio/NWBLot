@@ -886,6 +886,17 @@ TEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails){
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
     };
+    Graphics::GpuResolveTextureTaskDesc resolveTexture;
+    resolveTexture.acceptedToken = &token;
+    EXPECT_FALSE(graph.addResolveTextureTask(desc, resolveTexture).valid());
+    EXPECT_FALSE(token.valid());
+
+    token = Graphics::QueueSubmissionToken{
+        .queue = Graphics::CommandQueue::Graphics,
+        .value = 1u,
+        .physicalQueueIndex = 0u,
+        .deviceGeneration = 1u,
+    };
     Graphics::GpuClearBufferTaskDesc clearBuffer;
     clearBuffer.acceptedToken = &token;
     EXPECT_FALSE(graph.addClearBufferTask(desc, clearBuffer).valid());
@@ -1419,6 +1430,47 @@ TEST(GpuTaskGraph, CopyTextureTaskRequiresTypedTextureImports){
     EXPECT_FALSE(graph.addCopyTextureTask(
         desc,
         Graphics::GpuCopyTextureTaskDesc{
+            .regions = &region,
+            .regionCount = 1u,
+        }
+    ).valid());
+    EXPECT_EQ(graph.taskCount(), 0u);
+}
+
+TEST(GpuTaskGraph, ResolveTextureTaskRequiresTypedTextureImports){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId source = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/built_in_resolve_source"),
+        "Built-In Resolve Source"
+    );
+    const Graphics::GpuGraphResourceId destination = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/built_in_resolve_destination"),
+        "Built-In Resolve Destination"
+    );
+    ASSERT_TRUE(source.valid());
+    ASSERT_TRUE(destination.valid());
+
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/built_in_resolve"))
+        .setMarkerLabel("Built-In Resolve")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+    const Graphics::GpuResolveTextureTaskRegion region{
+        .source = source,
+        .destination = destination,
+    };
+    EXPECT_FALSE(graph.addResolveTextureTask(
+        desc,
+        Graphics::GpuResolveTextureTaskDesc{
             .regions = &region,
             .regionCount = 1u,
         }

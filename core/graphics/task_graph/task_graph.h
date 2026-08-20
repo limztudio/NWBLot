@@ -225,6 +225,11 @@ public:
     // must not provide separate resource uses.
     [[nodiscard]] GpuTaskId addCopyTextureTask(const GpuTaskDesc& desc, const GpuCopyTextureTaskDesc& copyDesc);
 
+    // Adds a graph-owned native texture-resolve task. The helper derives ResolveSource/ResolveDest resource uses
+    // from its regions and retains the imported textures through recording, so desc must declare Transfer capability
+    // and must not provide separate resource uses.
+    [[nodiscard]] GpuTaskId addResolveTextureTask(const GpuTaskDesc& desc, const GpuResolveTextureTaskDesc& resolveDesc);
+
     // Copies caller-owned bytes into graph-owned CPU storage. `alignment` must be a nonzero power of two; blobs
     // expose only an opaque byte view, so no typed-alignment promise escapes the graph. Built-in upload tasks resolve
     // the immutable blob while recording, then use the ordinary CommandList staging allocator for GPU lifetime.

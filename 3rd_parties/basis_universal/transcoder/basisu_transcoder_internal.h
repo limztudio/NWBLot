@@ -2299,9 +2299,9 @@ namespace basist
 	namespace arith_fastbits_f32
 	{
 		enum { TABLE_BITS = 8 };               // 256..1024 entries typical (8..10)
-		enum { TABLE_SIZE = 1 << TABLE_BITS };
+		enum { TABLE_SIZE = 1 << static_cast<int>(TABLE_BITS) };
 		enum { MANT_BITS = 23 };
-		enum { FRAC_BITS = MANT_BITS - TABLE_BITS };
+		enum { FRAC_BITS = static_cast<int>(MANT_BITS) - static_cast<int>(TABLE_BITS) };
 		enum { FRAC_MASK = (1u << FRAC_BITS) - 1u };
 
 		extern bool g_initialized;

@@ -106,6 +106,57 @@ struct CopyTextureTask{
     }
 };
 
+struct ResolveTextureTask{
+    struct Resolve{
+        GpuGraphResourceId sourceResource;
+        TextureHandle source;
+        TextureSubresourceSet sourceSubresources;
+        GpuGraphResourceId destinationResource;
+        TextureHandle destination;
+        TextureSubresourceSet destinationSubresources;
+    };
+
+    struct Payload{
+        explicit Payload(GraphicsArena& arena)
+            : resolves(arena)
+        {}
+
+        GraphicsVector<Resolve> resolves;
+        QueueSubmissionToken* acceptedToken = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        if(payload.resolves.empty() || context.commandIrCapture)
+            return false;
+
+        for(const Resolve& resolve : payload.resolves){
+            if(!resolve.source || !resolve.destination)
+                return false;
+            commandList.resolveTexture(
+                resolve.destination.get(),
+                resolve.destinationSubresources,
+                resolve.source.get(),
+                resolve.sourceSubresources
+            );
+        }
+        return true;
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(payload.acceptedToken)
+            *payload.acceptedToken = token;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.acceptedToken)
+            *payload.acceptedToken = {};
+    }
+};
+
 struct CopyBufferTask{
     struct Copy{
         GpuGraphResourceId sourceResource;
@@ -928,6 +979,125 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
             &DiscardPayload<CopyTask>,
             &DestroyPayload<CopyTask::Payload>
         );
+    return task;
+}
+
+GpuTaskId GpuTaskGraph::addResolveTextureTask(
+    const GpuTaskDesc& desc,
+    const GpuResolveTextureTaskDesc& resolveDesc
+){
+    if(resolveDesc.acceptedToken)
+        *resolveDesc.acceptedToken = {};
+
+    if(
+        desc.resourceUses
+        || desc.resourceUseCount != 0u
+        || desc.resourceSetUses
+        || desc.resourceSetUseCount != 0u
+        || !resolveDesc.regions
+        || resolveDesc.regionCount == 0u
+        || resolveDesc.regionCount > Limit<u32>::s_Max
+        || resolveDesc.regionCount > Limit<usize>::s_Max / 2u
+        || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
+    )
+        return {};
+
+    using ResolveTask = __hidden_gpu_task_graph::ResolveTextureTask;
+    ResolveTask::Payload* const payload = NewArenaObject<ResolveTask::Payload>(m_arena, m_arena);
+    if(!payload)
+        return {};
+    payload->resolves.reserve(resolveDesc.regionCount);
+    payload->acceptedToken = resolveDesc.acceptedToken;
+
+    GraphicsVector<GpuTaskResourceUse> resourceUses(m_arena);
+    resourceUses.reserve(resolveDesc.regionCount * 2u);
+    const auto appendResourceUse = [&](
+        const GpuGraphResourceId resource,
+        const TextureSubresourceSet& subresources,
+        const ResourceStates::Mask state,
+        const GpuTaskResourceAccess::Enum access
+    ){
+        for(const GpuTaskResourceUse& existing : resourceUses){
+            if(existing.resource != resource)
+                continue;
+            // A resolve source cannot also be a destination in one task: the required states need an explicit
+            // inter-task boundary rather than an ambiguous packet prologue.
+            if(existing.requiredState != state || existing.access != access)
+                return false;
+        }
+        resourceUses.push_back(GpuTaskResourceUse{
+            .resource = resource,
+            .range = { .textureSubresources = subresources },
+            .requiredState = state,
+            .access = access,
+        });
+        return true;
+    };
+
+    bool valid = true;
+    for(usize regionIndex = 0u; regionIndex < resolveDesc.regionCount && valid; ++regionIndex){
+        const GpuResolveTextureTaskRegion& region = resolveDesc.regions[regionIndex];
+        if(!validResource(region.source) || !validResource(region.destination)){
+            valid = false;
+            break;
+        }
+        const GpuGraphResourceNode& sourceResource = m_resources[region.source.index];
+        const GpuGraphResourceNode& destinationResource = m_resources[region.destination.index];
+        valid = region.source != region.destination
+            && sourceResource.type == GpuGraphResourceType::Texture
+            && destinationResource.type == GpuGraphResourceType::Texture
+            && sourceResource.texture
+            && destinationResource.texture
+            && appendResourceUse(
+                region.source,
+                region.sourceSubresources,
+                ResourceStates::ResolveSource,
+                GpuTaskResourceAccess::Read
+            )
+            && appendResourceUse(
+                region.destination,
+                region.destinationSubresources,
+                ResourceStates::ResolveDest,
+                GpuTaskResourceAccess::Write
+            )
+        ;
+        if(valid){
+            payload->resolves.push_back(ResolveTask::Resolve{
+                .sourceResource = region.source,
+                .source = sourceResource.texture,
+                .sourceSubresources = region.sourceSubresources,
+                .destinationResource = region.destination,
+                .destination = destinationResource.texture,
+                .destinationSubresources = region.destinationSubresources,
+            });
+        }
+    }
+    if(!valid){
+        discardAndDestroyUnappendedPayload(
+            payload,
+            &DiscardPayload<ResolveTask>,
+            &DestroyPayload<ResolveTask::Payload>
+        );
+        return {};
+    }
+
+    GpuTaskDesc resolvedDesc = desc;
+    resolvedDesc.setResourceUses(resourceUses.data(), resourceUses.size());
+    const GpuTaskId task = appendTask(
+        resolvedDesc,
+        payload,
+        &RecordPayload<ResolveTask>,
+        &AcceptPayload<ResolveTask>,
+        &DiscardPayload<ResolveTask>,
+        &DestroyPayload<ResolveTask::Payload>
+    );
+    if(!task.valid()){
+        discardAndDestroyUnappendedPayload(
+            payload,
+            &DiscardPayload<ResolveTask>,
+            &DestroyPayload<ResolveTask::Payload>
+        );
+    }
     return task;
 }
 

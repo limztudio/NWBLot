@@ -415,7 +415,10 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         return false;
 
     auto& shaderCookArena = graphicsMetadata.shaderEntries.get_allocator().arena();
-    const auto appendGeneratedPixelShaderEntry = [&](const GeneratedMaterialPixelShader& generatedPixelShader) -> bool{
+    const auto appendGeneratedPixelShaderEntry = [&](
+        const GeneratedMaterialPixelShader& generatedPixelShader,
+        const ShaderOptimizationLevel::Enum optimizationLevel = ShaderOptimizationLevel::Default
+    ) -> bool{
         ShaderCook::ShaderEntry pixelShaderEntry(shaderCookArena);
         pixelShaderEntry.name.assign(AStringView(generatedPixelShader.name));
         pixelShaderEntry.source.assign(AStringView(generatedPixelShader.source));
@@ -425,6 +428,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
             return false;
         }
         pixelShaderEntry.targetProfile = "spirv_1_5";
+        pixelShaderEntry.optimizationLevel = optimizationLevel;
         pixelShaderEntry.includeRoots.push_back(ShaderCook::CookString(AStringView("engine/graphics"), shaderCookArena));
         pixelShaderEntry.emitMeshComputeShadow = false;
 
@@ -446,7 +450,9 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
             return false;
     }
     for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedAvboitAccumulatePixelShaders){
-        if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
+        // Slang 1.4.313's default SPIR-V optimizer asserts while lowering the generated BXDF-dispatch path used
+        // only by transparent accumulation. Preserve normal optimization for the other generated material passes.
+        if(!appendGeneratedPixelShaderEntry(generatedPixelShader, ShaderOptimizationLevel::None))
             return false;
     }
     for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedAvboitOccupancyPixelShaders){

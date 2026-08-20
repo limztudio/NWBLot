@@ -172,6 +172,46 @@ TEST(AssetsGraphics, ShaderMetadataRejectsDefaultVariantAlias){
 #endif
 }
 
+TEST(AssetsGraphics, ShaderMetadataParsesOptimizationLevel){
+    TestArena testArena;
+    Path root(testArena.arena);
+    EXPECT_TRUE(PrepareAssetsGraphicsCaseRoot(testArena, "shader_optimization_level", root));
+
+    const Path assetRoot = root / "assets";
+    const Path shaderMetaPath = assetRoot / "shaders" / "optimization_level_ps.nwb";
+    EXPECT_TRUE(WriteTextFile(
+        shaderMetaPath,
+        "shader asset;\n\n"
+        "asset.stage = \"ps\";\n"
+        "asset.target_profile = \"spirv_1_5\";\n"
+        "asset.optimization_level = \"none\";\n"
+        "asset.entry_point = \"main\";\n"
+    ));
+    EXPECT_TRUE(WriteTextFile(
+        assetRoot / "shaders" / "optimization_level_ps.slang",
+        R"NWB_SLANG(struct NwbOptimizationLevelPixelOutput{
+    float4 color : SV_Target0;
+};
+
+NwbOptimizationLevelPixelOutput main(){
+    NwbOptimizationLevelPixelOutput output;
+    output.color = float4(1.0, 1.0, 1.0, 1.0);
+    return output;
+}
+
+)NWB_SLANG"
+    ));
+
+    NWB::Impl::ShaderCook shaderCook(testArena.arena);
+    NWB::Impl::ShaderCook::ShaderEntry entry(testArena.arena);
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ShaderScratchArena);
+    EXPECT_TRUE(shaderCook.parseShaderMeta(shaderMetaPath, entry, scratchArena));
+    EXPECT_EQ(entry.optimizationLevel, NWB::Impl::ShaderOptimizationLevel::None);
+
+    ErrorCode errorCode;
+    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+}
+
 TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
     TestArena testArena;
     Path root(testArena.arena);

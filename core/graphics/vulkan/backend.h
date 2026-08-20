@@ -181,7 +181,7 @@ bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeByte
 template<typename... Pointers>
 inline bool DebugValidateNotNull(const tchar* operationName, const tchar* message, Pointers... pointers){
 #if defined(NWB_DEBUG)
-    if((... || (pointers == nullptr))){
+    if((... || !pointers)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
         return false;

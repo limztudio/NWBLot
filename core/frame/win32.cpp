@@ -16,6 +16,7 @@
 
 
 #include <windows.h>
+#include <global/compile.h>
 #include <global/win32_message_loop.h>
 
 #include "input_helpers.h"
@@ -65,22 +66,33 @@ static HMODULE GetUser32Module(){
     return module;
 }
 
+template<typename FunctionT>
+[[nodiscard]] static FunctionT DecodeUser32Procedure(const FARPROC procedure){
+    static_assert(sizeof(FunctionT) == sizeof(procedure));
+    if(!procedure)
+        return nullptr;
+
+    // GetProcAddress returns a function pointer with a generic signature. Copy its Windows ABI representation
+    // instead of using an incompatible function-pointer cast that GNU-compatible frontends diagnose.
+    FunctionT result = nullptr;
+    NWB_MEMCPY(&result, sizeof(result), &procedure, sizeof(procedure));
+    return result;
+}
+
 static void EnableProcessDpiAwareness(){
     HMODULE user32 = GetUser32Module();
     if(!user32)
         return;
 
     using SetProcessDpiAwarenessContextFn = BOOL(WINAPI*)(HANDLE);
-    const auto setProcessDpiAwarenessContext =
-        reinterpret_cast<SetProcessDpiAwarenessContextFn>(GetProcAddress(user32, "SetProcessDpiAwarenessContext"))
-    ;
+    const auto setProcessDpiAwarenessContext = DecodeUser32Procedure<SetProcessDpiAwarenessContextFn>(GetProcAddress(user32, "SetProcessDpiAwarenessContext"));
     if(setProcessDpiAwarenessContext){
         if(setProcessDpiAwarenessContext(reinterpret_cast<HANDLE>(s_PerMonitorAwareV2Context)))
             return;
     }
 
     using SetProcessDpiAwareFn = BOOL(WINAPI*)();
-    const auto setProcessDpiAware = reinterpret_cast<SetProcessDpiAwareFn>(GetProcAddress(user32, "SetProcessDPIAware"));
+    const auto setProcessDpiAware = DecodeUser32Procedure<SetProcessDpiAwareFn>(GetProcAddress(user32, "SetProcessDPIAware"));
     if(setProcessDpiAware)
         setProcessDpiAware();
 }
@@ -89,7 +101,7 @@ static UINT QueryInitialWindowDpi(){
     HMODULE user32 = GetUser32Module();
     if(user32){
         using GetDpiForSystemFn = UINT(WINAPI*)();
-        const auto getDpiForSystem = reinterpret_cast<GetDpiForSystemFn>(GetProcAddress(user32, "GetDpiForSystem"));
+        const auto getDpiForSystem = DecodeUser32Procedure<GetDpiForSystemFn>(GetProcAddress(user32, "GetDpiForSystem"));
         if(getDpiForSystem){
             const UINT dpi = getDpiForSystem();
             if(dpi != 0)
@@ -111,9 +123,7 @@ static bool AdjustWindowRectForDpi(RECT& rect, DWORD style, BOOL hasMenu, DWORD 
     HMODULE user32 = GetUser32Module();
     if(user32){
         using AdjustWindowRectExForDpiFn = BOOL(WINAPI*)(LPRECT, DWORD, BOOL, DWORD, UINT);
-        const auto adjustWindowRectExForDpi =
-            reinterpret_cast<AdjustWindowRectExForDpiFn>(GetProcAddress(user32, "AdjustWindowRectExForDpi"))
-        ;
+        const auto adjustWindowRectExForDpi = DecodeUser32Procedure<AdjustWindowRectExForDpiFn>(GetProcAddress(user32, "AdjustWindowRectExForDpi"));
         if(adjustWindowRectExForDpi)
             return adjustWindowRectExForDpi(&rect, style, hasMenu, styleEx, dpi) != FALSE;
     }

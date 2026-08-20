@@ -1634,6 +1634,8 @@ public:
     void shutdown();
 
     [[nodiscard]] bool isInitialized()const{ return m_initialized; }
+    // Coherent aggregate lifecycle counters; intentionally does not identify individual physical queues.
+    [[nodiscard]] GpuDescriptorHeapLifecycleStatistics lifecycleStatistics()const;
 
     // Returns invalid (logged) when the class namespace is exhausted.
     [[nodiscard]] GpuDescriptorHandle allocate(GpuDescriptorClass::Enum descriptorClass);

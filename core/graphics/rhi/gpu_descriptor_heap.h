@@ -139,6 +139,33 @@ struct GpuDescriptorHeapDesc{
 };
 
 
+// Coherent-by-value lifecycle snapshot for the descriptor-buffer global heap. The Vulkan backend samples every
+// field while holding its heap mutex. Resource slots are one shared namespace for every non-sampler, non-TLAS
+// descriptor class; TLAS slots select separate immutable per-generation blocks.
+struct GpuDescriptorHeapLifecycleStatistics{
+    // False after shutdown or before initialization. The remaining counters are ordinarily zero in that state.
+    bool initialized = false;
+    u32 resourceCapacity = 0u;
+    u32 samplerCapacity = 0u;
+    u32 accelStructCapacity = 0u;
+    // A live slot is allocated and has not yet entered deferred-free quarantine.
+    usize resourceLiveSlotCount = 0u;
+    usize samplerLiveSlotCount = 0u;
+    usize accelStructLiveSlotCount = 0u;
+    // Aggregate slots awaiting reuse because a prior heap binding could still need their descriptor/resource.
+    usize pendingRetiredSlotCount = 0u;
+    // Heap uses with an accepted submission token, retained until collectRetired() reaps their token.
+    // This can include work that has physically completed but has not yet been collected.
+    usize acceptedHeapUseCount = 0u;
+    // Heap uses still owned by a recorded command buffer without an accepted submission token. Rejected or
+    // abandoned command buffers stop contributing here before collectRetired() releases their retired slots.
+    usize unsubmittedHeapUseCount = 0u;
+    // Heap uses whose command buffer was discarded without an accepted token. They have no trustworthy physical
+    // queue identity and remain visible only until collectRetired() releases the associated deferred-free slots.
+    usize abandonedHeapUseCount = 0u;
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

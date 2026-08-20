@@ -45996,6 +45996,18 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetiredAndDoubleFreed
     ;
     ASSERT_TRUE(heap.initialize(heapDesc));
 
+    const GpuDescriptorHeapLifecycleStatistics initialStatistics = heap.lifecycleStatistics();
+    EXPECT_TRUE(initialStatistics.initialized);
+    EXPECT_EQ(initialStatistics.resourceCapacity, 2u);
+    EXPECT_EQ(initialStatistics.samplerCapacity, 1u);
+    EXPECT_EQ(initialStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(initialStatistics.samplerLiveSlotCount, 0u);
+    EXPECT_EQ(initialStatistics.accelStructLiveSlotCount, 0u);
+    EXPECT_EQ(initialStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(initialStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(initialStatistics.unsubmittedHeapUseCount, 0u);
+    EXPECT_EQ(initialStatistics.abandonedHeapUseCount, 0u);
+
     auto storageBuffer = device.createBuffer(
         BufferDesc()
             .setByteSize(4096u)
@@ -46009,8 +46021,20 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetiredAndDoubleFreed
     const GpuDescriptorHandle retired = heap.allocate(GpuDescriptorClass::StorageBuffer);
     ASSERT_TRUE(retired.valid());
     ASSERT_TRUE(heap.write(retired, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
+    const GpuDescriptorHeapLifecycleStatistics allocatedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(allocatedStatistics.resourceLiveSlotCount, 1u);
+    EXPECT_EQ(allocatedStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(allocatedStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(allocatedStatistics.unsubmittedHeapUseCount, 0u);
+    EXPECT_EQ(allocatedStatistics.abandonedHeapUseCount, 0u);
 
     heap.free(retired);
+    const GpuDescriptorHeapLifecycleStatistics immediatelyRetiredStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(immediatelyRetiredStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(immediatelyRetiredStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(immediatelyRetiredStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(immediatelyRetiredStatistics.unsubmittedHeapUseCount, 0u);
+    EXPECT_EQ(immediatelyRetiredStatistics.abandonedHeapUseCount, 0u);
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
     EXPECT_DEATH_IF_SUPPORTED({
         EXPECT_FALSE(heap.write(retired, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
@@ -46164,6 +46188,22 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     ;
     ASSERT_TRUE(heap.initialize(heapDesc));
 
+    const GpuDescriptorHeapLifecycleStatistics initialStatistics = heap.lifecycleStatistics();
+    EXPECT_TRUE(initialStatistics.initialized);
+    EXPECT_EQ(initialStatistics.resourceCapacity, 2u);
+    EXPECT_EQ(initialStatistics.samplerCapacity, 1u);
+    if(heap.hasAccelStructLayout())
+        EXPECT_GT(initialStatistics.accelStructCapacity, 0u);
+    else
+        EXPECT_EQ(initialStatistics.accelStructCapacity, 0u);
+    EXPECT_EQ(initialStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(initialStatistics.samplerLiveSlotCount, 0u);
+    EXPECT_EQ(initialStatistics.accelStructLiveSlotCount, 0u);
+    EXPECT_EQ(initialStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(initialStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(initialStatistics.unsubmittedHeapUseCount, 0u);
+    EXPECT_EQ(initialStatistics.abandonedHeapUseCount, 0u);
+
     ShaderDesc shaderDesc(DescriptorBufferRoundTripTest::arena());
     shaderDesc
         .setShaderType(ShaderType::Compute)
@@ -46194,6 +46234,13 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     const GpuDescriptorHandle unsubmittedHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
     ASSERT_TRUE(unsubmittedHandle.valid());
     ASSERT_TRUE(heap.write(unsubmittedHandle, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
+    const GpuDescriptorHeapLifecycleStatistics allocatedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(allocatedStatistics.resourceLiveSlotCount, 1u);
+    EXPECT_EQ(allocatedStatistics.samplerLiveSlotCount, 0u);
+    EXPECT_EQ(allocatedStatistics.accelStructLiveSlotCount, 0u);
+    EXPECT_EQ(allocatedStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(allocatedStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(allocatedStatistics.unsubmittedHeapUseCount, 0u);
     EXPECT_EQ(storageBuffer->getReferenceCount(), 2u);
 
     auto unsubmittedCommandList = device.createCommandList();
@@ -46202,9 +46249,21 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     heap.bindCompute(*unsubmittedCommandList, *pipeline);
     unsubmittedCommandList->close();
     ASSERT_TRUE(unsubmittedCommandList->hasCommandBuffer());
+    const GpuDescriptorHeapLifecycleStatistics unsubmittedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(unsubmittedStatistics.resourceLiveSlotCount, 1u);
+    EXPECT_EQ(unsubmittedStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(unsubmittedStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(unsubmittedStatistics.unsubmittedHeapUseCount, 1u);
+    EXPECT_EQ(unsubmittedStatistics.abandonedHeapUseCount, 0u);
 
     heap.free(unsubmittedHandle);
     heap.collectRetired();
+    const GpuDescriptorHeapLifecycleStatistics retiredUnsubmittedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(retiredUnsubmittedStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(retiredUnsubmittedStatistics.pendingRetiredSlotCount, 1u);
+    EXPECT_EQ(retiredUnsubmittedStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(retiredUnsubmittedStatistics.unsubmittedHeapUseCount, 1u);
+    EXPECT_EQ(retiredUnsubmittedStatistics.abandonedHeapUseCount, 0u);
     EXPECT_EQ(storageBuffer->getReferenceCount(), 2u)
         << "an unsubmitted command buffer lost its descriptor resource";
 
@@ -46212,10 +46271,20 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     ASSERT_TRUE(heldSlot.valid());
     EXPECT_NE(heldSlot.slot(), unsubmittedHandle.slot())
         << "an unsubmitted command buffer allowed its descriptor slot to be recycled";
+    const GpuDescriptorHeapLifecycleStatistics heldSlotStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(heldSlotStatistics.resourceLiveSlotCount, 1u);
+    EXPECT_EQ(heldSlotStatistics.pendingRetiredSlotCount, 1u);
+    EXPECT_EQ(heldSlotStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(heldSlotStatistics.unsubmittedHeapUseCount, 1u);
     heap.free(heldSlot);
 
     device.runGarbageCollection();
     heap.collectRetired();
+    const GpuDescriptorHeapLifecycleStatistics garbageCollectedUnsubmittedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(garbageCollectedUnsubmittedStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(garbageCollectedUnsubmittedStatistics.pendingRetiredSlotCount, 2u);
+    EXPECT_EQ(garbageCollectedUnsubmittedStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(garbageCollectedUnsubmittedStatistics.unsubmittedHeapUseCount, 1u);
     EXPECT_EQ(storageBuffer->getReferenceCount(), 2u)
         << "CPU garbage collection released an unsubmitted descriptor heap use";
 
@@ -46225,7 +46294,20 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     device.executeCommandLists(unsubmittedCommandLists, 1u, CommandQueue::Graphics, &unsubmittedAccepted);
     EXPECT_FALSE(unsubmittedAccepted);
 
+    const GpuDescriptorHeapLifecycleStatistics rejectedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(rejectedStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(rejectedStatistics.pendingRetiredSlotCount, 2u);
+    EXPECT_EQ(rejectedStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(rejectedStatistics.unsubmittedHeapUseCount, 0u);
+    EXPECT_EQ(rejectedStatistics.abandonedHeapUseCount, 1u);
+
     heap.collectRetired();
+    const GpuDescriptorHeapLifecycleStatistics abandonedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(abandonedStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(abandonedStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(abandonedStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(abandonedStatistics.unsubmittedHeapUseCount, 0u);
+    EXPECT_EQ(abandonedStatistics.abandonedHeapUseCount, 0u);
     EXPECT_EQ(storageBuffer->getReferenceCount(), 1u)
         << "a rejected submission did not release the abandoned descriptor heap use";
 
@@ -46235,10 +46317,20 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     ASSERT_TRUE(recycledSecond.valid());
     EXPECT_TRUE(recycledFirst.slot() == unsubmittedHandle.slot() || recycledSecond.slot() == unsubmittedHandle.slot())
         << "a rejected submission did not return the abandoned descriptor slot";
+    const GpuDescriptorHeapLifecycleStatistics recycledStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(recycledStatistics.resourceLiveSlotCount, 2u);
+    EXPECT_EQ(recycledStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(recycledStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(recycledStatistics.unsubmittedHeapUseCount, 0u);
 
     heap.free(recycledFirst);
     heap.free(recycledSecond);
     heap.collectRetired();
+    const GpuDescriptorHeapLifecycleStatistics clearedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(clearedStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(clearedStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(clearedStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(clearedStatistics.unsubmittedHeapUseCount, 0u);
 
     const GpuDescriptorHandle acceptedHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
     ASSERT_TRUE(acceptedHandle.valid());
@@ -46250,9 +46342,19 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     heap.bindCompute(*acceptedCommandList, *pipeline);
     acceptedCommandList->close();
     ASSERT_TRUE(acceptedCommandList->hasCommandBuffer());
+    const GpuDescriptorHeapLifecycleStatistics acceptedUnsubmittedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(acceptedUnsubmittedStatistics.resourceLiveSlotCount, 1u);
+    EXPECT_EQ(acceptedUnsubmittedStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(acceptedUnsubmittedStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(acceptedUnsubmittedStatistics.unsubmittedHeapUseCount, 1u);
 
     heap.free(acceptedHandle);
     heap.collectRetired();
+    const GpuDescriptorHeapLifecycleStatistics acceptedRetiredStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(acceptedRetiredStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(acceptedRetiredStatistics.pendingRetiredSlotCount, 1u);
+    EXPECT_EQ(acceptedRetiredStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(acceptedRetiredStatistics.unsubmittedHeapUseCount, 1u);
     EXPECT_EQ(storageBuffer->getReferenceCount(), 2u)
         << "an unsubmitted accepted-path command buffer lost its descriptor resource";
 
@@ -46264,11 +46366,55 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(acceptedToken.valid());
+
+    // Accepted tokens remain visible until collection, independent of whether this no-op submission has already
+    // completed on a fast adapter. This avoids conflating submission acceptance with physical queue timing.
+    const GpuDescriptorHeapLifecycleStatistics acceptedStatistics = heap.lifecycleStatistics();
+    EXPECT_EQ(acceptedStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(acceptedStatistics.pendingRetiredSlotCount, 1u);
+    EXPECT_EQ(acceptedStatistics.acceptedHeapUseCount, 1u);
+    EXPECT_EQ(acceptedStatistics.unsubmittedHeapUseCount, 0u);
+    EXPECT_EQ(acceptedStatistics.abandonedHeapUseCount, 0u);
+
     ASSERT_TRUE(device.waitForIdle());
 
     heap.collectRetired();
+    const GpuDescriptorHeapLifecycleStatistics completedStatistics = heap.lifecycleStatistics();
+    EXPECT_TRUE(completedStatistics.initialized);
+    EXPECT_EQ(completedStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(completedStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(completedStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(completedStatistics.unsubmittedHeapUseCount, 0u);
+    EXPECT_EQ(completedStatistics.abandonedHeapUseCount, 0u);
     EXPECT_EQ(storageBuffer->getReferenceCount(), 1u)
         << "a completed queue submission did not release its descriptor heap use";
+
+    heap.shutdown();
+    const GpuDescriptorHeapLifecycleStatistics shutdownStatistics = heap.lifecycleStatistics();
+    EXPECT_FALSE(shutdownStatistics.initialized);
+    EXPECT_EQ(shutdownStatistics.resourceCapacity, 0u);
+    EXPECT_EQ(shutdownStatistics.samplerCapacity, 0u);
+    EXPECT_EQ(shutdownStatistics.accelStructCapacity, 0u);
+    EXPECT_EQ(shutdownStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(shutdownStatistics.samplerLiveSlotCount, 0u);
+    EXPECT_EQ(shutdownStatistics.accelStructLiveSlotCount, 0u);
+    EXPECT_EQ(shutdownStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(shutdownStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(shutdownStatistics.unsubmittedHeapUseCount, 0u);
+    EXPECT_EQ(shutdownStatistics.abandonedHeapUseCount, 0u);
+
+    ASSERT_TRUE(heap.initialize(heapDesc));
+    const GpuDescriptorHeapLifecycleStatistics reinitializedStatistics = heap.lifecycleStatistics();
+    EXPECT_TRUE(reinitializedStatistics.initialized);
+    EXPECT_EQ(reinitializedStatistics.resourceCapacity, 2u);
+    EXPECT_EQ(reinitializedStatistics.samplerCapacity, 1u);
+    EXPECT_EQ(reinitializedStatistics.resourceLiveSlotCount, 0u);
+    EXPECT_EQ(reinitializedStatistics.samplerLiveSlotCount, 0u);
+    EXPECT_EQ(reinitializedStatistics.accelStructLiveSlotCount, 0u);
+    EXPECT_EQ(reinitializedStatistics.pendingRetiredSlotCount, 0u);
+    EXPECT_EQ(reinitializedStatistics.acceptedHeapUseCount, 0u);
+    EXPECT_EQ(reinitializedStatistics.unsubmittedHeapUseCount, 0u);
+    EXPECT_EQ(reinitializedStatistics.abandonedHeapUseCount, 0u);
 #endif
 }
 

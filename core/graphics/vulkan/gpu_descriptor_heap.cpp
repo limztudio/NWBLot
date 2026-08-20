@@ -577,6 +577,44 @@ void GpuDescriptorHeap::shutdown(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+GpuDescriptorHeapLifecycleStatistics GpuDescriptorHeap::lifecycleStatistics()const{
+    ScopedLock lock(m_mutex);
+
+    GpuDescriptorHeapLifecycleStatistics statistics;
+    statistics.initialized = m_initialized;
+    statistics.resourceCapacity = m_resourceSlots.capacity;
+    statistics.samplerCapacity = m_samplerSlots.capacity;
+    statistics.accelStructCapacity = m_accelStructSlots.capacity;
+    statistics.pendingRetiredSlotCount = m_retired.size();
+
+    for(const u8 liveSlot : m_resourceSlots.liveSlots){
+        if(liveSlot != 0u)
+            ++statistics.resourceLiveSlotCount;
+    }
+    for(const u8 liveSlot : m_samplerSlots.liveSlots){
+        if(liveSlot != 0u)
+            ++statistics.samplerLiveSlotCount;
+    }
+    for(const u8 liveSlot : m_accelStructSlots.liveSlots){
+        if(liveSlot != 0u)
+            ++statistics.accelStructLiveSlotCount;
+    }
+
+    for(const HeapUse& heapUse : m_heapUses){
+        if(heapUse.submissionToken.valid())
+            ++statistics.acceptedHeapUseCount;
+        else if(heapUse.commandBuffer)
+            ++statistics.unsubmittedHeapUseCount;
+        else
+            ++statistics.abandonedHeapUseCount;
+    }
+    return statistics;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum descriptorClass){
     if(!m_initialized){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate called before initialize."));

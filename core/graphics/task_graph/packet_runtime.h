@@ -43,6 +43,9 @@ struct GpuRecordedPacket{
     // after graph lowering, so compile tooling can distinguish declared work from the native work that was recorded.
     u32 taskCount = 0u;
     u32 barrierCount = 0u;
+    f64 commandListAcquisitionSeconds = 0.0;
+    f64 graphBarrierRecordingSeconds = 0.0;
+    f64 taskRecordSeconds = 0.0;
     f64 recordingSeconds = 0.0;
     // Zero is serial/default recording. Nonzero values identify the ready-frontier worker lease that opened this
     // packet's native command list; kept for transactional diagnostics and worker-affinity smoke coverage.
@@ -52,6 +55,8 @@ struct GpuRecordedPacket{
 
 // Immutable snapshot assembled from successfully published native packet slots. Recording can be parallel, so
 // recordingSeconds is the sum of per-packet CPU work rather than elapsed wall-clock time for the whole frontier.
+// The phase counters isolate native list acquisition, graph-owned barrier lowering, and task callbacks; they do not
+// sum to recordingSeconds because graph preparation, markers, close, and lifecycle work intentionally remain there.
 struct GpuTaskGraphRecordingStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -62,6 +67,9 @@ struct GpuTaskGraphRecordingStatistics{
     usize commandListCount = 0u;
     usize barrierCount = 0u;
     usize parallelPacketCount = 0u;
+    f64 commandListAcquisitionSeconds = 0.0;
+    f64 graphBarrierRecordingSeconds = 0.0;
+    f64 taskRecordSeconds = 0.0;
     f64 recordingSeconds = 0.0;
 
     [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }

@@ -17248,6 +17248,28 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedComm
     EXPECT_NE(firstWorkerIndex, secondWorkerIndex);
     EXPECT_EQ(firstRecorded->recordingWorkerIndex, firstWorkerIndex);
     EXPECT_EQ(secondRecorded->recordingWorkerIndex, secondWorkerIndex);
+    EXPECT_GE(firstRecorded->commandListAcquisitionSeconds, 0.0);
+    EXPECT_GE(firstRecorded->graphBarrierRecordingSeconds, 0.0);
+    EXPECT_GE(firstRecorded->taskRecordSeconds, 0.0);
+    EXPECT_GE(secondRecorded->commandListAcquisitionSeconds, 0.0);
+    EXPECT_GE(secondRecorded->graphBarrierRecordingSeconds, 0.0);
+    EXPECT_GE(secondRecorded->taskRecordSeconds, 0.0);
+    const GpuTaskGraphRecordingStatistics recordingStatistics = recordedGraph.recordingStatistics(compiledGraph);
+    ASSERT_TRUE(recordingStatistics.valid());
+    EXPECT_EQ(recordingStatistics.packetCount, 2u);
+    EXPECT_EQ(recordingStatistics.parallelPacketCount, 2u);
+    EXPECT_EQ(
+        recordingStatistics.commandListAcquisitionSeconds,
+        firstRecorded->commandListAcquisitionSeconds + secondRecorded->commandListAcquisitionSeconds
+    );
+    EXPECT_EQ(
+        recordingStatistics.graphBarrierRecordingSeconds,
+        firstRecorded->graphBarrierRecordingSeconds + secondRecorded->graphBarrierRecordingSeconds
+    );
+    EXPECT_EQ(
+        recordingStatistics.taskRecordSeconds,
+        firstRecorded->taskRecordSeconds + secondRecorded->taskRecordSeconds
+    );
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
@@ -37413,6 +37435,14 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTextureHooksDiscardOnPacketRec
     EXPECT_EQ(hooks.afterCount, 1u);
     EXPECT_EQ(hooks.discardedCount, 1u);
     EXPECT_EQ(recordedGraph.find(packet), nullptr);
+    const GpuTaskGraphRecordingStatistics failedRecordingStatistics = recordedGraph.recordingStatistics(compiledGraph);
+    ASSERT_TRUE(failedRecordingStatistics.valid());
+    EXPECT_EQ(failedRecordingStatistics.packetCount, 0u);
+    EXPECT_EQ(failedRecordingStatistics.commandListCount, 0u);
+    EXPECT_EQ(failedRecordingStatistics.commandListAcquisitionSeconds, 0.0);
+    EXPECT_EQ(failedRecordingStatistics.graphBarrierRecordingSeconds, 0.0);
+    EXPECT_EQ(failedRecordingStatistics.taskRecordSeconds, 0.0);
+    EXPECT_EQ(failedRecordingStatistics.recordingSeconds, 0.0);
 }
 
 
@@ -37755,6 +37785,32 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
         compileStatistics.prologueBarrierCount + compileStatistics.epilogueBarrierCount
     );
     EXPECT_EQ(recordingStatistics.parallelPacketCount, 0u);
+    const GpuRecordedPacket* const writerRecordedPacket = recordedGraph.find(writerPacket);
+    const GpuRecordedPacket* const readerRecordedPacket = recordedGraph.find(readerPacket);
+    ASSERT_NE(writerRecordedPacket, nullptr);
+    ASSERT_NE(readerRecordedPacket, nullptr);
+    EXPECT_GE(writerRecordedPacket->commandListAcquisitionSeconds, 0.0);
+    EXPECT_GE(writerRecordedPacket->graphBarrierRecordingSeconds, 0.0);
+    EXPECT_GE(writerRecordedPacket->taskRecordSeconds, 0.0);
+    EXPECT_GE(readerRecordedPacket->commandListAcquisitionSeconds, 0.0);
+    EXPECT_GE(readerRecordedPacket->graphBarrierRecordingSeconds, 0.0);
+    EXPECT_GE(readerRecordedPacket->taskRecordSeconds, 0.0);
+    EXPECT_EQ(
+        recordingStatistics.commandListAcquisitionSeconds,
+        writerRecordedPacket->commandListAcquisitionSeconds + readerRecordedPacket->commandListAcquisitionSeconds
+    );
+    EXPECT_EQ(
+        recordingStatistics.graphBarrierRecordingSeconds,
+        writerRecordedPacket->graphBarrierRecordingSeconds + readerRecordedPacket->graphBarrierRecordingSeconds
+    );
+    EXPECT_EQ(
+        recordingStatistics.taskRecordSeconds,
+        writerRecordedPacket->taskRecordSeconds + readerRecordedPacket->taskRecordSeconds
+    );
+    EXPECT_EQ(
+        recordingStatistics.recordingSeconds,
+        writerRecordedPacket->recordingSeconds + readerRecordedPacket->recordingSeconds
+    );
     EXPECT_GE(recordingStatistics.recordingSeconds, 0.0);
 
     // A recording artifact alone cannot be combined with an unbound transaction snapshot from this plan: aggregate

@@ -395,6 +395,9 @@ GpuTaskGraphRecordingStatistics GpuRecordedGraph::recordingStatistics(
         statistics.taskCount += recordedPacket.taskCount;
         statistics.commandListCount += recordedPacket.commandListCount;
         statistics.barrierCount += recordedPacket.barrierCount;
+        statistics.commandListAcquisitionSeconds += recordedPacket.commandListAcquisitionSeconds;
+        statistics.graphBarrierRecordingSeconds += recordedPacket.graphBarrierRecordingSeconds;
+        statistics.taskRecordSeconds += recordedPacket.taskRecordSeconds;
         statistics.recordingSeconds += recordedPacket.recordingSeconds;
         if(recordedPacket.recordingWorkerIndex != 0u)
             ++statistics.parallelPacketCount;
@@ -1074,6 +1077,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     CommandListParameters parameters;
     parameters.setPhysicalQueue(packet.queue);
     parameters.setRecordingWorkerIndex(desc.recordingWorkerIndex);
+    const Timer commandListAcquisitionBegin = TimerNow();
     CommandListHandle commandList = m_device.createCommandList(parameters);
     if(!commandList){
         abortPacketRecording();
@@ -1081,8 +1085,11 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     }
 
     commandList->open(initialStates);
+    const f64 commandListAcquisitionSeconds = DurationInSeconds<f64>(TimerNow(), commandListAcquisitionBegin);
     bool recorded = commandList->hasCommandBuffer();
     u32 barrierCount = 0u;
+    f64 graphBarrierRecordingSeconds = 0.0;
+    f64 taskRecordSeconds = 0.0;
     if(!tasks || packet.taskCount == 0u)
         recorded = false;
     for(u32 taskIndex = 0u; recorded && taskIndex < packet.taskCount; ++taskIndex){
@@ -1108,6 +1115,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
             break;
         }
         barrierCount += compiledTask->prologueBarrierCount;
+        const Timer graphPrologueRecordingBegin = TimerNow();
         for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
             const GpuCompiledBarrier& barrier = prologueBarriers[barrierIndex];
             if(barrier.isGraphInitialState && barrier.before == ResourceStates::Unknown){
@@ -1138,12 +1146,16 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
             recorded = graph.seedTaskRetainedResourceStates(task, *commandList);
         if(recorded)
             commandList->commitBarriers();
+        graphBarrierRecordingSeconds += DurationInSeconds<f64>(TimerNow(), graphPrologueRecordingBegin);
         commandList->beginMarker(taskView.markerLabel);
 #if defined(NWB_DEBUG)
         commandList->beginTaskCapabilityTracking();
 #endif
-        if(recorded)
+        if(recorded){
+            const Timer taskRecordBegin = TimerNow();
             recorded = graph.recordTask(task, *commandList, context, recordingLease);
+            taskRecordSeconds += DurationInSeconds<f64>(TimerNow(), taskRecordBegin);
+        }
 #if defined(NWB_DEBUG)
         const GpuQueueCapability::Mask usedCapabilities = commandList->endTaskCapabilityTracking();
         if(
@@ -1172,11 +1184,13 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         const GpuCompiledBarrier* const epilogueBarriers = compiledGraph.taskEpilogueBarriers(task);
         if(compiledTask->epilogueBarrierCount > 0u && !epilogueBarriers)
             recorded = false;
+        const Timer graphEpilogueRecordingBegin = TimerNow();
         for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledTask->epilogueBarrierCount; ++barrierIndex)
             recorded = graph.applyCompiledBarrier(compiledGraph, epilogueBarriers[barrierIndex], *commandList);
         barrierCount += compiledTask->epilogueBarrierCount;
         if(recorded)
             commandList->commitBarriers();
+        graphBarrierRecordingSeconds += DurationInSeconds<f64>(TimerNow(), graphEpilogueRecordingBegin);
     }
     commandList->close(packetStateSeed);
     if(!recorded || !commandList->hasCommandBuffer()){
@@ -1204,6 +1218,9 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     recordedPacket.ownedCommandLists[0u] = Move(commandList);
     recordedPacket.taskCount = packet.taskCount;
     recordedPacket.barrierCount = barrierCount;
+    recordedPacket.commandListAcquisitionSeconds = commandListAcquisitionSeconds;
+    recordedPacket.graphBarrierRecordingSeconds = graphBarrierRecordingSeconds;
+    recordedPacket.taskRecordSeconds = taskRecordSeconds;
     recordedPacket.recordingSeconds = DurationInSeconds<f64>(TimerNow(), recordingBegin);
     recordedPacket.recordingWorkerIndex = desc.recordingWorkerIndex;
     // Publish the slot only after its owned native list is retained. Frontier workers are joined before callers can

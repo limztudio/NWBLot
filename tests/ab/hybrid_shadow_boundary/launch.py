@@ -205,7 +205,7 @@ def run_self_test() -> int:
     )
     paths = resolve_paths(args, settings)
     command = [str(item) for item in runner_command(args, paths)]
-    assert str(paths.runtime_directory).endswith("Testing/skinning_culling_benchmark_runtime/dbg")
+    assert paths.runtime_directory.as_posix().endswith("Testing/skinning_culling_benchmark_runtime/dbg")
     assert command[command.index("--healthy-executable") + 1].endswith("hybrid_shadow_boundary_healthy_benchmark.exe")
     assert command[command.index("--fallback-executable") + 1].endswith("hybrid_shadow_boundary_fallback_benchmark.exe")
     assert "--gpu-validation" in command

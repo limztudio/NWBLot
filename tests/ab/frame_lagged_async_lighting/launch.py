@@ -141,7 +141,7 @@ def run_self_test() -> int:
     )
     paths = resolve_paths(args, settings)
     command = [str(item) for item in runner_command(args, paths)]
-    assert str(paths.runtime_directory).endswith("Testing/smoke_runtime/dbg")
+    assert paths.runtime_directory.as_posix().endswith("Testing/smoke_runtime/dbg")
     assert command[command.index("--executable") + 1].endswith("frame_lagged_async_lighting_smoke.exe")
     assert "--gpu-validation" in command
     assert command[-2:] == ["--transition-timeout", "25"]

@@ -47,10 +47,31 @@ struct GpuPacketDependency{
     GpuSubmissionPacketId consumer;
 };
 
+// Explains each compiler packetization decision without exposing mutable compiler internals. Tooling can distinguish
+// deliberate lifecycle/timing boundaries from a merge that was rejected to preserve a cross-queue signal frontier.
+namespace GpuTaskPacketizationDecision{
+    enum Enum : u8{
+        Unknown,
+        FirstTask,
+        MergeNotRequested,
+        TaskForcesBoundary,
+        QueueChanged,
+        PrecedingTaskForcesBoundary,
+        ScoredMergeIneligible,
+        MergeRequiresExplicitImmediateDependency,
+        CrossQueueConsumerFrontier,
+        MergedExplicit,
+        MergedFrontierScored,
+
+        kCount,
+    };
+};
+
 struct GpuCompiledTask{
     GpuTaskId task;
     GpuPhysicalQueueId queue;
     GpuSubmissionPacketId packet;
+    GpuTaskPacketizationDecision::Enum packetizationDecision = GpuTaskPacketizationDecision::Unknown;
     u32 prologueStateSeedOffset = 0u;
     u32 prologueStateSeedCount = 0u;
     u32 prologueBarrierOffset = 0u;
@@ -124,6 +145,7 @@ public:
     [[nodiscard]] GpuSubmissionPacketRange allPacketRange()const noexcept;
     [[nodiscard]] const GpuCompiledTask* findTask(const GpuTaskId& task)const noexcept;
     [[nodiscard]] GpuSubmissionPacketId packetForTask(const GpuTaskId& task)const noexcept;
+    [[nodiscard]] GpuTaskPacketizationDecision::Enum packetizationDecisionForTask(const GpuTaskId& task)const noexcept;
     // Semantic packet-topology queries.  Renderer policy can validate coalescing and routing without retaining
     // compiler packet IDs; packet handles remain available below for packet-local runtime compatibility only.
     [[nodiscard]] bool tasksSharePacket(const GpuTaskId& first, const GpuTaskId& second)const noexcept;
@@ -191,6 +213,8 @@ struct GpuTaskRecordContext{
     GpuTaskId task;
     GpuSubmissionPacketId packet;
     GpuPhysicalQueueId queue;
+    // Recording attempts isolate retryable native captures sharing one immutable compiler plan.
+    u64 recordingAttemptGeneration = 0u;
     // Optional Phase 11 tooling sink. Null keeps direct native task recording on the ordinary runtime path.
     GpuCommandIrCapture* commandIrCapture = nullptr;
 };

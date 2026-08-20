@@ -151,9 +151,9 @@ struct TextureDesc{
 
     bool useClearValue = false;
 
-    // If keepInitialState is true, command lists that use the texture will automatically
-    // begin tracking the texture from the initial state and transition it to the initial state
-    // on command list close.
+    // If keepInitialState is true, command lists restore each used subresource to initialState before close. That
+    // retained native state becomes globally known only after the restoring command buffer is successfully
+    // submitted; a pre-submit cross-list consumer must import CommandListResourceStateHandoff instead.
     bool keepInitialState = false;
 
     constexpr TextureDesc& setWidth(u32 v)noexcept{ width = v; return *this; }

@@ -1459,7 +1459,17 @@ void GpuCommandIrCapture::reset()noexcept{
     m_commandBytes.resize(sizeof(GpuCommandIrStreamHeader));
     m_graphGeneration = 0u;
     m_planGeneration = 0u;
+    m_recordingAttemptGeneration = 0u;
     writeStreamHeader();
+}
+
+bool GpuCommandIrCapture::beginRecordingAttempt(const u64 recordingAttemptGeneration)noexcept{
+    if(recordingAttemptGeneration == 0u)
+        return false;
+    if(!m_records.empty() && m_recordingAttemptGeneration != recordingAttemptGeneration)
+        return false;
+    m_recordingAttemptGeneration = recordingAttemptGeneration;
+    return true;
 }
 
 const GpuCommandIrBuiltinTaskRecord* GpuCommandIrCapture::recordAt(const usize index)const noexcept{
@@ -1480,6 +1490,8 @@ void GpuCommandIrCapture::rollback(const usize recordCount)noexcept{
     m_commandBytes.resize(byteOffset);
     m_graphGeneration = m_records.empty() ? 0u : m_records[0u].task.generation;
     m_planGeneration = m_records.empty() ? 0u : m_records[0u].packet.generation;
+    if(m_records.empty())
+        m_recordingAttemptGeneration = 0u;
     writeStreamHeader();
 }
 
@@ -1733,4 +1745,6 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 

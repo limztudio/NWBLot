@@ -7,6 +7,7 @@
 
 #include "compiled_graph.h"
 #include "task_graph.h"
+#include "timing_feedback.h"
 
 #include <core/alloc/scratch.h>
 
@@ -62,6 +63,7 @@ namespace GpuTaskGraphQueueAssignmentStatus{
         Success,
         InvalidGraphAnalysis,
         InvalidQueueTopology,
+        InvalidTimingFeedback,
         NoCompatibleQueue,
     };
 };
@@ -96,8 +98,19 @@ namespace GpuTaskGraphPacketizationPolicy{
     };
 };
 
+// The timing system owns these immutable observations. Queue assignment only consumes a snapshot, so graph
+// validation and packet/barrier correctness remain independent from late query completion and history mutation.
+struct GpuTaskGraphQueueAssignmentOptions{
+    const GpuTaskTimingHistorySnapshot* timingHistory = nullptr;
+    const GpuTaskTimingFeedbackPolicy* timingFeedbackPolicy = nullptr;
+    const GpuTaskTimingQueueOverride* timingQueueOverrides = nullptr;
+    usize timingQueueOverrideCount = 0u;
+    u64 timingFrameIndex = 0u;
+};
+
 struct GpuTaskGraphCompileOptions{
     GpuTaskGraphPacketizationPolicy::Enum packetizationPolicy = GpuTaskGraphPacketizationPolicy::ExplicitMerge;
+    GpuTaskGraphQueueAssignmentOptions queueAssignmentOptions;
     // Native packet recording requires every task to retain a payload and record thunk. Tooling-only callers that
     // compile metadata graphs may opt out explicitly; executable graph paths must retain the default.
     bool allowMetadataOnlyTasks = false;
@@ -207,7 +220,8 @@ public:
         const GpuTaskGraph& graph,
         const GpuTaskGraphAnalysis& analysis,
         const GpuTaskGraphQueueTopology& topology,
-        GpuTaskGraphQueueAssignments& outAssignments
+        GpuTaskGraphQueueAssignments& outAssignments,
+        const GpuTaskGraphQueueAssignmentOptions& options = {}
     )const;
 
     // The packet compiler reuses the independently exposed analysis and queue-assignment results so telemetry and

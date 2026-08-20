@@ -1156,7 +1156,12 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         0u,
         recordedGraph
     )){
-        transaction.discardUnaccepted(graph, compiledGraph);
+        if(!transaction.discardUnaccepted(
+            graph,
+            compiledGraph,
+            recordedGraph.recordingAttemptGeneration()
+        ))
+            m_graphics.requestDeviceRecreation();
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to record graph-owned skinning work"));
         return false;
     }
@@ -1166,7 +1171,12 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         terminalTask
     );
     if(!finalStates){
-        transaction.discardUnaccepted(graph, compiledGraph);
+        if(!transaction.discardUnaccepted(
+            graph,
+            compiledGraph,
+            recordedGraph.recordingAttemptGeneration()
+        ))
+            m_graphics.requestDeviceRecreation();
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain graph-owned skinning frame state"));
         return false;
     }
@@ -1190,7 +1200,12 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         transaction,
         scratchArena
     )){
-        transaction.discardUnaccepted(graph, compiledGraph);
+        if(!transaction.discardUnaccepted(
+            graph,
+            compiledGraph,
+            recordedGraph.recordingAttemptGeneration()
+        ))
+            m_graphics.requestDeviceRecreation();
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning submission was rejected"));
         return false;
     }

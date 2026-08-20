@@ -304,6 +304,41 @@ Optional<Common::LoggerRegistrationGuard> DescriptorBufferRoundTripTest::s_logge
 }
 
 
+// A graph declaration can name a known imported state only after native work has materialized that state. Fresh
+// Vulkan images begin UNDEFINED, so tests that intentionally model an external first reader use this small producer
+// instead of asserting a descriptor's logical initialState as physical truth.
+[[nodiscard]] static bool PrimeTextureStatesForGraph(
+    GraphicsBackend::Device& device,
+    Texture* const* const textures,
+    const usize textureCount,
+    const ResourceStates::Mask state
+){
+    if(!textures || textureCount == 0u || state == ResourceStates::Unknown)
+        return false;
+    for(usize textureIndex = 0u; textureIndex < textureCount; ++textureIndex){
+        if(!textures[textureIndex])
+            return false;
+    }
+
+    const auto commandList = device.createCommandList();
+    if(!commandList)
+        return false;
+    commandList->open();
+    for(usize textureIndex = 0u; textureIndex < textureCount; ++textureIndex)
+        commandList->setTextureState(textures[textureIndex], s_AllSubresources, state);
+    commandList->close();
+
+    CommandList* const commandLists[] = { commandList.get() };
+    const QueueSubmissionToken token = device.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    return token.valid() && device.waitForIdle();
+}
+
+
 // The UI compatibility path owns neither a renderer graph nor a native preparation list. This compact probe uses
 // the public standalone submission boundary directly: an immutable upload must reach ShaderResource before the
 // terminal callback accepts, while a rejected packet must discard that callback without publishing a token.
@@ -368,7 +403,9 @@ struct StandaloneGraphTextureUploadContext{
             .setIdentity(Name("tests.standalone_graph_texture_upload.destination"))
             .setMarkerLabel("Standalone Graph Texture Upload")
             .setType(GpuGraphResourceType::Texture)
-            .setInitialState(textureDesc.initialState)
+            // This probe creates the destination immediately before its graph-owned first write. The descriptor
+            // state is the retained post-upload contract, while the native Vulkan image still starts Undefined.
+            .setInitialState(ResourceStates::Unknown)
             .setQueueSharing(textureDesc.queueSharing)
     );
     const GpuUploadBlobId source = graph.copyUploadData(context->bytes, context->byteCount, alignof(u32));
@@ -1412,6 +1449,7 @@ struct NativePacketPrefixTask{
         ResourceStates::Mask expectedThirdTextureState = ResourceStates::Unknown;
         bool* recorded = nullptr;
         QueueSubmissionToken* acceptedToken = nullptr;
+        u32* discardedCount = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -1439,6 +1477,11 @@ struct NativePacketPrefixTask{
     static void accepted(Payload& payload, const QueueSubmissionToken& token){
         if(payload.acceptedToken)
             *payload.acceptedToken = token;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.discardedCount)
+            ++*payload.discardedCount;
     }
 };
 
@@ -3402,6 +3445,13 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedFinalStateExportReassertsStateAfte
             .setInitialState(ResourceStates::Common)
     );
     ASSERT_NE(texture.get(), nullptr);
+    Texture* const initialTextures[] = { texture.get() };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId resource = graph.importTexture(
@@ -3698,7 +3748,9 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffMergesMultipleTerminal
             .setHeight(4u)
             .setMipLevels(2u)
             .setFormat(Format::RGBA8_UNORM)
-            .setInitialState(ResourceStates::Common)
+            // Vulkan images are created in Undefined layout. The first graph tasks discard both mip contents, so
+            // retain that physical fact instead of declaring an unproven Common state.
+            .setInitialState(ResourceStates::Unknown)
     );
     ASSERT_NE(texture.get(), nullptr);
 
@@ -3709,7 +3761,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffMergesMultipleTerminal
             .setIdentity(Name("tests/descriptor_buffer/external_final_multi_packet_texture"))
             .setMarkerLabel("External Final Multi-Packet Texture")
             .setType(GpuGraphResourceType::Texture)
-            .setInitialState(ResourceStates::Common)
+            .setInitialState(ResourceStates::Unknown)
             .setExternalFinalState(ResourceStates::ShaderResource)
             .setExternalFinalReleaseDestinationQueue(graphicsQueue)
     );
@@ -3890,7 +3942,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsIntoLaterGraph)
             .setHeight(4u)
             .setMipLevels(2u)
             .setFormat(Format::RGBA8_UNORM)
-            .setInitialState(ResourceStates::Common)
+            .setInitialState(ResourceStates::Unknown)
     );
     ASSERT_NE(texture.get(), nullptr);
 
@@ -3901,7 +3953,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsIntoLaterGraph)
             .setIdentity(Name("tests/descriptor_buffer/multi_import_source_texture"))
             .setMarkerLabel("Multi Import Source Texture")
             .setType(GpuGraphResourceType::Texture)
-            .setInitialState(ResourceStates::Common)
+            .setInitialState(ResourceStates::Unknown)
             .setExternalFinalState(ResourceStates::ShaderResource)
             .setExternalFinalReleaseDestinationQueue(graphicsQueue)
     );
@@ -4226,6 +4278,19 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsIntoLaterGraph)
         destinationTransaction,
         destinationScratch
     ));
+    // Once mip 0 accepts, a bad mip 1 completion must still be retryable.  The validation happens before native
+    // submission, so it cannot discard this later graph task merely because the transaction is already bound.
+    EXPECT_FALSE(submitter.submitPacket(
+        destinationGraph,
+        destinationCompiledGraph,
+        destinationRecordedGraph,
+        destinationMip1Packet,
+        staleCompletionTokens,
+        LengthOf(staleCompletionTokens),
+        destinationTransaction,
+        destinationScratch
+    ));
+    EXPECT_FALSE(destinationTransaction.taskToken(destinationCompiledGraph, destinationMip1Task).valid());
     ASSERT_TRUE(submitter.submitPacket(
         destinationGraph,
         destinationCompiledGraph,
@@ -4267,7 +4332,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsCrossQueueTextu
             .setMipLevels(2u)
             .setFormat(Format::RGBA8_UNORM)
             .setInUAV(true)
-            .setInitialState(ResourceStates::Common)
+            .setInitialState(ResourceStates::Unknown)
     );
     ASSERT_NE(texture.get(), nullptr);
 
@@ -4278,7 +4343,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsCrossQueueTextu
             .setIdentity(Name("tests/descriptor_buffer/external_final_cross_queue_texture"))
             .setMarkerLabel("External Final Cross-Queue Texture")
             .setType(GpuGraphResourceType::Texture)
-            .setInitialState(ResourceStates::Common)
+            .setInitialState(ResourceStates::Unknown)
             .setExternalFinalState(ResourceStates::ShaderResource)
             .setExternalFinalReleaseDestinationQueue(graphicsQueue)
     );
@@ -5144,7 +5209,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
             .setHeight(4u)
             .setFormat(Format::RGBA8_UNORM)
             .setInRenderTarget(true)
-            .setInitialState(ResourceStates::Common)
+            .setInitialState(ResourceStates::Unknown)
     );
     ASSERT_NE(texture.get(), nullptr);
     auto additionalTexture = device.createTexture(
@@ -5153,7 +5218,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
             .setHeight(4u)
             .setFormat(Format::RGBA8_UNORM)
             .setInUAV(true)
-            .setInitialState(ResourceStates::Common)
+            .setInitialState(ResourceStates::Unknown)
     );
     ASSERT_NE(additionalTexture.get(), nullptr);
 
@@ -7788,17 +7853,17 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
                 .setHeight(4u)
                 .setFormat(Format::RGBA8_UNORM)
                 .setInRenderTarget(true)
-                .setInitialState(ResourceStates::Common)
+                .setInitialState(ResourceStates::Unknown)
         );
     };
-    const auto makeShadowTarget = [&device](){
+    const auto makeShadowTarget = [&device](const ResourceStates::Mask initialState = ResourceStates::Common){
         return device.createTexture(
             TextureDesc()
                 .setWidth(4u)
                 .setHeight(4u)
                 .setFormat(Format::RGBA8_UNORM)
                 .setInUAV(true)
-                .setInitialState(ResourceStates::Common)
+                .setInitialState(initialState)
         );
     };
     auto currentBindlessSlots = makeConstantBuffer();
@@ -7812,11 +7877,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
         TextureDesc()
             .setWidth(4u)
             .setHeight(4u)
-            .setFormat(Format::D24S8)
+            .setFormat(Format::D32S8)
             .setInRenderTarget(true)
-            .setInitialState(ResourceStates::Common)
+            .setInitialState(ResourceStates::Unknown)
     );
-    auto shadowVisibility = makeShadowTarget();
+    auto shadowVisibility = makeShadowTarget(ResourceStates::Unknown);
     auto shadowSoftHalfA = makeShadowTarget();
     auto shadowCoarseTransmittance = makeShadowTarget();
     auto shadowSoftGeometry = makeShadowTarget();
@@ -7832,6 +7897,17 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
     ASSERT_NE(shadowSoftHalfA.get(), nullptr);
     ASSERT_NE(shadowCoarseTransmittance.get(), nullptr);
     ASSERT_NE(shadowSoftGeometry.get(), nullptr);
+    Texture* const initialTextures[] = {
+        shadowSoftHalfA.get(),
+        shadowCoarseTransmittance.get(),
+        shadowSoftGeometry.get(),
+    };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importBuffer = [&graph](
@@ -8762,25 +8838,25 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceEntryStatesR
 // renderer-native state bridge.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRecordsWithoutNativeBridge){
     auto& device = DescriptorBufferRoundTripTest::device();
-    const auto makeShadowTarget = [&device](){
+    const auto makeShadowTarget = [&device](const ResourceStates::Mask initialState = ResourceStates::Common){
         return device.createTexture(
             TextureDesc()
                 .setWidth(4u)
                 .setHeight(4u)
                 .setFormat(Format::RGBA8_UNORM)
                 .setInUAV(true)
-                .setInitialState(ResourceStates::Common)
+                .setInitialState(initialState)
         );
     };
-    auto shadowVisibility = makeShadowTarget();
-    auto transparentSoftHalf = makeShadowTarget();
-    auto transparentHistoryA = makeShadowTarget();
-    auto transparentMomentsA = makeShadowTarget();
-    auto transparentHistoryB = makeShadowTarget();
-    auto transparentMomentsB = makeShadowTarget();
-    auto opaqueSoftHalf = makeShadowTarget();
-    auto opaqueWaveletHalf = makeShadowTarget();
-    auto shadowSoftGeometry = makeShadowTarget();
+    auto shadowVisibility = makeShadowTarget(ResourceStates::Unknown);
+    auto transparentSoftHalf = makeShadowTarget(ResourceStates::Unknown);
+    auto transparentHistoryA = makeShadowTarget(ResourceStates::Unknown);
+    auto transparentMomentsA = makeShadowTarget(ResourceStates::Unknown);
+    auto transparentHistoryB = makeShadowTarget(ResourceStates::Unknown);
+    auto transparentMomentsB = makeShadowTarget(ResourceStates::Unknown);
+    auto opaqueSoftHalf = makeShadowTarget(ResourceStates::Unknown);
+    auto opaqueWaveletHalf = makeShadowTarget(ResourceStates::Unknown);
+    auto shadowSoftGeometry = makeShadowTarget(ResourceStates::Unknown);
     auto previousGeometry = makeShadowTarget();
     auto worldPosition = makeShadowTarget();
     auto normal = makeShadowTarget();
@@ -8806,6 +8882,18 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceToResolveRec
     ASSERT_NE(normal.get(), nullptr);
     ASSERT_NE(depth.get(), nullptr);
     ASSERT_NE(sceneShading.get(), nullptr);
+    Texture* const initialTextures[] = {
+        previousGeometry.get(),
+        worldPosition.get(),
+        normal.get(),
+        depth.get(),
+    };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importTexture = [&graph](const TextureHandle& texture, const Name identity, const AStringView label){
@@ -9542,6 +9630,20 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueSoftTemporalMergeEntryStat
     ASSERT_NE(momentsB.get(), nullptr);
     ASSERT_NE(previousGeometry.get(), nullptr);
     ASSERT_NE(worldPosition.get(), nullptr);
+    Texture* const initialTextures[] = {
+        historyA.get(),
+        momentsA.get(),
+        historyB.get(),
+        momentsB.get(),
+        previousGeometry.get(),
+        worldPosition.get(),
+    };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importTexture = [&graph](const TextureHandle& texture, const Name identity, const AStringView label){
@@ -9789,15 +9891,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftwareCausticsEntryStatesRecor
             .setHeight(4u)
             .setFormat(Format::RGBA8_UNORM)
             .setInRenderTarget(true)
-            .setInitialState(ResourceStates::Common)
+            .setInitialState(ResourceStates::Unknown)
     );
     shaderTextures[1u] = device.createTexture(
         TextureDesc()
             .setWidth(4u)
             .setHeight(4u)
-            .setFormat(Format::D24S8)
+            .setFormat(Format::D32S8)
             .setInRenderTarget(true)
-            .setInitialState(ResourceStates::Common)
+            .setInitialState(ResourceStates::Unknown)
     );
     TextureHandle uavTextures[uavTextureCount];
     for(u32 textureIndex = 0u; textureIndex < uavTextureCount; ++textureIndex)
@@ -9819,6 +9921,19 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftwareCausticsEntryStatesRecor
         ASSERT_NE(uavTextures[textureIndex].get(), nullptr);
     ASSERT_NE(causticIrradiance.get(), nullptr);
     ASSERT_NE(causticAccumulator.get(), nullptr);
+    Texture* const initialTextures[] = {
+        uavTextures[0u].get(),
+        uavTextures[1u].get(),
+        uavTextures[2u].get(),
+        causticIrradiance.get(),
+        causticAccumulator.get(),
+    };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importBuffer = [&graph](const BufferHandle& buffer, const Name identity, const AStringView label){
@@ -10365,7 +10480,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
         TextureDesc()
             .setWidth(4u)
             .setHeight(4u)
-            .setFormat(Format::D24S8)
+            .setFormat(Format::D32S8)
             .setInRenderTarget(true)
             .setInitialState(ResourceStates::Common)
     );
@@ -10391,6 +10506,18 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
     );
     ASSERT_NE(irradiance.get(), nullptr);
     ASSERT_NE(accumulator.get(), nullptr);
+    Texture* const initialTextures[] = {
+        shaderTextures[0u].get(),
+        shaderTextures[1u].get(),
+        irradiance.get(),
+        accumulator.get(),
+    };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importBuffer = [&graph](const BufferHandle& buffer, const Name identity, const AStringView label){
@@ -10735,6 +10862,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedNonTemporalCausticAccumulatorCle
             .setKeepInitialState(true)
     );
     ASSERT_NE(accumulator.get(), nullptr);
+    Texture* const initialTextures[] = { accumulator.get() };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::ShaderResource
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId accumulatorResource = graph.importTexture(
@@ -10930,6 +11064,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedWarmCausticAccumulatorDecayRecor
             .setKeepInitialState(true)
     );
     ASSERT_NE(accumulator.get(), nullptr);
+    Texture* const initialTextures[] = { accumulator.get() };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::ShaderResource
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId accumulatorResource = graph.importTexture(
@@ -11153,6 +11294,18 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCausticPhotonGeometryPrepareFive
             .setKeepInitialState(true)
     );
     ASSERT_NE(resolveHalf.get(), nullptr);
+    Texture* const initialTextures[] = {
+        accumulator.get(),
+        geometry.get(),
+        history.get(),
+        resolveHalf.get(),
+    };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::ShaderResource
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importTexture = [&graph](
@@ -12152,7 +12305,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
     EXPECT_TRUE(initializeRecorded);
     EXPECT_TRUE(initializationNeedsClear);
     EXPECT_TRUE(initializationClearPending);
-    rejectedTransaction.discardUnaccepted(graph, compiledGraph);
+    EXPECT_TRUE(rejectedTransaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        rejectedRecordedGraph.recordingAttemptGeneration()
+    ));
     EXPECT_TRUE(initializationNeedsClear);
     EXPECT_FALSE(initializationClearPending);
 
@@ -12170,6 +12327,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
         &commandIrCapture
     )) << "failed packet " << failedPacket.index;
     EXPECT_TRUE(initializeRecorded);
+    EXPECT_TRUE(initializationClearPending);
+    // The first transaction is permanently bound to its discarded native recording. A retry must not let that
+    // transaction discard the retry's pending lifecycle state or submit its stale command lists.
+    EXPECT_FALSE(rejectedTransaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        rejectedRecordedGraph.recordingAttemptGeneration()
+    ));
     EXPECT_TRUE(initializationClearPending);
     ASSERT_EQ(commandIrCapture.recordCount(), 4u);
     const GpuCommandIrBuiltinTaskRecord* const poolClearCapture = commandIrCapture.recordAt(0u);
@@ -12197,9 +12362,25 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
     EXPECT_EQ(freeListClearCapture->destination, freeListResource);
     EXPECT_EQ(freeListClearCapture->uintClearValue, UIntColor(0u));
 
+    const GpuTaskGraphSubmitter submitter(device);
+    GpuGraphSubmissionTransaction staleTransaction(DescriptorBufferRoundTripTest::arena());
+    staleTransaction.reset(compiledGraph);
+    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        rejectedRecordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        staleTransaction,
+        scratchArena
+    ));
+    EXPECT_FALSE(staleTransaction.packetToken(prefixPacket).valid());
+
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
-    const GpuTaskGraphSubmitter submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -12306,6 +12487,18 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     }
     const TextureHandle irradianceHalf = makeUavTexture();
     ASSERT_NE(irradianceHalf.get(), nullptr);
+    Texture* const initialTextures[] = {
+        shaderTextures[0u].get(),
+        shaderTextures[1u].get(),
+        uavTextures[0u].get(),
+        irradianceHalf.get(),
+    };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importBuffer = [&graph](const BufferHandle& buffer, const Name identity, const AStringView label){
@@ -13629,6 +13822,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialSampledTextureEntryState
             .setInitialState(ResourceStates::Common)
     );
     ASSERT_NE(texture.get(), nullptr);
+    Texture* const initialTextures[] = { texture.get() };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId preflightTextureResource = graph.importTexture(
@@ -15508,7 +15708,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
     const TextureDesc depthTextureDesc = TextureDesc()
         .setWidth(4u)
         .setHeight(4u)
-        .setFormat(Format::D24S8)
+        .setFormat(Format::D32S8)
         .setInRenderTarget(true)
         .setInitialState(ResourceStates::Common)
     ;
@@ -15516,6 +15716,17 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
     ASSERT_NE(accumColor.get(), nullptr);
     ASSERT_NE(accumExtinction.get(), nullptr);
     ASSERT_NE(deferredDepth.get(), nullptr);
+    Texture* const initialTextures[] = {
+        accumColor.get(),
+        accumExtinction.get(),
+        deferredDepth.get(),
+    };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId stateProbeResource = graph.importBuffer(
@@ -15855,6 +16066,13 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
     auto destination = device.createTexture(copyTextureDesc);
     ASSERT_NE(source.get(), nullptr);
     ASSERT_NE(destination.get(), nullptr);
+    Texture* const initialTextures[] = { source.get(), destination.get() };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId sourceResource = graph.importTexture(
@@ -16275,7 +16493,11 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlo
         rejectedRecordedGraph,
         &rejectedCapture
     ));
-    rejectedTransaction.discardUnaccepted(graph, compiledGraph);
+    EXPECT_TRUE(rejectedTransaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        rejectedRecordedGraph.recordingAttemptGeneration()
+    ));
     EXPECT_FALSE(acceptedToken.valid());
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
@@ -16290,6 +16512,16 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlo
         recordedGraph
     ));
     ASSERT_NE(recordedGraph.packetFinalStateSeed(packet), nullptr);
+
+    // A successfully recorded packet reserves its graph work for this attempt. A second output artifact cannot
+    // record an identical native command list before the first one reaches submission.
+    GpuRecordedGraph duplicateRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    EXPECT_FALSE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = packet },
+        duplicateRecordedGraph
+    ));
 
     const GpuTaskGraphSubmitter submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
@@ -16308,6 +16540,23 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlo
     ASSERT_TRUE(packetToken.valid());
     EXPECT_TRUE(acceptedToken.valid());
     EXPECT_EQ(acceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(acceptedToken.value, packetToken.value);
+
+    // Reusing a valid recorded packet through a fresh transaction must fail before Device::executeCommandLists().
+    // Its task already accepted the first token, so the graph-owned readiness preflight prevents double execution.
+    GpuGraphSubmissionTransaction duplicateTransaction(DescriptorBufferRoundTripTest::arena());
+    duplicateTransaction.reset(compiledGraph);
+    EXPECT_FALSE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        packet,
+        nullptr,
+        0u,
+        duplicateTransaction,
+        scratchArena
+    ));
+    EXPECT_FALSE(duplicateTransaction.packetToken(packet).valid());
     EXPECT_EQ(acceptedToken.value, packetToken.value);
     ASSERT_TRUE(device.waitForIdle());
 
@@ -16505,7 +16754,11 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitPhaseUploadsKeepImmutableSnapshotsIs
         rejectedRecordedGraph,
         &rejectedCapture
     ));
-    rejectedTransaction.discardUnaccepted(graph, compiledGraph);
+    EXPECT_TRUE(rejectedTransaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        rejectedRecordedGraph.recordingAttemptGeneration()
+    ));
     EXPECT_FALSE(occupancyAcceptedToken.valid());
     EXPECT_FALSE(extinctionAcceptedToken.valid());
     EXPECT_FALSE(accumulationAcceptedToken.valid());
@@ -16997,6 +17250,16 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadTextureTaskRecordsGraphOwnedB
             .setKeepInitialState(true)
     );
     ASSERT_NE(keepInitialDestination.get(), nullptr);
+    Texture* const initialTextures[] = {
+        destination.get(),
+        keepInitialDestination.get(),
+    };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId destinationResource = graph.importTexture(
@@ -20645,7 +20908,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationAliasFr
     const TextureDesc depthTextureDesc = TextureDesc()
         .setWidth(4u)
         .setHeight(4u)
-        .setFormat(Format::D24S8)
+        .setFormat(Format::D32S8)
         .setInRenderTarget(true)
         .setInitialState(ResourceStates::Common)
         .setQueueSharing(ResourceQueueSharing::Exclusive)
@@ -20660,6 +20923,17 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationAliasFr
         && accumExtinction
         && deferredDepth
     );
+    Texture* const initialTextures[] = {
+        accumColor.get(),
+        accumExtinction.get(),
+        deferredDepth.get(),
+    };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importBuffer = [&graph](const BufferHandle& buffer, const AStringView markerLabel){
@@ -21324,7 +21598,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     const TextureDesc depthTextureDesc = TextureDesc()
         .setWidth(4u)
         .setHeight(4u)
-        .setFormat(Format::D24S8)
+        .setFormat(Format::D32S8)
         .setInRenderTarget(true)
         .setInitialState(ResourceStates::Common)
         .setQueueSharing(ResourceQueueSharing::Exclusive)
@@ -21338,6 +21612,17 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
         && accumExtinction
         && deferredDepth
     );
+    Texture* const initialTextures[] = {
+        accumColor.get(),
+        accumExtinction.get(),
+        deferredDepth.get(),
+    };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importBuffer = [&graph](const BufferHandle& buffer, const AStringView markerLabel){
@@ -21994,7 +22279,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     const TextureDesc depthTextureDesc = TextureDesc()
         .setWidth(4u)
         .setHeight(4u)
-        .setFormat(Format::D24S8)
+        .setFormat(Format::D32S8)
         .setInRenderTarget(true)
         .setInitialState(ResourceStates::Common)
         .setQueueSharing(ResourceQueueSharing::Exclusive)
@@ -22008,6 +22293,17 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
         && accumExtinction
         && deferredDepth
     );
+    Texture* const initialTextures[] = {
+        accumColor.get(),
+        accumExtinction.get(),
+        deferredDepth.get(),
+    };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importBuffer = [&graph](const BufferHandle& buffer, const AStringView markerLabel){
@@ -22690,7 +22986,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     const TextureDesc depthTextureDesc = TextureDesc()
         .setWidth(4u)
         .setHeight(4u)
-        .setFormat(Format::D24S8)
+        .setFormat(Format::D32S8)
         .setInRenderTarget(true)
         .setInitialState(ResourceStates::Common)
         .setQueueSharing(ResourceQueueSharing::Exclusive)
@@ -22704,6 +23000,17 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
         && accumExtinction
         && deferredDepth
     );
+    Texture* const initialTextures[] = {
+        accumColor.get(),
+        accumExtinction.get(),
+        deferredDepth.get(),
+    };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importBuffer = [&graph](const BufferHandle& buffer, const AStringView markerLabel){
@@ -28201,6 +28508,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
         && extinctionOverflow
         && transmittance
     );
+    Texture* const initialTextures[] = { lowRaster.get() };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importBuffer = [&graph](const BufferHandle& buffer, const AStringView markerLabel){
@@ -29116,6 +29430,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
         && extinctionOverflow
         && transmittance
     );
+    Texture* const initialTextures[] = { lowRaster.get() };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importBuffer = [&graph](const BufferHandle& buffer, const AStringView markerLabel){
@@ -30056,6 +30377,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
         && extinctionOverflow
         && transmittance
     );
+    Texture* const initialTextures[] = { lowRaster.get() };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importBuffer = [&graph](const BufferHandle& buffer, const AStringView markerLabel){
@@ -31895,7 +32223,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationCsgAlia
     const TextureDesc depthTextureDesc = TextureDesc()
         .setWidth(4u)
         .setHeight(4u)
-        .setFormat(Format::D24S8)
+        .setFormat(Format::D32S8)
         .setInRenderTarget(true)
         .setInitialState(ResourceStates::Common)
         .setQueueSharing(ResourceQueueSharing::Exclusive)
@@ -31921,6 +32249,21 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationCsgAlia
         && removedIntervalData
         && removedIntervalCount
     );
+    Texture* const initialTextures[] = {
+        accumColor.get(),
+        accumExtinction.get(),
+        deferredDepth.get(),
+        removedIntervalDepth.get(),
+        removedIntervalCapNormal.get(),
+        removedIntervalData.get(),
+        removedIntervalCount.get(),
+    };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
     EXPECT_NE(generatedVertexA.get(), generatedVertexB.get());
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
@@ -33487,9 +33830,20 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitExtinctionComputeEmulationShare
     EXPECT_EQ(extinctionPacketTasks[0u], producerTask);
     EXPECT_EQ(extinctionPacketTasks[1u], extinctionTask);
     ASSERT_EQ(extinctionPacketPlan.dependencyCount, 1u);
-    ASSERT_EQ(integrationPacketPlan.dependencyCount, 1u);
+    ASSERT_EQ(integrationPacketPlan.dependencyCount, 2u);
+    const GpuPacketDependency* const integrationPacketDependencies = compiledGraph.packetDependencies(integrationPacket);
+    ASSERT_NE(integrationPacketDependencies, nullptr);
     EXPECT_EQ(compiledGraph.packetDependencies(extinctionPacket)[0u].producer, depthWarpPacket);
-    EXPECT_EQ(compiledGraph.packetDependencies(integrationPacket)[0u].producer, extinctionPacket);
+    // Integration reads control directly from Depth Warp and extinction data from the merged Graphics packet. Both
+    // semantic RAW edges remain in packet topology; the same-Compute Depth Warp wait is elided at submission.
+    EXPECT_TRUE(
+        integrationPacketDependencies[0u].producer == depthWarpPacket
+        || integrationPacketDependencies[1u].producer == depthWarpPacket
+    );
+    EXPECT_TRUE(
+        integrationPacketDependencies[0u].producer == extinctionPacket
+        || integrationPacketDependencies[1u].producer == extinctionPacket
+    );
 
     const GpuCompiledTask* const compiledDepthWarp = compiledGraph.findTask(depthWarpTask);
     const GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producerTask);
@@ -33765,7 +34119,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
         .setHeight(4u)
         .setFormat(Format::RGBA8_UNORM)
         .setInRenderTarget(true)
-        .setInitialState(ResourceStates::Common)
+        .setInitialState(ResourceStates::Unknown)
         .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
     ;
     auto accumColor = device.createTexture(accumulationTextureDesc);
@@ -33773,7 +34127,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
     const TextureDesc depthTextureDesc = TextureDesc()
         .setWidth(4u)
         .setHeight(4u)
-        .setFormat(Format::D24S8)
+        .setFormat(Format::D32S8)
         .setInRenderTarget(true)
         .setInitialState(ResourceStates::Common)
         .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
@@ -33789,6 +34143,13 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
         && accumExtinction
         && deferredDepth
     );
+    Texture* const initialTextures[] = { deferredDepth.get() };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(asyncScope.arena());
     const auto importBuffer = [&graph](const BufferHandle& buffer, const AStringView markerLabel){
@@ -34400,7 +34761,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
     EXPECT_TRUE(hasTextureTransition(
         rasterTask,
         accumColorResource,
-        ResourceStates::Common,
+        ResourceStates::Unknown,
         ResourceStates::RenderTarget,
         primaryGraphicsQueue,
         primaryGraphicsQueue
@@ -34408,7 +34769,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
     EXPECT_TRUE(hasTextureTransition(
         rasterTask,
         accumExtinctionResource,
-        ResourceStates::Common,
+        ResourceStates::Unknown,
         ResourceStates::RenderTarget,
         primaryGraphicsQueue,
         primaryGraphicsQueue
@@ -35806,13 +36167,20 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     const TextureDesc clearDepthTextureDesc = TextureDesc()
         .setWidth(4u)
         .setHeight(4u)
-        .setFormat(Format::D24S8)
+        .setFormat(Format::D32S8)
         .setInRenderTarget(true)
         .setInitialState(ResourceStates::Common)
         .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
     ;
     auto depthTexture = device.createTexture(clearDepthTextureDesc);
     ASSERT_NE(depthTexture.get(), nullptr);
+    Texture* const initialTextures[] = { texture.get(), depthTexture.get() };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId bufferResource = graph.importBuffer(
@@ -36543,6 +36911,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityAllLitClearRecor
     );
     ASSERT_NE(constants.get(), nullptr);
     ASSERT_NE(shadowVisibility.get(), nullptr);
+    Texture* const initialTextures[] = { shadowVisibility.get() };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId constantsResource = graph.importBuffer(
@@ -36955,9 +37330,14 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTextureHooksDiscardOnPacketRec
         GpuNativePacketRecordDesc{ .packet = packet },
         recordedGraph
     ));
+    EXPECT_EQ(hooks.discardedCount, 1u);
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
-    transaction.discardUnaccepted(graph, compiledGraph);
+    EXPECT_TRUE(transaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        recordedGraph.recordingAttemptGeneration()
+    ));
     EXPECT_TRUE(retryTaskAttempted);
     EXPECT_EQ(hooks.beforeCount, 1u);
     EXPECT_EQ(hooks.afterCount, 1u);
@@ -37493,8 +37873,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketResolvesTaskAnchoredRuntimeSta
             .setIdentity(Name("tests/descriptor_buffer/task_anchored_runtime_state"))
             .setMarkerLabel("Task-Anchored Runtime State")
             .setType(GpuGraphResourceType::Buffer)
-            // The graph declaration is already the desired state, so it deliberately emits no first-use
-            // transition. Only the late native source can materialize that state in the recording command list.
+            // The graph owns its known initial state. The late task-anchored source must still be accepted and
+            // applied before this task's first use when the renderer provides one.
             .setInitialState(ResourceStates::ShaderResource)
     );
     ASSERT_TRUE(resource.valid());
@@ -37581,17 +37961,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketResolvesTaskAnchoredRuntimeSta
     };
 
     const GpuNativePacketRecorder recorder(device);
-    GpuRecordedGraph missingBindingGraph(DescriptorBufferRoundTripTest::arena());
-    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
-        missingBindingGraph
-    ));
-    EXPECT_FALSE(taskRecorded);
-
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
@@ -37645,6 +38014,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
     ASSERT_NE(avboitPrefixBuffer.get(), nullptr);
     auto avboitOutput = CreateConcurrentTestTexture(device);
     ASSERT_NE(avboitOutput.get(), nullptr);
+    Texture* const initialTextures[] = { avboitOutput.get() };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId resource = graph.importBuffer(
@@ -38180,6 +38556,30 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     );
     ASSERT_TRUE(rejectedTailTask.valid());
 
+    u32 preflightRejectedDiscardedCount = 0u;
+    bool preflightRejectedRecorded = false;
+    const GpuTaskId preflightRejectedTailTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/late_history_preflight_reject"))
+            .setMarkerLabel("Late History Preflight Reject")
+            .setQueue(GpuQueueRequest{
+                GpuQueueCapability::Transfer,
+                GpuQueuePreference::Transfer,
+                true,
+                true,
+            })
+            .setScheduling(scheduling)
+            .setDependencies(rejectedTailDependencies, LengthOf(rejectedTailDependencies))
+            .setResourceUses(rejectedTailUses, LengthOf(rejectedTailUses)),
+        NativePacketPrefixTask::Payload{
+            .buffer = historyBuffer.get(),
+            .expectedState = ResourceStates::CopyDest,
+            .recorded = &preflightRejectedRecorded,
+            .discardedCount = &preflightRejectedDiscardedCount,
+        }
+    );
+    ASSERT_TRUE(preflightRejectedTailTask.valid());
+
     const GpuPhysicalQueueInfo queue{
         .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
@@ -38206,10 +38606,12 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     const GpuSubmissionPacketId presentPacket = compiledGraph.packetForTask(presentTask);
     const GpuSubmissionPacketId historyPacket = compiledGraph.packetForTask(historyTask);
     const GpuSubmissionPacketId rejectedTailPacket = compiledGraph.packetForTask(rejectedTailTask);
+    const GpuSubmissionPacketId preflightRejectedTailPacket = compiledGraph.packetForTask(preflightRejectedTailTask);
     ASSERT_TRUE(presentPacket.valid());
     ASSERT_TRUE(historyPacket.valid());
     ASSERT_TRUE(rejectedTailPacket.valid());
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    ASSERT_TRUE(preflightRejectedTailPacket.valid());
+    ASSERT_EQ(compiledGraph.packetCount(), 4u);
     EXPECT_EQ(compiledGraph.packetIdAt(0u), presentPacket);
     EXPECT_EQ(compiledGraph.packetIdAt(1u), historyPacket);
     EXPECT_EQ(compiledGraph.packetIdAt(2u), rejectedTailPacket);
@@ -38296,6 +38698,36 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     const QueueSubmissionToken historySubmissionToken = transaction.packetToken(historyPacket);
     ASSERT_TRUE(historySubmissionToken.valid());
     EXPECT_EQ(historyAcceptedToken.value, historySubmissionToken.value);
+
+    // Validation fails before the recorder can prepare its recorded graph. The helper must still establish the
+    // current graph attempt for transactional cleanup, rather than leaving the declared tail armed.
+    const GpuTaskPacketStateBinding invalidPreflightStateBindings[] = {
+        GpuTaskPacketStateBinding{ .task = preflightRejectedTailTask },
+    };
+    GpuRecordedGraph preflightRejectedRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction preflightRejectedTransaction(DescriptorBufferRoundTripTest::arena());
+    preflightRejectedTransaction.reset(compiledGraph);
+    EXPECT_EQ(preflightRejectedRecordedGraph.recordingAttemptGeneration(), 0u);
+    EXPECT_FALSE(submitter.recordAndSubmitTask(
+        graph,
+        compiledGraph,
+        recorder,
+        preflightRejectedRecordedGraph,
+        preflightRejectedTailTask,
+        invalidPreflightStateBindings,
+        LengthOf(invalidPreflightStateBindings),
+        nullptr,
+        preflightRejectedTransaction,
+        scratchArena
+    ));
+    EXPECT_FALSE(preflightRejectedRecorded);
+    EXPECT_EQ(preflightRejectedDiscardedCount, 1u);
+    EXPECT_FALSE(preflightRejectedTransaction.packetToken(preflightRejectedTailPacket).valid());
+    ASSERT_NE(preflightRejectedTransaction.packetRuntime(preflightRejectedTailPacket), nullptr);
+    EXPECT_EQ(
+        preflightRejectedTransaction.packetRuntime(preflightRejectedTailPacket)->state,
+        GpuPacketRuntimeState::Rejected
+    );
 
     const auto rejectLateTailAfterRecord = [](
         void* const context,
@@ -39309,7 +39741,11 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     EXPECT_FALSE(recoveryRetiresTiming);
     EXPECT_FALSE(frameTransaction.needsRetirement());
 
-    transaction.discardUnaccepted(graph, compiledGraph);
+    EXPECT_TRUE(transaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        recordedGraph.recordingAttemptGeneration()
+    ));
     ASSERT_NE(transaction.packetRuntime(prefixPacket), nullptr);
     ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
     EXPECT_EQ(transaction.packetRuntime(prefixPacket)->state, GpuPacketRuntimeState::Accepted);
@@ -39815,7 +40251,11 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_TRUE(recoveryToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
     ASSERT_TRUE(device.waitForIdle());
 
-    transaction.discardUnaccepted(graph, compiledGraph);
+    EXPECT_TRUE(transaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        recordedGraph.recordingAttemptGeneration()
+    ));
     ASSERT_NE(transaction.packetRuntime(transferPacket), nullptr);
     ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
     EXPECT_EQ(transaction.packetRuntime(transferPacket)->state, GpuPacketRuntimeState::Accepted);
@@ -40470,6 +40910,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureBatchUsesAuxiliaryGraphic
             .setQueueSharing(ResourceQueueSharing::Graphics)
     );
     ASSERT_NE(destination.get(), nullptr);
+    Texture* const initialTextures[] = { destination.get() };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::ShaderResource
+    ));
     const Graphics::TextureUploadRegion regions[] = {
         Graphics::TextureUploadRegion{
             .data = mip0Bytes.data(),
@@ -40496,6 +40943,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureBatchUsesAuxiliaryGraphic
         .finalState = ResourceStates::ShaderResource,
         .queue = CommandQueue::Graphics,
         .acceptedToken = &uploadToken,
+        .physicalInitialState = ResourceStates::ShaderResource,
+        .hasPhysicalInitialState = true,
     }));
     ASSERT_TRUE(uploadToken.valid());
     ASSERT_TRUE(uploadToken.matchesPhysicalQueue(
@@ -40708,6 +41157,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
         .regionCount = LengthOf(regions),
         .finalState = ResourceStates::ShaderResource,
         .acceptedToken = &acceptedToken,
+        .physicalInitialState = ResourceStates::Unknown,
+        .hasPhysicalInitialState = true,
     }));
     ASSERT_TRUE(acceptedToken.valid());
 
@@ -40839,6 +41290,59 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAc
 }
 
 
+TEST_F(DescriptorBufferRoundTripTest, RetainedTextureUploadPublishesOnlyAcceptedMipState){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const TextureHandle texture = graphics.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setMipLevels(2u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInitialState(ResourceStates::ShaderResource)
+            .setKeepInitialState(true)
+    );
+    ASSERT_NE(texture.get(), nullptr);
+
+    u8 uploadBytes[4u * 4u * 4u] = {};
+    const CommandListHandle upload = device.createCommandList();
+    ASSERT_NE(upload.get(), nullptr);
+    upload->open();
+    ASSERT_TRUE(upload->tryWriteTexture(texture.get(), 0u, 0u, uploadBytes, 4u * 4u));
+    upload->setTextureState(texture.get(), TextureSubresourceSet(0u, 1u, 0u, 1u), ResourceStates::ShaderResource);
+    upload->close();
+
+    // Closing only records the terminal restoration. A separate list must not inherit that speculative state
+    // before Queue::submit accepts the producer.
+    const CommandListHandle preSubmitStateProbe = device.createCommandList();
+    ASSERT_NE(preSubmitStateProbe.get(), nullptr);
+    preSubmitStateProbe->open();
+    EXPECT_EQ(preSubmitStateProbe->getTextureSubresourceState(texture.get(), 0u, 0u), ResourceStates::Unknown);
+    EXPECT_EQ(preSubmitStateProbe->getTextureSubresourceState(texture.get(), 0u, 1u), ResourceStates::Unknown);
+    preSubmitStateProbe->close();
+
+    CommandList* const commandLists[] = { upload.get() };
+    const QueueSubmissionToken uploadToken = device.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(uploadToken.valid());
+
+    // A successful submission publishes only the subresource whose recorded terminal barrier was accepted. The
+    // untouched mip remains physically Undefined and therefore cannot inherit the retained descriptor state.
+    const CommandListHandle postSubmitStateProbe = device.createCommandList();
+    ASSERT_NE(postSubmitStateProbe.get(), nullptr);
+    postSubmitStateProbe->open();
+    EXPECT_EQ(postSubmitStateProbe->getTextureSubresourceState(texture.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(postSubmitStateProbe->getTextureSubresourceState(texture.get(), 0u, 1u), ResourceStates::Unknown);
+    postSubmitStateProbe->close();
+
+    ASSERT_TRUE(device.waitForIdle());
+}
+
+
 // The generic public standalone path must neither discard an already accepted Transfer packet nor leave it without a
 // Graphics-side frontier when a later Graphics packet rejects. A second rejection proves the fail-closed recreation
 // latch engages when that recovery packet itself cannot be accepted.
@@ -40962,14 +41466,13 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphRecoversAcceptedTransferFro
 }
 
 
-// Public texture uploads no longer retain a native fallback.  A generic packed payload cannot describe the two
-// independently copied aspects of D24S8/D32S8, and retaining an Unknown initial state makes the post-upload state
-// untrackable.  Both cases must fail before a command list can claim a successful upload.
+// Public texture uploads no longer retain a native fallback. A generic packed payload cannot describe the two
+// independently copied aspects of a combined depth/stencil texture. Retaining an Unknown initial state also makes
+// the post-upload state untrackable. Both cases must fail before a command list can claim a successful upload.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsRejectUnsafeLegacyDescriptors){
     auto& graphics = s_scope->graphics();
     const u8 depthStencilBytes[8u] = {};
     const Format::Enum combinedDepthStencilFormats[] = {
-        Format::D24S8,
         Format::D32S8,
     };
     for(const Format::Enum format : combinedDepthStencilFormats){
@@ -41002,7 +41505,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsRejectUnsafeLegacy
         TextureDesc()
             .setWidth(1u)
             .setHeight(1u)
-            .setFormat(Format::D24S8)
+            .setFormat(Format::D32S8)
             .setInRenderTarget(true)
             .setInitialState(ResourceStates::DepthWrite)
     );
@@ -41782,7 +42285,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCo
     EXPECT_EQ(lighting->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::ShaderResource);
     EXPECT_EQ(lighting->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
     EXPECT_EQ(lighting->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
-    EXPECT_EQ(lighting->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::CopyDest);
+    EXPECT_EQ(lighting->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);
     lighting->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
     lighting->close(&lightingState);
     ASSERT_TRUE(lightingState.valid());
@@ -41834,6 +42337,8 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCo
     ASSERT_TRUE(presentInputState.buildFanIn(presentBaseState, presentBranches, 1u));
     present->open(&presentInputState);
     EXPECT_EQ(present->getTextureSubresourceState(compositeColor.get(), 0u, 0u), ResourceStates::Common);
+    // opaqueColor is deliberately absent from present's handoff and no producer has been accepted yet. A separate
+    // list must not observe the speculative retained Common restoration recorded by prefix or lighting.
     EXPECT_EQ(present->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Unknown);
     present->setTextureState(compositeColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
     present->close(&presentState);
@@ -41865,6 +42370,13 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCo
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(prefixToken.valid());
+
+    // Once prefix is accepted, its retained terminal restoration is globally available to a later raw list.
+    const CommandListHandle acceptedPrefixStateProbe = device.createCommandList();
+    ASSERT_NE(acceptedPrefixStateProbe.get(), nullptr);
+    acceptedPrefixStateProbe->open();
+    EXPECT_EQ(acceptedPrefixStateProbe->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);
+    acceptedPrefixStateProbe->close();
 
     const QueueSubmissionDesc rayEffectsSubmitDesc = QueueSubmissionDesc().setWaitTokens(&prefixToken, 1u);
     CommandList* rayEffectsLists[] = { rayEffects.get() };
@@ -41992,6 +42504,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
     CommandListResourceStateHandoff seedSurfelSourceState(asyncScope.arena());
     CommandListResourceStateHandoff seedStashInputState(asyncScope.arena());
     CommandListResourceStateHandoff seedStashState(asyncScope.arena());
+    CommandListResourceStateHandoff seedHistoryState(asyncScope.arena());
     CommandListResourceStateHandoff seedShadowReturnState(asyncScope.arena());
     CommandListResourceStateHandoff seedCausticReturnState(asyncScope.arena());
     CommandListResourceStateHandoff seedSurfelReturnState(asyncScope.arena());
@@ -42002,6 +42515,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
     CommandListResourceStateHandoff nextCausticSourceState(asyncScope.arena());
     CommandListResourceStateHandoff nextSurfelSourceState(asyncScope.arena());
     CommandListResourceStateHandoff laggedLightingBaseState(asyncScope.arena());
+    CommandListResourceStateHandoff laggedLightingInputState(asyncScope.arena());
     CommandListResourceStateHandoff laggedLightingState(asyncScope.arena());
     CommandListResourceStateHandoff laggedOpaqueCompositeState(asyncScope.arena());
     CommandListResourceStateHandoff laggedCompositeState(asyncScope.arena());
@@ -42063,6 +42577,18 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
     ASSERT_TRUE(seedShadowReturnState.buildTextureSubset(seedStashState, shadowVisibility.get()));
     ASSERT_TRUE(seedCausticReturnState.buildTextureSubset(seedStashState, causticIrradiance.get()));
     ASSERT_TRUE(seedSurfelReturnState.buildTextureSubset(seedStashState, surfelIrradiance.get()));
+    Texture* const seedHistoryTextures[] = {
+        shadowHistory.get(),
+        causticHistory.get(),
+        surfelHistory.get(),
+    };
+    ASSERT_TRUE(seedHistoryState.buildResourceSubset(
+        seedStashState,
+        seedHistoryTextures,
+        LengthOf(seedHistoryTextures),
+        nullptr,
+        0u
+    ));
 
     nextPrefix->open();
     nextPrefix->setTextureState(gbuffer.get(), s_AllSubresources, ResourceStates::ShaderResource);
@@ -42107,10 +42633,16 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
         nullptr,
         0u
     ));
-    laggedLighting->open(&laggedLightingBaseState);
+    const CommandListResourceStateHandoff* const laggedLightingBranches[] = { &seedHistoryState };
+    ASSERT_TRUE(laggedLightingInputState.buildFanIn(
+        laggedLightingBaseState,
+        laggedLightingBranches,
+        LengthOf(laggedLightingBranches)
+    ));
+    laggedLighting->open(&laggedLightingInputState);
     EXPECT_EQ(laggedLighting->getTextureSubresourceState(gbuffer.get(), 0u, 0u), ResourceStates::ShaderResource);
-    // The history is intentionally absent from the producer handoff. Its keep-initial-state close from the accepted
-    // stash makes the prior snapshot independently importable on Graphics after the stash token is waited.
+    // The future Graphics submission waits for seedStashToken, while this explicit subset supplies its terminal
+    // Common state during pre-submit recording. A raw retained-state lookup cannot represent this dependency.
     EXPECT_EQ(laggedLighting->getTextureSubresourceState(shadowHistory.get(), 0u, 0u), ResourceStates::Common);
     EXPECT_EQ(laggedLighting->getTextureSubresourceState(causticHistory.get(), 0u, 0u), ResourceStates::Common);
     EXPECT_EQ(laggedLighting->getTextureSubresourceState(surfelHistory.get(), 0u, 0u), ResourceStates::Common);
@@ -42805,7 +43337,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
                 .setHeight(4u)
                 .setFormat(Format::RGBA8_UNORM)
                 .setInRenderTarget(true)
-                .setInitialState(ResourceStates::Common)
+                .setInitialState(ResourceStates::Unknown)
         );
     };
     const auto makeStorageTarget = [&device](){
@@ -42815,7 +43347,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
                 .setHeight(4u)
                 .setFormat(Format::RGBA8_UNORM)
                 .setInUAV(true)
-                .setInitialState(ResourceStates::Common)
+                .setInitialState(ResourceStates::Unknown)
         );
     };
     const auto makeSetupBuffer = [&device](){
@@ -43328,12 +43860,19 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
     const GpuCompiledTask* const compiledPrefix = compiledGraph.findTask(graphicsPrefixTask);
     ASSERT_NE(compiledShadowPrepare, nullptr);
     ASSERT_NE(compiledPrefix, nullptr);
-    // The retained selector state matches the graph import. Preparation requires no stale Common -> ConstantBuffer
-    // barrier, and it records successfully without a native selector transition before seeding Prefix.
+    // The retained selector state matches the graph import. Preparation emits a graph-initial no-op marker to seed
+    // the native tracker, rather than a stale Common -> ConstantBuffer transition, before seeding Prefix.
     EXPECT_TRUE(slotsBuffer->getDescription().keepInitialState);
     EXPECT_EQ(slotsBuffer->getDescription().initialState, ResourceStates::ConstantBuffer);
     EXPECT_EQ(graph.resourceAt(slotsResource.index).initialState, ResourceStates::ConstantBuffer);
-    EXPECT_EQ(compiledShadowPrepare->prologueBarrierCount, 0u);
+    ASSERT_EQ(compiledShadowPrepare->prologueBarrierCount, 1u);
+    const GpuCompiledBarrier* const shadowPrepareBarrier = compiledGraph.taskPrologueBarriers(shadowPrepareTask);
+    ASSERT_NE(shadowPrepareBarrier, nullptr);
+    EXPECT_EQ(shadowPrepareBarrier[0u].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(shadowPrepareBarrier[0u].resource, slotsResource);
+    EXPECT_EQ(shadowPrepareBarrier[0u].before, ResourceStates::ConstantBuffer);
+    EXPECT_EQ(shadowPrepareBarrier[0u].after, ResourceStates::ConstantBuffer);
+    EXPECT_TRUE(shadowPrepareBarrier[0u].isGraphInitialState);
     ASSERT_GT(compiledPrefix->prologueStateSeedCount, 0u);
     const GpuPacketStateSeed* const graphicsPrefixStateSeeds = compiledGraph.taskPrologueStateSeeds(
         graphicsPrefixTask
@@ -45652,4 +46191,6 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 

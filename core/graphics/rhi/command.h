@@ -96,7 +96,8 @@ struct TimerQueryResult{
 // owned by the caller: every referenced texture and buffer must stay alive until the consumer has opened.
 //
 // It carries both transient and permanent state. UAV-barrier policy remains local to each command list, while
-// keepInitialState resources are captured after their close-time restore barriers.
+// keepInitialState resources are captured after their close-time restore barriers. Before the producer is accepted,
+// this handoff is the only valid cross-list source for that restored native state.
 class CommandListResourceStateHandoff final : NoCopy{
     friend class GraphicsBackend::CommandList;
 

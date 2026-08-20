@@ -111,6 +111,8 @@ struct GpuGraphResourceDesc{
     GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
     // Compiler-generated packet-boundary transitions begin from this state. Unknown remains valid only while a
     // transitional CommandListResourceStateHandoff supplies the authoritative imported state at recording time.
+    // Typed imports inherit their resource descriptor state only when this field was left unspecified; an explicit
+    // Unknown preserves Vulkan's fresh-resource UNDEFINED origin for the graph's first writer.
     ResourceStates::Mask initialState = ResourceStates::Unknown;
     // Optional required state when graph work completes. The compiler applies this to every terminal range the
     // graph declared for an imported texture, buffer, or acceleration structure and publishes it in the accepted
@@ -140,11 +142,14 @@ struct GpuGraphResourceDesc{
     const GpuGraphInitialOwnerHandoffSourceDesc* initialOwnerHandoffSources = nullptr;
     usize initialOwnerHandoffSourceCount = 0u;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+    // Appended so positional aggregate initializers retain their existing field layout. Prefer setInitialState()
+    // whenever Unknown is intended as an explicit physical initial state rather than an unspecified default.
+    bool hasExplicitInitialState = false;
 
     constexpr GpuGraphResourceDesc& setIdentity(const Name& value){ identity = value; return *this; }
     constexpr GpuGraphResourceDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
     constexpr GpuGraphResourceDesc& setType(const GpuGraphResourceType::Enum value){ type = value; return *this; }
-    constexpr GpuGraphResourceDesc& setInitialState(const ResourceStates::Mask value){ initialState = value; return *this; }
+    constexpr GpuGraphResourceDesc& setInitialState(const ResourceStates::Mask value){ initialState = value; hasExplicitInitialState = true; return *this; }
     constexpr GpuGraphResourceDesc& setExternalFinalState(const ResourceStates::Mask value){ externalFinalState = value; return *this; }
     constexpr GpuGraphResourceDesc& setExternalFinalReleaseDestinationQueue(const GpuPhysicalQueueId value){ externalFinalReleaseDestinationQueue = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerQueue(const GpuPhysicalQueueId value){ initialOwnerQueue = value; return *this; }

@@ -614,13 +614,48 @@ struct ClearTextureRectUIntTask{
 }
 
 template<typename ResourceDesc>
-[[nodiscard]] static bool BuiltInTaskStateMatchesRetainedInitialState(
+[[nodiscard]] static bool BuiltInTaskCanMaterializeRetainedState(
     const ResourceDesc& resourceDesc,
-    const ResourceStates::Mask requiredState
+    const ResourceStates::Mask graphInitialState,
+    const ResourceStates::Mask externalFinalState
 )noexcept{
-    // CommandList::close restores retained resources to their descriptor state. A primitive task can publish its
-    // native built-in state only when that restoration is a no-op.
-    return !resourceDesc.keepInitialState || resourceDesc.initialState == requiredState;
+    // Retained resources restore to their descriptor state when a native packet closes. The graph may still use a
+    // different built-in state when it explicitly starts from that descriptor state: compiler-owned barriers then
+    // establish the primitive state and the recorded packet exports the restored state for the next packet. A
+    // mismatched graph declaration has no native source that this helper can prove, and a terminal external state
+    // must agree with the close-time restoration before the graph publishes its handoff.
+    if(!resourceDesc.keepInitialState)
+        return true;
+    return resourceDesc.initialState != ResourceStates::Unknown
+        && graphInitialState == resourceDesc.initialState
+        && (
+            externalFinalState == ResourceStates::Unknown
+            || externalFinalState == resourceDesc.initialState
+        )
+    ;
+}
+
+[[nodiscard]] static bool UploadTextureTaskCanMaterializeRetainedState(
+    const TextureDesc& resourceDesc,
+    const ResourceStates::Mask graphInitialState,
+    const ResourceStates::Mask externalFinalState,
+    const ResourceStates::Mask uploadFinalState
+)noexcept{
+    if(!resourceDesc.keepInitialState)
+        return true;
+    if(
+        resourceDesc.initialState == ResourceStates::Unknown
+        || uploadFinalState != resourceDesc.initialState
+        || (
+            externalFinalState != ResourceStates::Unknown
+            && externalFinalState != resourceDesc.initialState
+        )
+    )
+        return false;
+    // A texture upload is a first write. Its recorder materializes CopyDest and then publishes finalState, so an
+    // explicit Unknown graph import is safe for a fresh image while all other built-ins retain the stricter source
+    // requirement above.
+    return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
 }
 
 [[nodiscard]] static TextureDimension::Enum CopyTextureImageType(const TextureDimension::Enum dimension)noexcept{
@@ -903,10 +938,11 @@ GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
     , m_uploadBlobs(arena)
     , m_markerText(arena)
     , m_generation(__hidden_gpu_task_graph::AllocateGeneration())
+    , m_activeRecordingAttemptGeneration(__hidden_gpu_task_graph::AllocateGeneration())
 {}
 
 GpuTaskGraph::~GpuTaskGraph(){
-    destroyTaskPayloads();
+    NWB_FATAL_ASSERT_MSG(destroyTaskPayloads(), "GpuTaskGraph destruction requires in-flight task work to resolve first");
     destroyTaskStateSnapshots();
     destroyResourceStateSnapshots();
 }
@@ -981,13 +1017,15 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
             && destinationResource.type == GpuGraphResourceType::Buffer
             && sourceResource.buffer
             && destinationResource.buffer
-            && __hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+            && __hidden_gpu_task_graph::BuiltInTaskCanMaterializeRetainedState(
                 sourceResource.buffer->getDescription(),
-                ResourceStates::CopySource
+                sourceResource.initialState,
+                sourceResource.externalFinalState
             )
-            && __hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+            && __hidden_gpu_task_graph::BuiltInTaskCanMaterializeRetainedState(
                 destinationResource.buffer->getDescription(),
-                ResourceStates::CopyDest
+                destinationResource.initialState,
+                destinationResource.externalFinalState
             )
             && validCopyRange(sourceResource.buffer->getDescription(), region.sourceOffsetBytes, region.dataSizeBytes)
             && validCopyRange(destinationResource.buffer->getDescription(), region.destinationOffsetBytes, region.dataSizeBytes)
@@ -1100,13 +1138,15 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
             && destinationResource.type == GpuGraphResourceType::Texture
             && sourceResource.texture
             && destinationResource.texture
-            && __hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+            && __hidden_gpu_task_graph::BuiltInTaskCanMaterializeRetainedState(
                 sourceResource.texture->getDescription(),
-                ResourceStates::CopySource
+                sourceResource.initialState,
+                sourceResource.externalFinalState
             )
-            && __hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+            && __hidden_gpu_task_graph::BuiltInTaskCanMaterializeRetainedState(
                 destinationResource.texture->getDescription(),
-                ResourceStates::CopyDest
+                destinationResource.initialState,
+                destinationResource.externalFinalState
             )
             && __hidden_gpu_task_graph::CopyTextureContractValid(
                 sourceResource.texture->getDescription(),
@@ -1236,13 +1276,15 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
             && destinationResource.type == GpuGraphResourceType::Texture
             && sourceResource.texture
             && destinationResource.texture
-            && __hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+            && __hidden_gpu_task_graph::BuiltInTaskCanMaterializeRetainedState(
                 sourceResource.texture->getDescription(),
-                ResourceStates::ResolveSource
+                sourceResource.initialState,
+                sourceResource.externalFinalState
             )
-            && __hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+            && __hidden_gpu_task_graph::BuiltInTaskCanMaterializeRetainedState(
                 destinationResource.texture->getDescription(),
-                ResourceStates::ResolveDest
+                destinationResource.initialState,
+                destinationResource.externalFinalState
             )
             && __hidden_gpu_task_graph::ResolveTextureContractValid(
                 sourceResource.texture->getDescription(),
@@ -1367,8 +1409,13 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
         // only during late packet recording.
         || (uploadDesc.destinationOffsetBytes & (sizeof(u32) - 1u)) != 0u
         || (source->bytes.size() & (sizeof(u32) - 1u)) != 0u
-        // CommandList::close restores keepInitialState resources after recording. Any different graph-visible final
-        // state would therefore lie to a later packet's compiler-owned state seed.
+        || !__hidden_gpu_task_graph::BuiltInTaskCanMaterializeRetainedState(
+            destinationDesc,
+            destinationResource.initialState,
+            destinationResource.externalFinalState
+        )
+        // Upload bodies perform their own CopyDest -> final-state transition. A retained descriptor restores its
+        // descriptor state at packet close, so the primitive's graph-visible final state must match that restore.
         || (destinationDesc.keepInitialState && uploadDesc.finalState != destinationDesc.initialState)
     )
         return {};
@@ -1440,7 +1487,12 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
     usize requiredBytes = 0u;
     const TextureDesc& destinationDesc = destinationResource.texture->getDescription();
     if(
-        (destinationDesc.keepInitialState && uploadDesc.finalState != destinationDesc.initialState)
+        !__hidden_gpu_task_graph::UploadTextureTaskCanMaterializeRetainedState(
+            destinationDesc,
+            destinationResource.initialState,
+            destinationResource.externalFinalState,
+            uploadDesc.finalState
+        )
         ||
         !__hidden_gpu_task_graph::ComputeTextureUploadByteSize(
             destinationDesc,
@@ -1514,9 +1566,10 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
         || !destinationResource.buffer
         || destinationResource.buffer->getDescription().byteSize == 0u
         || (destinationResource.buffer->getDescription().byteSize & (sizeof(u32) - 1u)) != 0u
-        || !__hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+        || !__hidden_gpu_task_graph::BuiltInTaskCanMaterializeRetainedState(
             destinationResource.buffer->getDescription(),
-            ResourceStates::CopyDest
+            destinationResource.initialState,
+            destinationResource.externalFinalState
         )
     )
         return {};
@@ -1582,9 +1635,10 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         // vkCmdClear*Image cannot operate on multisampled images outside a render pass. This primitive helper has no
         // framebuffer/render-pass lowering, so preserve its transfer-only contract by rejecting MSAA up front.
         || destinationResource.texture->getDescription().sampleCount != 1u
-        || !__hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+        || !__hidden_gpu_task_graph::BuiltInTaskCanMaterializeRetainedState(
             destinationResource.texture->getDescription(),
-            ResourceStates::CopyDest
+            destinationResource.initialState,
+            destinationResource.externalFinalState
         )
     )
         return {};
@@ -1674,9 +1728,10 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
         // vkCmdClear*Image cannot operate on multisampled images outside a render pass. This primitive helper has no
         // framebuffer/render-pass lowering, so preserve its transfer-only contract by rejecting MSAA up front.
         || destinationResource.texture->getDescription().sampleCount != 1u
-        || !__hidden_gpu_task_graph::BuiltInTaskStateMatchesRetainedInitialState(
+        || !__hidden_gpu_task_graph::BuiltInTaskCanMaterializeRetainedState(
             destinationResource.texture->getDescription(),
-            ResourceStates::CopyDest
+            destinationResource.initialState,
+            destinationResource.externalFinalState
         )
     )
         return {};
@@ -1764,8 +1819,17 @@ GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, con
         return {};
 
     GpuGraphResourceDesc resolvedDesc = desc;
-    if(resolvedDesc.initialState == ResourceStates::Unknown)
-        resolvedDesc.initialState = texture->getDescription().initialState;
+    if(!resolvedDesc.hasExplicitInitialState && resolvedDesc.initialState == ResourceStates::Unknown){
+        const TextureDesc& textureDesc = texture->getDescription();
+        // A mixed retained texture has no single physical layout: an accepted partial upload restored only part of
+        // it, while its remaining subresources are still Undefined. Preserve the legacy descriptor fallback for
+        // all-unknown fresh textures and all-known native imports, but force this ambiguous typed import to name
+        // Unknown until the caller supplies an explicit per-resource state source.
+        resolvedDesc.initialState = textureDesc.keepInitialState && texture->hasPartiallyKnownRetainedSubresourceState()
+            ? ResourceStates::Unknown
+            : textureDesc.initialState
+        ;
+    }
     if(resolvedDesc.queueSharing == ResourceQueueSharing::Exclusive)
         resolvedDesc.queueSharing = texture->getDescription().queueSharing;
 
@@ -1798,7 +1862,7 @@ GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const 
         return {};
 
     GpuGraphResourceDesc resolvedDesc = desc;
-    if(resolvedDesc.initialState == ResourceStates::Unknown)
+    if(!resolvedDesc.hasExplicitInitialState && resolvedDesc.initialState == ResourceStates::Unknown)
         resolvedDesc.initialState = buffer->getDescription().initialState;
     if(resolvedDesc.queueSharing == ResourceQueueSharing::Exclusive)
         resolvedDesc.queueSharing = buffer->getDescription().queueSharing;
@@ -2053,23 +2117,144 @@ GpuExternalCompletionId GpuTaskGraph::importExternalCompletion(const GpuExternal
 }
 
 void GpuTaskGraph::reset(){
-    destroyTaskPayloads();
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(m_teardownInProgress){
+            NWB_ASSERT_MSG(false, "GpuTaskGraph::reset requires prior teardown completion");
+            return;
+        }
+        for(const GpuTaskNode& task : m_tasks){
+            if(
+                task.lifecycleState == GpuTaskLifecycleState::Recording
+                || task.lifecycleState == GpuTaskLifecycleState::Submitting
+                || task.lifecycleState == GpuTaskLifecycleState::Accepting
+                || task.lifecycleState == GpuTaskLifecycleState::Discarding
+            ){
+                NWB_ASSERT_MSG(false, "GpuTaskGraph::reset requires in-flight task work to resolve first");
+                return;
+            }
+        }
+        m_teardownInProgress = true;
+    }
+
+    if(!destroyTaskPayloads()){
+        ScopedLock lock(m_lifecycleMutex);
+        m_teardownInProgress = false;
+        NWB_ASSERT_MSG(false, "GpuTaskGraph::reset requires in-flight task work to resolve first");
+        return;
+    }
     destroyTaskStateSnapshots();
     destroyResourceStateSnapshots();
-    m_tasks.clear();
-    m_dependencies.clear();
-    m_externalDependencies.clear();
-    m_externalStateSources.clear();
-    m_resourceUses.clear();
-    m_resources.clear();
-    m_initialOwnerHandoffSources.clear();
-    m_resourceSets.clear();
-    m_resourceSetMembers.clear();
-    m_pipelines.clear();
-    m_externalCompletions.clear();
-    m_uploadBlobs.clear();
-    m_markerText.clear();
-    m_generation = __hidden_gpu_task_graph::AllocateGeneration();
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        m_tasks.clear();
+        m_dependencies.clear();
+        m_externalDependencies.clear();
+        m_externalStateSources.clear();
+        m_resourceUses.clear();
+        m_resources.clear();
+        m_initialOwnerHandoffSources.clear();
+        m_resourceSets.clear();
+        m_resourceSetMembers.clear();
+        m_pipelines.clear();
+        m_externalCompletions.clear();
+        m_uploadBlobs.clear();
+        m_markerText.clear();
+        m_generation = __hidden_gpu_task_graph::AllocateGeneration();
+        m_activeRecordingAttemptGeneration = __hidden_gpu_task_graph::AllocateGeneration();
+        m_activeRecordingPlanGeneration = 0u;
+        m_teardownInProgress = false;
+    }
+}
+
+u64 GpuTaskGraph::recordingAttemptGeneration()const noexcept{
+    ScopedLock lock(m_lifecycleMutex);
+    return m_activeRecordingAttemptGeneration;
+}
+
+bool GpuTaskGraph::beginRecordingAttempt(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId* const tasks,
+    const usize taskCount
+)const noexcept{
+    if(!compiledGraph.validFor(*this) || !tasks || taskCount == 0u)
+        return false;
+
+    ScopedLock lock(m_lifecycleMutex);
+    if(m_teardownInProgress)
+        return false;
+
+    bool selectedTaskWasDiscarded = false;
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        if(!validTask(tasks[taskIndex]))
+            return false;
+        const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+        if(task.lifecycleAttemptGeneration != m_activeRecordingAttemptGeneration)
+            return false;
+        if(
+            task.lifecycleState == GpuTaskLifecycleState::Recording
+            || task.lifecycleState == GpuTaskLifecycleState::Recorded
+            || task.lifecycleState == GpuTaskLifecycleState::Discarding
+            || task.lifecycleState == GpuTaskLifecycleState::Submitting
+            || task.lifecycleState == GpuTaskLifecycleState::Accepting
+            || task.lifecycleState == GpuTaskLifecycleState::Accepted
+        )
+            return false;
+        if(task.lifecycleState == GpuTaskLifecycleState::Discarded)
+            selectedTaskWasDiscarded = true;
+    }
+
+    const bool planChanged = m_activeRecordingPlanGeneration != compiledGraph.planGeneration();
+    if(!planChanged && !selectedTaskWasDiscarded)
+        return true;
+
+    for(const GpuTaskNode& task : m_tasks){
+        if(
+            task.lifecycleAttemptGeneration != m_activeRecordingAttemptGeneration
+            || task.lifecycleState == GpuTaskLifecycleState::Recording
+            || task.lifecycleState == GpuTaskLifecycleState::Recorded
+            || task.lifecycleState == GpuTaskLifecycleState::Discarding
+            || task.lifecycleState == GpuTaskLifecycleState::Submitting
+            || task.lifecycleState == GpuTaskLifecycleState::Accepting
+            || task.lifecycleState == GpuTaskLifecycleState::Accepted
+        )
+            return false;
+        // A declaration-only discard is terminal. Once a plan began recording, every task must also receive its
+        // discarded callback before a different plan or retry can re-arm the graph.
+        if(
+            (m_activeRecordingPlanGeneration == 0u && task.lifecycleState == GpuTaskLifecycleState::Discarded)
+            || (
+                (!planChanged || m_activeRecordingPlanGeneration != 0u)
+                && task.lifecycleState != GpuTaskLifecycleState::Discarded
+            )
+        )
+            return false;
+    }
+
+    m_activeRecordingPlanGeneration = compiledGraph.planGeneration();
+    m_activeRecordingAttemptGeneration = __hidden_gpu_task_graph::AllocateGeneration();
+    for(const GpuTaskNode& task : m_tasks){
+        task.lifecycleState = GpuTaskLifecycleState::Declared;
+        task.lifecycleAttemptGeneration = m_activeRecordingAttemptGeneration;
+        task.recordingClaimGeneration = 0u;
+        task.submissionClaimGeneration = 0u;
+        task.recordThunkInProgress = false;
+        task.recordThunkCompleted = false;
+    }
+    return true;
+}
+
+bool GpuTaskGraph::matchesRecordingAttempt(
+    const GpuCompiledGraph& compiledGraph,
+    const u64 recordingAttemptGeneration
+)const noexcept{
+    ScopedLock lock(m_lifecycleMutex);
+    return recordingAttemptGeneration != 0u
+        && !m_teardownInProgress
+        && compiledGraph.validFor(*this)
+        && m_activeRecordingPlanGeneration == compiledGraph.planGeneration()
+        && m_activeRecordingAttemptGeneration == recordingAttemptGeneration
+    ;
 }
 
 bool GpuTaskGraph::validForDeviceGeneration(const u16 deviceGeneration)const noexcept{
@@ -2288,14 +2473,562 @@ RayTracingPipeline* GpuTaskGraph::rayTracingPipelineFor(const GpuGraphPipelineId
 bool GpuTaskGraph::recordTask(
     const GpuTaskId& taskID,
     CommandList& commandList,
-    const GpuTaskRecordContext& context
+    const GpuTaskRecordContext& context,
+    const GpuTaskPacketRecordingLease& lease
 )const{
-    if(!validTask(taskID))
+    if(!validTask(taskID) || !lease.valid())
         return false;
 
-    const GpuTaskNode& task = m_tasks[taskID.index];
-    return task.payload && task.recordPayload && task.recordPayload(task.payload, commandList, context);
+    const void* payload = nullptr;
+    GpuTaskRecordThunk recordPayload = nullptr;
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(m_teardownInProgress)
+            return false;
+        const GpuTaskNode& task = m_tasks[taskID.index];
+        if(
+            task.lifecycleState != GpuTaskLifecycleState::Recording
+            || task.lifecycleAttemptGeneration != context.recordingAttemptGeneration
+            || context.recordingAttemptGeneration == 0u
+            || task.recordingClaimGeneration != lease.m_claimGeneration
+            || task.recordThunkInProgress
+            || task.recordThunkCompleted
+            || !context.graph.validFor(*this)
+            || m_activeRecordingPlanGeneration != context.graph.planGeneration()
+            || m_activeRecordingAttemptGeneration != context.recordingAttemptGeneration
+            || lease.m_planGeneration != context.graph.planGeneration()
+            || lease.m_recordingAttemptGeneration != context.recordingAttemptGeneration
+        )
+            return false;
+        task.recordThunkInProgress = true;
+        payload = task.payload;
+        recordPayload = task.recordPayload;
+    }
+
+    const bool recorded = payload && recordPayload && recordPayload(payload, commandList, context);
+
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(
+            m_teardownInProgress
+            || !validTask(taskID)
+            || m_activeRecordingPlanGeneration != context.graph.planGeneration()
+            || m_activeRecordingAttemptGeneration != context.recordingAttemptGeneration
+        )
+            return false;
+
+        const GpuTaskNode& task = m_tasks[taskID.index];
+        if(
+            task.lifecycleState != GpuTaskLifecycleState::Recording
+            || task.lifecycleAttemptGeneration != context.recordingAttemptGeneration
+            || task.recordingClaimGeneration != lease.m_claimGeneration
+            || !task.recordThunkInProgress
+        )
+            return false;
+        task.recordThunkInProgress = false;
+        task.recordThunkCompleted = recorded;
+    }
+    return recorded;
 }
+
+bool GpuTaskGraph::beginPacketRecording(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId* const tasks,
+    const usize taskCount,
+    const u64 recordingAttemptGeneration,
+    GpuTaskPacketRecordingLease& outLease
+)const noexcept{
+    if(
+        !compiledGraph.validFor(*this)
+        || !tasks
+        || taskCount == 0u
+        || recordingAttemptGeneration == 0u
+        || outLease.valid()
+    )
+        return false;
+
+    ScopedLock lock(m_lifecycleMutex);
+    if(
+        m_teardownInProgress
+        || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
+        || m_activeRecordingAttemptGeneration != recordingAttemptGeneration
+    )
+        return false;
+
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        if(!validTask(tasks[taskIndex]))
+            return false;
+        const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+        if(
+            task.lifecycleState != GpuTaskLifecycleState::Declared
+            || task.lifecycleAttemptGeneration != recordingAttemptGeneration
+        )
+            return false;
+    }
+    const u64 claimGeneration = __hidden_gpu_task_graph::AllocateGeneration();
+    if(claimGeneration == 0u)
+        return false;
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        m_tasks[tasks[taskIndex].index].lifecycleState = GpuTaskLifecycleState::Recording;
+        m_tasks[tasks[taskIndex].index].recordingClaimGeneration = claimGeneration;
+        m_tasks[tasks[taskIndex].index].submissionClaimGeneration = 0u;
+        m_tasks[tasks[taskIndex].index].recordThunkInProgress = false;
+        m_tasks[tasks[taskIndex].index].recordThunkCompleted = false;
+    }
+    outLease.m_planGeneration = compiledGraph.planGeneration();
+    outLease.m_recordingAttemptGeneration = recordingAttemptGeneration;
+    outLease.m_claimGeneration = claimGeneration;
+    return true;
+}
+
+bool GpuTaskGraph::completePacketRecording(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId* const tasks,
+    const usize taskCount,
+    GpuTaskPacketRecordingLease& lease
+)const noexcept{
+    if(
+        !compiledGraph.validFor(*this)
+        || !tasks
+        || taskCount == 0u
+        || !lease.valid()
+        || lease.m_planGeneration != compiledGraph.planGeneration()
+    )
+        return false;
+
+    ScopedLock lock(m_lifecycleMutex);
+    if(
+        m_teardownInProgress
+        || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
+        || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
+    )
+        return false;
+
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        if(!validTask(tasks[taskIndex]))
+            return false;
+        const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+        if(
+            task.lifecycleState != GpuTaskLifecycleState::Recording
+            || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
+            || task.recordingClaimGeneration != lease.m_claimGeneration
+            || task.recordThunkInProgress
+            || (task.recordPayload && !task.recordThunkCompleted)
+        )
+            return false;
+    }
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        m_tasks[tasks[taskIndex].index].lifecycleState = GpuTaskLifecycleState::Recorded;
+        m_tasks[tasks[taskIndex].index].recordingClaimGeneration = 0u;
+        m_tasks[tasks[taskIndex].index].recordThunkInProgress = false;
+        m_tasks[tasks[taskIndex].index].recordThunkCompleted = false;
+    }
+    lease.reset();
+    return true;
+}
+
+
+void GpuTaskGraph::abortPacketRecording(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId* const tasks,
+    const usize taskCount,
+    GpuTaskPacketRecordingLease& lease
+)const noexcept{
+    if(
+        !compiledGraph.validFor(*this)
+        || !tasks
+        || taskCount == 0u
+        || !lease.valid()
+        || lease.m_planGeneration != compiledGraph.planGeneration()
+    )
+        return;
+
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(
+            m_teardownInProgress
+            || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
+            || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
+        )
+            return;
+
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            if(!validTask(tasks[taskIndex]))
+                return;
+            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+            if(
+                task.lifecycleState != GpuTaskLifecycleState::Recording
+                || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
+                || task.recordingClaimGeneration != lease.m_claimGeneration
+                || task.recordThunkInProgress
+            )
+                return;
+        }
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
+            m_tasks[tasks[taskIndex].index].lifecycleState = GpuTaskLifecycleState::Discarding;
+    }
+
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+        if(task.payload && task.discardPayload)
+            task.discardPayload(task.payload);
+    }
+
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(
+            m_teardownInProgress
+            || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
+            || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
+        )
+            return;
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            if(!validTask(tasks[taskIndex]))
+                return;
+            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+            if(
+                task.lifecycleState != GpuTaskLifecycleState::Discarding
+                || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
+                || task.recordingClaimGeneration != lease.m_claimGeneration
+            )
+                return;
+        }
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            m_tasks[tasks[taskIndex].index].lifecycleState = GpuTaskLifecycleState::Discarded;
+            m_tasks[tasks[taskIndex].index].recordingClaimGeneration = 0u;
+            m_tasks[tasks[taskIndex].index].recordThunkInProgress = false;
+            m_tasks[tasks[taskIndex].index].recordThunkCompleted = false;
+        }
+    }
+    lease.reset();
+}
+
+
+bool GpuTaskGraph::packetReadyForSubmission(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId* const tasks,
+    const usize taskCount,
+    const u64 recordingAttemptGeneration
+)const noexcept{
+    if(
+        !compiledGraph.validFor(*this)
+        || !tasks
+        || taskCount == 0u
+        || recordingAttemptGeneration == 0u
+    )
+        return false;
+
+    ScopedLock lock(m_lifecycleMutex);
+    if(
+        m_teardownInProgress
+        || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
+        || m_activeRecordingAttemptGeneration != recordingAttemptGeneration
+    )
+        return false;
+
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        if(!validTask(tasks[taskIndex]))
+            return false;
+        const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+        if(
+            task.lifecycleState != GpuTaskLifecycleState::Recorded
+            || task.lifecycleAttemptGeneration != recordingAttemptGeneration
+        )
+            return false;
+    }
+    return true;
+}
+
+
+bool GpuTaskGraph::beginPacketSubmission(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId* const tasks,
+    const usize taskCount,
+    const u64 recordingAttemptGeneration,
+    GpuTaskPacketSubmissionLease& outLease
+)const noexcept{
+    if(
+        !compiledGraph.validFor(*this)
+        || !tasks
+        || taskCount == 0u
+        || recordingAttemptGeneration == 0u
+        || outLease.valid()
+    )
+        return false;
+
+    ScopedLock lock(m_lifecycleMutex);
+    if(
+        m_teardownInProgress
+        || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
+        || m_activeRecordingAttemptGeneration != recordingAttemptGeneration
+    )
+        return false;
+
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        if(!validTask(tasks[taskIndex]))
+            return false;
+        const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+        if(
+            task.lifecycleState != GpuTaskLifecycleState::Recorded
+            || task.lifecycleAttemptGeneration != recordingAttemptGeneration
+            || task.recordingClaimGeneration != 0u
+            || task.submissionClaimGeneration != 0u
+            || task.recordThunkInProgress
+        )
+            return false;
+    }
+
+    const u64 claimGeneration = __hidden_gpu_task_graph::AllocateGeneration();
+    if(claimGeneration == 0u)
+        return false;
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+        task.lifecycleState = GpuTaskLifecycleState::Submitting;
+        task.submissionClaimGeneration = claimGeneration;
+    }
+    outLease.m_planGeneration = compiledGraph.planGeneration();
+    outLease.m_recordingAttemptGeneration = recordingAttemptGeneration;
+    outLease.m_claimGeneration = claimGeneration;
+    return true;
+}
+
+
+bool GpuTaskGraph::completePacketSubmission(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId* const tasks,
+    const usize taskCount,
+    const QueueSubmissionToken& token,
+    GpuTaskPacketSubmissionLease& lease
+)const noexcept{
+    if(
+        !compiledGraph.validFor(*this)
+        || !tasks
+        || taskCount == 0u
+        || !token.valid()
+        || !lease.valid()
+        || lease.m_planGeneration != compiledGraph.planGeneration()
+    )
+        return false;
+
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(
+            m_teardownInProgress
+            || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
+            || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
+        )
+            return false;
+
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            if(!validTask(tasks[taskIndex]))
+                return false;
+            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+            if(
+                task.lifecycleState != GpuTaskLifecycleState::Submitting
+                || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
+                || task.submissionClaimGeneration != lease.m_claimGeneration
+            )
+                return false;
+        }
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+            task.lifecycleState = GpuTaskLifecycleState::Accepting;
+        }
+    }
+
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+        if(task.payload && task.acceptPayload)
+            task.acceptPayload(task.payload, token);
+    }
+
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(
+            m_teardownInProgress
+            || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
+            || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
+        )
+            return false;
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            if(!validTask(tasks[taskIndex]))
+                return false;
+            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+            if(
+                task.lifecycleState != GpuTaskLifecycleState::Accepting
+                || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
+                || task.submissionClaimGeneration != lease.m_claimGeneration
+            )
+                return false;
+        }
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+            task.lifecycleState = GpuTaskLifecycleState::Accepted;
+            task.submissionClaimGeneration = 0u;
+        }
+    }
+    lease.reset();
+    return true;
+}
+
+
+void GpuTaskGraph::abortPacketSubmission(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId* const tasks,
+    const usize taskCount,
+    GpuTaskPacketSubmissionLease& lease
+)const noexcept{
+    if(
+        !compiledGraph.validFor(*this)
+        || !tasks
+        || taskCount == 0u
+        || !lease.valid()
+        || lease.m_planGeneration != compiledGraph.planGeneration()
+    )
+        return;
+
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(
+            m_teardownInProgress
+            || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
+            || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
+        )
+            return;
+
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            if(!validTask(tasks[taskIndex]))
+                return;
+            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+            if(
+                task.lifecycleState != GpuTaskLifecycleState::Submitting
+                || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
+                || task.submissionClaimGeneration != lease.m_claimGeneration
+            )
+                return;
+        }
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
+            m_tasks[tasks[taskIndex].index].lifecycleState = GpuTaskLifecycleState::Discarding;
+    }
+
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+        if(task.payload && task.discardPayload)
+            task.discardPayload(task.payload);
+    }
+
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(
+            m_teardownInProgress
+            || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
+            || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
+        )
+            return;
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            if(!validTask(tasks[taskIndex]))
+                return;
+            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+            if(
+                task.lifecycleState != GpuTaskLifecycleState::Discarding
+                || task.lifecycleAttemptGeneration != lease.m_recordingAttemptGeneration
+                || task.submissionClaimGeneration != lease.m_claimGeneration
+            )
+                return;
+        }
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+            task.lifecycleState = GpuTaskLifecycleState::Discarded;
+            task.submissionClaimGeneration = 0u;
+        }
+    }
+    lease.reset();
+}
+
+
+bool GpuTaskGraph::discardUnacceptedPacket(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId* const tasks,
+    const usize taskCount,
+    const u64 recordingAttemptGeneration
+)const noexcept{
+    if(
+        !compiledGraph.validFor(*this)
+        || !tasks
+        || taskCount == 0u
+        || recordingAttemptGeneration == 0u
+    )
+        return false;
+
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(
+            m_teardownInProgress
+            || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
+            || m_activeRecordingAttemptGeneration != recordingAttemptGeneration
+        )
+            return false;
+
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            if(!validTask(tasks[taskIndex]))
+                return false;
+            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+            if(
+                (
+                    task.lifecycleState != GpuTaskLifecycleState::Declared
+                    && task.lifecycleState != GpuTaskLifecycleState::Recorded
+                    && task.lifecycleState != GpuTaskLifecycleState::Discarded
+                )
+                || task.lifecycleAttemptGeneration != recordingAttemptGeneration
+            )
+                return false;
+        }
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+            if(task.lifecycleState != GpuTaskLifecycleState::Discarded)
+                task.lifecycleState = GpuTaskLifecycleState::Discarding;
+        }
+    }
+
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+        if(task.lifecycleState != GpuTaskLifecycleState::Discarding)
+            continue;
+        if(task.payload && task.discardPayload)
+            task.discardPayload(task.payload);
+    }
+
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(
+            m_teardownInProgress
+            || m_activeRecordingPlanGeneration != compiledGraph.planGeneration()
+            || m_activeRecordingAttemptGeneration != recordingAttemptGeneration
+        )
+            return false;
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            if(!validTask(tasks[taskIndex]))
+                return false;
+            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+            if(
+                task.lifecycleState != GpuTaskLifecycleState::Discarding
+                && task.lifecycleState != GpuTaskLifecycleState::Discarded
+            )
+                return false;
+            if(task.lifecycleAttemptGeneration != recordingAttemptGeneration)
+                return false;
+        }
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+            if(task.lifecycleState == GpuTaskLifecycleState::Discarding){
+                task.lifecycleState = GpuTaskLifecycleState::Discarded;
+                task.recordingClaimGeneration = 0u;
+            }
+        }
+    }
+    return true;
+}
+
 
 bool GpuTaskGraph::applyCompiledBarrier(
     const GpuCompiledGraph& compiledGraph,
@@ -2592,27 +3325,126 @@ bool GpuTaskGraph::seedTaskRetainedResourceStates(
 }
 
 void GpuTaskGraph::acceptTask(const GpuTaskId& taskID, const QueueSubmissionToken& token)noexcept{
-    if(!validTask(taskID) || !token.valid())
-        return;
-
-    GpuTaskNode& task = m_tasks[taskID.index];
-    if(task.lifecycleState != GpuTaskLifecycleState::Declared)
-        return;
-    task.lifecycleState = GpuTaskLifecycleState::Accepted;
-    if(task.payload && task.acceptPayload)
-        task.acceptPayload(task.payload, token);
+    // Native graph work must carry its attempt explicitly. This compatibility entry point is only for declaration
+    // lifecycle probes before compilation, so a delayed caller cannot accept a later retry by observing its state.
+    u64 recordingAttemptGeneration = 0u;
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(m_teardownInProgress || m_activeRecordingPlanGeneration != 0u)
+            return;
+        recordingAttemptGeneration = m_activeRecordingAttemptGeneration;
+    }
+    acceptTask(taskID, token, recordingAttemptGeneration);
 }
 
-void GpuTaskGraph::discardTask(const GpuTaskId& taskID)noexcept{
-    if(!validTask(taskID))
-        return;
+void GpuTaskGraph::acceptTask(
+    const GpuTaskId& taskID,
+    const QueueSubmissionToken& token,
+    const u64 recordingAttemptGeneration
+)noexcept{
+    void* payload = nullptr;
+    GpuTaskAcceptedThunk acceptPayload = nullptr;
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(
+            m_teardownInProgress
+            || !validTask(taskID)
+            || !token.valid()
+            || recordingAttemptGeneration == 0u
+            || recordingAttemptGeneration != m_activeRecordingAttemptGeneration
+        )
+            return;
 
-    GpuTaskNode& task = m_tasks[taskID.index];
-    if(task.lifecycleState != GpuTaskLifecycleState::Declared)
-        return;
-    task.lifecycleState = GpuTaskLifecycleState::Discarded;
-    if(task.payload && task.discardPayload)
-        task.discardPayload(task.payload);
+        const GpuTaskNode& task = m_tasks[taskID.index];
+        const GpuTaskLifecycleState::Enum requiredLifecycleState = m_activeRecordingPlanGeneration == 0u
+            ? GpuTaskLifecycleState::Declared
+            : GpuTaskLifecycleState::Recorded
+        ;
+        if(task.lifecycleState != requiredLifecycleState || task.lifecycleAttemptGeneration != recordingAttemptGeneration)
+            return;
+        task.lifecycleState = GpuTaskLifecycleState::Accepting;
+        payload = task.payload;
+        acceptPayload = task.acceptPayload;
+    }
+    if(payload && acceptPayload)
+        acceptPayload(payload, token);
+
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(
+            validTask(taskID)
+            && recordingAttemptGeneration == m_activeRecordingAttemptGeneration
+        ){
+            const GpuTaskNode& task = m_tasks[taskID.index];
+            if(
+                task.lifecycleState == GpuTaskLifecycleState::Accepting
+                && task.lifecycleAttemptGeneration == recordingAttemptGeneration
+            )
+                task.lifecycleState = GpuTaskLifecycleState::Accepted;
+        }
+    }
+}
+
+void GpuTaskGraph::discardTask(const GpuTaskId& taskID)const noexcept{
+    // See acceptTask(): compiled graph work must retain the originating recording-attempt generation.
+    u64 recordingAttemptGeneration = 0u;
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(m_teardownInProgress || m_activeRecordingPlanGeneration != 0u)
+            return;
+        recordingAttemptGeneration = m_activeRecordingAttemptGeneration;
+    }
+    discardTask(taskID, recordingAttemptGeneration);
+}
+
+void GpuTaskGraph::discardTask(
+    const GpuTaskId& taskID,
+    const u64 recordingAttemptGeneration
+)const noexcept{
+    void* payload = nullptr;
+    GpuTaskDiscardedThunk discardPayload = nullptr;
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(
+            m_teardownInProgress
+            || !validTask(taskID)
+            || recordingAttemptGeneration == 0u
+            || recordingAttemptGeneration != m_activeRecordingAttemptGeneration
+        )
+            return;
+
+        const GpuTaskNode& task = m_tasks[taskID.index];
+        if(
+            (
+                task.lifecycleState != GpuTaskLifecycleState::Declared
+                && task.lifecycleState != GpuTaskLifecycleState::Recorded
+            )
+            || task.lifecycleAttemptGeneration != recordingAttemptGeneration
+        )
+            return;
+        task.lifecycleState = GpuTaskLifecycleState::Discarding;
+        payload = task.payload;
+        discardPayload = task.discardPayload;
+    }
+    if(payload && discardPayload)
+        discardPayload(payload);
+
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        if(
+            validTask(taskID)
+            && recordingAttemptGeneration == m_activeRecordingAttemptGeneration
+        ){
+            const GpuTaskNode& task = m_tasks[taskID.index];
+            if(
+                task.lifecycleState == GpuTaskLifecycleState::Discarding
+                && task.lifecycleAttemptGeneration == recordingAttemptGeneration
+            ){
+                task.lifecycleState = GpuTaskLifecycleState::Discarded;
+                task.recordingClaimGeneration = 0u;
+            }
+        }
+    }
 }
 
 bool GpuTaskGraph::appendFrameGraphTelemetry(
@@ -2807,6 +3639,7 @@ GpuTaskId GpuTaskGraph::appendTask(
     task.acceptPayload = acceptPayload;
     task.discardPayload = discardPayload;
     task.destroyPayload = destroyPayload;
+    task.lifecycleAttemptGeneration = m_activeRecordingAttemptGeneration;
 
     for(usize dependencyIndex = 0u; dependencyIndex < desc.dependencyCount; ++dependencyIndex)
         m_dependencies.push_back(desc.dependencies[dependencyIndex]);
@@ -3160,18 +3993,54 @@ AStringView GpuTaskGraph::markerLabel(const u32 offset, const u32 size)const{
     return AStringView(reinterpret_cast<const char*>(m_markerText.data() + offset), size);
 }
 
-void GpuTaskGraph::destroyTaskPayloads()noexcept{
-    for(GpuTaskNode& task : m_tasks){
-        if(task.lifecycleState == GpuTaskLifecycleState::Declared){
-            task.lifecycleState = GpuTaskLifecycleState::Discarded;
-            if(task.payload && task.discardPayload)
-                task.discardPayload(task.payload);
+bool GpuTaskGraph::destroyTaskPayloads()noexcept{
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        for(const GpuTaskNode& task : m_tasks){
+            if(
+                task.lifecycleState == GpuTaskLifecycleState::Submitting
+                || task.lifecycleState == GpuTaskLifecycleState::Accepting
+                || task.lifecycleState == GpuTaskLifecycleState::Discarding
+                || task.lifecycleState == GpuTaskLifecycleState::Recording
+            ){
+                return false;
+            }
         }
+        for(GpuTaskNode& task : m_tasks){
+            if(
+                task.lifecycleState == GpuTaskLifecycleState::Declared
+                || task.lifecycleState == GpuTaskLifecycleState::Recording
+                || task.lifecycleState == GpuTaskLifecycleState::Recorded
+            )
+                task.lifecycleState = GpuTaskLifecycleState::Discarding;
+        }
+    }
+
+    for(GpuTaskNode& task : m_tasks){
+        if(task.lifecycleState == GpuTaskLifecycleState::Discarding && task.payload && task.discardPayload)
+            task.discardPayload(task.payload);
+    }
+
+    {
+        ScopedLock lock(m_lifecycleMutex);
+        for(GpuTaskNode& task : m_tasks){
+            if(task.lifecycleState != GpuTaskLifecycleState::Discarding)
+                continue;
+            task.lifecycleState = GpuTaskLifecycleState::Discarded;
+            task.recordingClaimGeneration = 0u;
+            task.submissionClaimGeneration = 0u;
+            task.recordThunkInProgress = false;
+            task.recordThunkCompleted = false;
+        }
+    }
+
+    for(GpuTaskNode& task : m_tasks){
         if(task.payload && task.destroyPayload)
             task.destroyPayload(m_arena, task.payload);
         task.payload = nullptr;
         task.destroyPayload = nullptr;
     }
+    return true;
 }
 
 void GpuTaskGraph::destroyTaskStateSnapshots()noexcept{
@@ -3203,4 +4072,6 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 

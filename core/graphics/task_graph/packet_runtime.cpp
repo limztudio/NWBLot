@@ -329,8 +329,22 @@ void GpuRecordedGraph::reset(const GpuCompiledGraph& compiledGraph){
     m_serialRecordingScratch.externalMergedStateSeed.reset();
     m_generation = compiledGraph.generation();
     m_planGeneration = compiledGraph.planGeneration();
+    m_recordingAttemptGeneration = 0u;
     m_deviceGeneration = compiledGraph.deviceGeneration();
     m_valid = compiledGraph.valid();
+}
+
+void GpuRecordedGraph::resetForRecording(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph
+){
+    reset(compiledGraph);
+    const u64 recordingAttemptGeneration = graph.recordingAttemptGeneration();
+    if(!graph.matchesRecordingAttempt(compiledGraph, recordingAttemptGeneration)){
+        m_valid = false;
+        return;
+    }
+    m_recordingAttemptGeneration = recordingAttemptGeneration;
 }
 
 bool GpuRecordedGraph::validFor(const GpuCompiledGraph& compiledGraph)const noexcept{
@@ -342,6 +356,16 @@ bool GpuRecordedGraph::validFor(const GpuCompiledGraph& compiledGraph)const noex
         && m_packets.size() == compiledGraph.packetCount()
         && m_packetStateSeeds.size() == compiledGraph.packetCount()
         && m_packetRecordingScratch.size() == compiledGraph.packetCount()
+    ;
+}
+
+bool GpuRecordedGraph::validFor(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph
+)const noexcept{
+    return validFor(compiledGraph)
+        && m_recordingAttemptGeneration != 0u
+        && graph.matchesRecordingAttempt(compiledGraph, m_recordingAttemptGeneration)
     ;
 }
 
@@ -891,8 +915,13 @@ bool GpuNativePacketRecorder::recordPacket(
         )
     )
         return false;
-    if(!outRecordedGraph.validFor(compiledGraph))
-        outRecordedGraph.reset(compiledGraph);
+    if(!prepareRecordingAttempt(
+        graph,
+        compiledGraph,
+        GpuSubmissionPacketRange{ .first = desc.packet, .packetCount = 1u },
+        outRecordedGraph
+    ))
+        return false;
     return recordPacketWithScratch(
         graph,
         compiledGraph,
@@ -921,7 +950,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         || !graph.validForDeviceGeneration(compiledGraph.deviceGeneration())
         || m_device.getDeviceGeneration() != compiledGraph.deviceGeneration()
         || !compiledGraph.validPacket(desc.packet)
-        || !outRecordedGraph.validFor(compiledGraph)
+        || !outRecordedGraph.validFor(graph, compiledGraph)
         || !__hidden_gpu_packet_runtime::ValidateTaskPacketStateBindings(
             graph,
             compiledGraph,
@@ -942,7 +971,33 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         )
     )
         return false;
+    if(
+        commandIrCapture
+        && !commandIrCapture->beginRecordingAttempt(outRecordedGraph.recordingAttemptGeneration())
+    )
+        return false;
     if(outRecordedGraph.find(desc.packet))
+        return false;
+
+    const GpuSubmissionPacket& packet = compiledGraph.packet(desc.packet);
+    const GpuTaskId* const tasks = compiledGraph.packetTasks(desc.packet);
+    GpuTaskPacketRecordingLease recordingLease;
+    const auto abortPacketRecording = [&]{
+        graph.abortPacketRecording(
+            compiledGraph,
+            tasks,
+            packet.taskCount,
+            recordingLease
+        );
+    };
+
+    if(!graph.beginPacketRecording(
+        compiledGraph,
+        tasks,
+        packet.taskCount,
+        outRecordedGraph.recordingAttemptGeneration(),
+        recordingLease
+    ))
         return false;
 
     const CommandListResourceStateHandoff* initialStates = nullptr;
@@ -957,21 +1012,28 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         taskStateBindingCount,
         initialStates
     ))
+    {
+        abortPacketRecording();
         return false;
+    }
 
     CommandListResourceStateHandoff* const packetStateSeed = outRecordedGraph.packetStateSeed(desc.packet);
-    if(!packetStateSeed)
+    if(!packetStateSeed){
+        abortPacketRecording();
         return false;
+    }
     packetStateSeed->reset();
 
-    const GpuSubmissionPacket& packet = compiledGraph.packet(desc.packet);
     const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packet.queue);
     if(
         !queue
         || queue->queueClass >= CommandQueue::kCount
         || !m_device.matchesPhysicalQueueIdentity(packet.queue)
     )
+    {
+        abortPacketRecording();
         return false;
+    }
 
     const usize captureRecordCount = commandIrCapture ? commandIrCapture->recordCount() : 0u;
 
@@ -979,12 +1041,13 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     parameters.setPhysicalQueue(packet.queue);
     parameters.setRecordingWorkerIndex(desc.recordingWorkerIndex);
     CommandListHandle commandList = m_device.createCommandList(parameters);
-    if(!commandList)
+    if(!commandList){
+        abortPacketRecording();
         return false;
+    }
 
     commandList->open(initialStates);
     bool recorded = commandList->hasCommandBuffer();
-    const GpuTaskId* const tasks = compiledGraph.packetTasks(desc.packet);
     if(!tasks || packet.taskCount == 0u)
         recorded = false;
     for(u32 taskIndex = 0u; recorded && taskIndex < packet.taskCount; ++taskIndex){
@@ -1001,6 +1064,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
             .task = task,
             .packet = desc.packet,
             .queue = packet.queue,
+            .recordingAttemptGeneration = outRecordedGraph.recordingAttemptGeneration(),
             .commandIrCapture = commandIrCapture,
         };
         const GpuCompiledBarrier* const prologueBarriers = compiledGraph.taskPrologueBarriers(task);
@@ -1043,7 +1107,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         commandList->beginTaskCapabilityTracking();
 #endif
         if(recorded)
-            recorded = graph.recordTask(task, *commandList, context);
+            recorded = graph.recordTask(task, *commandList, context, recordingLease);
 #if defined(NWB_DEBUG)
         const GpuQueueCapability::Mask usedCapabilities = commandList->endTaskCapabilityTracking();
         if(
@@ -1079,6 +1143,20 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     }
     commandList->close(packetStateSeed);
     if(!recorded || !commandList->hasCommandBuffer()){
+        packetStateSeed->reset();
+        abortPacketRecording();
+        if(commandIrCapture)
+            commandIrCapture->rollback(captureRecordCount);
+        return false;
+    }
+    if(!graph.completePacketRecording(
+        compiledGraph,
+        tasks,
+        packet.taskCount,
+        recordingLease
+    )){
+        packetStateSeed->reset();
+        abortPacketRecording();
         if(commandIrCapture)
             commandIrCapture->rollback(captureRecordCount);
         return false;
@@ -1092,6 +1170,30 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     recordedPacket.commandListCount = 1u;
     recordedPacket.recordingWorkerIndex = desc.recordingWorkerIndex;
     return true;
+}
+
+bool GpuNativePacketRecorder::prepareRecordingAttempt(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketRange& range,
+    GpuRecordedGraph& outRecordedGraph
+)const{
+    if(!compiledGraph.validFor(graph) || !compiledGraph.validPacketRange(range))
+        return false;
+
+    const usize rangeBegin = range.first.index;
+    const usize rangeEnd = rangeBegin + range.packetCount;
+    for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
+        const GpuSubmissionPacketId packetID = compiledGraph.packetIdAt(packetIndex);
+        const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
+        const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
+        if(!tasks || packet.taskCount == 0u || !graph.beginRecordingAttempt(compiledGraph, tasks, packet.taskCount))
+            return false;
+    }
+
+    if(!outRecordedGraph.validFor(graph, compiledGraph))
+        outRecordedGraph.resetForRecording(graph, compiledGraph);
+    return outRecordedGraph.validFor(graph, compiledGraph);
 }
 
 
@@ -1139,6 +1241,8 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
                 return false;
         }
     }
+    if(!prepareRecordingAttempt(graph, compiledGraph, range, outRecordedGraph))
+        return false;
 
     // The compiler emits packet IDs in stable topological order, so native recording preserves the graph's
     // internal state-seed chain without requiring renderer-side packet collectors. Callers supply only sparse
@@ -1267,9 +1371,8 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 return false;
         }
     }
-
-    if(!outRecordedGraph.validFor(compiledGraph))
-        outRecordedGraph.reset(compiledGraph);
+    if(!prepareRecordingAttempt(graph, compiledGraph, range, outRecordedGraph))
+        return false;
 
     Alloc::ScratchArena scratchArena(__hidden_gpu_packet_runtime::s_PacketRecordingFrontierScratchArena);
     Vector<GpuNativePacketRecordDesc, Alloc::ScratchArena> recordDescs(scratchArena);
@@ -1423,12 +1526,35 @@ bool GpuNativePacketRecorder::recordTaskRangeInReadyFrontiers(
 }
 
 
+bool GpuGraphSubmissionTransaction::validForLocked(const GpuCompiledGraph& compiledGraph)const noexcept{
+    return m_valid
+        && compiledGraph.valid()
+        && m_generation == compiledGraph.generation()
+        && m_planGeneration == compiledGraph.planGeneration()
+        && m_deviceGeneration == compiledGraph.deviceGeneration()
+        && m_packets.size() == compiledGraph.packetCount()
+        && m_externalResourceHandoffScratch.size() == compiledGraph.externalResourceExportCount()
+    ;
+}
+
+
 void GpuGraphSubmissionTransaction::reset(const GpuCompiledGraph& compiledGraph){
+    ScopedLock lock(m_mutex);
+    for(const GpuPacketRuntime& runtime : m_packets){
+        if(
+            runtime.state == GpuPacketRuntimeState::Submitting
+            || runtime.state == GpuPacketRuntimeState::Rejecting
+        ){
+            NWB_ASSERT_MSG(false, "GpuGraphSubmissionTransaction::reset requires every native submission/cancellation to resolve first");
+            return;
+        }
+    }
     m_packets.clear();
     m_latestAcceptedQueueTokens.clear();
     m_externalResourceHandoffScratch.clear();
     m_generation = compiledGraph.generation();
     m_planGeneration = compiledGraph.planGeneration();
+    m_recordingAttemptGeneration = 0u;
     m_deviceGeneration = compiledGraph.deviceGeneration();
     m_acceptedSubmissionCount = 0u;
     m_valid = compiledGraph.valid();
@@ -1450,23 +1576,143 @@ void GpuGraphSubmissionTransaction::reset(const GpuCompiledGraph& compiledGraph)
 }
 
 bool GpuGraphSubmissionTransaction::validFor(const GpuCompiledGraph& compiledGraph)const noexcept{
-    return m_valid
-        && compiledGraph.valid()
-        && m_generation == compiledGraph.generation()
-        && m_planGeneration == compiledGraph.planGeneration()
-        && m_deviceGeneration == compiledGraph.deviceGeneration()
-        && m_packets.size() == compiledGraph.packetCount()
-        && m_externalResourceHandoffScratch.size() == compiledGraph.externalResourceExportCount()
+    ScopedLock lock(m_mutex);
+    return validForLocked(compiledGraph);
+}
+
+
+bool GpuGraphSubmissionTransaction::hasAcceptedPackets()const noexcept{
+    ScopedLock lock(m_mutex);
+    return m_valid && m_acceptedSubmissionCount != 0u;
+}
+
+bool GpuGraphSubmissionTransaction::bindRecordingAttempt(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const u64 recordingAttemptGeneration
+)noexcept{
+    if(
+        recordingAttemptGeneration == 0u
+        || !graph.matchesRecordingAttempt(compiledGraph, recordingAttemptGeneration)
+    )
+        return false;
+
+    ScopedLock lock(m_mutex);
+    if(
+        !validForLocked(compiledGraph)
+        || (
+            m_recordingAttemptGeneration != 0u
+            && m_recordingAttemptGeneration != recordingAttemptGeneration
+        )
+    )
+        return false;
+    m_recordingAttemptGeneration = recordingAttemptGeneration;
+    return true;
+}
+
+bool GpuGraphSubmissionTransaction::matchesRecordedAttempt(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuRecordedGraph& recordedGraph
+)const noexcept{
+    ScopedLock lock(m_mutex);
+    return m_recordingAttemptGeneration != 0u
+        && recordedGraph.validFor(graph, compiledGraph)
+        && m_recordingAttemptGeneration == recordedGraph.recordingAttemptGeneration()
     ;
 }
 
-bool GpuGraphSubmissionTransaction::markPacketRecorded(const GpuSubmissionPacketId& packet)noexcept{
-    if(!m_valid || !packet.valid() || packet.generation != m_planGeneration || packet.index >= m_packets.size())
+bool GpuGraphSubmissionTransaction::markPacketRecorded(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId& packet,
+    const u64 recordingAttemptGeneration
+)noexcept{
+    if(
+        !compiledGraph.validPacket(packet)
+        || !graph.packetReadyForSubmission(
+            compiledGraph,
+            compiledGraph.packetTasks(packet),
+            compiledGraph.packet(packet).taskCount,
+            recordingAttemptGeneration
+        )
+        || !bindRecordingAttempt(graph, compiledGraph, recordingAttemptGeneration)
+    )
+        return false;
+
+    ScopedLock lock(m_mutex);
+    if(
+        !validForLocked(compiledGraph)
+        || !packet.valid()
+        || packet.generation != m_planGeneration
+        || packet.index >= m_packets.size()
+        || m_recordingAttemptGeneration != recordingAttemptGeneration
+    )
         return false;
     GpuPacketRuntime& runtime = m_packets[packet.index];
     if(runtime.state != GpuPacketRuntimeState::Declared)
         return false;
     runtime.state = GpuPacketRuntimeState::Recorded;
+    return true;
+}
+
+
+bool GpuGraphSubmissionTransaction::beginPacketSubmission(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId packetID,
+    const u64 recordingAttemptGeneration,
+    GpuTaskPacketSubmissionLease& outLease
+)noexcept{
+    if(
+        !validFor(compiledGraph)
+        || !compiledGraph.validPacket(packetID)
+        || outLease.valid()
+        || !graph.packetReadyForSubmission(
+            compiledGraph,
+            compiledGraph.packetTasks(packetID),
+            compiledGraph.packet(packetID).taskCount,
+            recordingAttemptGeneration
+        )
+        || !bindRecordingAttempt(graph, compiledGraph, recordingAttemptGeneration)
+    )
+        return false;
+
+    GpuPacketRuntimeState::Enum previousState = GpuPacketRuntimeState::Declared;
+    {
+        ScopedLock lock(m_mutex);
+        if(
+            !validForLocked(compiledGraph)
+            || m_recordingAttemptGeneration != recordingAttemptGeneration
+            || packetID.index >= m_packets.size()
+        )
+            return false;
+        GpuPacketRuntime& runtime = m_packets[packetID.index];
+        if(
+            runtime.state != GpuPacketRuntimeState::Declared
+            && runtime.state != GpuPacketRuntimeState::Recorded
+        )
+            return false;
+        previousState = runtime.state;
+        runtime.state = GpuPacketRuntimeState::Submitting;
+    }
+
+    const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
+    if(!graph.beginPacketSubmission(
+        compiledGraph,
+        compiledGraph.packetTasks(packetID),
+        packet.taskCount,
+        recordingAttemptGeneration,
+        outLease
+    )){
+        ScopedLock lock(m_mutex);
+        if(validForLocked(compiledGraph) && packetID.index < m_packets.size()){
+            GpuPacketRuntime& runtime = m_packets[packetID.index];
+            if(runtime.state == GpuPacketRuntimeState::Submitting)
+                runtime.state = previousState;
+        }
+        return false;
+    }
     return true;
 }
 
@@ -1476,7 +1722,17 @@ bool GpuGraphSubmissionTransaction::acceptPacket(
     const GpuSubmissionPacketId& packetID,
     const QueueSubmissionToken& token
 )noexcept{
-    if(!validFor(compiledGraph) || !compiledGraph.validPacket(packetID) || !token.valid())
+    u64 recordingAttemptGeneration = 0u;
+    {
+        ScopedLock lock(m_mutex);
+        recordingAttemptGeneration = m_recordingAttemptGeneration;
+    }
+    if(
+        !validFor(compiledGraph)
+        || !compiledGraph.validPacket(packetID)
+        || !token.valid()
+        || recordingAttemptGeneration == 0u
+    )
         return false;
     const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
     const GpuPhysicalQueueInfo* const queueInfo = compiledGraph.queueInfo(packet.queue);
@@ -1487,30 +1743,78 @@ bool GpuGraphSubmissionTransaction::acceptPacket(
         || !token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration)
     )
         return false;
-    GpuPacketRuntime& runtime = m_packets[packetID.index];
-    if(runtime.state != GpuPacketRuntimeState::Recorded)
+    GpuTaskPacketSubmissionLease lease;
+    if(!beginPacketSubmission(graph, compiledGraph, packetID, recordingAttemptGeneration, lease))
+        return false;
+    return acceptSubmittingPacket(graph, compiledGraph, packetID, token, lease);
+}
+
+
+bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId packetID,
+    const QueueSubmissionToken& token,
+    GpuTaskPacketSubmissionLease& lease
+)noexcept{
+    if(
+        !validFor(compiledGraph)
+        || !compiledGraph.validPacket(packetID)
+        || !token.valid()
+        || !lease.valid()
+        || lease.m_planGeneration != compiledGraph.planGeneration()
+        || !bindRecordingAttempt(graph, compiledGraph, lease.m_recordingAttemptGeneration)
+    )
         return false;
 
+    const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
+    const GpuPhysicalQueueInfo* const queueInfo = compiledGraph.queueInfo(packet.queue);
+    if(
+        !queueInfo
+        || queueInfo->queueClass >= CommandQueue::kCount
+        || token.queue != queueInfo->queueClass
+        || !token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration)
+    )
+        return false;
+
+    if(!graph.completePacketSubmission(
+        compiledGraph,
+        compiledGraph.packetTasks(packetID),
+        packet.taskCount,
+        token,
+        lease
+    ))
+        return false;
+
+    ScopedLock lock(m_mutex);
+    // reset(), public acceptance, and cancellation cannot cross a graph-owned submission lease. Once the graph
+    // publishes accepted callbacks, this transaction resolution is therefore an invariant rather than a second
+    // failure point.
+    NWB_ASSERT(validForLocked(compiledGraph));
+    NWB_ASSERT(packetID.index < m_packets.size());
+    GpuPacketRuntime& runtime = m_packets[packetID.index];
+    NWB_ASSERT(runtime.state == GpuPacketRuntimeState::Submitting);
     runtime.state = GpuPacketRuntimeState::Accepted;
     runtime.token = token;
-    const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
-    for(u32 taskIndex = 0u; tasks && taskIndex < packet.taskCount; ++taskIndex)
-        graph.acceptTask(tasks[taskIndex], token);
 
     ++m_acceptedSubmissionCount;
     if(m_acceptedSubmissionCount == 0u)
         ++m_acceptedSubmissionCount;
 
+    bool foundLatestQueue = false;
     for(LatestAcceptedQueueToken& latest : m_latestAcceptedQueueTokens){
         if(latest.queue == packet.queue){
             latest.token = token;
-            return true;
+            foundLatestQueue = true;
+            break;
         }
     }
-    m_latestAcceptedQueueTokens.push_back(LatestAcceptedQueueToken{
-        .queue = packet.queue,
-        .token = token,
-    });
+    if(!foundLatestQueue){
+        m_latestAcceptedQueueTokens.push_back(LatestAcceptedQueueToken{
+            .queue = packet.queue,
+            .token = token,
+        });
+    }
     return true;
 }
 
@@ -1519,17 +1823,125 @@ void GpuGraphSubmissionTransaction::rejectPacket(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId& packetID
 )noexcept{
-    if(!validFor(compiledGraph) || !compiledGraph.validPacket(packetID))
+    u64 recordingAttemptGeneration = 0u;
+    {
+        ScopedLock lock(m_mutex);
+        recordingAttemptGeneration = m_recordingAttemptGeneration;
+    }
+    rejectPacket(graph, compiledGraph, packetID, recordingAttemptGeneration);
+}
+
+void GpuGraphSubmissionTransaction::rejectPacket(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId& packetID,
+    const u64 recordingAttemptGeneration
+)noexcept{
+    if(
+        !validFor(compiledGraph)
+        || !compiledGraph.validPacket(packetID)
+        || recordingAttemptGeneration == 0u
+        || !bindRecordingAttempt(graph, compiledGraph, recordingAttemptGeneration)
+    )
         return;
-    GpuPacketRuntime& runtime = m_packets[packetID.index];
-    if(runtime.state == GpuPacketRuntimeState::Accepted || runtime.state == GpuPacketRuntimeState::Rejected)
-        return;
+    GpuPacketRuntimeState::Enum previousState = GpuPacketRuntimeState::Declared;
+    {
+        ScopedLock lock(m_mutex);
+        if(
+            !validForLocked(compiledGraph)
+            || m_recordingAttemptGeneration != recordingAttemptGeneration
+            || packetID.index >= m_packets.size()
+        )
+            return;
+        GpuPacketRuntime& runtime = m_packets[packetID.index];
+        if(
+            runtime.state == GpuPacketRuntimeState::Accepted
+            || runtime.state == GpuPacketRuntimeState::Rejected
+            || runtime.state == GpuPacketRuntimeState::Submitting
+            || runtime.state == GpuPacketRuntimeState::Rejecting
+        )
+            return;
+        if(
+            runtime.state != GpuPacketRuntimeState::Declared
+            && runtime.state != GpuPacketRuntimeState::Recorded
+        )
+            return;
+        previousState = runtime.state;
+        runtime.state = GpuPacketRuntimeState::Rejecting;
+    }
 
     const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
     const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
-    for(u32 taskIndex = 0u; tasks && taskIndex < packet.taskCount; ++taskIndex)
-        graph.discardTask(tasks[taskIndex]);
-    runtime.state = GpuPacketRuntimeState::Rejected;
+    if(!graph.discardUnacceptedPacket(
+        compiledGraph,
+        tasks,
+        packet.taskCount,
+        recordingAttemptGeneration
+    ))
+    {
+        ScopedLock lock(m_mutex);
+        if(validForLocked(compiledGraph) && packetID.index < m_packets.size()){
+            GpuPacketRuntime& runtime = m_packets[packetID.index];
+            if(runtime.state == GpuPacketRuntimeState::Rejecting)
+                runtime.state = previousState;
+        }
+        return;
+    }
+    {
+        ScopedLock lock(m_mutex);
+        if(validForLocked(compiledGraph) && packetID.index < m_packets.size()){
+            GpuPacketRuntime& runtime = m_packets[packetID.index];
+            if(runtime.state == GpuPacketRuntimeState::Rejecting)
+                runtime.state = GpuPacketRuntimeState::Rejected;
+        }
+    }
+}
+
+
+void GpuGraphSubmissionTransaction::rejectSubmittingPacket(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId packetID,
+    GpuTaskPacketSubmissionLease& lease
+)noexcept{
+    if(
+        !validFor(compiledGraph)
+        || !compiledGraph.validPacket(packetID)
+        || !lease.valid()
+        || lease.m_planGeneration != compiledGraph.planGeneration()
+        || !bindRecordingAttempt(graph, compiledGraph, lease.m_recordingAttemptGeneration)
+    )
+        return;
+
+    {
+        ScopedLock lock(m_mutex);
+        if(
+            !validForLocked(compiledGraph)
+            || m_recordingAttemptGeneration != lease.m_recordingAttemptGeneration
+            || packetID.index >= m_packets.size()
+        )
+            return;
+        GpuPacketRuntime& runtime = m_packets[packetID.index];
+        if(runtime.state != GpuPacketRuntimeState::Submitting)
+            return;
+    }
+
+    const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
+    graph.abortPacketSubmission(
+        compiledGraph,
+        compiledGraph.packetTasks(packetID),
+        packet.taskCount,
+        lease
+    );
+    if(lease.valid())
+        return;
+
+    ScopedLock lock(m_mutex);
+    if(validForLocked(compiledGraph) && packetID.index < m_packets.size()){
+        GpuPacketRuntime& runtime = m_packets[packetID.index];
+        if(runtime.state == GpuPacketRuntimeState::Submitting)
+            runtime.state = GpuPacketRuntimeState::Rejected;
+    }
 }
 
 void GpuGraphSubmissionTransaction::rejectTask(
@@ -1537,28 +1949,98 @@ void GpuGraphSubmissionTransaction::rejectTask(
     const GpuCompiledGraph& compiledGraph,
     const GpuTaskId task
 )noexcept{
-    if(!validFor(compiledGraph))
-        return;
-    rejectPacket(graph, compiledGraph, compiledGraph.packetForTask(task));
+    u64 recordingAttemptGeneration = 0u;
+    {
+        ScopedLock lock(m_mutex);
+        recordingAttemptGeneration = m_recordingAttemptGeneration;
+    }
+    rejectTask(graph, compiledGraph, task, recordingAttemptGeneration);
 }
 
-void GpuGraphSubmissionTransaction::discardUnaccepted(
+void GpuGraphSubmissionTransaction::rejectTask(
     GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskId task,
+    const u64 recordingAttemptGeneration
 )noexcept{
     if(!validFor(compiledGraph))
         return;
-    for(usize packetIndex = 0u; packetIndex < m_packets.size(); ++packetIndex){
-        if(m_packets[packetIndex].state == GpuPacketRuntimeState::Accepted)
-            continue;
-        rejectPacket(graph, compiledGraph, compiledGraph.packetIdAt(packetIndex));
-    }
+    rejectPacket(graph, compiledGraph, compiledGraph.packetForTask(task), recordingAttemptGeneration);
 }
 
-QueueSubmissionToken GpuGraphSubmissionTransaction::packetToken(const GpuSubmissionPacketId& packet)const noexcept{
-    const GpuPacketRuntime* const runtime = packetRuntime(packet);
-    return runtime && runtime->state == GpuPacketRuntimeState::Accepted ? runtime->token : QueueSubmissionToken{};
+bool GpuGraphSubmissionTransaction::discardUnaccepted(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph
+)noexcept{
+    u64 recordingAttemptGeneration = 0u;
+    {
+        ScopedLock lock(m_mutex);
+        recordingAttemptGeneration = m_recordingAttemptGeneration;
+    }
+    return discardUnaccepted(graph, compiledGraph, recordingAttemptGeneration);
 }
+
+bool GpuGraphSubmissionTransaction::discardUnaccepted(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const u64 recordingAttemptGeneration
+)noexcept{
+    if(
+        !validFor(compiledGraph)
+        || recordingAttemptGeneration == 0u
+        || !bindRecordingAttempt(graph, compiledGraph, recordingAttemptGeneration)
+    )
+        return false;
+
+    for(usize packetIndex = 0u; packetIndex < compiledGraph.packetCount(); ++packetIndex){
+        {
+            ScopedLock lock(m_mutex);
+            if(
+                !validForLocked(compiledGraph)
+                || m_recordingAttemptGeneration != recordingAttemptGeneration
+                || packetIndex >= m_packets.size()
+            )
+                return false;
+            const GpuPacketRuntimeState::Enum state = m_packets[packetIndex].state;
+            if(state == GpuPacketRuntimeState::Accepted || state == GpuPacketRuntimeState::Rejected)
+                continue;
+            if(
+                state == GpuPacketRuntimeState::Submitting
+                || state == GpuPacketRuntimeState::Rejecting
+            )
+                return false;
+        }
+
+        const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
+        if(!packet.valid())
+            return false;
+        rejectPacket(graph, compiledGraph, packet, recordingAttemptGeneration);
+
+        ScopedLock lock(m_mutex);
+        if(
+            !validForLocked(compiledGraph)
+            || packetIndex >= m_packets.size()
+            || m_packets[packetIndex].state != GpuPacketRuntimeState::Rejected
+        )
+            return false;
+    }
+    return true;
+}
+
+
+QueueSubmissionToken GpuGraphSubmissionTransaction::packetToken(const GpuSubmissionPacketId& packet)const noexcept{
+    ScopedLock lock(m_mutex);
+    if(
+        !m_valid
+        || !packet.valid()
+        || packet.generation != m_planGeneration
+        || packet.index >= m_packets.size()
+    )
+        return {};
+    const GpuPacketRuntime& runtime = m_packets[packet.index];
+    return runtime.state == GpuPacketRuntimeState::Accepted ? runtime.token : QueueSubmissionToken{};
+}
+
 
 QueueSubmissionToken GpuGraphSubmissionTransaction::taskToken(
     const GpuCompiledGraph& compiledGraph,
@@ -1568,7 +2050,6 @@ QueueSubmissionToken GpuGraphSubmissionTransaction::taskToken(
         return {};
     return packetToken(compiledGraph.packetForTask(task));
 }
-
 GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResourceHandoff(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
@@ -1576,9 +2057,7 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
     const GpuGraphResourceId resource
 )const noexcept{
     if(
-        !validFor(compiledGraph)
-        || !compiledGraph.validFor(graph)
-        || !recordedGraph.validFor(compiledGraph)
+        !matchesRecordedAttempt(graph, compiledGraph, recordedGraph)
     )
         return {};
 
@@ -1787,7 +2266,12 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
     const GpuRecordedGraph& recordedGraph,
     const GpuGraphResourceId resource
 )const noexcept{
-    if(!validFor(compiledGraph) || !recordedGraph.validFor(compiledGraph))
+    if(
+        !validFor(compiledGraph)
+        || !recordedGraph.validFor(compiledGraph)
+        || m_recordingAttemptGeneration == 0u
+        || m_recordingAttemptGeneration != recordedGraph.recordingAttemptGeneration()
+    )
         return {};
 
     const GpuCompiledExternalResourceExport* const exportInfo = compiledGraph.externalResourceExport(resource);
@@ -1873,6 +2357,8 @@ GpuTaskGraphExternalResourceHandoff GpuGraphSubmissionTransaction::externalResou
 const QueueSubmissionToken* GpuGraphSubmissionTransaction::latestAcceptedToken(
     const GpuPhysicalQueueId& queue
 )const noexcept{
+    // This borrowed inspection pointer is intended for a caller that serializes reset/query access. Submission and
+    // cancellation paths use value copies instead, so they never retain transaction-owned vector storage.
     for(const LatestAcceptedQueueToken& latest : m_latestAcceptedQueueTokens){
         if(latest.queue == queue && latest.token.valid())
             return &latest.token;
@@ -1884,6 +2370,7 @@ bool GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(
     const GpuPhysicalQueueId& destinationQueue,
     Vector<QueueSubmissionToken, Alloc::ScratchArena>& outTokens
 )const{
+    ScopedLock lock(m_mutex);
     if(!m_valid || !destinationQueue.valid() || destinationQueue.deviceGeneration != m_deviceGeneration)
         return false;
 
@@ -1902,6 +2389,8 @@ bool GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(
 const GpuPacketRuntime* GpuGraphSubmissionTransaction::packetRuntime(
     const GpuSubmissionPacketId& packet
 )const noexcept{
+    // See latestAcceptedToken(): test/diagnostic inspection must serialize reset/query access around this borrowed
+    // pointer. Runtime submission paths query packet tokens by value under m_mutex.
     if(!m_valid || !packet.valid() || packet.generation != m_planGeneration || packet.index >= m_packets.size())
         return nullptr;
     return &m_packets[packet.index];
@@ -1925,17 +2414,27 @@ bool GpuTaskGraphSubmitter::submitPacket(
         || !graph.validForDeviceGeneration(compiledGraph.deviceGeneration())
         || m_device.getDeviceGeneration() != compiledGraph.deviceGeneration()
         || !compiledGraph.validPacket(packetID)
-        || !recordedGraph.validFor(compiledGraph)
+        || !recordedGraph.validFor(graph, compiledGraph)
         || !transaction.validFor(compiledGraph)
         || (externalCompletionTokenCount > 0u && !externalCompletionTokens)
         || (preSubmitHook && !preSubmitHook->valid())
-        || !transaction.markPacketRecorded(packetID)
     )
         return false;
 
-    const GpuRecordedPacket* const recordedPacket = recordedGraph.find(packetID);
     const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
+    const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
+    if(!graph.packetReadyForSubmission(
+        compiledGraph,
+        tasks,
+        packet.taskCount,
+        recordedGraph.recordingAttemptGeneration()
+    ))
+        return false;
+
+    const GpuRecordedPacket* const recordedPacket = recordedGraph.find(packetID);
     const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packet.queue);
+    // All validation before the transaction reservation is retryable.  A caller that abandons this artifact uses
+    // discardUnaccepted() explicitly; a corrected dependency/completion must not discard graph-owned task state.
     if(
         !recordedPacket
         || recordedPacket->commandListCount == 0u
@@ -1943,15 +2442,12 @@ bool GpuTaskGraphSubmitter::submitPacket(
         || !queue
         || !m_device.matchesPhysicalQueueIdentity(packet.queue)
     ){
-        transaction.rejectPacket(graph, compiledGraph, packetID);
         return false;
     }
     for(u8 commandListIndex = 0u; commandListIndex < recordedPacket->commandListCount; ++commandListIndex){
         CommandList* const commandList = recordedPacket->commandLists[commandListIndex];
-        if(!commandList || !commandList->hasCommandBuffer()){
-            transaction.rejectPacket(graph, compiledGraph, packetID);
+        if(!commandList || !commandList->hasCommandBuffer())
             return false;
-        }
     }
 
     Vector<QueueSubmissionToken, Alloc::ScratchArena> waitTokens(scratchArena);
@@ -1963,10 +2459,8 @@ bool GpuTaskGraphSubmitter::submitPacket(
     const GpuPacketDependency* const dependencies = compiledGraph.packetDependencies(packetID);
     for(u32 dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){
         const QueueSubmissionToken token = transaction.packetToken(dependencies[dependencyIndex].producer);
-        if(!token.valid()){
-            transaction.rejectPacket(graph, compiledGraph, packetID);
+        if(!token.valid())
             return false;
-        }
         waitTokens.push_back(token);
     }
 
@@ -1986,28 +2480,34 @@ bool GpuTaskGraphSubmitter::submitPacket(
                         completion,
                         binding.token
                     )
-                ){
-                    transaction.rejectPacket(graph, compiledGraph, packetID);
+                )
                     return false;
-                }
                 token = binding.token;
                 break;
             }
         }
-        if(!token.valid()){
-            transaction.rejectPacket(graph, compiledGraph, packetID);
+        if(!token.valid())
             return false;
-        }
         waitTokens.push_back(token);
     }
 
     if(
         packet.joinsAcceptedQueueFrontier
         && !transaction.appendAcceptedQueueFrontierWaitTokens(packet.queue, waitTokens)
-    ){
-        transaction.rejectPacket(graph, compiledGraph, packetID);
+    )
         return false;
-    }
+    // A bad dependency or external completion is a pre-submit input error. Preserve the completed native packet
+    // so the caller can retry it with corrected tokens; the graph-owned reservation starts only once submission is
+    // unavoidable and keeps cancellation from racing Device::executeCommandLists().
+    GpuTaskPacketSubmissionLease submissionLease;
+    if(!transaction.beginPacketSubmission(
+        graph,
+        compiledGraph,
+        packetID,
+        recordedGraph.recordingAttemptGeneration(),
+        submissionLease
+    ))
+        return false;
 
     QueueSubmissionDesc submitDesc;
     if(!waitTokens.empty())
@@ -2030,12 +2530,12 @@ bool GpuTaskGraphSubmitter::submitPacket(
         )
     ;
     if(!token.valid()){
-        transaction.rejectPacket(graph, compiledGraph, packetID);
+        transaction.rejectSubmittingPacket(graph, compiledGraph, packetID, submissionLease);
         return false;
     }
 
     NWB_ASSERT(token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration));
-    return transaction.acceptPacket(graph, compiledGraph, packetID, token);
+    return transaction.acceptSubmittingPacket(graph, compiledGraph, packetID, token, submissionLease);
 }
 
 
@@ -2061,7 +2561,7 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
         *outFailedPacket = {};
     if(
         !compiledGraph.validFor(graph)
-        || !recordedGraph.validFor(compiledGraph)
+        || !recordedGraph.validFor(graph, compiledGraph)
         || !transaction.validFor(compiledGraph)
         || !compiledGraph.validPacketRange(range)
         || (externalCompletionTokenCount != 0u && !externalCompletionTokens)
@@ -2251,8 +2751,25 @@ bool GpuTaskGraphSubmitter::recordAndSubmitAcceptedFrontierTask(
             && transaction.validFor(compiledGraph)
             && graph.validTask(task)
             && compiledGraph.findTask(task)
-        )
-            transaction.rejectTask(graph, compiledGraph, task);
+        ){
+            u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();
+            if(recordingAttemptGeneration == 0u){
+                const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+                const GpuTaskId* const packetTasks = packet.valid() ? compiledGraph.packetTasks(packet) : nullptr;
+                if(
+                    !packetTasks
+                    || !graph.beginRecordingAttempt(compiledGraph, packetTasks, compiledGraph.packet(packet).taskCount)
+                )
+                    return;
+                recordingAttemptGeneration = graph.recordingAttemptGeneration();
+            }
+            transaction.rejectTask(
+                graph,
+                compiledGraph,
+                task,
+                recordingAttemptGeneration
+            );
+        }
     };
     if(
         !compiledGraph.validFor(graph)
@@ -2304,8 +2821,25 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTask(
             && transaction.validFor(compiledGraph)
             && graph.validTask(task)
             && compiledGraph.findTask(task)
-        )
-            transaction.rejectTask(graph, compiledGraph, task);
+        ){
+            u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();
+            if(recordingAttemptGeneration == 0u){
+                const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+                const GpuTaskId* const packetTasks = packet.valid() ? compiledGraph.packetTasks(packet) : nullptr;
+                if(
+                    !packetTasks
+                    || !graph.beginRecordingAttempt(compiledGraph, packetTasks, compiledGraph.packet(packet).taskCount)
+                )
+                    return;
+                recordingAttemptGeneration = graph.recordingAttemptGeneration();
+            }
+            transaction.rejectTask(
+                graph,
+                compiledGraph,
+                task,
+                recordingAttemptGeneration
+            );
+        }
     };
     if(
         !compiledGraph.validFor(graph)
@@ -2559,4 +3093,6 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 

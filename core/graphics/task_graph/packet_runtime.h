@@ -10,6 +10,7 @@
 #include <core/alloc/scratch.h>
 #include <core/alloc/thread.h>
 #include <core/graphics/rhi/device.h>
+#include <global/sync.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,6 +24,8 @@ NWB_CORE_BEGIN
 
 class GpuTimingSubmissionTicket;
 class GpuTaskGraph;
+class GpuTaskGraphSubmitter;
+class GpuTaskPacketSubmissionLease;
 class GpuCommandIrCapture;
 struct GpuExternalPacketStateSource;
 struct GpuTaskPacketStateBinding;
@@ -75,9 +78,14 @@ public:
 
 
 public:
+    // Reset and scratch-backed handoff queries are externally serialized. reset() refuses while native submission
+    // or cancellation is resolving so it cannot invalidate transaction storage used by a live packet operation.
     void reset(const GpuCompiledGraph& compiledGraph);
+    void resetForRecording(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph);
 
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
+    [[nodiscard]] bool validFor(const GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)const noexcept;
+    [[nodiscard]] u64 recordingAttemptGeneration()const noexcept{ return m_recordingAttemptGeneration; }
     [[nodiscard]] const GpuRecordedPacket* find(const GpuSubmissionPacketId& packet)const noexcept;
     // Read-only export for a later graph or cross-frame state cache that needs this packet's actual native final
     // state. Graph-internal consumers use compiler-produced state seeds instead.
@@ -118,6 +126,7 @@ private:
     GraphicsVector<PacketRecordingScratch> m_packetRecordingScratch;
     u64 m_generation = 0u;
     u64 m_planGeneration = 0u;
+    u64 m_recordingAttemptGeneration = 0u;
     u16 m_deviceGeneration = 0u;
     bool m_valid = false;
 };
@@ -233,6 +242,12 @@ public:
         usize taskStateBindingCount = 0u
     )const;
 private:
+    [[nodiscard]] bool prepareRecordingAttempt(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuSubmissionPacketRange& range,
+        GpuRecordedGraph& outRecordedGraph
+    )const;
     [[nodiscard]] bool recordPacketWithScratch(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -251,6 +266,8 @@ namespace GpuPacketRuntimeState{
     enum Enum : u8{
         Declared,
         Recorded,
+        Submitting,
+        Rejecting,
         Accepted,
         Rejected,
     };
@@ -392,6 +409,13 @@ struct GpuTaskGraphTaskRecordedCallback{
 
 
 class GpuGraphSubmissionTransaction final : NoCopy{
+    friend class GpuTaskGraphSubmitter;
+
+
+private:
+    [[nodiscard]] bool validForLocked(const GpuCompiledGraph& compiledGraph)const noexcept;
+
+
 public:
     explicit GpuGraphSubmissionTransaction(GraphicsArena& arena)
         : m_arena(arena)
@@ -405,17 +429,32 @@ public:
     void reset(const GpuCompiledGraph& compiledGraph);
 
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
-    [[nodiscard]] bool markPacketRecorded(const GpuSubmissionPacketId& packet)noexcept;
+    // Test/diagnostic seam for manually completed recording. The explicit graph and attempt prevent an arbitrary
+    // generation from binding this transaction to stale graph work.
+    [[nodiscard]] bool markPacketRecorded(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuSubmissionPacketId& packet,
+        u64 recordingAttemptGeneration
+    )noexcept;
     [[nodiscard]] bool acceptPacket(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketId& packet,
         const QueueSubmissionToken& token
     )noexcept;
+    // Convenience only after the transaction has been bound by an explicit attempt. An unbound cleanup must not
+    // infer the graph's current attempt, because a stale transaction could otherwise discard a later retry.
     void rejectPacket(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketId& packet
+    )noexcept;
+    void rejectPacket(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuSubmissionPacketId& packet,
+        u64 recordingAttemptGeneration
     )noexcept;
     // Semantic companion to rejectPacket(). It resolves the current packet only inside the transaction, so
     // renderer recovery code can revoke unaccepted graph work without mirroring compiler packet identities.
@@ -424,9 +463,22 @@ public:
         const GpuCompiledGraph& compiledGraph,
         GpuTaskId task
     )noexcept;
-    void discardUnaccepted(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)noexcept;
+    void rejectTask(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        GpuTaskId task,
+        u64 recordingAttemptGeneration
+    )noexcept;
+    // Returns false when a packet is actively recording/submitting or the transaction no longer owns this attempt.
+    // Callers must retain the graph until a true result confirms that every unaccepted packet was resolved.
+    [[nodiscard]] bool discardUnaccepted(GpuTaskGraph& graph, const GpuCompiledGraph& compiledGraph)noexcept;
+    [[nodiscard]] bool discardUnaccepted(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        u64 recordingAttemptGeneration
+    )noexcept;
 
-    [[nodiscard]] bool hasAcceptedPackets()const noexcept{ return m_valid && m_acceptedSubmissionCount != 0u; }
+    [[nodiscard]] bool hasAcceptedPackets()const noexcept;
     [[nodiscard]] QueueSubmissionToken packetToken(const GpuSubmissionPacketId& packet)const noexcept;
     // Resolves the current compiler packet for semantic graph work before returning its accepted submission token.
     // This is generation-checked so renderer lifecycle code cannot treat a task from an older compiled graph as
@@ -437,7 +489,8 @@ public:
     )const noexcept;
     // Publishes the exact external final-state/ownership handoff only after every compiler-selected terminal
     // producer packet accepted. Multi-producer exports retain all semantic producers, compact their waits to one
-    // latest token per physical queue, and merge the exact terminal state ranges without exposing packet IDs.
+    // latest token per physical queue, and merge the exact terminal state ranges without exposing packet IDs. The
+    // returned storage is transaction scratch; callers must serialize handoff queries with reset and later queries.
     [[nodiscard]] GpuTaskGraphExternalResourceHandoff externalResourceHandoff(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -446,7 +499,8 @@ public:
     )const noexcept;
     // Source-compatible one-producer query. A true multi-producer texture export requires the graph-aware overload
     // above so it can filter and merge the exact terminal ranges; this legacy form deliberately returns invalid for
-    // that case instead of publishing a partial state snapshot.
+    // that case instead of publishing a partial state snapshot. Its return storage has the same serialized-query
+    // lifetime as the graph-aware overload.
     [[nodiscard]] GpuTaskGraphExternalResourceHandoff externalResourceHandoff(
         const GpuCompiledGraph& compiledGraph,
         const GpuRecordedGraph& recordedGraph,
@@ -464,6 +518,38 @@ public:
 
 
 private:
+    // Reserves native submission before Device::executeCommandLists() begins. While a packet is Submitting,
+    // transaction cancellation cannot run its discarded callback or claim the graph for a retry.
+    [[nodiscard]] bool beginPacketSubmission(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        u64 recordingAttemptGeneration,
+        GpuTaskPacketSubmissionLease& outLease
+    )noexcept;
+    [[nodiscard]] bool acceptSubmittingPacket(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        const QueueSubmissionToken& token,
+        GpuTaskPacketSubmissionLease& lease
+    )noexcept;
+    void rejectSubmittingPacket(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        GpuTaskPacketSubmissionLease& lease
+    )noexcept;
+    [[nodiscard]] bool bindRecordingAttempt(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        u64 recordingAttemptGeneration
+    )noexcept;
+    [[nodiscard]] bool matchesRecordedAttempt(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuRecordedGraph& recordedGraph
+    )const noexcept;
     struct LatestAcceptedQueueToken{
         GpuPhysicalQueueId queue;
         QueueSubmissionToken token;
@@ -511,9 +597,11 @@ private:
     mutable GraphicsVector<ExternalResourceHandoffScratch> m_externalResourceHandoffScratch;
     u64 m_generation = 0u;
     u64 m_planGeneration = 0u;
+    u64 m_recordingAttemptGeneration = 0u;
     u16 m_deviceGeneration = 0u;
     u64 m_acceptedSubmissionCount = 0u;
     bool m_valid = false;
+    mutable Futex m_mutex;
 };
 
 

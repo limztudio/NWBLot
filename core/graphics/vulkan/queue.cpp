@@ -29,6 +29,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(
     , m_referencedResources(context.objectArena)
     , m_referencedStagingBuffers(context.objectArena)
     , m_referencedDescriptorHeaps(context.objectArena)
+    , m_retainedTextureStateCommits(context.objectArena)
     , m_context(context)
 {
     if(m_ownsCmdPool){
@@ -84,7 +85,37 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
     clearTrackedReferences();
 }
 
+void TrackedCommandBuffer::appendRetainedTextureStateCommit(
+    Texture& texture,
+    const MipLevel mipLevel,
+    const ArraySlice arraySlice
+){
+    // The closing barrier and its deferred state publication outlive CommandList::clearState(). Keep the texture
+    // alive with the command buffer until Queue::submit accepts or discards the command buffer.
+    m_referencedResources.emplace_back(&texture, Handle<GraphicsResource>::deleter_type(&m_context.objectArena));
+
+    m_retainedTextureStateCommits.push_back(RetainedTextureStateCommit{
+        .texture = &texture,
+        .mipLevel = mipLevel,
+        .arraySlice = arraySlice,
+    });
+}
+
+void TrackedCommandBuffer::commitRetainedTextureStateCommits(){
+    for(const RetainedTextureStateCommit& commit : m_retainedTextureStateCommits){
+        if(commit.texture)
+            commit.texture->setRetainedSubresourceStateKnown(commit.arraySlice, commit.mipLevel, true);
+    }
+    m_retainedTextureStateCommits.clear();
+}
+
+void TrackedCommandBuffer::discardRetainedTextureStateCommits(){
+    m_retainedTextureStateCommits.clear();
+}
+
 void TrackedCommandBuffer::clearTrackedReferences(){
+    discardRetainedTextureStateCommits();
+
     for(GpuDescriptorHeap* heap : m_referencedDescriptorHeaps){
         if(heap)
             heap->discardCommandBufferUse(*this);
@@ -600,6 +631,7 @@ u64 Queue::submit(
         .deviceGeneration = m_physicalQueue.deviceGeneration,
     };
     for(auto& tracked : trackedBuffers){
+        tracked->commitRetainedTextureStateCommits();
         for(GpuDescriptorHeap* heap : tracked->m_referencedDescriptorHeaps){
             if(heap)
                 heap->submitCommandBufferUse(*tracked, submissionToken);
@@ -621,7 +653,9 @@ void Queue::updateLastFinishedID(){
     u64 completedValue = 0;
     const VkResult res = vkGetSemaphoreCounterValue(m_context.device, m_trackingSemaphore, &completedValue);
     if(res == VK_SUCCESS)
-        m_lastFinishedID = completedValue;
+        // vkQueueWaitIdle() establishes a stronger completion fact than a later timeline query. Never let a stale
+        // driver value make already-retired command buffers or descriptor uses appear in flight again.
+        m_lastFinishedID = Max(m_lastFinishedID, completedValue);
     else{
         if(res == VK_ERROR_DEVICE_LOST)
             m_device.captureGpuCrash("queue timeline query");

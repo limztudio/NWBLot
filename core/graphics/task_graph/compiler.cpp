@@ -340,6 +340,184 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     return nullptr;
 }
 
+[[nodiscard]] static const GpuPhysicalQueueInfo* FindPhysicalQueue(
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueId& queueID
+)noexcept{
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
+        if(queue.id == queueID)
+            return &queue;
+    }
+    return nullptr;
+}
+
+[[nodiscard]] static const GpuTaskQueueAssignment* FindQueueAssignment(
+    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GpuTaskId& task
+)noexcept{
+    for(const GpuTaskQueueAssignment& assignment : assignments){
+        if(assignment.task == task)
+            return &assignment;
+    }
+    return nullptr;
+}
+
+[[nodiscard]] static bool AllowsTimingFeedbackRouting(const GpuTaskGraphTaskView& task)noexcept{
+    return task.scheduling.allowSameClassQueueRouting
+        && task.scheduling.overlapPreferred
+        && !task.scheduling.avoidQueueCrossing
+    ;
+}
+
+// Adaptive routing deliberately stays narrower than ordinary same-class routing: an immutable timing snapshot may
+// select a different physical transport only inside the already selected queue class and Vulkan family. Existing
+// explicit cross-family policy remains available through task scheduling, but history can never manufacture a new
+// ownership-transfer route.
+[[nodiscard]] static bool IsLegalTimingFeedbackRoute(
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& incumbent,
+    const GpuPhysicalQueueInfo& candidate
+)noexcept{
+    return AllowsTimingFeedbackRouting(task)
+        && candidate.queueClass == incumbent.queueClass
+        && candidate.familyIndex == incumbent.familyIndex
+        && HasCapabilities(candidate.capabilities, task.queue.requiredCapabilities)
+    ;
+}
+
+[[nodiscard]] static bool HasUsableTimingFeedback(
+    const GpuTaskGraphQueueAssignmentOptions& options,
+    const u16 deviceGeneration
+)noexcept{
+    return options.timingFeedbackPolicy
+        && options.timingFeedbackPolicy->enabled
+        && options.timingFeedbackPolicy->valid()
+        && options.timingHistory
+        && options.timingHistory->valid()
+        && options.timingHistory->deviceGeneration() == deviceGeneration
+    ;
+}
+
+[[nodiscard]] static i32 SaturateQueueScoreTerm(const u64 value)noexcept{
+    return value > static_cast<u64>(Limit<i32>::s_Max)
+        ? Limit<i32>::s_Max
+        : static_cast<i32>(value)
+    ;
+}
+
+// Timing history decides whether a switch is worthwhile. This lightweight score only gives deterministic meaning to
+// equal-duration candidates: lower existing graph load and fewer already-known incoming queue crossings win, with
+// the physical queue ID remaining the final tie-breaker.
+[[nodiscard]] static GpuQueueAssignmentScore BuildTimingFeedbackScore(
+    const GpuTaskGraph& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& incumbent,
+    const GpuPhysicalQueueInfo& candidate
+)noexcept{
+    GpuQueueAssignmentScore score;
+    score.preference = candidate.id == incumbent.id ? 1 : 0;
+    score.overlap = candidate.id != incumbent.id && task.scheduling.overlapPreferred ? 1 : 0;
+
+    u64 queueLoad = 0u;
+    for(const GpuTaskQueueAssignment& assignment : assignments){
+        if(assignment.queue != candidate.id)
+            continue;
+
+        const u64 cost = QueueCostWeight(graph.taskAt(assignment.task.index).scheduling.cost);
+        queueLoad = queueLoad > Limit<u64>::s_Max - cost ? Limit<u64>::s_Max : queueLoad + cost;
+    }
+    score.queueLoad = SaturateQueueScoreTerm(queueLoad);
+
+    u64 incomingCrossings = 0u;
+    for(const GpuTaskDependencyEdge& edge : analysis.edges()){
+        if(edge.consumer != task.id)
+            continue;
+
+        const GpuTaskQueueAssignment* const producerAssignment = FindQueueAssignment(assignments, edge.producer);
+        if(producerAssignment && producerAssignment->queue != candidate.id)
+            ++incomingCrossings;
+    }
+    score.incomingCrossings = SaturateQueueScoreTerm(incomingCrossings);
+    // Future consumer assignments are not yet immutable. Same-family routes never need a Vulkan ownership
+    // transfer, so neither term participates in this intentionally local scoring pass.
+    score.outgoingCrossings = 0;
+    score.ownershipTransfers = 0;
+    return score;
+}
+
+[[nodiscard]] static const GpuPhysicalQueueInfo* FindTimingFeedbackQueue(
+    const GpuTaskGraph& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& incumbent,
+    const GpuTaskTimingKey& key,
+    const GpuTaskTimingHistorySnapshot& historySnapshot,
+    const GpuTaskTimingFeedbackPolicy& policy,
+    const u64 frameIndex
+)noexcept{
+    const GpuTaskTimingHistory* const incumbentHistory = historySnapshot.find(key, incumbent.id);
+    const GpuTaskTimingAssignmentState* const assignmentState = historySnapshot.findAssignment(key);
+    if(!incumbentHistory || !assignmentState)
+        return nullptr;
+
+    const GpuPhysicalQueueInfo* result = nullptr;
+    const GpuTaskTimingHistory* resultHistory = nullptr;
+    GpuQueueAssignmentScore resultScore;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+        if(candidate.id == incumbent.id || !IsLegalTimingFeedbackRoute(task, incumbent, candidate))
+            continue;
+
+        const GpuTaskTimingHistory* const candidateHistory = historySnapshot.find(key, candidate.id);
+        if(
+            !candidateHistory
+            || !GpuTaskTimingFeedbackCanSwitch(
+                *incumbentHistory,
+                *candidateHistory,
+                *assignmentState,
+                incumbent.id,
+                candidate.id,
+                frameIndex,
+                policy
+            )
+        )
+            continue;
+
+        const GpuQueueAssignmentScore candidateScore = BuildTimingFeedbackScore(
+            graph,
+            analysis,
+            assignments,
+            task,
+            incumbent,
+            candidate
+        );
+        if(
+            !result
+            || candidateHistory->averageSeconds < resultHistory->averageSeconds
+            || (
+                candidateHistory->averageSeconds == resultHistory->averageSeconds
+                && (
+                    candidateScore.total() > resultScore.total()
+                    || (
+                        candidateScore.total() == resultScore.total()
+                        && IsBetterQueue(candidate, result)
+                    )
+                )
+            )
+        ){
+            result = &candidate;
+            resultHistory = candidateHistory;
+            resultScore = candidateScore;
+        }
+    }
+    return result;
+}
+
 [[nodiscard]] static bool IsReadAccess(const GpuTaskResourceAccess::Enum access)noexcept{
     return access == GpuTaskResourceAccess::Read || access == GpuTaskResourceAccess::ReadWrite;
 }
@@ -1381,7 +1559,8 @@ bool GpuTaskGraphCompiler::assignQueues(
     const GpuTaskGraph& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuTaskGraphQueueTopology& topology,
-    GpuTaskGraphQueueAssignments& outAssignments
+    GpuTaskGraphQueueAssignments& outAssignments,
+    const GpuTaskGraphQueueAssignmentOptions& options
 )const{
     using namespace __hidden_gpu_task_graph_compiler;
 
@@ -1397,6 +1576,20 @@ bool GpuTaskGraphCompiler::assignQueues(
 
     if(!IsValidQueueTopology(topology))
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidQueueTopology);
+
+    if(
+        options.timingFeedbackPolicy
+        && options.timingFeedbackPolicy->enabled
+        && !options.timingFeedbackPolicy->valid()
+    )
+        return fail(GpuTaskGraphQueueAssignmentStatus::InvalidTimingFeedback);
+
+    if(ValidateGpuTaskTimingQueueOverrides(
+        options.timingQueueOverrides,
+        options.timingQueueOverrideCount,
+        topology.queues[0u].id.deviceGeneration
+    ) != GpuTaskTimingQueueOverrideStatus::Success)
+        return fail(GpuTaskGraphQueueAssignmentStatus::InvalidTimingFeedback);
 
     outAssignments.m_generation = graph.generation();
     outAssignments.m_taskCount = graph.taskCount();
@@ -1560,6 +1753,51 @@ bool GpuTaskGraphCompiler::assignQueues(
         if(selectedQueue != initiallySelectedQueue)
             reason = GpuTaskQueueAssignmentReason::SameClassRouting;
 
+        // Task declarations currently supply one semantic identity but no renderer-owned pipeline-variant or
+        // resolution-class metadata. Zero retains the stable default dimension until that timing producer is wired;
+        // the history key still separates every task identity and selected broad queue class today.
+        const GpuTaskTimingKey timingKey{
+            .task = task.identity,
+            .queue = selectedQueue->queueClass,
+        };
+        const GpuTaskTimingQueueOverride* const timingOverride = FindGpuTaskTimingQueueOverride(
+            options.timingQueueOverrides,
+            options.timingQueueOverrideCount,
+            timingKey
+        );
+        if(timingOverride){
+            const GpuPhysicalQueueInfo* const forcedQueue = FindPhysicalQueue(topology, timingOverride->queue);
+            if(!forcedQueue || !IsLegalTimingFeedbackRoute(task, *selectedQueue, *forcedQueue)){
+                return fail(
+                    GpuTaskGraphQueueAssignmentStatus::InvalidTimingFeedback,
+                    task.id,
+                    task.queue.requiredCapabilities
+                );
+            }
+            if(forcedQueue != selectedQueue){
+                selectedQueue = forcedQueue;
+                reason = GpuTaskQueueAssignmentReason::SameClassRouting;
+            }
+        }
+        else if(HasUsableTimingFeedback(options, topology.queues[0u].id.deviceGeneration)){
+            const GpuPhysicalQueueInfo* const timingQueue = FindTimingFeedbackQueue(
+                graph,
+                analysis,
+                outAssignments.m_assignments,
+                topology,
+                task,
+                *selectedQueue,
+                timingKey,
+                *options.timingHistory,
+                *options.timingFeedbackPolicy,
+                options.timingFrameIndex
+            );
+            if(timingQueue){
+                selectedQueue = timingQueue;
+                reason = GpuTaskQueueAssignmentReason::SameClassRouting;
+            }
+        }
+
         outAssignments.m_assignments.push_back(GpuTaskQueueAssignment{
             .task = task.id,
             .queue = selectedQueue->id,
@@ -1636,7 +1874,7 @@ bool GpuTaskGraphCompiler::compile(
         }
     }
 
-    if(!assignQueues(graph, outAnalysis, topology, outAssignments))
+    if(!assignQueues(graph, outAnalysis, topology, outAssignments, options.queueAssignmentOptions))
         return false;
 
     if(
@@ -1763,6 +2001,10 @@ bool GpuTaskGraphCompiler::compile(
 
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
         GpuSubmissionPacketId packetID;
+        GpuTaskPacketizationDecision::Enum packetizationDecision = outCompiledGraph.m_packets.empty()
+            ? GpuTaskPacketizationDecision::FirstTask
+            : GpuTaskPacketizationDecision::MergeNotRequested
+        ;
         const bool scoredMergeRequested =
             options.packetizationPolicy == GpuTaskGraphPacketizationPolicy::FrontierScored
             && !task.scheduling.mergeWithPrevious
@@ -1774,9 +2016,20 @@ bool GpuTaskGraphCompiler::compile(
             && !task.scheduling.joinsAcceptedQueueFrontier
             && !outCompiledGraph.m_packets.empty()
         ;
+        if(
+            !outCompiledGraph.m_packets.empty()
+            && (
+                !task.scheduling.allowPacketMerge
+                || task.scheduling.forceSubmissionBoundary
+                || task.scheduling.joinsAcceptedQueueFrontier
+            )
+        )
+            packetizationDecision = GpuTaskPacketizationDecision::TaskForcesBoundary;
         if(mergeRequested){
             GpuSubmissionPacket& precedingPacket = outCompiledGraph.m_packets.back();
             bool precedingPacketAllowsMerge = precedingPacket.queue == assignment->queue;
+            if(!precedingPacketAllowsMerge)
+                packetizationDecision = GpuTaskPacketizationDecision::QueueChanged;
             for(u32 precedingTaskIndex = 0u;
                 precedingPacketAllowsMerge && precedingTaskIndex < precedingPacket.taskCount;
                 ++precedingTaskIndex
@@ -1785,10 +2038,13 @@ bool GpuTaskGraphCompiler::compile(
                     precedingPacket.taskOffset + precedingTaskIndex
                 ];
                 const GpuTaskGraphTaskView preceding = graph.taskAt(precedingTask.index);
-                precedingPacketAllowsMerge = preceding.scheduling.allowPacketMerge
+                const bool precedingTaskAllowsMerge = preceding.scheduling.allowPacketMerge
                     && !preceding.scheduling.forceSubmissionBoundary
                     && !preceding.scheduling.joinsAcceptedQueueFrontier
                 ;
+                if(!precedingTaskAllowsMerge)
+                    packetizationDecision = GpuTaskPacketizationDecision::PrecedingTaskForcesBoundary;
+                precedingPacketAllowsMerge = precedingTaskAllowsMerge;
             }
             if(precedingPacketAllowsMerge && scoredMergeRequested){
                 // A score is useful only for an actual immediate serial chain. Never use packet coalescing to
@@ -1804,10 +2060,13 @@ bool GpuTaskGraphCompiler::compile(
                         break;
                     }
                 }
-                precedingPacketAllowsMerge = directlyDependsOnPrecedingTask
+                const bool eligibleScoredMerge = directlyDependsOnPrecedingTask
                     && task.scheduling.cost <= GpuTaskCostHint::Small
                     && !task.scheduling.allowMergeAcrossConsumerFrontier
                 ;
+                if(!eligibleScoredMerge)
+                    packetizationDecision = GpuTaskPacketizationDecision::ScoredMergeIneligible;
+                precedingPacketAllowsMerge = eligibleScoredMerge;
             }
             if(precedingPacketAllowsMerge && task.scheduling.allowMergeAcrossConsumerFrontier){
                 // This narrow opt-in is only valid for an explicit immediate successor. It must not let an
@@ -1824,6 +2083,8 @@ bool GpuTaskGraphCompiler::compile(
                         || task.dependencies[dependencyIndex] == precedingTask
                     ;
                 }
+                if(!explicitlyDependsOnPrecedingTask)
+                    packetizationDecision = GpuTaskPacketizationDecision::MergeRequiresExplicitImmediateDependency;
                 precedingPacketAllowsMerge = explicitlyDependsOnPrecedingTask;
             }
             if(
@@ -1853,6 +2114,7 @@ bool GpuTaskGraphCompiler::compile(
                             || !consumerAssignment->queue.valid()
                             || consumerAssignment->queue != precedingPacket.queue
                         ){
+                            packetizationDecision = GpuTaskPacketizationDecision::CrossQueueConsumerFrontier;
                             precedingPacketAllowsMerge = false;
                             break;
                         }
@@ -1865,6 +2127,10 @@ bool GpuTaskGraphCompiler::compile(
                     outCompiledGraph.m_planGeneration,
                 };
                 ++precedingPacket.taskCount;
+                packetizationDecision = scoredMergeRequested
+                    ? GpuTaskPacketizationDecision::MergedFrontierScored
+                    : GpuTaskPacketizationDecision::MergedExplicit
+                ;
             }
         }
 
@@ -1885,6 +2151,7 @@ bool GpuTaskGraphCompiler::compile(
             .task = taskID,
             .queue = assignment->queue,
             .packet = packetID,
+            .packetizationDecision = packetizationDecision,
         });
     }
 
@@ -2825,4 +3092,6 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 

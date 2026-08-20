@@ -65,6 +65,8 @@ namespace GpuCommandIrWireOpcode{
 
 // The stream is a same-host tooling format for now. The magic/version make a future reader reject incompatible
 // layouts before interpreting its POD records; remote or persistent cross-platform transport will add endian policy.
+// Its serialized identity intentionally remains graph+plan scoped so tooling may replay a captured plan. Recording
+// attempts guard only a live GpuCommandIrCapture object's mutation while native packets are being recorded.
 inline constexpr u32 s_GpuCommandIrStreamMagic = 0x4E574349u; // NWCI
 inline constexpr u16 s_GpuCommandIrStreamFirstSupportedVersion = 3u;
 inline constexpr u16 s_GpuCommandIrStreamVersion = 3u;
@@ -453,6 +455,10 @@ public:
     [[nodiscard]] usize recordCount()const noexcept{ return m_records.size(); }
     [[nodiscard]] u64 graphGeneration()const noexcept{ return m_graphGeneration; }
     [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
+    [[nodiscard]] u64 recordingAttemptGeneration()const noexcept{ return m_recordingAttemptGeneration; }
+    // A non-empty capture belongs to exactly one native recording attempt, even when the graph and compiler plan
+    // remain unchanged across a rejected retry.
+    [[nodiscard]] bool beginRecordingAttempt(u64 recordingAttemptGeneration)noexcept;
     [[nodiscard]] const GpuCommandIrBuiltinTaskRecord* recordAt(usize index)const noexcept;
     [[nodiscard]] BinaryByteView commandBytes()const noexcept{
         return BinaryByteView{ m_commandBytes.data(), m_commandBytes.size() };
@@ -515,6 +521,7 @@ private:
     GraphicsBytes m_commandBytes;
     u64 m_graphGeneration = 0u;
     u64 m_planGeneration = 0u;
+    u64 m_recordingAttemptGeneration = 0u;
 };
 
 

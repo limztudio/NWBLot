@@ -178,10 +178,11 @@ inline constexpr Name s_TaskGraphScratchArena("tests/graphics/task_graph_scratch
     const Graphics::GpuTaskGraph& graph,
     const Graphics::GpuTaskGraphAnalysis& analysis,
     const Graphics::GpuTaskGraphQueueTopology& topology,
-    Graphics::GpuTaskGraphQueueAssignments& assignments
+    Graphics::GpuTaskGraphQueueAssignments& assignments,
+    const Graphics::GpuTaskGraphQueueAssignmentOptions& options = {}
 ){
     const Graphics::GpuTaskGraphCompiler compiler;
-    return compiler.assignQueues(graph, analysis, topology, assignments);
+    return compiler.assignQueues(graph, analysis, topology, assignments, options);
 }
 
 [[nodiscard]] bool Compile(
@@ -1248,10 +1249,13 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
     Graphics::BufferDesc& writeBufferDescription = const_cast<Graphics::BufferDesc&>(writeBuffer->getDescription());
     writeBufferDescription.setInitialState(Graphics::ResourceStates::Unknown);
     Graphics::TextureDesc& textureDescription = const_cast<Graphics::TextureDesc&>(texture->getDescription());
+    // A graph importer can explicitly preserve Vulkan's fresh-resource origin instead of inheriting this logical
+    // descriptor state.
     textureDescription
         .setMipLevels(2u)
         .setArraySize(2u)
         .setDimension(Graphics::TextureDimension::Texture2DArray)
+        .setInitialState(Graphics::ResourceStates::Common)
     ;
 
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -1291,6 +1295,7 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
     ASSERT_TRUE(bufferResource.valid());
     ASSERT_TRUE(accelStructResource.valid());
     ASSERT_TRUE(writeResource.valid());
+    EXPECT_EQ(graph.resourceAt(textureResource.index).initialState, Graphics::ResourceStates::Unknown);
 
     const Graphics::GpuTaskResourceUse uses[]{
         Graphics::GpuTaskResourceUse{
@@ -2306,6 +2311,75 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){
     EXPECT_FALSE(graph.addClearBufferTask(desc, clearDesc).valid());
     EXPECT_EQ(graph.taskCount(), 0u);
 
+    // A retained descriptor may start in Common while the graph explicitly declares that same state. The compiler
+    // then owns the Common -> CopyDest transition instead of requiring primitive callers to create a native bridge.
+    Graphics::GpuTaskGraph transitionedGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId transitionedDestination = transitionedGraph.importBuffer(
+        destination,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/retained_clear_buffer_graph_transition"))
+            .setMarkerLabel("Retained Clear Buffer Graph Transition")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::Common)
+    );
+    ASSERT_TRUE(transitionedDestination.valid());
+    Graphics::GpuClearBufferTaskDesc transitionedClearDesc;
+    transitionedClearDesc.destination = transitionedDestination;
+    desc
+        .setIdentity(Name("tests/task_graph/retained_clear_buffer_graph_transition"))
+        .setMarkerLabel("Retained Clear Buffer Graph Transition")
+    ;
+    EXPECT_TRUE(transitionedGraph.addClearBufferTask(desc, transitionedClearDesc).valid());
+
+    // Keep-initial-state restoration happens before a graph packet publishes its terminal handoff. Do not accept a
+    // primitive transition that would therefore advertise an external state different from the restored descriptor.
+    Graphics::GpuTaskGraph externalFinalGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId externalFinalDestination = externalFinalGraph.importBuffer(
+        destination,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/retained_clear_buffer_external_final"))
+            .setMarkerLabel("Retained Clear Buffer External Final")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::Common)
+            .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
+    );
+    ASSERT_TRUE(externalFinalDestination.valid());
+    Graphics::GpuClearBufferTaskDesc externalFinalClearDesc;
+    externalFinalClearDesc.destination = externalFinalDestination;
+    desc
+        .setIdentity(Name("tests/task_graph/retained_clear_buffer_external_final"))
+        .setMarkerLabel("Retained Clear Buffer External Final")
+    ;
+    EXPECT_FALSE(externalFinalGraph.addClearBufferTask(desc, externalFinalClearDesc).valid());
+
+    // An automatic retained resource needs one concrete descriptor state. Unknown cannot be restored by the
+    // native tracker or published as a graph initial state, so do not admit a primitive solely because both
+    // declarations happen to name Unknown.
+    const Graphics::BufferDesc unknownInitialDescription = Graphics::BufferDesc()
+        .setByteSize(sizeof(u32))
+        .setInitialState(Graphics::ResourceStates::Unknown)
+        .setKeepInitialState(true)
+    ;
+    Graphics::BufferHandle unknownInitialDestination = createBuffer(unknownInitialDescription);
+    ASSERT_NE(unknownInitialDestination.get(), nullptr);
+    Graphics::GpuTaskGraph unknownInitialGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId unknownInitialResource = unknownInitialGraph.importBuffer(
+        unknownInitialDestination,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/retained_clear_buffer_unknown_initial"))
+            .setMarkerLabel("Retained Clear Buffer Unknown Initial")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::Unknown)
+    );
+    ASSERT_TRUE(unknownInitialResource.valid());
+    Graphics::GpuClearBufferTaskDesc unknownInitialClearDesc;
+    unknownInitialClearDesc.destination = unknownInitialResource;
+    desc
+        .setIdentity(Name("tests/task_graph/retained_clear_buffer_unknown_initial"))
+        .setMarkerLabel("Retained Clear Buffer Unknown Initial")
+    ;
+    EXPECT_FALSE(unknownInitialGraph.addClearBufferTask(desc, unknownInitialClearDesc).valid());
+
     destinationDescription.setInitialState(Graphics::ResourceStates::CopyDest);
     laterDestinationDescription.setInitialState(Graphics::ResourceStates::CopyDest);
     const Graphics::GpuCopyBufferTaskRegion validRegions[]{
@@ -2740,6 +2814,120 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForTexturePrimitives){
     EXPECT_EQ(graph.taskCount(), 4u);
 }
 
+TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadOnlyWhenItPublishesDescriptorState){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+    Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(testArena.arena, context, allocator);
+    ASSERT_NE(textureObject, nullptr);
+    Graphics::TextureHandle texture(
+        textureObject,
+        Graphics::TextureHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::TextureDesc& textureDescription = const_cast<Graphics::TextureDesc&>(texture->getDescription());
+    textureDescription = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setMipLevels(2u)
+        .setFormat(Graphics::Format::RGBA8_UNORM)
+        .setInitialState(Graphics::ResourceStates::ShaderResource)
+        .setKeepInitialState(true)
+    ;
+
+    // An all-unknown fresh retained texture keeps the long-standing descriptor-state import behavior.
+    Graphics::GpuTaskGraph freshImportGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId freshImport = freshImportGraph.importTexture(
+        texture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/fresh_retained_unspecified_import"))
+            .setMarkerLabel("Fresh Retained Unspecified Import")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(freshImport.valid());
+    EXPECT_EQ(freshImportGraph.resourceAt(freshImport.index).initialState, Graphics::ResourceStates::ShaderResource);
+
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId destination = graph.importTexture(
+        texture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/fresh_retained_upload_destination"))
+            .setMarkerLabel("Fresh Retained Upload Destination")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::Unknown)
+    );
+    ASSERT_TRUE(destination.valid());
+    const u8 uploadBytes[4u * 4u * 4u]{};
+    const Graphics::GpuUploadBlobId source = graph.copyUploadData(uploadBytes, sizeof(uploadBytes), alignof(u32));
+    ASSERT_TRUE(source.valid());
+
+    Graphics::GpuTaskDesc uploadTaskDesc;
+    uploadTaskDesc
+        .setIdentity(Name("tests/task_graph/fresh_retained_upload"))
+        .setMarkerLabel("Fresh Retained Upload")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+    const Graphics::GpuUploadTextureTaskDesc validUploadDesc{
+        .source = source,
+        .destination = destination,
+        .mipLevel = 0u,
+        .finalState = Graphics::ResourceStates::ShaderResource,
+    };
+    EXPECT_TRUE(graph.addUploadTextureTask(uploadTaskDesc, validUploadDesc).valid());
+    EXPECT_FALSE(graph.addUploadTextureTask(
+        uploadTaskDesc,
+        Graphics::GpuUploadTextureTaskDesc{
+            .source = source,
+            .destination = destination,
+            .finalState = Graphics::ResourceStates::CopyDest,
+        }
+    ).valid());
+
+    Graphics::GpuClearTextureTaskDesc clearDesc;
+    clearDesc.destination = destination;
+    clearDesc.subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
+    clearDesc.valueType = Graphics::GpuClearTextureTaskValueType::Float;
+    EXPECT_FALSE(graph.addClearTextureTask(uploadTaskDesc, clearDesc).valid());
+    EXPECT_EQ(graph.taskCount(), 1u);
+
+#if !defined(NWB_FINAL)
+    // Model Queue::submit accepting the explicit-Unknown mip-0 upload. Mip 1 remains Undefined, so a new typed
+    // import without an explicit state cannot claim the descriptor's ShaderResource layout for the whole image.
+    Graphics::GraphicsBackend::VulkanDetail::MarkRetainedTextureSubresourceStateKnownForTesting(*texture, 0u, 0u);
+    Graphics::GpuTaskGraph partialImportGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId partialImport = partialImportGraph.importTexture(
+        texture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/partial_retained_unspecified_import"))
+            .setMarkerLabel("Partial Retained Unspecified Import")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(partialImport.valid());
+    EXPECT_EQ(partialImportGraph.resourceAt(partialImport.index).initialState, Graphics::ResourceStates::Unknown);
+
+    // Once all subresources have accepted their restoration, unspecified typed imports preserve the descriptor
+    // fallback just as native imported textures do.
+    Graphics::GraphicsBackend::VulkanDetail::MarkRetainedTextureSubresourceStateKnownForTesting(*texture, 0u, 1u);
+    Graphics::GpuTaskGraph completeImportGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId completeImport = completeImportGraph.importTexture(
+        texture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/complete_retained_unspecified_import"))
+            .setMarkerLabel("Complete Retained Unspecified Import")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(completeImport.valid());
+    EXPECT_EQ(completeImportGraph.resourceAt(completeImport.index).initialState, Graphics::ResourceStates::ShaderResource);
+#endif
+}
+
 TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
@@ -3066,6 +3254,27 @@ TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphAndPlanGeneration){
     EXPECT_EQ(resetHeader.recordCount, 0u);
     EXPECT_EQ(resetHeader.payloadBytes, 0u);
     EXPECT_EQ(resetCursor, resetBytes.size());
+}
+
+TEST(GpuCommandIrCapture, RejectsNonEmptyCaptureFromDifferentRecordingAttempt){
+    TestArena testArena;
+    Graphics::GpuCommandIrCapture capture(testArena.arena);
+    const Graphics::GpuTaskId task{ 4u, 17u };
+    const Graphics::GpuSubmissionPacketId packet{ 2u, 23u };
+    const Graphics::GpuPhysicalQueueId queue{ 1u, 3u };
+    const Graphics::GpuGraphResourceId source{ 5u, 17u };
+    const Graphics::GpuGraphResourceId destination{ 6u, 17u };
+
+    ASSERT_TRUE(capture.beginRecordingAttempt(41u));
+    EXPECT_EQ(capture.recordingAttemptGeneration(), 41u);
+    ASSERT_TRUE(capture.captureCopyBuffer(task, packet, queue, source, 0u, destination, 0u, 4u));
+    EXPECT_FALSE(capture.beginRecordingAttempt(42u));
+    EXPECT_TRUE(capture.beginRecordingAttempt(41u));
+
+    capture.rollback(0u);
+    EXPECT_EQ(capture.recordingAttemptGeneration(), 0u);
+    EXPECT_TRUE(capture.beginRecordingAttempt(42u));
+    EXPECT_EQ(capture.recordingAttemptGeneration(), 42u);
 }
 
 TEST(GpuCommandIrCapture, EncodesVersionedRectUIntTextureClearAndRejectsPrePlanIdentityStreams){
@@ -4697,6 +4906,222 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
         compiledGraph.taskPrologueBarriers(consumer)[0u].type,
         Graphics::GpuCompiledBarrierType::BufferTransition
     );
+}
+
+
+TEST(GpuTaskGraph, AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOptions){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuQueueRequest graphicsRequest;
+    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+    graphicsRequest.allowFallback = false;
+    graphicsRequest.compilerMayOverridePreference = false;
+
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.allowSameClassQueueRouting = true;
+    const Name taskIdentity("tests/task_graph/timing_feedback_hysteresis");
+    const Graphics::GpuTaskId task = AddTaskWithQueue(
+        graph,
+        taskIdentity,
+        "Timing Feedback Hysteresis",
+        graphicsRequest,
+        scheduling
+    );
+    ASSERT_TRUE(task.valid());
+
+    Graphics::GpuPhysicalQueueInfo auxiliaryGraphicsQueue = GraphicsQueue(1u);
+    auxiliaryGraphicsQueue.queueIndex = 1u;
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        auxiliaryGraphicsQueue,
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+
+    Graphics::GpuTaskTimingHistoryStore timingHistory(testArena.arena);
+    const Graphics::GpuTaskTimingKey timingKey{
+        .task = taskIdentity,
+        .queue = Graphics::CommandQueue::Graphics,
+    };
+    for(u64 frameIndex = 1u; frameIndex <= 4u; ++frameIndex)
+        ASSERT_TRUE(timingHistory.recordSample(timingKey, auxiliaryGraphicsQueue.id, 0.001, frameIndex));
+    for(u64 frameIndex = 5u; frameIndex <= 8u; ++frameIndex)
+        ASSERT_TRUE(timingHistory.recordSample(timingKey, queues[0u].id, 0.010, frameIndex));
+
+    Graphics::GpuTaskTimingHistorySnapshot timingSnapshot(testArena.arena);
+    timingHistory.snapshot(timingSnapshot);
+    ASSERT_TRUE(timingSnapshot.valid());
+
+    Graphics::GpuTaskTimingFeedbackPolicy timingPolicy;
+    timingPolicy.minimumSampleCount = 4u;
+    timingPolicy.minimumAbsoluteBenefitSeconds = 0.001;
+    timingPolicy.minimumRelativeBenefit = 0.1;
+    timingPolicy.minimumFramesBetweenSwitches = 10u;
+    Graphics::GpuTaskGraphQueueAssignmentOptions assignmentOptions;
+    assignmentOptions.timingHistory = &timingSnapshot;
+    assignmentOptions.timingFeedbackPolicy = &timingPolicy;
+    assignmentOptions.timingFrameIndex = 9u;
+
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    // Disabled remains an exact deterministic fallback even when a complete snapshot is present.
+    ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
+    const Graphics::GpuTaskQueueAssignment* assignment = assignments.find(task);
+    ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->queue, queues[0u].id);
+
+    timingPolicy.enabled = true;
+    // The accepted primary route switched at frame five, so the configured dwell period still retains it.
+    ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
+    assignment = assignments.find(task);
+    ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->queue, queues[0u].id);
+
+    timingPolicy.minimumFramesBetweenSwitches = 0u;
+    Graphics::GpuTaskGraphCompileOptions compileOptions;
+    compileOptions.queueAssignmentOptions = assignmentOptions;
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, compileOptions));
+    assignment = assignments.find(task);
+    ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->queue, auxiliaryGraphicsQueue.id);
+    EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+}
+
+
+TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueueRoutes){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuQueueRequest graphicsRequest;
+    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+    graphicsRequest.allowFallback = false;
+    graphicsRequest.compilerMayOverridePreference = false;
+
+    Graphics::GpuTaskSchedulingHint preloadScheduling;
+    preloadScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    preloadScheduling.allowSameClassQueueRouting = true;
+    preloadScheduling.preferNonPrimarySameClassQueue = true;
+    const Graphics::GpuTaskId preload = AddTaskWithQueue(
+        graph,
+        Name("tests/task_graph/timing_feedback_preload"),
+        "Timing Feedback Preload",
+        graphicsRequest,
+        preloadScheduling
+    );
+    ASSERT_TRUE(preload.valid());
+
+    Graphics::GpuTaskSchedulingHint targetScheduling;
+    targetScheduling.allowSameClassQueueRouting = true;
+    const Name targetIdentity("tests/task_graph/timing_feedback_equal_candidates");
+    const Graphics::GpuTaskId target = AddTaskWithQueue(
+        graph,
+        targetIdentity,
+        "Timing Feedback Equal Candidates",
+        graphicsRequest,
+        targetScheduling
+    );
+    ASSERT_TRUE(target.valid());
+
+    Graphics::GpuPhysicalQueueInfo firstAuxiliaryGraphicsQueue = GraphicsQueue(1u);
+    firstAuxiliaryGraphicsQueue.queueIndex = 1u;
+    Graphics::GpuPhysicalQueueInfo secondAuxiliaryGraphicsQueue = GraphicsQueue(2u);
+    secondAuxiliaryGraphicsQueue.queueIndex = 2u;
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        firstAuxiliaryGraphicsQueue,
+        secondAuxiliaryGraphicsQueue,
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+
+    Graphics::GpuTaskTimingHistoryStore timingHistory(testArena.arena);
+    const Graphics::GpuTaskTimingKey targetTimingKey{
+        .task = targetIdentity,
+        .queue = Graphics::CommandQueue::Graphics,
+    };
+    for(u64 frameIndex = 1u; frameIndex <= 4u; ++frameIndex)
+        ASSERT_TRUE(timingHistory.recordSample(targetTimingKey, firstAuxiliaryGraphicsQueue.id, 0.001, frameIndex));
+    for(u64 frameIndex = 5u; frameIndex <= 8u; ++frameIndex)
+        ASSERT_TRUE(timingHistory.recordSample(targetTimingKey, secondAuxiliaryGraphicsQueue.id, 0.001, frameIndex));
+    for(u64 frameIndex = 9u; frameIndex <= 12u; ++frameIndex)
+        ASSERT_TRUE(timingHistory.recordSample(targetTimingKey, queues[0u].id, 0.010, frameIndex));
+
+    Graphics::GpuTaskTimingHistorySnapshot timingSnapshot(testArena.arena);
+    timingHistory.snapshot(timingSnapshot);
+    ASSERT_TRUE(timingSnapshot.valid());
+
+    Graphics::GpuTaskTimingFeedbackPolicy timingPolicy;
+    timingPolicy.enabled = true;
+    timingPolicy.minimumSampleCount = 4u;
+    timingPolicy.minimumAbsoluteBenefitSeconds = 0.001;
+    timingPolicy.minimumRelativeBenefit = 0.1;
+    timingPolicy.minimumFramesBetweenSwitches = 0u;
+    Graphics::GpuTaskGraphQueueAssignmentOptions assignmentOptions;
+    assignmentOptions.timingHistory = &timingSnapshot;
+    assignmentOptions.timingFeedbackPolicy = &timingPolicy;
+    assignmentOptions.timingFrameIndex = 12u;
+
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
+    const Graphics::GpuTaskQueueAssignment* const preloadAssignment = assignments.find(preload);
+    const Graphics::GpuTaskQueueAssignment* const targetAssignment = assignments.find(target);
+    ASSERT_NE(preloadAssignment, nullptr);
+    ASSERT_NE(targetAssignment, nullptr);
+    EXPECT_EQ(preloadAssignment->queue, firstAuxiliaryGraphicsQueue.id);
+    // Both auxiliary histories are equally fast. The first already owns the expensive preload, so the score must
+    // choose the second route instead of depending on topology order alone.
+    EXPECT_EQ(targetAssignment->queue, secondAuxiliaryGraphicsQueue.id);
+
+    const Graphics::GpuTaskTimingQueueOverride forcedOverride[]{
+        Graphics::GpuTaskTimingQueueOverride{
+            .key = targetTimingKey,
+            .queue = firstAuxiliaryGraphicsQueue.id,
+        },
+    };
+    assignmentOptions.timingHistory = nullptr;
+    assignmentOptions.timingFeedbackPolicy = nullptr;
+    assignmentOptions.timingQueueOverrides = forcedOverride;
+    assignmentOptions.timingQueueOverrideCount = LengthOf(forcedOverride);
+    ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
+    const Graphics::GpuTaskQueueAssignment* const forcedAssignment = assignments.find(target);
+    ASSERT_NE(forcedAssignment, nullptr);
+    EXPECT_EQ(forcedAssignment->queue, firstAuxiliaryGraphicsQueue.id);
+
+    Graphics::GpuPhysicalQueueInfo crossFamilyGraphicsQueue = GraphicsQueue(1u);
+    crossFamilyGraphicsQueue.familyIndex = 1u;
+    const Graphics::GpuPhysicalQueueInfo crossFamilyQueues[] = {
+        GraphicsQueue(),
+        crossFamilyGraphicsQueue,
+    };
+    const Graphics::GpuTaskGraphQueueTopology crossFamilyTopology{
+        .queues = crossFamilyQueues,
+        .queueCount = LengthOf(crossFamilyQueues),
+    };
+    const Graphics::GpuTaskTimingQueueOverride invalidForcedOverride[]{
+        Graphics::GpuTaskTimingQueueOverride{
+            .key = targetTimingKey,
+            .queue = crossFamilyGraphicsQueue.id,
+        },
+    };
+    assignmentOptions.timingQueueOverrides = invalidForcedOverride;
+    assignmentOptions.timingQueueOverrideCount = LengthOf(invalidForcedOverride);
+    EXPECT_FALSE(Assign(graph, analysis, crossFamilyTopology, assignments, assignmentOptions));
+    EXPECT_EQ(
+        assignments.diagnostic().status,
+        Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidTimingFeedback
+    );
+    EXPECT_EQ(assignments.diagnostic().task, target);
 }
 
 
@@ -7629,9 +8054,37 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_EQ(recoveryPacketPlan.externalDependencyCount, 0u);
     EXPECT_TRUE(recoveryPacketPlan.joinsAcceptedQueueFrontier);
 
+    const auto completeGraphPacketRecording = [&](const Graphics::GpuSubmissionPacketId& packetID){
+        const Graphics::GpuSubmissionPacket& packetPlan = compiledGraph.packet(packetID);
+        const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packetID);
+        Graphics::GpuTaskPacketRecordingLease recordingLease;
+        return packetTasks
+            && graph.beginRecordingAttempt(compiledGraph, packetTasks, packetPlan.taskCount)
+            && graph.beginPacketRecording(
+                compiledGraph,
+                packetTasks,
+                packetPlan.taskCount,
+                graph.recordingAttemptGeneration(),
+                recordingLease
+            )
+            && graph.completePacketRecording(
+                compiledGraph,
+                packetTasks,
+                packetPlan.taskCount,
+                recordingLease
+            )
+        ;
+    };
+
     Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
     transaction.reset(compiledGraph);
-    ASSERT_TRUE(transaction.markPacketRecorded(firstPacket));
+    ASSERT_TRUE(completeGraphPacketRecording(firstPacket));
+    ASSERT_TRUE(transaction.markPacketRecorded(
+        graph,
+        compiledGraph,
+        firstPacket,
+        graph.recordingAttemptGeneration()
+    ));
     const Graphics::GpuPhysicalQueueId firstQueue = compiledGraph.packet(firstPacket).queue;
     const Graphics::GpuPhysicalQueueId recoveryQueue = compiledGraph.packet(recoveryPacket).queue;
     const Graphics::QueueSubmissionToken firstToken{
@@ -7677,7 +8130,30 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_EQ(transaction.latestAcceptedToken(compiledGraph.packet(firstPacket).queue)->value, firstToken.value);
     EXPECT_EQ(transaction.latestAcceptedToken(recoveryQueue), nullptr);
 
-    ASSERT_TRUE(transaction.markPacketRecorded(transferPacket));
+    // An attempt-tagged direct callback is still not allowed to skip native packet recording.
+    graph.acceptTask(second, firstToken, graph.recordingAttemptGeneration());
+    EXPECT_EQ(acceptedCount, 1u);
+
+    // A fresh transaction cannot turn an already accepted graph packet into a second native submission. The
+    // submitter performs this same graph-owned preflight before it reaches Device::executeCommandLists().
+    Graphics::GpuGraphSubmissionTransaction duplicateTransaction(testArena.arena);
+    duplicateTransaction.reset(compiledGraph);
+    EXPECT_FALSE(duplicateTransaction.markPacketRecorded(
+        graph,
+        compiledGraph,
+        firstPacket,
+        graph.recordingAttemptGeneration()
+    ));
+    EXPECT_FALSE(duplicateTransaction.acceptPacket(graph, compiledGraph, firstPacket, firstToken));
+    EXPECT_FALSE(duplicateTransaction.packetToken(firstPacket).valid());
+
+    ASSERT_TRUE(completeGraphPacketRecording(transferPacket));
+    ASSERT_TRUE(transaction.markPacketRecorded(
+        graph,
+        compiledGraph,
+        transferPacket,
+        graph.recordingAttemptGeneration()
+    ));
     const Graphics::GpuPhysicalQueueId transferQueue = compiledGraph.packet(transferPacket).queue;
     const Graphics::QueueSubmissionToken transferToken{
         .queue = Graphics::CommandQueue::Transfer,
@@ -7715,7 +8191,13 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_EQ(recoveryWaitTokens[1u].value, transferToken.value);
     EXPECT_EQ(recoveryWaitTokens[1u].physicalQueueIndex, transferQueue.index);
 
-    ASSERT_TRUE(transaction.markPacketRecorded(recoveryPacket));
+    ASSERT_TRUE(completeGraphPacketRecording(recoveryPacket));
+    ASSERT_TRUE(transaction.markPacketRecorded(
+        graph,
+        compiledGraph,
+        recoveryPacket,
+        graph.recordingAttemptGeneration()
+    ));
     const Graphics::QueueSubmissionToken recoveryToken{
         .queue = Graphics::CommandQueue::Graphics,
         .value = 43u,
@@ -7730,7 +8212,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     ASSERT_NE(transaction.latestAcceptedToken(recoveryQueue), nullptr);
     EXPECT_EQ(transaction.latestAcceptedToken(recoveryQueue)->value, recoveryToken.value);
 
-    transaction.discardUnaccepted(graph, compiledGraph);
+    EXPECT_TRUE(transaction.discardUnaccepted(graph, compiledGraph));
     EXPECT_EQ(acceptedCount, 3u);
     EXPECT_EQ(discardedCount, 1u);
     ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
@@ -7796,7 +8278,14 @@ TEST(GpuTaskGraph, DiscardsUnacceptedPayloadsAfterPacketRecordFailureCleanup){
 
     // A native recorder reports failure before marking its packet recorded. Range-recording callers then invoke
     // this transaction cleanup, which must reject the failed packet and all still-unaccepted work.
-    transaction.discardUnaccepted(graph, compiledGraph);
+    const Graphics::GpuTaskId* const firstPacketTasks = compiledGraph.packetTasks(firstPacket);
+    ASSERT_NE(firstPacketTasks, nullptr);
+    ASSERT_TRUE(graph.beginRecordingAttempt(
+        compiledGraph,
+        firstPacketTasks,
+        compiledGraph.packet(firstPacket).taskCount
+    ));
+    EXPECT_TRUE(transaction.discardUnaccepted(graph, compiledGraph, graph.recordingAttemptGeneration()));
     EXPECT_EQ(acceptedCount, 0u);
     EXPECT_EQ(discardedCount, 2u);
     ASSERT_NE(transaction.packetRuntime(firstPacket), nullptr);
@@ -7804,9 +8293,133 @@ TEST(GpuTaskGraph, DiscardsUnacceptedPayloadsAfterPacketRecordFailureCleanup){
     EXPECT_EQ(transaction.packetRuntime(firstPacket)->state, Graphics::GpuPacketRuntimeState::Rejected);
     EXPECT_EQ(transaction.packetRuntime(secondPacket)->state, Graphics::GpuPacketRuntimeState::Rejected);
 
-    transaction.discardUnaccepted(graph, compiledGraph);
+    EXPECT_TRUE(transaction.discardUnaccepted(graph, compiledGraph, graph.recordingAttemptGeneration()));
     graph.reset();
     EXPECT_EQ(discardedCount, 2u);
+}
+
+
+TEST(GpuTaskGraph, KeepsDeclarationDiscardedTasksTerminalBeforeFirstRecordingAttempt){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    u32 discardedCount = 0u;
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/declaration_discard_terminal"))
+        .setMarkerLabel("Declaration Discard Terminal")
+    ;
+    const Graphics::GpuTaskId task = graph.addTask<PacketLifecycleTask>(
+        desc,
+        PacketLifecycleTask::Payload{ .discardedCount = &discardedCount }
+    );
+    ASSERT_TRUE(task.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    ASSERT_TRUE(packet.valid());
+    ASSERT_NE(packetTasks, nullptr);
+
+    const u64 declarationAttempt = graph.recordingAttemptGeneration();
+    graph.discardTask(task);
+    EXPECT_EQ(discardedCount, 1u);
+    EXPECT_FALSE(graph.beginRecordingAttempt(compiledGraph, packetTasks, compiledGraph.packet(packet).taskCount));
+    EXPECT_EQ(graph.recordingAttemptGeneration(), declarationAttempt);
+
+    graph.reset();
+    EXPECT_EQ(discardedCount, 1u);
+}
+
+
+TEST(GpuTaskGraph, ClaimsOnePacketRecordingAcrossConcurrentRecorders){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    u32 discardedCount = 0u;
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/concurrent_packet_claim"))
+        .setMarkerLabel("Concurrent Packet Claim")
+    ;
+    const Graphics::GpuTaskId task = graph.addTask<PacketLifecycleTask>(
+        desc,
+        PacketLifecycleTask::Payload{ .discardedCount = &discardedCount }
+    );
+    ASSERT_TRUE(task.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
+    ASSERT_TRUE(packet.valid());
+    ASSERT_NE(packetTasks, nullptr);
+    ASSERT_TRUE(graph.beginRecordingAttempt(compiledGraph, packetTasks, compiledGraph.packet(packet).taskCount));
+    const u64 recordingAttemptGeneration = graph.recordingAttemptGeneration();
+
+    Atomic<u32> successfulClaims{ 0u };
+    Graphics::GpuTaskPacketRecordingLease firstRecordingLease;
+    Graphics::GpuTaskPacketRecordingLease secondRecordingLease;
+    Core::Alloc::ThreadPool recordingWorkers(1u);
+    recordingWorkers.parallelFor(0u, 2u, [&](const usize recorderIndex){
+        Graphics::GpuTaskPacketRecordingLease& recordingLease = recorderIndex == 0u
+            ? firstRecordingLease
+            : secondRecordingLease
+        ;
+        if(graph.beginPacketRecording(
+            compiledGraph,
+            packetTasks,
+            compiledGraph.packet(packet).taskCount,
+            recordingAttemptGeneration,
+            recordingLease
+        ))
+            successfulClaims.fetch_add(1u, MemoryOrder::relaxed);
+    });
+    EXPECT_EQ(successfulClaims.load(MemoryOrder::relaxed), 1u);
+
+    // A transaction-side discard cannot cancel a thunk that its owning recorder may still be executing. The claim
+    // remains active until that recorder explicitly aborts or completes it, so no retry can re-arm this graph.
+    graph.discardTask(task, recordingAttemptGeneration);
+    EXPECT_EQ(discardedCount, 0u);
+    EXPECT_FALSE(graph.beginRecordingAttempt(compiledGraph, packetTasks, compiledGraph.packet(packet).taskCount));
+
+    // A claimed packet may be abandoned only by its owner. Once the discard callback resolves, reset can release
+    // the graph without racing a recorder that still holds the opaque lease.
+    if(firstRecordingLease.valid()){
+        graph.abortPacketRecording(
+            compiledGraph,
+            packetTasks,
+            compiledGraph.packet(packet).taskCount,
+            firstRecordingLease
+        );
+    }
+    else{
+        ASSERT_TRUE(secondRecordingLease.valid());
+        graph.abortPacketRecording(
+            compiledGraph,
+            packetTasks,
+            compiledGraph.packet(packet).taskCount,
+            secondRecordingLease
+        );
+    }
+    EXPECT_EQ(discardedCount, 1u);
+    graph.reset();
+    EXPECT_EQ(discardedCount, 1u);
 }
 
 
@@ -8271,6 +8884,18 @@ TEST(GpuTaskGraph, MergesExplicitCompatibleSuccessorIntoOnePacket){
     EXPECT_EQ(compiledGraph.packetTasks(prefixPacket)[1u], suffix);
     EXPECT_EQ(compiledGraph.packetTasks(prefixPacket)[2u], finalSuffix);
     EXPECT_EQ(packet.dependencyCount, 0u);
+    EXPECT_EQ(
+        compiledGraph.packetizationDecisionForTask(prefix),
+        Graphics::GpuTaskPacketizationDecision::FirstTask
+    );
+    EXPECT_EQ(
+        compiledGraph.packetizationDecisionForTask(suffix),
+        Graphics::GpuTaskPacketizationDecision::MergedExplicit
+    );
+    EXPECT_EQ(
+        compiledGraph.packetizationDecisionForTask(finalSuffix),
+        Graphics::GpuTaskPacketizationDecision::MergedExplicit
+    );
 }
 
 
@@ -19952,6 +20577,10 @@ TEST(GpuTaskGraph, FrontierSafePacketizationSplitsBeforeCrossQueueConsumer){
     );
     EXPECT_EQ(frontierGraph.packet(frontierFirstPacket).taskCount, 1u);
     EXPECT_EQ(frontierGraph.packet(frontierUnrelatedPacket).taskCount, 1u);
+    EXPECT_EQ(
+        frontierGraph.packetizationDecisionForTask(unrelatedGraphics),
+        Graphics::GpuTaskPacketizationDecision::CrossQueueConsumerFrontier
+    );
     ASSERT_EQ(frontierGraph.packet(frontierConsumerPacket).dependencyCount, 1u);
     EXPECT_EQ(
         frontierGraph.packetDependencies(frontierConsumerPacket)[0u].producer,
@@ -20013,6 +20642,14 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationMergesCheapImmediateSuccessor){
     ASSERT_TRUE(producerPacket.valid());
     EXPECT_EQ(producerPacket, successorPacket);
     EXPECT_EQ(compiledGraph.packet(producerPacket).taskCount, 2u);
+    EXPECT_EQ(
+        compiledGraph.packetizationDecisionForTask(producer),
+        Graphics::GpuTaskPacketizationDecision::FirstTask
+    );
+    EXPECT_EQ(
+        compiledGraph.packetizationDecisionForTask(successor),
+        Graphics::GpuTaskPacketizationDecision::MergedFrontierScored
+    );
 }
 
 
@@ -20089,6 +20726,10 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationPreservesCrossQueueConsumerFrontie
     ASSERT_TRUE(producerPacket.valid());
     EXPECT_NE(producerPacket, successorPacket);
     EXPECT_NE(producerPacket, consumerPacket);
+    EXPECT_EQ(
+        compiledGraph.packetizationDecisionForTask(successor),
+        Graphics::GpuTaskPacketizationDecision::CrossQueueConsumerFrontier
+    );
     ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(consumerPacket)[0u].producer, producerPacket);
 }
@@ -35703,4 +36344,6 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 

@@ -1423,6 +1423,7 @@ bool BackendContext::createVulkanDevice(){
         return false;
     }
 
+    const bool swapchainEnabled = isDeviceExtensionEnabled(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
     for(const auto& ext : deviceExtensions){
         GraphicsString name(ext.extensionName, m_arena);
         bool enableExtension = false;
@@ -1430,7 +1431,13 @@ bool BackendContext::createVulkanDevice(){
 
         auto optIt = m_optionalExtensions.device.find(name);
         if(optIt != m_optionalExtensions.device.end()){
-            if(name == VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME && m_deviceParams.headlessDevice)
+            if(
+                !swapchainEnabled
+                && (
+                    name == VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME
+                    || name == VK_EXT_HDR_METADATA_EXTENSION_NAME
+                )
+            )
                 continue;
             enableExtension = true;
             enabledFeature = optIt.value();
@@ -2569,7 +2576,7 @@ bool BackendContext::createVulkanSwapChain(){
             m_swapChain = VK_NULL_HANDLE;
             return false;
         }
-        sci.rhiHandle->m_keepInitialStateKnown = false;
+        sci.rhiHandle->initializeRetainedSubresourceStates(false);
         m_swapChainImages.push_back(Move(sci));
     }
 

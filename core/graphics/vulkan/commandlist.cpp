@@ -32,6 +32,8 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
         m_device.getGpuCrashTracker().registerGpuCrashMarkerTracker(m_gpuCrashMarkerTracker);
 }
 CommandList::~CommandList(){
+    if(m_currentCmdBuf)
+        m_currentCmdBuf->discardRetainedTextureStateCommits();
     discardUnsubmittedUploadChunks();
 
     if(m_device.isAnyGpuMarkerEnabled())
@@ -50,6 +52,8 @@ void CommandList::discardUnsubmittedUploadChunks(){
 }
 
 void CommandList::open(const CommandListResourceStateHandoff* initialStates){
+    if(m_currentCmdBuf)
+        m_currentCmdBuf->discardRetainedTextureStateCommits();
     discardUnsubmittedUploadChunks();
     m_currentCmdBuf.reset();
     m_isRecording = false;
@@ -133,7 +137,7 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
     }
 
     endActiveRenderPass();
-    m_stateTracker.appendKeepInitialStateBarriers(m_pendingImageBarriers, m_pendingBufferBarriers);
+    m_stateTracker.appendKeepInitialStateBarriers(*m_currentCmdBuf, m_pendingImageBarriers, m_pendingBufferBarriers);
     commitBarriers();
     appendPendingOwnershipReleaseBarriers();
 
@@ -142,6 +146,7 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to end command buffer recording: {}"), ResultToString(res));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to end command buffer recording"));
+        m_currentCmdBuf->discardRetainedTextureStateCommits();
         discardUnsubmittedUploadChunks();
         m_currentCmdBuf.reset();
         clearState();

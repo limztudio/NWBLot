@@ -44,6 +44,14 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if !defined(NWB_FINAL)
+void MarkRetainedTextureSubresourceStateKnownForTesting(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel);
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace PipelineStencilFaceMode{
     enum Enum : u8{
         DepthOnly = 0u,
@@ -530,6 +538,7 @@ inline void CopyHostMemory(
 class Device;
 class Queue;
 class TrackedCommandBuffer;
+class StateTracker;
 class GpuDescriptorHeap;
 class DescriptorBufferManager;
 
@@ -709,9 +718,16 @@ inline bool UsesConcurrentQueueSharing(
 // Command buffer with resource tracking
 
 
+struct RetainedTextureStateCommit{
+    Texture* texture = nullptr;
+    MipLevel mipLevel = 0;
+    ArraySlice arraySlice = 0;
+};
+
 class TrackedCommandBuffer final : public RefCounter<GraphicsResource>, NoCopy{
     friend class CommandList;
     friend class Queue;
+    friend class StateTracker;
     friend class GpuDescriptorHeap;
 
 
@@ -726,6 +742,9 @@ public:
 
 
 private:
+    void appendRetainedTextureStateCommit(Texture& texture, MipLevel mipLevel, ArraySlice arraySlice);
+    void commitRetainedTextureStateCommits();
+    void discardRetainedTextureStateCommits();
     void clearTrackedReferences();
 
 
@@ -737,6 +756,7 @@ private:
     Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_referencedResources;
     Vector<BufferHandle, Alloc::GlobalArena> m_referencedStagingBuffers;
     Vector<GpuDescriptorHeap*, Alloc::GlobalArena> m_referencedDescriptorHeaps;
+    Vector<RetainedTextureStateCommit, Alloc::GlobalArena> m_retainedTextureStateCommits;
 
     u64 m_recordingID = 0;
     u64 m_submissionID = 0;
@@ -1147,6 +1167,10 @@ class Texture final : public RefCounter<GraphicsResource>, NoCopy{
     friend class StateTracker;
     friend class VulkanAllocator;
     friend class Queue;
+    friend class TrackedCommandBuffer;
+#if !defined(NWB_FINAL)
+    friend void VulkanDetail::MarkRetainedTextureSubresourceStateKnownForTesting(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel);
+#endif
 
 
 public:
@@ -1157,10 +1181,18 @@ public:
 public:
     [[nodiscard]] const TextureDesc& getDescription()const{ return m_desc; }
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
+    // True when accepted retained-state publication covers only a strict subset of this texture's subresources.
+    [[nodiscard]] bool hasPartiallyKnownRetainedSubresourceState()const;
     Object getNativeHandle(ObjectType objectType);
     Object getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool);
 
     [[nodiscard]] VkImageView getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format);
+
+
+private:
+    void initializeRetainedSubresourceStates(bool known);
+    [[nodiscard]] bool isRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel);
+    void setRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel, bool known);
 
 
 private:
@@ -1173,9 +1205,10 @@ private:
     VkImageCreateInfo m_imageInfo{};
 
     HashMap<TextureViewKey, VkImageView, TextureViewKeyHasher, EqualTo<TextureViewKey>, Alloc::GlobalArena> m_views;
+    Vector<u8, Alloc::GlobalArena> m_retainedSubresourceStates;
+    mutable Futex m_retainedSubresourceStatesMutex;
 
     bool m_managed = true; // if true, owns the VkImage or VMA allocation
-    bool m_keepInitialStateKnown = false;
 
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
@@ -2070,6 +2103,7 @@ public:
     void beginTrackingTexture(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingBuffer(Buffer* buffer, ResourceStates::Mask state);
     void appendKeepInitialStateBarriers(
+        TrackedCommandBuffer& commandBuffer,
         Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& imageBarriers,
         Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& bufferBarriers
     );

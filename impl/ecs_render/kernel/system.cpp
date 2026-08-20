@@ -2765,10 +2765,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredCompositeTimingTicket.discard();
         deferredPresentTimingTicket.discard();
     };
-    const auto discardUnacceptedGraphPackets = [&](){
-        m_deferredLightingSubmissionTransaction.discardUnaccepted(
+    const auto discardUnacceptedGraphPackets = [&]() -> bool {
+        return m_deferredLightingSubmissionTransaction.discardUnaccepted(
             m_deferredLightingTaskGraph,
-            m_deferredLightingCompiledGraph
+            m_deferredLightingCompiledGraph,
+            m_deferredLightingRecordedGraph.recordingAttemptGeneration()
         );
     };
     const auto discardRenderPackets = [&](){
@@ -2818,7 +2819,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         frameTimingTransaction.discard();
         discardTimingTickets();
-        discardUnacceptedGraphPackets();
+        if(!discardUnacceptedGraphPackets()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred graph cancellation overlapped active native work; requesting device recreation"));
+            m_graphics.requestDeviceRecreation();
+        }
         const bool shadowPrepareAccepted = taskIsCompiled(m_deferredShadowPrepareTask)
             && m_deferredLightingSubmissionTransaction.taskToken(
                 m_deferredLightingCompiledGraph,
@@ -3433,10 +3437,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         );
     }
     if(!deferredPacketsRecorded){
-        m_deferredLightingSubmissionTransaction.discardUnaccepted(
-            m_deferredLightingTaskGraph,
-            m_deferredLightingCompiledGraph
-        );
         shadowPrepareTimingTicket.discard();
         discardGraphicsPrefixTimingTickets();
         avboitPreTimingTicket.discard();
@@ -3492,10 +3492,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !deferredLightingFinalStateSeed
         || (hardwareShadowSupported && !hardwareCausticsFinalStateSeed)
     ){
-        m_deferredLightingSubmissionTransaction.discardUnaccepted(
-            m_deferredLightingTaskGraph,
-            m_deferredLightingCompiledGraph
-        );
         shadowPrepareTimingTicket.discard();
         discardGraphicsPrefixTimingTickets();
         avboitPreTimingTicket.discard();
@@ -3589,8 +3585,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const bool recovered = recoverPendingFrameSubmission();
         // Recovery must record and submit while this packet remains Declared. Once it has accepted (or its own
         // rejection discarded the timing transaction), reject every remaining normal packet in the shared graph.
-        discardUnacceptedGraphPackets();
-        return recovered;
+        return discardUnacceptedGraphPackets() && recovered;
     };
     const auto failFrameRenderRecovery = [&](){
         if(m_frameRenderRecoveryFailed)
@@ -4802,10 +4797,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             )
         ;
         if(!historyCopyStateSourcesReady){
-            m_deferredLightingSubmissionTransaction.discardUnaccepted(
+            if(!m_deferredLightingSubmissionTransaction.discardUnaccepted(
                 m_deferredLightingTaskGraph,
-                m_deferredLightingCompiledGraph
-            );
+                m_deferredLightingCompiledGraph,
+                m_deferredLightingRecordedGraph.recordingAttemptGeneration()
+            ))
+                m_graphics.requestDeviceRecreation();
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged lighting-history capture skipped because its source state was unavailable"));
             invalidateLaggedLightingHistorySubmission();
         }
@@ -4819,10 +4816,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
         ){
             if(m_deferredLightingTaskGraphValid){
-                m_deferredLightingSubmissionTransaction.discardUnaccepted(
+                if(!m_deferredLightingSubmissionTransaction.discardUnaccepted(
                     m_deferredLightingTaskGraph,
-                    m_deferredLightingCompiledGraph
-                );
+                    m_deferredLightingCompiledGraph,
+                    m_deferredLightingRecordedGraph.recordingAttemptGeneration()
+                ))
+                    m_graphics.requestDeviceRecreation();
             }
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting"));
             invalidateLaggedLightingHistorySubmission();
@@ -4871,10 +4870,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 historyCopyRecordContext.finalState
             ;
             if(!historyCopyAccepted || !historyCopyFinalStateSeed){
-                m_deferredLightingSubmissionTransaction.discardUnaccepted(
+                if(!m_deferredLightingSubmissionTransaction.discardUnaccepted(
                     m_deferredLightingTaskGraph,
-                    m_deferredLightingCompiledGraph
-                );
+                    m_deferredLightingCompiledGraph,
+                    m_deferredLightingRecordedGraph.recordingAttemptGeneration()
+                ))
+                    m_graphics.requestDeviceRecreation();
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned lagged lighting-history capture record/submission was rejected; reverting to current-frame lighting"));
                 invalidateLaggedLightingHistorySubmission();
             }

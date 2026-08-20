@@ -1588,7 +1588,7 @@ bool StateTracker::getResolvedTransientTextureState(Texture& texture, ArraySlice
         return true;
     }
 
-    if(texture.m_desc.keepInitialState && texture.m_keepInitialStateKnown)
+    if(texture.isRetainedSubresourceStateKnown(arraySlice, mipLevel))
         outState = texture.m_desc.initialState;
 
     return true;
@@ -1631,6 +1631,7 @@ void StateTracker::beginTrackingBuffer(Buffer* buffer, ResourceStates::Mask stat
 }
 
 void StateTracker::appendKeepInitialStateBarriers(
+    TrackedCommandBuffer& commandBuffer,
     Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& imageBarriers,
     Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& bufferBarriers
 ){
@@ -1646,7 +1647,7 @@ void StateTracker::appendKeepInitialStateBarriers(
 
         auto* texture = key.texture;
         if(currentState == desc.initialState){
-            texture->m_keepInitialStateKnown = true;
+            commandBuffer.appendRetainedTextureStateCommit(*texture, key.mipLevel, key.arraySlice);
             continue;
         }
 
@@ -1659,7 +1660,7 @@ void StateTracker::appendKeepInitialStateBarriers(
             m_context.extensions.KHR_ray_tracing_pipeline
         ));
         it.value() = desc.initialState;
-        texture->m_keepInitialStateKnown = true;
+        commandBuffer.appendRetainedTextureStateCommit(*texture, key.mipLevel, key.arraySlice);
     }
 
     for(auto it = m_bufferStates.begin(); it != m_bufferStates.end(); ++it){

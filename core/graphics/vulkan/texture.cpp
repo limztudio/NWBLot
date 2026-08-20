@@ -1223,6 +1223,7 @@ bool BuildTextureImageViewCreateInfo(
 Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator)
     : RefCounter<GraphicsResource>(context.threadPool)
     , m_views(0, TextureViewKeyHasher(), EqualTo<TextureViewKey>(), context.objectArena)
+    , m_retainedSubresourceStates(context.objectArena)
     , m_context(context)
     , m_allocator(allocator)
 {}
@@ -1292,6 +1293,89 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
     return view;
 }
 
+bool Texture::hasPartiallyKnownRetainedSubresourceState()const{
+    if(!m_desc.keepInitialState)
+        return false;
+
+    const usize subresourceCount = static_cast<usize>(m_desc.mipLevels) * static_cast<usize>(m_desc.arraySize);
+    if(subresourceCount == 0u)
+        return false;
+
+    ScopedLock lock(m_retainedSubresourceStatesMutex);
+    const usize trackedSubresourceCount = Min(subresourceCount, m_retainedSubresourceStates.size());
+    bool hasKnownState = false;
+    bool hasUnknownState = trackedSubresourceCount < subresourceCount;
+    for(usize subresourceIndex = 0u; subresourceIndex < trackedSubresourceCount; ++subresourceIndex){
+        if(m_retainedSubresourceStates[subresourceIndex] != 0u)
+            hasKnownState = true;
+        else
+            hasUnknownState = true;
+
+        if(hasKnownState && hasUnknownState)
+            return true;
+    }
+    return false;
+}
+
+void Texture::initializeRetainedSubresourceStates(const bool known){
+    const usize subresourceCount = static_cast<usize>(m_desc.mipLevels) * static_cast<usize>(m_desc.arraySize);
+    ScopedLock lock(m_retainedSubresourceStatesMutex);
+    m_retainedSubresourceStates.assign(subresourceCount, known ? 1u : 0u);
+}
+
+bool Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel){
+    if(
+        !m_desc.keepInitialState
+        || arraySlice >= m_desc.arraySize
+        || mipLevel >= m_desc.mipLevels
+    )
+        return false;
+
+    const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_desc.mipLevels) + static_cast<usize>(mipLevel);
+    ScopedLock lock(m_retainedSubresourceStatesMutex);
+    NWB_ASSERT(index < m_retainedSubresourceStates.size());
+    return index < m_retainedSubresourceStates.size() && m_retainedSubresourceStates[index] != 0u;
+}
+
+void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel, const bool known){
+    if(
+        !m_desc.keepInitialState
+        || arraySlice >= m_desc.arraySize
+        || mipLevel >= m_desc.mipLevels
+    )
+        return;
+
+    const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_desc.mipLevels) + static_cast<usize>(mipLevel);
+    ScopedLock lock(m_retainedSubresourceStatesMutex);
+    NWB_ASSERT(index < m_retainedSubresourceStates.size());
+    if(index >= m_retainedSubresourceStates.size())
+        return;
+
+    m_retainedSubresourceStates[index] = known ? 1u : 0u;
+}
+
+#if !defined(NWB_FINAL)
+void VulkanDetail::MarkRetainedTextureSubresourceStateKnownForTesting(
+    Texture& texture,
+    const ArraySlice arraySlice,
+    const MipLevel mipLevel
+){
+    if(
+        !texture.m_desc.keepInitialState
+        || arraySlice >= texture.m_desc.arraySize
+        || mipLevel >= texture.m_desc.mipLevels
+    )
+        return;
+
+    const usize subresourceCount = static_cast<usize>(texture.m_desc.mipLevels) * static_cast<usize>(texture.m_desc.arraySize);
+    const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(texture.m_desc.mipLevels) + static_cast<usize>(mipLevel);
+    ScopedLock lock(texture.m_retainedSubresourceStatesMutex);
+    if(texture.m_retainedSubresourceStates.size() != subresourceCount)
+        texture.m_retainedSubresourceStates.assign(subresourceCount, 0u);
+    texture.m_retainedSubresourceStates[index] = 1u;
+}
+#endif
+
 Object Texture::getNativeHandle(ObjectType objectType){
     if(objectType == ObjectTypes::VK_Image)
         return Object(m_image);
@@ -1333,6 +1417,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     texture->m_desc = d;
     texture->m_formatLayout = metadata.formatLayout;
     texture->m_aspectMask = metadata.aspectMask;
+    texture->initializeRetainedSubresourceStates(false);
 
     texture->m_imageInfo = __hidden_vulkan_texture::BuildTextureImageCreateInfo(d, metadata);
     const QueueFamilySharingInfo sharingInfo = ResolveQueueFamilySharing(d.queueSharing, m_context);
@@ -1429,7 +1514,7 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
     texture->m_aspectMask = metadata.aspectMask;
     texture->m_image = nativeImage;
     texture->m_managed = false;
-    texture->m_keepInitialStateKnown = desc.keepInitialState;
+    texture->initializeRetainedSubresourceStates(desc.keepInitialState);
 
     texture->m_imageInfo = __hidden_vulkan_texture::BuildTextureImageCreateInfo(desc, metadata);
 

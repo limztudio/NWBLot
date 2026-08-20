@@ -124,6 +124,11 @@ GpuSubmissionPacketId GpuCompiledGraph::packetForTask(const GpuTaskId& task)cons
     return compiledTask ? compiledTask->packet : GpuSubmissionPacketId{};
 }
 
+GpuTaskPacketizationDecision::Enum GpuCompiledGraph::packetizationDecisionForTask(const GpuTaskId& task)const noexcept{
+    const GpuCompiledTask* const compiledTask = findTask(task);
+    return compiledTask ? compiledTask->packetizationDecision : GpuTaskPacketizationDecision::Unknown;
+}
+
 bool GpuCompiledGraph::tasksSharePacket(
     const GpuTaskId& first,
     const GpuTaskId& second
@@ -339,4 +344,6 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 

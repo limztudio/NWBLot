@@ -413,7 +413,12 @@ template<typename DeclareTask>
         0u,
         recordedGraph
     )){
-        transaction.discardUnaccepted(graph, compiledGraph);
+        if(!transaction.discardUnaccepted(
+            graph,
+            compiledGraph,
+            recordedGraph.recordingAttemptGeneration()
+        ))
+            graphics.requestDeviceRecreation();
         return false;
     }
 
@@ -439,15 +444,27 @@ template<typename DeclareTask>
             transaction,
             scratchArena
         );
-        transaction.discardUnaccepted(graph, compiledGraph);
+        const bool discarded = transaction.discardUnaccepted(
+            graph,
+            compiledGraph,
+            recordedGraph.recordingAttemptGeneration()
+        );
         outSubmissionToken = {};
-        if(!recovered)
+        if(!recovered || !discarded)
             graphics.requestDeviceRecreation();
         return false;
     }
 
     outSubmissionToken = transaction.packetToken(terminalPacket);
-    transaction.discardUnaccepted(graph, compiledGraph);
+    if(!transaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        recordedGraph.recordingAttemptGeneration()
+    )){
+        graphics.requestDeviceRecreation();
+        outSubmissionToken = {};
+        return false;
+    }
     return outSubmissionToken.valid();
 }
 
@@ -765,6 +782,17 @@ static bool ValidateTextureSetupUpload(const Graphics::TextureSetupDesc& desc){
         );
         return false;
     }
+    if(
+        textureDesc.keepInitialState
+        && desc.hasPhysicalInitialState
+        && desc.physicalInitialState != ResourceStates::Unknown
+        && desc.physicalInitialState != textureDesc.initialState
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch '{}': retained textures require their declared physical initial state to match initialState")
+            , StringConvert(textureDesc.name.c_str())
+        );
+        return false;
+    }
 
     for(usize regionIndex = 0u; regionIndex < desc.regionCount; ++regionIndex){
         const Graphics::TextureUploadRegion& region = desc.regions[regionIndex];
@@ -786,6 +814,8 @@ static bool ValidateTextureSetupUpload(const Graphics::TextureSetupDesc& desc){
         }
         outTotalByteCount += region.dataSize;
     }
+    // Retained subresources publish their state only after this batch is accepted. A partial fresh upload leaves
+    // the texture mixed, so later unspecified typed imports resolve to Unknown until every subresource is known.
     return true;
 }
 
@@ -1706,6 +1736,15 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
 
     if(!desc.data || desc.uploadDataSize == 0)
         return device.createTexture(desc.textureDesc);
+    if(
+        desc.textureDesc.keepInitialState
+        && (desc.textureDesc.arraySize != 1u || desc.textureDesc.mipLevels != 1u)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to set up texture '{}': a fresh retained setup upload must cover every mip and array slice; use uploadTextureBatch")
+            , StringConvert(desc.textureDesc.name.c_str())
+        );
+        return {};
+    }
 
     const CommandQueue::Enum uploadQueue = __hidden_graphics::ResolveSetupUploadQueue(
         device,
@@ -1741,7 +1780,9 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
                     .setIdentity(Name("graphics.setup_texture.resource"))
                     .setMarkerLabel("Setup Texture")
                     .setType(GpuGraphResourceType::Texture)
-                    .setInitialState(uploadDesc.initialState)
+                    // Vulkan creates this texture in UNDEFINED layout. The upload task owns its first concrete
+                    // transition; the task's finalState still publishes the caller-requested logical state.
+                    .setInitialState(ResourceStates::Unknown)
                     .setQueueSharing(uploadDesc.queueSharing)
             );
             const GpuUploadBlobId source = graph.copyUploadData(desc.data, desc.uploadDataSize, alignof(u32));
@@ -1818,6 +1859,10 @@ bool Graphics::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
         return false;
 
     const TextureDesc& textureDesc = desc.destination->getDescription();
+    const ResourceStates::Mask graphInitialState = desc.hasPhysicalInitialState
+        ? desc.physicalInitialState
+        : textureDesc.initialState
+    ;
     const CommandQueue::Enum uploadQueue = __hidden_graphics::ResolveTextureUploadBatchQueue(
         device,
         desc.queue,
@@ -1841,14 +1886,14 @@ bool Graphics::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
         m_allocator.getObjectArena(),
         textureDesc.queueSharing,
         uploadQueue,
-        [&desc, &textureDesc, uploadQueue, sameClassRouting, &uploadToken](GpuTaskGraph& graph){
+        [&desc, &textureDesc, graphInitialState, uploadQueue, sameClassRouting, &uploadToken](GpuTaskGraph& graph){
             const GpuGraphResourceId destination = graph.importTexture(
                 desc.destination,
                 GpuGraphResourceDesc{}
                     .setIdentity(Name("graphics.upload_texture_batch.resource"))
                     .setMarkerLabel("Texture Upload Batch")
                     .setType(GpuGraphResourceType::Texture)
-                    .setInitialState(textureDesc.initialState)
+                    .setInitialState(graphInitialState)
                     .setQueueSharing(textureDesc.queueSharing)
             );
             if(!destination.valid())
@@ -2127,4 +2172,6 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 

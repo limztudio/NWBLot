@@ -79,6 +79,9 @@ public:
     // Uploads every listed region into an existing texture through a compiler-owned task graph.  This is the
     // multi-subresource companion to TextureSetupDesc for decoded/static assets.  `finalState` is explicit so a
     // caller cannot publish an opaque post-write layout; for keepInitialState textures it must equal initialState.
+    // Leave hasPhysicalInitialState false to preserve the legacy descriptor-state import.  Set it true to declare
+    // the actual native state of the destination before the upload; an explicit Unknown means a fresh Vulkan image
+    // begins in UNDEFINED rather than TextureDesc::initialState.
     struct TextureUploadBatchDesc{
         TextureHandle destination;
         const TextureUploadRegion* regions = nullptr;
@@ -86,6 +89,8 @@ public:
         ResourceStates::Mask finalState = ResourceStates::Unknown;
         CommandQueue::Enum queue = CommandQueue::kCount;
         QueueSubmissionToken* acceptedToken = nullptr;
+        ResourceStates::Mask physicalInitialState = ResourceStates::Unknown;
+        bool hasPhysicalInitialState = false;
     };
 
     struct MeshSetupDesc{

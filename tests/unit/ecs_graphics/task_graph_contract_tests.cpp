@@ -273,6 +273,13 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
         compiledGraphHeader,
         "GpuTaskGraphPhysicalQueueCompileStatistics physicalQueueCompileStatistics("
     ));
+    EXPECT_TRUE(ContainsText(
+        compiledGraphHeader,
+        "    usize epilogueBarrierCount = 0u;\n"
+        "    usize ownershipReleaseBarrierCount = 0u;\n"
+        "    usize ownershipAcquireBarrierCount = 0u;\n\n"
+        "    [[nodiscard]] bool valid()const noexcept{"
+    ));
     EXPECT_TRUE(ContainsText(compiledGraph, "if(!valid())\n        return {};"));
     EXPECT_TRUE(ContainsText(compiledGraph, ".queues = m_queueTopology.empty() ? nullptr : m_queueTopology.data(),"));
     EXPECT_TRUE(ContainsText(compiledGraph, ".queueCount = m_queueTopology.size(),"));
@@ -337,7 +344,7 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     EXPECT_TRUE(ContainsText(frameGraph, "accepted frontier={} CPU={:.3f} ms"));
     EXPECT_TRUE(ContainsText(
         frameGraph,
-        "  Compile plan: tasks={} packets={} merged tasks={} prologue barriers={} epilogue barriers={}"
+        "  Compile plan: tasks={} packets={} merged tasks={} prologue barriers={} epilogue barriers={} ownership release barriers (subset)={} ownership acquire barriers (subset)={}"
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
@@ -353,6 +360,15 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     EXPECT_TRUE(ContainsText(frameGraph, "queueCompileStatistics.mergedTaskCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueCompileStatistics.prologueBarrierCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueCompileStatistics.epilogueBarrierCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueCompileStatistics.ownershipReleaseBarrierCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueCompileStatistics.ownershipAcquireBarrierCount,"));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "queueCompileStatistics.epilogueBarrierCount,\n"
+        "                queueCompileStatistics.ownershipReleaseBarrierCount,\n"
+        "                queueCompileStatistics.ownershipAcquireBarrierCount,\n"
+        "                queueRecordingStatistics.packetCount,"
+    ));
     EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.packetCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.taskCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.commandListCount,"));

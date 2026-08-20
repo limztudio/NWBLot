@@ -342,7 +342,8 @@ template<typename DeclareTask>
     GraphicsArena& graphArena,
     DeclareTask&& declareTask,
     QueueSubmissionToken& outSubmissionToken,
-    const GpuPhysicalQueueId requiredTerminalQueue = {}
+    const GpuPhysicalQueueId requiredTerminalQueue = {},
+    Alloc::ThreadPool* const readyFrontierWorkerPool = nullptr
 ){
     outSubmissionToken = {};
 
@@ -406,15 +407,30 @@ template<typename DeclareTask>
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
     const GpuTaskGraphSubmitter submitter(device);
-    if(!submitter.recordAndSubmitPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        recorder,
-        recordedGraph,
-        normalPacketRange,
-        transaction,
-        scratchArena
-    )){
+    // Setup and timing callers preserve their established serial behavior. The public standalone graph boundary
+    // passes the Graphics worker pool, whose task declarations opt into worker recording individually.
+    const bool submitted = readyFrontierWorkerPool
+        ? submitter.recordAndSubmitPacketRangeInReadyFrontiers(
+            graph,
+            compiledGraph,
+            recorder,
+            recordedGraph,
+            *readyFrontierWorkerPool,
+            normalPacketRange,
+            transaction,
+            scratchArena
+        )
+        : submitter.recordAndSubmitPacketRangeInCompileOrder(
+            graph,
+            compiledGraph,
+            recorder,
+            recordedGraph,
+            normalPacketRange,
+            transaction,
+            scratchArena
+        )
+    ;
+    if(!submitted){
         const bool recovered = !transaction.hasAcceptedPackets() || submitter.recordAndSubmitAcceptedFrontierTask(
             graph,
             compiledGraph,
@@ -1825,7 +1841,8 @@ bool Graphics::submitStandaloneTaskGraph(
             return declareTask(userData, graph);
         },
         outSubmissionToken,
-        requiredTerminalQueue
+        requiredTerminalQueue,
+        &m_threadPool
     );
 }
 

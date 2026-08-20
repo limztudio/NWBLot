@@ -790,6 +790,20 @@ public:
         Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
+    // Ready-frontier variant of the normal range executor. It preserves the serial helper's recovery-tail
+    // preflight and submission order, but gives explicitly opted-in packets isolated worker recording leases.
+    // Packets without opt-in retain the recorder's serial fallback. Callers retain all cleanup and recovery policy.
+    [[nodiscard]] bool recordAndSubmitPacketRangeInReadyFrontiers(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuNativePacketRecorder& recorder,
+        GpuRecordedGraph& recordedGraph,
+        Alloc::ThreadPool& workerPool,
+        const GpuSubmissionPacketRange& range,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuSubmissionPacketId* outFailedPacket = nullptr
+    )const;
     // Records and submits one semantic late-recovery/finalization task whose compiled packet joins the accepted
     // physical-queue frontier. The transaction supplies the exact current queue waits during submission; callers
     // never assemble a renderer-local frontier token list or compiler packet range. Record or submit failure

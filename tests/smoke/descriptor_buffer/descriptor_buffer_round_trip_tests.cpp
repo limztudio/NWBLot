@@ -643,6 +643,196 @@ struct StandaloneGraphAcceptedFrontierRecoveryContext{
 #endif
 
 
+// Public standalone declarations may opt into the same compiler-derived worker frontiers as renderer-owned graph
+// tasks. This probe keeps both caller arrays mutable so the built-in uploads prove graph-owned blob retention, while
+// two side-effect-free packet tasks prove the same ready frontier receives nonzero worker-affined leases.
+struct StandaloneGraphReadyFrontierObserverTask{
+    struct Payload{
+        Latch* recordingStarted = nullptr;
+        u32* observedWorkerIndex = nullptr;
+        bool* discarded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.recordingStarted || !payload.observedWorkerIndex)
+            return false;
+
+        *payload.observedWorkerIndex = commandList.getDescription().recordingWorkerIndex;
+        payload.recordingStarted->count_down();
+        payload.recordingStarted->wait();
+        return commandList.isRecording();
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.discarded)
+            *payload.discarded = true;
+    }
+};
+
+struct StandaloneGraphReadyFrontierUploadContext{
+    BufferHandle firstDestination;
+    BufferHandle secondDestination;
+    void* firstBytes = nullptr;
+    void* secondBytes = nullptr;
+    usize firstByteCount = 0u;
+    usize secondByteCount = 0u;
+    Latch* recordingStarted = nullptr;
+    u32* firstWorkerIndex = nullptr;
+    u32* secondWorkerIndex = nullptr;
+    QueueSubmissionToken* firstAcceptedToken = nullptr;
+    QueueSubmissionToken* secondAcceptedToken = nullptr;
+    bool* firstDiscarded = nullptr;
+    bool* secondDiscarded = nullptr;
+};
+
+[[nodiscard]] static GpuTaskId DeclareStandaloneGraphReadyFrontierUploads(
+    void* const rawContext,
+    GpuTaskGraph& graph
+){
+    StandaloneGraphReadyFrontierUploadContext* const context =
+        static_cast<StandaloneGraphReadyFrontierUploadContext*>(rawContext)
+    ;
+    if(
+        !context
+        || !context->firstDestination
+        || !context->secondDestination
+        || !context->firstBytes
+        || !context->secondBytes
+        || context->firstByteCount == 0u
+        || context->secondByteCount == 0u
+        || !context->recordingStarted
+        || !context->firstWorkerIndex
+        || !context->secondWorkerIndex
+    )
+        return {};
+
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    scheduling.allowParallelRecording = true;
+    const auto addUpload = [&graph, scheduling](
+        const BufferHandle& destinationBuffer,
+        void* const bytes,
+        const usize byteCount,
+        const Name& resourceIdentity,
+        const AStringView resourceLabel,
+        const Name& taskIdentity,
+        const AStringView taskLabel,
+        QueueSubmissionToken* const acceptedToken
+    ){
+        const GpuGraphResourceId destination = graph.importBuffer(
+            destinationBuffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(resourceIdentity)
+                .setMarkerLabel(resourceLabel)
+                .setType(GpuGraphResourceType::Buffer)
+                .setInitialState(ResourceStates::Common)
+                .setQueueSharing(destinationBuffer->getDescription().queueSharing)
+        );
+        const GpuUploadBlobId source = graph.copyUploadData(bytes, byteCount, alignof(u32));
+        if(!destination.valid() || !source.valid())
+            return GpuTaskId{};
+
+        GpuTaskDesc desc;
+        desc
+            .setIdentity(taskIdentity)
+            .setMarkerLabel(taskLabel)
+            .setQueue(GpuQueueRequest{
+                GpuQueueCapability::Transfer,
+                GpuQueuePreference::Graphics,
+                false,
+                false,
+            })
+            .setScheduling(scheduling)
+        ;
+        return graph.addUploadBufferTask(
+            desc,
+            GpuUploadBufferTaskDesc{
+                .source = source,
+                .destination = destination,
+                .finalState = ResourceStates::CopyDest,
+                .acceptedToken = acceptedToken,
+            }
+        );
+    };
+
+    const GpuTaskId firstUpload = addUpload(
+        context->firstDestination,
+        context->firstBytes,
+        context->firstByteCount,
+        Name("tests.standalone_graph_ready_frontier.first_destination"),
+        "Standalone Ready Frontier First Destination",
+        Name("tests.standalone_graph_ready_frontier.first_upload"),
+        "Standalone Ready Frontier First Upload",
+        context->firstAcceptedToken
+    );
+    const GpuTaskId secondUpload = addUpload(
+        context->secondDestination,
+        context->secondBytes,
+        context->secondByteCount,
+        Name("tests.standalone_graph_ready_frontier.second_destination"),
+        "Standalone Ready Frontier Second Destination",
+        Name("tests.standalone_graph_ready_frontier.second_upload"),
+        "Standalone Ready Frontier Second Upload",
+        context->secondAcceptedToken
+    );
+    if(!firstUpload.valid() || !secondUpload.valid())
+        return {};
+
+    const auto addObserver = [&graph, context, scheduling](
+        const Name& identity,
+        const AStringView label,
+        u32* const observedWorkerIndex,
+        bool* const discarded
+    ){
+        GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(GpuQueueRequest{
+                GpuQueueCapability::Graphics,
+                GpuQueuePreference::Graphics,
+                false,
+                false,
+            })
+            .setScheduling(scheduling)
+        ;
+        return graph.addTask<StandaloneGraphReadyFrontierObserverTask>(
+            desc,
+            StandaloneGraphReadyFrontierObserverTask::Payload{
+                .recordingStarted = context->recordingStarted,
+                .observedWorkerIndex = observedWorkerIndex,
+                .discarded = discarded,
+            }
+        );
+    };
+    const GpuTaskId firstObserver = addObserver(
+        Name("tests.standalone_graph_ready_frontier.first_observer"),
+        "Standalone Ready Frontier First Observer",
+        context->firstWorkerIndex,
+        context->firstDiscarded
+    );
+    const GpuTaskId secondObserver = addObserver(
+        Name("tests.standalone_graph_ready_frontier.second_observer"),
+        "Standalone Ready Frontier Second Observer",
+        context->secondWorkerIndex,
+        context->secondDiscarded
+    );
+    if(!firstObserver.valid() || !secondObserver.valid())
+        return {};
+
+    NWB_MEMSET(context->firstBytes, 0, context->firstByteCount);
+    NWB_MEMSET(context->secondBytes, 0, context->secondByteCount);
+    return secondObserver;
+}
+
+
 // These compact graph tasks model skinning's descriptor-visible compute endpoint. They deliberately perform no
 // synthetic native submission: their packet-local barriers publish the required compute states, and the task's
 // accepted callback observes the same packet token as its uploads/copies.
@@ -40084,9 +40274,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
 }
 
 
-// Normal packet-range execution owns only the ordinary graph prefix. A caller must retain its late recovery tail,
+// Ready-frontier range execution owns only the ordinary graph prefix. A caller must retain its late recovery tail,
 // including the choice to recover after one normal packet rejects and the final transactional cleanup.
-TEST_F(DescriptorBufferRoundTripTest, NativePacketRangeHelperPreservesRecoveryOwnership){
+TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierPacketRangeHelperPreservesRecoveryOwnership){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
@@ -40178,15 +40368,17 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRangeHelperPreservesRecoveryOw
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
+    Alloc::ThreadPool recordingWorkers(2u, CpuAffinity::Any);
     const GpuTaskGraphSubmitter submitter(device);
     GpuSubmissionPacketId failedPacket;
 
     // The helper fails before beginning a recording attempt when a range contains the caller-owned recovery packet.
-    EXPECT_FALSE(submitter.recordAndSubmitPacketRangeInCompileOrder(
+    EXPECT_FALSE(submitter.recordAndSubmitPacketRangeInReadyFrontiers(
         graph,
         compiledGraph,
         recorder,
         recordedGraph,
+        recordingWorkers,
         compiledGraph.allPacketRange(),
         transaction,
         scratchArena,
@@ -40199,12 +40391,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRangeHelperPreservesRecoveryOw
     EXPECT_FALSE(recoveryRecorded);
     EXPECT_FALSE(transaction.hasAcceptedPackets());
 
-    // A normal prefix succeeds through the combined serial recorder/submitter path.
-    ASSERT_TRUE(submitter.recordAndSubmitPacketRangeInCompileOrder(
+    // Normal packets retain the recorder's serial fallback until every task opts in to worker recording.
+    ASSERT_TRUE(submitter.recordAndSubmitPacketRangeInReadyFrontiers(
         graph,
         compiledGraph,
         recorder,
         recordedGraph,
+        recordingWorkers,
         compiledGraph.packetRange(prefixPacket, prefixPacket),
         transaction,
         scratchArena,
@@ -40218,11 +40411,12 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRangeHelperPreservesRecoveryOw
     // Submission failure remains visible to the caller. The helper neither discards the rejected normal packet nor
     // records the recovery tail, which leaves the accepted frontier available to the explicit recovery helper.
     device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
-    EXPECT_FALSE(submitter.recordAndSubmitPacketRangeInCompileOrder(
+    EXPECT_FALSE(submitter.recordAndSubmitPacketRangeInReadyFrontiers(
         graph,
         compiledGraph,
         recorder,
         recordedGraph,
+        recordingWorkers,
         compiledGraph.packetRange(rejectedPacket, rejectedPacket),
         transaction,
         scratchArena,
@@ -41785,6 +41979,115 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAc
     EXPECT_FALSE(acceptedDiscarded);
     EXPECT_TRUE(device.waitForIdle());
 #endif
+}
+
+
+// The public standalone boundary uses Graphics' worker pool for normal packets. Two independent graph-owned blobs
+// must record with distinct nonzero worker leases, submit in compiler order, and retain their copied bytes after
+// the declaration intentionally clears both caller arrays.
+TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphReadyFrontierUploadsUseWorkerLeasesAndImmutableBlobs){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const GpuPhysicalQueueId graphicsQueue = BackendQueueId(device, CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+
+    static constexpr u32 s_FirstExpectedWords[] = {
+        0x4ef8a219u,
+        0x13c0ffeeu,
+        0x7f4a7c15u,
+        0x9e3779b9u,
+    };
+    static constexpr u32 s_SecondExpectedWords[] = {
+        0xfeedfaceu,
+        0x0badf00du,
+        0x2c1b3a49u,
+        0xd1cebeefu,
+    };
+    u32 firstWords[] = {
+        s_FirstExpectedWords[0u],
+        s_FirstExpectedWords[1u],
+        s_FirstExpectedWords[2u],
+        s_FirstExpectedWords[3u],
+    };
+    u32 secondWords[] = {
+        s_SecondExpectedWords[0u],
+        s_SecondExpectedWords[1u],
+        s_SecondExpectedWords[2u],
+        s_SecondExpectedWords[3u],
+    };
+    const auto createDestination = [&device]{
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(sizeof(firstWords))
+                .setInitialState(ResourceStates::Common)
+                .setQueueSharing(ResourceQueueSharing::Exclusive)
+                .setCpuAccess(CpuAccessMode::Read)
+        );
+    };
+    const BufferHandle firstDestination = createDestination();
+    const BufferHandle secondDestination = createDestination();
+    ASSERT_NE(firstDestination.get(), nullptr);
+    ASSERT_NE(secondDestination.get(), nullptr);
+
+    Latch recordingStarted(2);
+    u32 firstWorkerIndex = 0u;
+    u32 secondWorkerIndex = 0u;
+    QueueSubmissionToken firstAcceptedToken;
+    QueueSubmissionToken secondAcceptedToken;
+    bool firstDiscarded = false;
+    bool secondDiscarded = false;
+    StandaloneGraphReadyFrontierUploadContext context{
+        .firstDestination = firstDestination,
+        .secondDestination = secondDestination,
+        .firstBytes = firstWords,
+        .secondBytes = secondWords,
+        .firstByteCount = sizeof(firstWords),
+        .secondByteCount = sizeof(secondWords),
+        .recordingStarted = &recordingStarted,
+        .firstWorkerIndex = &firstWorkerIndex,
+        .secondWorkerIndex = &secondWorkerIndex,
+        .firstAcceptedToken = &firstAcceptedToken,
+        .secondAcceptedToken = &secondAcceptedToken,
+        .firstDiscarded = &firstDiscarded,
+        .secondDiscarded = &secondDiscarded,
+    };
+    QueueSubmissionToken terminalToken;
+    const bool submitted = graphics.submitStandaloneTaskGraph(
+        &context,
+        &DeclareStandaloneGraphReadyFrontierUploads,
+        terminalToken,
+        graphicsQueue
+    );
+    ASSERT_TRUE(submitted) << "firstWorker=" << firstWorkerIndex
+        << ", secondWorker=" << secondWorkerIndex
+        << ", firstDiscarded=" << firstDiscarded
+        << ", secondDiscarded=" << secondDiscarded;
+    ASSERT_TRUE(terminalToken.valid());
+    ASSERT_TRUE(firstAcceptedToken.valid());
+    ASSERT_TRUE(secondAcceptedToken.valid());
+    EXPECT_EQ(terminalToken.queue, CommandQueue::Graphics);
+    EXPECT_GT(terminalToken.value, secondAcceptedToken.value);
+    EXPECT_FALSE(firstDiscarded);
+    EXPECT_FALSE(secondDiscarded);
+    EXPECT_NE(firstWorkerIndex, 0u);
+    EXPECT_NE(secondWorkerIndex, 0u);
+    EXPECT_NE(firstWorkerIndex, secondWorkerIndex);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(firstWords); ++wordIndex){
+        EXPECT_EQ(firstWords[wordIndex], 0u);
+        EXPECT_EQ(secondWords[wordIndex], 0u);
+    }
+
+    ASSERT_TRUE(device.waitForIdle());
+    const u32* const firstUploadedWords = static_cast<const u32*>(device.mapBuffer(firstDestination.get(), CpuAccessMode::Read));
+    const u32* const secondUploadedWords = static_cast<const u32*>(device.mapBuffer(secondDestination.get(), CpuAccessMode::Read));
+    ASSERT_NE(firstUploadedWords, nullptr);
+    ASSERT_NE(secondUploadedWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_FirstExpectedWords); ++wordIndex){
+        EXPECT_EQ(firstUploadedWords[wordIndex], s_FirstExpectedWords[wordIndex]);
+        EXPECT_EQ(secondUploadedWords[wordIndex], s_SecondExpectedWords[wordIndex]);
+    }
+    device.unmapBuffer(firstDestination.get());
+    device.unmapBuffer(secondDestination.get());
 }
 
 

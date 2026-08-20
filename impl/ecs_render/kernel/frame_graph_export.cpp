@@ -51,7 +51,9 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             "Task graph: tasks={} packets={} deps={} transitions={}\n"
             "Recording: packets={} tasks={} command lists={} barriers={} parallel={}\n"
             "Submission: accepted={} submissions={} command lists={} waits={} rejected={}\n"
-            "CPU: compile={:.3f} ms record={:.3f} ms submit={:.3f} ms",
+            "CPU: compile={:.3f} ms record={:.3f} ms submit={:.3f} ms\n"
+            "CPU compile phases: analysis={:.3f} ms queue assignment={:.3f} ms planning={:.3f} ms\n"
+            "CPU recording phases: command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task recording={:.3f} ms",
             compileStatistics.taskCount,
             compileStatistics.packetCount,
             compileStatistics.packetDependencyCount,
@@ -68,7 +70,13 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             submissionStatistics.rejectedSubmissionCount,
             compileStatistics.totalSeconds * 1000.0,
             recordingStatistics.recordingSeconds * 1000.0,
-            submissionStatistics.submissionSeconds * 1000.0
+            submissionStatistics.submissionSeconds * 1000.0,
+            compileStatistics.analysisSeconds * 1000.0,
+            compileStatistics.queueAssignmentSeconds * 1000.0,
+            compileStatistics.planningSeconds * 1000.0,
+            recordingStatistics.commandListAcquisitionSeconds * 1000.0,
+            recordingStatistics.graphBarrierRecordingSeconds * 1000.0,
+            recordingStatistics.taskRecordSeconds * 1000.0
         );
     }
     else

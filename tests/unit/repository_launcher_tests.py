@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 import sys
 import tempfile
 import unittest
@@ -35,6 +36,7 @@ class LauncherPlatformTests(unittest.TestCase):
 
     def test_explicit_configure_preset_selects_matching_build_directory(self):
         root = Path(os.sep) / "repo"
+        resolved_root = root.resolve()
         args = argparse.Namespace(
             repo_root=root,
             platform="linux",
@@ -46,7 +48,7 @@ class LauncherPlatformTests(unittest.TestCase):
             cmake=None,
         )
         settings = launcher.resolve_launch_settings(args, "full")
-        self.assertEqual(root / "__cmake" / "build" / "linux-clang-engine-x64", settings.build_dir)
+        self.assertEqual(resolved_root / "__cmake" / "build" / "linux-clang-engine-x64", settings.build_dir)
         self.assertEqual("engine", settings.domain)
 
     def test_output_root_matches_engine_and_domain_layouts(self):
@@ -241,7 +243,10 @@ class LauncherPlatformTests(unittest.TestCase):
             path.parent.mkdir(parents=True)
             path.write_text("", encoding="utf-8")
 
-            with self.assertRaisesRegex(SystemExit, "missing category launcher: utilities/launch.py"):
+            with self.assertRaisesRegex(
+                SystemExit,
+                r"\A" + re.escape(f"missing category launcher: {Path('utilities') / 'launch.py'}") + r"\Z",
+            ):
                 launcher.discover_repo_launchers(root)
 
     def test_nested_leaf_requires_an_intermediate_router(self):
@@ -254,7 +259,10 @@ class LauncherPlatformTests(unittest.TestCase):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text("", encoding="utf-8")
 
-            with self.assertRaisesRegex(SystemExit, "missing directory launcher: tests/ab/launch.py"):
+            with self.assertRaisesRegex(
+                SystemExit,
+                r"\A" + re.escape(f"missing directory launcher: {Path('tests') / 'ab' / 'launch.py'}") + r"\Z",
+            ):
                 launcher.discover_repo_launchers(root)
 
     def test_discovered_launcher_forwards_its_arguments(self):

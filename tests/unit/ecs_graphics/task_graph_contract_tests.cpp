@@ -99,6 +99,8 @@ TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){
     EXPECT_TRUE(ContainsText(frameGraph, "if(deferredRuntimeStatistics.valid()){"));
     EXPECT_TRUE(ContainsText(frameGraph, "StringAppendFormat(\n            m_frameGraphRendererLabel,"));
     EXPECT_TRUE(ContainsText(frameGraph, "\"Task graph: tasks={} packets={} deps={} transitions={}\\n\""));
+    EXPECT_TRUE(ContainsText(frameGraph, "\"Declarations: resource sets={} resource-set members={} direct uses={} declared set uses={} expanded set-member uses={} materialized uses={}\\n\""));
+    EXPECT_TRUE(ContainsText(frameGraph, "\"Data: payload objects={} payload object bytes={} upload blobs={} upload blob bytes={}\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"Recording: packets={} tasks={} command lists={} barriers={} parallel={}\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"Submission: accepted={} submissions={} command lists={} waits={} rejected={}\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"CPU: compile={:.3f} ms record={:.3f} ms submit={:.3f} ms\\n\""));
@@ -107,6 +109,16 @@ TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.analysisSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.queueAssignmentSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.planningSeconds * 1000.0,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.resourceSetCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.resourceSetMemberCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.directResourceUseCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.declaredResourceSetUseCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.expandedResourceSetMemberUseCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.resourceUseCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.payloadObjectCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.payloadObjectBytes,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.uploadBlobCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.uploadBlobBytes,"));
     EXPECT_TRUE(ContainsText(frameGraph, "recordingStatistics.commandListAcquisitionSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "recordingStatistics.graphBarrierRecordingSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "recordingStatistics.taskRecordSeconds * 1000.0"));

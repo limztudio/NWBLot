@@ -49,6 +49,8 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             m_frameGraphRendererLabel,
             "Renderer Frame\n"
             "Task graph: tasks={} packets={} deps={} transitions={}\n"
+            "Declarations: resource sets={} resource-set members={} direct uses={} declared set uses={} expanded set-member uses={} materialized uses={}\n"
+            "Data: payload objects={} payload object bytes={} upload blobs={} upload blob bytes={}\n"
             "Recording: packets={} tasks={} command lists={} barriers={} parallel={}\n"
             "Submission: accepted={} submissions={} command lists={} waits={} rejected={}\n"
             "CPU: compile={:.3f} ms record={:.3f} ms submit={:.3f} ms\n"
@@ -58,6 +60,16 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             compileStatistics.packetCount,
             compileStatistics.packetDependencyCount,
             compileStatistics.transitionBarrierCount,
+            compileStatistics.resourceSetCount,
+            compileStatistics.resourceSetMemberCount,
+            compileStatistics.directResourceUseCount,
+            compileStatistics.declaredResourceSetUseCount,
+            compileStatistics.expandedResourceSetMemberUseCount,
+            compileStatistics.resourceUseCount,
+            compileStatistics.payloadObjectCount,
+            compileStatistics.payloadObjectBytes,
+            compileStatistics.uploadBlobCount,
+            compileStatistics.uploadBlobBytes,
             recordingStatistics.packetCount,
             recordingStatistics.taskCount,
             recordingStatistics.commandListCount,

@@ -200,6 +200,28 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
     else
         m_frameGraphRendererLabel += "Renderer Frame";
 
+    const Core::GpuDescriptorHeapLifecycleStatistics descriptorHeapLifecycleStatistics =
+        m_graphics.getDevice().getDescriptorHeap().lifecycleStatistics()
+    ;
+    StringAppendFormat(
+        m_frameGraphRendererLabel,
+        "\nDescriptor heap lifecycle (device-wide current): initialized={} "
+        "resource live/capacity={}/{} sampler live/capacity={}/{} "
+        "acceleration structure live/capacity={}/{} pending retired slots={} "
+        "accepted heap uses={} unsubmitted heap uses={} abandoned heap uses={}",
+        descriptorHeapLifecycleStatistics.initialized,
+        descriptorHeapLifecycleStatistics.resourceLiveSlotCount,
+        descriptorHeapLifecycleStatistics.resourceCapacity,
+        descriptorHeapLifecycleStatistics.samplerLiveSlotCount,
+        descriptorHeapLifecycleStatistics.samplerCapacity,
+        descriptorHeapLifecycleStatistics.accelStructLiveSlotCount,
+        descriptorHeapLifecycleStatistics.accelStructCapacity,
+        descriptorHeapLifecycleStatistics.pendingRetiredSlotCount,
+        descriptorHeapLifecycleStatistics.acceptedHeapUseCount,
+        descriptorHeapLifecycleStatistics.unsubmittedHeapUseCount,
+        descriptorHeapLifecycleStatistics.abandonedHeapUseCount
+    );
+
     const Handle rendererFrame = builder.addPass(
         Name("ecs_render/frame"),
         AStringView(m_frameGraphRendererLabel.data(), m_frameGraphRendererLabel.size())

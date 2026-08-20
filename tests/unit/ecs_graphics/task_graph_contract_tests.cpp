@@ -137,6 +137,75 @@ TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){
 }
 
 
+// Descriptor heap lifetime is owned by the Device rather than any deferred graph attempt or physical queue. Keep
+// one by-value current snapshot on the persistent renderer label so no-graph frames retain this diagnostic context.
+TEST(EcsGraphics, FrameGraphExportsDeviceWideDescriptorHeapLifecycle){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString frameGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "frame_graph_export.cpp", frameGraphSource));
+    const AStringView frameGraph(frameGraphSource.data(), frameGraphSource.size());
+
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "const Core::GpuDescriptorHeapLifecycleStatistics descriptorHeapLifecycleStatistics =\n"
+        "        m_graphics.getDevice().getDescriptorHeap().lifecycleStatistics()\n"
+        "    ;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "\"\\nDescriptor heap lifecycle (device-wide current): initialized={} \"\n"
+        "        \"resource live/capacity={}/{} sampler live/capacity={}/{} \"\n"
+        "        \"acceleration structure live/capacity={}/{} pending retired slots={} \"\n"
+        "        \"accepted heap uses={} unsubmitted heap uses={} abandoned heap uses={}\""
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "StringAppendFormat(\n"
+        "        m_frameGraphRendererLabel,\n"
+        "        \"\\nDescriptor heap lifecycle (device-wide current): initialized={} \"\n"
+        "        \"resource live/capacity={}/{} sampler live/capacity={}/{} \"\n"
+        "        \"acceleration structure live/capacity={}/{} pending retired slots={} \"\n"
+        "        \"accepted heap uses={} unsubmitted heap uses={} abandoned heap uses={}\""
+    ));
+
+    const usize snapshotOffset = frameGraph.find("const Core::GpuDescriptorHeapLifecycleStatistics descriptorHeapLifecycleStatistics");
+    const usize runtimeValidOffset = frameGraph.find("if(deferredRuntimeStatistics.valid()){");
+    const usize queueLoopOffset = frameGraph.find("for(usize queueIndex = 0u; queueIndex < queueTopology.queueCount; ++queueIndex){");
+    const usize fallbackOffset = frameGraph.find("m_frameGraphRendererLabel += \"Renderer Frame\";");
+    const usize lifecycleLabelOffset = frameGraph.find("Descriptor heap lifecycle (device-wide current):");
+    const usize rendererFrameOffset = frameGraph.find("const Handle rendererFrame = builder.addPass(");
+    ASSERT_NE(snapshotOffset, AStringView::npos);
+    ASSERT_NE(runtimeValidOffset, AStringView::npos);
+    ASSERT_NE(queueLoopOffset, AStringView::npos);
+    ASSERT_NE(fallbackOffset, AStringView::npos);
+    ASSERT_NE(lifecycleLabelOffset, AStringView::npos);
+    ASSERT_NE(rendererFrameOffset, AStringView::npos);
+    EXPECT_LT(runtimeValidOffset, snapshotOffset);
+    EXPECT_LT(queueLoopOffset, snapshotOffset);
+    EXPECT_LT(fallbackOffset, snapshotOffset);
+    EXPECT_LT(snapshotOffset, lifecycleLabelOffset);
+    EXPECT_LT(fallbackOffset, lifecycleLabelOffset);
+    EXPECT_LT(lifecycleLabelOffset, rendererFrameOffset);
+
+    const AStringView lifecycleLabel = frameGraph.substr(lifecycleLabelOffset, rendererFrameOffset - lifecycleLabelOffset);
+    EXPECT_TRUE(ContainsText(lifecycleLabel, "descriptorHeapLifecycleStatistics.initialized,"));
+    EXPECT_TRUE(ContainsText(lifecycleLabel, "descriptorHeapLifecycleStatistics.resourceLiveSlotCount,"));
+    EXPECT_TRUE(ContainsText(lifecycleLabel, "descriptorHeapLifecycleStatistics.resourceCapacity,"));
+    EXPECT_TRUE(ContainsText(lifecycleLabel, "descriptorHeapLifecycleStatistics.samplerLiveSlotCount,"));
+    EXPECT_TRUE(ContainsText(lifecycleLabel, "descriptorHeapLifecycleStatistics.samplerCapacity,"));
+    EXPECT_TRUE(ContainsText(lifecycleLabel, "descriptorHeapLifecycleStatistics.accelStructLiveSlotCount,"));
+    EXPECT_TRUE(ContainsText(lifecycleLabel, "descriptorHeapLifecycleStatistics.accelStructCapacity,"));
+    EXPECT_TRUE(ContainsText(lifecycleLabel, "descriptorHeapLifecycleStatistics.pendingRetiredSlotCount,"));
+    EXPECT_TRUE(ContainsText(lifecycleLabel, "descriptorHeapLifecycleStatistics.acceptedHeapUseCount,"));
+    EXPECT_TRUE(ContainsText(lifecycleLabel, "descriptorHeapLifecycleStatistics.unsubmittedHeapUseCount,"));
+    EXPECT_TRUE(ContainsText(lifecycleLabel, "descriptorHeapLifecycleStatistics.abandonedHeapUseCount"));
+    EXPECT_FALSE(ContainsText(lifecycleLabel, "queueStatistics."));
+    EXPECT_FALSE(ContainsText(lifecycleLabel, "queueInfo."));
+}
+
+
 // Renderer-side graph declaration is intentionally separate from core compilation, and a failed attempt must not
 // publish its elapsed time because the compiler only publishes the supplied value with a completed immutable plan.
 TEST(EcsGraphics, DeferredGraphMeasuresDeclarationAttemptBeforeCoreCompile){

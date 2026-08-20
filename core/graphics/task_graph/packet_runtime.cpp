@@ -2939,6 +2939,30 @@ bool GpuTaskGraphSubmitter::recordAndSubmitPacketRangeInCompileOrder(
 }
 
 
+bool GpuTaskGraphSubmitter::recordAndSubmitTaskRangeInCompileOrder(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuNativePacketRecorder& recorder,
+    GpuRecordedGraph& recordedGraph,
+    const GpuTaskId firstTask,
+    const GpuTaskId lastTask,
+    GpuGraphSubmissionTransaction& transaction,
+    Alloc::ScratchArena& scratchArena,
+    GpuSubmissionPacketId* const outFailedPacket
+)const{
+    return recordAndSubmitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        compiledGraph.packetRangeForTasks(firstTask, lastTask),
+        transaction,
+        scratchArena,
+        outFailedPacket
+    );
+}
+
+
 bool GpuTaskGraphSubmitter::recordAndSubmitPacketRangeInReadyFrontiers(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
@@ -3002,6 +3026,32 @@ bool GpuTaskGraphSubmitter::recordAndSubmitPacketRangeInReadyFrontiers(
         return false;
     }
     return true;
+}
+
+
+bool GpuTaskGraphSubmitter::recordAndSubmitTaskRangeInReadyFrontiers(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuNativePacketRecorder& recorder,
+    GpuRecordedGraph& recordedGraph,
+    Alloc::ThreadPool& workerPool,
+    const GpuTaskId firstTask,
+    const GpuTaskId lastTask,
+    GpuGraphSubmissionTransaction& transaction,
+    Alloc::ScratchArena& scratchArena,
+    GpuSubmissionPacketId* const outFailedPacket
+)const{
+    return recordAndSubmitPacketRangeInReadyFrontiers(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        workerPool,
+        compiledGraph.packetRangeForTasks(firstTask, lastTask),
+        transaction,
+        scratchArena,
+        outFailedPacket
+    );
 }
 
 

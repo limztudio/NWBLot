@@ -790,6 +790,20 @@ public:
         Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
+    // Semantic companion to the serial normal range executor. It resolves inclusive compiler-order bounds from
+    // declared task endpoints, preserving the packet helper's recovery-tail preflight, failure result, and caller
+    // owned cleanup policy.
+    [[nodiscard]] bool recordAndSubmitTaskRangeInCompileOrder(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuNativePacketRecorder& recorder,
+        GpuRecordedGraph& recordedGraph,
+        GpuTaskId firstTask,
+        GpuTaskId lastTask,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuSubmissionPacketId* outFailedPacket = nullptr
+    )const;
     // Ready-frontier variant of the normal range executor. It preserves the serial helper's recovery-tail
     // preflight and submission order, but gives explicitly opted-in packets isolated worker recording leases.
     // Packets without opt-in retain the recorder's serial fallback. Callers retain all cleanup and recovery policy.
@@ -800,6 +814,20 @@ public:
         GpuRecordedGraph& recordedGraph,
         Alloc::ThreadPool& workerPool,
         const GpuSubmissionPacketRange& range,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuSubmissionPacketId* outFailedPacket = nullptr
+    )const;
+    // Semantic ready-frontier companion. Task endpoints resolve through the current compiled graph before the
+    // packet helper applies its normal recovery-tail preflight and preserves the caller's cleanup ownership.
+    [[nodiscard]] bool recordAndSubmitTaskRangeInReadyFrontiers(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuNativePacketRecorder& recorder,
+        GpuRecordedGraph& recordedGraph,
+        Alloc::ThreadPool& workerPool,
+        GpuTaskId firstTask,
+        GpuTaskId lastTask,
         GpuGraphSubmissionTransaction& transaction,
         Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr

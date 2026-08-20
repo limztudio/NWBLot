@@ -40274,9 +40274,205 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
 }
 
 
-// Ready-frontier range execution owns only the ordinary graph prefix. A caller must retain its late recovery tail,
-// including the choice to recover after one normal packet rejects and the final transactional cleanup.
-TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierPacketRangeHelperPreservesRecoveryOwnership){
+// The serial semantic range helper owns only ordinary graph work. Rejected normal task submission remains visible
+// so the caller can record the late frontier task itself and then resolve its remaining transactional state.
+TEST_F(DescriptorBufferRoundTripTest, TaskRangeHelperPreservesRecoveryOwnership){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint normalScheduling;
+    normalScheduling.forceSubmissionBoundary = true;
+    normalScheduling.allowPacketMerge = false;
+
+    bool prefixShouldRecord = true;
+    bool prefixRecorded = false;
+    const GpuTaskId prefixTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/task_range_helper_serial_prefix"))
+            .setMarkerLabel("Task Range Helper Serial Prefix")
+            .setQueue(graphicsQueue)
+            .setScheduling(normalScheduling),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &prefixShouldRecord,
+            .attempted = &prefixRecorded,
+        }
+    );
+    ASSERT_TRUE(prefixTask.valid());
+
+    bool rejectedShouldRecord = true;
+    bool rejectedRecorded = false;
+    const GpuTaskId rejectedDependencies[] = { prefixTask };
+    const GpuTaskId rejectedTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/task_range_helper_serial_rejected"))
+            .setMarkerLabel("Task Range Helper Serial Rejected")
+            .setQueue(graphicsQueue)
+            .setScheduling(normalScheduling)
+            .setDependencies(rejectedDependencies, LengthOf(rejectedDependencies)),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &rejectedShouldRecord,
+            .attempted = &rejectedRecorded,
+        }
+    );
+    ASSERT_TRUE(rejectedTask.valid());
+
+    bool recoveryShouldRecord = true;
+    bool recoveryRecorded = false;
+    GpuTaskSchedulingHint recoveryScheduling = normalScheduling;
+    recoveryScheduling.joinsAcceptedQueueFrontier = true;
+    const GpuTaskId recoveryTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/task_range_helper_serial_recovery"))
+            .setMarkerLabel("Task Range Helper Serial Recovery")
+            .setQueue(graphicsQueue)
+            .setScheduling(recoveryScheduling),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &recoveryShouldRecord,
+            .attempted = &recoveryRecorded,
+        }
+    );
+    ASSERT_TRUE(recoveryTask.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/task_range_helper_serial_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+
+    const GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefixTask);
+    const GpuSubmissionPacketId rejectedPacket = compiledGraph.packetForTask(rejectedTask);
+    const GpuSubmissionPacketId recoveryPacket = compiledGraph.packetForTask(recoveryTask);
+    ASSERT_TRUE(prefixPacket.valid());
+    ASSERT_TRUE(rejectedPacket.valid());
+    ASSERT_TRUE(recoveryPacket.valid());
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    EXPECT_TRUE(compiledGraph.packet(recoveryPacket).joinsAcceptedQueueFrontier);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    const GpuTaskGraphSubmitter submitter(device);
+    GpuSubmissionPacketId failedPacket;
+
+    EXPECT_FALSE(submitter.recordAndSubmitTaskRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        {},
+        prefixTask,
+        transaction,
+        scratchArena,
+        &failedPacket
+    ));
+    EXPECT_FALSE(failedPacket.valid());
+    EXPECT_EQ(recordedGraph.recordingAttemptGeneration(), 0u);
+    EXPECT_FALSE(submitter.recordAndSubmitTaskRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        rejectedTask,
+        prefixTask,
+        transaction,
+        scratchArena,
+        &failedPacket
+    ));
+    EXPECT_FALSE(failedPacket.valid());
+    EXPECT_EQ(recordedGraph.recordingAttemptGeneration(), 0u);
+
+    // Semantic endpoints that reach the late recovery task fail before any normal task recording begins.
+    EXPECT_FALSE(submitter.recordAndSubmitTaskRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        prefixTask,
+        recoveryTask,
+        transaction,
+        scratchArena,
+        &failedPacket
+    ));
+    EXPECT_EQ(failedPacket, recoveryPacket);
+    EXPECT_EQ(recordedGraph.recordingAttemptGeneration(), 0u);
+    EXPECT_FALSE(prefixRecorded);
+    EXPECT_FALSE(rejectedRecorded);
+    EXPECT_FALSE(recoveryRecorded);
+    EXPECT_FALSE(transaction.hasAcceptedPackets());
+
+    ASSERT_TRUE(submitter.recordAndSubmitTaskRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        prefixTask,
+        prefixTask,
+        transaction,
+        scratchArena,
+        &failedPacket
+    ));
+    EXPECT_FALSE(failedPacket.valid());
+    EXPECT_TRUE(prefixRecorded);
+    ASSERT_TRUE(transaction.packetToken(prefixPacket).valid());
+
+    // A rejected normal task remains recorded/rejected for caller-owned recovery; the helper does not touch the
+    // late frontier task or cleanup state.
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    EXPECT_FALSE(submitter.recordAndSubmitTaskRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        rejectedTask,
+        rejectedTask,
+        transaction,
+        scratchArena,
+        &failedPacket
+    ));
+    EXPECT_EQ(failedPacket, rejectedPacket);
+    EXPECT_TRUE(rejectedRecorded);
+    EXPECT_FALSE(recoveryRecorded);
+    ASSERT_NE(transaction.packetRuntime(prefixPacket), nullptr);
+    ASSERT_NE(transaction.packetRuntime(rejectedPacket), nullptr);
+    ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(prefixPacket)->state, GpuPacketRuntimeState::Accepted);
+    EXPECT_EQ(transaction.packetRuntime(rejectedPacket)->state, GpuPacketRuntimeState::Rejected);
+    EXPECT_EQ(transaction.packetRuntime(recoveryPacket)->state, GpuPacketRuntimeState::Declared);
+
+    ASSERT_TRUE(submitter.recordAndSubmitAcceptedFrontierTask(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        recoveryTask,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(recoveryRecorded);
+    ASSERT_TRUE(transaction.packetToken(recoveryPacket).valid());
+    EXPECT_TRUE(transaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        recordedGraph.recordingAttemptGeneration()
+    ));
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Ready-frontier semantic range execution owns only the ordinary graph prefix. A caller must retain its late
+// recovery tail, including the choice to recover after one normal task rejects and the final transactional cleanup.
+TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierTaskRangeHelperPreservesRecoveryOwnership){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
@@ -40360,9 +40556,9 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierPacketRangeHelperPreservesRec
     EXPECT_EQ(compiledGraph.packetIdAt(1u), rejectedPacket);
     EXPECT_EQ(compiledGraph.packetIdAt(2u), recoveryPacket);
     EXPECT_TRUE(compiledGraph.packet(recoveryPacket).joinsAcceptedQueueFrontier);
-    const GpuSubmissionPacketRange normalRange = compiledGraph.packetRange(prefixPacket, rejectedPacket);
-    ASSERT_TRUE(compiledGraph.validPacketRange(normalRange));
-    EXPECT_EQ(normalRange.packetCount, 2u);
+    const GpuSubmissionPacketRange normalTaskRange = compiledGraph.packetRangeForTasks(prefixTask, rejectedTask);
+    ASSERT_TRUE(compiledGraph.validPacketRange(normalTaskRange));
+    EXPECT_EQ(normalTaskRange.packetCount, 2u);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -40372,14 +40568,46 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierPacketRangeHelperPreservesRec
     const GpuTaskGraphSubmitter submitter(device);
     GpuSubmissionPacketId failedPacket;
 
-    // The helper fails before beginning a recording attempt when a range contains the caller-owned recovery packet.
-    EXPECT_FALSE(submitter.recordAndSubmitPacketRangeInReadyFrontiers(
+    // Invalid and reversed semantic endpoints preserve the packet helper's empty failure result and do not record.
+    EXPECT_FALSE(submitter.recordAndSubmitTaskRangeInReadyFrontiers(
         graph,
         compiledGraph,
         recorder,
         recordedGraph,
         recordingWorkers,
-        compiledGraph.allPacketRange(),
+        {},
+        prefixTask,
+        transaction,
+        scratchArena,
+        &failedPacket
+    ));
+    EXPECT_FALSE(failedPacket.valid());
+    EXPECT_EQ(recordedGraph.recordingAttemptGeneration(), 0u);
+    EXPECT_FALSE(submitter.recordAndSubmitTaskRangeInReadyFrontiers(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        recordingWorkers,
+        rejectedTask,
+        prefixTask,
+        transaction,
+        scratchArena,
+        &failedPacket
+    ));
+    EXPECT_FALSE(failedPacket.valid());
+    EXPECT_EQ(recordedGraph.recordingAttemptGeneration(), 0u);
+
+    // The helper fails before beginning a recording attempt when semantic endpoints include the caller-owned
+    // recovery packet.
+    EXPECT_FALSE(submitter.recordAndSubmitTaskRangeInReadyFrontiers(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        recordingWorkers,
+        prefixTask,
+        recoveryTask,
         transaction,
         scratchArena,
         &failedPacket
@@ -40392,13 +40620,14 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierPacketRangeHelperPreservesRec
     EXPECT_FALSE(transaction.hasAcceptedPackets());
 
     // Normal packets retain the recorder's serial fallback until every task opts in to worker recording.
-    ASSERT_TRUE(submitter.recordAndSubmitPacketRangeInReadyFrontiers(
+    ASSERT_TRUE(submitter.recordAndSubmitTaskRangeInReadyFrontiers(
         graph,
         compiledGraph,
         recorder,
         recordedGraph,
         recordingWorkers,
-        compiledGraph.packetRange(prefixPacket, prefixPacket),
+        prefixTask,
+        prefixTask,
         transaction,
         scratchArena,
         &failedPacket
@@ -40411,13 +40640,14 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierPacketRangeHelperPreservesRec
     // Submission failure remains visible to the caller. The helper neither discards the rejected normal packet nor
     // records the recovery tail, which leaves the accepted frontier available to the explicit recovery helper.
     device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
-    EXPECT_FALSE(submitter.recordAndSubmitPacketRangeInReadyFrontiers(
+    EXPECT_FALSE(submitter.recordAndSubmitTaskRangeInReadyFrontiers(
         graph,
         compiledGraph,
         recorder,
         recordedGraph,
         recordingWorkers,
-        compiledGraph.packetRange(rejectedPacket, rejectedPacket),
+        rejectedTask,
+        rejectedTask,
         transaction,
         scratchArena,
         &failedPacket

@@ -2858,6 +2858,70 @@ bool GpuTaskGraphSubmitter::submitTaskRangeInCompileOrder(
 }
 
 
+bool GpuTaskGraphSubmitter::recordAndSubmitPacketRangeInCompileOrder(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuNativePacketRecorder& recorder,
+    GpuRecordedGraph& recordedGraph,
+    const GpuSubmissionPacketRange& range,
+    GpuGraphSubmissionTransaction& transaction,
+    Alloc::ScratchArena& scratchArena,
+    GpuSubmissionPacketId* const outFailedPacket
+)const{
+    if(outFailedPacket)
+        *outFailedPacket = {};
+    if(
+        !compiledGraph.validFor(graph)
+        || !transaction.validFor(compiledGraph)
+        || !compiledGraph.validPacketRange(range)
+    )
+        return false;
+
+    const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
+    for(usize packetIndex = range.first.index; packetIndex < rangeEnd; ++packetIndex){
+        const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
+        if(!compiledGraph.packet(packet).joinsAcceptedQueueFrontier)
+            continue;
+        if(outFailedPacket)
+            *outFailedPacket = packet;
+        return false;
+    }
+
+    GpuSubmissionPacketId failedPacket;
+    if(!recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        range,
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )){
+        if(outFailedPacket)
+            *outFailedPacket = failedPacket;
+        return false;
+    }
+    if(!submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        range,
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena,
+        &failedPacket
+    )){
+        if(outFailedPacket)
+            *outFailedPacket = failedPacket;
+        return false;
+    }
+    return true;
+}
+
+
 bool GpuTaskGraphSubmitter::recordAndSubmitAcceptedFrontierTask(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,

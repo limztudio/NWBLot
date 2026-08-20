@@ -769,6 +769,19 @@ public:
         const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr,
         usize taskAcceptedCallbackCount = 0u
     )const;
+    // Records then submits one compiler-derived normal range in serial compile order. Recovery/finalization packets
+    // that join the accepted queue frontier are deliberately rejected here: callers retain explicit ownership of
+    // their late tail, cleanup, and recovery policy. This helper does not discard or reject any remaining work.
+    [[nodiscard]] bool recordAndSubmitPacketRangeInCompileOrder(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuNativePacketRecorder& recorder,
+        GpuRecordedGraph& recordedGraph,
+        const GpuSubmissionPacketRange& range,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuSubmissionPacketId* outFailedPacket = nullptr
+    )const;
     // Records and submits one semantic late-recovery/finalization task whose compiled packet joins the accepted
     // physical-queue frontier. The transaction supplies the exact current queue waits during submission; callers
     // never assemble a renderer-local frontier token list or compiler packet range. Record or submit failure

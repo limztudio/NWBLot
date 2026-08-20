@@ -40010,6 +40010,180 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
 }
 
 
+// Normal packet-range execution owns only the ordinary graph prefix. A caller must retain its late recovery tail,
+// including the choice to recover after one normal packet rejects and the final transactional cleanup.
+TEST_F(DescriptorBufferRoundTripTest, NativePacketRangeHelperPreservesRecoveryOwnership){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint normalScheduling;
+    normalScheduling.forceSubmissionBoundary = true;
+    normalScheduling.allowPacketMerge = false;
+
+    bool prefixShouldRecord = true;
+    bool prefixRecorded = false;
+    const GpuTaskId prefixTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/range_helper_prefix"))
+            .setMarkerLabel("Range Helper Prefix")
+            .setQueue(graphicsQueue)
+            .setScheduling(normalScheduling),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &prefixShouldRecord,
+            .attempted = &prefixRecorded,
+        }
+    );
+    ASSERT_TRUE(prefixTask.valid());
+
+    bool rejectedShouldRecord = true;
+    bool rejectedRecorded = false;
+    const GpuTaskId rejectedDependencies[] = { prefixTask };
+    const GpuTaskId rejectedTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/range_helper_rejected"))
+            .setMarkerLabel("Range Helper Rejected")
+            .setQueue(graphicsQueue)
+            .setScheduling(normalScheduling)
+            .setDependencies(rejectedDependencies, LengthOf(rejectedDependencies)),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &rejectedShouldRecord,
+            .attempted = &rejectedRecorded,
+        }
+    );
+    ASSERT_TRUE(rejectedTask.valid());
+
+    bool recoveryShouldRecord = true;
+    bool recoveryRecorded = false;
+    GpuTaskSchedulingHint recoveryScheduling = normalScheduling;
+    recoveryScheduling.joinsAcceptedQueueFrontier = true;
+    const GpuTaskId recoveryTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/range_helper_recovery"))
+            .setMarkerLabel("Range Helper Recovery")
+            .setQueue(graphicsQueue)
+            .setScheduling(recoveryScheduling),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &recoveryShouldRecord,
+            .attempted = &recoveryRecorded,
+        }
+    );
+    ASSERT_TRUE(recoveryTask.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/range_helper_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+
+    const GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefixTask);
+    const GpuSubmissionPacketId rejectedPacket = compiledGraph.packetForTask(rejectedTask);
+    const GpuSubmissionPacketId recoveryPacket = compiledGraph.packetForTask(recoveryTask);
+    ASSERT_TRUE(prefixPacket.valid());
+    ASSERT_TRUE(rejectedPacket.valid());
+    ASSERT_TRUE(recoveryPacket.valid());
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    EXPECT_EQ(compiledGraph.packetIdAt(0u), prefixPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(1u), rejectedPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(2u), recoveryPacket);
+    EXPECT_TRUE(compiledGraph.packet(recoveryPacket).joinsAcceptedQueueFrontier);
+    const GpuSubmissionPacketRange normalRange = compiledGraph.packetRange(prefixPacket, rejectedPacket);
+    ASSERT_TRUE(compiledGraph.validPacketRange(normalRange));
+    EXPECT_EQ(normalRange.packetCount, 2u);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    const GpuTaskGraphSubmitter submitter(device);
+    GpuSubmissionPacketId failedPacket;
+
+    // The helper fails before beginning a recording attempt when a range contains the caller-owned recovery packet.
+    EXPECT_FALSE(submitter.recordAndSubmitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        transaction,
+        scratchArena,
+        &failedPacket
+    ));
+    EXPECT_EQ(failedPacket, recoveryPacket);
+    EXPECT_EQ(recordedGraph.recordingAttemptGeneration(), 0u);
+    EXPECT_FALSE(prefixRecorded);
+    EXPECT_FALSE(rejectedRecorded);
+    EXPECT_FALSE(recoveryRecorded);
+    EXPECT_FALSE(transaction.hasAcceptedPackets());
+
+    // A normal prefix succeeds through the combined serial recorder/submitter path.
+    ASSERT_TRUE(submitter.recordAndSubmitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        compiledGraph.packetRange(prefixPacket, prefixPacket),
+        transaction,
+        scratchArena,
+        &failedPacket
+    ));
+    EXPECT_FALSE(failedPacket.valid());
+    EXPECT_TRUE(prefixRecorded);
+    const QueueSubmissionToken prefixToken = transaction.packetToken(prefixPacket);
+    ASSERT_TRUE(prefixToken.valid());
+
+    // Submission failure remains visible to the caller. The helper neither discards the rejected normal packet nor
+    // records the recovery tail, which leaves the accepted frontier available to the explicit recovery helper.
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    EXPECT_FALSE(submitter.recordAndSubmitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        compiledGraph.packetRange(rejectedPacket, rejectedPacket),
+        transaction,
+        scratchArena,
+        &failedPacket
+    ));
+    EXPECT_EQ(failedPacket, rejectedPacket);
+    EXPECT_TRUE(rejectedRecorded);
+    EXPECT_FALSE(recoveryRecorded);
+    ASSERT_NE(transaction.packetRuntime(prefixPacket), nullptr);
+    ASSERT_NE(transaction.packetRuntime(rejectedPacket), nullptr);
+    ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(prefixPacket)->state, GpuPacketRuntimeState::Accepted);
+    EXPECT_EQ(transaction.packetRuntime(rejectedPacket)->state, GpuPacketRuntimeState::Rejected);
+    EXPECT_EQ(transaction.packetRuntime(recoveryPacket)->state, GpuPacketRuntimeState::Declared);
+
+    ASSERT_TRUE(submitter.recordAndSubmitAcceptedFrontierTask(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        recoveryTask,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(recoveryRecorded);
+    ASSERT_TRUE(transaction.packetToken(recoveryPacket).valid());
+    EXPECT_TRUE(transaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        recordedGraph.recordingAttemptGeneration()
+    ));
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Timing ownership follows semantic task anchors instead of packet IDs.  The two graph tasks deliberately force
 // separate Graphics packets, but this caller never asks the compiler which packet owns either timing scope.
 // A valid collected frame sample proves the submitter resolved both task bindings to the correct native submits.

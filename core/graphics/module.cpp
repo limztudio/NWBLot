@@ -405,33 +405,13 @@ template<typename DeclareTask>
 
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    if(!recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        normalPacketRange,
-        nullptr,
-        0u,
-        recordedGraph
-    )){
-        if(!transaction.discardUnaccepted(
-            graph,
-            compiledGraph,
-            recordedGraph.recordingAttemptGeneration()
-        ))
-            graphics.requestDeviceRecreation();
-        return false;
-    }
-
     const GpuTaskGraphSubmitter submitter(device);
-    if(!submitter.submitPacketRangeInCompileOrder(
+    if(!submitter.recordAndSubmitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
+        recorder,
         recordedGraph,
         normalPacketRange,
-        nullptr,
-        0u,
-        nullptr,
-        0u,
         transaction,
         scratchArena
     )){

@@ -950,7 +950,7 @@ GpuTaskGraph::~GpuTaskGraph(){
 
 
 GpuTaskId GpuTaskGraph::addTask(const GpuTaskDesc& desc){
-    return appendTask(desc, nullptr, nullptr, nullptr, nullptr, nullptr);
+    return appendTask(desc, nullptr, nullptr, nullptr, nullptr, nullptr, 0u);
 }
 
 GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopyBufferTaskDesc& copyDesc){
@@ -1062,7 +1062,8 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
         &RecordPayload<CopyTask>,
         &AcceptPayload<CopyTask>,
         &DiscardPayload<CopyTask>,
-        &DestroyPayload<CopyTask::Payload>
+        &DestroyPayload<CopyTask::Payload>,
+        sizeof(CopyTask::Payload)
     );
     if(!task.valid())
         discardAndDestroyUnappendedPayload(
@@ -1198,7 +1199,8 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
         &RecordPayload<CopyTask>,
         &AcceptPayload<CopyTask>,
         &DiscardPayload<CopyTask>,
-        &DestroyPayload<CopyTask::Payload>
+        &DestroyPayload<CopyTask::Payload>,
+        sizeof(CopyTask::Payload)
     );
     if(!task.valid())
         discardAndDestroyUnappendedPayload(
@@ -1336,7 +1338,8 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
         &RecordPayload<ResolveTask>,
         &AcceptPayload<ResolveTask>,
         &DiscardPayload<ResolveTask>,
-        &DestroyPayload<ResolveTask::Payload>
+        &DestroyPayload<ResolveTask::Payload>,
+        sizeof(ResolveTask::Payload)
     );
     if(!task.valid()){
         discardAndDestroyUnappendedPayload(
@@ -1445,7 +1448,8 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
         &RecordPayload<UploadTask>,
         &AcceptPayload<UploadTask>,
         &DiscardPayload<UploadTask>,
-        &DestroyPayload<UploadTask::Payload>
+        &DestroyPayload<UploadTask::Payload>,
+        sizeof(UploadTask::Payload)
     );
     if(!task.valid())
         discardAndDestroyUnappendedPayload(
@@ -1536,7 +1540,8 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
         &RecordPayload<UploadTask>,
         &AcceptPayload<UploadTask>,
         &DiscardPayload<UploadTask>,
-        &DestroyPayload<UploadTask::Payload>
+        &DestroyPayload<UploadTask::Payload>,
+        sizeof(UploadTask::Payload)
     );
     if(!task.valid())
         discardAndDestroyUnappendedPayload(
@@ -1598,7 +1603,8 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
         &RecordPayload<ClearTask>,
         &AcceptPayload<ClearTask>,
         &DiscardPayload<ClearTask>,
-        &DestroyPayload<ClearTask::Payload>
+        &DestroyPayload<ClearTask::Payload>,
+        sizeof(ClearTask::Payload)
     );
     if(!task.valid())
         discardAndDestroyUnappendedPayload(
@@ -1692,7 +1698,8 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         &RecordPayload<ClearTask>,
         &AcceptPayload<ClearTask>,
         &DiscardPayload<ClearTask>,
-        &DestroyPayload<ClearTask::Payload>
+        &DestroyPayload<ClearTask::Payload>,
+        sizeof(ClearTask::Payload)
     );
     if(!task.valid())
         discardAndDestroyUnappendedPayload(
@@ -1784,7 +1791,8 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
         &RecordPayload<ClearTask>,
         &AcceptPayload<ClearTask>,
         &DiscardPayload<ClearTask>,
-        &DestroyPayload<ClearTask::Payload>
+        &DestroyPayload<ClearTask::Payload>,
+        sizeof(ClearTask::Payload)
     );
     if(!task.valid())
         discardAndDestroyUnappendedPayload(
@@ -3567,7 +3575,8 @@ GpuTaskId GpuTaskGraph::appendTask(
     const GpuTaskRecordThunk recordPayload,
     const GpuTaskAcceptedThunk acceptPayload,
     const GpuTaskDiscardedThunk discardPayload,
-    const GpuTaskPayloadDestroyThunk destroyPayload
+    const GpuTaskPayloadDestroyThunk destroyPayload,
+    const usize payloadObjectSize
 ){
     if(
         !desc.identity
@@ -3583,6 +3592,7 @@ GpuTaskId GpuTaskGraph::appendTask(
         || (desc.externalStateSourceCount > 0u && !desc.externalStateSources)
         || (desc.resourceUseCount > 0u && !desc.resourceUses)
         || (desc.resourceSetUseCount > 0u && !desc.resourceSetUses)
+        || ((payload == nullptr) != (payloadObjectSize == 0u))
     )
         return {};
 
@@ -3654,7 +3664,11 @@ GpuTaskId GpuTaskGraph::appendTask(
     task.externalStateSourceCount = static_cast<u32>(desc.externalStateSourceCount);
     task.resourceUseOffset = static_cast<u32>(m_resourceUses.size());
     task.resourceUseCount = static_cast<u32>(expandedResourceUseCount);
+    task.directResourceUseCount = static_cast<u32>(desc.resourceUseCount);
+    task.declaredResourceSetUseCount = static_cast<u32>(desc.resourceSetUseCount);
+    task.expandedResourceSetMemberUseCount = static_cast<u32>(expandedResourceUseCount - desc.resourceUseCount);
     task.payload = payload;
+    task.payloadObjectSize = payloadObjectSize;
     task.recordPayload = recordPayload;
     task.acceptPayload = acceptPayload;
     task.discardPayload = discardPayload;

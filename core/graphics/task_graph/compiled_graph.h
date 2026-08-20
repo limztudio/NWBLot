@@ -164,6 +164,19 @@ struct GpuTaskGraphCompileStatistics{
     f64 queueAssignmentSeconds = 0.0;
     f64 planningSeconds = 0.0;
     f64 totalSeconds = 0.0;
+    // Declaration structure is retained separately from resourceUseCount above, which remains the final
+    // materialized resource-use total after immutable resource-set expansion.
+    usize resourceSetCount = 0u;
+    usize resourceSetMemberCount = 0u;
+    usize directResourceUseCount = 0u;
+    usize declaredResourceSetUseCount = 0u;
+    usize expandedResourceSetMemberUseCount = 0u;
+    // Payload bytes count only the graph-owned payload objects themselves; dynamic payload allocations remain
+    // owned by their individual payload types and are deliberately excluded.
+    usize payloadObjectCount = 0u;
+    usize payloadObjectBytes = 0u;
+    usize uploadBlobCount = 0u;
+    usize uploadBlobBytes = 0u;
 
     [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
 };

@@ -8433,6 +8433,139 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
 }
 
 
+TEST(GpuTaskGraph, PublishesDeclarationStructureStatisticsOnlyForAcceptedPlans){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId directResource = AddHazardDomain(
+        graph,
+        Name("tests/task_graph/declaration_direct_resource"),
+        "Declaration Direct Resource"
+    );
+    const Graphics::GpuGraphResourceId setFirstResource = AddHazardDomain(
+        graph,
+        Name("tests/task_graph/declaration_set_first_resource"),
+        "Declaration Set First Resource"
+    );
+    const Graphics::GpuGraphResourceId setSecondResource = AddHazardDomain(
+        graph,
+        Name("tests/task_graph/declaration_set_second_resource"),
+        "Declaration Set Second Resource"
+    );
+    ASSERT_TRUE(directResource.valid());
+    ASSERT_TRUE(setFirstResource.valid());
+    ASSERT_TRUE(setSecondResource.valid());
+
+    const Graphics::GpuGraphResourceId resourceSetMembers[] = { setFirstResource, setSecondResource };
+    const Graphics::GpuGraphResourceSetId resourceSet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/declaration_resource_set"))
+            .setMarkerLabel("Declaration Resource Set")
+            .setMembers(resourceSetMembers, LengthOf(resourceSetMembers))
+    );
+    ASSERT_TRUE(resourceSet.valid());
+
+    const Graphics::GpuTaskResourceUse directUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = directResource,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuTaskResourceSetUse resourceSetUses[] = {
+        Graphics::GpuTaskResourceSetUse{
+            .resourceSet = resourceSet,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc typedTaskDesc;
+    typedTaskDesc
+        .setIdentity(Name("tests/task_graph/declaration_typed_task"))
+        .setMarkerLabel("Declaration Typed Task")
+        .setResourceUses(directUses, LengthOf(directUses))
+        .setResourceSetUses(resourceSetUses, LengthOf(resourceSetUses))
+    ;
+    ASSERT_TRUE(graph.addTask<PacketLifecycleTask>(typedTaskDesc, PacketLifecycleTask::Payload{}).valid());
+
+    Graphics::GpuTaskDesc recordTaskDesc;
+    recordTaskDesc
+        .setIdentity(Name("tests/task_graph/declaration_record_task"))
+        .setMarkerLabel("Declaration Record Task")
+    ;
+    ASSERT_TRUE(graph.addTask<NativeRecordProbeTask>(recordTaskDesc, NativeRecordProbeTask::Payload{}).valid());
+
+    ASSERT_TRUE(AddTask(
+        graph,
+        Name("tests/task_graph/declaration_metadata_task"),
+        "Declaration Metadata Task"
+    ).valid());
+
+    const u8 firstUploadBytes[] = { 0x17u, 0x3au, 0x5cu };
+    const u8 secondUploadBytes[] = { 0x8eu, 0xb1u, 0xc4u, 0xd9u, 0xefu };
+    ASSERT_TRUE(graph.copyUploadData(firstUploadBytes, sizeof(firstUploadBytes), alignof(u8)).valid());
+    ASSERT_TRUE(graph.copyUploadData(secondUploadBytes, sizeof(secondUploadBytes), alignof(u8)).valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledGraph.compileStatistics();
+    ASSERT_TRUE(statistics.valid());
+    EXPECT_EQ(statistics.resourceSetCount, 1u);
+    EXPECT_EQ(statistics.resourceSetMemberCount, LengthOf(resourceSetMembers));
+    EXPECT_EQ(statistics.directResourceUseCount, LengthOf(directUses));
+    EXPECT_EQ(statistics.declaredResourceSetUseCount, LengthOf(resourceSetUses));
+    EXPECT_EQ(statistics.expandedResourceSetMemberUseCount, LengthOf(resourceSetMembers));
+    EXPECT_EQ(statistics.resourceUseCount, LengthOf(directUses) + LengthOf(resourceSetMembers));
+    EXPECT_EQ(statistics.payloadObjectCount, 2u);
+    EXPECT_EQ(
+        statistics.payloadObjectBytes,
+        sizeof(PacketLifecycleTask::Payload) + sizeof(NativeRecordProbeTask::Payload)
+    );
+    EXPECT_EQ(statistics.uploadBlobCount, 2u);
+    EXPECT_EQ(statistics.uploadBlobBytes, sizeof(firstUploadBytes) + sizeof(secondUploadBytes));
+
+    compiledGraph.reset();
+    const Graphics::GpuTaskGraphCompileStatistics& resetStatistics = compiledGraph.compileStatistics();
+    EXPECT_FALSE(resetStatistics.valid());
+    EXPECT_EQ(resetStatistics.resourceSetCount, 0u);
+    EXPECT_EQ(resetStatistics.resourceSetMemberCount, 0u);
+    EXPECT_EQ(resetStatistics.directResourceUseCount, 0u);
+    EXPECT_EQ(resetStatistics.declaredResourceSetUseCount, 0u);
+    EXPECT_EQ(resetStatistics.expandedResourceSetMemberUseCount, 0u);
+    EXPECT_EQ(resetStatistics.resourceUseCount, 0u);
+    EXPECT_EQ(resetStatistics.payloadObjectCount, 0u);
+    EXPECT_EQ(resetStatistics.payloadObjectBytes, 0u);
+    EXPECT_EQ(resetStatistics.uploadBlobCount, 0u);
+    EXPECT_EQ(resetStatistics.uploadBlobBytes, 0u);
+
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuTaskGraphQueueTopology invalidTopology{};
+    EXPECT_FALSE(Compile(graph, analysis, invalidTopology, assignments, compiledGraph));
+    EXPECT_FALSE(compiledGraph.valid());
+    const Graphics::GpuTaskGraphCompileStatistics& failedStatistics = compiledGraph.compileStatistics();
+    EXPECT_FALSE(failedStatistics.valid());
+    EXPECT_EQ(failedStatistics.resourceSetCount, 0u);
+    EXPECT_EQ(failedStatistics.resourceSetMemberCount, 0u);
+    EXPECT_EQ(failedStatistics.directResourceUseCount, 0u);
+    EXPECT_EQ(failedStatistics.declaredResourceSetUseCount, 0u);
+    EXPECT_EQ(failedStatistics.expandedResourceSetMemberUseCount, 0u);
+    EXPECT_EQ(failedStatistics.resourceUseCount, 0u);
+    EXPECT_EQ(failedStatistics.payloadObjectCount, 0u);
+    EXPECT_EQ(failedStatistics.payloadObjectBytes, 0u);
+    EXPECT_EQ(failedStatistics.uploadBlobCount, 0u);
+    EXPECT_EQ(failedStatistics.uploadBlobBytes, 0u);
+}
+
+
 TEST(GpuTaskGraph, DiscardsUnacceptedPayloadsAfterPacketRecordFailureCleanup){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

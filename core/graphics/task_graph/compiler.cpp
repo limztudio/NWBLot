@@ -3262,6 +3262,11 @@ bool GpuTaskGraphCompiler::compile(
     statistics.deviceGeneration = outCompiledGraph.m_deviceGeneration;
     statistics.taskCount = graph.taskCount();
     statistics.resourceCount = graph.resourceCount();
+    statistics.resourceSetCount = graph.m_resourceSets.size();
+    statistics.resourceSetMemberCount = graph.m_resourceSetMembers.size();
+    statistics.uploadBlobCount = graph.m_uploadBlobs.size();
+    for(const auto& blob : graph.m_uploadBlobs)
+        statistics.uploadBlobBytes += blob.bytes.size();
     statistics.explicitDependencyCount = outAnalysis.explicitEdgeCount();
     statistics.inferredDependencyCount = outAnalysis.inferredEdgeCount();
     statistics.declaredExternalDependencyCount = outAnalysis.externalDependencies().size();
@@ -3275,7 +3280,15 @@ bool GpuTaskGraphCompiler::compile(
     statistics.epilogueBarrierCount = outCompiledGraph.m_epilogueBarriers.size();
     for(const GpuCompiledTask& compiledTask : outCompiledGraph.m_tasks){
         const GpuTaskGraphTaskView task = graph.taskAt(compiledTask.task.index);
+        const auto& declaredTask = graph.m_tasks[compiledTask.task.index];
         statistics.resourceUseCount += task.resourceUseCount;
+        statistics.directResourceUseCount += declaredTask.directResourceUseCount;
+        statistics.declaredResourceSetUseCount += declaredTask.declaredResourceSetUseCount;
+        statistics.expandedResourceSetMemberUseCount += declaredTask.expandedResourceSetMemberUseCount;
+        if(declaredTask.payload){
+            ++statistics.payloadObjectCount;
+            statistics.payloadObjectBytes += declaredTask.payloadObjectSize;
+        }
         if(compiledTask.packetizationDecision < GpuTaskPacketizationDecision::kCount)
             ++statistics.packetizationDecisionCounts[compiledTask.packetizationDecision];
 

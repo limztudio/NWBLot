@@ -233,7 +233,12 @@ private:
         u32 externalStateSourceCount = 0u;
         u32 resourceUseOffset = 0u;
         u32 resourceUseCount = 0u;
+        // Preserve declaration structure after resource-set uses expand into the materialized range above.
+        u32 directResourceUseCount = 0u;
+        u32 declaredResourceSetUseCount = 0u;
+        u32 expandedResourceSetMemberUseCount = 0u;
         void* payload = nullptr;
+        usize payloadObjectSize = 0u;
         GpuTaskRecordThunk recordPayload = nullptr;
         GpuTaskAcceptedThunk acceptPayload = nullptr;
         GpuTaskDiscardedThunk discardPayload = nullptr;
@@ -396,7 +401,8 @@ public:
             recordPayload,
             acceptPayload,
             discardPayload,
-            &DestroyPayload<Payload>
+            &DestroyPayload<Payload>,
+            sizeof(Payload)
         );
         if(!task.valid())
             discardAndDestroyUnappendedPayload(storedPayload, discardPayload, &DestroyPayload<Payload>);
@@ -642,7 +648,8 @@ private:
         GpuTaskRecordThunk recordPayload,
         GpuTaskAcceptedThunk acceptPayload,
         GpuTaskDiscardedThunk discardPayload,
-        GpuTaskPayloadDestroyThunk destroyPayload
+        GpuTaskPayloadDestroyThunk destroyPayload,
+        usize payloadObjectSize
     );
     void discardAndDestroyUnappendedPayload(
         void* payload,

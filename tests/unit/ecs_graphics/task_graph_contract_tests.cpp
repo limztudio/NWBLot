@@ -1056,6 +1056,64 @@ TEST(EcsGraphics, HardwareCausticsPermitsOptInCrossFamilyGraphicsRouting){
 }
 
 
+// FrontierSafe normally closes a packet at a cross-queue consumer. These direct serial effect chains instead own
+// one timing/acceptance packet, so every accumulator alternative and semantic tail must opt in explicitly.
+TEST(EcsGraphics, FrontierSafeEffectChainsRetainTheirSemanticPackets){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    const usize softwareCausticsOffset = taskGraph.find("bool RendererSystem::declareDeferredSoftwareCausticsTask");
+    const usize surfelGiOffset = taskGraph.find("bool RendererSystem::declareDeferredSurfelGiTask", softwareCausticsOffset);
+    const usize surfelReadbackOffset = taskGraph.find("void RendererSystem::declareDeferredSurfelCountReadbackTask", surfelGiOffset);
+    const usize deferredLightingOffset = taskGraph.find("void RendererSystem::buildDeferredLightingTaskGraph", surfelReadbackOffset);
+    const usize hardwareCausticsOffset = taskGraph.find("if(declaresHardwareCaustics){", deferredLightingOffset);
+    const usize avboitOffset = taskGraph.find("AvboitPreGraphTask::Payload", hardwareCausticsOffset);
+    ASSERT_NE(softwareCausticsOffset, AStringView::npos);
+    ASSERT_NE(surfelGiOffset, AStringView::npos);
+    ASSERT_NE(surfelReadbackOffset, AStringView::npos);
+    ASSERT_NE(deferredLightingOffset, AStringView::npos);
+    ASSERT_NE(hardwareCausticsOffset, AStringView::npos);
+    ASSERT_NE(avboitOffset, AStringView::npos);
+    ASSERT_LT(softwareCausticsOffset, surfelGiOffset);
+    ASSERT_LT(surfelGiOffset, surfelReadbackOffset);
+    ASSERT_LT(surfelReadbackOffset, deferredLightingOffset);
+    ASSERT_LT(deferredLightingOffset, hardwareCausticsOffset);
+    ASSERT_LT(hardwareCausticsOffset, avboitOffset);
+    const AStringView softwareCaustics = taskGraph.substr(softwareCausticsOffset, surfelGiOffset - softwareCausticsOffset);
+    const AStringView surfelGi = taskGraph.substr(surfelGiOffset, surfelReadbackOffset - surfelGiOffset);
+    const AStringView hardwareCaustics = taskGraph.substr(hardwareCausticsOffset, avboitOffset - hardwareCausticsOffset);
+    const AStringView avboit = taskGraph.substr(avboitOffset);
+
+    EXPECT_TRUE(ContainsText(softwareCaustics, "accumulatorNonTemporalClearScheduling.allowMergeAcrossConsumerFrontier = true;"));
+    EXPECT_TRUE(ContainsText(softwareCaustics, "accumulatorBootstrapClearScheduling.allowMergeAcrossConsumerFrontier = true;"));
+    EXPECT_TRUE(ContainsText(softwareCaustics, "accumulatorDecayScheduling.allowMergeAcrossConsumerFrontier = true;"));
+    EXPECT_TRUE(ContainsText(softwareCaustics, "causticsScheduling.allowMergeAcrossConsumerFrontier = true;"));
+    EXPECT_TRUE(ContainsText(softwareCaustics, ".setDependencies(&causticsDependency, 1u)"));
+    EXPECT_TRUE(ContainsText(softwareCaustics, "render.software_caustics.resolve_timing_close"));
+
+    EXPECT_TRUE(ContainsText(surfelGi, "surfelGiScheduling.allowMergeAcrossConsumerFrontier = true;"));
+    EXPECT_TRUE(ContainsText(surfelGi, ".setDependencies(&surfelGiDependency, 1u)"));
+    EXPECT_TRUE(ContainsText(surfelGi, "render.surfel_gi"));
+
+    EXPECT_TRUE(ContainsText(hardwareCaustics, "accumulatorNonTemporalClearScheduling.allowMergeAcrossConsumerFrontier = true;"));
+    EXPECT_TRUE(ContainsText(hardwareCaustics, "accumulatorBootstrapClearScheduling.allowMergeAcrossConsumerFrontier = true;"));
+    EXPECT_TRUE(ContainsText(hardwareCaustics, "accumulatorDecayScheduling.allowMergeAcrossConsumerFrontier = true;"));
+    EXPECT_TRUE(ContainsText(hardwareCaustics, "hardwareCausticsScheduling.allowMergeAcrossConsumerFrontier = true;"));
+    EXPECT_TRUE(ContainsText(hardwareCaustics, ".setDependencies(&causticsDependency, 1u)"));
+    EXPECT_TRUE(ContainsText(hardwareCaustics, "render.hardware_caustics.resolve_timing_close"));
+
+    EXPECT_TRUE(ContainsText(avboit, "avboitClearScheduling.allowMergeAcrossConsumerFrontier = true;"));
+    EXPECT_TRUE(ContainsText(avboit, "avboitOccupancyScheduling.allowMergeAcrossConsumerFrontier = true;"));
+    EXPECT_TRUE(ContainsText(avboit, "accumulationFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;"));
+    EXPECT_TRUE(ContainsText(avboit, ".setDependencies(&occupancyDependency, 1u)"));
+    EXPECT_TRUE(ContainsText(avboit, ".setDependencies(&m_deferredAvboitAccumulationTask, 1u)"));
+}
+
+
 // Shadow Visibility has both a fully split soft-transparent route and a retained monolithic compatibility route.
 // Each graph-owned chain may choose an alternate Compute family, while its direct successors retain that physical
 // queue and the explicit primary-Graphics presentation guard remains outside this effect.

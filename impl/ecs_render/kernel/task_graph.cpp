@@ -9536,6 +9536,8 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     if(graphOwnsNonTemporalAccumulatorClear){
         Core::GpuTaskSchedulingHint accumulatorNonTemporalClearScheduling = irradianceClearScheduling;
         accumulatorNonTemporalClearScheduling.mergeWithPrevious = true;
+        // The direct accumulator clear must remain in the accepted Software Caustics producer/timing packet.
+        accumulatorNonTemporalClearScheduling.allowMergeAcrossConsumerFrontier = true;
         EnableSameFamilyComputeEffectRouting(accumulatorNonTemporalClearScheduling);
         Core::GpuTaskDesc accumulatorNonTemporalClearDesc;
         accumulatorNonTemporalClearDesc
@@ -9570,6 +9572,8 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         accumulatorBootstrapClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
         accumulatorBootstrapClearScheduling.allowPacketMerge = true;
         accumulatorBootstrapClearScheduling.mergeWithPrevious = true;
+        // The direct accumulator clear must remain in the accepted Software Caustics producer/timing packet.
+        accumulatorBootstrapClearScheduling.allowMergeAcrossConsumerFrontier = true;
         EnableSameFamilyComputeEffectRouting(accumulatorBootstrapClearScheduling);
         EnableCrossFamilyComputeEffectRouting(accumulatorBootstrapClearScheduling);
         Core::GpuTaskDesc accumulatorBootstrapClearDesc;
@@ -9606,6 +9610,8 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         accumulatorDecayScheduling.cost = Core::GpuTaskCostHint::Tiny;
         accumulatorDecayScheduling.allowPacketMerge = true;
         accumulatorDecayScheduling.mergeWithPrevious = true;
+        // The direct accumulator decay must remain in the accepted Software Caustics producer/timing packet.
+        accumulatorDecayScheduling.allowMergeAcrossConsumerFrontier = true;
         EnableSameFamilyComputeEffectRouting(accumulatorDecayScheduling);
         EnableCrossFamilyComputeEffectRouting(accumulatorDecayScheduling);
         const Core::GpuTaskResourceUse accumulatorDecayUses[] = {
@@ -9647,6 +9653,8 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     causticsScheduling.forceSubmissionBoundary = false;
     causticsScheduling.allowPacketMerge = true;
     causticsScheduling.mergeWithPrevious = true;
+    // Photon, geometry, and resolve stages are direct serial successors in one Software Caustics timing packet.
+    causticsScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc photonDesc;
     photonDesc
         .setIdentity(Name("render.software_caustics.photons"))
@@ -10449,6 +10457,9 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     surfelGiScheduling.forceSubmissionBoundary = false;
     surfelGiScheduling.allowPacketMerge = true;
     surfelGiScheduling.mergeWithPrevious = true;
+    // Every GI preparation stage directly succeeds the output clear or its predecessor and shares one accepted
+    // Compute timing packet; later cross-queue consumers wait for the completed packet.
+    surfelGiScheduling.allowMergeAcrossConsumerFrontier = true;
     EnableSameFamilyComputeEffectRouting(surfelGiScheduling);
     EnableCrossFamilyComputeEffectRouting(surfelGiScheduling);
     if(graphOwnsSurfelGiResolve){
@@ -12192,6 +12203,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         if(graphOwnsNonTemporalAccumulatorClear){
             Core::GpuTaskSchedulingHint accumulatorNonTemporalClearScheduling = irradianceClearScheduling;
             accumulatorNonTemporalClearScheduling.mergeWithPrevious = true;
+            // The direct accumulator clear must remain in the accepted Hardware Caustics producer/timing packet.
+            accumulatorNonTemporalClearScheduling.allowMergeAcrossConsumerFrontier = true;
             EnableSameFamilyComputeEffectRouting(accumulatorNonTemporalClearScheduling);
             Core::GpuTaskDesc accumulatorNonTemporalClearDesc;
             accumulatorNonTemporalClearDesc
@@ -12226,6 +12239,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             accumulatorBootstrapClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
             accumulatorBootstrapClearScheduling.allowPacketMerge = true;
             accumulatorBootstrapClearScheduling.mergeWithPrevious = true;
+            // The bootstrap clear directly follows irradiance clear and must remain in the accepted producer packet.
+            accumulatorBootstrapClearScheduling.allowMergeAcrossConsumerFrontier = true;
             EnableSameFamilyComputeEffectRouting(accumulatorBootstrapClearScheduling);
             EnableCrossFamilyComputeEffectRouting(accumulatorBootstrapClearScheduling);
             Core::GpuTaskDesc accumulatorBootstrapClearDesc;
@@ -12262,6 +12277,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             accumulatorDecayScheduling.cost = Core::GpuTaskCostHint::Tiny;
             accumulatorDecayScheduling.allowPacketMerge = true;
             accumulatorDecayScheduling.mergeWithPrevious = true;
+            // The direct accumulator decay must remain in the accepted Hardware Caustics producer/timing packet.
+            accumulatorDecayScheduling.allowMergeAcrossConsumerFrontier = true;
             EnableSameFamilyComputeEffectRouting(accumulatorDecayScheduling);
             EnableCrossFamilyComputeEffectRouting(accumulatorDecayScheduling);
             const Core::GpuTaskResourceUse accumulatorDecayUses[] = {
@@ -12303,6 +12320,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwareCausticsScheduling.forceSubmissionBoundary = false;
         hardwareCausticsScheduling.allowPacketMerge = true;
         hardwareCausticsScheduling.mergeWithPrevious = true;
+        // Photon, geometry, and resolve stages are explicit immediate successors in one Hardware Caustics timing chain.
+        hardwareCausticsScheduling.allowMergeAcrossConsumerFrontier = true;
         Core::GpuTaskDesc hardwarePhotonDesc;
         hardwarePhotonDesc
             .setIdentity(Name("render.hardware_caustics.photons"))
@@ -13646,6 +13665,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         avboitClearScheduling.forceSubmissionBoundary = false;
         avboitClearScheduling.allowPacketMerge = true;
         avboitClearScheduling.mergeWithPrevious = true;
+        // The direct serial target-clear chain and its Occupancy successor own one AVBOIT Pre timing packet even
+        // when split Depth Warp consumes it from another queue.
+        avboitClearScheduling.allowMergeAcrossConsumerFrontier = true;
         const auto makeAvboitClearTaskDesc = [&avboitClearScheduling](
             const Name identity,
             const AStringView markerLabel,
@@ -13988,6 +14010,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitOccupancyScheduling.forceSubmissionBoundary = false;
     avboitOccupancyScheduling.allowPacketMerge = true;
     avboitOccupancyScheduling.mergeWithPrevious = true;
+    // Occupancy directly closes the serial AVBOIT Pre packet after its uploads and clears; preserve that timing
+    // and acceptance contract when later split stages form a cross-queue consumer frontier.
+    avboitOccupancyScheduling.allowMergeAcrossConsumerFrontier = true;
     if(occupancyComputeEmulationOutputStatesGraphOwned){
         avboitOccupancyComputeEmulationPayload.renderer = this;
         avboitOccupancyComputeEmulationPayload.targets = &deferredTargets;
@@ -16238,6 +16263,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     accumulationFinalizeScheduling.forceSubmissionBoundary = false;
     accumulationFinalizeScheduling.allowPacketMerge = true;
     accumulationFinalizeScheduling.mergeWithPrevious = true;
+    // The finalizer is Accumulation's direct semantic tail and must retain its timing/acceptance packet before
+    // Lighting observes the restored shader-readable depth state from another queue.
+    accumulationFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc accumulationFinalizeDesc;
     accumulationFinalizeDesc
         .setIdentity(Name("render.avboit.accumulation_finalize"))

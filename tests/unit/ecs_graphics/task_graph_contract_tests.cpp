@@ -1034,6 +1034,58 @@ TEST(EcsGraphics, SurfelGiPermitsOptInCrossFamilyComputeRouting){
 }
 
 
+// The full irradiance clear is deliberately renderer-local: the generic helper conservatively declares Graphics
+// for render-pass lowering, while this native clear is constrained to the direct Compute GI packet and captures the
+// same typed command-IR record after the graph-owned CopyDest transition.
+TEST(EcsGraphics, SurfelIrradianceClearUsesComputeGraphCallback){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    const usize callbackOffset = taskGraph.find("struct SurfelIrradianceClearGraphTask");
+    const usize shadowPrepareOffset = taskGraph.find("struct ShadowPrepareGraphTask", callbackOffset);
+    const usize surfelGiOffset = taskGraph.find("bool RendererSystem::declareDeferredSurfelGiTask", shadowPrepareOffset);
+    const usize readbackOffset = taskGraph.find("void RendererSystem::declareDeferredSurfelCountReadbackTask", surfelGiOffset);
+    ASSERT_NE(callbackOffset, AStringView::npos);
+    ASSERT_NE(shadowPrepareOffset, AStringView::npos);
+    ASSERT_NE(surfelGiOffset, AStringView::npos);
+    ASSERT_NE(readbackOffset, AStringView::npos);
+    ASSERT_LT(callbackOffset, shadowPrepareOffset);
+    ASSERT_LT(shadowPrepareOffset, surfelGiOffset);
+    ASSERT_LT(surfelGiOffset, readbackOffset);
+    const AStringView callback = taskGraph.substr(callbackOffset, shadowPrepareOffset - callbackOffset);
+    const AStringView surfelGi = taskGraph.substr(surfelGiOffset, readbackOffset - surfelGiOffset);
+
+    EXPECT_TRUE(ContainsText(callback, "context.taskGraph.textureForResource(payload.destination)"));
+    EXPECT_TRUE(ContainsText(callback, "if(!destination || commandList.isRenderPassActive())"));
+    EXPECT_FALSE(ContainsText(callback, "endRenderPass()"));
+    EXPECT_TRUE(ContainsText(callback, "Core::GpuClearTextureTaskDesc clearDesc{"));
+    EXPECT_TRUE(ContainsText(callback, ".destination = payload.destination,"));
+    EXPECT_TRUE(ContainsText(callback, ".subresources = s_FramebufferSubresources,"));
+    EXPECT_TRUE(ContainsText(callback, ".valueType = Core::GpuClearTextureTaskValueType::Float,"));
+    EXPECT_TRUE(ContainsText(callback, ".floatValue = Core::Color(0.f, 0.f, 0.f, 0.f),"));
+    EXPECT_TRUE(ContainsText(callback, "context.commandIrCapture"));
+    EXPECT_TRUE(ContainsText(callback, "captureClearTexture("));
+    EXPECT_TRUE(ContainsText(callback, "commandList.clearTextureFloat(destination, clearDesc.subresources, clearDesc.floatValue);"));
+
+    const usize resourceUseOffset = surfelGi.find("const Core::GpuTaskResourceUse surfelIrradianceClearResourceUse");
+    const usize giSchedulingOffset = surfelGi.find("Core::GpuTaskSchedulingHint surfelGiScheduling", resourceUseOffset);
+    ASSERT_NE(resourceUseOffset, AStringView::npos);
+    ASSERT_NE(giSchedulingOffset, AStringView::npos);
+    ASSERT_LT(resourceUseOffset, giSchedulingOffset);
+    const AStringView irradianceClear = surfelGi.substr(resourceUseOffset, giSchedulingOffset - resourceUseOffset);
+
+    EXPECT_TRUE(ContainsText(irradianceClear, "WriteTextureUse(\n        surfelIrradiance,\n        ECSRenderDetail::s_FramebufferSubresources,\n        Core::ResourceStates::CopyDest\n    )"));
+    EXPECT_TRUE(ContainsText(irradianceClear, ".setQueue(ComputePacketQueueRequest())"));
+    EXPECT_TRUE(ContainsText(irradianceClear, ".setResourceUses(&surfelIrradianceClearResourceUse, 1u)"));
+    EXPECT_TRUE(ContainsText(irradianceClear, "addTask<ECSRenderDetail::SurfelIrradianceClearGraphTask>("));
+    EXPECT_FALSE(ContainsText(irradianceClear, "addClearTextureTask("));
+}
+
+
 // Hardware Caustics is a separate Graphics-capable effect chain. Its clear and every independently created
 // temporal-accumulator prefix must carry the explicit cross-family opt-in so copied photon/resolve schedules
 // retain one selected physical Graphics queue without making a windowed present eligible for that queue.

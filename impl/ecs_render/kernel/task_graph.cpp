@@ -10,6 +10,7 @@
 
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 
+#include <core/graphics/capture/command_ir.h>
 #include <core/graphics/gpu_timing.h>
 
 #include <global/timer.h>
@@ -79,6 +80,49 @@ struct FrameRecoveryGraphTask{
             *payload.armed = false;
         if(payload.retiresFrameTiming)
             *payload.retiresFrameTiming = false;
+    }
+};
+
+
+// Surfel GI starts its own Compute packet after the optional snapshot copy. Its irradiance clear must stay on that
+// selected transport with the following Compute stages, unlike the generic full-clear helper which also permits a
+// Graphics render-pass route. The graph owns the CopyDest transition; this callback only records the native clear.
+struct SurfelIrradianceClearGraphTask{
+    struct Payload{
+        Core::GpuGraphResourceId destination;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        Core::Texture* const destination = context.taskGraph.textureForResource(payload.destination);
+        // This Compute-only callback may not end a Graphics render pass. The packet must begin outside rendering,
+        // which also preserves the command-IR replay precondition for its captured native texture clear.
+        if(!destination || commandList.isRenderPassActive())
+            return false;
+
+        const Core::GpuClearTextureTaskDesc clearDesc{
+            .destination = payload.destination,
+            .subresources = s_FramebufferSubresources,
+            .valueType = Core::GpuClearTextureTaskValueType::Float,
+            .floatValue = Core::Color(0.f, 0.f, 0.f, 0.f),
+        };
+        if(
+            context.commandIrCapture
+            && !context.commandIrCapture->captureClearTexture(
+                context.task,
+                context.packet,
+                context.queue,
+                payload.destination,
+                clearDesc
+            )
+        )
+            return false;
+
+        commandList.clearTextureFloat(destination, clearDesc.subresources, clearDesc.floatValue);
+        return true;
     }
 };
 
@@ -10429,21 +10473,24 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     // dependencies.
     EnableSameFamilyComputeEffectRouting(surfelIrradianceClearScheduling, false);
     EnableCrossFamilyComputeEffectRouting(surfelIrradianceClearScheduling);
+    const Core::GpuTaskResourceUse surfelIrradianceClearResourceUse = WriteTextureUse(
+        surfelIrradiance,
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::CopyDest
+    );
     Core::GpuTaskDesc surfelIrradianceClearDesc;
     surfelIrradianceClearDesc
         .setIdentity(Name("render.surfel_gi.irradiance_clear"))
         .setMarkerLabel("Surfel Irradiance Clear")
-        .setQueue(ComputeTransferQueueRequest())
+        .setQueue(ComputePacketQueueRequest())
         .setScheduling(surfelIrradianceClearScheduling)
         .setDependencies(&surfelGiDependency, 1u)
+        .setResourceUses(&surfelIrradianceClearResourceUse, 1u)
     ;
-    const Core::GpuTaskId surfelIrradianceClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
+    const Core::GpuTaskId surfelIrradianceClearTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::SurfelIrradianceClearGraphTask>(
         surfelIrradianceClearDesc,
-        Core::GpuClearTextureTaskDesc{
+        ECSRenderDetail::SurfelIrradianceClearGraphTask::Payload{
             .destination = surfelIrradiance,
-            .subresources = ECSRenderDetail::s_FramebufferSubresources,
-            .valueType = Core::GpuClearTextureTaskValueType::Float,
-            .floatValue = Core::Color(0.f, 0.f, 0.f, 0.f),
         }
     );
     if(!surfelIrradianceClearTask.valid()){

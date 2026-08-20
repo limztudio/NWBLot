@@ -7530,6 +7530,8 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(firstTask);
     ASSERT_TRUE(firstPacket.valid());
+    const Graphics::GpuPhysicalQueueId firstQueue = compiledGraph.packet(firstPacket).queue;
+    ASSERT_TRUE(firstQueue.valid());
 
     Graphics::GpuRecordedGraph recordedGraph(testArena.arena);
     Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
@@ -7537,6 +7539,38 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     transaction.reset(compiledGraph);
     ASSERT_TRUE(recordedGraph.validFor(compiledGraph));
     ASSERT_TRUE(transaction.validFor(compiledGraph));
+    const Graphics::GpuTaskGraphPhysicalQueueRecordingStatistics firstQueueStatistics =
+        recordedGraph.physicalQueueRecordingStatistics(compiledGraph, firstQueue)
+    ;
+    ASSERT_TRUE(firstQueueStatistics.valid());
+    EXPECT_EQ(firstQueueStatistics.graphGeneration, compiledGraph.generation());
+    EXPECT_EQ(firstQueueStatistics.planGeneration, compiledGraph.planGeneration());
+    EXPECT_EQ(firstQueueStatistics.recordingAttemptGeneration, 0u);
+    EXPECT_EQ(firstQueueStatistics.deviceGeneration, compiledGraph.deviceGeneration());
+    EXPECT_EQ(firstQueueStatistics.queue, firstQueue);
+    EXPECT_EQ(firstQueueStatistics.queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(firstQueueStatistics.packetCount, 0u);
+    EXPECT_EQ(firstQueueStatistics.taskCount, 0u);
+    EXPECT_EQ(firstQueueStatistics.commandListCount, 0u);
+    EXPECT_EQ(firstQueueStatistics.barrierCount, 0u);
+    EXPECT_EQ(firstQueueStatistics.parallelPacketCount, 0u);
+    EXPECT_EQ(firstQueueStatistics.commandListAcquisitionSeconds, 0.0);
+    EXPECT_EQ(firstQueueStatistics.graphBarrierRecordingSeconds, 0.0);
+    EXPECT_EQ(firstQueueStatistics.taskRecordSeconds, 0.0);
+    EXPECT_EQ(firstQueueStatistics.recordingSeconds, 0.0);
+    const Graphics::GpuPhysicalQueueId staleFirstQueue{
+        firstQueue.index,
+        static_cast<u16>(
+            firstQueue.deviceGeneration == Limit<u16>::s_Max
+                ? 1u
+                : firstQueue.deviceGeneration + 1u
+        ),
+    };
+    EXPECT_FALSE(recordedGraph.physicalQueueRecordingStatistics(compiledGraph, staleFirstQueue).valid());
+    // A current-generation ID is still invalid when the compiled plan has no matching physical topology entry.
+    const Graphics::GpuPhysicalQueueId nonPlanQueue{ 3u, compiledGraph.deviceGeneration() };
+    EXPECT_TRUE(nonPlanQueue.valid());
+    EXPECT_FALSE(recordedGraph.physicalQueueRecordingStatistics(compiledGraph, nonPlanQueue).valid());
     const u64 firstCompiledGeneration = compiledGraph.generation();
 
     graph.reset();
@@ -7548,8 +7582,13 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     ASSERT_TRUE(secondTask.valid());
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
     ASSERT_NE(compiledGraph.generation(), firstCompiledGeneration);
+    const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(secondTask);
+    ASSERT_TRUE(secondPacket.valid());
+    const Graphics::GpuPhysicalQueueId secondQueue = compiledGraph.packet(secondPacket).queue;
+    ASSERT_TRUE(secondQueue.valid());
     EXPECT_FALSE(recordedGraph.validFor(compiledGraph));
     EXPECT_FALSE(transaction.validFor(compiledGraph));
+    EXPECT_FALSE(recordedGraph.physicalQueueRecordingStatistics(compiledGraph, secondQueue).valid());
 
     // reset() releases old packet-owned command-list handles and reconstructs the serial/per-packet recording
     // scratch for the new immutable graph generation before a future command arena can be leased again.
@@ -7557,8 +7596,27 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     transaction.reset(compiledGraph);
     EXPECT_TRUE(recordedGraph.validFor(compiledGraph));
     EXPECT_TRUE(transaction.validFor(compiledGraph));
+    const Graphics::GpuTaskGraphPhysicalQueueRecordingStatistics secondQueueStatistics =
+        recordedGraph.physicalQueueRecordingStatistics(compiledGraph, secondQueue)
+    ;
+    ASSERT_TRUE(secondQueueStatistics.valid());
+    EXPECT_EQ(secondQueueStatistics.graphGeneration, compiledGraph.generation());
+    EXPECT_EQ(secondQueueStatistics.planGeneration, compiledGraph.planGeneration());
+    EXPECT_EQ(secondQueueStatistics.recordingAttemptGeneration, 0u);
+    EXPECT_EQ(secondQueueStatistics.deviceGeneration, compiledGraph.deviceGeneration());
+    EXPECT_EQ(secondQueueStatistics.queue, secondQueue);
+    EXPECT_EQ(secondQueueStatistics.queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(secondQueueStatistics.packetCount, 0u);
+    EXPECT_EQ(secondQueueStatistics.taskCount, 0u);
+    EXPECT_EQ(secondQueueStatistics.commandListCount, 0u);
+    EXPECT_EQ(secondQueueStatistics.barrierCount, 0u);
+    EXPECT_EQ(secondQueueStatistics.parallelPacketCount, 0u);
+    EXPECT_EQ(secondQueueStatistics.commandListAcquisitionSeconds, 0.0);
+    EXPECT_EQ(secondQueueStatistics.graphBarrierRecordingSeconds, 0.0);
+    EXPECT_EQ(secondQueueStatistics.taskRecordSeconds, 0.0);
+    EXPECT_EQ(secondQueueStatistics.recordingSeconds, 0.0);
     EXPECT_EQ(transaction.packetRuntime(firstPacket), nullptr);
-    EXPECT_NE(transaction.packetRuntime(compiledGraph.packetForTask(secondTask)), nullptr);
+    EXPECT_NE(transaction.packetRuntime(secondPacket), nullptr);
 }
 
 TEST(GpuTaskGraph, InvalidatesPacketRuntimeAndCaptureForSameGraphRecompile){

@@ -1385,6 +1385,75 @@ TEST_F(DescriptorBufferRoundTripTest, SameClassGraphicsQueuesRouteGraphPacketsAn
     ASSERT_TRUE(recordingStatistics.valid());
     EXPECT_EQ(recordingStatistics.packetCount, 2u);
     EXPECT_EQ(recordingStatistics.commandListCount, 2u);
+    const GpuTaskGraphPhysicalQueueRecordingStatistics primaryQueueRecordingStatistics =
+        recordedGraph.physicalQueueRecordingStatistics(compiledGraph, primaryGraphicsQueue)
+    ;
+    const GpuTaskGraphPhysicalQueueRecordingStatistics secondaryQueueRecordingStatistics =
+        recordedGraph.physicalQueueRecordingStatistics(compiledGraph, secondaryGraphicsQueue->id)
+    ;
+    ASSERT_TRUE(primaryQueueRecordingStatistics.valid());
+    ASSERT_TRUE(secondaryQueueRecordingStatistics.valid());
+    EXPECT_EQ(primaryQueueRecordingStatistics.graphGeneration, compiledGraph.generation());
+    EXPECT_EQ(primaryQueueRecordingStatistics.planGeneration, compiledGraph.planGeneration());
+    EXPECT_EQ(primaryQueueRecordingStatistics.recordingAttemptGeneration, recordedGraph.recordingAttemptGeneration());
+    EXPECT_EQ(primaryQueueRecordingStatistics.deviceGeneration, compiledGraph.deviceGeneration());
+    EXPECT_EQ(primaryQueueRecordingStatistics.queue, primaryGraphicsQueue);
+    EXPECT_EQ(secondaryQueueRecordingStatistics.queue, secondaryGraphicsQueue->id);
+    EXPECT_NE(primaryQueueRecordingStatistics.queue, secondaryQueueRecordingStatistics.queue);
+    EXPECT_EQ(primaryQueueRecordingStatistics.queueClass, CommandQueue::Graphics);
+    EXPECT_EQ(secondaryQueueRecordingStatistics.queueClass, CommandQueue::Graphics);
+    EXPECT_EQ(primaryQueueRecordingStatistics.packetCount, 1u);
+    EXPECT_EQ(primaryQueueRecordingStatistics.taskCount, 1u);
+    EXPECT_EQ(primaryQueueRecordingStatistics.commandListCount, 1u);
+    EXPECT_EQ(primaryQueueRecordingStatistics.parallelPacketCount, 0u);
+    EXPECT_EQ(secondaryQueueRecordingStatistics.packetCount, 1u);
+    EXPECT_EQ(secondaryQueueRecordingStatistics.taskCount, 1u);
+    EXPECT_EQ(secondaryQueueRecordingStatistics.commandListCount, 1u);
+    EXPECT_EQ(secondaryQueueRecordingStatistics.parallelPacketCount, 0u);
+    // The recorder completed synchronously before these immutable snapshots, so the two exact physical queues sum
+    // to the aggregate without an in-flight ready-frontier worker or reset/recompile mutation window.
+    EXPECT_EQ(
+        primaryQueueRecordingStatistics.packetCount + secondaryQueueRecordingStatistics.packetCount,
+        recordingStatistics.packetCount
+    );
+    EXPECT_EQ(
+        primaryQueueRecordingStatistics.taskCount + secondaryQueueRecordingStatistics.taskCount,
+        recordingStatistics.taskCount
+    );
+    EXPECT_EQ(
+        primaryQueueRecordingStatistics.commandListCount + secondaryQueueRecordingStatistics.commandListCount,
+        recordingStatistics.commandListCount
+    );
+    EXPECT_EQ(
+        primaryQueueRecordingStatistics.barrierCount + secondaryQueueRecordingStatistics.barrierCount,
+        recordingStatistics.barrierCount
+    );
+    EXPECT_EQ(
+        primaryQueueRecordingStatistics.parallelPacketCount + secondaryQueueRecordingStatistics.parallelPacketCount,
+        recordingStatistics.parallelPacketCount
+    );
+    EXPECT_NEAR(
+        primaryQueueRecordingStatistics.commandListAcquisitionSeconds
+            + secondaryQueueRecordingStatistics.commandListAcquisitionSeconds,
+        recordingStatistics.commandListAcquisitionSeconds,
+        0.000001
+    );
+    EXPECT_NEAR(
+        primaryQueueRecordingStatistics.graphBarrierRecordingSeconds
+            + secondaryQueueRecordingStatistics.graphBarrierRecordingSeconds,
+        recordingStatistics.graphBarrierRecordingSeconds,
+        0.000001
+    );
+    EXPECT_NEAR(
+        primaryQueueRecordingStatistics.taskRecordSeconds + secondaryQueueRecordingStatistics.taskRecordSeconds,
+        recordingStatistics.taskRecordSeconds,
+        0.000001
+    );
+    EXPECT_NEAR(
+        primaryQueueRecordingStatistics.recordingSeconds + secondaryQueueRecordingStatistics.recordingSeconds,
+        recordingStatistics.recordingSeconds,
+        0.000001
+    );
     const GpuTaskGraphSubmissionStatistics submissionStatistics = transaction.submissionStatistics();
     ASSERT_TRUE(submissionStatistics.valid());
     EXPECT_EQ(submissionStatistics.acceptedTaskCount, 2u);
@@ -17652,6 +17721,48 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedComm
     ASSERT_TRUE(recordingStatistics.valid());
     EXPECT_EQ(recordingStatistics.packetCount, 2u);
     EXPECT_EQ(recordingStatistics.parallelPacketCount, 2u);
+    // recordPacketRangeInReadyFrontiers() completed synchronously, so no worker can still publish a slot while this
+    // exact physical-queue snapshot reads the aggregate's ordinary per-packet counters.
+    const GpuTaskGraphPhysicalQueueRecordingStatistics graphicsQueueRecordingStatistics =
+        recordedGraph.physicalQueueRecordingStatistics(compiledGraph, graphicsQueue.id)
+    ;
+    ASSERT_TRUE(graphicsQueueRecordingStatistics.valid());
+    EXPECT_EQ(graphicsQueueRecordingStatistics.graphGeneration, compiledGraph.generation());
+    EXPECT_EQ(graphicsQueueRecordingStatistics.planGeneration, compiledGraph.planGeneration());
+    EXPECT_EQ(
+        graphicsQueueRecordingStatistics.recordingAttemptGeneration,
+        recordedGraph.recordingAttemptGeneration()
+    );
+    EXPECT_EQ(graphicsQueueRecordingStatistics.deviceGeneration, compiledGraph.deviceGeneration());
+    EXPECT_EQ(graphicsQueueRecordingStatistics.queue, graphicsQueue.id);
+    EXPECT_EQ(graphicsQueueRecordingStatistics.queueClass, CommandQueue::Graphics);
+    EXPECT_EQ(graphicsQueueRecordingStatistics.packetCount, 2u);
+    EXPECT_EQ(graphicsQueueRecordingStatistics.parallelPacketCount, 2u);
+    EXPECT_EQ(graphicsQueueRecordingStatistics.packetCount, recordingStatistics.packetCount);
+    EXPECT_EQ(graphicsQueueRecordingStatistics.taskCount, recordingStatistics.taskCount);
+    EXPECT_EQ(graphicsQueueRecordingStatistics.commandListCount, recordingStatistics.commandListCount);
+    EXPECT_EQ(graphicsQueueRecordingStatistics.barrierCount, recordingStatistics.barrierCount);
+    EXPECT_EQ(graphicsQueueRecordingStatistics.parallelPacketCount, recordingStatistics.parallelPacketCount);
+    EXPECT_NEAR(
+        graphicsQueueRecordingStatistics.commandListAcquisitionSeconds,
+        recordingStatistics.commandListAcquisitionSeconds,
+        0.000001
+    );
+    EXPECT_NEAR(
+        graphicsQueueRecordingStatistics.graphBarrierRecordingSeconds,
+        recordingStatistics.graphBarrierRecordingSeconds,
+        0.000001
+    );
+    EXPECT_NEAR(
+        graphicsQueueRecordingStatistics.taskRecordSeconds,
+        recordingStatistics.taskRecordSeconds,
+        0.000001
+    );
+    EXPECT_NEAR(
+        graphicsQueueRecordingStatistics.recordingSeconds,
+        recordingStatistics.recordingSeconds,
+        0.000001
+    );
     EXPECT_EQ(
         recordingStatistics.commandListAcquisitionSeconds,
         firstRecorded->commandListAcquisitionSeconds + secondRecorded->commandListAcquisitionSeconds

@@ -405,6 +405,53 @@ GpuTaskGraphRecordingStatistics GpuRecordedGraph::recordingStatistics(
     return statistics;
 }
 
+GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueRecordingStatistics(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuPhysicalQueueId& queue
+)const noexcept{
+    if(!validFor(compiledGraph))
+        return {};
+
+    const GpuPhysicalQueueInfo* const queueInfo = compiledGraph.queueInfo(queue);
+    if(!queueInfo || queueInfo->queueClass >= CommandQueue::kCount)
+        return {};
+
+    GpuTaskGraphPhysicalQueueRecordingStatistics statistics{
+        .graphGeneration = m_generation,
+        .planGeneration = m_planGeneration,
+        .recordingAttemptGeneration = m_recordingAttemptGeneration,
+        .deviceGeneration = m_deviceGeneration,
+        .queue = queue,
+        .queueClass = queueInfo->queueClass,
+    };
+    for(usize packetIndex = 0u; packetIndex < m_packets.size(); ++packetIndex){
+        const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
+        const GpuRecordedPacket& recordedPacket = m_packets[packetIndex];
+        if(
+            recordedPacket.commandListCount == 0u
+            || recordedPacket.packet != packet
+        )
+            continue;
+
+        const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
+        if(packetPlan.queue != queue)
+            continue;
+
+        ++statistics.packetCount;
+        statistics.taskCount += recordedPacket.taskCount;
+        statistics.commandListCount += recordedPacket.commandListCount;
+        statistics.barrierCount += recordedPacket.barrierCount;
+        statistics.commandListAcquisitionSeconds += recordedPacket.commandListAcquisitionSeconds;
+        statistics.graphBarrierRecordingSeconds += recordedPacket.graphBarrierRecordingSeconds;
+        statistics.taskRecordSeconds += recordedPacket.taskRecordSeconds;
+        statistics.recordingSeconds += recordedPacket.recordingSeconds;
+        if(recordedPacket.recordingWorkerIndex != 0u)
+            ++statistics.parallelPacketCount;
+    }
+    return statistics;
+}
+
+
 bool GpuTaskGraphExternalCompletionToken::validFor(const GpuCompiledGraph& compiledGraph)const noexcept{
     if(
         !compiledGraph.valid()

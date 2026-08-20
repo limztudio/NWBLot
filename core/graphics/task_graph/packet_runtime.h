@@ -76,6 +76,38 @@ struct GpuTaskGraphRecordingStatistics{
 };
 
 
+// Immutable-by-value native recording telemetry for one exact physical queue in one compiled graph recording
+// attempt. The queue identity includes its device generation, so an auxiliary same-class queue or a recreated
+// device cannot alias this result. Counts include only successfully published native packet slots.
+struct GpuTaskGraphPhysicalQueueRecordingStatistics{
+    u64 graphGeneration = 0u;
+    u64 planGeneration = 0u;
+    u64 recordingAttemptGeneration = 0u;
+    u16 deviceGeneration = 0u;
+    GpuPhysicalQueueId queue;
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
+    usize packetCount = 0u;
+    usize taskCount = 0u;
+    usize commandListCount = 0u;
+    usize barrierCount = 0u;
+    usize parallelPacketCount = 0u;
+    f64 commandListAcquisitionSeconds = 0.0;
+    f64 graphBarrierRecordingSeconds = 0.0;
+    f64 taskRecordSeconds = 0.0;
+    f64 recordingSeconds = 0.0;
+
+    [[nodiscard]] bool valid()const noexcept{
+        return graphGeneration != 0u
+            && planGeneration != 0u
+            && deviceGeneration != 0u
+            && queue.valid()
+            && queue.deviceGeneration == deviceGeneration
+            && queueClass < CommandQueue::kCount
+        ;
+    }
+};
+
+
 class GpuRecordedGraph final : NoCopy{
     friend class GpuNativePacketRecorder;
 
@@ -120,6 +152,14 @@ public:
     // Like reset()/find(), this aggregate inspection is externally serialized with recording and reset. Individual
     // packet slots are published only after their native list and counters are complete.
     [[nodiscard]] GpuTaskGraphRecordingStatistics recordingStatistics(const GpuCompiledGraph& compiledGraph)const noexcept;
+    // Aggregates one full physical-queue snapshot from published native packet slots. Invalid/stale queue IDs and
+    // a recorded graph from another compiled plan return an empty result. Callers serialize this query with native
+    // recording and compiled-graph reset/recompile, matching recordingStatistics(); in particular, query only after
+    // recordPacketRangeInReadyFrontiers() has synchronously joined its recording workers.
+    [[nodiscard]] GpuTaskGraphPhysicalQueueRecordingStatistics physicalQueueRecordingStatistics(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuPhysicalQueueId& queue
+    )const noexcept;
     [[nodiscard]] const GpuRecordedPacket* find(const GpuSubmissionPacketId& packet)const noexcept;
     // Read-only export for a later graph or cross-frame state cache that needs this packet's actual native final
     // state. Graph-internal consumers use compiler-produced state seeds instead.

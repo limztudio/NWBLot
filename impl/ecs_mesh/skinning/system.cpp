@@ -78,14 +78,13 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Run
     return request;
 }
 
-[[nodiscard]] static Core::GpuTaskSchedulingHint JointPaletteUploadScheduling(const bool mergeWithPrevious){
+[[nodiscard]] static Core::GpuTaskSchedulingHint JointPaletteUploadScheduling(){
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
     scheduling.overlapPreferred = false;
     scheduling.avoidQueueCrossing = true;
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
-    scheduling.mergeWithPrevious = mergeWithPrevious;
     return scheduling;
 }
 
@@ -107,7 +106,6 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Run
     scheduling.avoidQueueCrossing = true;
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
-    scheduling.mergeWithPrevious = true;
     return scheduling;
 }
 
@@ -758,7 +756,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                     .setIdentity(uploadIdentity)
                     .setMarkerLabel("Skinning Bindless Slots Upload")
                     .setQueue(__hidden_system::JointPaletteUploadQueueRequest())
-                    .setScheduling(__hidden_system::JointPaletteUploadScheduling(terminalTask.valid()))
+                    .setScheduling(__hidden_system::JointPaletteUploadScheduling())
                 ;
                 if(terminalTask.valid())
                     selectorUploadDesc.setDependencies(&terminalTask, 1u);
@@ -823,7 +821,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                     ))
                     .setMarkerLabel("Skinning Rest-to-Skinned Copy")
                     .setQueue(__hidden_system::JointPaletteUploadQueueRequest())
-                    .setScheduling(__hidden_system::JointPaletteUploadScheduling(terminalTask.valid()))
+                    .setScheduling(__hidden_system::JointPaletteUploadScheduling())
                 ;
                 if(!copyDesc.identity){
                     NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive graph identity for rest-to-skinned copy"));
@@ -879,7 +877,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                     ))
                     .setMarkerLabel("Skinning Joint Palette Upload")
                     .setQueue(__hidden_system::JointPaletteUploadQueueRequest())
-                    .setScheduling(__hidden_system::JointPaletteUploadScheduling(terminalTask.valid()))
+                    .setScheduling(__hidden_system::JointPaletteUploadScheduling())
                 ;
                 if(!jointPaletteUploadDesc.identity){
                     NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to derive graph identity for joint palette upload"));
@@ -1129,7 +1127,9 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     Core::GpuRecordedGraph recordedGraph(m_arena);
     Core::GpuGraphSubmissionTransaction transaction(m_arena);
     const Core::GpuTaskGraphCompiler compiler;
-    if(!compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena)){
+    Core::GpuTaskGraphCompileOptions compileOptions;
+    compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierScored;
+    if(!compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to compile graph-owned skinning work"));
         return false;
     }

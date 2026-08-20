@@ -107,6 +107,29 @@ TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){
 }
 
 
+// MeshSkinning has a complete primary-Graphics serial chain with one terminal timing submission. It can therefore
+// let FrontierScored coalesce its cheap immediate successors without reinstating per-task merge hints.
+TEST(EcsGraphics, MeshSkinningUsesFrontierScoredSerialPacketization){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString skinningSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_mesh" / "skinning" / "system.cpp", skinningSource));
+    const AStringView skinning(skinningSource.data(), skinningSource.size());
+
+    EXPECT_TRUE(ContainsText(skinning, "Core::GpuTaskGraphCompileOptions compileOptions;"));
+    EXPECT_TRUE(ContainsText(skinning, "compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierScored;"));
+    EXPECT_TRUE(ContainsText(skinning, "compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions)"));
+    EXPECT_EQ(CountText(skinning, "mergeWithPrevious"), 0u);
+    EXPECT_EQ(CountText(skinning, "setDependencies(&terminalTask, 1u);"), 4u);
+    EXPECT_TRUE(ContainsText(skinning, "if(compiledGraph.packetCount() != 1u)"));
+    EXPECT_TRUE(ContainsText(skinning, "const Core::GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);"));
+    EXPECT_TRUE(ContainsText(skinning, "terminalQueue->id != graphicsQueue"));
+    EXPECT_EQ(CountText(skinning, "Core::GpuTaskGraphTaskTimingTicket{"), 1u);
+    EXPECT_TRUE(ContainsText(skinning, ".task = terminalTask,\n            .timingTicket = &timingTicket,"));
+}
+
+
 // Caustics and Surfel GI choose a semantic producer task at graph declaration. Keep their normal-frame merge and
 // presence validation task-based so a later packet split cannot leak compiler packet identities back into the
 // renderer's effect policy.

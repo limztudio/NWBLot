@@ -17905,7 +17905,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
     selectorScheduling.avoidQueueCrossing = true;
     selectorScheduling.forceSubmissionBoundary = false;
     selectorScheduling.allowPacketMerge = true;
-    selectorScheduling.mergeWithPrevious = false;
     QueueSubmissionToken selectorAcceptedToken;
     const GpuTaskId selectorTask = graph.addUploadBufferTask(
         GpuTaskDesc{}
@@ -17938,8 +17937,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
             .access = GpuTaskResourceAccess::Read,
         },
     };
-    GpuTaskSchedulingHint selectorConsumerScheduling = selectorScheduling;
-    selectorConsumerScheduling.mergeWithPrevious = true;
     bool selectorConsumerObservedConstantBuffer = false;
     bool selectorConsumerObservedStaticInputShaderResource = false;
     QueueSubmissionToken selectorConsumerAcceptedToken;
@@ -17953,7 +17950,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
                 false,
                 false,
             })
-            .setScheduling(selectorConsumerScheduling)
+            .setScheduling(selectorScheduling)
             .setDependencies(&selectorTask, 1u)
             .setResourceUses(selectorConsumerUses, LengthOf(selectorConsumerUses)),
         SkinningGraphSelectorConsumerTask::Payload{
@@ -17976,7 +17973,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
     GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
     Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/skinning_selector_scratch"));
     const GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    GpuTaskGraphCompileOptions compileOptions;
+    compileOptions.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierScored;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions));
     const GpuTaskQueueAssignment* const selectorAssignment = assignments.find(selectorTask);
     ASSERT_NE(selectorAssignment, nullptr);
     EXPECT_EQ(selectorAssignment->queue, primaryGraphicsQueue);
@@ -17988,6 +17987,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
     EXPECT_EQ(selectorConsumerPacket, selectorPacket);
     EXPECT_EQ(compiledGraph.packet(selectorPacket).queue, primaryGraphicsQueue);
     EXPECT_EQ(compiledGraph.packet(selectorPacket).taskCount, 2u);
+    EXPECT_EQ(
+        compiledGraph.packetizationDecisionForTask(selectorConsumerTask),
+        GpuTaskPacketizationDecision::MergedFrontierScored
+    );
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -18202,7 +18205,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesWithGraphC
     paletteScheduling.avoidQueueCrossing = true;
     paletteScheduling.forceSubmissionBoundary = false;
     paletteScheduling.allowPacketMerge = true;
-    paletteScheduling.mergeWithPrevious = false;
     GpuTaskDesc paletteDesc;
     paletteDesc
         .setIdentity(Name("tests/descriptor_buffer/skinning_palette_upload"))
@@ -18220,13 +18222,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesWithGraphC
     );
     ASSERT_TRUE(paletteTask.valid());
 
-    GpuTaskSchedulingHint restCopyScheduling = paletteScheduling;
-    restCopyScheduling.mergeWithPrevious = true;
     const GpuTaskDesc restCopyDesc = GpuTaskDesc{}
         .setIdentity(Name("tests/descriptor_buffer/skinning_rest_to_skinned_copy"))
         .setMarkerLabel("Skinning Rest-to-Skinned Copy")
         .setQueue(graphicsUploadQueue)
-        .setScheduling(restCopyScheduling)
+        .setScheduling(paletteScheduling)
         .setDependencies(&paletteTask, 1u)
     ;
     const GpuCopyBufferTaskRegion copyRegions[] = {
@@ -18278,8 +18278,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesWithGraphC
             .access = GpuTaskResourceAccess::Read,
         },
     };
-    GpuTaskSchedulingHint restStreamConsumerScheduling = restCopyScheduling;
-    restStreamConsumerScheduling.mergeWithPrevious = true;
     QueueSubmissionToken restStreamConsumerAcceptedToken;
     const GpuTaskId restStreamConsumerTask = graph.addTask<SkinningGraphRestStreamConsumerTask>(
         GpuTaskDesc{}
@@ -18291,7 +18289,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesWithGraphC
                 false,
                 false,
             })
-            .setScheduling(restStreamConsumerScheduling)
+            .setScheduling(paletteScheduling)
             .setDependencies(&restCopyTask, 1u)
             .setResourceUses(restStreamConsumerUses, LengthOf(restStreamConsumerUses)),
         SkinningGraphRestStreamConsumerTask::Payload{
@@ -18313,7 +18311,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesWithGraphC
     GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
     Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/skinning_rest_copy_scratch"));
     const GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    GpuTaskGraphCompileOptions compileOptions;
+    compileOptions.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierScored;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions));
     const GpuTaskQueueAssignment* const paletteAssignment = assignments.find(paletteTask);
     const GpuTaskQueueAssignment* const restCopyAssignment = assignments.find(restCopyTask);
     const GpuTaskQueueAssignment* const restStreamConsumerAssignment = assignments.find(restStreamConsumerTask);
@@ -18334,6 +18334,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesWithGraphC
     EXPECT_EQ(restStreamConsumerPacket, restCopyPacket);
     EXPECT_EQ(compiledGraph.packet(restCopyPacket).queue, primaryGraphicsQueue);
     EXPECT_EQ(compiledGraph.packet(restCopyPacket).taskCount, 3u);
+    EXPECT_EQ(
+        compiledGraph.packetizationDecisionForTask(restCopyTask),
+        GpuTaskPacketizationDecision::MergedFrontierScored
+    );
+    EXPECT_EQ(
+        compiledGraph.packetizationDecisionForTask(restStreamConsumerTask),
+        GpuTaskPacketizationDecision::MergedFrontierScored
+    );
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -35509,7 +35517,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningDeformationHandoffStaysI
     deformationScheduling.avoidQueueCrossing = true;
     deformationScheduling.forceSubmissionBoundary = false;
     deformationScheduling.allowPacketMerge = true;
-    deformationScheduling.mergeWithPrevious = false;
     const GpuTaskResourceUse deformationUses[] = {
         GpuTaskResourceUse{
             .resource = skinnedPositionResource,
@@ -35557,8 +35564,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningDeformationHandoffStaysI
     );
     ASSERT_TRUE(deformationTask.valid());
 
-    GpuTaskSchedulingHint postDispatchScheduling = deformationScheduling;
-    postDispatchScheduling.mergeWithPrevious = true;
     const GpuTaskResourceUse postDispatchUses[] = {
         GpuTaskResourceUse{
             .resource = skinnedPositionResource,
@@ -35610,7 +35615,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningDeformationHandoffStaysI
             .setIdentity(Name("tests/descriptor_buffer/skinning_stage_bounds_repack"))
             .setMarkerLabel("Skinning Bounds and Repack")
             .setQueue(graphicsComputeQueue)
-            .setScheduling(postDispatchScheduling)
+            .setScheduling(deformationScheduling)
             .setDependencies(&deformationTask, 1u)
             .setResourceUses(postDispatchUses, LengthOf(postDispatchUses)),
         Move(postDispatchPayload)
@@ -35680,7 +35685,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningDeformationHandoffStaysI
             .setIdentity(Name("tests/descriptor_buffer/skinning_stage_finalize"))
             .setMarkerLabel("Skinning Finalize States")
             .setQueue(graphicsComputeQueue)
-            .setScheduling(postDispatchScheduling)
+            .setScheduling(deformationScheduling)
             .setDependencies(&postDispatchTask, 1u)
             .setResourceUses(finalizerUses, LengthOf(finalizerUses)),
         Move(finalizerPayload)
@@ -35697,7 +35702,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningDeformationHandoffStaysI
     GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
     Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/skinning_stage_handoff_scratch"));
     const GpuTaskGraphCompiler compiler;
-    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    GpuTaskGraphCompileOptions compileOptions;
+    compileOptions.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierScored;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions));
     const GpuTaskQueueAssignment* const deformationAssignment = assignments.find(deformationTask);
     const GpuTaskQueueAssignment* const postDispatchAssignment = assignments.find(postDispatchTask);
     const GpuTaskQueueAssignment* const finalizerAssignment = assignments.find(finalizerTask);
@@ -35717,6 +35724,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningDeformationHandoffStaysI
     EXPECT_EQ(postDispatchPacket, deformationPacket);
     EXPECT_EQ(finalizerPacket, deformationPacket);
     EXPECT_EQ(compiledGraph.packet(deformationPacket).taskCount, 3u);
+    EXPECT_EQ(
+        compiledGraph.packetizationDecisionForTask(postDispatchTask),
+        GpuTaskPacketizationDecision::MergedFrontierScored
+    );
+    EXPECT_EQ(
+        compiledGraph.packetizationDecisionForTask(finalizerTask),
+        GpuTaskPacketizationDecision::MergedFrontierScored
+    );
 
     const GpuCompiledTask* const compiledDeformation = compiledGraph.findTask(deformationTask);
     const GpuCompiledTask* const compiledPostDispatch = compiledGraph.findTask(postDispatchTask);

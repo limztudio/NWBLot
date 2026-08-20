@@ -39,7 +39,45 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
     const bool hasTransparentRenderers = m_materialSystem.hasTransparentRenderers(RendererResourceLookupMode::PreparedOnly);
     const bool hasAvboitWork = hasTransparentRenderers || m_avboitState.m_targetsNeedClear;
 
-    const Handle rendererFrame = builder.addPass(Name("ecs_render/frame"), "Renderer Frame");
+    const Core::GpuTaskGraphRuntimeStatistics deferredRuntimeStatistics = deferredTaskGraphRuntimeStatistics();
+    m_frameGraphRendererLabel.clear();
+    if(deferredRuntimeStatistics.valid()){
+        const Core::GpuTaskGraphCompileStatistics& compileStatistics = deferredRuntimeStatistics.compile;
+        const Core::GpuTaskGraphRecordingStatistics& recordingStatistics = deferredRuntimeStatistics.recording;
+        const Core::GpuTaskGraphSubmissionStatistics& submissionStatistics = deferredRuntimeStatistics.submission;
+        StringAppendFormat(
+            m_frameGraphRendererLabel,
+            "Renderer Frame\n"
+            "Task graph: tasks={} packets={} deps={} transitions={}\n"
+            "Recording: packets={} tasks={} command lists={} barriers={} parallel={}\n"
+            "Submission: accepted={} submissions={} command lists={} waits={} rejected={}\n"
+            "CPU: compile={:.3f} ms record={:.3f} ms submit={:.3f} ms",
+            compileStatistics.taskCount,
+            compileStatistics.packetCount,
+            compileStatistics.packetDependencyCount,
+            compileStatistics.transitionBarrierCount,
+            recordingStatistics.packetCount,
+            recordingStatistics.taskCount,
+            recordingStatistics.commandListCount,
+            recordingStatistics.barrierCount,
+            recordingStatistics.parallelPacketCount,
+            submissionStatistics.acceptedPacketCount,
+            submissionStatistics.nativeSubmissionCount,
+            submissionStatistics.nativeCommandListCount,
+            submissionStatistics.timelineWaitCount,
+            submissionStatistics.rejectedSubmissionCount,
+            compileStatistics.totalSeconds * 1000.0,
+            recordingStatistics.recordingSeconds * 1000.0,
+            submissionStatistics.submissionSeconds * 1000.0
+        );
+    }
+    else
+        m_frameGraphRendererLabel += "Renderer Frame";
+
+    const Handle rendererFrame = builder.addPass(
+        Name("ecs_render/frame"),
+        AStringView(m_frameGraphRendererLabel.data(), m_frameGraphRendererLabel.size())
+    );
     const Handle frameSetup = builder.addPass(Name("ecs_render/frame_setup"), "Frame Setup");
     const Handle deferredTargets = builder.addResource(Name("ecs_render/deferred_targets"), "Deferred Targets");
     const Handle meshViewBuffer = builder.addResource(Name("ecs_render/mesh_view_buffer"), "Mesh View Buffer");

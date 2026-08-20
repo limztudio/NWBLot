@@ -74,6 +74,7 @@ RendererSystem::RendererSystem(
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_csgShapeRegistry(arena)
+    , m_frameGraphRendererLabel(arena)
     , m_deferredLightingTaskGraph(arena)
     , m_deferredLightingTaskGraphAnalysis(arena)
     , m_deferredLightingTaskGraphQueueAssignments(arena)

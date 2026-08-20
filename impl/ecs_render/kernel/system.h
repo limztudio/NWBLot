@@ -490,6 +490,9 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;
+    // FrameGraphBuilder retains labels by view until the capture payload is encoded, so this storage must outlive
+    // appendFrameGraph() rather than using its task-graph scratch arena.
+    AString<Core::Alloc::GlobalArena> m_frameGraphRendererLabel;
     // Shadow Preparation, the native Graphics prefix, Shadow Visibility, Software Caustics, Surfel GI, AVBOIT, Hardware Caustics,
     // Deferred Lighting, Composite, Present, optional lagged-history copy, and recovery share one packet graph. The
     // prefix's five command lists remain a temporary recording bridge inside its first Graphics packet.

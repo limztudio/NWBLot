@@ -77,6 +77,36 @@ TEST(EcsGraphics, DeferredGraphExposesRuntimeTelemetryArtifacts){
 }
 
 
+// FrameGraphBuilder retains labels by view until the capture is encoded. Keep the renderer's human-readable
+// runtime snapshot in persistent renderer-owned storage, and reset the label when no coherent attempt exists.
+TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemHeaderSource;
+    AString systemSource;
+    AString frameGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", systemHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", systemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "frame_graph_export.cpp", frameGraphSource));
+    const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
+    const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView frameGraph(frameGraphSource.data(), frameGraphSource.size());
+
+    EXPECT_TRUE(ContainsText(systemHeader, "AString<Core::Alloc::GlobalArena> m_frameGraphRendererLabel;"));
+    EXPECT_TRUE(ContainsText(system, ", m_frameGraphRendererLabel(arena)"));
+    EXPECT_TRUE(ContainsText(frameGraph, "const Core::GpuTaskGraphRuntimeStatistics deferredRuntimeStatistics = deferredTaskGraphRuntimeStatistics();"));
+    EXPECT_TRUE(ContainsText(frameGraph, "if(deferredRuntimeStatistics.valid()){"));
+    EXPECT_TRUE(ContainsText(frameGraph, "StringAppendFormat(\n            m_frameGraphRendererLabel,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "\"Task graph: tasks={} packets={} deps={} transitions={}\\n\""));
+    EXPECT_TRUE(ContainsText(frameGraph, "\"Recording: packets={} tasks={} command lists={} barriers={} parallel={}\\n\""));
+    EXPECT_TRUE(ContainsText(frameGraph, "\"Submission: accepted={} submissions={} command lists={} waits={} rejected={}\\n\""));
+    EXPECT_TRUE(ContainsText(frameGraph, "\"CPU: compile={:.3f} ms record={:.3f} ms submit={:.3f} ms\""));
+    EXPECT_TRUE(ContainsText(frameGraph, "m_frameGraphRendererLabel += \"Renderer Frame\";"));
+    EXPECT_TRUE(ContainsText(frameGraph, "AStringView(m_frameGraphRendererLabel.data(), m_frameGraphRendererLabel.size())"));
+}
+
+
 // Caustics and Surfel GI choose a semantic producer task at graph declaration. Keep their normal-frame merge and
 // presence validation task-based so a later packet split cannot leak compiler packet identities back into the
 // renderer's effect policy.

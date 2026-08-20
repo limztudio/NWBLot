@@ -104,6 +104,19 @@ struct GpuCompiledExternalResourceExport{
     ResourceStates::Mask finalState = ResourceStates::Unknown;
 };
 
+// Immutable presentation completion resolved from a graph declaration. It retains the semantic producer/backbuffer
+// pair along with the compiler-owned packet and physical queue selected for the one native present signal.
+struct GpuCompiledPresentEndpoint{
+    GpuTaskId producer;
+    GpuGraphResourceId backBuffer;
+    GpuSubmissionPacketId packet;
+    GpuPhysicalQueueId queue;
+
+    [[nodiscard]] bool valid()const noexcept{
+        return producer.valid() && backBuffer.valid() && packet.valid() && queue.valid();
+    }
+};
+
 
 // Immutable compiler-side telemetry for one concrete task-graph plan. These counters describe only the accepted
 // compiler output: failed or superseded plans retain an empty snapshot, so tooling never has to reconcile partial
@@ -228,6 +241,9 @@ public:
         const GpuGraphResourceId& resource
     )const noexcept;
     [[nodiscard]] usize externalResourceExportCount()const noexcept{ return m_externalResourceExports.size(); }
+    [[nodiscard]] const GpuCompiledPresentEndpoint* presentEndpoint()const noexcept{
+        return valid() && m_hasPresentEndpoint ? &m_presentEndpoint : nullptr;
+    }
     [[nodiscard]] const GpuTaskGraphCompileStatistics& compileStatistics()const noexcept{ return m_compileStatistics; }
     [[nodiscard]] const GpuCompiledExternalResourceExport* externalResourceExportAt(usize index)const noexcept;
     [[nodiscard]] const GpuCompiledExternalResourceExportSource* externalResourceExportSources(
@@ -248,11 +264,14 @@ private:
     GraphicsVector<GpuCompiledExternalResourceExport> m_externalResourceExports;
     GraphicsVector<GpuCompiledExternalResourceExportSource> m_externalResourceExportSources;
     GraphicsVector<GpuPhysicalQueueInfo> m_queueTopology;
+    GpuCompiledPresentEndpoint m_presentEndpoint;
     u64 m_generation = 0u;
+    u64 m_declarationRevision = 0u;
     u64 m_planGeneration = 0u;
     u16 m_deviceGeneration = 0u;
     usize m_graphTaskCount = 0u;
     GpuTaskGraphCompileStatistics m_compileStatistics;
+    bool m_hasPresentEndpoint = false;
     bool m_valid = false;
 };
 

@@ -8706,7 +8706,7 @@ TEST(GpuTaskGraph, DerivesStableRecordingReadyFrontiersFromPacketDependencies){
 }
 
 
-TEST(GpuTaskGraph, KeepsPresentationOverlayInDistinctTerminalGraphicsPacket){
+TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId backbuffer = AddHazardDomain(
@@ -8760,9 +8760,23 @@ TEST(GpuTaskGraph, KeepsPresentationOverlayInDistinctTerminalGraphicsPacket){
     const Graphics::GpuTaskId overlay = graph.addTask(overlayDesc);
     ASSERT_TRUE(overlay.valid());
 
+    // The published producer only confirms that the final presentation contributor recorded. It deliberately has
+    // no direct backbuffer use, so endpoint validation must follow the graph dependency closure instead.
+    Graphics::GpuTaskDesc terminalDesc;
+    terminalDesc
+        .setIdentity(Name("tests/task_graph/presentation_terminal"))
+        .setMarkerLabel("Presentation Terminal")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+        .setDependencies(&overlay, 1u)
+    ;
+    const Graphics::GpuTaskId terminal = graph.addTask(terminalDesc);
+    ASSERT_TRUE(terminal.valid());
+    EXPECT_EQ(graph.taskAt(terminal.index).resourceUseCount, 0u);
+
     // A diagnostic/history tail need not depend on the backbuffer, but declaration order keeps it outside the
-    // terminal presentation span. This lets the renderer signal presentation from the overlay packet while later
-    // graph-owned maintenance work continues independently.
+    // terminal presentation span. This lets the renderer signal from the terminal packet while later graph-owned
+    // maintenance work continues independently.
     Graphics::GpuTaskDesc lateTailDesc;
     lateTailDesc
         .setIdentity(Name("tests/task_graph/presentation_late_tail"))
@@ -8782,26 +8796,329 @@ TEST(GpuTaskGraph, KeepsPresentationOverlayInDistinctTerminalGraphicsPacket){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(analysis.validFor(graph));
+    ASSERT_TRUE(assignments.validFor(graph));
+    ASSERT_TRUE(compiledGraph.validFor(graph));
+    ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+        .producer = terminal,
+        .backBuffer = backbuffer,
+    }));
+    // Endpoint metadata is part of an immutable compiled plan. Adding it invalidates the prior no-endpoint plan
+    // even though task/resource generations and counts did not change.
+    EXPECT_FALSE(analysis.validFor(graph));
+    EXPECT_FALSE(assignments.validFor(graph));
+    EXPECT_FALSE(compiledGraph.validFor(graph));
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
 
     const Graphics::GpuSubmissionPacketId sceneOutputPacket = compiledGraph.packetForTask(sceneOutput);
     const Graphics::GpuSubmissionPacketId overlayPacket = compiledGraph.packetForTask(overlay);
+    const Graphics::GpuSubmissionPacketId terminalPacket = compiledGraph.packetForTask(terminal);
     const Graphics::GpuSubmissionPacketId lateTailPacket = compiledGraph.packetForTask(lateTail);
     ASSERT_TRUE(sceneOutputPacket.valid());
     ASSERT_TRUE(overlayPacket.valid());
+    ASSERT_TRUE(terminalPacket.valid());
     ASSERT_TRUE(lateTailPacket.valid());
     EXPECT_NE(sceneOutputPacket, overlayPacket);
-    EXPECT_GT(lateTailPacket.index, overlayPacket.index);
-    EXPECT_EQ(compiledGraph.packet(overlayPacket).queue, queues[0].id);
+    EXPECT_NE(overlayPacket, terminalPacket);
+    EXPECT_GT(lateTailPacket.index, terminalPacket.index);
+    EXPECT_EQ(compiledGraph.packet(terminalPacket).queue, queues[0].id);
     const Graphics::GpuSubmissionPacketRange presentationRange = compiledGraph.packetRange(
         sceneOutputPacket,
-        overlayPacket
+        terminalPacket
     );
     ASSERT_TRUE(presentationRange.valid());
-    EXPECT_EQ(presentationRange.packetCount, 2u);
+    EXPECT_EQ(presentationRange.packetCount, 3u);
     const auto& overlayPlan = compiledGraph.packet(overlayPacket);
     ASSERT_EQ(overlayPlan.taskCount, 1u);
     ASSERT_EQ(overlayPlan.dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(overlayPacket)[0].producer, sceneOutputPacket);
+    const Graphics::GpuCompiledPresentEndpoint* const endpoint = compiledGraph.presentEndpoint();
+    ASSERT_NE(endpoint, nullptr);
+    EXPECT_TRUE(endpoint->valid());
+    EXPECT_EQ(endpoint->producer, terminal);
+    EXPECT_EQ(endpoint->backBuffer, backbuffer);
+    EXPECT_EQ(endpoint->packet, terminalPacket);
+    EXPECT_EQ(endpoint->queue, queues[0].id);
+}
+
+
+TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
+    TestArena testArena;
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const auto expectInvalidEndpoint = [&](
+        Graphics::GpuTaskGraph& graph,
+        const Graphics::GpuTaskId producer,
+        const Graphics::GpuTaskId relatedTask,
+        const Graphics::GpuGraphResourceId resource
+    ){
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint);
+        EXPECT_EQ(analysis.diagnostic().task, producer);
+        EXPECT_EQ(analysis.diagnostic().relatedTask, relatedTask);
+        EXPECT_EQ(analysis.diagnostic().resource, resource);
+        EXPECT_FALSE(analysis.valid());
+        EXPECT_FALSE(assignments.valid());
+        EXPECT_FALSE(compiledGraph.valid());
+    };
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        Graphics::GpuTaskGraph foreignGraph(testArena.arena);
+        const Graphics::GpuGraphResourceId backbuffer = AddHazardDomain(
+            graph,
+            Name("tests/task_graph/presentation_declaration_backbuffer"),
+            "Presentation Declaration Back Buffer"
+        );
+        const Graphics::GpuTaskId producer = AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/presentation_declaration_terminal"),
+            "Presentation Declaration Terminal",
+            graphicsRequest
+        );
+        const Graphics::GpuGraphResourceId foreignBackbuffer = AddHazardDomain(
+            foreignGraph,
+            Name("tests/task_graph/presentation_declaration_foreign_backbuffer"),
+            "Presentation Declaration Foreign Back Buffer"
+        );
+        const Graphics::GpuTaskId foreignProducer = AddTaskWithQueue(
+            foreignGraph,
+            Name("tests/task_graph/presentation_declaration_foreign_terminal"),
+            "Presentation Declaration Foreign Terminal",
+            graphicsRequest
+        );
+        ASSERT_TRUE(backbuffer.valid());
+        ASSERT_TRUE(producer.valid());
+        ASSERT_TRUE(foreignBackbuffer.valid());
+        ASSERT_TRUE(foreignProducer.valid());
+        EXPECT_FALSE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = foreignProducer,
+            .backBuffer = backbuffer,
+        }));
+        EXPECT_FALSE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = producer,
+            .backBuffer = foreignBackbuffer,
+        }));
+        ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = producer,
+            .backBuffer = backbuffer,
+        }));
+        EXPECT_FALSE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = producer,
+            .backBuffer = backbuffer,
+        }));
+        const Graphics::GpuPresentEndpoint* const endpoint = graph.presentEndpoint();
+        ASSERT_NE(endpoint, nullptr);
+        EXPECT_EQ(endpoint->producer, producer);
+        EXPECT_EQ(endpoint->backBuffer, backbuffer);
+    }
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId nonPresentationResource = AddBufferMetadata(
+            graph,
+            Name("tests/task_graph/presentation_invalid_buffer"),
+            "Presentation Invalid Buffer"
+        );
+        ASSERT_TRUE(nonPresentationResource.valid());
+        const Graphics::GpuTaskResourceUse writerUse{
+            .resource = nonPresentationResource,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Common,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc writerDesc;
+        writerDesc
+            .setIdentity(Name("tests/task_graph/presentation_invalid_buffer_writer"))
+            .setMarkerLabel("Presentation Invalid Buffer Writer")
+            .setQueue(graphicsRequest)
+            .setResourceUses(&writerUse, 1u)
+        ;
+        const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+        ASSERT_TRUE(writer.valid());
+        const Graphics::GpuTaskId producer = AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/presentation_invalid_buffer_terminal"),
+            "Presentation Invalid Buffer Terminal",
+            graphicsRequest
+        );
+        ASSERT_TRUE(producer.valid());
+        EXPECT_FALSE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = {},
+            .backBuffer = nonPresentationResource,
+        }));
+        EXPECT_FALSE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = producer,
+            .backBuffer = {},
+        }));
+        ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = producer,
+            .backBuffer = nonPresentationResource,
+        }));
+        expectInvalidEndpoint(graph, producer, {}, nonPresentationResource);
+    }
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId backbuffer = AddHazardDomain(
+            graph,
+            Name("tests/task_graph/presentation_non_graphics_backbuffer"),
+            "Presentation Non-Graphics Back Buffer"
+        );
+        ASSERT_TRUE(backbuffer.valid());
+        const Graphics::GpuTaskResourceUse writerUse{
+            .resource = backbuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Present,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc writerDesc;
+        writerDesc
+            .setIdentity(Name("tests/task_graph/presentation_non_graphics_writer"))
+            .setMarkerLabel("Presentation Non-Graphics Writer")
+            .setQueue(graphicsRequest)
+            .setResourceUses(&writerUse, 1u)
+        ;
+        const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+        ASSERT_TRUE(writer.valid());
+        const Graphics::GpuQueueRequest transferRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            false,
+            false,
+        };
+        const Graphics::GpuTaskId producer = AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/presentation_non_graphics_terminal"),
+            "Presentation Non-Graphics Terminal",
+            transferRequest
+        );
+        ASSERT_TRUE(producer.valid());
+        ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = producer,
+            .backBuffer = backbuffer,
+        }));
+        expectInvalidEndpoint(graph, producer, {}, backbuffer);
+    }
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId backbuffer = AddHazardDomain(
+            graph,
+            Name("tests/task_graph/presentation_unwritten_backbuffer"),
+            "Presentation Unwritten Back Buffer"
+        );
+        ASSERT_TRUE(backbuffer.valid());
+        const Graphics::GpuTaskId producer = AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/presentation_unwritten_terminal"),
+            "Presentation Unwritten Terminal",
+            graphicsRequest
+        );
+        ASSERT_TRUE(producer.valid());
+        ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = producer,
+            .backBuffer = backbuffer,
+        }));
+        expectInvalidEndpoint(graph, producer, {}, backbuffer);
+    }
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId backbuffer = AddHazardDomain(
+            graph,
+            Name("tests/task_graph/presentation_disconnected_backbuffer"),
+            "Presentation Disconnected Back Buffer"
+        );
+        ASSERT_TRUE(backbuffer.valid());
+        const Graphics::GpuTaskResourceUse writerUse{
+            .resource = backbuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Present,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc writerDesc;
+        writerDesc
+            .setIdentity(Name("tests/task_graph/presentation_disconnected_writer"))
+            .setMarkerLabel("Presentation Disconnected Writer")
+            .setQueue(graphicsRequest)
+            .setResourceUses(&writerUse, 1u)
+        ;
+        const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+        ASSERT_TRUE(writer.valid());
+        const Graphics::GpuTaskId producer = AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/presentation_disconnected_terminal"),
+            "Presentation Disconnected Terminal",
+            graphicsRequest
+        );
+        ASSERT_TRUE(producer.valid());
+        ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = producer,
+            .backBuffer = backbuffer,
+        }));
+        expectInvalidEndpoint(graph, producer, writer, backbuffer);
+    }
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId backbuffer = AddHazardDomain(
+            graph,
+            Name("tests/task_graph/presentation_mixed_writer_backbuffer"),
+            "Presentation Mixed Writer Back Buffer"
+        );
+        ASSERT_TRUE(backbuffer.valid());
+        const Graphics::GpuTaskResourceUse writerUse{
+            .resource = backbuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Present,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc reachableWriterDesc;
+        reachableWriterDesc
+            .setIdentity(Name("tests/task_graph/presentation_mixed_writer_reachable"))
+            .setMarkerLabel("Presentation Mixed Writer Reachable")
+            .setQueue(graphicsRequest)
+            .setResourceUses(&writerUse, 1u)
+        ;
+        const Graphics::GpuTaskId reachableWriter = graph.addTask(reachableWriterDesc);
+        ASSERT_TRUE(reachableWriter.valid());
+        Graphics::GpuTaskDesc producerDesc;
+        producerDesc
+            .setIdentity(Name("tests/task_graph/presentation_mixed_writer_terminal"))
+            .setMarkerLabel("Presentation Mixed Writer Terminal")
+            .setQueue(graphicsRequest)
+            .setDependencies(&reachableWriter, 1u)
+        ;
+        const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+        ASSERT_TRUE(producer.valid());
+        Graphics::GpuTaskDesc unrelatedWriterDesc;
+        unrelatedWriterDesc
+            .setIdentity(Name("tests/task_graph/presentation_mixed_writer_unrelated"))
+            .setMarkerLabel("Presentation Mixed Writer Unrelated")
+            .setQueue(graphicsRequest)
+            .setResourceUses(&writerUse, 1u)
+        ;
+        const Graphics::GpuTaskId unrelatedWriter = graph.addTask(unrelatedWriterDesc);
+        ASSERT_TRUE(unrelatedWriter.valid());
+        ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = producer,
+            .backBuffer = backbuffer,
+        }));
+        expectInvalidEndpoint(graph, producer, unrelatedWriter, backbuffer);
+    }
 }
 
 TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){

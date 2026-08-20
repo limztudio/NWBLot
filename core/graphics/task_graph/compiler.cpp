@@ -1258,6 +1258,7 @@ void GpuTaskGraphAnalysis::reset(){
     m_cycleEdges.clear();
     m_diagnostic = GpuTaskGraphAnalysisDiagnostic{};
     m_generation = 0u;
+    m_declarationRevision = 0u;
     m_taskCount = 0u;
     m_resourceCount = 0u;
     m_externalCompletionCount = 0u;
@@ -1269,6 +1270,7 @@ void GpuTaskGraphAnalysis::reset(){
 bool GpuTaskGraphAnalysis::validFor(const GpuTaskGraph& graph)const noexcept{
     return m_valid
         && m_generation == graph.generation()
+        && m_declarationRevision == graph.declarationRevision()
         && m_taskCount == graph.taskCount()
         && m_resourceCount == graph.resourceCount()
         && m_externalCompletionCount == graph.externalCompletionCount()
@@ -1300,6 +1302,7 @@ void GpuTaskGraphQueueAssignments::reset(){
     m_assignments.clear();
     m_diagnostic = GpuTaskQueueAssignmentDiagnostic{};
     m_generation = 0u;
+    m_declarationRevision = 0u;
     m_taskCount = 0u;
     m_valid = false;
 }
@@ -1307,6 +1310,7 @@ void GpuTaskGraphQueueAssignments::reset(){
 bool GpuTaskGraphQueueAssignments::validFor(const GpuTaskGraph& graph)const noexcept{
     return m_valid
         && m_generation == graph.generation()
+        && m_declarationRevision == graph.declarationRevision()
         && m_taskCount == graph.taskCount()
     ;
 }
@@ -1333,6 +1337,7 @@ bool GpuTaskGraphCompiler::analyze(
 )const{
     outAnalysis.reset();
     outAnalysis.m_generation = graph.generation();
+    outAnalysis.m_declarationRevision = graph.declarationRevision();
     outAnalysis.m_taskCount = graph.taskCount();
     outAnalysis.m_resourceCount = graph.resourceCount();
     outAnalysis.m_externalCompletionCount = graph.externalCompletionCount();
@@ -1602,6 +1607,58 @@ bool GpuTaskGraphCompiler::analyze(
         );
     }
 
+    if(const GpuPresentEndpoint* const endpoint = graph.presentEndpoint()){
+        if(!graph.validTask(endpoint->producer) || !graph.validResource(endpoint->backBuffer))
+            return fail(GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint, endpoint->producer, {}, endpoint->backBuffer);
+
+        const GpuTaskGraphTaskView producer = graph.taskAt(endpoint->producer.index);
+        const GpuTaskGraphResourceView backBuffer = graph.resourceAt(endpoint->backBuffer.index);
+        if(
+            (backBuffer.type != GpuGraphResourceType::Texture && backBuffer.type != GpuGraphResourceType::HazardDomain)
+            || !__hidden_gpu_task_graph_compiler::HasCapabilities(
+                producer.queue.requiredCapabilities,
+                GpuQueueCapability::Graphics
+            )
+        )
+            return fail(GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint, producer.id, {}, backBuffer.id);
+
+        Vector<u8, Alloc::ScratchArena> reachesProducer(graph.taskCount(), scratchArena);
+        for(usize taskIndex = 0u; taskIndex < reachesProducer.size(); ++taskIndex)
+            reachesProducer[taskIndex] = 0u;
+        reachesProducer[endpoint->producer.index] = 1u;
+        for(usize orderIndex = outAnalysis.m_topologicalOrder.size(); orderIndex > 0u; --orderIndex){
+            const GpuTaskId consumer = outAnalysis.m_topologicalOrder[orderIndex - 1u];
+            if(!reachesProducer[consumer.index])
+                continue;
+            for(const GpuTaskDependencyEdge& edge : outAnalysis.m_edges){
+                if(edge.consumer == consumer)
+                    reachesProducer[edge.producer.index] = 1u;
+            }
+        }
+
+        bool hasBackBufferWriter = false;
+        for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
+            const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
+            for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
+                const GpuTaskResourceUse& use = task.resourceUses[useIndex];
+                if(use.resource != endpoint->backBuffer || !__hidden_gpu_task_graph_compiler::IsWriteAccess(use.access))
+                    continue;
+
+                hasBackBufferWriter = true;
+                if(!reachesProducer[task.id.index]){
+                    return fail(
+                        GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint,
+                        endpoint->producer,
+                        task.id,
+                        endpoint->backBuffer
+                    );
+                }
+            }
+        }
+        if(!hasBackBufferWriter)
+            return fail(GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint, endpoint->producer, {}, endpoint->backBuffer);
+    }
+
     outAnalysis.m_diagnostic.status = GpuTaskGraphAnalysisStatus::Success;
     outAnalysis.m_valid = true;
     return true;
@@ -1645,6 +1702,7 @@ bool GpuTaskGraphCompiler::assignQueues(
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidTimingFeedback);
 
     outAssignments.m_generation = graph.generation();
+    outAssignments.m_declarationRevision = graph.declarationRevision();
     outAssignments.m_taskCount = graph.taskCount();
     outAssignments.m_assignments.reserve(graph.taskCount());
 
@@ -1961,6 +2019,7 @@ bool GpuTaskGraphCompiler::compile(
         return false;
 
     outCompiledGraph.m_generation = graph.generation();
+    outCompiledGraph.m_declarationRevision = graph.declarationRevision();
     outCompiledGraph.m_planGeneration = AllocateCompiledPlanGeneration();
     outCompiledGraph.m_deviceGeneration = topology.queues[0].id.deviceGeneration;
     outCompiledGraph.m_graphTaskCount = graph.taskCount();
@@ -3153,6 +3212,28 @@ bool GpuTaskGraphCompiler::compile(
                 frontier = candidateFrontier;
         }
         packet.recordingFrontier = frontier;
+    }
+
+    if(const GpuPresentEndpoint* const endpoint = graph.presentEndpoint()){
+        const GpuCompiledTask* const producer = outCompiledGraph.findTask(endpoint->producer);
+        const GpuPhysicalQueueInfo* const queue = producer ? outCompiledGraph.queueInfo(producer->queue) : nullptr;
+        if(
+            !producer
+            || !producer->packet.valid()
+            || producer->packet.generation != outCompiledGraph.m_planGeneration
+            || !queue
+            || queue->queueClass != CommandQueue::Graphics
+        ){
+            outCompiledGraph.reset();
+            return false;
+        }
+        outCompiledGraph.m_presentEndpoint = GpuCompiledPresentEndpoint{
+            .producer = endpoint->producer,
+            .backBuffer = endpoint->backBuffer,
+            .packet = producer->packet,
+            .queue = queue->id,
+        };
+        outCompiledGraph.m_hasPresentEndpoint = true;
     }
 
     GpuTaskGraphCompileStatistics& statistics = outCompiledGraph.m_compileStatistics;

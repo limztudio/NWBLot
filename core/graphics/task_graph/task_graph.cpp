@@ -938,6 +938,7 @@ GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
     , m_uploadBlobs(arena)
     , m_markerText(arena)
     , m_generation(__hidden_gpu_task_graph::AllocateGeneration())
+    , m_declarationRevision(__hidden_gpu_task_graph::AllocateGeneration())
     , m_activeRecordingAttemptGeneration(__hidden_gpu_task_graph::AllocateGeneration())
 {}
 
@@ -2116,6 +2117,20 @@ GpuExternalCompletionId GpuTaskGraph::importExternalCompletion(const GpuExternal
     return appendExternalCompletion(desc);
 }
 
+bool GpuTaskGraph::declarePresentEndpoint(const GpuPresentEndpoint& endpoint){
+    if(
+        m_hasPresentEndpoint
+        || !validTask(endpoint.producer)
+        || !validResource(endpoint.backBuffer)
+    )
+        return false;
+
+    m_presentEndpoint = endpoint;
+    m_declarationRevision = __hidden_gpu_task_graph::AllocateGeneration();
+    m_hasPresentEndpoint = true;
+    return true;
+}
+
 void GpuTaskGraph::reset(){
     {
         ScopedLock lock(m_lifecycleMutex);
@@ -2160,9 +2175,12 @@ void GpuTaskGraph::reset(){
         m_externalCompletions.clear();
         m_uploadBlobs.clear();
         m_markerText.clear();
+        m_presentEndpoint = {};
         m_generation = __hidden_gpu_task_graph::AllocateGeneration();
+        m_declarationRevision = __hidden_gpu_task_graph::AllocateGeneration();
         m_activeRecordingAttemptGeneration = __hidden_gpu_task_graph::AllocateGeneration();
         m_activeRecordingPlanGeneration = 0u;
+        m_hasPresentEndpoint = false;
         m_teardownInProgress = false;
     }
 }

@@ -43,23 +43,42 @@ void GpuCompiledGraph::reset(){
     m_externalResourceExports.clear();
     m_externalResourceExportSources.clear();
     m_queueTopology.clear();
+    m_presentEndpoint = {};
     m_generation = 0u;
+    m_declarationRevision = 0u;
     m_planGeneration = 0u;
     m_deviceGeneration = 0u;
     m_graphTaskCount = 0u;
     m_compileStatistics = {};
+    m_hasPresentEndpoint = false;
     m_valid = false;
 }
 
 bool GpuCompiledGraph::validFor(const GpuTaskGraph& graph)const noexcept{
+    const GpuPresentEndpoint* const graphEndpoint = graph.presentEndpoint();
     return valid()
         && m_generation == graph.generation()
+        && m_declarationRevision == graph.declarationRevision()
         && m_graphTaskCount == graph.taskCount()
         && m_tasks.size() == m_graphTaskCount
         && m_packetTasks.size() == m_graphTaskCount
         && (
             (m_graphTaskCount == 0u && m_packets.empty())
             || (m_graphTaskCount > 0u && !m_packets.empty() && m_packets.size() <= m_graphTaskCount)
+        )
+        && (m_hasPresentEndpoint == (graphEndpoint != nullptr))
+        && (
+            !graphEndpoint
+            || (
+                m_presentEndpoint.valid()
+                && m_presentEndpoint.producer == graphEndpoint->producer
+                && m_presentEndpoint.backBuffer == graphEndpoint->backBuffer
+                && m_presentEndpoint.producer.generation == m_generation
+                && m_presentEndpoint.backBuffer.generation == m_generation
+                && validPacket(m_presentEndpoint.packet)
+                && m_presentEndpoint.packet == packetForTask(m_presentEndpoint.producer)
+                && queueInfo(m_presentEndpoint.queue) != nullptr
+            )
         )
     ;
 }

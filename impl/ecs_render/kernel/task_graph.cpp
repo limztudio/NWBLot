@@ -16583,6 +16583,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred frame-timing endpoint graph task"));
         return;
     }
+    if(!m_deferredLightingTaskGraph.declarePresentEndpoint(Core::GpuPresentEndpoint{
+        .producer = m_deferredFrameTimingEndTask,
+        .backBuffer = backbuffer,
+    })){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred graph presentation endpoint"));
+        return;
+    }
 
     // Keep this diagnostic after the normal Present path in declaration order. Its only dependency is Surfel GI,
     // so it remains a late independent Transfer-preferred tail and does not delay lighting or presentation.

@@ -152,8 +152,8 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
 }
 
 
-// The exact terminal packet is retained solely for the swap-chain binary signal. Every other normal renderer
-// readiness check uses a declared task anchor or a semantic task range.
+// The exact terminal packet is retained solely in compiler-owned presentation metadata for the swap-chain binary
+// signal. Every other normal renderer readiness check uses a declared task anchor or a semantic task range.
 TEST(EcsGraphics, OnlyTerminalPresentationRetainsAPacketIdentity){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -162,8 +162,10 @@ TEST(EcsGraphics, OnlyTerminalPresentationRetainsAPacketIdentity){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", systemSource));
     const AStringView system(systemSource.data(), systemSource.size());
 
-    EXPECT_EQ(CountText(system, "packetForTask("), 1u);
-    EXPECT_TRUE(ContainsText(system, "packetForTask(terminalPresentationTask)"));
+    EXPECT_EQ(CountText(system, "packetForTask("), 0u);
+    EXPECT_TRUE(ContainsText(system, "GpuCompiledPresentEndpoint* const presentationEndpoint"));
+    EXPECT_TRUE(ContainsText(system, "m_deferredLightingCompiledGraph.presentEndpoint()"));
+    EXPECT_TRUE(ContainsText(system, "presentationEndpoint->packet"));
     EXPECT_TRUE(ContainsText(system, "terminalPresentationPacket"));
     EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId deferredLightingPacket"));
     EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId deferredCompositePacket"));
@@ -206,6 +208,9 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
     EXPECT_TRUE(ContainsText(taskGraph, "render.frame_timing_end"));
     EXPECT_TRUE(ContainsText(taskGraph, "setDependencies(&frameTimingEndDependency, 1u)"));
     EXPECT_TRUE(ContainsText(taskGraph, "frameTimingTransaction->recordEnd(commandList)"));
+    EXPECT_TRUE(ContainsText(taskGraph, "declarePresentEndpoint(Core::GpuPresentEndpoint{"));
+    EXPECT_TRUE(ContainsText(taskGraph, ".producer = m_deferredFrameTimingEndTask,"));
+    EXPECT_TRUE(ContainsText(taskGraph, ".backBuffer = backbuffer,"));
 
     const AStringView shadowPrepare = taskGraph.substr(shadowPrepareOffset, meshViewSetupOffset - shadowPrepareOffset);
     EXPECT_TRUE(ContainsText(shadowPrepare, "frameTimingTransaction->begin("));
@@ -215,7 +220,8 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
     const AStringView recovery = taskGraph.substr(recoveryOffset, deferredPresentOffset - recoveryOffset);
     EXPECT_TRUE(ContainsText(recovery, "frameTimingTransaction->recordEnd(commandList)"));
     EXPECT_TRUE(ContainsText(recovery, "confirmEndSubmission(false)"));
-    EXPECT_TRUE(ContainsText(system, "const Core::GpuTaskId terminalPresentationTask = m_deferredFrameTimingEndTask;"));
+    EXPECT_TRUE(ContainsText(system, "presentationEndpoint->producer"));
+    EXPECT_TRUE(ContainsText(system, "presentationEndpoint->queue != primaryGraphicsQueue"));
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredFrameTimingEndTask)"));
 
     const usize shadowPrepareAcceptanceOffset = system.find("const auto acceptShadowPrepareTask = [](");

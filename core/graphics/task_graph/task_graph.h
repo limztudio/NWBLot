@@ -107,6 +107,14 @@ struct GpuTaskGraphExternalCompletionView{
     AStringView markerLabel;
 };
 
+// One graph-declared presentation completion. The producer is intentionally allowed to contain no direct use of
+// the backbuffer: a terminal timing/finalization task can publish after the earlier backbuffer writers that reach
+// it through ordinary graph dependencies.
+struct GpuPresentEndpoint{
+    GpuTaskId producer;
+    GpuGraphResourceId backBuffer;
+};
+
 struct GpuTaskGraphTelemetryOptions{
     const GpuTaskGraphQueueAssignments* queueAssignments = nullptr;
 };
@@ -434,12 +442,22 @@ public:
         const GpuGraphPipelineDesc& desc
     );
     [[nodiscard]] GpuExternalCompletionId importExternalCompletion(const GpuExternalCompletionDesc& desc);
+    // One graph may publish one presentation completion. The compiler validates the producer's Graphics routing,
+    // the backbuffer kind, and the complete writer-to-producer dependency closure before exposing it to native
+    // presentation policy.
+    [[nodiscard]] bool declarePresentEndpoint(const GpuPresentEndpoint& endpoint);
+    [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const noexcept{
+        return m_hasPresentEndpoint ? &m_presentEndpoint : nullptr;
+    }
 
     // Reset is externally serialized against *starting* native recording/submission entrypoints. Once a packet
     // claim exists, reset detects it and refuses teardown; callers must resolve that lease before retrying reset.
     void reset();
 
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
+    // Endpoint declarations do not change task/resource handles, but they do invalidate every compiler snapshot
+    // that did not include the newly declared native presentation contract.
+    [[nodiscard]] u64 declarationRevision()const noexcept{ return m_declarationRevision; }
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
     // Starts or validates one native-recording attempt for the supplied graph tasks. A retry can begin only after
     // every task from the previous attempt was discarded; accepted-frontier recovery remains in that same attempt.
@@ -660,9 +678,12 @@ private:
     GraphicsVector<GpuExternalCompletionNode> m_externalCompletions;
     GraphicsVector<GpuUploadBlobNode> m_uploadBlobs;
     GraphicsBytes m_markerText;
+    GpuPresentEndpoint m_presentEndpoint;
     u64 m_generation = 0u;
+    u64 m_declarationRevision = 0u;
     mutable u64 m_activeRecordingAttemptGeneration = 0u;
     mutable u64 m_activeRecordingPlanGeneration = 0u;
+    bool m_hasPresentEndpoint = false;
     mutable bool m_teardownInProgress = false;
 };
 

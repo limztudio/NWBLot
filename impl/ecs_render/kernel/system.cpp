@@ -2189,11 +2189,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLaggedLightingHistorySlotsUploadTask
         )
     ;
-    const Core::GpuTaskId terminalPresentationTask = m_deferredFrameTimingEndTask;
-    // Presentation is the sole renderer policy that still needs the exact compiler packet: it owns the binary
-    // swap-chain signal. All ordinary record/submit readiness below resolves through semantic task anchors.
-    const Core::GpuSubmissionPacketId terminalPresentationPacket =
-        m_deferredLightingCompiledGraph.packetForTask(terminalPresentationTask);
+    // Presentation is the sole renderer policy that needs the exact compiler packet: it owns the binary swap-chain
+    // signal. Resolve every signal/hook/token/queue decision through the compiler-owned endpoint instead of
+    // mirroring the FrameTimingEnd task's packet identity in renderer policy.
+    const Core::GpuCompiledPresentEndpoint* const presentationEndpoint =
+        m_deferredLightingCompiledGraph.presentEndpoint();
+    const Core::GpuTaskId terminalPresentationTask = presentationEndpoint
+        ? presentationEndpoint->producer
+        : Core::GpuTaskId{}
+    ;
+    const Core::GpuSubmissionPacketId terminalPresentationPacket = presentationEndpoint
+        ? presentationEndpoint->packet
+        : Core::GpuSubmissionPacketId{}
+    ;
     const Core::GpuPhysicalQueueInfo* const deferredLightingQueue =
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredLightingTask);
     const Core::GpuPhysicalQueueInfo* const deferredCompositeQueue =
@@ -2202,8 +2210,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredPresentTask);
     const Core::GpuPhysicalQueueInfo* const deferredPresentationOverlayQueue =
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredPresentationOverlayTask);
-    const Core::GpuPhysicalQueueInfo* const terminalPresentationQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(terminalPresentationTask);
+    const Core::GpuPhysicalQueueInfo* const terminalPresentationQueue = presentationEndpoint
+        ? m_deferredLightingCompiledGraph.queueInfo(presentationEndpoint->queue)
+        : nullptr
+    ;
     const Core::GpuPhysicalQueueInfo* const deferredLaggedLightingHistoryQueue =
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredLaggedLightingHistoryTask);
     const Core::GpuPhysicalQueueInfo* const deferredFrameRecoveryQueue =
@@ -2667,6 +2677,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !taskIsCompiled(m_deferredPresentTask)
         || !taskIsCompiled(m_deferredFrameTimingEndTask)
         || (m_deferredPresentationOverlayRequired && !taskIsCompiled(m_deferredPresentationOverlayTask))
+        || !presentationEndpoint
+        || !presentationEndpoint->valid()
+        || presentationEndpoint->producer != m_deferredFrameTimingEndTask
+        || !m_deferredLightingTaskGraph.validResource(presentationEndpoint->backBuffer)
         || !terminalPresentationPacket.valid()
         || !taskIsCompiled(m_deferredFrameRecoveryTask)
         || !deferredLightingQueue
@@ -2679,6 +2693,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         // graph may use an explicitly opted-in auxiliary Graphics queue for ordinary work, but it must not route
         // a backbuffer writer or its final presentation signal without an acquired-image/share contract for it.
         || !primaryGraphicsQueue.valid()
+        || presentationEndpoint->queue != primaryGraphicsQueue
         || deferredPresentQueue->id != primaryGraphicsQueue
         || (m_deferredPresentationOverlayRequired
             && deferredPresentationOverlayQueue->id != primaryGraphicsQueue)
@@ -3434,6 +3449,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && taskIsCompiled(m_deferredCompositeTask)
         && taskIsCompiled(m_deferredPresentTask)
         && taskIsCompiled(m_deferredFrameTimingEndTask)
+        && presentationEndpoint
+        && presentationEndpoint->valid()
+        && presentationEndpoint->producer == m_deferredFrameTimingEndTask
         && terminalPresentationPacket.valid()
         && taskIsCompiled(m_deferredFrameRecoveryTask)
         && deferredFrameRecoveryQueue
@@ -3916,6 +3934,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && (!m_deferredPresentationOverlayRequired || m_deferredPresentationOverlayTask.valid())
             && taskIsCompiled(m_deferredPresentTask)
             && taskIsCompiled(m_deferredFrameTimingEndTask)
+            && presentationEndpoint
+            && presentationEndpoint->valid()
+            && presentationEndpoint->producer == m_deferredFrameTimingEndTask
             && terminalPresentationPacket.valid()
             && terminalPresentationPacketRange.valid()
             && terminalPresentationPacketRange.packetCount >= LengthOf(deferredPresentTimingTickets)

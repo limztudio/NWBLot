@@ -32,6 +32,7 @@ namespace GpuTaskGraphAnalysisStatus{
         InvalidExternalCompletionDependency,
         InvalidResourceUse,
         Cycle,
+        InvalidPresentationEndpoint,
     };
 };
 
@@ -164,6 +165,7 @@ private:
     GraphicsVector<GpuTaskDependencyEdge> m_cycleEdges;
     GpuTaskGraphAnalysisDiagnostic m_diagnostic;
     u64 m_generation = 0u;
+    u64 m_declarationRevision = 0u;
     usize m_taskCount = 0u;
     usize m_resourceCount = 0u;
     usize m_externalCompletionCount = 0u;
@@ -196,6 +198,7 @@ private:
     GraphicsVector<GpuTaskQueueAssignment> m_assignments;
     GpuTaskQueueAssignmentDiagnostic m_diagnostic;
     u64 m_generation = 0u;
+    u64 m_declarationRevision = 0u;
     usize m_taskCount = 0u;
     bool m_valid = false;
 };

@@ -635,6 +635,27 @@ template<typename ResourceDesc>
     ;
 }
 
+[[nodiscard]] static bool CopyOrClearTextureDestinationCanMaterializeRetainedState(
+    const TextureDesc& resourceDesc,
+    const ResourceStates::Mask graphInitialState,
+    const ResourceStates::Mask externalFinalState
+)noexcept{
+    if(!resourceDesc.keepInitialState)
+        return true;
+    if(
+        resourceDesc.initialState == ResourceStates::Unknown
+        || (
+            externalFinalState != ResourceStates::Unknown
+            && externalFinalState != resourceDesc.initialState
+        )
+    )
+        return false;
+    // An Unknown write-only destination never invents an input state. Fresh managed subresources lower from
+    // Undefined; accepted retained subresources are restored to descriptor state at packet close and reused by
+    // StateTracker on later packets.
+    return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
+}
+
 [[nodiscard]] static bool UploadTextureTaskCanMaterializeRetainedState(
     const TextureDesc& resourceDesc,
     const ResourceStates::Mask graphInitialState,
@@ -1145,7 +1166,7 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
                 sourceResource.initialState,
                 sourceResource.externalFinalState
             )
-            && __hidden_gpu_task_graph::BuiltInTaskCanMaterializeRetainedState(
+            && __hidden_gpu_task_graph::CopyOrClearTextureDestinationCanMaterializeRetainedState(
                 destinationResource.texture->getDescription(),
                 destinationResource.initialState,
                 destinationResource.externalFinalState
@@ -1642,7 +1663,7 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         // vkCmdClear*Image cannot operate on multisampled images outside a render pass. This primitive helper has no
         // framebuffer/render-pass lowering, so preserve its transfer-only contract by rejecting MSAA up front.
         || destinationResource.texture->getDescription().sampleCount != 1u
-        || !__hidden_gpu_task_graph::BuiltInTaskCanMaterializeRetainedState(
+        || !__hidden_gpu_task_graph::CopyOrClearTextureDestinationCanMaterializeRetainedState(
             destinationResource.texture->getDescription(),
             destinationResource.initialState,
             destinationResource.externalFinalState

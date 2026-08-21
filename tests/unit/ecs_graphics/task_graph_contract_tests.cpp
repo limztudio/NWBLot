@@ -1790,6 +1790,76 @@ TEST(EcsGraphics, LaggedLightingSelectorHasNoNativeCompatibilityDispatcher){
 }
 
 
+// Fresh deferred outputs must lower their first graph write from the native image origin. Active lagged history
+// remains a generic import because Lighting reads its accepted descriptor-state handoff.
+TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const usize lightingOffset = taskGraph.find("void RendererSystem::buildDeferredLightingTaskGraph");
+    const usize compileOffset = taskGraph.find("if(!compiler.compile(", lightingOffset);
+    ASSERT_NE(lightingOffset, AStringView::npos);
+    ASSERT_NE(compileOffset, AStringView::npos);
+    const AStringView deferredLighting = taskGraph.substr(lightingOffset, compileOffset - lightingOffset);
+
+    EXPECT_TRUE(ContainsText(
+        deferredLighting,
+        "const auto importFirstWriteTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){\n"
+        "        Core::GpuGraphResourceDesc desc = TextureResourceDesc(identity, label);\n"
+        "        desc.setInitialState(Core::ResourceStates::Unknown);\n"
+        "        return m_deferredLightingTaskGraph.importTexture(texture, desc);\n"
+        "    };"
+    ));
+    EXPECT_EQ(CountText(deferredLighting, "importFirstWriteTexture("), 5u);
+    EXPECT_TRUE(ContainsText(
+        deferredLighting,
+        "const Core::GpuGraphResourceId opaqueColor = importFirstWriteTexture(\n"
+        "        deferredTargets.opaqueColor,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        deferredLighting,
+        "const Core::GpuGraphResourceId compositeColor = importFirstWriteTexture(\n"
+        "        deferredTargets.compositeColor,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        deferredLighting,
+        "historyCopyDestinationShadowVisibility = history\n"
+        "            ? shadowVisibility\n"
+        "            : importFirstWriteTexture("
+    ));
+    EXPECT_TRUE(ContainsText(
+        deferredLighting,
+        "historyCopyDestinationCausticIrradiance = history\n"
+        "            ? causticIrradiance\n"
+        "            : importFirstWriteTexture("
+    ));
+    EXPECT_TRUE(ContainsText(
+        deferredLighting,
+        "historyCopyDestinationSurfelIrradiance = history\n"
+        "            ? surfelIrradiance\n"
+        "            : importFirstWriteTexture("
+    ));
+    EXPECT_TRUE(ContainsText(
+        deferredLighting,
+        "const Core::GpuGraphResourceId shadowVisibility = importTexture(\n"
+        "        history ? history->shadowVisibility : deferredTargets.shadowVisibility,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        deferredLighting,
+        "const Core::GpuGraphResourceId causticIrradiance = importTexture(\n"
+        "        history ? history->causticIrradiance : deferredTargets.causticIrradiance,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        deferredLighting,
+        "const Core::GpuGraphResourceId surfelIrradiance = importTexture(\n"
+        "        history ? history->surfelIrradiance : deferredTargets.surfelIrradiance,"
+    ));
+}
+
+
 // The legacy bulk shadow-context uploader has no caller: frozen graph batches and the explicit hybrid restore own
 // those two supported paths. Keep the dead mutable writer out of the ray-tracing subsystem.
 TEST(EcsGraphics, ShadowMaterialContextHasNoDeadNativeBulkUploader){

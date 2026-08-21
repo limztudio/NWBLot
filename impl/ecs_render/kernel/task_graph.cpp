@@ -11102,6 +11102,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
     };
+    // These outputs begin with a graph-owned write. Fresh managed subresources lower from Undefined; accepted retained
+    // state is restored to descriptor state at packet close and reused by StateTracker on later packets.
+    const auto importFirstWriteTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
+        Core::GpuGraphResourceDesc desc = TextureResourceDesc(identity, label);
+        desc.setInitialState(Core::ResourceStates::Unknown);
+        return m_deferredLightingTaskGraph.importTexture(texture, desc);
+    };
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
@@ -11397,7 +11404,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             "Surfel Irradiance"
         )
     ;
-    const Core::GpuGraphResourceId opaqueColor = importTexture(
+    const Core::GpuGraphResourceId opaqueColor = importFirstWriteTexture(
         deferredTargets.opaqueColor,
         Name("render.deferred_lighting.opaque_color"),
         "Opaque Color"
@@ -11510,7 +11517,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ;
         historyCopyDestinationShadowVisibility = history
             ? shadowVisibility
-            : importTexture(
+            : importFirstWriteTexture(
                 captureHistory->shadowVisibility,
                 Name("render.lagged_history_copy.history_shadow_visibility"),
                 "History Shadow Visibility"
@@ -11518,7 +11525,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ;
         historyCopyDestinationCausticIrradiance = history
             ? causticIrradiance
-            : importTexture(
+            : importFirstWriteTexture(
                 captureHistory->causticIrradiance,
                 Name("render.lagged_history_copy.history_caustic_irradiance"),
                 "History Caustic Irradiance"
@@ -11526,7 +11533,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ;
         historyCopyDestinationSurfelIrradiance = history
             ? surfelIrradiance
-            : importTexture(
+            : importFirstWriteTexture(
                 captureHistory->surfelIrradiance,
                 Name("render.lagged_history_copy.history_surfel_irradiance"),
                 "History Surfel Irradiance"
@@ -16555,7 +16562,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
 
     // Composite remains a distinct packet and joins both graph-owned AVBOIT and Lighting. It retains the current
     // bindless selector in lagged mode rather than inheriting Lighting's history selector.
-    const Core::GpuGraphResourceId compositeColor = importTexture(
+    const Core::GpuGraphResourceId compositeColor = importFirstWriteTexture(
         deferredTargets.compositeColor,
         Name("render.deferred_composite.composite_color"),
         "Composite Color"

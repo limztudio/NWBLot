@@ -2850,7 +2850,7 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForTexturePrimitives){
     EXPECT_EQ(graph.taskCount(), 4u);
 }
 
-TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadOnlyWhenItPublishesDescriptorState){
+TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPublishDescriptorState){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
     Core::Alloc::ThreadPool threadPool(0u);
@@ -2930,8 +2930,15 @@ TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadOnlyWhenItPublishesDescriptor
     clearDesc.destination = destination;
     clearDesc.subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
     clearDesc.valueType = Graphics::GpuClearTextureTaskValueType::Float;
-    EXPECT_FALSE(graph.addClearTextureTask(uploadTaskDesc, clearDesc).valid());
-    EXPECT_EQ(graph.taskCount(), 1u);
+    // A full retained clear restores the descriptor state at packet close, so it does not need a fabricated reader
+    // source after the earlier upload.
+    Graphics::GpuTaskDesc clearTaskDesc = uploadTaskDesc;
+    clearTaskDesc
+        .setIdentity(Name("tests/task_graph/fresh_retained_clear"))
+        .setMarkerLabel("Fresh Retained Clear")
+    ;
+    EXPECT_TRUE(graph.addClearTextureTask(clearTaskDesc, clearDesc).valid());
+    EXPECT_EQ(graph.taskCount(), 2u);
 
 #if !defined(NWB_FINAL)
     // Model Queue::submit accepting the explicit-Unknown mip-0 upload. Mip 1 remains Undefined, so a new typed
@@ -2962,6 +2969,332 @@ TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadOnlyWhenItPublishesDescriptor
     ASSERT_TRUE(completeImport.valid());
     EXPECT_EQ(completeImportGraph.resourceAt(completeImport.index).initialState, Graphics::ResourceStates::ShaderResource);
 #endif
+}
+
+TEST(GpuTaskGraph, AllowsExplicitUnknownRetainedTextureFirstWriteDestinations){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+    const auto createTexture = [&](const Graphics::TextureDesc& sourceDescription){
+        Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+            testArena.arena,
+            context,
+            allocator
+        );
+        if(!textureObject)
+            return Graphics::TextureHandle{};
+
+        Graphics::TextureHandle texture(
+            textureObject,
+            Graphics::TextureHandle::deleter_type(&testArena.arena),
+            AdoptRef
+        );
+        Graphics::TextureDesc& textureDescription = const_cast<Graphics::TextureDesc&>(texture->getDescription());
+        textureDescription = sourceDescription;
+        return texture;
+    };
+    const auto createBuffer = [&](const Graphics::BufferDesc& sourceDescription){
+        Graphics::Buffer* const bufferObject = NewArenaObject<Graphics::Buffer>(
+            testArena.arena,
+            context,
+            allocator
+        );
+        if(!bufferObject)
+            return Graphics::BufferHandle{};
+
+        Graphics::BufferHandle buffer(
+            bufferObject,
+            Graphics::BufferHandle::deleter_type(&testArena.arena),
+            AdoptRef
+        );
+        Graphics::BufferDesc& bufferDescription = const_cast<Graphics::BufferDesc&>(buffer->getDescription());
+        bufferDescription = sourceDescription;
+        return buffer;
+    };
+    const Graphics::TextureDesc retainedCommonDesc = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Graphics::Format::RGBA8_UNORM)
+        .setInitialState(Graphics::ResourceStates::Common)
+        .setKeepInitialState(true)
+    ;
+    Graphics::TextureDesc resolveSourceDesc = retainedCommonDesc;
+    resolveSourceDesc.setSampleCount(4u);
+    Graphics::TextureDesc rectClearDesc = retainedCommonDesc;
+    rectClearDesc.setFormat(Graphics::Format::RGBA8_UINT);
+    const Graphics::BufferDesc retainedCommonBufferDesc = Graphics::BufferDesc()
+        .setByteSize(sizeof(u32))
+        .setInitialState(Graphics::ResourceStates::Common)
+        .setKeepInitialState(true)
+    ;
+    Graphics::TextureHandle copySource = createTexture(retainedCommonDesc);
+    Graphics::TextureHandle unknownCopySource = createTexture(retainedCommonDesc);
+    Graphics::TextureHandle copyDestination = createTexture(retainedCommonDesc);
+    Graphics::TextureHandle clearDestination = createTexture(retainedCommonDesc);
+    Graphics::TextureHandle resolveSource = createTexture(resolveSourceDesc);
+    Graphics::TextureHandle resolveDestination = createTexture(retainedCommonDesc);
+    Graphics::TextureHandle rectClearDestination = createTexture(rectClearDesc);
+    Graphics::BufferHandle bufferSource = createBuffer(retainedCommonBufferDesc);
+    Graphics::BufferHandle bufferDestination = createBuffer(retainedCommonBufferDesc);
+    ASSERT_NE(copySource.get(), nullptr);
+    ASSERT_NE(unknownCopySource.get(), nullptr);
+    ASSERT_NE(copyDestination.get(), nullptr);
+    ASSERT_NE(clearDestination.get(), nullptr);
+    ASSERT_NE(resolveSource.get(), nullptr);
+    ASSERT_NE(resolveDestination.get(), nullptr);
+    ASSERT_NE(rectClearDestination.get(), nullptr);
+    ASSERT_NE(bufferSource.get(), nullptr);
+    ASSERT_NE(bufferDestination.get(), nullptr);
+
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const auto importTexture = [&](const Graphics::TextureHandle& texture, const Name& identity, const AStringView label, const bool firstWrite){
+        Graphics::GpuGraphResourceDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setType(Graphics::GpuGraphResourceType::Texture)
+        ;
+        if(firstWrite)
+            desc.setInitialState(Graphics::ResourceStates::Unknown);
+        return graph.importTexture(texture, desc);
+    };
+    const auto importBuffer = [&](const Graphics::BufferHandle& buffer, const Name& identity, const AStringView label, const bool firstWrite){
+        Graphics::GpuGraphResourceDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+        ;
+        if(firstWrite)
+            desc.setInitialState(Graphics::ResourceStates::Unknown);
+        return graph.importBuffer(buffer, desc);
+    };
+    const Graphics::GpuGraphResourceId copySourceResource = importTexture(
+        copySource,
+        Name("tests/task_graph/unknown_retained_copy_source"),
+        "Unknown Retained Copy Source",
+        false
+    );
+    const Graphics::GpuGraphResourceId unknownCopySourceResource = importTexture(
+        unknownCopySource,
+        Name("tests/task_graph/unknown_retained_copy_unknown_source"),
+        "Unknown Retained Copy Unknown Source",
+        true
+    );
+    const Graphics::GpuGraphResourceId copyDestinationResource = importTexture(
+        copyDestination,
+        Name("tests/task_graph/unknown_retained_copy_destination"),
+        "Unknown Retained Copy Destination",
+        true
+    );
+    const Graphics::GpuGraphResourceId clearDestinationResource = importTexture(
+        clearDestination,
+        Name("tests/task_graph/unknown_retained_clear_destination"),
+        "Unknown Retained Clear Destination",
+        true
+    );
+    const Graphics::GpuGraphResourceId resolveSourceResource = importTexture(
+        resolveSource,
+        Name("tests/task_graph/unknown_retained_resolve_source"),
+        "Unknown Retained Resolve Source",
+        false
+    );
+    const Graphics::GpuGraphResourceId resolveDestinationResource = importTexture(
+        resolveDestination,
+        Name("tests/task_graph/unknown_retained_resolve_destination"),
+        "Unknown Retained Resolve Destination",
+        true
+    );
+    const Graphics::GpuGraphResourceId rectClearDestinationResource = importTexture(
+        rectClearDestination,
+        Name("tests/task_graph/unknown_retained_rect_clear_destination"),
+        "Unknown Retained Rect Clear Destination",
+        true
+    );
+    const Graphics::GpuGraphResourceId bufferSourceResource = importBuffer(
+        bufferSource,
+        Name("tests/task_graph/unknown_retained_buffer_source"),
+        "Unknown Retained Buffer Source",
+        false
+    );
+    const Graphics::GpuGraphResourceId bufferDestinationResource = importBuffer(
+        bufferDestination,
+        Name("tests/task_graph/unknown_retained_buffer_destination"),
+        "Unknown Retained Buffer Destination",
+        true
+    );
+    ASSERT_TRUE(copySourceResource.valid());
+    ASSERT_TRUE(unknownCopySourceResource.valid());
+    ASSERT_TRUE(copyDestinationResource.valid());
+    ASSERT_TRUE(clearDestinationResource.valid());
+    ASSERT_TRUE(resolveSourceResource.valid());
+    ASSERT_TRUE(resolveDestinationResource.valid());
+    ASSERT_TRUE(rectClearDestinationResource.valid());
+    ASSERT_TRUE(bufferSourceResource.valid());
+    ASSERT_TRUE(bufferDestinationResource.valid());
+    EXPECT_EQ(graph.resourceAt(copyDestinationResource.index).initialState, Graphics::ResourceStates::Unknown);
+    EXPECT_EQ(graph.resourceAt(clearDestinationResource.index).initialState, Graphics::ResourceStates::Unknown);
+
+    Graphics::GpuTaskDesc copyTaskDesc;
+    copyTaskDesc
+        .setIdentity(Name("tests/task_graph/unknown_retained_copy"))
+        .setMarkerLabel("Unknown Retained Copy")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+    const Graphics::GpuCopyTextureTaskRegion rejectedSourceRegion{
+        .source = unknownCopySourceResource,
+        .sourceSlice = {},
+        .destination = copyDestinationResource,
+        .destinationSlice = {},
+    };
+    EXPECT_FALSE(graph.addCopyTextureTask(
+        copyTaskDesc,
+        Graphics::GpuCopyTextureTaskDesc{
+            .regions = &rejectedSourceRegion,
+            .regionCount = 1u,
+        }
+    ).valid());
+
+    Graphics::GpuTaskDesc resolveTaskDesc = copyTaskDesc;
+    resolveTaskDesc
+        .setIdentity(Name("tests/task_graph/unknown_retained_resolve_destination"))
+        .setMarkerLabel("Unknown Retained Resolve Destination")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueuePreference::Graphics,
+            true,
+            true,
+        })
+    ;
+    const Graphics::GpuResolveTextureTaskRegion rejectedResolveDestinationRegion{
+        .source = resolveSourceResource,
+        .sourceSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+        .destination = resolveDestinationResource,
+        .destinationSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+    };
+    EXPECT_FALSE(graph.addResolveTextureTask(
+        resolveTaskDesc,
+        Graphics::GpuResolveTextureTaskDesc{
+            .regions = &rejectedResolveDestinationRegion,
+            .regionCount = 1u,
+        }
+    ).valid());
+
+    Graphics::GpuTaskDesc rectClearTaskDesc = copyTaskDesc;
+    rectClearTaskDesc
+        .setIdentity(Name("tests/task_graph/unknown_retained_rect_clear_destination"))
+        .setMarkerLabel("Unknown Retained Rect Clear Destination")
+    ;
+    EXPECT_FALSE(graph.addClearTextureRectUIntTask(
+        rectClearTaskDesc,
+        Graphics::GpuClearTextureRectUIntTaskDesc{
+            .destination = rectClearDestinationResource,
+            .subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+            .rect = Graphics::Rect(4, 4),
+            .uintValue = Graphics::UIntColor(0u, 0u, 0u, 0u),
+            .recordHooks = {},
+        }
+    ).valid());
+
+    Graphics::GpuTaskDesc bufferTaskDesc = copyTaskDesc;
+    bufferTaskDesc
+        .setIdentity(Name("tests/task_graph/unknown_retained_copy_buffer_destination"))
+        .setMarkerLabel("Unknown Retained Copy Buffer Destination")
+    ;
+    const Graphics::GpuCopyBufferTaskRegion rejectedBufferDestinationRegion{
+        .source = bufferSourceResource,
+        .sourceOffsetBytes = 0u,
+        .destination = bufferDestinationResource,
+        .destinationOffsetBytes = 0u,
+        .dataSizeBytes = sizeof(u32),
+    };
+    EXPECT_FALSE(graph.addCopyBufferTask(
+        bufferTaskDesc,
+        Graphics::GpuCopyBufferTaskDesc{
+            .regions = &rejectedBufferDestinationRegion,
+            .regionCount = 1u,
+        }
+    ).valid());
+    bufferTaskDesc
+        .setIdentity(Name("tests/task_graph/unknown_retained_clear_buffer_destination"))
+        .setMarkerLabel("Unknown Retained Clear Buffer Destination")
+    ;
+    EXPECT_FALSE(graph.addClearBufferTask(
+        bufferTaskDesc,
+        Graphics::GpuClearBufferTaskDesc{
+            .destination = bufferDestinationResource,
+        }
+    ).valid());
+    EXPECT_EQ(graph.taskCount(), 0u);
+
+    const Graphics::GpuCopyTextureTaskRegion copyRegion{
+        .source = copySourceResource,
+        .sourceSlice = {},
+        .destination = copyDestinationResource,
+        .destinationSlice = {},
+    };
+    const Graphics::GpuTaskId copyTask = graph.addCopyTextureTask(
+        copyTaskDesc,
+        Graphics::GpuCopyTextureTaskDesc{
+            .regions = &copyRegion,
+            .regionCount = 1u,
+        }
+    );
+    ASSERT_TRUE(copyTask.valid());
+
+    Graphics::GpuTaskDesc clearTaskDesc = copyTaskDesc;
+    clearTaskDesc
+        .setIdentity(Name("tests/task_graph/unknown_retained_clear"))
+        .setMarkerLabel("Unknown Retained Clear")
+    ;
+    const Graphics::GpuTaskId clearTask = graph.addClearTextureTask(
+        clearTaskDesc,
+        Graphics::GpuClearTextureTaskDesc{
+            .destination = clearDestinationResource,
+            .subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+            .valueType = Graphics::GpuClearTextureTaskValueType::Float,
+        }
+    );
+    ASSERT_TRUE(clearTask.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[]{ GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const auto findPrologueBarrier = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        if(!compiledTask || !barriers)
+            return static_cast<const Graphics::GpuCompiledBarrier*>(nullptr);
+        for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            if(barriers[barrierIndex].resource == resource)
+                return &barriers[barrierIndex];
+        }
+        return static_cast<const Graphics::GpuCompiledBarrier*>(nullptr);
+    };
+    const Graphics::GpuCompiledBarrier* const copyBarrier = findPrologueBarrier(copyTask, copyDestinationResource);
+    ASSERT_NE(copyBarrier, nullptr);
+    EXPECT_EQ(copyBarrier->before, Graphics::ResourceStates::Unknown);
+    EXPECT_EQ(copyBarrier->after, Graphics::ResourceStates::CopyDest);
+    EXPECT_FALSE(copyBarrier->isGraphInitialState);
+    const Graphics::GpuCompiledBarrier* const clearBarrier = findPrologueBarrier(clearTask, clearDestinationResource);
+    ASSERT_NE(clearBarrier, nullptr);
+    EXPECT_EQ(clearBarrier->before, Graphics::ResourceStates::Unknown);
+    EXPECT_EQ(clearBarrier->after, Graphics::ResourceStates::CopyDest);
+    EXPECT_FALSE(clearBarrier->isGraphInitialState);
 }
 
 TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){

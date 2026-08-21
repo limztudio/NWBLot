@@ -26830,7 +26830,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
         graph,
         Name("tests/task_graph/caustic_photon_resolve_geometry"),
         "Caustic Photon Resolve Geometry",
-        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::Unknown,
         Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
     );
     ASSERT_TRUE(geometry.valid());
@@ -26838,7 +26838,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
         graph,
         Name("tests/task_graph/caustic_photon_resolve_history"),
         "Caustic Photon Resolve History",
-        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::Unknown,
         Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
     );
     ASSERT_TRUE(history.valid());
@@ -26846,7 +26846,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
         graph,
         Name("tests/task_graph/caustic_photon_resolve_half"),
         "Caustic Photon Resolve Half",
-        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::Unknown,
         Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
     );
     ASSERT_TRUE(resolveHalf.valid());
@@ -26884,7 +26884,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
             .resource = geometry,
             .range = {},
             .requiredState = Graphics::ResourceStates::UnorderedAccess,
-            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+            .access = Graphics::GpuTaskResourceAccess::Write,
         },
     };
     Graphics::GpuTaskSchedulingHint geometryScheduling = photonScheduling;
@@ -26912,12 +26912,6 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
         },
         {
             .resource = geometry,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::ShaderResource,
-            .access = Graphics::GpuTaskResourceAccess::Read,
-        },
-        {
-            .resource = resolveHalf,
             .range = {},
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Read,
@@ -27243,6 +27237,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
     EXPECT_EQ(tailPacket, photonPacket);
     EXPECT_EQ(timingClosePacket, photonPacket);
 
+    const Graphics::GpuCompiledTask* const compiledGeometry = compiledGraph.findTask(geometryTask);
     const Graphics::GpuCompiledTask* const compiledPrepare = compiledGraph.findTask(prepareTask);
     const Graphics::GpuCompiledTask* const compiledWavelet = compiledGraph.findTask(waveletTask);
     const Graphics::GpuCompiledTask* const compiledSecondWavelet = compiledGraph.findTask(secondWaveletTask);
@@ -27250,6 +27245,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
     const Graphics::GpuCompiledTask* const compiledFourthWavelet = compiledGraph.findTask(fourthWaveletTask);
     const Graphics::GpuCompiledTask* const compiledFifthWavelet = compiledGraph.findTask(fifthWaveletTask);
     const Graphics::GpuCompiledTask* const compiledTail = compiledGraph.findTask(tailTask);
+    ASSERT_NE(compiledGeometry, nullptr);
     ASSERT_NE(compiledPrepare, nullptr);
     ASSERT_NE(compiledWavelet, nullptr);
     ASSERT_NE(compiledSecondWavelet, nullptr);
@@ -27257,6 +27253,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
     ASSERT_NE(compiledFourthWavelet, nullptr);
     ASSERT_NE(compiledFifthWavelet, nullptr);
     ASSERT_NE(compiledTail, nullptr);
+    const Graphics::GpuCompiledBarrier* const geometryBarriers = compiledGraph.taskPrologueBarriers(geometryTask);
     const Graphics::GpuCompiledBarrier* const prepareBarriers = compiledGraph.taskPrologueBarriers(prepareTask);
     const Graphics::GpuCompiledBarrier* const waveletBarriers = compiledGraph.taskPrologueBarriers(waveletTask);
     const Graphics::GpuCompiledBarrier* const secondWaveletBarriers = compiledGraph.taskPrologueBarriers(secondWaveletTask);
@@ -27264,6 +27261,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
     const Graphics::GpuCompiledBarrier* const fourthWaveletBarriers = compiledGraph.taskPrologueBarriers(fourthWaveletTask);
     const Graphics::GpuCompiledBarrier* const fifthWaveletBarriers = compiledGraph.taskPrologueBarriers(fifthWaveletTask);
     const Graphics::GpuCompiledBarrier* const tailBarriers = compiledGraph.taskPrologueBarriers(tailTask);
+    ASSERT_NE(geometryBarriers, nullptr);
     ASSERT_NE(prepareBarriers, nullptr);
     ASSERT_NE(waveletBarriers, nullptr);
     ASSERT_NE(secondWaveletBarriers, nullptr);
@@ -27271,6 +27269,19 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
     ASSERT_NE(fourthWaveletBarriers, nullptr);
     ASSERT_NE(fifthWaveletBarriers, nullptr);
     ASSERT_NE(tailBarriers, nullptr);
+    bool hasFreshGeometryWrite = false;
+    for(usize barrierIndex = 0u; barrierIndex < compiledGeometry->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = geometryBarriers[barrierIndex];
+        hasFreshGeometryWrite = hasFreshGeometryWrite || (
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == geometry
+            && barrier.before == Graphics::ResourceStates::Unknown
+            && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            && !barrier.isGraphInitialState
+        );
+    }
+    EXPECT_TRUE(hasFreshGeometryWrite);
+
     bool hasAccumulatorHandoff = false;
     bool hasGeometryHandoff = false;
     for(usize barrierIndex = 0u; barrierIndex < compiledPrepare->prologueBarrierCount; ++barrierIndex){
@@ -27291,6 +27302,19 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
     EXPECT_TRUE(hasAccumulatorHandoff);
     EXPECT_TRUE(hasGeometryHandoff);
 
+    bool hasFreshHistoryWrite = false;
+    for(usize barrierIndex = 0u; barrierIndex < compiledPrepare->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = prepareBarriers[barrierIndex];
+        hasFreshHistoryWrite = hasFreshHistoryWrite || (
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == history
+            && barrier.before == Graphics::ResourceStates::Unknown
+            && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            && !barrier.isGraphInitialState
+        );
+    }
+    EXPECT_TRUE(hasFreshHistoryWrite);
+
     bool hasPrepareWaveletHandoff = false;
     for(usize barrierIndex = 0u; barrierIndex < compiledWavelet->prologueBarrierCount; ++barrierIndex){
         const Graphics::GpuCompiledBarrier& barrier = waveletBarriers[barrierIndex];
@@ -27302,6 +27326,19 @@ TEST(GpuTaskGraph, PlansGraphOwnedCausticPhotonGeometryPrepareFiveWaveletAndUpsa
         );
     }
     EXPECT_TRUE(hasPrepareWaveletHandoff);
+
+    bool hasFreshResolveHalfWrite = false;
+    for(usize barrierIndex = 0u; barrierIndex < compiledWavelet->prologueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = waveletBarriers[barrierIndex];
+        hasFreshResolveHalfWrite = hasFreshResolveHalfWrite || (
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+            && barrier.resource == resolveHalf
+            && barrier.before == Graphics::ResourceStates::Unknown
+            && barrier.after == Graphics::ResourceStates::UnorderedAccess
+            && !barrier.isGraphInitialState
+        );
+    }
+    EXPECT_TRUE(hasFreshResolveHalfWrite);
 
     bool hasWaveletSecondHandoff = false;
     for(usize barrierIndex = 0u; barrierIndex < compiledSecondWavelet->prologueBarrierCount; ++barrierIndex){

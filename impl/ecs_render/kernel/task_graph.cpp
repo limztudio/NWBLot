@@ -9273,7 +9273,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
             : softwareTraceGeometryResourceCount
     ));
     geometryResourceUses.reserve(3u);
-    resolvePrepareResourceUses.reserve(4u);
+    resolvePrepareResourceUses.reserve(3u);
     resolveWaveletResourceUses.reserve(3u);
     resolveSecondWaveletResourceUses.reserve(3u);
     resolveThirdWaveletResourceUses.reserve(3u);
@@ -9299,8 +9299,8 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     ));
     photonResourceUses.push_back(ReadUse(sceneGeometryDomain));
 
-    // Geometry downsample begins only after the selected photon producer. Its cache write becomes an explicit graph
-    // handoff to wavelet resolve, while dynamic ping-pong transitions remain inside the latter callback.
+    // Geometry downsample begins only after the selected photon producer. It writes the fresh cache before wavelet
+    // resolve reads it; dynamic ping-pong transitions remain inside the latter callback.
     geometryResourceUses.push_back(ReadTextureUse(
         worldPosition,
         ECSRenderDetail::s_FramebufferSubresources,
@@ -9311,15 +9311,15 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         ECSRenderDetail::s_FramebufferSubresources,
         Core::ResourceStates::ShaderResource
     ));
-    geometryResourceUses.push_back(ReadWriteTextureUse(
+    geometryResourceUses.push_back(WriteTextureUse(
         causticResolveGeometry,
         ECSRenderDetail::s_FramebufferSubresources,
         Core::ResourceStates::UnorderedAccess
     ));
 
     // Prepare consumes both immutable graph-produced inputs, then writes the parity-selected first ping-pong target.
-    // The five fixed wavelet passes read/write the alternating pair, so the compiler owns their exact UAV-to-SRV
-    // handoffs before the native upsample tail begins.
+    // It does not sample the ping-pong input for this stage; the five fixed wavelet passes own that alternating
+    // read/write sequence, including their exact UAV-to-SRV handoffs before the native upsample tail begins.
     constexpr bool s_CausticResolvePrepareWritesHalf = (NWB_CAUSTIC_RESOLVE_PASS_COUNT % 2u) == 0u;
     resolvePrepareResourceUses.push_back(ReadTextureUse(
         causticAccumulator,
@@ -9357,11 +9357,6 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         Core::ResourceStates::ShaderResource
     ));
     if(s_CausticResolvePrepareWritesHalf){
-        resolvePrepareResourceUses.push_back(ReadTextureUse(
-            causticHistory,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
         resolvePrepareResourceUses.push_back(WriteTextureUse(
             causticResolveHalf,
             ECSRenderDetail::s_FramebufferSubresources,
@@ -9419,11 +9414,6 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         ));
     }
     else{
-        resolvePrepareResourceUses.push_back(ReadTextureUse(
-            causticResolveHalf,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ));
         resolvePrepareResourceUses.push_back(WriteTextureUse(
             causticHistory,
             ECSRenderDetail::s_FramebufferSubresources,
@@ -11939,7 +11929,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             hardwareTraceAttributeStatesGraphOwned ? 0u : hardwareTraceAttributeResources.size()
         ));
         hardwareGeometryResourceUses.reserve(3u);
-        hardwareResolvePrepareResourceUses.reserve(4u);
+        hardwareResolvePrepareResourceUses.reserve(3u);
         hardwareResolveWaveletResourceUses.reserve(3u);
         hardwareResolveSecondWaveletResourceUses.reserve(3u);
         hardwareResolveThirdWaveletResourceUses.reserve(3u);
@@ -11975,8 +11965,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Core::ResourceStates::UnorderedAccess
         ));
 
-        // Geometry downsample writes its cache after photons. The following wavelet callback reads that cache, so
-        // the compiler owns their exact UAV-to-SRV handoff while ping-pong transitions remain local.
+        // Geometry downsample writes its fresh cache after photons. The following wavelet callback reads that cache,
+        // so the compiler owns their exact UAV-to-SRV handoff while ping-pong transitions remain local.
         hardwareGeometryResourceUses.push_back(ReadTextureUse(
             worldPosition,
             ECSRenderDetail::s_FramebufferSubresources,
@@ -11987,14 +11977,14 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             ECSRenderDetail::s_FramebufferSubresources,
             Core::ResourceStates::ShaderResource
         ));
-        hardwareGeometryResourceUses.push_back(ReadWriteTextureUse(
+        hardwareGeometryResourceUses.push_back(WriteTextureUse(
             causticResolveGeometry,
             ECSRenderDetail::s_FramebufferSubresources,
             Core::ResourceStates::UnorderedAccess
         ));
 
         // Prepare consumes both immutable graph-produced inputs, then writes the parity-selected first ping-pong
-        // target. The five fixed wavelet passes read/write the alternating pair through graph barriers.
+        // target. It does not sample the ping-pong input for this stage; wavelets own that alternating sequence.
         constexpr bool s_HardwareCausticResolvePrepareWritesHalf = (NWB_CAUSTIC_RESOLVE_PASS_COUNT % 2u) == 0u;
         hardwareResolvePrepareResourceUses.push_back(ReadTextureUse(
             causticAccumulator,
@@ -12032,11 +12022,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Core::ResourceStates::ShaderResource
         ));
         if(s_HardwareCausticResolvePrepareWritesHalf){
-            hardwareResolvePrepareResourceUses.push_back(ReadTextureUse(
-                causticHistory,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::ShaderResource
-            ));
             hardwareResolvePrepareResourceUses.push_back(WriteTextureUse(
                 causticResolveHalf,
                 ECSRenderDetail::s_FramebufferSubresources,
@@ -12094,11 +12079,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             ));
         }
         else{
-            hardwareResolvePrepareResourceUses.push_back(ReadTextureUse(
-                causticResolveHalf,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::ShaderResource
-            ));
             hardwareResolvePrepareResourceUses.push_back(WriteTextureUse(
                 causticHistory,
                 ECSRenderDetail::s_FramebufferSubresources,

@@ -1108,6 +1108,122 @@ TEST(EcsGraphics, HardwareCausticsPermitsOptInCrossFamilyGraphicsRouting){
 }
 
 
+// Caustic resolve targets start Unknown after recreation. Geometry downsample and prepare must therefore publish
+// their first results as writes, while a warm hardware accumulator imports only accepted Graphics packet state.
+TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAccumulatorState){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    AString systemSource;
+    AString systemHeaderSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", systemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", systemHeaderSource));
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
+
+    const usize softwareCausticsOffset = taskGraph.find("bool RendererSystem::declareDeferredSoftwareCausticsTask");
+    const usize surfelGiOffset = taskGraph.find("bool RendererSystem::declareDeferredSurfelGiTask", softwareCausticsOffset);
+    const usize deferredLightingOffset = taskGraph.find("void RendererSystem::buildDeferredLightingTaskGraph", surfelGiOffset);
+    const usize hardwareCausticsOffset = taskGraph.find("if(declaresHardwareCaustics){", deferredLightingOffset);
+    const usize avboitOffset = taskGraph.find("AvboitPreGraphTask::Payload", hardwareCausticsOffset);
+    ASSERT_NE(softwareCausticsOffset, AStringView::npos);
+    ASSERT_NE(surfelGiOffset, AStringView::npos);
+    ASSERT_NE(deferredLightingOffset, AStringView::npos);
+    ASSERT_NE(hardwareCausticsOffset, AStringView::npos);
+    ASSERT_NE(avboitOffset, AStringView::npos);
+    ASSERT_LT(softwareCausticsOffset, surfelGiOffset);
+    ASSERT_LT(surfelGiOffset, deferredLightingOffset);
+    ASSERT_LT(deferredLightingOffset, hardwareCausticsOffset);
+    ASSERT_LT(hardwareCausticsOffset, avboitOffset);
+    const AStringView softwareCaustics = taskGraph.substr(softwareCausticsOffset, surfelGiOffset - softwareCausticsOffset);
+    const AStringView hardwareCaustics = taskGraph.substr(hardwareCausticsOffset, avboitOffset - hardwareCausticsOffset);
+
+    const usize softwareGeometryOffset = softwareCaustics.find("geometryResourceUses.push_back(ReadTextureUse(");
+    const usize softwarePrepareOffset = softwareCaustics.find("constexpr bool s_CausticResolvePrepareWritesHalf", softwareGeometryOffset);
+    const usize softwareUpsampleOffset = softwareCaustics.find("resolveUpsampleResourceUses.push_back(", softwarePrepareOffset);
+    const usize hardwareGeometryOffset = hardwareCaustics.find("hardwareGeometryResourceUses.push_back(ReadTextureUse(");
+    const usize hardwarePrepareOffset = hardwareCaustics.find("constexpr bool s_HardwareCausticResolvePrepareWritesHalf", hardwareGeometryOffset);
+    const usize hardwareUpsampleOffset = hardwareCaustics.find("hardwareResolveUpsampleResourceUses.push_back(", hardwarePrepareOffset);
+    ASSERT_NE(softwareGeometryOffset, AStringView::npos);
+    ASSERT_NE(softwarePrepareOffset, AStringView::npos);
+    ASSERT_NE(softwareUpsampleOffset, AStringView::npos);
+    ASSERT_NE(hardwareGeometryOffset, AStringView::npos);
+    ASSERT_NE(hardwarePrepareOffset, AStringView::npos);
+    ASSERT_NE(hardwareUpsampleOffset, AStringView::npos);
+    ASSERT_LT(softwareGeometryOffset, softwarePrepareOffset);
+    ASSERT_LT(softwarePrepareOffset, softwareUpsampleOffset);
+    ASSERT_LT(hardwareGeometryOffset, hardwarePrepareOffset);
+    ASSERT_LT(hardwarePrepareOffset, hardwareUpsampleOffset);
+    const AStringView softwareGeometry = softwareCaustics.substr(
+        softwareGeometryOffset,
+        softwarePrepareOffset - softwareGeometryOffset
+    );
+    const AStringView softwarePrepare = softwareCaustics.substr(
+        softwarePrepareOffset,
+        softwareUpsampleOffset - softwarePrepareOffset
+    );
+    const AStringView hardwareGeometry = hardwareCaustics.substr(
+        hardwareGeometryOffset,
+        hardwarePrepareOffset - hardwareGeometryOffset
+    );
+    const AStringView hardwarePrepare = hardwareCaustics.substr(
+        hardwarePrepareOffset,
+        hardwareUpsampleOffset - hardwarePrepareOffset
+    );
+
+    EXPECT_TRUE(ContainsText(softwareGeometry, "geometryResourceUses.push_back(WriteTextureUse(\n        causticResolveGeometry,"));
+    EXPECT_FALSE(ContainsText(softwareGeometry, "geometryResourceUses.push_back(ReadWriteTextureUse("));
+    EXPECT_EQ(CountText(softwarePrepare, "resolvePrepareResourceUses.push_back(ReadTextureUse("), 2u);
+    EXPECT_FALSE(ContainsText(softwarePrepare, "resolvePrepareResourceUses.push_back(ReadWriteTextureUse("));
+    EXPECT_EQ(CountText(softwarePrepare, "resolvePrepareResourceUses.push_back(WriteTextureUse("), 2u);
+    EXPECT_TRUE(ContainsText(hardwareGeometry, "hardwareGeometryResourceUses.push_back(WriteTextureUse(\n            causticResolveGeometry,"));
+    EXPECT_FALSE(ContainsText(hardwareGeometry, "hardwareGeometryResourceUses.push_back(ReadWriteTextureUse("));
+    EXPECT_EQ(CountText(hardwarePrepare, "hardwareResolvePrepareResourceUses.push_back(ReadTextureUse("), 2u);
+    EXPECT_FALSE(ContainsText(hardwarePrepare, "hardwareResolvePrepareResourceUses.push_back(ReadWriteTextureUse("));
+    EXPECT_EQ(CountText(hardwarePrepare, "hardwareResolvePrepareResourceUses.push_back(WriteTextureUse("), 2u);
+
+    const usize hardwareStateSourcesOffset = system.find("Core::GpuExternalPacketStateSource hardwareCausticsStateSources[");
+    const usize deferredCompositeStateSourcesOffset = system.find(
+        "Core::GpuExternalPacketStateSource deferredCompositeStateSources[",
+        hardwareStateSourcesOffset
+    );
+    const usize hardwareAcceptanceOffset = system.find("struct HardwareCausticsAcceptanceContext{");
+    const usize hardwareFailureOffset = system.find("if(!hardwareCausticsStateReady){", hardwareAcceptanceOffset);
+    ASSERT_NE(hardwareStateSourcesOffset, AStringView::npos);
+    ASSERT_NE(deferredCompositeStateSourcesOffset, AStringView::npos);
+    ASSERT_NE(hardwareAcceptanceOffset, AStringView::npos);
+    ASSERT_NE(hardwareFailureOffset, AStringView::npos);
+    ASSERT_LT(hardwareStateSourcesOffset, deferredCompositeStateSourcesOffset);
+    ASSERT_LT(hardwareAcceptanceOffset, hardwareFailureOffset);
+    const AStringView hardwareStateSources = system.substr(
+        hardwareStateSourcesOffset,
+        deferredCompositeStateSourcesOffset - hardwareStateSourcesOffset
+    );
+    const AStringView hardwareAcceptance = system.substr(
+        hardwareAcceptanceOffset,
+        hardwareFailureOffset - hardwareAcceptanceOffset
+    );
+
+    EXPECT_TRUE(ContainsText(system, "s_HardwareCausticsStateSourceCapacity = 2u;"));
+    EXPECT_TRUE(ContainsText(system, "m_hardwareCausticAccumulatorPersistentState(arena)"));
+    EXPECT_TRUE(ContainsText(system, "m_hardwareCausticAccumulatorPersistentState.reset();"));
+    EXPECT_EQ(CountText(system, "m_hardwareCausticAccumulatorPersistentState.reset();"), 1u);
+    EXPECT_TRUE(ContainsText(systemHeader, "Core::GpuPersistentResourceStateCache m_hardwareCausticAccumulatorPersistentState;"));
+    EXPECT_TRUE(ContainsText(hardwareStateSources, "__hidden_renderer_system::s_HardwareCausticsStateSourceCapacity"));
+    EXPECT_TRUE(ContainsText(hardwareStateSources, "m_hardwareCausticAccumulatorPersistentState.valid()"));
+    EXPECT_TRUE(ContainsText(hardwareStateSources, "m_hardwareCausticAccumulatorPersistentState.source()"));
+    EXPECT_TRUE(ContainsText(hardwareAcceptance, "m_hardwareCausticAccumulatorPersistentState.replaceTextureSubset("));
+    EXPECT_TRUE(ContainsText(hardwareAcceptance, "context->targets->causticAccumulator"));
+    EXPECT_TRUE(ContainsText(hardwareAcceptance, "const Core::GpuTaskGraphTaskAcceptedCallback hardwareCausticsAcceptedCallback{"));
+    EXPECT_TRUE(ContainsText(hardwareAcceptance, "if(context->stateReady && context->usesLaggedHistory){"));
+    EXPECT_TRUE(ContainsText(system, "a rejected record must preserve its prior warm-decay source."));
+    EXPECT_TRUE(ContainsText(system, "if(!hardwareCausticsWasAccepted)\n                    restoreCausticsCpuState();"));
+}
+
+
 // FrontierSafe normally closes a packet at a cross-queue consumer. These direct serial effect chains instead own
 // one timing/acceptance packet, so every accumulator alternative and semantic tail must opt in explicitly.
 TEST(EcsGraphics, FrontierSafeEffectChainsRetainTheirSemanticPackets){

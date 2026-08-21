@@ -1056,8 +1056,8 @@ void RendererRayTracingSystem::dispatchCausticResolvePrepare(
     Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     NWB_ASSERT(heap.isInitialized());
 
-    // Prepare reads the accumulated photons and one half-resolution target, then writes the other. The normal graph
-    // supplies all four exact entry states; compatibility callers retain the original native transition sequence.
+    // Prepare reads accumulated photons and resolve geometry, then writes the parity-selected half-resolution target.
+    // The normal graph supplies those exact entry states; compatibility callers retain the original native sequence.
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.causticHistory.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.causticResolveHalf.get(), true);

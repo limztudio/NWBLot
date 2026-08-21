@@ -42,6 +42,7 @@ inline constexpr usize s_PresentationOverlayPacketCount = 1u;
 inline constexpr usize s_ShadowVisibilityStateSourceCapacity = 3u;
 inline constexpr usize s_SoftwareCausticsStateSourceCapacity = 3u;
 inline constexpr usize s_SurfelGiStateSourceCapacity = 4u;
+inline constexpr usize s_HardwareCausticsStateSourceCapacity = 2u;
 inline constexpr usize s_SingleStateSourceCapacity = 1u;
 inline constexpr usize s_SinglePacketStateBindingCapacity = 1u;
 inline constexpr usize s_SingleExternalCompletionTokenCapacity = 1u;
@@ -89,6 +90,7 @@ RendererSystem::RendererSystem(
     , m_shadowVisibilityReturnState(arena)
     , m_shadowPreparePersistentState(arena)
     , m_causticsComputePersistentState(arena)
+    , m_hardwareCausticAccumulatorPersistentState(arena)
     , m_causticIrradianceLightingState(arena)
     , m_causticIrradianceReturnState(arena)
     , m_surfelGiComputePersistentState(arena)
@@ -205,6 +207,7 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     m_shadowComputePersistentState.reset();
     m_shadowVisibilityReturnState.reset();
     m_causticsComputePersistentState.reset();
+    m_hardwareCausticAccumulatorPersistentState.reset();
     m_causticIrradianceLightingState.reset();
     m_causticIrradianceReturnState.reset();
     m_surfelGiComputePersistentState.reset();
@@ -224,7 +227,8 @@ void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
 }
 
 void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
-    // Rejected frames keep only cross-frame state from earlier accepted producers.
+    // Rejected frames keep only cross-frame state from earlier accepted producers. The hardware caustic accumulator
+    // changes only in its accepted callback, so a rejected record must preserve its prior warm-decay source.
     m_causticIrradianceLightingState.reset();
 }
 
@@ -3202,8 +3206,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ;
     }
 
-    // AVBOIT, Hardware Caustics, and lagged Lighting each retain the same filtered Prefix source for their
-    // independent common reads.  Their packet ordering remains internal to this compiled graph.
+    // AVBOIT and lagged Lighting retain the filtered Prefix source for their independent common reads. Hardware
+    // Caustics additionally imports its accepted Graphics accumulator state when a warm temporal decay reads it.
+    // Their packet ordering remains internal to this compiled graph.
     m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
     const Core::GpuExternalPacketStateSource avboitPreStateSources[] = {
         Core::GpuExternalPacketStateSource{
@@ -3221,18 +3226,28 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         graphicsPrefixFinalStateSeed
     );
     Core::GpuExternalPacketStateSource hardwareCausticsStateSources[
-        __hidden_renderer_system::s_SingleStateSourceCapacity
+        __hidden_renderer_system::s_HardwareCausticsStateSourceCapacity
     ] = {};
     usize hardwareCausticsStateSourceCount = 0u;
-    const bool hardwareCausticsStateSourcesReady =
-        !hardwareShadowSupported
-        || appendDeclaredStateSource(
+    bool hardwareCausticsStateSourcesReady = true;
+    if(hardwareShadowSupported){
+        hardwareCausticsStateSourcesReady = appendDeclaredStateSource(
             hardwareCausticsStateSources,
             LengthOf(hardwareCausticsStateSources),
             hardwareCausticsStateSourceCount,
             graphicsPrefixFinalStateSeed
-        )
-    ;
+        );
+        if(m_hardwareCausticAccumulatorPersistentState.valid()){
+            hardwareCausticsStateSourcesReady = hardwareCausticsStateSourcesReady
+                && appendDeclaredStateSource(
+                    hardwareCausticsStateSources,
+                    LengthOf(hardwareCausticsStateSources),
+                    hardwareCausticsStateSourceCount,
+                    m_hardwareCausticAccumulatorPersistentState.source()
+                )
+            ;
+        }
+    }
     Core::GpuExternalPacketStateSource deferredCompositeStateSources[
         __hidden_renderer_system::s_SingleStateSourceCapacity
     ] = {};
@@ -4564,16 +4579,22 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 ;
                 if(!context)
                     return false;
-                if(!context->usesLaggedHistory)
-                    return true;
                 if(!context->renderer || !context->targets || !context->finalState){
                     context->stateReady = false;
                     return false;
                 }
-                context->stateReady = context->renderer->m_causticIrradianceLightingState.replaceTextureSubset(
+                // The accumulator is the only hardware-caustics scratch read on a warm frame. Retain it only after
+                // the producer packet accepts so a rejected record keeps the prior native state source intact.
+                context->stateReady = context->renderer->m_hardwareCausticAccumulatorPersistentState.replaceTextureSubset(
                     *context->finalState,
-                    context->targets->causticIrradiance
+                    context->targets->causticAccumulator
                 );
+                if(context->stateReady && context->usesLaggedHistory){
+                    context->stateReady = context->renderer->m_causticIrradianceLightingState.replaceTextureSubset(
+                        *context->finalState,
+                        context->targets->causticIrradiance
+                    );
+                }
                 return context->stateReady;
             };
             const Core::GpuTaskGraphTaskAcceptedCallback hardwareCausticsAcceptedCallback{

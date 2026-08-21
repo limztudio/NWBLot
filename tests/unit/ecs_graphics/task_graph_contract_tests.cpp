@@ -1790,6 +1790,35 @@ TEST(EcsGraphics, LaggedLightingSelectorHasNoNativeCompatibilityDispatcher){
 }
 
 
+// The next graph declaration clears its history-tail output token. Current-frame consumers must keep using the
+// immutable prior accepted token, while the declared tail remains the sole publisher of the next token.
+TEST(EcsGraphics, LaggedLightingHistoryConsumersSnapshotPriorAcceptedToken){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemSource;
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", systemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const usize renderOffset = system.find("void RendererSystem::render(");
+    ASSERT_NE(renderOffset, AStringView::npos);
+    const AStringView render = system.substr(renderOffset);
+    const usize priorTokenOffset = render.find("const Core::QueueSubmissionToken priorLaggedLightingHistoryToken");
+    const usize graphBuildOffset = render.find("buildDeferredLightingTaskGraph(");
+    ASSERT_NE(priorTokenOffset, AStringView::npos);
+    ASSERT_NE(graphBuildOffset, AStringView::npos);
+
+    EXPECT_LT(priorTokenOffset, graphBuildOffset);
+    EXPECT_TRUE(ContainsText(render, "&& priorLaggedLightingHistoryToken.valid()"));
+    EXPECT_TRUE(ContainsText(render, ".laggedLightingHistoryAccepted = priorLaggedLightingHistoryToken.valid()"));
+    EXPECT_EQ(CountText(render, ".token = priorLaggedLightingHistoryToken"), 2u);
+    EXPECT_FALSE(ContainsText(render, ".token = m_laggedLightingHistorySubmissionToken"));
+    EXPECT_TRUE(ContainsText(taskGraph, ".acceptedToken = &m_laggedLightingHistorySubmissionToken"));
+}
+
+
 // Fresh deferred outputs must lower their first graph write from the native image origin. Active lagged history
 // remains a generic import because Lighting reads its accepted descriptor-state handoff.
 TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){

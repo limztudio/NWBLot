@@ -781,6 +781,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     else{
         resetLaggedLightingHistoryTracking();
     }
+    // Declaring the next history-copy tail intentionally resets the member token before that new packet accepts.
+    // Snapshot the prior accepted tail for every current-frame external dependency before graph declaration.
+    const Core::QueueSubmissionToken priorLaggedLightingHistoryToken = m_laggedLightingHistorySubmissionToken;
     const bool hardwareShadowSupported =
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
         && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
@@ -788,7 +791,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const bool laggedAsyncLightingSchedule =
         laggedAsyncLightingRequested
         && laggedLightingHistoryResourcesReady
-        && m_laggedLightingHistorySubmissionToken.valid()
+        && priorLaggedLightingHistoryToken.valid()
     ;
     // History capture is graph-owned and remains available whenever the opt-in path has a distinct compute
     // transport. Its tail is optional: a failed tail build must leave the current frame's deferred path intact.
@@ -799,7 +802,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const ECSRenderDetail::RendererFrameGraphFeatures frameGraphFeatures{
         .frameLaggedAsyncLightingEnabled = m_frameLaggedAsyncLightingEnabled,
         .laggedLightingHistoryReady = laggedLightingHistoryResourcesReady,
-        .laggedLightingHistoryAccepted = m_laggedLightingHistorySubmissionToken.valid(),
+        .laggedLightingHistoryAccepted = priorLaggedLightingHistoryToken.valid(),
         .hasTransparentRenderers = hasTransparentRenderers,
         .hardwareCaustics = hardwareShadowSupported,
     };
@@ -3789,7 +3792,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(laggedAsyncLightingSchedule){
             deferredLightingCompletionTokens[deferredLightingCompletionCount++] = {
                 .completion = m_deferredLightingHistoryCompletion,
-                .token = m_laggedLightingHistorySubmissionToken,
+                .token = priorLaggedLightingHistoryToken,
             };
         }
         struct DeferredLightingAcceptanceContext{
@@ -4551,7 +4554,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             if(laggedAsyncLightingSchedule){
                 hardwareCausticsCompletionTokens[hardwareCausticsCompletionCount++] = {
                     .completion = m_deferredLightingHistoryCompletion,
-                    .token = m_laggedLightingHistorySubmissionToken,
+                    .token = priorLaggedLightingHistoryToken,
                 };
             }
             Core::Alloc::ScratchArena hardwareCausticsScratchArena(RendererArenaScope::s_TaskGraphArena);

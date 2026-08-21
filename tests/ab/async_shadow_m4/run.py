@@ -39,6 +39,7 @@ from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE,
     SmokeFailure,
     SmokeSkip,
+    WindowsCapture,
     build_launch_environment,
     collect_log_delta,
     create_capture_backend,
@@ -465,6 +466,11 @@ def validate_lane_for_mode(mode: str, lane: LaneStatus) -> None:
         raise SmokeFailure(f"synchronous baseline unexpectedly enabled async compute: {lane}")
 
 
+def capture_m4_client_area(capture_backend, window, capture_path):
+    """Capture application pixels only; Windows excludes the compositor-owned non-client frame."""
+    return capture_backend.capture_client_window(window, capture_path)
+
+
 def run_frame_locked_capture(
     args: argparse.Namespace,
     mode: str,
@@ -526,7 +532,7 @@ def run_frame_locked_capture(
             args.startup_timeout,
         )
         wait_while_running(app_process, args.pixel_capture_settle_seconds, f"while settling {mode} frame-locked capture")
-        capture_result = capture_backend.capture_window(window, capture_path)
+        capture_result = capture_m4_client_area(capture_backend, window, capture_path)
         validate_capture_result(capture_result)
     finally:
         if app_process:
@@ -894,6 +900,70 @@ def run_self_test() -> int:
         "RendererSystem: cannot safely continue after an unresolved frame recovery submission",
         DEFAULT_FORBIDDEN_LOGS,
     ) == ["cannot safely continue after an unresolved frame recovery submission"]
+
+    class ClientAreaCaptureProbe:
+        def __init__(self):
+            self.calls = []
+
+        def capture_client_window(self, window, output_path):
+            self.calls.append((window, output_path))
+            return "client-capture"
+
+    client_capture_probe = ClientAreaCaptureProbe()
+    client_capture_path = Path("client-capture.bmp")
+    assert capture_m4_client_area(client_capture_probe, 17, client_capture_path) == "client-capture"
+    assert client_capture_probe.calls == [(17, client_capture_path)]
+
+    class ClientRectUser32:
+        def __init__(self, get_client_rect_result=True, client_to_screen_result=True):
+            self.get_client_rect_result = get_client_rect_result
+            self.client_to_screen_result = client_to_screen_result
+            self.get_client_rect_calls = 0
+            self.client_to_screen_calls = 0
+
+        def GetClientRect(self, hwnd, rect_pointer):
+            del hwnd
+            self.get_client_rect_calls += 1
+            if not self.get_client_rect_result:
+                return 0
+            rect = rect_pointer._obj
+            rect.left = 0
+            rect.top = 0
+            rect.right = 1280
+            rect.bottom = 900
+            return 1
+
+        def ClientToScreen(self, hwnd, point_pointer):
+            del hwnd
+            self.client_to_screen_calls += 1
+            if not self.client_to_screen_result:
+                return 0
+            point = point_pointer._obj
+            point.x += 104
+            point.y += 73
+            return 1
+
+    client_rect_user32 = ClientRectUser32()
+    client_rect_capture = object.__new__(WindowsCapture)
+    client_rect_capture.user32 = client_rect_user32
+    client_rect = client_rect_capture._client_rect(17)
+    assert (client_rect.left, client_rect.top, client_rect.right, client_rect.bottom) == (104, 73, 1384, 973)
+    assert client_rect_user32.get_client_rect_calls == 1
+    assert client_rect_user32.client_to_screen_calls == 1
+
+    client_rect_failure_user32 = ClientRectUser32(get_client_rect_result=False)
+    client_rect_failure_capture = object.__new__(WindowsCapture)
+    client_rect_failure_capture.user32 = client_rect_failure_user32
+    assert client_rect_failure_capture._client_rect(17) is None
+    assert client_rect_failure_user32.get_client_rect_calls == 1
+    assert client_rect_failure_user32.client_to_screen_calls == 0
+
+    client_origin_failure_user32 = ClientRectUser32(client_to_screen_result=False)
+    client_origin_failure_capture = object.__new__(WindowsCapture)
+    client_origin_failure_capture.user32 = client_origin_failure_user32
+    assert client_origin_failure_capture._client_rect(17) is None
+    assert client_origin_failure_user32.get_client_rect_calls == 1
+    assert client_origin_failure_user32.client_to_screen_calls == 1
 
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)

@@ -1182,6 +1182,11 @@ class LinuxX11Capture:
 
         return result
 
+    def capture_client_window(self, window, output_path):
+        # The X11 drawable selected for the application is already its client content; keep the M4 capture API
+        # portable while Windows explicitly strips the compositor-owned non-client frame below.
+        return self.capture_window(window, output_path)
+
     def _window_root_region(self, window, attributes):
         root_x = ctypes.c_int()
         root_y = ctypes.c_int()
@@ -1253,6 +1258,13 @@ class WinRect(ctypes.Structure):
     ]
 
 
+class WinPoint(ctypes.Structure):
+    _fields_ = [
+        ("x", ctypes.c_long),
+        ("y", ctypes.c_long),
+    ]
+
+
 class WinBitmapInfoHeader(ctypes.Structure):
     _fields_ = [
         ("biSize", ctypes.c_uint32),
@@ -1297,6 +1309,7 @@ class WindowsCapture:
     WM_LBUTTONDOWN = 0x0201
     WM_LBUTTONUP = 0x0202
     RECT = WinRect
+    POINT = WinPoint
     BITMAPINFOHEADER = WinBitmapInfoHeader
     BITMAPINFO = WinBitmapInfo
 
@@ -1317,6 +1330,10 @@ class WindowsCapture:
         self.user32.GetWindowThreadProcessId.restype = ctypes.c_ulong
         self.user32.GetWindowRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(self.RECT)]
         self.user32.GetWindowRect.restype = ctypes.c_int
+        self.user32.GetClientRect.argtypes = [ctypes.c_void_p, ctypes.POINTER(self.RECT)]
+        self.user32.GetClientRect.restype = ctypes.c_int
+        self.user32.ClientToScreen.argtypes = [ctypes.c_void_p, ctypes.POINTER(self.POINT)]
+        self.user32.ClientToScreen.restype = ctypes.c_int
         self.user32.PostMessageW.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_size_t, ctypes.c_ssize_t]
         self.user32.PostMessageW.restype = ctypes.c_int
         self.user32.SetForegroundWindow.argtypes = [ctypes.c_void_p]
@@ -1367,6 +1384,23 @@ class WindowsCapture:
         if not self.user32.GetWindowRect(ctypes.c_void_p(hwnd), ctypes.byref(rect)):
             return None
         return rect
+
+    def _client_rect(self, hwnd):
+        client_rect = self.RECT()
+        hwnd_ptr = ctypes.c_void_p(hwnd)
+        if not self.user32.GetClientRect(hwnd_ptr, ctypes.byref(client_rect)):
+            return None
+
+        width = client_rect.right - client_rect.left
+        height = client_rect.bottom - client_rect.top
+        if width <= 0 or height <= 0:
+            return None
+
+        origin = self.POINT(client_rect.left, client_rect.top)
+        if not self.user32.ClientToScreen(hwnd_ptr, ctypes.byref(origin)):
+            return None
+
+        return self.RECT(origin.x, origin.y, origin.x + width, origin.y + height)
 
     def find_window_for_pid(self, pid):
         matches = []
@@ -1445,17 +1479,14 @@ class WindowsCapture:
         time.sleep(0.05)
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_KEYUP, virtual_key, 0)
 
-    def capture_window(self, hwnd, output_path):
-        rect = self._window_rect(hwnd)
-        if not rect:
-            raise SmokeFailure(f"HWND 0x{hwnd:x} rect is unavailable")
-
+    def _prepare_capture_window(self, hwnd):
         hwnd_ptr = ctypes.c_void_p(hwnd)
         self.user32.ShowWindow(hwnd_ptr, self.SW_RESTORE)
         self.user32.SetWindowPos(hwnd_ptr, self.HWND_TOPMOST, 0, 0, 0, 0, self.SWP_NOMOVE | self.SWP_NOSIZE | self.SWP_SHOWWINDOW)
         self.user32.SetForegroundWindow(hwnd_ptr)
         time.sleep(0.1)
 
+    def _capture_screen_rect(self, hwnd, rect, output_path):
         width = rect.right - rect.left
         height = rect.bottom - rect.top
         if width <= 0 or height <= 0:
@@ -1505,6 +1536,22 @@ class WindowsCapture:
                 self.gdi32.DeleteDC(mem_dc)
             if screen_dc:
                 self.user32.ReleaseDC(None, screen_dc)
+
+    def capture_window(self, hwnd, output_path):
+        rect = self._window_rect(hwnd)
+        if not rect:
+            raise SmokeFailure(f"HWND 0x{hwnd:x} rect is unavailable")
+
+        self._prepare_capture_window(hwnd)
+        return self._capture_screen_rect(hwnd, rect, output_path)
+
+    def capture_client_window(self, hwnd, output_path):
+        # M4 compares renderer output; GetWindowRect includes a DWM frame whose active/inactive pixels vary by process.
+        self._prepare_capture_window(hwnd)
+        rect = self._client_rect(hwnd)
+        if not rect:
+            raise SmokeFailure(f"HWND 0x{hwnd:x} client rect is unavailable")
+        return self._capture_screen_rect(hwnd, rect, output_path)
 
 
 def create_capture_backend():

@@ -83,11 +83,12 @@ struct GpuTaskSchedulingHint{
     bool preserveSameClassQueueWithDirectDependency = false;
     // Extends the same-class opt-in to a physical queue from another Vulkan family. This remains separately opt-in
     // because exclusive resource uses cross that boundary through compiler-owned release/acquire ownership pairs.
-    // It has no effect unless allowSameClassQueueRouting is also set.
+    // It has no effect unless allowSameClassQueueRouting is also set; timing feedback also requires its own opt-in.
     bool allowCrossFamilySameClassQueueRouting = false;
     // Enables timing-history routing and bounded calibration for this task. This is separate from ordinary
     // same-class routing so an application can keep historical measurement scoped to a small, proven-safe subset.
-    // Timing feedback itself remains same-family only and never manufactures an ownership-transfer route.
+    // Another Vulkan family additionally requires allowCrossFamilySameClassQueueRouting, preserving a deliberate
+    // dual opt-in before the compiler plans any ownership-transfer route.
     bool allowTimingFeedbackRouting = false;
     // FrontierScored automatic coalescing requires this nonempty domain to match every task already in the
     // preceding packet. Empty domains are never scored-merge eligible; explicit mergeWithPrevious ignores it.

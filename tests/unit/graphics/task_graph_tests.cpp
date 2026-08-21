@@ -5413,8 +5413,9 @@ TEST(GpuTaskGraph, AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOption
 }
 
 
-// A feedback-enabled task must acquire bounded same-family calibration samples before history can switch its normal
-// route. This prevents a stable baseline from observing only itself forever while preserving the disabled fallback.
+// A feedback-enabled task may acquire bounded cross-family calibration samples only through the same explicit
+// scheduling opt-in. This prevents a stable baseline from observing only itself forever while preserving the
+// disabled fallback.
 TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -5427,6 +5428,7 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
 
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.allowSameClassQueueRouting = true;
+    scheduling.allowCrossFamilySameClassQueueRouting = true;
     scheduling.allowTimingFeedbackRouting = true;
     const Name taskIdentity("tests/task_graph/timing_feedback_calibration");
     const Graphics::GpuTaskTimingMetadata timingMetadata{
@@ -5444,6 +5446,7 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     ASSERT_TRUE(task.valid());
 
     Graphics::GpuPhysicalQueueInfo auxiliaryGraphicsQueue = GraphicsQueue(1u);
+    auxiliaryGraphicsQueue.familyIndex = 3u;
     auxiliaryGraphicsQueue.queueIndex = 1u;
     const Graphics::GpuPhysicalQueueInfo queues[]{
         GraphicsQueue(),
@@ -5645,8 +5648,7 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
     );
     EXPECT_EQ(assignments.diagnostic().task, target);
 
-    // Ordinary scheduling may explicitly allow cross-family work, but immutable timing feedback must never turn a
-    // calibration/override into an ownership-transfer route.
+    // Cross-family timing routes remain rejected without the task's separate cross-family scheduling opt-in.
     Graphics::GpuTaskGraph crossFamilyGraph(testArena.arena);
     Graphics::GpuTaskSchedulingHint crossFamilyScheduling;
     crossFamilyScheduling.allowSameClassQueueRouting = true;
@@ -5676,18 +5678,159 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
     crossFamilyOptions.timingQueueOverrides = crossFamilyOverride;
     crossFamilyOptions.timingQueueOverrideCount = LengthOf(crossFamilyOverride);
     Graphics::GpuTaskGraphQueueAssignments crossFamilyAssignments(testArena.arena);
-    EXPECT_FALSE(Assign(
+    ASSERT_TRUE(Assign(
         crossFamilyGraph,
         crossFamilyAnalysis,
         crossFamilyTopology,
         crossFamilyAssignments,
         crossFamilyOptions
     ));
-    EXPECT_EQ(
-        crossFamilyAssignments.diagnostic().status,
-        Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidTimingFeedback
+    const Graphics::GpuTaskQueueAssignment* const crossFamilyAssignment = crossFamilyAssignments.find(crossFamilyTask);
+    ASSERT_NE(crossFamilyAssignment, nullptr);
+    EXPECT_EQ(crossFamilyAssignment->queue, crossFamilyGraphicsQueue.id);
+    EXPECT_EQ(crossFamilyAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+}
+
+
+// A task must retain its normal direct-dependency route until accepted history proves another explicitly permitted
+// Vulkan family faster. The compiler then owns both the queue handoff and exclusive-resource release/acquire pair.
+TEST(GpuTaskGraph, RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnershipHandoffs){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/timing_feedback_cross_family_buffer"),
+        "Timing Feedback Cross Family Buffer"
     );
-    EXPECT_EQ(crossFamilyAssignments.diagnostic().task, crossFamilyTask);
+    ASSERT_TRUE(buffer.valid());
+
+    Graphics::GpuQueueRequest graphicsRequest;
+    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+    graphicsRequest.allowFallback = false;
+    graphicsRequest.compilerMayOverridePreference = false;
+
+    const Graphics::GpuTaskResourceUse producerUse{
+        .resource = buffer,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::CopyDest,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    Graphics::GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/task_graph/timing_feedback_cross_family_producer"))
+        .setMarkerLabel("Timing Feedback Cross Family Producer")
+        .setQueue(graphicsRequest)
+        .setResourceUses(&producerUse, 1u)
+    ;
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    ASSERT_TRUE(producer.valid());
+
+    Graphics::GpuTaskSchedulingHint consumerScheduling;
+    consumerScheduling.allowSameClassQueueRouting = true;
+    consumerScheduling.preserveSameClassQueueWithDirectDependency = true;
+    consumerScheduling.allowCrossFamilySameClassQueueRouting = true;
+    consumerScheduling.allowTimingFeedbackRouting = true;
+    const Graphics::GpuTaskId consumerDependencies[] = { producer };
+    const Graphics::GpuTaskResourceUse consumerUse{
+        .resource = buffer,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::CopySource,
+        .access = Graphics::GpuTaskResourceAccess::Read,
+    };
+    const Name consumerIdentity("tests/task_graph/timing_feedback_cross_family_consumer");
+    Graphics::GpuTaskDesc consumerDesc;
+    consumerDesc
+        .setIdentity(consumerIdentity)
+        .setMarkerLabel("Timing Feedback Cross Family Consumer")
+        .setQueue(graphicsRequest)
+        .setScheduling(consumerScheduling)
+        .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
+        .setResourceUses(&consumerUse, 1u)
+    ;
+    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    ASSERT_TRUE(consumer.valid());
+
+    Graphics::GpuPhysicalQueueInfo auxiliaryGraphicsQueue = GraphicsQueue(1u);
+    auxiliaryGraphicsQueue.familyIndex = 3u;
+    const Graphics::GpuPhysicalQueueInfo queues[]{
+        GraphicsQueue(),
+        auxiliaryGraphicsQueue,
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+
+    const Graphics::GpuTaskTimingKey consumerTimingKey{
+        .task = consumerIdentity,
+        .queue = Graphics::CommandQueue::Graphics,
+    };
+    Graphics::GpuTaskTimingHistoryStore timingHistory(testArena.arena);
+    for(u64 frameIndex = 1u; frameIndex <= 4u; ++frameIndex)
+        ASSERT_TRUE(timingHistory.recordSample(consumerTimingKey, auxiliaryGraphicsQueue.id, 0.001, frameIndex));
+    for(u64 frameIndex = 5u; frameIndex <= 8u; ++frameIndex)
+        ASSERT_TRUE(timingHistory.recordSample(consumerTimingKey, queues[0u].id, 0.010, frameIndex));
+
+    Graphics::GpuTaskTimingHistorySnapshot timingSnapshot(testArena.arena);
+    timingHistory.snapshot(timingSnapshot);
+    ASSERT_TRUE(timingSnapshot.valid());
+
+    Graphics::GpuTaskTimingFeedbackPolicy timingPolicy;
+    timingPolicy.enabled = true;
+    timingPolicy.minimumSampleCount = 4u;
+    timingPolicy.calibrationIntervalFrames = 0u;
+    timingPolicy.minimumAbsoluteBenefitSeconds = 0.001;
+    timingPolicy.minimumRelativeBenefit = 0.1;
+    timingPolicy.minimumFramesBetweenSwitches = 0u;
+    Graphics::GpuTaskGraphQueueAssignmentOptions assignmentOptions;
+    assignmentOptions.timingHistory = &timingSnapshot;
+    assignmentOptions.timingFeedbackPolicy = &timingPolicy;
+    assignmentOptions.timingFrameIndex = 8u;
+    Graphics::GpuTaskGraphCompileOptions compileOptions;
+    compileOptions.queueAssignmentOptions = assignmentOptions;
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, compileOptions));
+
+    const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
+    const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
+    ASSERT_NE(producerAssignment, nullptr);
+    ASSERT_NE(consumerAssignment, nullptr);
+    EXPECT_EQ(producerAssignment->queue, queues[0u].id);
+    EXPECT_EQ(consumerAssignment->queue, auxiliaryGraphicsQueue.id);
+    EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumer);
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+    ASSERT_TRUE(producerPacket.valid());
+    ASSERT_TRUE(consumerPacket.valid());
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledConsumer, nullptr);
+    ASSERT_NE(producerPacket, consumerPacket);
+    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(consumerPacket)[0u].producer, producerPacket);
+    ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
+    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
+    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
+
+    const Graphics::GpuCompiledBarrier& release = compiledGraph.taskEpilogueBarriers(producer)[0u];
+    EXPECT_EQ(release.type, Graphics::GpuCompiledBarrierType::BufferOwnershipRelease);
+    EXPECT_EQ(release.resource, buffer);
+    EXPECT_EQ(release.sourceQueue, queues[0u].id);
+    EXPECT_EQ(release.destinationQueue, auxiliaryGraphicsQueue.id);
+
+    const Graphics::GpuCompiledBarrier* const acquireAndTransition = compiledGraph.taskPrologueBarriers(consumer);
+    ASSERT_NE(acquireAndTransition, nullptr);
+    EXPECT_EQ(acquireAndTransition[0u].type, Graphics::GpuCompiledBarrierType::BufferOwnershipAcquire);
+    EXPECT_EQ(acquireAndTransition[0u].resource, buffer);
+    EXPECT_EQ(acquireAndTransition[0u].sourceQueue, queues[0u].id);
+    EXPECT_EQ(acquireAndTransition[0u].destinationQueue, auxiliaryGraphicsQueue.id);
+    EXPECT_EQ(acquireAndTransition[1u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
 }
 
 

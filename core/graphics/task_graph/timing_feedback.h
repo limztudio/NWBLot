@@ -96,9 +96,9 @@ struct GpuTaskTimingAssignmentState{
 struct GpuTaskTimingFeedbackPolicy{
     bool enabled = false;
     u32 minimumSampleCount = 8u;
-    // While a legal candidate lacks enough samples, one same-family probe is selected every N frames. Zero keeps
-    // timing feedback adaptive-only and disables automatic calibration. Probes stop once every legal route has
-    // minimumSampleCount observations.
+    // While a legal candidate lacks enough samples, one same-class probe is selected every N frames. Cross-family
+    // probes require the task's separate cross-family same-class opt-in. Zero keeps timing feedback adaptive-only
+    // and disables automatic calibration. Probes stop once every legal route has minimumSampleCount observations.
     u32 calibrationIntervalFrames = 1u;
     f64 minimumAbsoluteBenefitSeconds = 0.0;
     f64 minimumRelativeBenefit = 0.0;

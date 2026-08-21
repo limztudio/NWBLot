@@ -373,10 +373,9 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     ;
 }
 
-// Adaptive routing deliberately stays narrower than ordinary same-class routing: an immutable timing snapshot may
-// select a different physical transport only inside the already selected queue class and Vulkan family. Existing
-// explicit cross-family policy remains available through task scheduling, but history can never manufacture a new
-// ownership-transfer route.
+// Adaptive routing remains inside the selected queue class. Same-family candidates are always eligible; another
+// Vulkan family additionally needs the task's explicit cross-family opt-in, after which resource planning owns the
+// required exclusive release/acquire pair or rejects an incompatible concurrent-sharing declaration.
 [[nodiscard]] static bool IsLegalTimingFeedbackRoute(
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& incumbent,
@@ -384,7 +383,10 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 )noexcept{
     return AllowsTimingFeedbackRouting(task)
         && candidate.queueClass == incumbent.queueClass
-        && candidate.familyIndex == incumbent.familyIndex
+        && (
+            candidate.familyIndex == incumbent.familyIndex
+            || task.scheduling.allowCrossFamilySameClassQueueRouting
+        )
         && HasCapabilities(candidate.capabilities, task.queue.requiredCapabilities)
     ;
 }
@@ -444,8 +446,8 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
             ++incomingCrossings;
     }
     score.incomingCrossings = SaturateQueueScoreTerm(incomingCrossings);
-    // Future consumer assignments are not yet immutable. Same-family routes never need a Vulkan ownership
-    // transfer, so neither term participates in this intentionally local scoring pass.
+    // Future consumer assignments are not yet immutable. Exact ownership costs require the complete plan, so both
+    // terms remain outside this intentionally local tie-breaker; resource planning stays authoritative.
     score.outgoingCrossings = 0;
     score.ownershipTransfers = 0;
     return score;
@@ -522,7 +524,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 }
 
 // Calibration is deliberately bounded and narrower than adaptive selection. It only visits already-legal
-// same-family routes until each has enough accepted samples, then ordinary hysteresis resumes. Returning the
+// same-class routes until each has enough accepted samples, then ordinary hysteresis resumes. Returning the
 // incumbent is meaningful: it reserves this frame for a baseline sample instead of switching on incomplete data.
 [[nodiscard]] static const GpuPhysicalQueueInfo* FindTimingFeedbackCalibrationQueue(
     const GpuTaskGraphQueueTopology& topology,

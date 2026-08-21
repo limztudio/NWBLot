@@ -103,6 +103,41 @@ class TextureSmokeAnalysisTests(unittest.TestCase):
         self.assertEqual(analysis.receiver_red_pixels, 8 * 8)
 
 
+class WindowsCaptureOrderingTests(unittest.TestCase):
+    def test_capture_window_prepares_before_querying_the_screen_rect(self):
+        hwnd = 0x4A
+        output_path = Path("capture.bmp")
+        calls = []
+        expected_rect = object()
+        capture = object.__new__(window_capture_smoke.WindowsCapture)
+
+        def prepare(window):
+            calls.append(("prepare", window))
+
+        def window_rect(window):
+            self.assertEqual(calls, [("prepare", hwnd)])
+            calls.append(("post-prepare-rect", window))
+            return expected_rect
+
+        def screen_bitblt(window, rect, path):
+            calls.append(("BitBlt", window, rect, path))
+            return "capture"
+
+        capture._prepare_capture_window = prepare
+        capture._window_rect = window_rect
+        capture._capture_screen_rect = screen_bitblt
+
+        self.assertEqual(capture.capture_window(hwnd, output_path), "capture")
+        self.assertEqual(
+            calls,
+            [
+                ("prepare", hwnd),
+                ("post-prepare-rect", hwnd),
+                ("BitBlt", hwnd, expected_rect, output_path),
+            ],
+        )
+
+
 class GracefulTerminationTests(unittest.TestCase):
     def test_linux_x11_helper_receives_captured_window_handle(self):
         result = mock.Mock(returncode=0)

@@ -1594,11 +1594,11 @@ class WindowsCapture:
                 self.user32.ReleaseDC(None, screen_dc)
 
     def capture_window(self, hwnd, output_path):
+        self._prepare_capture_window(hwnd)
         rect = self._window_rect(hwnd)
         if not rect:
             raise SmokeFailure(f"HWND 0x{hwnd:x} rect is unavailable")
 
-        self._prepare_capture_window(hwnd)
         return self._capture_screen_rect(hwnd, rect, output_path)
 
     def capture_client_window(self, hwnd, output_path):

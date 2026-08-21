@@ -1448,6 +1448,75 @@ TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
 }
 
 
+// Temporal soft-shadow scratch stays private, but its accepted native state must seed the next shadow packet on
+// either the Graphics fallback or dedicated Compute route. The separate return-state cache stays Compute-only.
+TEST(EcsGraphics, ShadowTemporalScratchRetainsAcceptedStateAcrossGraphicsRoute){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", systemSource));
+    const AStringView system(systemSource.data(), systemSource.size());
+
+    const usize stateSourcesOffset = system.find("Core::GpuExternalPacketStateSource shadowVisibilityStateSources[");
+    const usize softwareCausticsSourcesOffset = system.find(
+        "Core::GpuExternalPacketStateSource softwareCausticsStateSources[",
+        stateSourcesOffset
+    );
+    ASSERT_NE(stateSourcesOffset, AStringView::npos);
+    ASSERT_NE(softwareCausticsSourcesOffset, AStringView::npos);
+    ASSERT_LT(stateSourcesOffset, softwareCausticsSourcesOffset);
+    const AStringView shadowVisibilityStateSources = system.substr(
+        stateSourcesOffset,
+        softwareCausticsSourcesOffset - stateSourcesOffset
+    );
+    EXPECT_TRUE(ContainsText(shadowVisibilityStateSources, "if(m_shadowComputePersistentState.valid())"));
+    EXPECT_TRUE(ContainsText(shadowVisibilityStateSources, "m_shadowComputePersistentState.source()"));
+    EXPECT_FALSE(ContainsText(
+        shadowVisibilityStateSources,
+        "shadowVisibilityRunsOnCompute && m_shadowComputePersistentState.valid()"
+    ));
+    EXPECT_TRUE(ContainsText(
+        shadowVisibilityStateSources,
+        "if(shadowVisibilityRunsOnCompute && m_shadowVisibilityReturnState.valid())"
+    ));
+
+    const usize acceptedShadowOffset = system.find("const bool softwareCausticsAccepted =");
+    const usize scratchStateOffset = system.find(
+        "m_shadowComputePersistentState.replaceResourceSubset(",
+        acceptedShadowOffset
+    );
+    const usize temporalFinalizeOffset = system.find(
+        "m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);",
+        scratchStateOffset
+    );
+    ASSERT_NE(acceptedShadowOffset, AStringView::npos);
+    ASSERT_NE(scratchStateOffset, AStringView::npos);
+    ASSERT_NE(temporalFinalizeOffset, AStringView::npos);
+    ASSERT_LT(acceptedShadowOffset, temporalFinalizeOffset);
+    const AStringView acceptedShadow = system.substr(
+        acceptedShadowOffset,
+        temporalFinalizeOffset - acceptedShadowOffset
+    );
+    const usize returnStateOffset = acceptedShadow.find("m_shadowVisibilityReturnState.replaceTextureSubset(");
+    const usize acceptedScratchStateOffset = acceptedShadow.find("m_shadowComputePersistentState.replaceResourceSubset(");
+    ASSERT_NE(returnStateOffset, AStringView::npos);
+    ASSERT_NE(acceptedScratchStateOffset, AStringView::npos);
+    EXPECT_LT(returnStateOffset, acceptedScratchStateOffset);
+    EXPECT_TRUE(ContainsText(
+        acceptedShadow,
+        "if(shadowVisibilityRunsOnCompute){\n            // Retain only the cross-queue return state"
+    ));
+    EXPECT_TRUE(ContainsText(
+        acceptedShadow,
+        "        }\n        const Core::TextureHandle shadowComputeScratchTextures[] = {"
+    ));
+    EXPECT_TRUE(ContainsText(acceptedShadow, "deferredTargets.shadowSoftGeometry,"));
+    EXPECT_TRUE(ContainsText(acceptedShadow, "deferredTargets.shadowSoftGeometryPrev,"));
+    EXPECT_TRUE(ContainsText(acceptedShadow, "m_shadowComputePersistentState.replaceResourceSubset("));
+}
+
+
 // AVBOIT's Graphics raster packets deliberately retain their established primary route, but its split Depth Warp
 // and Integration tasks are pure Compute packets with complete graph-declared handoffs. Keep their auxiliary
 // routing opt-in explicit rather than inferring it from the broader AVBOIT effect name.

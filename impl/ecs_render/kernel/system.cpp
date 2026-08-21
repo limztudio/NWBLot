@@ -3111,7 +3111,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         shadowVisibilityStateSourceCount,
         graphicsPrefixFinalStateSeed
     );
-    if(shadowVisibilityRunsOnCompute && m_shadowComputePersistentState.valid()){
+    if(m_shadowComputePersistentState.valid()){
         shadowVisibilityStateSourcesReady = shadowVisibilityStateSourcesReady
             && appendDeclaredStateSource(
                 shadowVisibilityStateSources,
@@ -4472,7 +4472,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         );
 
         if(shadowVisibilityRunsOnCompute){
-            // Retain only private compute scratch; shared inputs come from next frame's prefix.
+            // Retain only the cross-queue return state; shared inputs come from next frame's prefix.
             // Retain accepted producer state for recovery after later rejection.
             const bool producerReturnStatesReady =
                 m_shadowVisibilityReturnState.replaceTextureSubset(
@@ -4491,46 +4491,46 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 failFrameRenderRecovery();
                 return;
             }
-            const Core::TextureHandle shadowComputeScratchTextures[] = {
-                deferredTargets.shadowCoarseTransmittance,
-                deferredTargets.shadowSoftHalfA,
-                deferredTargets.shadowSoftHalfB,
-                deferredTargets.shadowSoftGeometry,
-                deferredTargets.shadowSoftGeometryPrev,
-                deferredTargets.shadowHistA,
-                deferredTargets.shadowHistB,
-                deferredTargets.shadowMomentsA,
-                deferredTargets.shadowMomentsB,
-                deferredTargets.transparentSoftHalf,
-                deferredTargets.transparentHistA,
-                deferredTargets.transparentHistB,
-                deferredTargets.transparentMomentsA,
-                deferredTargets.transparentMomentsB,
-            };
-            const Core::BufferHandle shadowComputeScratchBuffers[] = {
-                m_rayTracingState.m_swShadowEdgeStatsBuffer,
-                m_rayTracingState.m_swShadowEdgeStatsReadback,
-                m_rayTracingState.m_swShadowEdgeCounterBuffer,
-                m_rayTracingState.m_swShadowEdgeListBuffer,
-                m_rayTracingState.m_swShadowIndirectArgsBuffer,
-            };
-            if(!m_shadowComputePersistentState.replaceResourceSubset(
-                *shadowVisibilityFinalStateSeed,
-                shadowComputeScratchTextures,
-                LengthOf(shadowComputeScratchTextures),
-                shadowComputeScratchBuffers,
-                LengthOf(shadowComputeScratchBuffers)
-            )){
-                const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
-                discardTimingTickets();
-                restoreUnacceptedShadowEffectsCpuState();
-                m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-                if(!recovered)
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to recover an accepted deferred packet before abandoning shadow-compute state"));
-                // Missing compute scratch leaves no safe layout restoration.
-                failFrameRenderRecovery();
-                return;
-            }
+        }
+        const Core::TextureHandle shadowComputeScratchTextures[] = {
+            deferredTargets.shadowCoarseTransmittance,
+            deferredTargets.shadowSoftHalfA,
+            deferredTargets.shadowSoftHalfB,
+            deferredTargets.shadowSoftGeometry,
+            deferredTargets.shadowSoftGeometryPrev,
+            deferredTargets.shadowHistA,
+            deferredTargets.shadowHistB,
+            deferredTargets.shadowMomentsA,
+            deferredTargets.shadowMomentsB,
+            deferredTargets.transparentSoftHalf,
+            deferredTargets.transparentHistA,
+            deferredTargets.transparentHistB,
+            deferredTargets.transparentMomentsA,
+            deferredTargets.transparentMomentsB,
+        };
+        const Core::BufferHandle shadowComputeScratchBuffers[] = {
+            m_rayTracingState.m_swShadowEdgeStatsBuffer,
+            m_rayTracingState.m_swShadowEdgeStatsReadback,
+            m_rayTracingState.m_swShadowEdgeCounterBuffer,
+            m_rayTracingState.m_swShadowEdgeListBuffer,
+            m_rayTracingState.m_swShadowIndirectArgsBuffer,
+        };
+        if(!m_shadowComputePersistentState.replaceResourceSubset(
+            *shadowVisibilityFinalStateSeed,
+            shadowComputeScratchTextures,
+            LengthOf(shadowComputeScratchTextures),
+            shadowComputeScratchBuffers,
+            LengthOf(shadowComputeScratchBuffers)
+        )){
+            const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
+            discardTimingTickets();
+            restoreUnacceptedShadowEffectsCpuState();
+            m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
+            if(!recovered)
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to recover an accepted deferred packet before abandoning shadow scratch state"));
+            // Missing private shadow scratch leaves no safe layout restoration.
+            failFrameRenderRecovery();
+            return;
         }
 
         m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);

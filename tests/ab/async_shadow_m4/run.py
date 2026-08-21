@@ -67,7 +67,6 @@ SCOPE_RE = re.compile(
 
 REQUIRED_ASYNC_SCOPES = (
     "render.frame",
-    "render.async_prefix",
     "render.async_shadow",
     "render.async_final",
 )
@@ -912,6 +911,36 @@ def run_self_test() -> int:
         assert summaries["render.frame"].median_ms == 4.5
         assert summaries["render.async_shadow"].positive_sample_count == 2
 
+        # The prefix envelope is diagnostic-only: it is absent when the compiler splits its endpoints into separate
+        # submissions. The rollout gate must still accept complete frame/shadow/final timing in that valid topology.
+        stable_scope = ScopeSummary(6, 6, 1.0, 1.0, 1.0, 1.0)
+        async_run = RunResult(
+            mode="async",
+            executable="async.exe",
+            timing_file="async.timing.txt",
+            log_file="async.log",
+            capture_file=None,
+            lane=LaneStatus(True, True, 0, 1),
+            scopes={
+                "render.frame": stable_scope,
+                "render.async_shadow": stable_scope,
+                "render.async_final": stable_scope,
+            },
+            forbidden_log_messages=[],
+        )
+        sync_run = RunResult(
+            mode="sync",
+            executable="sync.exe",
+            timing_file="sync.timing.txt",
+            log_file="sync.log",
+            capture_file=None,
+            lane=LaneStatus(False, False, 0, 1),
+            scopes={"render.frame": stable_scope},
+            forbidden_log_messages=[],
+        )
+        capture_args.skip_pixel_parity = True
+        assert evaluate_runs(capture_args, sync_run, async_run)["verdict"] == "pass"
+
         first = root / "first.bmp"
         second = root / "second.bmp"
         build_test_bmp(first, ((0, 0, 0), (10, 20, 30)))
@@ -1017,3 +1046,4 @@ def main(argv: Sequence[str]) -> int:
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
+

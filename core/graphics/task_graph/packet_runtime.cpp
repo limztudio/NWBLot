@@ -225,6 +225,74 @@ inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph
     return true;
 }
 
+// A frontier packet is meaningful only as an explicit recovery/finalization tail. The compiler prevents it from
+// merging with ordinary work, but does not force declaration order, so normal graph execution verifies that the
+// packets form one terminal suffix before it opens any native command list.
+[[nodiscard]] bool FindNormalGraphPacketRange(
+    const GpuCompiledGraph& compiledGraph,
+    GpuSubmissionPacketRange& outRange,
+    GpuSubmissionPacketId* const outFailedPacket
+){
+    outRange = {};
+    if(outFailedPacket)
+        *outFailedPacket = {};
+
+    const usize packetCount = compiledGraph.packetCount();
+    if(packetCount == 0u)
+        return false;
+
+    usize firstFrontierPacketIndex = packetCount;
+    for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex){
+        const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
+        if(compiledGraph.packet(packet).joinsAcceptedQueueFrontier){
+            if(firstFrontierPacketIndex == packetCount)
+                firstFrontierPacketIndex = packetIndex;
+            continue;
+        }
+        if(firstFrontierPacketIndex != packetCount){
+            if(outFailedPacket)
+                *outFailedPacket = packet;
+            return false;
+        }
+    }
+
+    if(firstFrontierPacketIndex == 0u){
+        if(outFailedPacket)
+            *outFailedPacket = compiledGraph.packetIdAt(0u);
+        return false;
+    }
+
+    const GpuSubmissionPacketId firstPacket = compiledGraph.packetIdAt(0u);
+    const GpuSubmissionPacketId lastPacket = compiledGraph.packetIdAt(
+        firstFrontierPacketIndex == packetCount ? packetCount - 1u : firstFrontierPacketIndex - 1u
+    );
+    outRange = compiledGraph.packetRange(firstPacket, lastPacket);
+    return compiledGraph.validPacketRange(outRange);
+}
+
+[[nodiscard]] bool ValidateNormalGraphTaskStateBindings(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketRange& range,
+    const GpuTaskPacketStateBinding* const taskStateBindings,
+    const usize taskStateBindingCount
+){
+    if(!ValidateTaskPacketStateBindings(graph, compiledGraph, taskStateBindings, taskStateBindingCount))
+        return false;
+
+    const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
+    for(usize bindingIndex = 0u; bindingIndex < taskStateBindingCount; ++bindingIndex){
+        const GpuSubmissionPacketId packet = compiledGraph.packetForTask(taskStateBindings[bindingIndex].task);
+        if(
+            !packet.valid()
+            || packet.index < range.first.index
+            || static_cast<usize>(packet.index) >= rangeEnd
+        )
+            return false;
+    }
+    return true;
+}
+
 // Ordinary external completions may originate on any current-device queue. A completion paired with an imported
 // ownership acquire is narrower: it must prove the exact physical source queue that released the resource, or the
 // consumer could wait an unrelated timeline and race the Vulkan acquire.
@@ -3019,6 +3087,111 @@ bool GpuTaskGraphSubmitter::submitTaskRangeInCompileOrder(
         taskAcceptedCallbacks,
         taskAcceptedCallbackCount
     );
+}
+
+
+bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuNativePacketRecorder& recorder,
+    GpuRecordedGraph& recordedGraph,
+    const GpuTaskGraphNormalExecutionDesc& desc,
+    GpuGraphSubmissionTransaction& transaction,
+    Alloc::ScratchArena& scratchArena,
+    GpuSubmissionPacketId* const outFailedPacket
+)const{
+    if(outFailedPacket)
+        *outFailedPacket = {};
+    if(!compiledGraph.validFor(graph) || !transaction.validFor(compiledGraph))
+        return false;
+
+    GpuSubmissionPacketRange normalRange;
+    GpuSubmissionPacketId failedPacket;
+    if(!__hidden_gpu_packet_runtime::FindNormalGraphPacketRange(
+        compiledGraph,
+        normalRange,
+        &failedPacket
+    )){
+        if(outFailedPacket)
+            *outFailedPacket = failedPacket;
+        return false;
+    }
+    if(
+        (desc.recordOverrideCount != 0u && !desc.recordOverrides)
+        || (desc.externalCompletionTokenCount != 0u && !desc.externalCompletionTokens)
+        || (desc.taskTimingTicketCount != 0u && !desc.taskTimingTickets)
+        || (desc.submissionHookCount != 0u && !desc.submissionHooks)
+        || (desc.taskAcceptedCallbackCount != 0u && !desc.taskAcceptedCallbacks)
+        || (desc.taskSubmissionHookCount != 0u && !desc.taskSubmissionHooks)
+        || (desc.acceptedCallback && !desc.acceptedCallback->invoke)
+        || !__hidden_gpu_packet_runtime::ValidateNormalGraphTaskStateBindings(
+            graph,
+            compiledGraph,
+            normalRange,
+            desc.taskStateBindings,
+            desc.taskStateBindingCount
+        )
+    )
+        return false;
+
+    const bool recorded = desc.readyFrontierWorkerPool
+        ? recorder.recordPacketRangeInReadyFrontiers(
+            graph,
+            compiledGraph,
+            normalRange,
+            desc.recordOverrides,
+            desc.recordOverrideCount,
+            recordedGraph,
+            *desc.readyFrontierWorkerPool,
+            &failedPacket,
+            desc.commandIrCapture,
+            desc.taskStateBindings,
+            desc.taskStateBindingCount
+        )
+        : recorder.recordPacketRangeInCompileOrder(
+            graph,
+            compiledGraph,
+            normalRange,
+            desc.recordOverrides,
+            desc.recordOverrideCount,
+            recordedGraph,
+            &failedPacket,
+            desc.commandIrCapture,
+            desc.taskStateBindings,
+            desc.taskStateBindingCount
+        )
+    ;
+    if(!recorded){
+        if(outFailedPacket)
+            *outFailedPacket = failedPacket;
+        return false;
+    }
+
+    if(!submitPacketRangeInCompileOrderFromTasks(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        normalRange,
+        desc.externalCompletionTokens,
+        desc.externalCompletionTokenCount,
+        desc.taskTimingTickets,
+        desc.taskTimingTicketCount,
+        transaction,
+        scratchArena,
+        &failedPacket,
+        desc.acceptedCallback,
+        desc.submissionHooks,
+        desc.submissionHookCount,
+        desc.taskAcceptedCallbacks,
+        desc.taskAcceptedCallbackCount,
+        desc.taskSubmissionHooks,
+        desc.taskSubmissionHookCount
+    )){
+        if(outFailedPacket)
+            *outFailedPacket = failedPacket;
+        return false;
+    }
+    return true;
 }
 
 

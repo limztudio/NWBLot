@@ -848,21 +848,25 @@ TEST(EcsGraphics, UiLegacyFallbackUsesStandaloneGraphs){
     ASSERT_NE(resizeOffset, AStringView::npos);
     const AStringView prepareFrame = ui.substr(prepareFrameOffset, snapshotClearOffset - prepareFrameOffset);
     const AStringView directRenderBody = ui.substr(renderOffset, resizeOffset - renderOffset);
-    EXPECT_TRUE(ContainsText(prepareFrame, "ensureRenderCommandList()"));
-    EXPECT_FALSE(ContainsText(directRenderBody, "ensureRenderCommandList()"));
+    EXPECT_FALSE(ContainsText(prepareFrame, "ensureRenderCommandList()"));
+    EXPECT_TRUE(ContainsText(directRenderBody, "if(!ensureRenderCommandList())"));
     EXPECT_FALSE(ContainsText(directRenderBody, "prepareTextureRequests"));
     EXPECT_TRUE(ContainsText(directRenderBody, "standalone legacy ImGui graph presentation failed; retaining direct raster fallback"));
     EXPECT_TRUE(ContainsText(directRenderBody, "direct ImGui fallback submission was rejected; retaining frame for retry"));
 
     const usize directTextureSubmitOffset = directRenderBody.find("submitPreparedLegacyTextureUploads(*drawData)");
+    const usize directCommandListOffset = directRenderBody.find("if(!ensureRenderCommandList())");
     const usize directExecuteOffset = directRenderBody.find("device.executeCommandLists(commandLists, 1, Core::CommandQueue::Graphics, &submitted)");
     const usize directRejectedSubmitOffset = directRenderBody.find("if(!submitted)", directExecuteOffset);
     const usize directFrameResetOffset = directRenderBody.find("m_frameStarted = false", directExecuteOffset);
     ASSERT_NE(directTextureSubmitOffset, AStringView::npos);
+    ASSERT_NE(directCommandListOffset, AStringView::npos);
     ASSERT_NE(directExecuteOffset, AStringView::npos);
     ASSERT_NE(directRejectedSubmitOffset, AStringView::npos);
     ASSERT_NE(directFrameResetOffset, AStringView::npos);
     EXPECT_LT(directTextureSubmitOffset, directExecuteOffset);
+    EXPECT_LT(directTextureSubmitOffset, directCommandListOffset);
+    EXPECT_LT(directCommandListOffset, directExecuteOffset);
     EXPECT_LT(directExecuteOffset, directRejectedSubmitOffset);
     EXPECT_LT(directRejectedSubmitOffset, directFrameResetOffset);
 }

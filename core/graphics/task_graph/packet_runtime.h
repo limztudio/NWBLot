@@ -495,6 +495,33 @@ struct GpuTaskGraphTaskRecordedCallback{
 };
 
 
+// Describes one graph-owned execution of every ordinary packet in compiler order. The executor derives the normal
+// prefix itself and leaves any terminal accepted-frontier suffix declared for the caller's explicit recovery or
+// finalization policy. Semantic timing, completion, and callback bindings keep that ordinary execution independent
+// from compiler packet splitting and merging.
+struct GpuTaskGraphNormalExecutionDesc{
+    const GpuNativePacketRecordDesc* recordOverrides = nullptr;
+    usize recordOverrideCount = 0u;
+    const GpuTaskPacketStateBinding* taskStateBindings = nullptr;
+    usize taskStateBindingCount = 0u;
+    // A null worker pool preserves serial compile-order recording. A supplied pool enables the recorder's
+    // per-packet ready-frontier policy; packets without declaration opt-in still record serially.
+    Alloc::ThreadPool* readyFrontierWorkerPool = nullptr;
+    GpuCommandIrCapture* commandIrCapture = nullptr;
+    const GpuTaskGraphExternalCompletionToken* externalCompletionTokens = nullptr;
+    usize externalCompletionTokenCount = 0u;
+    const GpuTaskGraphTaskTimingTicket* taskTimingTickets = nullptr;
+    usize taskTimingTicketCount = 0u;
+    const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr;
+    const GpuTaskGraphPacketSubmissionHook* submissionHooks = nullptr;
+    usize submissionHookCount = 0u;
+    const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr;
+    usize taskAcceptedCallbackCount = 0u;
+    const GpuTaskGraphTaskSubmissionHook* taskSubmissionHooks = nullptr;
+    usize taskSubmissionHookCount = 0u;
+};
+
+
 // Transaction-owned native submission telemetry. Wait counts describe graph-provided timeline tokens after applying
 // the same physical-queue elision and per-producer merge rules as Device::executeCommandLists(); backend-internal
 // waits outside this graph submission are intentionally excluded.
@@ -881,6 +908,19 @@ public:
         usize submissionHookCount = 0u,
         const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr,
         usize taskAcceptedCallbackCount = 0u
+    )const;
+    // Records then submits every ordinary compiler packet. Accepted-frontier packets must form one terminal suffix;
+    // the executor rejects a non-terminal frontier before recording so recovery/finalization remains explicit and
+    // retry-safe. It never discards remaining work or submits the frontier suffix on the caller's behalf.
+    [[nodiscard]] bool recordAndSubmitNormalGraph(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuNativePacketRecorder& recorder,
+        GpuRecordedGraph& recordedGraph,
+        const GpuTaskGraphNormalExecutionDesc& desc,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
     // Records then submits one compiler-derived normal range in serial compile order. Recovery/finalization packets
     // that join the accepted queue frontier are deliberately rejected here: callers retain explicit ownership of

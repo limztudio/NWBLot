@@ -143,6 +143,9 @@ GpuTimingScope GpuTimingAccumulator::beginQuery(
 
     record.recording = true;
     record.publishSample = true;
+    // A device-timeline reset authorizes exactly one timestamp pair. Consume it as soon as the reservation records
+    // its begin endpoint, even if that command buffer is later discarded before submission.
+    record.deviceReady = false;
     commandList.beginTimerQuery(record.query.get());
     record.frameIndex = frameIndex;
     record.attribution = attribution;
@@ -194,12 +197,13 @@ void GpuTimingAccumulator::discardQuery(const GpuTimingScope& scope){
     if(record.query.get() != scope.query || record.reservation != scope.reservation)
         return;
 
-    // The command buffer that wrote this pair never reached the device, so its timestamp values cannot become
-    // observable. Keep the preamble-established deviceReady state intact: a later scope may still use this pool.
+    // A discarded command buffer may already contain timestamp writes. Require another accepted preamble reset
+    // before a dynamic-rendering scope reuses this pool; outside a render pass beginTimerQuery() resets it itself.
     record.recording = false;
     record.pending = false;
     record.publishSample = true;
     record.attribution = s_NoGpuTimingSampleAttribution;
+    record.deviceReady = false;
 }
 
 bool GpuTimingAccumulator::reserveQueries(Device& device, const u32 queryCount){

@@ -404,39 +404,23 @@ template<typename DeclareTask>
     )
         return false;
 
-    const GpuSubmissionPacketRange normalPacketRange = compiledGraph.packetRange(
-        compiledGraph.packetIdAt(0u),
-        compiledGraph.packetIdAt(recoveryPacket.index - 1u)
-    );
-    if(!compiledGraph.validPacketRange(normalPacketRange))
-        return false;
-
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
     const GpuTaskGraphSubmitter submitter(device);
     // Setup and timing callers preserve their established serial behavior. The public standalone graph boundary
-    // passes the Graphics worker pool, whose task declarations opt into worker recording individually.
-    const bool submitted = readyFrontierWorkerPool
-        ? submitter.recordAndSubmitPacketRangeInReadyFrontiers(
-            graph,
-            compiledGraph,
-            recorder,
-            recordedGraph,
-            *readyFrontierWorkerPool,
-            normalPacketRange,
-            transaction,
-            scratchArena
-        )
-        : submitter.recordAndSubmitPacketRangeInCompileOrder(
-            graph,
-            compiledGraph,
-            recorder,
-            recordedGraph,
-            normalPacketRange,
-            transaction,
-            scratchArena
-        )
-    ;
+    // supplies the Graphics worker pool; the normal executor derives its recovery suffix and each task decides
+    // whether it can safely opt into ready-frontier worker recording.
+    GpuTaskGraphNormalExecutionDesc normalExecution;
+    normalExecution.readyFrontierWorkerPool = readyFrontierWorkerPool;
+    const bool submitted = submitter.recordAndSubmitNormalGraph(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        normalExecution,
+        transaction,
+        scratchArena
+    );
     if(!submitted){
         const bool recovered = !transaction.hasAcceptedPackets() || submitter.recordAndSubmitAcceptedFrontierTask(
             graph,

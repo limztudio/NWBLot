@@ -640,11 +640,6 @@ bool UiSystem::prepareFrameResources(Core::Framebuffer* framebuffer, const bool 
     if(drawData->TotalVtxCount <= 0 || drawData->TotalIdxCount <= 0)
         return true;
 
-    // The renderer can abandon a graph after graph-owned preparation. Keep the direct fallback command list ready
-    // before that declaration so render() only records against prepared persistent resources.
-    if(!ensureRenderCommandList())
-        return false;
-
     if(graphOwnsUploads && !prepareTaskGraphDrawUploads(*drawData))
         return false;
 
@@ -1879,18 +1874,19 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
     if(!m_pipeline)
         return;
 
-    auto& device = m_graphics.getDevice();
     if(drawData->TotalVtxCount <= 0 || drawData->TotalIdxCount <= 0){
         m_frameStarted = false;
         m_frameFinished = false;
         return;
     }
 
-    Core::CommandList* commandList = m_renderCommandList.get();
-    if(!commandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: render command list was not prepared"));
+    // A native list belongs only to the last-resort direct path. Graph declaration must remain queue-agnostic until
+    // the compiler selects a physical queue, so allocate this compatibility list only after both graph attempts fail.
+    if(!ensureRenderCommandList())
         return;
-    }
+
+    auto& device = m_graphics.getDevice();
+    Core::CommandList* const commandList = m_renderCommandList.get();
     NWB_ASSERT(commandList);
 
     commandList->open();

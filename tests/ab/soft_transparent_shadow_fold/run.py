@@ -217,6 +217,9 @@ def run_arm(
         window = capture_backend.wait_for_window(app_process.pid, args.startup_timeout, args.window_title)
         if not window:
             raise SmokeFailure(f"{arm} benchmark did not expose expected window '{args.window_title}'")
+        capture_backend.prepare_window(window)
+        time.sleep(0.1)
+
         wait_while_running(app_process, args.warmup_seconds, f"during {arm} warmup")
         wait_while_running(app_process, args.measure_seconds, f"during {arm} measurement")
         validate_capture_result(capture_backend.capture_window(window, capture_path))
@@ -521,3 +524,4 @@ def main(argv: Sequence[str]) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv[1:]))
+

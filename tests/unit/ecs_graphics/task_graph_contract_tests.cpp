@@ -1034,6 +1034,48 @@ TEST(EcsGraphics, SurfelGiPermitsOptInCrossFamilyComputeRouting){
 }
 
 
+// The persistent counter crosses the Compute GI packet and optional Transfer readback tail.  Its next-frame
+// imported cache must therefore be concurrently shared by each actual transport rather than retaining a stale
+// exclusive Transfer owner with no future release destination.
+TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString surfelSource;
+    AString taskGraphSource;
+    AString systemSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_surfel_gi.cpp", surfelSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", systemSource));
+    const AStringView surfel(surfelSource.data(), surfelSource.size());
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const AStringView system(systemSource.data(), systemSource.size());
+
+    const usize counterOffset = surfel.find("if(!rayTracingState().m_surfelCounterBuffer){");
+    const usize traceArgsOffset = surfel.find("// Build-args rewrites the indirect dispatch buffer each frame.", counterOffset);
+    ASSERT_NE(counterOffset, AStringView::npos);
+    ASSERT_NE(traceArgsOffset, AStringView::npos);
+    ASSERT_LT(counterOffset, traceArgsOffset);
+    const AStringView counter = surfel.substr(counterOffset, traceArgsOffset - counterOffset);
+    EXPECT_TRUE(ContainsText(counter, ".setCanHaveUAVs(true)"));
+    EXPECT_TRUE(ContainsText(counter, ".setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)"));
+    EXPECT_TRUE(ContainsText(counter, ".setDebugName(Name(\"surfel_counter\"))"));
+
+    const usize readbackOffset = taskGraph.find("void RendererSystem::declareDeferredSurfelCountReadbackTask");
+    const usize graphBuildOffset = taskGraph.find("void RendererSystem::buildDeferredLightingTaskGraph", readbackOffset);
+    ASSERT_NE(readbackOffset, AStringView::npos);
+    ASSERT_NE(graphBuildOffset, AStringView::npos);
+    ASSERT_LT(readbackOffset, graphBuildOffset);
+    const AStringView readback = taskGraph.substr(readbackOffset, graphBuildOffset - readbackOffset);
+    EXPECT_TRUE(ContainsText(readback, "m_rayTracingState.m_surfelCounterBuffer"));
+    EXPECT_TRUE(ContainsText(readback, ".source = counter,"));
+    EXPECT_TRUE(ContainsText(readback, ".setQueue(TransferQueueRequest())"));
+
+    EXPECT_TRUE(ContainsText(system, "if(m_surfelGiCounterPersistentState.valid())"));
+    EXPECT_TRUE(ContainsText(system, "m_surfelGiCounterPersistentState.commit(readbackCounterStateCandidate)"));
+}
+
+
 // The full irradiance clear is deliberately renderer-local: the generic helper conservatively declares Graphics
 // for render-pass lowering, while this native clear is constrained to the direct Compute GI packet and captures the
 // same typed command-IR record after the graph-owned CopyDest transition.

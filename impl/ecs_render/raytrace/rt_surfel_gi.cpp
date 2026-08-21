@@ -803,6 +803,9 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
             .setByteSize(static_cast<u64>(sizeof(u32)) * NWB_SURFEL_COUNTER_SIZE)
             .setStructStride(sizeof(u32))
             .setCanHaveUAVs(true)
+            // The persistent counter is written by GI on Compute and may be copied by the late diagnostic
+            // readback on Transfer before the next Compute frame imports its accepted tail state.
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
             .setDebugName(Name("surfel_counter"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;

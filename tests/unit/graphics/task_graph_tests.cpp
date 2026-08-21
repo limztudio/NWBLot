@@ -24737,6 +24737,12 @@ TEST(GpuTaskGraph, MergesGraphOwnedAdaptiveShadowPrimitivesIntoShadowVisibilityP
 TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuExternalCompletionId priorHistoryTail = graph.importExternalCompletion(
+        Graphics::GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/task_graph/monolithic_shadow_visibility_history_tail"))
+            .setMarkerLabel("Prior Lagged Lighting History Tail")
+    );
+    ASSERT_TRUE(priorHistoryTail.valid());
     constexpr Graphics::ResourceQueueSharing::Mask queueSharing =
         Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
     ;
@@ -24826,6 +24832,7 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
         .setQueue(computeRequest)
         .setScheduling(clearScheduling)
         .setDependencies(&prefix, 1u)
+        .setExternalDependencies(&priorHistoryTail, 1u)
         .setResourceUses(allLitClearUses, LengthOf(allLitClearUses))
     ;
     const Graphics::GpuTaskId allLitClear = graph.addTask(allLitClearDesc);
@@ -24942,6 +24949,12 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
     ASSERT_NE(shadowPacketTasks, nullptr);
     EXPECT_EQ(shadowPacketTasks[0u], allLitClear);
     EXPECT_EQ(shadowPacketTasks[1u], shadow);
+    ASSERT_EQ(shadowPacketDesc.externalDependencyCount, 1u);
+    const Graphics::GpuExternalCompletionId* const shadowExternalDependencies = compiledGraph.packetExternalDependencies(
+        shadowPacket
+    );
+    ASSERT_NE(shadowExternalDependencies, nullptr);
+    EXPECT_EQ(shadowExternalDependencies[0u], priorHistoryTail);
 
     const auto hasTextureTransition = [&](
         const Graphics::GpuTaskId task,
@@ -25019,6 +25032,12 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
 TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisibility){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuExternalCompletionId priorHistoryTail = graph.importExternalCompletion(
+        Graphics::GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/task_graph/soft_transparent_fold_history_tail"))
+            .setMarkerLabel("Prior Lagged Lighting History Tail")
+    );
+    ASSERT_TRUE(priorHistoryTail.valid());
     constexpr Graphics::ResourceQueueSharing::Mask queueSharing =
         Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
     ;
@@ -25180,6 +25199,7 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
         .setMarkerLabel("Shadow Visibility Opaque")
         .setQueue(computeRequest)
         .setScheduling(opaqueScheduling)
+        .setExternalDependencies(&priorHistoryTail, 1u)
         .setResourceUses(opaqueUses, LengthOf(opaqueUses))
     ;
     const Graphics::GpuTaskId opaque = graph.addTask(opaqueDesc);
@@ -25558,6 +25578,12 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     EXPECT_EQ(shadowTasks[4u], transparentTemporalMerge);
     EXPECT_EQ(shadowTasks[5u], transparentFirstWavelet);
     EXPECT_EQ(shadowTasks[6u], fold);
+    ASSERT_EQ(shadowPacket.externalDependencyCount, 1u);
+    const Graphics::GpuExternalCompletionId* const shadowExternalDependencies = compiledGraph.packetExternalDependencies(
+        foldPacket
+    );
+    ASSERT_NE(shadowExternalDependencies, nullptr);
+    EXPECT_EQ(shadowExternalDependencies[0u], priorHistoryTail);
 
     const Graphics::GpuCompiledTask* const compiledOpaqueFirstWavelet = compiledGraph.findTask(opaqueFirstWavelet);
     ASSERT_NE(compiledOpaqueFirstWavelet, nullptr);
@@ -32075,14 +32101,19 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
 
-    const auto importTexture = [&](const Name& identity, const AStringView label, const Graphics::ResourceStates::Mask initialState){
+    const auto importTexture = [&](
+        const Name& identity,
+        const AStringView label,
+        const Graphics::ResourceStates::Mask initialState,
+        const Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    ){
         Graphics::GpuGraphResourceDesc desc;
         desc
             .setIdentity(identity)
             .setMarkerLabel(label)
             .setType(Graphics::GpuGraphResourceType::Texture)
             .setInitialState(initialState)
-            .setQueueSharing(Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute)
+            .setQueueSharing(queueSharing)
         ;
         return graph.importResource(desc);
     };
@@ -32115,12 +32146,14 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     const Graphics::GpuGraphResourceId historyIrradiance = importTexture(
         Name("tests/task_graph/lagged_history_irradiance"),
         "Lagged Irradiance",
-        Graphics::ResourceStates::ShaderResource
+        Graphics::ResourceStates::ShaderResource,
+        Graphics::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer
     );
     const Graphics::GpuGraphResourceId currentIrradiance = importTexture(
         Name("tests/task_graph/lagged_current_irradiance"),
         "Current Irradiance",
-        Graphics::ResourceStates::CopySource
+        Graphics::ResourceStates::CopySource,
+        Graphics::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer
     );
     const Graphics::GpuGraphResourceId opaqueColor = importTexture(
         Name("tests/task_graph/lagged_opaque_color"),
@@ -32251,6 +32284,7 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
         .setQueue(computeRequest)
         .setScheduling(scheduling)
         .setDependencies(&prefix, 1u)
+        .setExternalDependencies(&historyCompletion, 1u)
         .setResourceUses(shadowVisibilityUses, LengthOf(shadowVisibilityUses))
     ;
     const Graphics::GpuTaskId shadowVisibility = graph.addTask(shadowVisibilityDesc);
@@ -32499,6 +32533,7 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     const Graphics::GpuPhysicalQueueInfo queues[] = {
         GraphicsQueue(),
         DedicatedComputeQueue(),
+        DedicatedTransferQueue(),
     };
     const Graphics::GpuTaskGraphQueueTopology topology{
         .queues = queues,
@@ -32544,6 +32579,9 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     EXPECT_EQ(lightingAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute);
     EXPECT_EQ(compositeAssignment->queueClass, Graphics::CommandQueue::Graphics);
     EXPECT_EQ(presentAssignment->queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(historyCopyAssignment->queueClass, Graphics::CommandQueue::Transfer);
+    EXPECT_EQ(historyCopyAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedTransfer);
+    EXPECT_EQ(historyCopyAssignment->queue, queues[2u].id);
 
     const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
     const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
@@ -32645,7 +32683,12 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
         ;
     }
     EXPECT_TRUE(shadowVisibilityImportsBindlessSlotsState);
-    EXPECT_EQ(compiledGraph.packet(shadowVisibilityPacket).externalDependencyCount, 0u);
+    ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).externalDependencyCount, 1u);
+    const Graphics::GpuExternalCompletionId* const shadowVisibilityExternalDependencies =
+        compiledGraph.packetExternalDependencies(shadowVisibilityPacket)
+    ;
+    ASSERT_NE(shadowVisibilityExternalDependencies, nullptr);
+    EXPECT_EQ(shadowVisibilityExternalDependencies[0u], historyCompletion);
     ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 2u);
     const Graphics::GpuPacketDependency* const shadowVisibilityPacketDependencies = compiledGraph.packetDependencies(
         shadowVisibilityPacket
@@ -32663,6 +32706,12 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     }
     EXPECT_TRUE(shadowVisibilityWaitsForShadowPrepare);
     EXPECT_TRUE(shadowVisibilityWaitsForPrefix);
+    ASSERT_EQ(compiledGraph.packet(hardwarePacket).externalDependencyCount, 1u);
+    const Graphics::GpuExternalCompletionId* const hardwareExternalDependencies = compiledGraph.packetExternalDependencies(
+        hardwarePacket
+    );
+    ASSERT_NE(hardwareExternalDependencies, nullptr);
+    EXPECT_EQ(hardwareExternalDependencies[0u], historyCompletion);
     ASSERT_EQ(compiledGraph.packet(surfelGiPacket).externalDependencyCount, 0u);
     ASSERT_GE(compiledGraph.packet(surfelGiPacket).dependencyCount, 1u);
     const Graphics::GpuPacketDependency* const surfelGiPacketDependencies = compiledGraph.packetDependencies(

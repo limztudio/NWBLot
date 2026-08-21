@@ -8051,6 +8051,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     const Core::GpuGraphResourceSetId softwareTraceGeometrySet,
     const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
     const Core::GpuTaskId prefixTask,
+    const Core::GpuExternalCompletionId laggedLightingHistoryWriterCompletion,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming,
     Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
@@ -8087,6 +8088,11 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         || (softwareTraceGeometryResourceCount != 0u && !softwareTraceGeometryResources)
     )
         return false;
+
+    const Core::GpuExternalCompletionId* const laggedLightingHistoryWriterDependencies =
+        laggedLightingHistoryWriterCompletion.valid() ? &laggedLightingHistoryWriterCompletion : nullptr
+    ;
+    const usize laggedLightingHistoryWriterDependencyCount = laggedLightingHistoryWriterCompletion.valid() ? 1u : 0u;
 
     opaqueProduced = false;
     transparentTraceProduced = false;
@@ -8829,6 +8835,10 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             .setQueue(ComputeTransferPacketQueueRequest())
             .setScheduling(opaqueScheduling)
             .setDependencies(&prefixTask, 1u)
+            .setExternalDependencies(
+                laggedLightingHistoryWriterDependencies,
+                laggedLightingHistoryWriterDependencyCount
+            )
             .setResourceUses(opaqueResourceUses.data(), opaqueResourceUses.size())
             .setResourceSetUses(
                 !hardwareShadowSupported && softwareTraceGeometryStatesGraphOwned ? &softwareTraceGeometrySetUse : nullptr,
@@ -9134,6 +9144,10 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         .setQueue(ComputePacketQueueRequest())
         .setScheduling(allLitClearScheduling)
         .setDependencies(&shadowVisibilityDependency, 1u)
+        .setExternalDependencies(
+            laggedLightingHistoryWriterDependencies,
+            laggedLightingHistoryWriterDependencyCount
+        )
         .setResourceUses(&allLitClearResourceUse, 1u)
     ;
     m_deferredShadowVisibilityAllLitClearTask = m_deferredLightingTaskGraph.addTask<
@@ -11099,6 +11113,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         && features.laggedLightingHistoryReady
         && features.laggedLightingHistoryAccepted
     ;
+    const bool waitsForLaggedLightingHistoryWriter = useLaggedLightingHistory
+        || features.laggedLightingHistoryWriterWaitPending
+    ;
     const bool splitAvboitStages = !useLaggedLightingHistory
         && dedicatedAsyncCompute
         && features.hasTransparentRenderers
@@ -11813,7 +11830,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         return;
     }
 
-    if(useLaggedLightingHistory){
+    if(waitsForLaggedLightingHistoryWriter){
         Core::GpuExternalCompletionDesc lightingHistoryCompletionDesc;
         lightingHistoryCompletionDesc
             .setIdentity(Name("render.deferred_lighting.lagged_history_complete"))
@@ -11864,6 +11881,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         softwareTraceGeometrySet,
         traceMaterialSampledTextureSet,
         m_graphicsPrefixTask,
+        features.laggedLightingHistoryWriterWaitPending
+            ? m_deferredLightingHistoryCompletion
+            : Core::GpuExternalCompletionId{},
         shadowVisibilityTimingTicket,
         shadowVisibilityAsyncTiming,
         shadowVisibilityTiming,
@@ -12319,11 +12339,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         }
 
         const Core::GpuTaskId hardwareDependencies[] = { m_graphicsPrefixTask };
-        const Core::GpuExternalCompletionId* const hardwareExternalDependencies = useLaggedLightingHistory
+        const Core::GpuExternalCompletionId* const hardwareExternalDependencies = features.laggedLightingHistoryWriterWaitPending
             ? &m_deferredLightingHistoryCompletion
             : nullptr
         ;
-        const usize hardwareExternalDependencyCount = useLaggedLightingHistory ? 1u : 0u;
+        const usize hardwareExternalDependencyCount = features.laggedLightingHistoryWriterWaitPending ? 1u : 0u;
         Core::GpuTaskSchedulingHint hardwareScheduling;
         hardwareScheduling.cost = Core::GpuTaskCostHint::Large;
         hardwareScheduling.forceSubmissionBoundary = true;

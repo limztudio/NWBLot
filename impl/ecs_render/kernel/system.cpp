@@ -197,9 +197,19 @@ void RendererSystem::invalidateLaggedLightingHistorySubmission()noexcept{
     m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
 }
 
-void RendererSystem::resetLaggedLightingHistoryTracking()noexcept{
+void RendererSystem::invalidateLaggedLightingHistoryWriterDrain()noexcept{
+    m_laggedLightingHistoryWriterDrainToken = Core::QueueSubmissionToken{};
+    m_laggedLightingHistoryWriterDrainGeneration = 0u;
+}
+
+void RendererSystem::resetLaggedLightingHistoryReadTracking()noexcept{
     invalidateLaggedLightingHistorySubmission();
     m_laggedLightingHistoryGeneration = 0u;
+}
+
+void RendererSystem::resetLaggedLightingHistoryTracking()noexcept{
+    resetLaggedLightingHistoryReadTracking();
+    invalidateLaggedLightingHistoryWriterDrain();
 }
 
 void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
@@ -770,20 +780,69 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
+    const u64 laggedLightingHistoryTargetGeneration = deferredTargets.laggedLightingHistory.generation;
+    const Core::QueueSubmissionToken laggedLightingHistorySubmissionToken =
+        m_laggedLightingHistorySubmissionToken
+    ;
+    const auto laggedLightingHistoryTokenPending = [&device, laggedLightingHistoryTargetGeneration](
+        const Core::QueueSubmissionToken& token,
+        const u64 tokenTargetGeneration
+    ){
+        return token.valid()
+        && tokenTargetGeneration == laggedLightingHistoryTargetGeneration
+        && token.hasPhysicalQueueIdentity()
+        && device.matchesPhysicalQueueIdentity(
+            token.queue,
+            token.physicalQueueIndex,
+            token.deviceGeneration
+        )
+        && device.queueGetCompletedInstance(
+            Core::GpuPhysicalQueueId{
+                token.physicalQueueIndex,
+                token.deviceGeneration,
+            }
+        ) < token.value
+    ;
+    };
+    const bool laggedLightingHistorySubmissionPending = laggedLightingHistoryTokenPending(
+        laggedLightingHistorySubmissionToken,
+        m_laggedLightingHistoryGeneration
+    );
+
+    // The next graph declaration clears the normal history-tail output token before its replacement can accept.
+    // Keep only an incomplete accepted tail as the writer drain. A completed tail cannot race live producers, while a
+    // later accepted tail is a proven successor of an older drain and protects a rejected declaration/submission retry.
+    if(laggedLightingHistorySubmissionPending){
+        m_laggedLightingHistoryWriterDrainToken = laggedLightingHistorySubmissionToken;
+        m_laggedLightingHistoryWriterDrainGeneration = m_laggedLightingHistoryGeneration;
+    }
+    else if(
+        m_laggedLightingHistoryWriterDrainToken.valid()
+        && !laggedLightingHistoryTokenPending(
+            m_laggedLightingHistoryWriterDrainToken,
+            m_laggedLightingHistoryWriterDrainGeneration
+        )
+    )
+        invalidateLaggedLightingHistoryWriterDrain();
+
     if(laggedAsyncLightingRequested){
-        const u64 historyGeneration = deferredTargets.laggedLightingHistory.generation;
-        if(m_laggedLightingHistoryGeneration != historyGeneration){
+        if(m_laggedLightingHistoryGeneration != laggedLightingHistoryTargetGeneration){
             // Target generations prevent history from using recycled slots after resize.
             invalidateLaggedLightingHistorySubmission();
-            m_laggedLightingHistoryGeneration = historyGeneration;
+            m_laggedLightingHistoryGeneration = laggedLightingHistoryTargetGeneration;
         }
     }
     else{
-        resetLaggedLightingHistoryTracking();
+        resetLaggedLightingHistoryReadTracking();
     }
     // Declaring the next history-copy tail intentionally resets the member token before that new packet accepts.
     // Snapshot the prior accepted tail for every current-frame external dependency before graph declaration.
     const Core::QueueSubmissionToken priorLaggedLightingHistoryToken = m_laggedLightingHistorySubmissionToken;
+    const Core::QueueSubmissionToken priorLaggedLightingHistoryWriterDrainToken =
+        m_laggedLightingHistoryWriterDrainToken
+    ;
+    const bool laggedLightingHistoryWriterWaitPending = priorLaggedLightingHistoryWriterDrainToken.valid();
+    const Core::QueueSubmissionToken laggedLightingHistoryWriterCompletionToken = priorLaggedLightingHistoryWriterDrainToken;
     const bool hardwareShadowSupported =
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
         && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
@@ -792,6 +851,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         laggedAsyncLightingRequested
         && laggedLightingHistoryResourcesReady
         && priorLaggedLightingHistoryToken.valid()
+    ;
+    const bool laggedLightingHistoryCompletionRequired =
+        laggedAsyncLightingSchedule
+        || laggedLightingHistoryWriterWaitPending
     ;
     // History capture is graph-owned and remains available whenever the opt-in path has a distinct compute
     // transport. Its tail is optional: a failed tail build must leave the current frame's deferred path intact.
@@ -803,6 +866,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         .frameLaggedAsyncLightingEnabled = m_frameLaggedAsyncLightingEnabled,
         .laggedLightingHistoryReady = laggedLightingHistoryResourcesReady,
         .laggedLightingHistoryAccepted = priorLaggedLightingHistoryToken.valid(),
+        .laggedLightingHistoryWriterWaitPending = laggedLightingHistoryWriterWaitPending,
         .hasTransparentRenderers = hasTransparentRenderers,
         .hardwareCaustics = hardwareShadowSupported,
     };
@@ -2678,7 +2742,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || (static_cast<u8>(deferredLaggedLightingHistoryQueue->capabilities)
                 & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
         ))
-        || (laggedAsyncLightingSchedule && !m_deferredLightingHistoryCompletion.valid())
+        || (laggedLightingHistoryCompletionRequired && !m_deferredLightingHistoryCompletion.valid())
         || !taskIsCompiled(m_deferredLightingTask)
         || !laggedLightingHistorySlotsUploadMergedIntoLightingPacket
         || !taskIsCompiled(m_deferredCompositeTask)
@@ -3463,7 +3527,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLaggedLightingHistoryTask.valid()
             && taskIsCompiled(m_deferredLaggedLightingHistoryTask)
         ))
-        && (!laggedAsyncLightingSchedule || m_deferredLightingHistoryCompletion.valid())
+        && (!laggedLightingHistoryCompletionRequired || m_deferredLightingHistoryCompletion.valid())
         && taskIsCompiled(m_deferredLightingTask)
         && taskIsCompiled(m_deferredCompositeTask)
         && taskIsCompiled(m_deferredPresentTask)
@@ -4416,10 +4480,24 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? 1u
             : LengthOf(shadowEffectsTimingTickets)
         ;
+        Core::GpuTaskGraphExternalCompletionToken shadowEffectsCompletionTokens[
+            __hidden_renderer_system::s_SingleExternalCompletionTokenCapacity
+        ] = {};
+        usize shadowEffectsCompletionCount = 0u;
+        if(laggedLightingHistoryWriterWaitPending){
+            shadowEffectsCompletionTokens[shadowEffectsCompletionCount++] = {
+                .completion = m_deferredLightingHistoryCompletion,
+                .token = laggedLightingHistoryWriterCompletionToken,
+            };
+        }
         const bool shadowEffectsSubmitted =
             m_deferredLightingTaskGraphValid
             && m_deferredShadowVisibilityTask.valid()
             && taskIsCompiled(m_deferredShadowVisibilityTask)
+            && (!laggedLightingHistoryWriterWaitPending || (
+                m_deferredLightingHistoryCompletion.valid()
+                && laggedLightingHistoryWriterCompletionToken.valid()
+            ))
             && shadowVisibilityPreparedTasksMerged
             && shadowVisibilityAllLitClearMerged
             && shadowVisibilityAdaptivePrimitivesMerged
@@ -4435,8 +4513,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredLightingRecordedGraph,
                 m_deferredShadowVisibilityTask,
                 hardwareShadowSupported ? m_deferredShadowVisibilityTask : m_deferredSoftwareCausticsTask,
-                nullptr,
-                0u,
+                shadowEffectsCompletionTokens,
+                shadowEffectsCompletionCount,
                 shadowEffectsTimingTickets,
                 shadowEffectsTimingTicketCount,
                 m_deferredLightingSubmissionTransaction,
@@ -4551,10 +4629,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 __hidden_renderer_system::s_SingleExternalCompletionTokenCapacity
             ] = {};
             usize hardwareCausticsCompletionCount = 0u;
-            if(laggedAsyncLightingSchedule){
+            if(laggedLightingHistoryWriterWaitPending){
                 hardwareCausticsCompletionTokens[hardwareCausticsCompletionCount++] = {
                     .completion = m_deferredLightingHistoryCompletion,
-                    .token = priorLaggedLightingHistoryToken,
+                    .token = laggedLightingHistoryWriterCompletionToken,
                 };
             }
             Core::Alloc::ScratchArena hardwareCausticsScratchArena(RendererArenaScope::s_TaskGraphArena);
@@ -4614,7 +4692,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             const bool hardwareCausticsAccepted =
                 m_deferredLightingTaskGraphValid
                 && m_deferredHardwareCausticsTask.valid()
-                && (!laggedAsyncLightingSchedule || m_deferredLightingHistoryCompletion.valid())
+                && (!laggedLightingHistoryWriterWaitPending || (
+                    m_deferredLightingHistoryCompletion.valid()
+                    && laggedLightingHistoryWriterCompletionToken.valid()
+                ))
                 && taskIsCompiled(m_deferredHardwareCausticsTask)
                 && hardwareCausticsPacketRange.valid()
                 && hardwareCausticsPacketRange.packetCount == LengthOf(hardwareCausticsTimingTickets)

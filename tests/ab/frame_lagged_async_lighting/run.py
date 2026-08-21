@@ -226,6 +226,8 @@ def run(args: argparse.Namespace) -> int:
         window = capture_backend.wait_for_window(app_process.pid, args.startup_timeout, args.window_title)
         if not window:
             raise SmokeFailure(f"lagged-lighting smoke did not expose the expected window '{args.window_title}'")
+        capture_backend.prepare_window(window)
+        time.sleep(0.1)
 
         final_log = wait_for_lifecycle_stage(
             app_process,
@@ -365,3 +367,4 @@ def main(argv: Sequence[str]) -> int:
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
+

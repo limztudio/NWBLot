@@ -138,6 +138,68 @@ class WindowsCaptureOrderingTests(unittest.TestCase):
         )
 
 
+class CaptureFocusTests(unittest.TestCase):
+    def test_linux_focus_window_raises_sets_input_focus_and_flushes(self):
+        window = 0x4A
+        display = object()
+        calls = []
+        capture = object.__new__(window_capture_smoke.LinuxX11Capture)
+
+        class FakeX11:
+            def XRaiseWindow(self, received_display, received_window):
+                calls.append(("raise", received_display, received_window))
+
+            def XSetInputFocus(self, received_display, received_window, revert_to, timestamp):
+                calls.append(("focus", received_display, received_window, revert_to, timestamp))
+
+            def XFlush(self, received_display):
+                calls.append(("flush", received_display))
+
+        capture.x11 = FakeX11()
+        capture.display = display
+
+        capture.focus_window(window)
+
+        self.assertEqual(
+            calls,
+            [
+                ("raise", display, window),
+                ("focus", display, window, capture.REVERT_TO_PARENT, capture.CURRENT_TIME),
+                ("flush", display),
+            ],
+        )
+
+    def test_windows_focus_window_foregrounds_the_captured_hwnd(self):
+        window = 0x4A
+        calls = []
+        capture = object.__new__(window_capture_smoke.WindowsCapture)
+
+        class FakeUser32:
+            def SetForegroundWindow(self, hwnd):
+                calls.append(hwnd.value)
+                return 1
+
+        capture.user32 = FakeUser32()
+
+        capture.focus_window(window)
+
+        self.assertEqual(calls, [window])
+
+    def test_windows_prepare_window_uses_the_capture_preparation_path(self):
+        window = 0x4A
+        calls = []
+        capture = object.__new__(window_capture_smoke.WindowsCapture)
+
+        def prepare(received_window):
+            calls.append(received_window)
+
+        capture._prepare_capture_window = prepare
+
+        capture.prepare_window(window)
+
+        self.assertEqual(calls, [window])
+
+
 class GracefulTerminationTests(unittest.TestCase):
     def test_linux_x11_helper_receives_captured_window_handle(self):
         result = mock.Mock(returncode=0)

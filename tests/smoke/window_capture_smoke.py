@@ -1081,6 +1081,14 @@ class LinuxX11Capture:
             raise SmokeFailure("failed to send key event")
         self.x11.XFlush(self.display)
 
+    def focus_window(self, window):
+        self.x11.XRaiseWindow(self.display, window)
+        self.x11.XSetInputFocus(self.display, window, self.REVERT_TO_PARENT, self.CURRENT_TIME)
+        self.x11.XFlush(self.display)
+
+    def prepare_window(self, window):
+        self.focus_window(window)
+
     def send_named_key(self, window, key_name):
         keysym = self.x11.XStringToKeysym(str(key_name).encode("ascii"))
         if keysym == 0:
@@ -1090,9 +1098,7 @@ class LinuxX11Capture:
         if keycode == 0:
             raise SmokeFailure(f"could not resolve keycode '{key_name}'")
 
-        self.x11.XRaiseWindow(self.display, window)
-        self.x11.XSetInputFocus(self.display, window, self.REVERT_TO_PARENT, self.CURRENT_TIME)
-        self.x11.XFlush(self.display)
+        self.focus_window(window)
         time.sleep(0.1)
         self.send_key_event(window, self.KEY_PRESS, keycode)
         time.sleep(0.05)
@@ -1474,12 +1480,18 @@ class WindowsCapture:
         time.sleep(0.05)
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONUP, 0, lparam)
 
+    def focus_window(self, hwnd):
+        self.user32.SetForegroundWindow(ctypes.c_void_p(hwnd))
+
+    def prepare_window(self, hwnd):
+        self._prepare_capture_window(hwnd)
+
     def send_named_key(self, hwnd, key_name):
         virtual_key = self.VIRTUAL_KEYS.get(str(key_name))
         if virtual_key is None:
             raise SmokeFailure(f"could not resolve virtual key '{key_name}'")
 
-        self.user32.SetForegroundWindow(ctypes.c_void_p(hwnd))
+        self.focus_window(hwnd)
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_KEYDOWN, virtual_key, 0)
         time.sleep(0.05)
         self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_KEYUP, virtual_key, 0)

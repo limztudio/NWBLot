@@ -907,6 +907,35 @@ TEST(EcsGraphics, SetupUploadReadinessBridgeRemainsGraphOwned){
 }
 
 
+// Windows may deny foreground activation to the parent smoke harness after bootstrap. Keep the opt-in local to the
+// frame-lagged executable so it bypasses only its focus throttle, uses Graphics' normal render-pass extension, and
+// unregisters before the renderer/world can be destroyed.
+TEST(EcsGraphics, FrameLaggedSmokeRendersWhenUnfocused){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString smokeSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "transparent_multi_project.cpp", smokeSource));
+    const AStringView smoke(smokeSource.data(), smokeSource.size());
+
+    EXPECT_TRUE(ContainsText(smoke, "class FrameLaggedAsyncLightingUnfocusedPass final : public NWB::Core::IRenderPass"));
+    EXPECT_TRUE(ContainsText(smoke, "virtual bool shouldRenderUnfocused()override{ return true; }"));
+    EXPECT_TRUE(ContainsText(smoke, "m_context.graphics.addRenderPassToBack(m_frameLaggedAsyncLightingUnfocusedPass);"));
+    EXPECT_TRUE(ContainsText(smoke, "m_context.graphics.removeRenderPass(m_frameLaggedAsyncLightingUnfocusedPass);"));
+
+    const usize shutdownOffset = smoke.find("virtual void onShutdown()override");
+    const usize updateOffset = smoke.find("virtual bool onUpdate", shutdownOffset);
+    ASSERT_NE(shutdownOffset, AStringView::npos);
+    ASSERT_NE(updateOffset, AStringView::npos);
+    const AStringView shutdown = smoke.substr(shutdownOffset, updateOffset - shutdownOffset);
+    const usize removeOffset = shutdown.find("removeFrameLaggedAsyncLightingUnfocusedPass();");
+    const usize destroyOffset = shutdown.find("destroyWorld();");
+    ASSERT_NE(removeOffset, AStringView::npos);
+    ASSERT_NE(destroyOffset, AStringView::npos);
+    EXPECT_LT(removeOffset, destroyOffset);
+}
+
+
 // The parity baseline must pin temporal AVBOIT in test code, not introduce a renderer/core feature toggle. The
 // runner waits for the smoke marker only after that project has suspended its next submission.
 TEST(EcsGraphics, TransparentAvboitBaselineCaptureIsFrameLockedAndTestOwned){
@@ -2052,32 +2081,138 @@ TEST(EcsGraphics, LaggedLightingSelectorHasNoNativeCompatibilityDispatcher){
 }
 
 
-// The next graph declaration clears its history-tail output token. Current-frame consumers must keep using the
-// immutable prior accepted token, while the declared tail remains the sole publisher of the next token.
+// The next graph declaration clears its history-tail output token. Active Lighting keeps its immutable prior token,
+// while Shadow and Hardware Caustics also wait before their first live writes. Disabling lagged Lighting preserves
+// that tail as a drain until its Transfer timeline completes rather than trusting packet-state metadata alone.
 TEST(EcsGraphics, LaggedLightingHistoryConsumersSnapshotPriorAcceptedToken){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString systemSource;
+    AString systemHeaderSource;
     AString taskGraphSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", systemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", systemHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
     const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
     const usize renderOffset = system.find("void RendererSystem::render(");
     ASSERT_NE(renderOffset, AStringView::npos);
     const AStringView render = system.substr(renderOffset);
     const usize priorTokenOffset = render.find("const Core::QueueSubmissionToken priorLaggedLightingHistoryToken");
+    const usize priorDrainOffset = render.find("const Core::QueueSubmissionToken priorLaggedLightingHistoryWriterDrainToken");
+    const usize armDrainOffset = render.find(
+        "m_laggedLightingHistoryWriterDrainToken = laggedLightingHistorySubmissionToken"
+    );
     const usize graphBuildOffset = render.find("buildDeferredLightingTaskGraph(");
     ASSERT_NE(priorTokenOffset, AStringView::npos);
+    ASSERT_NE(priorDrainOffset, AStringView::npos);
+    ASSERT_NE(armDrainOffset, AStringView::npos);
     ASSERT_NE(graphBuildOffset, AStringView::npos);
 
     EXPECT_LT(priorTokenOffset, graphBuildOffset);
+    EXPECT_LT(priorDrainOffset, graphBuildOffset);
+    EXPECT_LT(armDrainOffset, graphBuildOffset);
     EXPECT_TRUE(ContainsText(render, "&& priorLaggedLightingHistoryToken.valid()"));
+    EXPECT_TRUE(ContainsText(render, "const auto laggedLightingHistoryTokenPending ="));
+    EXPECT_TRUE(ContainsText(render, "tokenTargetGeneration == laggedLightingHistoryTargetGeneration"));
+    EXPECT_TRUE(ContainsText(render, "const bool laggedLightingHistorySubmissionPending = laggedLightingHistoryTokenPending("));
+    EXPECT_TRUE(ContainsText(render, "if(laggedLightingHistorySubmissionPending){"));
+    EXPECT_TRUE(ContainsText(render, "else if(\n        m_laggedLightingHistoryWriterDrainToken.valid()"));
+    EXPECT_TRUE(ContainsText(render, ") < token.value"));
+    EXPECT_TRUE(ContainsText(render, "laggedLightingHistoryWriterWaitPending"));
+    EXPECT_TRUE(ContainsText(render, "laggedLightingHistoryWriterCompletionToken"));
+    EXPECT_TRUE(ContainsText(
+        render,
+        "const bool laggedLightingHistoryCompletionRequired =\n"
+        "        laggedAsyncLightingSchedule\n"
+        "        || laggedLightingHistoryWriterWaitPending"
+    ));
+    EXPECT_TRUE(ContainsText(render, "laggedLightingHistoryCompletionRequired && !m_deferredLightingHistoryCompletion.valid()"));
+    EXPECT_TRUE(ContainsText(
+        render,
+        "const bool laggedLightingHistoryWriterWaitPending = priorLaggedLightingHistoryWriterDrainToken.valid();"
+    ));
     EXPECT_TRUE(ContainsText(render, ".laggedLightingHistoryAccepted = priorLaggedLightingHistoryToken.valid()"));
-    EXPECT_EQ(CountText(render, ".token = priorLaggedLightingHistoryToken"), 2u);
+    EXPECT_TRUE(ContainsText(render, ".laggedLightingHistoryWriterWaitPending = laggedLightingHistoryWriterWaitPending"));
+    EXPECT_EQ(CountText(render, ".token = priorLaggedLightingHistoryToken"), 1u);
+    EXPECT_EQ(CountText(render, ".token = laggedLightingHistoryWriterCompletionToken"), 2u);
     EXPECT_FALSE(ContainsText(render, ".token = m_laggedLightingHistorySubmissionToken"));
+    EXPECT_TRUE(ContainsText(render, "shadowEffectsCompletionTokens"));
+    EXPECT_TRUE(ContainsText(render, "hardwareCausticsCompletionTokens"));
+    EXPECT_TRUE(ContainsText(
+        render,
+        "shadowEffectsCompletionTokens,\n                shadowEffectsCompletionCount,\n                shadowEffectsTimingTickets"
+    ));
+    EXPECT_TRUE(ContainsText(
+        render,
+        "hardwareCausticsCompletionTokens,\n                    hardwareCausticsCompletionCount,\n                    hardwareCausticsTimingTickets"
+    ));
+    EXPECT_TRUE(ContainsText(render, "!laggedLightingHistoryWriterWaitPending || ("));
+    EXPECT_TRUE(ContainsText(render, "device.queueGetCompletedInstance("));
+    EXPECT_FALSE(ContainsText(render, "consumeLaggedLightingHistoryWriterDrain"));
     EXPECT_TRUE(ContainsText(taskGraph, ".acceptedToken = &m_laggedLightingHistorySubmissionToken"));
+
+    const usize shadowVisibilityOffset = taskGraph.find("bool RendererSystem::declareDeferredShadowVisibilityTask");
+    const usize softwareCausticsOffset = taskGraph.find(
+        "bool RendererSystem::declareDeferredSoftwareCausticsTask",
+        shadowVisibilityOffset
+    );
+    const usize lightingOffset = taskGraph.find("void RendererSystem::buildDeferredLightingTaskGraph");
+    ASSERT_NE(shadowVisibilityOffset, AStringView::npos);
+    ASSERT_NE(softwareCausticsOffset, AStringView::npos);
+    ASSERT_NE(lightingOffset, AStringView::npos);
+    const AStringView shadowVisibility = taskGraph.substr(
+        shadowVisibilityOffset,
+        softwareCausticsOffset - shadowVisibilityOffset
+    );
+    const AStringView lighting = taskGraph.substr(lightingOffset);
+
+    EXPECT_TRUE(ContainsText(shadowVisibility, "laggedLightingHistoryWriterDependencies"));
+    EXPECT_TRUE(ContainsText(
+        shadowVisibility,
+        "Core::GpuExternalCompletionId laggedLightingHistoryWriterCompletion"
+    ));
+    EXPECT_TRUE(ContainsText(
+        systemHeader,
+        "Core::GpuExternalCompletionId laggedLightingHistoryWriterCompletion"
+    ));
+    EXPECT_TRUE(ContainsText(shadowVisibility, ".setExternalDependencies(\n                laggedLightingHistoryWriterDependencies,"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, ".setExternalDependencies(\n            laggedLightingHistoryWriterDependencies,"));
+    EXPECT_TRUE(ContainsText(lighting, "const bool waitsForLaggedLightingHistoryWriter = useLaggedLightingHistory"));
+    EXPECT_TRUE(ContainsText(lighting, "if(waitsForLaggedLightingHistoryWriter){"));
+    EXPECT_TRUE(ContainsText(
+        lighting,
+        "features.laggedLightingHistoryWriterWaitPending\n"
+        "            ? m_deferredLightingHistoryCompletion\n"
+        "            : Core::GpuExternalCompletionId{}"
+    ));
+    EXPECT_TRUE(ContainsText(lighting, "hardwareExternalDependencies = features.laggedLightingHistoryWriterWaitPending"));
+    EXPECT_TRUE(ContainsText(lighting, "lightingExternalDependencies = useLaggedLightingHistory"));
+
+    const usize setterOffset = systemHeader.find("void setFrameLaggedAsyncLightingEnabled(");
+    const usize nextSetterOffset = systemHeader.find("[[nodiscard]] bool frameLaggedAsyncLightingEnabled", setterOffset);
+    ASSERT_NE(setterOffset, AStringView::npos);
+    ASSERT_NE(nextSetterOffset, AStringView::npos);
+    const AStringView setter = systemHeader.substr(setterOffset, nextSetterOffset - setterOffset);
+    EXPECT_TRUE(ContainsText(setter, "m_laggedLightingHistoryWriterDrainToken = m_laggedLightingHistorySubmissionToken"));
+    EXPECT_TRUE(ContainsText(setter, "m_laggedLightingHistoryWriterDrainGeneration = m_laggedLightingHistoryGeneration"));
+    EXPECT_TRUE(ContainsText(setter, "resetLaggedLightingHistoryReadTracking();"));
+    EXPECT_FALSE(ContainsText(setter, "resetLaggedLightingHistoryTracking();"));
+    EXPECT_FALSE(ContainsText(systemHeader, "NWB_ASSERT(!m_laggedLightingHistoryWriterDrainToken.valid())"));
+
+    const usize readTrackingOffset = system.find("void RendererSystem::resetLaggedLightingHistoryReadTracking");
+    const usize fullTrackingOffset = system.find("void RendererSystem::resetLaggedLightingHistoryTracking", readTrackingOffset);
+    const usize targetResetOffset = system.find("void RendererSystem::resetTargetGenerationStateHandoffs", fullTrackingOffset);
+    ASSERT_NE(readTrackingOffset, AStringView::npos);
+    ASSERT_NE(fullTrackingOffset, AStringView::npos);
+    ASSERT_NE(targetResetOffset, AStringView::npos);
+    const AStringView readTracking = system.substr(readTrackingOffset, fullTrackingOffset - readTrackingOffset);
+    const AStringView fullTracking = system.substr(fullTrackingOffset, targetResetOffset - fullTrackingOffset);
+    EXPECT_FALSE(ContainsText(readTracking, "invalidateLaggedLightingHistoryWriterDrain"));
+    EXPECT_TRUE(ContainsText(fullTracking, "invalidateLaggedLightingHistoryWriterDrain();"));
+    EXPECT_EQ(CountText(system, "invalidateLaggedLightingHistoryWriterDrain();"), 2u);
 }
 
 

@@ -143,6 +143,20 @@ public:
 private:
     bool m_toggleRequested = false;
 };
+
+// Windows may deny a harness process foreground ownership even after SetForegroundWindow succeeds locally. The
+// target-hardware lifecycle needs actual post-bootstrap submissions, so use Graphics' existing render-pass opt-in
+// only in this dedicated smoke executable; production projects retain their normal focus throttling policy.
+class FrameLaggedAsyncLightingUnfocusedPass final : public NWB::Core::IRenderPass{
+public:
+    explicit FrameLaggedAsyncLightingUnfocusedPass(NWB::Core::Graphics& graphics)
+        : IRenderPass(graphics)
+    {}
+
+
+public:
+    virtual bool shouldRenderUnfocused()override{ return true; }
+};
 #endif
 
 [[nodiscard]] static const tchar* TransparentMultiFpsLabel(){
@@ -350,6 +364,16 @@ private:
         DestroySmokeRenderWorld(m_context, m_world);
     }
 
+#if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
+    void removeFrameLaggedAsyncLightingUnfocusedPass(){
+        if(!m_frameLaggedAsyncLightingUnfocusedPassRegistered)
+            return;
+
+        m_context.graphics.removeRenderPass(m_frameLaggedAsyncLightingUnfocusedPass);
+        m_frameLaggedAsyncLightingUnfocusedPassRegistered = false;
+    }
+#endif
+
 
 public:
     explicit TransparentMultiSmokeProject(NWB::ProjectRuntimeContext& context)
@@ -361,6 +385,7 @@ public:
         m_context.input.removeHandler(m_arrowYawInput); // idempotent backstop if onShutdown was skipped (dispatcher outlives us)
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
         m_context.input.removeHandler(m_frameLaggedAsyncLightingToggleInput);
+        removeFrameLaggedAsyncLightingUnfocusedPass();
 #endif
         destroyWorld();
     }
@@ -378,6 +403,8 @@ public:
         // at the arrow keys; it consumes only Left/Right and passes everything else through.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
+        m_context.graphics.addRenderPassToBack(m_frameLaggedAsyncLightingUnfocusedPass);
+        m_frameLaggedAsyncLightingUnfocusedPassRegistered = true;
         // The target-hardware harness presses F1 only after an accepted history is observed. It then proves the
         // normal current-frame path and the following bootstrap without exposing a renderer-only test switch.
         m_context.input.addHandlerToBack(m_frameLaggedAsyncLightingToggleInput);
@@ -531,6 +558,7 @@ public:
         m_context.input.removeHandler(m_arrowYawInput);
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
         m_context.input.removeHandler(m_frameLaggedAsyncLightingToggleInput);
+        removeFrameLaggedAsyncLightingUnfocusedPass();
 #endif
         destroyWorld();
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: shutdown"));
@@ -649,6 +677,8 @@ private:
     bool m_rendererBaselineCapturePaused = false;
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
     FrameLaggedAsyncLightingToggleInputHandler m_frameLaggedAsyncLightingToggleInput;
+    FrameLaggedAsyncLightingUnfocusedPass m_frameLaggedAsyncLightingUnfocusedPass{ m_context.graphics };
+    bool m_frameLaggedAsyncLightingUnfocusedPassRegistered = false;
     bool m_frameLaggedAsyncLightingEnabled = true;
 #endif
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)

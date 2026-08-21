@@ -100,6 +100,9 @@ struct RendererFrameGraphFeatures{
     bool frameLaggedAsyncLightingEnabled = false;
     bool laggedLightingHistoryReady = false;
     bool laggedLightingHistoryAccepted = false;
+    // A prior Transfer history-copy tail still reads the live producer targets. The next shadow/caustic writers
+    // must wait for it even when current-frame Lighting does not sample history.
+    bool laggedLightingHistoryWriterWaitPending = false;
     bool hasTransparentRenderers = false;
     bool hardwareCaustics = false;
 };
@@ -262,10 +265,14 @@ public:
         // Preserve a one-shot proof when the opt-in mode is explicitly turned off: the next accepted normal frame
         // confirms that the renderer returned to its established current-frame path instead of merely planning it.
         m_laggedLightingCurrentFrameAcceptancePending = m_frameLaggedAsyncLightingEnabled && !enabled;
+        if(m_frameLaggedAsyncLightingEnabled && !enabled && m_laggedLightingHistorySubmissionToken.valid()){
+            m_laggedLightingHistoryWriterDrainToken = m_laggedLightingHistorySubmissionToken;
+            m_laggedLightingHistoryWriterDrainGeneration = m_laggedLightingHistoryGeneration;
+        }
         m_frameLaggedAsyncLightingEnabled = enabled;
         m_laggedLightingReport = LaggedLightingReport::Unreported;
         m_laggedLightingReportGeneration = 0u;
-        resetLaggedLightingHistoryTracking();
+        resetLaggedLightingHistoryReadTracking();
     }
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept{ return m_frameLaggedAsyncLightingEnabled; }
     [[nodiscard]] bool setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
@@ -293,6 +300,8 @@ private:
     void resetAbandonedFrameStateHandoffs()noexcept;
     void resetRejectedShadowVisibilityStateHandoffs()noexcept;
     void invalidateLaggedLightingHistorySubmission()noexcept;
+    void invalidateLaggedLightingHistoryWriterDrain()noexcept;
+    void resetLaggedLightingHistoryReadTracking()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
     [[nodiscard]] bool declareDeferredShadowPrepareTask(
         DeferredFrameTargets& deferredTargets,
@@ -367,6 +376,7 @@ private:
         Core::GpuGraphResourceSetId softwareTraceGeometrySet,
         Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
         Core::GpuTaskId prefixTask,
+        Core::GpuExternalCompletionId laggedLightingHistoryWriterCompletion,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming,
         Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
@@ -759,9 +769,14 @@ private:
     u64 m_laggedLightingReportGeneration = 0u;
     bool m_laggedLightingCurrentFrameAcceptancePending = false;
     Core::QueueSubmissionToken m_laggedLightingHistorySubmissionToken;
+    // The newest incomplete accepted same-generation Transfer tail protects live producer writes while graph
+    // declaration resets the normal history-read token. A later tail is its proven successor; completed tails do not
+    // keep adding redundant waits. Target recreation clears it with the normal history tracking state.
+    Core::QueueSubmissionToken m_laggedLightingHistoryWriterDrainToken;
     // Deferred target creation increments this identity for every target generation. It prevents a recycled descriptor
     // slot or allocator address from making a freshly recreated history look accepted.
     u64 m_laggedLightingHistoryGeneration = 0u;
+    u64 m_laggedLightingHistoryWriterDrainGeneration = 0u;
     // A partially accepted frame whose recovery packet cannot be submitted is not recoverable by guessing. End this
     // device generation and rebuild resources before rendering resumes.
     bool m_frameRenderRecoveryFailed = false;

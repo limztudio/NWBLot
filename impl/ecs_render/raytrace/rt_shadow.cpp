@@ -1901,9 +1901,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
     }
-    // Subsequent passes read/write these UAVs in place.
+    // Subsequent visibility passes read/write this UAV in place.
     commandList.setEnableUavBarriersForTexture(targets.shadowVisibility.get(), true);
-    commandList.setEnableUavBarriersForTexture(targets.shadowCoarseTransmittance.get(), true);
     if(!graphEntryStatesOwned)
         commandList.commitBarriers();
 
@@ -1974,7 +1973,6 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
 
         // The transparent pass reads and multiplies the opaque mask in place.
         commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
         // Soft opaque resolve replaces the full-resolution mask.
@@ -2093,6 +2091,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         }
 
         // Coarse transmittance feeds both adaptive resolve modes.
+        commandList.setEnableUavBarriersForTexture(targets.shadowCoarseTransmittance.get(), true);
         commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();

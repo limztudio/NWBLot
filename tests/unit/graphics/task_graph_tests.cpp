@@ -1216,6 +1216,11 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
         context,
         allocator
     );
+    Graphics::Texture* const writeTextureObject = NewArenaObject<Graphics::Texture>(
+        testArena.arena,
+        context,
+        allocator
+    );
     Graphics::RayTracingAccelStruct* const accelStructObject = NewArenaObject<Graphics::RayTracingAccelStruct>(
         testArena.arena,
         context
@@ -1223,6 +1228,7 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
     ASSERT_NE(readWriteBufferObject, nullptr);
     ASSERT_NE(writeBufferObject, nullptr);
     ASSERT_NE(textureObject, nullptr);
+    ASSERT_NE(writeTextureObject, nullptr);
     ASSERT_NE(accelStructObject, nullptr);
     Graphics::BufferHandle readWriteBuffer(
         readWriteBufferObject,
@@ -1236,6 +1242,11 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
     );
     Graphics::TextureHandle texture(
         textureObject,
+        Graphics::TextureHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::TextureHandle writeTexture(
+        writeTextureObject,
         Graphics::TextureHandle::deleter_type(&testArena.arena),
         AdoptRef
     );
@@ -1259,6 +1270,8 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
         .setDimension(Graphics::TextureDimension::Texture2DArray)
         .setInitialState(Graphics::ResourceStates::Common)
     ;
+    Graphics::TextureDesc& writeTextureDescription = const_cast<Graphics::TextureDesc&>(writeTexture->getDescription());
+    writeTextureDescription.setInitialState(Graphics::ResourceStates::Unknown);
 
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId textureResource = graph.importTexture(
@@ -1293,10 +1306,19 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
             .setType(Graphics::GpuGraphResourceType::Buffer)
             .setInitialState(Graphics::ResourceStates::Unknown)
     );
+    const Graphics::GpuGraphResourceId writeTextureResource = graph.importTexture(
+        writeTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/unknown_first_write_texture"))
+            .setMarkerLabel("Unknown First Write Texture")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::Unknown)
+    );
     ASSERT_TRUE(textureResource.valid());
     ASSERT_TRUE(bufferResource.valid());
     ASSERT_TRUE(accelStructResource.valid());
     ASSERT_TRUE(writeResource.valid());
+    ASSERT_TRUE(writeTextureResource.valid());
     EXPECT_EQ(graph.resourceAt(textureResource.index).initialState, Graphics::ResourceStates::Unknown);
 
     const Graphics::GpuTaskResourceUse uses[]{
@@ -1324,6 +1346,12 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
             .resource = writeResource,
             .range = {},
             .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = writeTextureResource,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
     };
@@ -1383,6 +1411,12 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
     ASSERT_NE(writeBarrier, nullptr);
     EXPECT_EQ(writeBarrier->before, Graphics::ResourceStates::Unknown);
     EXPECT_FALSE(writeBarrier->isGraphInitialState);
+
+    const Graphics::GpuCompiledBarrier* const writeTextureBarrier = findPrologueBarrier(writeTextureResource);
+    ASSERT_NE(writeTextureBarrier, nullptr);
+    EXPECT_EQ(writeTextureBarrier->before, Graphics::ResourceStates::Unknown);
+    EXPECT_EQ(writeTextureBarrier->after, Graphics::ResourceStates::UnorderedAccess);
+    EXPECT_FALSE(writeTextureBarrier->isGraphInitialState);
 }
 
 TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
@@ -24570,32 +24604,34 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     constexpr Graphics::ResourceQueueSharing::Mask queueSharing =
         Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
     ;
+    // The retained A history preserves the established sampled-history route. Fresh split outputs begin Unknown and
+    // must be accepted through their first Write declaration rather than a fabricated native initial state.
     const Graphics::GpuGraphResourceId shadowVisibility = AddTextureMetadata(
         graph,
         Name("tests/task_graph/soft_transparent_fold_shadow_visibility"),
         "Shadow Visibility",
-        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::Unknown,
         queueSharing
     );
     const Graphics::GpuGraphResourceId opaqueSoftHalf = AddTextureMetadata(
         graph,
         Name("tests/task_graph/soft_transparent_fold_opaque_half"),
         "Opaque Shadow Soft Half",
-        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::Unknown,
         queueSharing
     );
     const Graphics::GpuGraphResourceId opaqueWaveletHalf = AddTextureMetadata(
         graph,
         Name("tests/task_graph/soft_transparent_fold_opaque_wavelet_half"),
         "Opaque Shadow First Wavelet Half",
-        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::Unknown,
         queueSharing
     );
     const Graphics::GpuGraphResourceId transparentSoftHalf = AddTextureMetadata(
         graph,
         Name("tests/task_graph/soft_transparent_fold_half"),
         "Transparent Shadow Soft Half",
-        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::Unknown,
         queueSharing
     );
     const Graphics::GpuGraphResourceId transparentHistoryA = AddTextureMetadata(
@@ -24616,21 +24652,21 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
         graph,
         Name("tests/task_graph/soft_transparent_history_b"),
         "Transparent Shadow History B",
-        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::Unknown,
         queueSharing
     );
     const Graphics::GpuGraphResourceId transparentMomentsB = AddTextureMetadata(
         graph,
         Name("tests/task_graph/soft_transparent_moments_b"),
         "Transparent Shadow Moments B",
-        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::Unknown,
         queueSharing
     );
     const Graphics::GpuGraphResourceId shadowSoftGeometry = AddTextureMetadata(
         graph,
         Name("tests/task_graph/soft_transparent_fold_geometry"),
         "Shadow Soft Geometry",
-        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::Unknown,
         queueSharing
     );
     const Graphics::GpuGraphResourceId previousGeometry = AddTextureMetadata(
@@ -24719,30 +24755,6 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
             .requiredState = Graphics::ResourceStates::UnorderedAccess,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
-        {
-            .resource = transparentHistoryA,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::UnorderedAccess,
-            .access = Graphics::GpuTaskResourceAccess::Write,
-        },
-        {
-            .resource = transparentMomentsA,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::UnorderedAccess,
-            .access = Graphics::GpuTaskResourceAccess::Write,
-        },
-        {
-            .resource = transparentHistoryB,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::UnorderedAccess,
-            .access = Graphics::GpuTaskResourceAccess::Write,
-        },
-        {
-            .resource = transparentMomentsB,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::UnorderedAccess,
-            .access = Graphics::GpuTaskResourceAccess::Write,
-        },
     };
     Graphics::GpuTaskDesc opaqueDesc;
     opaqueDesc
@@ -24823,18 +24835,6 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     ASSERT_TRUE(opaqueResolve.valid());
 
     const Graphics::GpuTaskResourceUse traceUses[] = {
-        {
-            .resource = shadowVisibility,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::UnorderedAccess,
-            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
-        },
-        {
-            .resource = opaqueSoftHalf,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::UnorderedAccess,
-            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
-        },
         {
             .resource = transparentSoftHalf,
             .range = {},
@@ -25180,24 +25180,31 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     }
     EXPECT_TRUE(hasOpaqueWaveletResolveTransition);
 
-    const Graphics::GpuCompiledTask* const compiledTrace = compiledGraph.findTask(trace);
-    ASSERT_NE(compiledTrace, nullptr);
-    const Graphics::GpuCompiledBarrier* const traceBarriers = compiledGraph.taskPrologueBarriers(trace);
-    ASSERT_NE(traceBarriers, nullptr);
-    bool hasOpaqueResolveToTraceUav = false;
-    for(u32 barrierIndex = 0u; barrierIndex < compiledTrace->prologueBarrierCount; ++barrierIndex){
-        const Graphics::GpuCompiledBarrier& barrier = traceBarriers[barrierIndex];
-        if(
-            barrier.type == Graphics::GpuCompiledBarrierType::TextureUav
-            && barrier.resource == shadowVisibility
-            && barrier.before == Graphics::ResourceStates::UnorderedAccess
-            && barrier.after == Graphics::ResourceStates::UnorderedAccess
-        ){
-            hasOpaqueResolveToTraceUav = true;
-            break;
+    const auto hasUnknownFirstWrite = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId resource){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+        if(!compiledTask || !barriers)
+            return false;
+        for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == resource
+                && barrier.before == Graphics::ResourceStates::Unknown
+                && barrier.after == Graphics::ResourceStates::UnorderedAccess
+                && !barrier.isGraphInitialState
+            )
+                return true;
         }
-    }
-    EXPECT_TRUE(hasOpaqueResolveToTraceUav);
+        return false;
+    };
+    EXPECT_TRUE(hasUnknownFirstWrite(opaque, shadowVisibility));
+    EXPECT_TRUE(hasUnknownFirstWrite(opaque, opaqueSoftHalf));
+    EXPECT_TRUE(hasUnknownFirstWrite(opaque, shadowSoftGeometry));
+    EXPECT_TRUE(hasUnknownFirstWrite(opaqueFirstWavelet, opaqueWaveletHalf));
+    EXPECT_TRUE(hasUnknownFirstWrite(trace, transparentSoftHalf));
+    EXPECT_TRUE(hasUnknownFirstWrite(transparentTemporalMerge, transparentHistoryB));
+    EXPECT_TRUE(hasUnknownFirstWrite(transparentTemporalMerge, transparentMomentsB));
 
     const Graphics::GpuCompiledTask* const compiledTransparentTemporalMerge = compiledGraph.findTask(transparentTemporalMerge);
     ASSERT_NE(compiledTransparentTemporalMerge, nullptr);
@@ -25219,8 +25226,8 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
         return false;
     };
     EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(transparentSoftHalf, Graphics::ResourceStates::UnorderedAccess));
-    EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(transparentHistoryA, Graphics::ResourceStates::UnorderedAccess));
-    EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(transparentMomentsA, Graphics::ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(transparentHistoryA, Graphics::ResourceStates::Common));
+    EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(transparentMomentsA, Graphics::ResourceStates::Common));
     EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(previousGeometry, Graphics::ResourceStates::Common));
     EXPECT_TRUE(hasTransparentTemporalMergeShaderResourceTransition(worldPosition, Graphics::ResourceStates::Common));
 
@@ -25245,20 +25252,6 @@ TEST(GpuTaskGraph, MergesGraphOwnedSoftTransparentTraceAndResolveAfterOpaqueVisi
     };
     EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(transparentHistoryB, Graphics::ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasTransparentFirstWaveletShaderResourceTransition(transparentMomentsB, Graphics::ResourceStates::UnorderedAccess));
-    bool hasTransparentTraceToFirstWaveletUav = false;
-    for(u32 barrierIndex = 0u; barrierIndex < compiledTransparentFirstWavelet->prologueBarrierCount; ++barrierIndex){
-        const Graphics::GpuCompiledBarrier& barrier = transparentFirstWaveletBarriers[barrierIndex];
-        if(
-            barrier.type == Graphics::GpuCompiledBarrierType::TextureUav
-            && barrier.resource == opaqueSoftHalf
-            && barrier.before == Graphics::ResourceStates::UnorderedAccess
-            && barrier.after == Graphics::ResourceStates::UnorderedAccess
-        ){
-            hasTransparentTraceToFirstWaveletUav = true;
-            break;
-        }
-    }
-    EXPECT_TRUE(hasTransparentTraceToFirstWaveletUav);
 
     const Graphics::GpuCompiledTask* const compiledFold = compiledGraph.findTask(fold);
     ASSERT_NE(compiledFold, nullptr);

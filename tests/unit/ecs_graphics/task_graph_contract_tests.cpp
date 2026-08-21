@@ -1193,6 +1193,103 @@ TEST(EcsGraphics, ShadowVisibilityPermitsOptInCrossFamilyComputeRouting){
 }
 
 
+// Split shadow callbacks must declare only resources their native body touches. Fresh retained scratch stays
+// Unknown until a graph writer publishes it, while an accepted temporal history remains a real sampled input.
+TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    AString shadowSource;
+    AString softShadowSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", shadowSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow.cpp", softShadowSource));
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const AStringView shadowSourceView(shadowSource.data(), shadowSource.size());
+    const AStringView softShadowSourceView(softShadowSource.data(), softShadowSource.size());
+
+    const usize shadowOffset = taskGraph.find("bool RendererSystem::declareDeferredShadowVisibilityTask");
+    const usize softwareCausticsOffset = taskGraph.find("bool RendererSystem::declareDeferredSoftwareCausticsTask", shadowOffset);
+    ASSERT_NE(shadowOffset, AStringView::npos);
+    ASSERT_NE(softwareCausticsOffset, AStringView::npos);
+    ASSERT_LT(shadowOffset, softwareCausticsOffset);
+    const AStringView shadowVisibility = taskGraph.substr(shadowOffset, softwareCausticsOffset - shadowOffset);
+
+    const usize opaqueResourcesOffset = shadowVisibility.find("opaqueResourceUses.reserve(");
+    const usize opaqueFirstWaveletOffset = shadowVisibility.find("opaqueFirstWaveletResourceUses.reserve(", opaqueResourcesOffset);
+    const usize opaqueDescOffset = shadowVisibility.find("Core::GpuTaskDesc opaqueDesc;", opaqueFirstWaveletOffset);
+    const usize traceUsesOffset = shadowVisibility.find("transparentTraceResourceUses.reserve(", opaqueFirstWaveletOffset);
+    const usize transparentHistoryOffset = shadowVisibility.find("graphOwnsTransparentTemporalMergeEntryStates =", traceUsesOffset);
+    ASSERT_NE(opaqueResourcesOffset, AStringView::npos);
+    ASSERT_NE(opaqueFirstWaveletOffset, AStringView::npos);
+    ASSERT_NE(opaqueDescOffset, AStringView::npos);
+    ASSERT_NE(traceUsesOffset, AStringView::npos);
+    ASSERT_NE(transparentHistoryOffset, AStringView::npos);
+    ASSERT_LT(opaqueResourcesOffset, opaqueFirstWaveletOffset);
+    ASSERT_LT(opaqueFirstWaveletOffset, opaqueDescOffset);
+    ASSERT_LT(traceUsesOffset, transparentHistoryOffset);
+    const AStringView opaqueResources = shadowVisibility.substr(
+        opaqueResourcesOffset,
+        opaqueFirstWaveletOffset - opaqueResourcesOffset
+    );
+    const AStringView opaqueDesc = shadowVisibility.substr(opaqueDescOffset, traceUsesOffset - opaqueDescOffset);
+    const AStringView transparentTraceUses = shadowVisibility.substr(
+        traceUsesOffset,
+        transparentHistoryOffset - traceUsesOffset
+    );
+
+    EXPECT_TRUE(ContainsText(opaqueResources, "WriteUse(shadowVisibility, Core::ResourceStates::UnorderedAccess)"));
+    EXPECT_TRUE(ContainsText(opaqueResources, "WriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess)"));
+    EXPECT_TRUE(ContainsText(opaqueResources, "WriteUse(shadowSoftGeometry, Core::ResourceStates::UnorderedAccess)"));
+    EXPECT_TRUE(ContainsText(opaqueResources, "if(hardwareShadowSupported){"));
+    EXPECT_TRUE(ContainsText(opaqueResources, "ReadUse(sceneTlas, Core::ResourceStates::AccelStructRead)"));
+    EXPECT_TRUE(ContainsText(opaqueResources, "}else{\n            opaqueResourceUses.push_back(ReadUse(sceneBvhNodes"));
+    EXPECT_FALSE(ContainsText(opaqueResources, "shadowCoarseTransmittance"));
+    EXPECT_FALSE(ContainsText(opaqueResources, "shadowSoftHalfB"));
+    EXPECT_FALSE(ContainsText(opaqueResources, "shadowHistA"));
+    EXPECT_FALSE(ContainsText(opaqueResources, "transparentSoftHalf"));
+    EXPECT_TRUE(ContainsText(opaqueDesc, ".setResourceUses(opaqueResourceUses.data(), opaqueResourceUses.size())"));
+    EXPECT_TRUE(ContainsText(opaqueDesc, "!hardwareShadowSupported && softwareTraceGeometryStatesGraphOwned"));
+
+    EXPECT_TRUE(ContainsText(transparentTraceUses, "WriteUse(transparentSoftHalf, Core::ResourceStates::UnorderedAccess)"));
+    EXPECT_FALSE(ContainsText(transparentTraceUses, "ReadWriteUse(shadowVisibility"));
+    EXPECT_FALSE(ContainsText(transparentTraceUses, "shadowCoarseTransmittance"));
+    EXPECT_FALSE(ContainsText(transparentTraceUses, "ReadWriteUse(shadowSoftHalfA"));
+    EXPECT_FALSE(ContainsText(transparentTraceUses, "ReadWriteUse(shadowSoftHalfB"));
+
+    EXPECT_TRUE(ContainsText(shadowVisibility, "const bool softShadowHistoryReadable ="));
+    EXPECT_TRUE(ContainsText(shadowVisibility, "m_softShadowTemporalReady"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, "m_prevWorldToClipValid"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, "m_softShadowTemporalSeeded"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, "if(softShadowHistoryReadable){\n                opaqueFirstWaveletResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, "if(softShadowHistoryReadable){\n                transparentTemporalMergeResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, "WriteUse(transparentHistoryOut, Core::ResourceStates::UnorderedAccess)"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, "splitSoftTransparentFold\n            || appendOptionalWriteTexture("));
+
+    const usize softwareVisibilityOffset = shadowSourceView.find("bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(");
+    const usize softwareOpaqueOffset = shadowSourceView.find("bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(", softwareVisibilityOffset);
+    ASSERT_NE(softwareVisibilityOffset, AStringView::npos);
+    ASSERT_NE(softwareOpaqueOffset, AStringView::npos);
+    ASSERT_LT(softwareVisibilityOffset, softwareOpaqueOffset);
+    const AStringView softwareVisibility = shadowSourceView.substr(softwareVisibilityOffset, softwareOpaqueOffset - softwareVisibilityOffset);
+    const usize adaptiveOffset = softwareVisibility.find("if(!softTransparentRan && rayTracingState().m_swShadowAdaptiveEnabled)");
+    ASSERT_NE(adaptiveOffset, AStringView::npos);
+    const AStringView preAdaptive = softwareVisibility.substr(0u, adaptiveOffset);
+    const AStringView adaptive = softwareVisibility.substr(adaptiveOffset);
+    EXPECT_FALSE(ContainsText(preAdaptive, "targets.shadowCoarseTransmittance.get()"));
+    EXPECT_TRUE(ContainsText(adaptive, "commandList.setEnableUavBarriersForTexture(targets.shadowCoarseTransmittance.get(), true)"));
+    EXPECT_TRUE(ContainsText(adaptive, "commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess)"));
+
+    const usize softDispatchOffset = softShadowSourceView.find("void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(");
+    ASSERT_NE(softDispatchOffset, AStringView::npos);
+    const AStringView softDispatch = softShadowSourceView.substr(softDispatchOffset);
+    EXPECT_TRUE(ContainsText(softDispatch, "const bool temporalHistoryReadable = softShadowTemporalHistoryUsable();"));
+    EXPECT_TRUE(ContainsText(softDispatch, "if(temporalHistoryReadable){\n                commandList.setTextureState(resources.historyIn"));
+    EXPECT_TRUE(ContainsText(softDispatch, "if(temporalHistoryReadable)\n                commandList.setTextureState(targets.shadowSoftGeometryPrev"));
+}
+
+
 // AVBOIT's Graphics raster packets deliberately retain their established primary route, but its split Depth Warp
 // and Integration tasks are pure Compute packets with complete graph-declared handoffs. Keep their auxiliary
 // routing opt-in explicit rather than inferring it from the broader AVBOIT effect name.

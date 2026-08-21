@@ -18,6 +18,7 @@ window. `--self-test` exercises parsing, statistics, and image comparison withou
 from __future__ import annotations
 
 import argparse
+import inspect
 import json
 import math
 import re
@@ -468,7 +469,15 @@ def validate_lane_for_mode(mode: str, lane: LaneStatus) -> None:
 
 def capture_m4_client_area(capture_backend, window, capture_path):
     """Capture application pixels only; Windows excludes the compositor-owned non-client frame."""
+    if isinstance(capture_backend, WindowsCapture):
+        return capture_backend.capture_prepared_m4_client_window(window, capture_path)
     return capture_backend.capture_client_window(window, capture_path)
+
+
+def prepare_m4_client_area(capture_backend, window):
+    """Stabilize the Windows M4 client capture before the held-frame marker."""
+    if isinstance(capture_backend, WindowsCapture):
+        capture_backend.prepare_m4_client_window(window)
 
 
 def run_frame_locked_capture(
@@ -523,6 +532,7 @@ def run_frame_locked_capture(
         if not window:
             raise SmokeFailure(f"{mode} benchmark did not expose the expected window '{args.window_title}'")
 
+        prepare_m4_client_area(capture_backend, window)
         wait_for_log_message(
             app_process,
             log_directory,
@@ -911,8 +921,24 @@ def run_self_test() -> int:
 
     client_capture_probe = ClientAreaCaptureProbe()
     client_capture_path = Path("client-capture.bmp")
+    prepare_m4_client_area(client_capture_probe, 17)
     assert capture_m4_client_area(client_capture_probe, 17, client_capture_path) == "client-capture"
     assert client_capture_probe.calls == [(17, client_capture_path)]
+
+    m4_capture_calls = []
+    m4_capture_probe = object.__new__(WindowsCapture)
+    m4_capture_probe.prepare_m4_client_window = lambda window: m4_capture_calls.append(("prepare", window))
+    m4_capture_probe.capture_prepared_m4_client_window = (
+        lambda window, output_path: m4_capture_calls.append(("capture", window, output_path)) or "prepared-client-capture"
+    )
+    prepare_m4_client_area(m4_capture_probe, 17)
+    assert capture_m4_client_area(m4_capture_probe, 17, client_capture_path) == "prepared-client-capture"
+    assert m4_capture_calls == [("prepare", 17), ("capture", 17, client_capture_path)]
+
+    frame_locked_capture_source = inspect.getsource(run_frame_locked_capture)
+    assert frame_locked_capture_source.index("prepare_m4_client_area(capture_backend, window)") < frame_locked_capture_source.index(
+        "wait_for_log_message("
+    ) < frame_locked_capture_source.index("wait_while_running(")
 
     class ClientRectUser32:
         def __init__(self, get_client_rect_result=True, client_to_screen_result=True):
@@ -964,6 +990,90 @@ def run_self_test() -> int:
     assert client_origin_failure_capture._client_rect(17) is None
     assert client_origin_failure_user32.get_client_rect_calls == 1
     assert client_origin_failure_user32.client_to_screen_calls == 1
+
+    class DwmApi:
+        def __init__(self, calls, set_result=0, flush_result=0):
+            self.calls = calls
+            self.set_result = set_result
+            self.flush_result = flush_result
+
+        def DwmSetWindowAttribute(self, hwnd, attribute, preference_pointer, preference_size):
+            self.calls.append(("DwmSetWindowAttribute", hwnd.value, attribute, preference_pointer._obj.value, preference_size))
+            return self.set_result
+
+        def DwmFlush(self):
+            self.calls.append(("DwmFlush",))
+            return self.flush_result
+
+    dwm_calls = []
+    dwm_capture = object.__new__(WindowsCapture)
+    dwm_capture.dwmapi = DwmApi(dwm_calls)
+    dwm_capture._prepare_capture_window = lambda hwnd: dwm_calls.append(("prepare", hwnd))
+    dwm_capture.prepare_m4_client_window(17)
+    assert dwm_calls == [
+        ("prepare", 17),
+        ("DwmSetWindowAttribute", 17, 33, 1, 4),
+        ("DwmFlush",),
+    ]
+
+    unsupported_calls = []
+    unsupported_capture = object.__new__(WindowsCapture)
+    unsupported_capture.dwmapi = DwmApi(unsupported_calls, -2147024809)
+    unsupported_capture._prepare_capture_window = lambda hwnd: unsupported_calls.append(("prepare", hwnd))
+    try:
+        unsupported_capture.prepare_m4_client_window(17)
+    except SmokeSkip as error:
+        assert "Windows 11 build 22000 or later" in str(error)
+        assert "0x80070057" in str(error)
+    else:
+        raise AssertionError("M4 DWM setup accepted an unsupported corner-preference attribute")
+    assert unsupported_calls == [
+        ("prepare", 17),
+        ("DwmSetWindowAttribute", 17, 33, 1, 4),
+    ]
+
+    negative_failure_calls = []
+    negative_failure_capture = object.__new__(WindowsCapture)
+    negative_failure_capture.dwmapi = DwmApi(negative_failure_calls, -1)
+    negative_failure_capture._prepare_capture_window = lambda hwnd: negative_failure_calls.append(("prepare", hwnd))
+    try:
+        negative_failure_capture.prepare_m4_client_window(17)
+    except SmokeFailure as error:
+        assert "DwmSetWindowAttribute" in str(error)
+        assert "HRESULT 0xFFFFFFFF" in str(error)
+    else:
+        raise AssertionError("M4 DWM setup accepted a negative DwmSetWindowAttribute failure")
+    assert len(negative_failure_calls) == 2
+
+    for set_result, flush_result, expected_operation, expected_calls in (
+        (1, 0, "DwmSetWindowAttribute", 2),
+        (0, 1, "DwmFlush", 3),
+    ):
+        failure_calls = []
+        failure_capture = object.__new__(WindowsCapture)
+        failure_capture.dwmapi = DwmApi(failure_calls, set_result, flush_result)
+        failure_capture._prepare_capture_window = lambda hwnd: failure_calls.append(("prepare", hwnd))
+        try:
+            failure_capture.prepare_m4_client_window(17)
+        except SmokeFailure as error:
+            assert expected_operation in str(error)
+            assert "HRESULT 0x00000001" in str(error)
+        else:
+            raise AssertionError(f"M4 DWM setup accepted non-S_OK {expected_operation} result")
+        assert len(failure_calls) == expected_calls
+
+    raw_client_capture_calls = []
+    raw_client_capture = object.__new__(WindowsCapture)
+    raw_client_capture._client_rect = lambda hwnd: raw_client_capture_calls.append(("client-rect", hwnd)) or "client-rect"
+    raw_client_capture._capture_screen_rect = (
+        lambda hwnd, rect, output_path: raw_client_capture_calls.append(("screen-bitblt", hwnd, rect, output_path))
+        or "raw-client-capture"
+    )
+    assert raw_client_capture.capture_prepared_m4_client_window(17, client_capture_path) == "raw-client-capture"
+    assert raw_client_capture_calls == [
+        ("client-rect", 17),
+        ("screen-bitblt", 17, "client-rect", client_capture_path),
+    ]
 
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)

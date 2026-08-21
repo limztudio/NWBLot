@@ -1291,6 +1291,10 @@ class WinBitmapInfo(ctypes.Structure):
 class WindowsCapture:
     SRCCOPY = 0x00CC0020
     DIB_RGB_COLORS = 0
+    S_OK = 0
+    E_INVALIDARG = 0x80070057
+    DWMWA_WINDOW_CORNER_PREFERENCE = 33
+    DWMWCP_DONOTROUND = 1
     HWND_TOPMOST = ctypes.c_void_p(-1)
     MK_LBUTTON = 0x0001
     SW_RESTORE = 9
@@ -1316,6 +1320,7 @@ class WindowsCapture:
     def __init__(self):
         self.user32 = ctypes.WinDLL("user32", use_last_error=True)
         self.gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
+        self.dwmapi = None
         self._bind_functions()
 
     def close(self):
@@ -1486,6 +1491,57 @@ class WindowsCapture:
         self.user32.SetForegroundWindow(hwnd_ptr)
         time.sleep(0.1)
 
+    def _m4_dwmapi(self):
+        if getattr(self, "dwmapi", None) is not None:
+            return self.dwmapi
+
+        try:
+            dwmapi = ctypes.WinDLL("dwmapi", use_last_error=True)
+        except OSError as error:
+            raise SmokeFailure("M4 Windows raw pixel capture requires DwmSetWindowAttribute from dwmapi") from error
+
+        dwmapi.DwmSetWindowAttribute.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32]
+        dwmapi.DwmSetWindowAttribute.restype = ctypes.c_int32
+        dwmapi.DwmFlush.argtypes = []
+        dwmapi.DwmFlush.restype = ctypes.c_int32
+        self.dwmapi = dwmapi
+        return dwmapi
+
+    def prepare_m4_client_window(self, hwnd):
+        """Prepare the M4 HWND for raw client-area capture before its held-frame marker."""
+        self._prepare_capture_window(hwnd)
+
+        preference = ctypes.c_int(self.DWMWCP_DONOTROUND)
+        preference_size = ctypes.sizeof(preference)
+        if preference_size != 4:
+            raise SmokeFailure(
+                f"M4 Windows raw pixel capture requires a 4-byte DWM corner preference; got {preference_size} bytes"
+            )
+
+        dwmapi = self._m4_dwmapi()
+        result = dwmapi.DwmSetWindowAttribute(
+            ctypes.c_void_p(hwnd),
+            self.DWMWA_WINDOW_CORNER_PREFERENCE,
+            ctypes.byref(preference),
+            preference_size,
+        )
+        unsigned_result = ctypes.c_uint32(result).value
+        if unsigned_result == self.E_INVALIDARG:
+            raise SmokeSkip(
+                "M4 Windows raw pixel capture requires Windows 11 build 22000 or later with "
+                "DWMWA_WINDOW_CORNER_PREFERENCE; DwmSetWindowAttribute returned HRESULT 0x80070057"
+            )
+        if result != self.S_OK:
+            raise SmokeFailure(
+                "M4 Windows raw pixel capture requires "
+                "DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND); "
+                f"HRESULT 0x{unsigned_result:08X}"
+            )
+
+        result = dwmapi.DwmFlush()
+        if result != self.S_OK:
+            raise SmokeFailure(f"M4 Windows raw pixel capture requires DwmFlush; HRESULT 0x{ctypes.c_uint32(result).value:08X}")
+
     def _capture_screen_rect(self, hwnd, rect, output_path):
         width = rect.right - rect.left
         height = rect.bottom - rect.top
@@ -1548,6 +1604,13 @@ class WindowsCapture:
     def capture_client_window(self, hwnd, output_path):
         # M4 compares renderer output; GetWindowRect includes a DWM frame whose active/inactive pixels vary by process.
         self._prepare_capture_window(hwnd)
+        rect = self._client_rect(hwnd)
+        if not rect:
+            raise SmokeFailure(f"HWND 0x{hwnd:x} client rect is unavailable")
+        return self._capture_screen_rect(hwnd, rect, output_path)
+
+    def capture_prepared_m4_client_window(self, hwnd, output_path):
+        """Capture the raw M4 client area after prepare_m4_client_window has stabilized DWM composition."""
         rect = self._client_rect(hwnd)
         if not rect:
             raise SmokeFailure(f"HWND 0x{hwnd:x} client rect is unavailable")

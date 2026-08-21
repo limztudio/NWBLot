@@ -29,6 +29,14 @@ capture point only when investigating a specific temporal phase:
 python launcher.py async-shadow-m4 -- --pixel-capture-frames 128
 ```
 
+On Windows, the M4 capture path restores, raises, and foregrounds the benchmark window before waiting for that
+held-frame marker. It then requires `DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE=33,
+DWMWCP_DONOTROUND=1)` and `DwmFlush` to succeed before the existing raw client-area screen capture. This is scoped to
+M4; it does not mask pixels or change generic capture behavior. Windows 11 build 22000 or later is required: the
+documented unsupported-attribute result `E_INVALIDARG` (`HRESULT 0x80070057`) is an explicit skip (exit 77). Every
+other non-`S_OK` DWM result, including any `DwmFlush` failure, is an explicit M4 test failure rather than a
+best-effort fallback, because the resulting composed desktop capture would not be a valid raw parity artifact.
+
 Build both benchmark targets and their cooked runtime assets. A debug or namesym build is simplest because timing scope names are readable. For an opt/final build, pass each generated `.namesym` sidecar to the runner.
 
 ```bash

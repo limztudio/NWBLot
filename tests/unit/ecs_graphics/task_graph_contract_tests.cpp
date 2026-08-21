@@ -1486,6 +1486,54 @@ TEST(EcsGraphics, FrontierSafeEffectChainsRetainTheirSemanticPackets){
 }
 
 
+// A retained generated-vertex output needs an explicit graph phase for every producer/raster handoff. Keep the
+// narrow fifth regular draw visible rather than allowing it to fall through to a callback-local compatibility path.
+TEST(EcsGraphics, SharedComputeEmulationRetainsFiveRegularDraws){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemHeaderSource;
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", systemHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    EXPECT_TRUE(ContainsText(systemHeader, "s_SharedComputeEmulationMaximumDrawCount = 5u;"));
+    EXPECT_TRUE(ContainsText(
+        systemHeader,
+        "s_SharedComputeEmulationMaximumPhaseCount =\n"
+        "    s_SharedComputeEmulationMaximumDrawCount * s_SharedComputeEmulationPhasesPerDraw;"
+    ));
+
+    const AStringView fifthPhaseIdentities[] = {
+        "render.graphics_prefix.opaque_shared_compute_emulation_generate_e",
+        "render.graphics_prefix.opaque_shared_compute_emulation_raster_e",
+        "render.avboit.occupancy.shared_compute_emulation_generate_e",
+        "render.avboit.occupancy.shared_compute_emulation_raster_e",
+        "render.avboit.extinction.shared_compute_emulation_generate_e",
+        "render.avboit.extinction.shared_compute_emulation_raster_e",
+        "render.avboit.accumulation.shared_compute_emulation_generate_e",
+        "render.avboit.accumulation.shared_compute_emulation_raster_e",
+    };
+    for(const AStringView identity : fifthPhaseIdentities)
+        EXPECT_TRUE(ContainsText(taskGraph, identity));
+
+    const AStringView fifthPhaseMarkers[] = {
+        "Opaque Shared Compute Emulation Generate E",
+        "Opaque Shared Compute Emulation Raster E",
+        "AVBOIT Occupancy Shared Compute Emulation Generate E",
+        "AVBOIT Occupancy Shared Compute Emulation Raster E",
+        "AVBOIT Extinction Shared Compute Emulation Generate E",
+        "AVBOIT Extinction Shared Compute Emulation Raster E",
+        "AVBOIT Accumulation Shared Compute Emulation Generate E",
+        "AVBOIT Accumulation Shared Compute Emulation Raster E",
+    };
+    for(const AStringView marker : fifthPhaseMarkers)
+        EXPECT_TRUE(ContainsText(taskGraph, marker));
+}
+
+
 // Shadow Visibility has both a fully split soft-transparent route and a retained monolithic compatibility route.
 // Each graph-owned chain may choose an alternate Compute family, while its direct successors retain that physical
 // queue and the explicit primary-Graphics presentation guard remains outside this effect.

@@ -3211,12 +3211,16 @@ bool GpuTaskGraphCompiler::compile(
         }
     }
 
-    // Packet dependencies are already constrained to earlier compiler-order packets. Persist the longest producer
-    // chain as immutable ready-frontier depth so native recording can fan out independent packets without changing
-    // the stable compile-order traversal used for submission, timing, and failure reporting.
+    // Packet dependencies are already constrained to earlier compiler-order packets and remain the authoritative
+    // GPU submission order. Native recording only needs prior packets that export a state snapshot consumed by a
+    // prologue seed, so retain the longest such chain as immutable ready-frontier depth without unnecessarily
+    // serializing explicit ordering-only packet dependencies on the CPU.
     for(usize packetIndex = 0u; packetIndex < outCompiledGraph.m_packets.size(); ++packetIndex){
         GpuSubmissionPacket& packet = outCompiledGraph.m_packets[packetIndex];
-        u32 frontier = 0u;
+        const GpuSubmissionPacketId packetID{
+            static_cast<u32>(packetIndex),
+            outCompiledGraph.m_planGeneration,
+        };
         for(u32 dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){
             const GpuPacketDependency& dependency = outCompiledGraph.m_packetDependencies[
                 packet.dependencyOffset + dependencyIndex
@@ -3230,14 +3234,43 @@ bool GpuTaskGraphCompiler::compile(
                 outCompiledGraph.reset();
                 return false;
             }
-            const u32 producerFrontier = outCompiledGraph.m_packets[dependency.producer.index].recordingFrontier;
-            if(producerFrontier == Limit<u32>::s_Max){
+        }
+
+        u32 frontier = 0u;
+        for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
+            const GpuTaskId task = outCompiledGraph.m_packetTasks[packet.taskOffset + taskIndex];
+            const GpuCompiledTask* const compiledTask = outCompiledGraph.findTask(task);
+            if(!compiledTask){
                 outCompiledGraph.reset();
                 return false;
             }
-            const u32 candidateFrontier = producerFrontier + 1u;
-            if(candidateFrontier > frontier)
-                frontier = candidateFrontier;
+
+            const GpuPacketStateSeed* const stateSeeds = outCompiledGraph.taskPrologueStateSeeds(task);
+            if(compiledTask->prologueStateSeedCount != 0u && !stateSeeds){
+                outCompiledGraph.reset();
+                return false;
+            }
+            for(u32 stateSeedIndex = 0u; stateSeedIndex < compiledTask->prologueStateSeedCount; ++stateSeedIndex){
+                const GpuSubmissionPacketId sourcePacket = stateSeeds[stateSeedIndex].sourcePacket;
+                if(
+                    !sourcePacket.valid()
+                    || sourcePacket == packetID
+                    || sourcePacket.index >= packetIndex
+                    || sourcePacket.generation != outCompiledGraph.m_planGeneration
+                ){
+                    outCompiledGraph.reset();
+                    return false;
+                }
+
+                const u32 producerFrontier = outCompiledGraph.m_packets[sourcePacket.index].recordingFrontier;
+                if(producerFrontier == Limit<u32>::s_Max){
+                    outCompiledGraph.reset();
+                    return false;
+                }
+                const u32 candidateFrontier = producerFrontier + 1u;
+                if(candidateFrontier > frontier)
+                    frontier = candidateFrontier;
+            }
         }
         packet.recordingFrontier = frontier;
     }

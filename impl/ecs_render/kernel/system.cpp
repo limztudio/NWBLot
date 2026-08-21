@@ -1035,7 +1035,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::Gbuffer
         )],
     };
-    // The small shared-output opaque sequence spans G-buffer's mesh prelude and four, six, or eight graph callbacks.
+    // The small shared-output opaque sequence spans G-buffer's mesh prelude and four, six, eight, or ten graph callbacks.
     // Keep its measurement alive through graph declaration, recording, submission, and rejection just like CSG
     // intervals.
     Optional<Core::GpuTimingMeasure> opaqueRegularSharedComputeEmulationTiming;

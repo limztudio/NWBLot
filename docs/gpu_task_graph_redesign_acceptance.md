@@ -9,7 +9,7 @@ graph-owned per-frame ImGui uploads, opt-in ready-frontier native recording, and
 routing including explicit cross-family ownership handoffs, actual-device stale packet-recording recreation coverage, qualified dedicated-Transfer recovery-frontier
 coverage, graph-owned public setup uploads,
 graph-owned deferred mesh-view, scene-light, and scene-shading frame updates, and graph-owned decoded texture-asset
-uploads, graph-owned runtime-skinning dispatch packets, graph-owned opaque material draw-stream and sampled-image resource sets, graph-owned alias-free split- and unsplit-AVBOIT regular Occupancy, Extinction, and Accumulation plus CSG-only Occupancy, Extinction, and Accumulation compute-emulation handoffs, exact-two-, three-, or four-draw shared-output regular opaque and unsplit-AVBOIT Occupancy, Extinction, and Accumulation handoffs, and a graph-owned unsplit AVBOIT Integration tail,
+uploads, graph-owned runtime-skinning dispatch packets, graph-owned opaque material draw-stream and sampled-image resource sets, graph-owned alias-free split- and unsplit-AVBOIT regular Occupancy, Extinction, and Accumulation plus CSG-only Occupancy, Extinction, and Accumulation compute-emulation handoffs, exact-two-, three-, four-, or five-draw shared-output regular opaque and unsplit-AVBOIT Occupancy, Extinction, and Accumulation handoffs, and a graph-owned unsplit AVBOIT Integration tail,
 graph-owned opaque CSG receiver/cutter/context/interval streams and typed work-region interval clears, graph-owned alias-free opaque CSG interval-sample compute-emulation handoffs, graph-owned transparent CSG interval-producer
 streams, graph-owned AVBOIT typed target clears plus transparent occupancy, extinction, and accumulation material/CSG streams and sampled-image resource sets, and
 graph-owned AVBOIT final G-buffer state handoffs, graph-owned normal Shadow Visibility hardware/software traversal
@@ -779,10 +779,10 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    `ShaderResource` sets.
    Direct/unprepared material callers and generated emulation-vertex intra-draw transitions remain local, except
    for the pairwise-distinct regular opaque, opaque CSG receiver-surface, and opaque CSG interval-sample producer/raster handoffs, plus the
-   exact two-, three-, or four-item non-CSG regular opaque shared-output sequences, which are graph-owned in G-buffer's
-   existing primary-Graphics packet, and the exact-two-, three-, or four-draw regular Occupancy, Extinction, and Accumulation shared-output sequences, which are
+   exact two-, three-, four-, or five-item non-CSG regular opaque shared-output sequences, which are graph-owned in G-buffer's
+   existing primary-Graphics packet, and the exact-two-, three-, four-, or five-draw regular Occupancy, Extinction, and Accumulation shared-output sequences, which are
    graph-owned in their unsplit AVBOIT-Pre Graphics packet. Pairwise-distinct regular split-AVBOIT Extinction producer/raster handoffs are likewise graph-owned in their existing
-   primary-Graphics Extinction packet, while regular Occupancy, Extinction, and Accumulation plus pairwise-distinct CSG-only Occupancy, Extinction, and Accumulation handoffs are graph-owned in their existing split or unsplit AVBOIT-Pre/terminal Graphics packets. Larger or mixed shared-output groups, shared-output CSG, mixed CSG, and transparent compute-emulation streams outside those pairwise-distinct, exact-two-, three-, or four-draw shared-output regular opaque, Occupancy, Extinction, and Accumulation, and CSG-only Occupancy, Extinction, and Accumulation routes
+   primary-Graphics Extinction packet, while regular Occupancy, Extinction, and Accumulation plus pairwise-distinct CSG-only Occupancy, Extinction, and Accumulation handoffs are graph-owned in their existing split or unsplit AVBOIT-Pre/terminal Graphics packets. Larger or mixed shared-output groups, shared-output CSG, mixed CSG, and transparent compute-emulation streams outside those pairwise-distinct, exact-two-, three-, four-, or five-draw shared-output regular opaque, Occupancy, Extinction, and Accumulation, and CSG-only Occupancy, Extinction, and Accumulation routes
    remain deliberately local because their persistent generated-vertex buffer may require dispatch/raster
    interleaving.
    The graph-owned skinning dispatch likewise receives its immutable bindless selector, static skin/meshlet inputs,

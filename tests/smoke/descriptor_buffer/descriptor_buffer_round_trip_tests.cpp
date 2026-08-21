@@ -1050,6 +1050,7 @@ struct WorkerAffinedPacketTask{
         u32* observedWorkerIndex = nullptr;
         Buffer* expectedBuffer = nullptr;
         ResourceStates::Mask expectedBufferState = ResourceStates::Unknown;
+        QueueSubmissionToken* acceptedToken = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -1068,6 +1069,11 @@ struct WorkerAffinedPacketTask{
         payload.recordingStarted->count_down();
         payload.recordingStarted->wait();
         return commandList.isRecording();
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(payload.acceptedToken)
+            *payload.acceptedToken = token;
     }
 };
 
@@ -17580,6 +17586,225 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRecordsIndependentGra
     }
     device.unmapBuffer(firstDestination.get());
     device.unmapBuffer(secondDestination.get());
+}
+
+
+// An explicit GPU submission edge does not import producer command-list state.  Its packets can therefore record
+// together on worker leases, while compile-order submission still publishes the producer token before its consumer.
+TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRecordsExplicitGpuDependencyPacketsInParallel){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const auto createBuffer = [&device]{
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    auto firstBuffer = createBuffer();
+    auto secondBuffer = createBuffer();
+    ASSERT_NE(firstBuffer.get(), nullptr);
+    ASSERT_NE(secondBuffer.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importBuffer = [&graph](const BufferHandle& buffer, const Name& identity, const AStringView label){
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Buffer)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const GpuGraphResourceId firstResource = importBuffer(
+        firstBuffer,
+        Name("tests/descriptor_buffer/explicit_gpu_dependency_first"),
+        "Explicit GPU Dependency First"
+    );
+    const GpuGraphResourceId secondResource = importBuffer(
+        secondBuffer,
+        Name("tests/descriptor_buffer/explicit_gpu_dependency_second"),
+        "Explicit GPU Dependency Second"
+    );
+    ASSERT_TRUE(firstResource.valid());
+    ASSERT_TRUE(secondResource.valid());
+
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    scheduling.allowParallelRecording = true;
+    const auto addTask = [&](const Name& identity,
+        const AStringView label,
+        const GpuGraphResourceId resource,
+        const GpuTaskId* const dependencies,
+        const usize dependencyCount,
+        Latch& recordingStarted,
+        u32& observedWorkerIndex,
+        QueueSubmissionToken& acceptedToken
+    ){
+        const GpuTaskResourceUse uses[] = {
+            GpuTaskResourceUse{
+                .resource = resource,
+                .range = {},
+                .requiredState = ResourceStates::CopyDest,
+                .access = GpuTaskResourceAccess::Write,
+            },
+        };
+        GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(GpuQueueRequest{
+                GpuQueueCapability::Graphics,
+                GpuQueuePreference::Graphics,
+                false,
+                false,
+            })
+            .setScheduling(scheduling)
+            .setDependencies(dependencies, dependencyCount)
+            .setResourceUses(uses, LengthOf(uses))
+        ;
+        return graph.addTask<WorkerAffinedPacketTask>(
+            desc,
+            WorkerAffinedPacketTask::Payload{
+                .recordingStarted = &recordingStarted,
+                .observedWorkerIndex = &observedWorkerIndex,
+                .expectedBuffer = graph.bufferForResource(resource),
+                .expectedBufferState = ResourceStates::CopyDest,
+                .acceptedToken = &acceptedToken,
+            }
+        );
+    };
+
+    Latch recordingStarted(2);
+    u32 firstWorkerIndex = 0u;
+    u32 secondWorkerIndex = 0u;
+    QueueSubmissionToken firstAcceptedToken;
+    QueueSubmissionToken secondAcceptedToken;
+    const GpuTaskId firstTask = addTask(
+        Name("tests/descriptor_buffer/explicit_gpu_dependency_first_task"),
+        "Explicit GPU Dependency First Task",
+        firstResource,
+        nullptr,
+        0u,
+        recordingStarted,
+        firstWorkerIndex,
+        firstAcceptedToken
+    );
+    const GpuTaskId secondTask = addTask(
+        Name("tests/descriptor_buffer/explicit_gpu_dependency_second_task"),
+        "Explicit GPU Dependency Second Task",
+        secondResource,
+        &firstTask,
+        1u,
+        recordingStarted,
+        secondWorkerIndex,
+        secondAcceptedToken
+    );
+    ASSERT_TRUE(firstTask.valid());
+    ASSERT_TRUE(secondTask.valid());
+
+    const GpuPhysicalQueueInfo graphicsQueue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &graphicsQueue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/explicit_gpu_dependency_recording_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(firstTask);
+    const GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(secondTask);
+    ASSERT_TRUE(firstPacket.valid());
+    ASSERT_TRUE(secondPacket.valid());
+    ASSERT_NE(firstPacket, secondPacket);
+    EXPECT_LT(firstPacket.index, secondPacket.index);
+    const GpuSubmissionPacket& secondPacketPlan = compiledGraph.packet(secondPacket);
+    ASSERT_EQ(secondPacketPlan.dependencyCount, 1u);
+    const GpuPacketDependency* const secondDependencies = compiledGraph.packetDependencies(secondPacket);
+    ASSERT_NE(secondDependencies, nullptr);
+    EXPECT_EQ(secondDependencies[0u].producer, firstPacket);
+    EXPECT_EQ(secondDependencies[0u].consumer, secondPacket);
+    const GpuCompiledTask* const firstCompiledTask = compiledGraph.findTask(firstTask);
+    const GpuCompiledTask* const secondCompiledTask = compiledGraph.findTask(secondTask);
+    ASSERT_NE(firstCompiledTask, nullptr);
+    ASSERT_NE(secondCompiledTask, nullptr);
+    EXPECT_EQ(firstCompiledTask->prologueStateSeedCount, 0u);
+    EXPECT_EQ(secondCompiledTask->prologueStateSeedCount, 0u);
+    EXPECT_EQ(compiledGraph.packet(firstPacket).recordingFrontier, 0u);
+    EXPECT_EQ(compiledGraph.packet(secondPacket).recordingFrontier, 0u);
+
+    Alloc::ThreadPool recordingWorkers(1u, CpuAffinity::Any);
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInReadyFrontiers(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        recordingWorkers
+    ));
+    const GpuRecordedPacket* const firstRecorded = recordedGraph.find(firstPacket);
+    const GpuRecordedPacket* const secondRecorded = recordedGraph.find(secondPacket);
+    ASSERT_NE(firstRecorded, nullptr);
+    ASSERT_NE(secondRecorded, nullptr);
+    EXPECT_NE(firstWorkerIndex, 0u);
+    EXPECT_NE(secondWorkerIndex, 0u);
+    EXPECT_NE(firstWorkerIndex, secondWorkerIndex);
+    EXPECT_EQ(firstRecorded->recordingWorkerIndex, firstWorkerIndex);
+    EXPECT_EQ(secondRecorded->recordingWorkerIndex, secondWorkerIndex);
+    const GpuTaskGraphRecordingStatistics recordingStatistics = recordedGraph.recordingStatistics(compiledGraph);
+    ASSERT_TRUE(recordingStatistics.valid());
+    EXPECT_EQ(recordingStatistics.packetCount, 2u);
+    EXPECT_EQ(recordingStatistics.parallelPacketCount, 2u);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken firstPacketToken = transaction.packetToken(firstPacket);
+    const QueueSubmissionToken secondPacketToken = transaction.packetToken(secondPacket);
+    ASSERT_TRUE(firstPacketToken.valid());
+    ASSERT_TRUE(secondPacketToken.valid());
+    ASSERT_TRUE(firstAcceptedToken.valid());
+    ASSERT_TRUE(secondAcceptedToken.valid());
+    EXPECT_EQ(firstAcceptedToken.queue, firstPacketToken.queue);
+    EXPECT_EQ(firstAcceptedToken.value, firstPacketToken.value);
+    EXPECT_EQ(secondAcceptedToken.queue, secondPacketToken.queue);
+    EXPECT_EQ(secondAcceptedToken.value, secondPacketToken.value);
+    EXPECT_EQ(firstAcceptedToken.queue, secondAcceptedToken.queue);
+    EXPECT_EQ(firstAcceptedToken.physicalQueueIndex, secondAcceptedToken.physicalQueueIndex);
+    EXPECT_EQ(firstAcceptedToken.deviceGeneration, secondAcceptedToken.deviceGeneration);
+    EXPECT_LT(firstAcceptedToken.value, secondAcceptedToken.value);
+    EXPECT_TRUE(device.waitForIdle());
 }
 
 

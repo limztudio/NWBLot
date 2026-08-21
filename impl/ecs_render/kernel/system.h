@@ -70,7 +70,7 @@ namespace ECSRenderDetail{
 // validation all depend on the same narrow contract.
 inline constexpr usize s_SharedComputeEmulationPhasesPerDraw = 2u;
 inline constexpr usize s_SharedComputeEmulationMinimumDrawCount = 2u;
-inline constexpr usize s_SharedComputeEmulationMaximumDrawCount = 4u;
+inline constexpr usize s_SharedComputeEmulationMaximumDrawCount = 5u;
 inline constexpr usize s_SharedComputeEmulationMinimumPhaseCount =
     s_SharedComputeEmulationMinimumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
 inline constexpr usize s_SharedComputeEmulationMaximumPhaseCount =
@@ -566,8 +566,8 @@ private:
     Core::GpuTaskId m_graphicsPrefixOpaqueComputeEmulationTask;
     // Small shared-output regular paths keep dispatch/raster alternation in the same packet. Retain every phase ID
     // so runtime validation can prove the strict D(A) -> R(A) -> ... packet order, rather than merely proving
-    // that the two endpoint callbacks coalesced. The active prefix holds four, six, or eight phases for two, three,
-    // or four draws.
+    // that the two endpoint callbacks coalesced. The active prefix holds four, six, eight, or ten phases for two
+    // through five draws.
     Core::GpuTaskId m_graphicsPrefixOpaqueSharedComputeEmulationTasks[
         ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount
     ] = {};
@@ -659,7 +659,7 @@ private:
     // local occupancy uploads cannot overwrite the frozen CSG stream before those callbacks record.
     Core::GpuTaskId m_deferredAvboitCsgReceiverSpanTask;
     Core::GpuTaskId m_deferredAvboitCsgIntervalCombineTask;
-    // The final immutable Occupancy upload and optional graph-owned regular producer/two-, three-, or four-draw
+    // The final immutable Occupancy upload and optional graph-owned regular producer with two through five draws
     // alternating shared-output phases stay in AVBOIT Pre's accepting Graphics packet before its later Depth-Warp
     // Compute dependency.
     Core::GpuTaskId m_deferredAvboitOccupancyStreamTask;
@@ -670,7 +670,7 @@ private:
     usize m_deferredAvboitOccupancySharedComputeEmulationTaskCount = 0u;
     Core::GpuTaskId m_deferredAvboitOccupancyTask;
     Core::GpuTaskId m_deferredAvboitDepthWarpTask;
-    // The optional alias-free regular/CSG producer or narrowly retained two-, three-, or four-draw shared-output
+    // The optional alias-free regular/CSG producer or narrowly retained two-through-five-draw shared-output
     // phases must remain in Extinction's selected Graphics packet so their material timing interval and
     // generated-vertex handoff share the consumer's token.
     Core::GpuTaskId m_deferredAvboitExtinctionComputeEmulationTask;
@@ -688,7 +688,7 @@ private:
     // generated-vertex handoff and its cross-callback timing interval share the terminal Graphics packet and
     // finalizer.
     Core::GpuTaskId m_deferredAvboitAccumulationComputeEmulationTask;
-    // A narrowly accepted two-, three-, or four-draw shared-output regular stream retains every alternating D/R
+    // A narrowly accepted two-through-five-draw shared-output regular stream retains every alternating D/R
     // phase so the runtime can prove exact packet order instead of accepting only its two endpoints.
     Core::GpuTaskId m_deferredAvboitAccumulationSharedComputeEmulationTasks[
         ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount

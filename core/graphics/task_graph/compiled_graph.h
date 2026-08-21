@@ -32,7 +32,7 @@ struct GpuSubmissionPacket{
     u32 dependencyCount = 0u;
     u32 externalDependencyOffset = 0u;
     u32 externalDependencyCount = 0u;
-    // Compiler-derived ready-frontier depth for native recording. Packets in one depth have no internal packet
+    // Compiler-derived ready-frontier depth for native recording. Packets in one depth have no recorded-state-seed
     // producer relationship, so the runtime may record opted-in packets concurrently while retaining deterministic
     // compile-order submission.
     u32 recordingFrontier = 0u;

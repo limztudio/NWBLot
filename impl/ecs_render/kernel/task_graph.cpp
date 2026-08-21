@@ -1075,7 +1075,7 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
 
 
 // A persistent generated-vertex buffer normally forces local dispatch/raster interleaving. This deliberately
-// narrow graph-owned case can retain up to four regular draws that share one buffer and descriptor slot, so each
+// narrow graph-owned case can retain up to five regular draws that share one buffer and descriptor slot, so each
 // consumer can explicitly opt into its supported D(A) -> R(A) -> ... ordering without batching producers.
 struct RegularSharedComputeEmulationGraphPlan{
     MaterialPassDrawItem drawItems[s_SharedComputeEmulationMaximumDrawCount] = {};
@@ -3142,9 +3142,9 @@ struct AvboitOccupancyComputeEmulationGraphTask{
 };
 
 
-// Two, three, or four regular AVBOIT Occupancy draws sharing one generated-vertex buffer cannot batch their
+// Two through five regular AVBOIT Occupancy draws sharing one generated-vertex buffer cannot batch their
 // generators ahead of rasterization. Keep the original D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) ->
-// R(D)] stream as explicit primary-Graphics callbacks so the compiler owns every alternating UAV/VertexBuffer
+// R(D) -> D(E) -> R(E)] stream as explicit primary-Graphics callbacks so the compiler owns every alternating UAV/VertexBuffer
 // boundary before the existing Depth-Warp successor.
 struct AvboitOccupancySharedComputeEmulationGraphTask{
     enum class Phase : u8{
@@ -3552,10 +3552,10 @@ struct AvboitExtinctionComputeEmulationGraphTask{
 };
 
 
-// Two, three, or four regular Extinction draws targeting one persistent generated-vertex buffer must retain their
-// native D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) -> R(D)] order. Each phase is graph-visible so the
-// compiler lowers the alternating UAV/VertexBuffer states before the common typed Integration tail consumes the
-// packed outputs.
+// Two through five regular Extinction draws targeting one persistent generated-vertex buffer must retain their
+// native D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) -> R(D) -> D(E) -> R(E)] order.
+// Each phase is graph-visible so the compiler lowers the alternating UAV/VertexBuffer states before the common
+// typed Integration tail consumes the packed outputs.
 struct AvboitExtinctionSharedComputeEmulationGraphTask{
     enum class Phase : u8{
         Generate,
@@ -6982,7 +6982,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     gbufferPayload.regularComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationOutputStatesGraphOwned;
 
     // A persistent generated-vertex buffer is normally a local dispatch/raster bridge. Handle the small alias
-    // classes explicitly: two, three, or four regular opaque compute items sharing one frozen output and heap slot.
+    // classes explicitly: two through five regular opaque compute items sharing one frozen output and heap slot.
     // Opaque CSG remains out of scope so no CSG producer/raster phase can observe this alternation.
     ECSRenderDetail::RegularSharedComputeEmulationGraphPlan opaqueSharedComputeEmulationPlan;
     const bool opaqueSharedComputeEmulationPlanCaptured =
@@ -7425,7 +7425,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
     Core::GpuTaskId gbufferCompletionTask = m_graphicsPrefixGbufferTask;
     if(opaqueSharedComputeEmulationOutputStatesGraphOwned){
-        // These two, three, or four draw items target exactly one imported buffer. Keep every state phase explicit
+        // These two through five draw items target exactly one imported buffer. Keep every state phase explicit
         // so the compiler, not the material callback, owns Common -> UAV -> VertexBuffer -> ... -> VertexBuffer.
         // The immediate chain is also the semantic ordering contract for the retained persistent output alias.
         opaqueSharedComputeEmulationGenerateResourceUses.reserve(4u);
@@ -7547,6 +7547,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_c"),
             Name("render.graphics_prefix.opaque_shared_compute_emulation_generate_d"),
             Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_d"),
+            Name("render.graphics_prefix.opaque_shared_compute_emulation_generate_e"),
+            Name("render.graphics_prefix.opaque_shared_compute_emulation_raster_e"),
         };
         const AStringView opaqueSharedComputeEmulationPhaseMarkers[] = {
             "Opaque Shared Compute Emulation Generate A",
@@ -7557,6 +7559,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             "Opaque Shared Compute Emulation Raster C",
             "Opaque Shared Compute Emulation Generate D",
             "Opaque Shared Compute Emulation Raster D",
+            "Opaque Shared Compute Emulation Generate E",
+            "Opaque Shared Compute Emulation Raster E",
         };
         const usize opaqueSharedComputeEmulationPhaseCount =
             ECSRenderDetail::SharedComputeEmulationPhaseCountForDrawCount(opaqueSharedComputeEmulationPlan.drawCount);
@@ -13798,10 +13802,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     occupancyCsgFrameData
                 )
             ;
-            // The unsplit all-compute two-, three-, or four-draw case can preserve one shared generated output only
-            // as an explicit D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) -> R(D)] sequence. Keep mesh and
-            // CSG work out of this narrow slice so the aggregate Occupancy callback is never partially replayed
-            // around its phases.
+            // The unsplit all-compute two-through-five-draw case can preserve one shared generated output only
+            // as an explicit D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) -> R(D) -> D(E) -> R(E)]
+            // sequence. Keep mesh and CSG work out of this narrow slice so the aggregate Occupancy callback is
+            // never partially replayed around its phases.
             occupancySharedComputeEmulationPlanCaptured = !splitAvboitStages
                 && !occupancyRegularComputeEmulationPlanCaptured
                 && occupancyDrawItems.regular.meshDrawItems.empty()
@@ -14437,6 +14441,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Name("render.avboit.occupancy.shared_compute_emulation_raster_c"),
             Name("render.avboit.occupancy.shared_compute_emulation_generate_d"),
             Name("render.avboit.occupancy.shared_compute_emulation_raster_d"),
+            Name("render.avboit.occupancy.shared_compute_emulation_generate_e"),
+            Name("render.avboit.occupancy.shared_compute_emulation_raster_e"),
         };
         const AStringView occupancySharedComputeEmulationPhaseMarkers[] = {
             "AVBOIT Occupancy Shared Compute Emulation Generate A",
@@ -14447,6 +14453,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             "AVBOIT Occupancy Shared Compute Emulation Raster C",
             "AVBOIT Occupancy Shared Compute Emulation Generate D",
             "AVBOIT Occupancy Shared Compute Emulation Raster D",
+            "AVBOIT Occupancy Shared Compute Emulation Generate E",
+            "AVBOIT Occupancy Shared Compute Emulation Raster E",
         };
         const usize occupancySharedComputeEmulationPhaseCount =
             ECSRenderDetail::SharedComputeEmulationPhaseCountForDrawCount(
@@ -15409,6 +15417,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Name("render.avboit.extinction.shared_compute_emulation_raster_c"),
             Name("render.avboit.extinction.shared_compute_emulation_generate_d"),
             Name("render.avboit.extinction.shared_compute_emulation_raster_d"),
+            Name("render.avboit.extinction.shared_compute_emulation_generate_e"),
+            Name("render.avboit.extinction.shared_compute_emulation_raster_e"),
         };
         const AStringView extinctionSharedComputeEmulationPhaseMarkers[] = {
             "AVBOIT Extinction Shared Compute Emulation Generate A",
@@ -15419,6 +15429,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             "AVBOIT Extinction Shared Compute Emulation Raster C",
             "AVBOIT Extinction Shared Compute Emulation Generate D",
             "AVBOIT Extinction Shared Compute Emulation Raster D",
+            "AVBOIT Extinction Shared Compute Emulation Generate E",
+            "AVBOIT Extinction Shared Compute Emulation Raster E",
         };
         const usize extinctionSharedComputeEmulationPhaseCount =
             ECSRenderDetail::SharedComputeEmulationPhaseCountForDrawCount(
@@ -15865,10 +15877,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     accumulationCsgFrameData
                 )
             ;
-            // The unsplit all-compute two-, three-, or four-draw case can preserve one shared generated output only
-            // as an explicit D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) -> R(D)] sequence. Keep mesh and
-            // CSG work out of this narrow slice so the aggregate accumulation callback is never partially replayed
-            // around its phases.
+            // The unsplit all-compute two-through-five-draw case can preserve one shared generated output only
+            // as an explicit D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) -> R(D) -> D(E) -> R(E)]
+            // sequence. Keep mesh and CSG work out of this narrow slice so the aggregate accumulation callback
+            // is never partially replayed around its phases.
             accumulationSharedComputeEmulationPlanCaptured = !splitAvboitStages
                 && !accumulationRegularComputeEmulationPlanCaptured
                 && accumulationDrawItems.regular.meshDrawItems.empty()
@@ -16357,6 +16369,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             Name("render.avboit.accumulation.shared_compute_emulation_raster_c"),
             Name("render.avboit.accumulation.shared_compute_emulation_generate_d"),
             Name("render.avboit.accumulation.shared_compute_emulation_raster_d"),
+            Name("render.avboit.accumulation.shared_compute_emulation_generate_e"),
+            Name("render.avboit.accumulation.shared_compute_emulation_raster_e"),
         };
         const AStringView accumulationSharedComputeEmulationPhaseMarkers[] = {
             "AVBOIT Accumulation Shared Compute Emulation Generate A",
@@ -16367,6 +16381,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             "AVBOIT Accumulation Shared Compute Emulation Raster C",
             "AVBOIT Accumulation Shared Compute Emulation Generate D",
             "AVBOIT Accumulation Shared Compute Emulation Raster D",
+            "AVBOIT Accumulation Shared Compute Emulation Generate E",
+            "AVBOIT Accumulation Shared Compute Emulation Raster E",
         };
         const usize accumulationSharedComputeEmulationPhaseCount =
             ECSRenderDetail::SharedComputeEmulationPhaseCountForDrawCount(

@@ -1499,14 +1499,33 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             maximumFrontier = frontier;
     }
 
-    const auto packetDependenciesAreRecorded = [&](const GpuSubmissionPacketId packet){
-        const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
-        const GpuPacketDependency* const dependencies = compiledGraph.packetDependencies(packet);
-        if(packetPlan.dependencyCount != 0u && !dependencies)
+    const auto packetStateSeedsAreRecorded = [&](const GpuSubmissionPacketId packet){
+        if(!compiledGraph.validPacket(packet))
             return false;
-        for(u32 dependencyIndex = 0u; dependencyIndex < packetPlan.dependencyCount; ++dependencyIndex){
-            if(!outRecordedGraph.find(dependencies[dependencyIndex].producer))
+        const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
+        const GpuTaskId* const tasks = compiledGraph.packetTasks(packet);
+        if(!tasks || packetPlan.taskCount == 0u)
+            return false;
+
+        for(u32 taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
+            const GpuTaskId task = tasks[taskIndex];
+            const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+            if(!compiledTask)
                 return false;
+
+            const GpuPacketStateSeed* const stateSeeds = compiledGraph.taskPrologueStateSeeds(task);
+            if(compiledTask->prologueStateSeedCount != 0u && !stateSeeds)
+                return false;
+            for(u32 stateSeedIndex = 0u; stateSeedIndex < compiledTask->prologueStateSeedCount; ++stateSeedIndex){
+                const GpuSubmissionPacketId sourcePacket = stateSeeds[stateSeedIndex].sourcePacket;
+                if(
+                    !compiledGraph.validPacket(sourcePacket)
+                    || sourcePacket == packet
+                    || sourcePacket.index >= packet.index
+                    || !outRecordedGraph.find(sourcePacket)
+                )
+                    return false;
+            }
         }
         return true;
     };
@@ -1542,7 +1561,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             const GpuNativePacketRecordDesc& desc = recordDescs[descIndex];
             if(compiledGraph.packet(desc.packet).recordingFrontier != frontier)
                 continue;
-            if(!packetDependenciesAreRecorded(desc.packet)){
+            if(!packetStateSeedsAreRecorded(desc.packet)){
                 if(outFailedPacket)
                     *outFailedPacket = desc.packet;
                 return false;

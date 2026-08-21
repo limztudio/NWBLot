@@ -2719,37 +2719,6 @@ bool RendererRayTracingSystem::meshSwBvhResourcesReady(
     ;
 }
 
-bool RendererRayTracingSystem::buildMeshSwBvh(
-    Core::CommandList& commandList,
-    const u32 positionHeapSlot,
-    const u32 triangleIndexHeapSlot,
-    u32 primitiveCount,
-    const SIMDVector aabbMin,
-    const SIMDVector aabbMax,
-    Core::BufferHandle& nodeBuffer,
-    Core::BufferHandle& parentBuffer,
-    Core::GpuDescriptorHandle& nodeHeapHandle,
-    Core::GpuDescriptorHandle& parentHeapHandle
-){
-    if(primitiveCount == 0u)
-        return false;
-    if(!meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
-        return false;
-
-    return buildMeshSwBvhPrepared(
-        commandList,
-        positionHeapSlot,
-        triangleIndexHeapSlot,
-        primitiveCount,
-        aabbMin,
-        aabbMax,
-        nodeBuffer,
-        parentBuffer,
-        nodeHeapHandle,
-        parentHeapHandle
-    );
-}
-
 bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     Core::CommandList& commandList,
     const u32 positionHeapSlot,
@@ -2859,33 +2828,6 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     if(!graphBoundaryStatesOwned)
         bvhBuildBarrier();
     return true;
-}
-
-bool RendererRayTracingSystem::refitMeshSwBvh(
-    Core::CommandList& commandList,
-    const u32 positionHeapSlot,
-    const u32 triangleIndexHeapSlot,
-    u32 primitiveCount,
-    Core::BufferHandle& nodeBuffer,
-    Core::BufferHandle& parentBuffer,
-    Core::GpuDescriptorHandle& nodeHeapHandle,
-    Core::GpuDescriptorHandle& parentHeapHandle
-){
-    if(primitiveCount == 0u)
-        return false;
-    if(!meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
-        return false;
-
-    return refitMeshSwBvhPrepared(
-        commandList,
-        positionHeapSlot,
-        triangleIndexHeapSlot,
-        primitiveCount,
-        nodeBuffer,
-        parentBuffer,
-        nodeHeapHandle,
-        parentHeapHandle
-    );
 }
 
 bool RendererRayTracingSystem::refitMeshSwBvhPrepared(

@@ -951,18 +951,6 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     return true;
 }
 
-void RendererRayTracingSystem::clearCausticTargets(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    if(!targets.causticIrradiance || !targets.causticAccumulator)
-        return;
-
-    // Black is the additive no-op when no producer runs.
-    commandList.setTextureState(targets.causticIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.clearTextureFloat(targets.causticIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
-
-    clearNonTemporalCausticAccumulator(commandList, targets);
-}
-
 void RendererRayTracingSystem::clearNonTemporalCausticAccumulator(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!targets.causticAccumulator)
         return;

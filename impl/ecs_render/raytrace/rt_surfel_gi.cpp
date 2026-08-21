@@ -1219,36 +1219,6 @@ bool RendererRayTracingSystem::needsSurfelResourceInitialization()const noexcept
     return hasSurfelWork() && rayTracingState().m_surfelResourcesNeedClear;
 }
 
-bool RendererRayTracingSystem::initializeSurfelResources(
-    Core::CommandList& commandList,
-    const bool graphEntryStatesOwned
-){
-    if(!rayTracingState().m_surfelResourcesNeedClear)
-        return true;
-
-    Core::Buffer* pool = rayTracingState().m_surfelPoolBuffer.get();
-    Core::Buffer* cellHead = rayTracingState().m_surfelCellHeadBuffer.get();
-    Core::Buffer* counter = rayTracingState().m_surfelCounterBuffer.get();
-    Core::Buffer* freeList = rayTracingState().m_surfelFreeListBuffer.get();
-    if(!pool || !cellHead || !counter || !freeList)
-        return false;
-
-    // The normal graph establishes CopyDest in its packet prologue. Direct compatibility callers retain their
-    // local setup; both routes leave the clear body and following snapshot's final CopyDest state unchanged.
-    if(!graphEntryStatesOwned){
-        commandList.setBufferState(pool, Core::ResourceStates::CopyDest);
-        commandList.setBufferState(cellHead, Core::ResourceStates::CopyDest);
-        commandList.setBufferState(counter, Core::ResourceStates::CopyDest);
-        commandList.setBufferState(freeList, Core::ResourceStates::CopyDest);
-    }
-    commandList.commitBarriers();
-    commandList.clearBufferUInt(pool, 0u);
-    commandList.clearBufferUInt(cellHead, NWB_SURFEL_CELL_INVALID);
-    commandList.clearBufferUInt(counter, 0u);
-    commandList.clearBufferUInt(freeList, 0u);   // contents cosmetic; counter FREE_TOP=0 is what marks it empty
-    return recordSurfelResourceInitializationLifecycle();
-}
-
 bool RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targets){
     if(!hasSurfelWork())
         return true;

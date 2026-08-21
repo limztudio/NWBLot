@@ -109,6 +109,9 @@ private:
         // heap entry. The heap retains the texture through its deferred-free quarantine, so this handle must be
         // retired before the owning resource leaves m_textures.
         Core::GpuDescriptorHandle sampledImageHeapHandle = Core::GpuDescriptorHandle::invalid();
+        // Newly-created retained textures have a native Unknown origin. Only an accepted full upload can publish
+        // their descriptor ShaderResource state for a later first read.
+        bool initialUploadAccepted = false;
         // A texture can be imported once per graph generation and then shared by its upload and UI draw resource
         // declarations.  The generation check rejects an ID retained across a graph rebuild.
         Core::GpuGraphResourceId taskGraphResource;
@@ -134,6 +137,7 @@ private:
     // texture handle keeps the declared sampled resource alive independently of the next ImGui frame.
     struct TaskGraphDrawCommand{
         Core::TextureHandle texture;
+        bool textureInitialUploadAccepted = false;
         Core::GpuDescriptorHandle textureHeapHandle = Core::GpuDescriptorHandle::invalid();
         f32 clipMinX = 0.0f;
         f32 clipMinY = 0.0f;

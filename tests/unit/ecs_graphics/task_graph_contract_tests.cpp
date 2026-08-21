@@ -640,7 +640,7 @@ TEST(EcsGraphics, UiPresentationSnapshotsLateRecordInputs){
     EXPECT_TRUE(ContainsText(ui, "m_taskGraphDrawCommands"));
     EXPECT_TRUE(ContainsText(ui, "recordTaskGraphDrawSnapshot"));
     EXPECT_TRUE(ContainsText(ui, "graph-owned ImGui overlay cannot safely record a custom draw callback"));
-    EXPECT_TRUE(ContainsText(ui, "appendDrawTextureUse(drawCommand.texture)"));
+    EXPECT_TRUE(ContainsText(ui, "appendDrawTextureUse(drawCommand)"));
 
     const usize recordOffset = ui.find("bool UiSystem::recordTaskGraphPresentation");
     const usize opaqueRecordOffset = ui.find("bool UiSystem::recordStandaloneLegacyTaskGraphPresentation", recordOffset);
@@ -685,6 +685,75 @@ TEST(EcsGraphics, UiGraphUploadsDeclareConcurrentProducerFamilies){
     EXPECT_TRUE(ContainsText(uiTextures, "allowCrossFamilySameClassQueueRouting = preferDedicatedTransport"));
     EXPECT_TRUE(ContainsText(uiTextures, "ResourceQueueSharing::GraphicsAsyncComputeAndTransfer"));
     EXPECT_TRUE(ContainsText(uiGraphicsResources, "ResourceQueueSharing::GraphicsAsyncComputeAndTransfer"));
+}
+
+
+// A newly-created retained ImGui texture is natively Unknown until its upload accepts. The graph must preserve that
+// origin for the first write, then use the descriptor ShaderResource state only after the accepted batch publishes it.
+TEST(EcsGraphics, UiFreshTextureImportsPreserveNativeOrigins){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString uiHeaderSource;
+    AString uiSource;
+    AString uiTextureSource;
+    AString uiSubmissionSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.h", uiHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "texture_resources.cpp", uiTextureSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "texture_submission.h", uiSubmissionSource));
+    const AStringView uiHeader(uiHeaderSource.data(), uiHeaderSource.size());
+    const AStringView ui(uiSource.data(), uiSource.size());
+    const AStringView uiTextures(uiTextureSource.data(), uiTextureSource.size());
+    const AStringView uiSubmission(uiSubmissionSource.data(), uiSubmissionSource.size());
+
+    EXPECT_TRUE(ContainsText(uiHeader, "bool initialUploadAccepted = false;"));
+    EXPECT_TRUE(ContainsText(uiHeader, "bool textureInitialUploadAccepted = false;"));
+    EXPECT_TRUE(ContainsText(uiSubmission, "bool* initialUploadAccepted = nullptr;"));
+    EXPECT_TRUE(ContainsText(uiSubmission, "void add(ImTextureData& textureData, bool* const initialUploadAccepted = nullptr)"));
+
+    const usize createStatusOffset = uiSubmission.find("case ImTextureStatus_WantCreate:");
+    const usize updateStatusOffset = uiSubmission.find("case ImTextureStatus_WantUpdates:", createStatusOffset);
+    const usize okStatusOffset = uiSubmission.find("case ImTextureStatus_OK:", updateStatusOffset);
+    ASSERT_NE(createStatusOffset, AStringView::npos);
+    ASSERT_NE(updateStatusOffset, AStringView::npos);
+    ASSERT_NE(okStatusOffset, AStringView::npos);
+    ASSERT_LT(createStatusOffset, updateStatusOffset);
+    ASSERT_LT(updateStatusOffset, okStatusOffset);
+    const AStringView createStatus = uiSubmission.substr(createStatusOffset, updateStatusOffset - createStatusOffset);
+    const AStringView updateStatus = uiSubmission.substr(updateStatusOffset, okStatusOffset - updateStatusOffset);
+    EXPECT_TRUE(ContainsText(
+        createStatus,
+        "if(request.initialUploadAccepted)\n                        *request.initialUploadAccepted = true;"
+    ));
+    EXPECT_FALSE(ContainsText(updateStatus, "initialUploadAccepted"));
+
+    for(const AStringView source : { uiTextures, ui }){
+        EXPECT_TRUE(ContainsText(
+            source,
+            "TextureResourceDesc(\n    const Core::TextureDesc& textureDesc,\n    const bool initialUploadAccepted\n)"
+        ));
+        EXPECT_TRUE(ContainsText(
+            source,
+            ".setInitialState(initialUploadAccepted ? textureDesc.initialState : Core::ResourceStates::Unknown)"
+        ));
+    }
+    EXPECT_TRUE(ContainsText(
+        uiTextures,
+        "__hidden_ui::TextureResourceDesc(resource.texture->getDescription(), resource.initialUploadAccepted)"
+    ));
+    EXPECT_TRUE(ContainsText(uiTextures, "m_textureUploadBatch.add(*textureData, &resource->initialUploadAccepted)"));
+    EXPECT_TRUE(ContainsText(ui, ".textureInitialUploadAccepted = textureResource->initialUploadAccepted,"));
+    EXPECT_TRUE(ContainsText(ui, "const auto appendDrawTextureUse = [&](const TaskGraphDrawCommand& drawCommand){"));
+    EXPECT_TRUE(ContainsText(
+        ui,
+        "__hidden_ui::TextureResourceDesc(\n"
+        "                    drawCommand.texture->getDescription(),\n"
+        "                    drawCommand.textureInitialUploadAccepted\n"
+        "                )"
+    ));
+    EXPECT_TRUE(ContainsText(ui, "appendDrawTextureUse(drawCommand)"));
+    EXPECT_TRUE(ContainsText(ui, "m_textureUploadBatch.complete(true);"));
 }
 
 
@@ -2074,7 +2143,7 @@ TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
     EXPECT_TRUE(ContainsText(uiTextures, "heap.allocate(Core::GpuDescriptorClass::SampledImage)"));
     EXPECT_TRUE(ContainsText(uiTextures, "importTaskGraphTexture(graph, *resource)"));
     EXPECT_TRUE(ContainsText(uiTextures, "graph.addUploadTextureTask("));
-    EXPECT_TRUE(ContainsText(ui, "appendDrawTextureUse(drawCommand.texture)"));
+    EXPECT_TRUE(ContainsText(ui, "appendDrawTextureUse(drawCommand)"));
     EXPECT_TRUE(ContainsText(ui, "m_taskGraphDrawCommands.push_back(TaskGraphDrawCommand{"));
     EXPECT_TRUE(ContainsText(ui, "graph-owned ImGui overlay cannot safely record a custom draw callback"));
 }

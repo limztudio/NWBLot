@@ -40180,6 +40180,8 @@ TEST_F(DescriptorBufferRoundTripTest, ImguiTextureUploadBatchCommitsOnlyAfterAcc
     Impl::UiTextureUploadBatch uploads{arena};
     ImTextureData createTexture;
     ImTextureData updateTexture;
+    bool createInitialUploadAccepted = false;
+    bool updateInitialUploadAccepted = false;
     createTexture.SetStatus(ImTextureStatus_WantCreate);
     updateTexture.SetStatus(ImTextureStatus_WantUpdates);
 
@@ -40189,8 +40191,8 @@ TEST_F(DescriptorBufferRoundTripTest, ImguiTextureUploadBatchCommitsOnlyAfterAcc
     rejected->close();
     ASSERT_TRUE(rejected->hasCommandBuffer());
 
-    uploads.add(createTexture);
-    uploads.add(updateTexture);
+    uploads.add(createTexture, &createInitialUploadAccepted);
+    uploads.add(updateTexture, &updateInitialUploadAccepted);
     device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
     CommandList* rejectedCommandLists[] = { rejected.get() };
     bool submitted = true;
@@ -40199,6 +40201,8 @@ TEST_F(DescriptorBufferRoundTripTest, ImguiTextureUploadBatchCommitsOnlyAfterAcc
     uploads.complete(submitted);
     EXPECT_EQ(createTexture.Status, ImTextureStatus_WantCreate);
     EXPECT_EQ(updateTexture.Status, ImTextureStatus_WantUpdates);
+    EXPECT_FALSE(createInitialUploadAccepted);
+    EXPECT_FALSE(updateInitialUploadAccepted);
 
     auto accepted = device.createCommandList();
     ASSERT_NE(accepted.get(), nullptr);
@@ -40206,8 +40210,8 @@ TEST_F(DescriptorBufferRoundTripTest, ImguiTextureUploadBatchCommitsOnlyAfterAcc
     accepted->close();
     ASSERT_TRUE(accepted->hasCommandBuffer());
 
-    uploads.add(createTexture);
-    uploads.add(updateTexture);
+    uploads.add(createTexture, &createInitialUploadAccepted);
+    uploads.add(updateTexture, &updateInitialUploadAccepted);
     CommandList* acceptedCommandLists[] = { accepted.get() };
     submitted = false;
     device.executeCommandLists(acceptedCommandLists, 1u, CommandQueue::Graphics, &submitted);
@@ -40215,6 +40219,8 @@ TEST_F(DescriptorBufferRoundTripTest, ImguiTextureUploadBatchCommitsOnlyAfterAcc
     uploads.complete(submitted);
     EXPECT_EQ(createTexture.Status, ImTextureStatus_OK);
     EXPECT_EQ(updateTexture.Status, ImTextureStatus_OK);
+    EXPECT_TRUE(createInitialUploadAccepted);
+    EXPECT_FALSE(updateInitialUploadAccepted);
 }
 
 

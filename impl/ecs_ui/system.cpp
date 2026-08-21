@@ -203,13 +203,16 @@ static bool HasPendingTextureUploads(const ImDrawData& drawData){
     };
 }
 
-[[nodiscard]] static Core::GpuGraphResourceDesc TextureResourceDesc(const Core::TextureDesc& textureDesc){
+[[nodiscard]] static Core::GpuGraphResourceDesc TextureResourceDesc(
+    const Core::TextureDesc& textureDesc,
+    const bool initialUploadAccepted
+){
     Core::GpuGraphResourceDesc desc;
     desc
         .setIdentity(textureDesc.name)
         .setMarkerLabel("ImGui Texture")
         .setType(Core::GpuGraphResourceType::Texture)
-        .setInitialState(textureDesc.initialState)
+        .setInitialState(initialUploadAccepted ? textureDesc.initialState : Core::ResourceStates::Unknown)
         .setQueueSharing(textureDesc.queueSharing)
     ;
     return desc;
@@ -872,6 +875,7 @@ bool UiSystem::prepareTaskGraphDrawUploads(ImDrawData& drawData){
             const usize priorCommandCount = m_taskGraphDrawCommands.size();
             m_taskGraphDrawCommands.push_back(TaskGraphDrawCommand{
                 .texture = textureResource->texture,
+                .textureInitialUploadAccepted = textureResource->initialUploadAccepted,
                 .textureHeapHandle = textureResource->sampledImageHeapHandle,
                 .clipMinX = clipMinX,
                 .clipMinY = clipMinY,
@@ -1188,14 +1192,17 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
             resourceUses.push_back(__hidden_ui::ReadTextureUse(texture));
     }
 
-    const auto appendDrawTextureUse = [&](const Core::TextureHandle& texture){
-        if(!texture)
+    const auto appendDrawTextureUse = [&](const TaskGraphDrawCommand& drawCommand){
+        if(!drawCommand.texture)
             return true;
-        Core::GpuGraphResourceId textureResource = graph.findImportedTexture(texture);
+        Core::GpuGraphResourceId textureResource = graph.findImportedTexture(drawCommand.texture);
         if(!textureResource.valid()){
             textureResource = graph.importTexture(
-                texture,
-                __hidden_ui::TextureResourceDesc(texture->getDescription())
+                drawCommand.texture,
+                __hidden_ui::TextureResourceDesc(
+                    drawCommand.texture->getDescription(),
+                    drawCommand.textureInitialUploadAccepted
+                )
             );
         }
         if(!textureResource.valid())
@@ -1208,7 +1215,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         return true;
     };
     for(const TaskGraphDrawCommand& drawCommand : m_taskGraphDrawCommands){
-        if(!appendDrawTextureUse(drawCommand.texture)){
+        if(!appendDrawTextureUse(drawCommand)){
             m_textureUploadBatch.reset();
             return {};
         }

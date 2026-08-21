@@ -127,6 +127,47 @@ struct SurfelIrradianceClearGraphTask{
 };
 
 
+// The retained monolithic shadow callback must share its selected Compute packet with an all-lit fallback clear.
+// The generic full-clear helper declares Graphics for render-pass lowering, so this callback records only the native
+// Compute-safe clear after the graph lowers CopyDest and rejects an unexpected active render pass.
+struct ShadowVisibilityAllLitClearGraphTask{
+    struct Payload{
+        Core::GpuGraphResourceId destination;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        Core::Texture* const destination = context.taskGraph.textureForResource(payload.destination);
+        if(!destination || commandList.isRenderPassActive())
+            return false;
+
+        const Core::GpuClearTextureTaskDesc clearDesc{
+            .destination = payload.destination,
+            .subresources = s_ShadowVisibilitySubresources,
+            .valueType = Core::GpuClearTextureTaskValueType::Float,
+            .floatValue = Core::Color(1.f, 1.f, 1.f, 1.f),
+        };
+        if(
+            context.commandIrCapture
+            && !context.commandIrCapture->captureClearTexture(
+                context.task,
+                context.packet,
+                context.queue,
+                payload.destination,
+                clearDesc
+            )
+        )
+            return false;
+
+        commandList.clearTextureFloat(destination, clearDesc.subresources, clearDesc.floatValue);
+        return true;
+    }
+};
+
+
 [[nodiscard]] static const Core::GpuPhysicalQueueInfo* QueueForTask(
     const Core::GpuTaskRecordContext& context,
     const Core::GpuTaskId* const task
@@ -8175,15 +8216,6 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     );
     resourceUses.push_back(ReadUse(sceneGeometryDomain));
 
-    const auto appendOptionalReadWriteTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
-        if(!texture)
-            return true;
-        const Core::GpuGraphResourceId resource = importTexture(texture, identity, label);
-        if(!resource.valid())
-            return false;
-        resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::UnorderedAccess));
-        return true;
-    };
     const auto appendOptionalWriteTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         if(!texture)
             return true;
@@ -8204,6 +8236,14 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
                 ? ReadUse(resource, Core::ResourceStates::ShaderResource)
                 : WriteUse(resource, Core::ResourceStates::UnorderedAccess)
             );
+        else if(!splitSoftTransparentFold){
+            if(isInput){
+                if(softShadowHistoryReadable)
+                    resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+            }
+            else if(m_rayTracingState.m_softShadowTemporalReady)
+                resourceUses.push_back(WriteUse(resource, Core::ResourceStates::UnorderedAccess));
+        }
         else
             resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::UnorderedAccess));
         return true;
@@ -8214,10 +8254,26 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         const Core::GpuGraphResourceId resource = importTexture(texture, identity, label);
         if(!resource.valid())
             return false;
-        resourceUses.push_back(graphOwnsOpaqueTemporalMergeEntryStates
-            ? ReadUse(resource, Core::ResourceStates::ShaderResource)
-            : ReadWriteUse(resource, Core::ResourceStates::UnorderedAccess)
-        );
+        if(softShadowHistoryReadable)
+            resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+        else if(splitSoftTransparentFold && !graphOwnsOpaqueTemporalMergeEntryStates)
+            resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::UnorderedAccess));
+        return true;
+    };
+    const auto appendOptionalTransparentTemporalHistoryTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label, const bool isInput){
+        if(!texture)
+            return true;
+        const Core::GpuGraphResourceId resource = importTexture(texture, identity, label);
+        if(!resource.valid())
+            return false;
+        if(m_rayTracingState.m_softTransparentTemporalReady){
+            if(isInput){
+                if(softShadowHistoryReadable)
+                    resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+            }
+            else
+                resourceUses.push_back(WriteUse(resource, Core::ResourceStates::UnorderedAccess));
+        }
         return true;
     };
     const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
@@ -8258,17 +8314,20 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
                 "Shadow Coarse Transmittance"
             )
         )
-        && appendOptionalReadWriteTexture(
+        // The retained callback first overwrites these scratch targets, then resolves them locally within the same
+        // command list.  Its graph entry must therefore preserve Unknown -> UAV first writes rather than fabricate
+        // a ReadWrite native source for a fresh target generation.
+        && appendOptionalWriteTexture(
             deferredTargets.shadowSoftHalfA,
             Name("render.shadow_visibility.soft_half_a"),
             "Shadow Soft Half A"
         )
-        && appendOptionalReadWriteTexture(
+        && appendOptionalWriteTexture(
             deferredTargets.shadowSoftHalfB,
             Name("render.shadow_visibility.soft_half_b"),
             "Shadow Soft Half B"
         )
-        && appendOptionalReadWriteTexture(
+        && appendOptionalWriteTexture(
             deferredTargets.shadowSoftGeometry,
             Name("render.shadow_visibility.soft_geometry"),
             "Shadow Soft Geometry"
@@ -8302,30 +8361,34 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             "Shadow Moments B",
             !opaqueHistoryFrontIsA
         )
-        && appendOptionalReadWriteTexture(
+        && appendOptionalWriteTexture(
             deferredTargets.transparentSoftHalf,
             Name("render.shadow_visibility.transparent_soft_half"),
             "Transparent Shadow Soft Half"
         )
-        && appendOptionalReadWriteTexture(
+        && appendOptionalTransparentTemporalHistoryTexture(
             deferredTargets.transparentHistA,
             Name("render.shadow_visibility.transparent_history_a"),
-            "Transparent Shadow History A"
+            "Transparent Shadow History A",
+            opaqueHistoryFrontIsA
         )
-        && appendOptionalReadWriteTexture(
+        && appendOptionalTransparentTemporalHistoryTexture(
             deferredTargets.transparentHistB,
             Name("render.shadow_visibility.transparent_history_b"),
-            "Transparent Shadow History B"
+            "Transparent Shadow History B",
+            !opaqueHistoryFrontIsA
         )
-        && appendOptionalReadWriteTexture(
+        && appendOptionalTransparentTemporalHistoryTexture(
             deferredTargets.transparentMomentsA,
             Name("render.shadow_visibility.transparent_moments_a"),
-            "Transparent Shadow Moments A"
+            "Transparent Shadow Moments A",
+            opaqueHistoryFrontIsA
         )
-        && appendOptionalReadWriteTexture(
+        && appendOptionalTransparentTemporalHistoryTexture(
             deferredTargets.transparentMomentsB,
             Name("render.shadow_visibility.transparent_moments_b"),
-            "Transparent Shadow Moments B"
+            "Transparent Shadow Moments B",
+            !opaqueHistoryFrontIsA
         )
         && appendOptionalReadBuffer(
             m_rayTracingState.m_sceneBvhNodeBuffer,
@@ -9051,7 +9114,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     // Preparedness is established while Shadow Prepare records, after this graph is declared.  The normal
     // monolithic path therefore begins with an unconditional all-lit clear: real shadow producers overwrite it,
     // while a missing producer retains the same white fallback without a callback-local native state bridge.
-    // Keep this typed Transfer primitive on the same selected Compute/Graphics packet as Shadow Visibility.
+    // Keep this Compute-native clear on the selected Compute packet with Shadow Visibility.
     Core::GpuTaskSchedulingHint allLitClearScheduling;
     allLitClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
     allLitClearScheduling.forceSubmissionBoundary = false;
@@ -9059,21 +9122,26 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     allLitClearScheduling.mergeWithPrevious = adaptivePrimitivePrecedesVisibility;
     EnableSameFamilyComputeEffectRouting(allLitClearScheduling, adaptivePrimitivePrecedesVisibility);
     EnableCrossFamilyComputeEffectRouting(allLitClearScheduling);
+    const Core::GpuTaskResourceUse allLitClearResourceUse = WriteTextureUse(
+        shadowVisibility,
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::ResourceStates::CopyDest
+    );
     Core::GpuTaskDesc allLitClearDesc;
     allLitClearDesc
         .setIdentity(Name("render.shadow_visibility.all_lit_clear"))
         .setMarkerLabel("Shadow Visibility All-Lit Clear")
-        .setQueue(ComputeTransferPacketQueueRequest())
+        .setQueue(ComputePacketQueueRequest())
         .setScheduling(allLitClearScheduling)
         .setDependencies(&shadowVisibilityDependency, 1u)
+        .setResourceUses(&allLitClearResourceUse, 1u)
     ;
-    m_deferredShadowVisibilityAllLitClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
+    m_deferredShadowVisibilityAllLitClearTask = m_deferredLightingTaskGraph.addTask<
+        ECSRenderDetail::ShadowVisibilityAllLitClearGraphTask
+    >(
         allLitClearDesc,
-        Core::GpuClearTextureTaskDesc{
+        ECSRenderDetail::ShadowVisibilityAllLitClearGraphTask::Payload{
             .destination = shadowVisibility,
-            .subresources = ECSRenderDetail::s_ShadowVisibilitySubresources,
-            .valueType = Core::GpuClearTextureTaskValueType::Float,
-            .floatValue = Core::Color(1.f, 1.f, 1.f, 1.f),
         }
     );
     if(!m_deferredShadowVisibilityAllLitClearTask.valid()){

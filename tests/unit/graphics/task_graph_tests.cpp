@@ -24730,9 +24730,10 @@ TEST(GpuTaskGraph, MergesGraphOwnedAdaptiveShadowPrimitivesIntoShadowVisibilityP
 
 
 // The retained monolithic Shadow Visibility callback receives an unconditional typed white clear because its
-// producer readiness is only known while the earlier Shadow Prepare packet records.  Keep the clear and callback
-// in one effects packet so the compiler, rather than the callback, lowers CopyDest -> UAV before a later lighting
-// read transitions the output to ShaderResource.
+// producer readiness is only known while the earlier Shadow Prepare packet records. On a Graphics + dedicated
+// Compute + dedicated Transfer topology, keep the Compute-only clear and callback in one effects packet so the
+// compiler, rather than the callback, lowers CopyDest -> UAV before a later lighting read transitions the output
+// to ShaderResource.
 TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -24747,11 +24748,41 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
         queueSharing
     );
     ASSERT_TRUE(shadowVisibility.valid());
+    const Graphics::GpuGraphResourceId shadowSoftHalfA = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/monolithic_shadow_visibility_soft_half_a"),
+        "Monolithic Shadow Soft Half A",
+        Graphics::ResourceStates::Unknown,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId shadowSoftHalfB = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/monolithic_shadow_visibility_soft_half_b"),
+        "Monolithic Shadow Soft Half B",
+        Graphics::ResourceStates::Unknown,
+        queueSharing
+    );
+    const Graphics::GpuGraphResourceId shadowSoftGeometry = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/monolithic_shadow_visibility_soft_geometry"),
+        "Monolithic Shadow Soft Geometry",
+        Graphics::ResourceStates::Unknown,
+        queueSharing
+    );
+    ASSERT_TRUE(shadowSoftHalfA.valid());
+    ASSERT_TRUE(shadowSoftHalfB.valid());
+    ASSERT_TRUE(shadowSoftGeometry.valid());
 
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
         Graphics::GpuQueuePreference::Graphics,
         false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        true,
         false,
     };
     const Graphics::GpuQueueRequest computeTransferRequest{
@@ -24792,7 +24823,7 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
     allLitClearDesc
         .setIdentity(Name("tests/task_graph/monolithic_shadow_visibility_all_lit_clear"))
         .setMarkerLabel("Shadow Visibility All-Lit Clear")
-        .setQueue(computeTransferRequest)
+        .setQueue(computeRequest)
         .setScheduling(clearScheduling)
         .setDependencies(&prefix, 1u)
         .setResourceUses(allLitClearUses, LengthOf(allLitClearUses))
@@ -24810,6 +24841,24 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
             .range = {},
             .requiredState = Graphics::ResourceStates::UnorderedAccess,
             .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        {
+            .resource = shadowSoftHalfA,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = shadowSoftHalfB,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        {
+            .resource = shadowSoftGeometry,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
         },
     };
     Graphics::GpuTaskDesc shadowDesc;
@@ -24848,6 +24897,7 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
     const Graphics::GpuPhysicalQueueInfo queues[] = {
         GraphicsQueue(),
         DedicatedComputeQueue(),
+        DedicatedTransferQueue(),
     };
     const Graphics::GpuTaskGraphQueueTopology topology{
         .queues = queues,
@@ -24868,6 +24918,16 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
     ASSERT_TRUE(clearPacket.valid());
     ASSERT_TRUE(shadowPacket.valid());
     ASSERT_TRUE(lightingPacket.valid());
+    const Graphics::GpuPhysicalQueueInfo* const clearQueue = compiledGraph.queueInfoForTask(allLitClear);
+    const Graphics::GpuPhysicalQueueInfo* const shadowQueue = compiledGraph.queueInfoForTask(shadow);
+    ASSERT_NE(clearQueue, nullptr);
+    ASSERT_NE(shadowQueue, nullptr);
+    EXPECT_EQ(clearQueue->id, queues[1u].id);
+    EXPECT_EQ(shadowQueue->id, queues[1u].id);
+    EXPECT_EQ(clearQueue->queueClass, Graphics::CommandQueue::Compute);
+    EXPECT_EQ(shadowQueue->queueClass, Graphics::CommandQueue::Compute);
+    EXPECT_TRUE(clearQueue->dedicated);
+    EXPECT_TRUE(shadowQueue->dedicated);
     EXPECT_NE(prefixPacket, shadowPacket);
     EXPECT_EQ(clearPacket, shadowPacket);
     EXPECT_NE(lightingPacket, shadowPacket);
@@ -24885,6 +24945,7 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
 
     const auto hasTextureTransition = [&](
         const Graphics::GpuTaskId task,
+        const Graphics::GpuGraphResourceId resource,
         const Graphics::ResourceStates::Mask before,
         const Graphics::ResourceStates::Mask after
     ){
@@ -24898,7 +24959,7 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
             const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
             if(
                 barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
-                && barrier.resource == shadowVisibility
+                && barrier.resource == resource
                 && barrier.before == before
                 && barrier.after == after
             )
@@ -24908,19 +24969,43 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
     };
     EXPECT_TRUE(hasTextureTransition(
         allLitClear,
+        shadowVisibility,
         Graphics::ResourceStates::Common,
         Graphics::ResourceStates::CopyDest
     ));
     EXPECT_TRUE(hasTextureTransition(
         shadow,
+        shadowVisibility,
         Graphics::ResourceStates::CopyDest,
         Graphics::ResourceStates::UnorderedAccess
     ));
     EXPECT_TRUE(hasTextureTransition(
         lighting,
+        shadowVisibility,
         Graphics::ResourceStates::UnorderedAccess,
         Graphics::ResourceStates::ShaderResource
     ));
+    const auto hasUnknownFirstWrite = [&](const Graphics::GpuGraphResourceId resource){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(shadow);
+        const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(shadow);
+        if(!compiledTask || !barriers)
+            return false;
+        for(u32 barrierIndex = 0u; barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = barriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::TextureTransition
+                && barrier.resource == resource
+                && barrier.before == Graphics::ResourceStates::Unknown
+                && barrier.after == Graphics::ResourceStates::UnorderedAccess
+                && !barrier.isGraphInitialState
+            )
+                return true;
+        }
+        return false;
+    };
+    EXPECT_TRUE(hasUnknownFirstWrite(shadowSoftHalfA));
+    EXPECT_TRUE(hasUnknownFirstWrite(shadowSoftHalfB));
+    EXPECT_TRUE(hasUnknownFirstWrite(shadowSoftGeometry));
     ASSERT_EQ(compiledGraph.packet(shadowPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(shadowPacket)[0u].producer, prefixPacket);
     ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 1u);

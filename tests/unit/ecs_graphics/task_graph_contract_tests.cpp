@@ -1197,6 +1197,70 @@ TEST(EcsGraphics, SurfelIrradianceClearUsesComputeGraphCallback){
 }
 
 
+// The retained monolithic soft-shadow route must clear all-lit visibility on the selected Compute packet. Its
+// renderer-local callback retains typed command-IR capture while avoiding the generic clear helper's Graphics path.
+TEST(EcsGraphics, ShadowVisibilityAllLitClearUsesComputeGraphCallback){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    const usize callbackOffset = taskGraph.find("struct ShadowVisibilityAllLitClearGraphTask");
+    const usize queueForTaskOffset = taskGraph.find(
+        "[[nodiscard]] static const Core::GpuPhysicalQueueInfo* QueueForTask",
+        callbackOffset
+    );
+    const usize shadowVisibilityOffset = taskGraph.find(
+        "bool RendererSystem::declareDeferredShadowVisibilityTask",
+        queueForTaskOffset
+    );
+    const usize softwareCausticsOffset = taskGraph.find(
+        "bool RendererSystem::declareDeferredSoftwareCausticsTask",
+        shadowVisibilityOffset
+    );
+    ASSERT_NE(callbackOffset, AStringView::npos);
+    ASSERT_NE(queueForTaskOffset, AStringView::npos);
+    ASSERT_NE(shadowVisibilityOffset, AStringView::npos);
+    ASSERT_NE(softwareCausticsOffset, AStringView::npos);
+    ASSERT_LT(callbackOffset, queueForTaskOffset);
+    ASSERT_LT(queueForTaskOffset, shadowVisibilityOffset);
+    ASSERT_LT(shadowVisibilityOffset, softwareCausticsOffset);
+    const AStringView callback = taskGraph.substr(callbackOffset, queueForTaskOffset - callbackOffset);
+    const AStringView shadowVisibility = taskGraph.substr(
+        shadowVisibilityOffset,
+        softwareCausticsOffset - shadowVisibilityOffset
+    );
+
+    EXPECT_TRUE(ContainsText(callback, "context.taskGraph.textureForResource(payload.destination)"));
+    EXPECT_TRUE(ContainsText(callback, "if(!destination || commandList.isRenderPassActive())"));
+    EXPECT_FALSE(ContainsText(callback, "endRenderPass()"));
+    EXPECT_TRUE(ContainsText(callback, "Core::GpuClearTextureTaskDesc clearDesc{"));
+    EXPECT_TRUE(ContainsText(callback, ".destination = payload.destination,"));
+    EXPECT_TRUE(ContainsText(callback, ".subresources = s_ShadowVisibilitySubresources,"));
+    EXPECT_TRUE(ContainsText(callback, ".valueType = Core::GpuClearTextureTaskValueType::Float,"));
+    EXPECT_TRUE(ContainsText(callback, ".floatValue = Core::Color(1.f, 1.f, 1.f, 1.f),"));
+    EXPECT_TRUE(ContainsText(callback, "context.commandIrCapture"));
+    EXPECT_TRUE(ContainsText(callback, "captureClearTexture("));
+    EXPECT_TRUE(ContainsText(callback, "commandList.clearTextureFloat(destination, clearDesc.subresources, clearDesc.floatValue);"));
+
+    const usize resourceUseOffset = shadowVisibility.find("const Core::GpuTaskResourceUse allLitClearResourceUse");
+    const usize shadowSchedulingOffset = shadowVisibility.find("Core::GpuTaskSchedulingHint scheduling;", resourceUseOffset);
+    ASSERT_NE(resourceUseOffset, AStringView::npos);
+    ASSERT_NE(shadowSchedulingOffset, AStringView::npos);
+    ASSERT_LT(resourceUseOffset, shadowSchedulingOffset);
+    const AStringView allLitClear = shadowVisibility.substr(resourceUseOffset, shadowSchedulingOffset - resourceUseOffset);
+
+    EXPECT_TRUE(ContainsText(allLitClear, "WriteTextureUse(\n        shadowVisibility,\n        ECSRenderDetail::s_ShadowVisibilitySubresources,\n        Core::ResourceStates::CopyDest\n    )"));
+    EXPECT_TRUE(ContainsText(allLitClear, ".setQueue(ComputePacketQueueRequest())"));
+    EXPECT_TRUE(ContainsText(allLitClear, ".setResourceUses(&allLitClearResourceUse, 1u)"));
+    EXPECT_TRUE(ContainsText(allLitClear, "m_deferredLightingTaskGraph.addTask<"));
+    EXPECT_TRUE(ContainsText(allLitClear, "ECSRenderDetail::ShadowVisibilityAllLitClearGraphTask"));
+    EXPECT_FALSE(ContainsText(allLitClear, "addClearTextureTask("));
+}
+
+
 // Hardware Caustics is a separate Graphics-capable effect chain. Its clear and every independently created
 // temporal-accumulator prefix must carry the explicit cross-family opt-in so copied photon/resolve schedules
 // retain one selected physical Graphics queue without making a windowed present eligible for that queue.
@@ -1514,6 +1578,66 @@ TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
     EXPECT_TRUE(ContainsText(softDispatch, "const bool temporalHistoryReadable = softShadowTemporalHistoryUsable();"));
     EXPECT_TRUE(ContainsText(softDispatch, "if(temporalHistoryReadable){\n                commandList.setTextureState(resources.historyIn"));
     EXPECT_TRUE(ContainsText(softDispatch, "if(temporalHistoryReadable)\n                commandList.setTextureState(targets.shadowSoftGeometryPrev"));
+}
+
+
+// The retained monolithic callback owns later native scratch transitions, but its graph entry must still reflect
+// each fresh target's first write. Only an accepted temporal history may enter as a sampled input.
+TEST(EcsGraphics, MonolithicShadowVisibilityKeepsFreshScratchAsFirstWrites){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString taskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+
+    const usize shadowOffset = taskGraph.find("bool RendererSystem::declareDeferredShadowVisibilityTask");
+    const usize softwareCausticsOffset = taskGraph.find("bool RendererSystem::declareDeferredSoftwareCausticsTask", shadowOffset);
+    ASSERT_NE(shadowOffset, AStringView::npos);
+    ASSERT_NE(softwareCausticsOffset, AStringView::npos);
+    ASSERT_LT(shadowOffset, softwareCausticsOffset);
+    const AStringView shadowVisibility = taskGraph.substr(shadowOffset, softwareCausticsOffset - shadowOffset);
+
+    const usize opaqueHistoryHelperOffset = shadowVisibility.find("const auto appendOptionalOpaqueTemporalHistoryTexture");
+    const usize transparentHistoryHelperOffset = shadowVisibility.find(
+        "const auto appendOptionalTransparentTemporalHistoryTexture",
+        opaqueHistoryHelperOffset
+    );
+    const usize optionalImportsOffset = shadowVisibility.find("bool optionalResourcesImported =", transparentHistoryHelperOffset);
+    const usize sceneTlasOffset = shadowVisibility.find("Core::GpuGraphResourceId sceneTlas;", optionalImportsOffset);
+    ASSERT_NE(opaqueHistoryHelperOffset, AStringView::npos);
+    ASSERT_NE(transparentHistoryHelperOffset, AStringView::npos);
+    ASSERT_NE(optionalImportsOffset, AStringView::npos);
+    ASSERT_NE(sceneTlasOffset, AStringView::npos);
+    ASSERT_LT(opaqueHistoryHelperOffset, transparentHistoryHelperOffset);
+    ASSERT_LT(transparentHistoryHelperOffset, optionalImportsOffset);
+    ASSERT_LT(optionalImportsOffset, sceneTlasOffset);
+    const AStringView opaqueHistoryHelper = shadowVisibility.substr(
+        opaqueHistoryHelperOffset,
+        transparentHistoryHelperOffset - opaqueHistoryHelperOffset
+    );
+    const AStringView transparentHistoryHelper = shadowVisibility.substr(
+        transparentHistoryHelperOffset,
+        optionalImportsOffset - transparentHistoryHelperOffset
+    );
+    const AStringView optionalImports = shadowVisibility.substr(optionalImportsOffset, sceneTlasOffset - optionalImportsOffset);
+
+    EXPECT_TRUE(ContainsText(opaqueHistoryHelper, "else if(!splitSoftTransparentFold){"));
+    EXPECT_TRUE(ContainsText(opaqueHistoryHelper, "if(softShadowHistoryReadable)\n                    resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));"));
+    EXPECT_TRUE(ContainsText(opaqueHistoryHelper, "else if(m_rayTracingState.m_softShadowTemporalReady)\n                resourceUses.push_back(WriteUse(resource, Core::ResourceStates::UnorderedAccess));"));
+    EXPECT_TRUE(ContainsText(transparentHistoryHelper, "if(m_rayTracingState.m_softTransparentTemporalReady){"));
+    EXPECT_TRUE(ContainsText(transparentHistoryHelper, "if(softShadowHistoryReadable)\n                    resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));"));
+    EXPECT_TRUE(ContainsText(transparentHistoryHelper, "resourceUses.push_back(WriteUse(resource, Core::ResourceStates::UnorderedAccess));"));
+
+    EXPECT_TRUE(ContainsText(optionalImports, "appendOptionalWriteTexture(\n            deferredTargets.shadowSoftHalfA"));
+    EXPECT_TRUE(ContainsText(optionalImports, "appendOptionalWriteTexture(\n            deferredTargets.shadowSoftHalfB"));
+    EXPECT_TRUE(ContainsText(optionalImports, "appendOptionalWriteTexture(\n            deferredTargets.shadowSoftGeometry"));
+    EXPECT_TRUE(ContainsText(optionalImports, "appendOptionalWriteTexture(\n            deferredTargets.transparentSoftHalf"));
+    EXPECT_TRUE(ContainsText(optionalImports, "appendOptionalTransparentTemporalHistoryTexture(\n            deferredTargets.transparentHistA"));
+    EXPECT_TRUE(ContainsText(optionalImports, "appendOptionalTransparentTemporalHistoryTexture(\n            deferredTargets.transparentHistB"));
+    EXPECT_TRUE(ContainsText(optionalImports, "appendOptionalTransparentTemporalHistoryTexture(\n            deferredTargets.transparentMomentsA"));
+    EXPECT_TRUE(ContainsText(optionalImports, "appendOptionalTransparentTemporalHistoryTexture(\n            deferredTargets.transparentMomentsB"));
+    EXPECT_FALSE(ContainsText(optionalImports, "ReadWriteUse("));
 }
 
 

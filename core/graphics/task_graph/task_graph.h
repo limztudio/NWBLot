@@ -218,6 +218,10 @@ class GpuTaskGraph final : NoCopy{
     friend class GpuGraphSubmissionTransaction;
 
 private:
+    [[nodiscard]] static u64 allocateGeneration()noexcept;
+
+
+private:
     struct GpuTaskNode{
         Name identity = NAME_NONE;
         GpuQueueRequest queue;

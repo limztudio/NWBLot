@@ -1,0 +1,568 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "task_graph.h"
+#include "compiled_graph.h"
+
+#include <core/graphics/capture/command_ir.h>
+#include <core/graphics/backend_selection.h>
+#include <core/graphics/rhi/command.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_gpu_task_graph_builtin_clears{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct ClearBufferTask{
+    struct Payload{
+        GpuGraphResourceId destinationResource;
+        BufferHandle destination;
+        u32 clearValue = 0u;
+        QueueSubmissionToken* acceptedToken = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        if(!payload.destination)
+            return false;
+        if(
+            context.commandIrCapture
+            && !context.commandIrCapture->captureClearBuffer(
+                context.task,
+                context.packet,
+                context.queue,
+                payload.destinationResource,
+                payload.clearValue
+            )
+        )
+            return false;
+        commandList.clearBufferUInt(payload.destination.get(), payload.clearValue);
+        return true;
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(payload.acceptedToken)
+            *payload.acceptedToken = token;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.acceptedToken)
+            *payload.acceptedToken = {};
+    }
+};
+
+struct ClearTextureTask{
+    struct Payload{
+        GpuGraphResourceId destinationResource;
+        TextureHandle destination;
+        GpuClearTextureTaskDesc clearDesc;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        if(!payload.destination || payload.clearDesc.valueType >= GpuClearTextureTaskValueType::kCount)
+            return false;
+        if(
+            context.commandIrCapture
+            && !context.commandIrCapture->captureClearTexture(
+                context.task,
+                context.packet,
+                context.queue,
+                payload.destinationResource,
+                payload.clearDesc
+            )
+        )
+            return false;
+        if(
+            payload.clearDesc.recordHooks.beforeClear
+            && !payload.clearDesc.recordHooks.beforeClear(
+                payload.clearDesc.recordHooks.context,
+                commandList,
+                context
+            )
+        )
+            return false;
+
+        bool clearRecorded = false;
+        switch(payload.clearDesc.valueType){
+        case GpuClearTextureTaskValueType::Float:
+            commandList.clearTextureFloat(
+                payload.destination.get(),
+                payload.clearDesc.subresources,
+                payload.clearDesc.floatValue
+            );
+            clearRecorded = true;
+            break;
+        case GpuClearTextureTaskValueType::UInt:
+            commandList.clearTextureUInt(
+                payload.destination.get(),
+                payload.clearDesc.subresources,
+                payload.clearDesc.uintValue
+            );
+            clearRecorded = true;
+            break;
+        case GpuClearTextureTaskValueType::Int:
+            commandList.clearTextureInt(
+                payload.destination.get(),
+                payload.clearDesc.subresources,
+                payload.clearDesc.intValue
+            );
+            clearRecorded = true;
+            break;
+        case GpuClearTextureTaskValueType::DepthStencil:
+            commandList.clearDepthStencilTexture(
+                payload.destination.get(),
+                payload.clearDesc.subresources,
+                payload.clearDesc.clearDepth,
+                payload.clearDesc.depthValue,
+                payload.clearDesc.clearStencil,
+                payload.clearDesc.stencilValue
+            );
+            clearRecorded = true;
+            break;
+        default:
+            return false;
+        }
+        return clearRecorded
+            && (
+                !payload.clearDesc.recordHooks.afterClear
+                || payload.clearDesc.recordHooks.afterClear(
+                    payload.clearDesc.recordHooks.context,
+                    commandList,
+                    context
+                )
+            )
+        ;
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(payload.clearDesc.acceptedToken)
+            *payload.clearDesc.acceptedToken = token;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.clearDesc.acceptedToken)
+            *payload.clearDesc.acceptedToken = {};
+        if(payload.clearDesc.recordHooks.discarded)
+            payload.clearDesc.recordHooks.discarded(payload.clearDesc.recordHooks.context);
+    }
+};
+
+struct ClearTextureRectUIntTask{
+    struct Payload{
+        GpuGraphResourceId destinationResource;
+        TextureHandle destination;
+        GpuClearTextureRectUIntTaskDesc clearDesc;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        if(!payload.destination)
+            return false;
+        if(
+            context.commandIrCapture
+            && !context.commandIrCapture->captureClearTextureRectUInt(
+                context.task,
+                context.packet,
+                context.queue,
+                payload.destinationResource,
+                payload.clearDesc
+            )
+        )
+            return false;
+        if(
+            payload.clearDesc.recordHooks.beforeClear
+            && !payload.clearDesc.recordHooks.beforeClear(
+                payload.clearDesc.recordHooks.context,
+                commandList,
+                context
+            )
+        )
+            return false;
+
+        commandList.clearTextureRectUInt(
+            payload.destination.get(),
+            payload.clearDesc.subresources,
+            payload.clearDesc.rect,
+            payload.clearDesc.uintValue
+        );
+        return !payload.clearDesc.recordHooks.afterClear
+            || payload.clearDesc.recordHooks.afterClear(
+                payload.clearDesc.recordHooks.context,
+                commandList,
+                context
+            )
+        ;
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(payload.clearDesc.acceptedToken)
+            *payload.clearDesc.acceptedToken = token;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.clearDesc.acceptedToken)
+            *payload.clearDesc.acceptedToken = {};
+        if(payload.clearDesc.recordHooks.discarded)
+            payload.clearDesc.recordHooks.discarded(payload.clearDesc.recordHooks.context);
+    }
+};
+template<typename ResourceDesc>
+[[nodiscard]] static bool BuiltInTaskCanMaterializeRetainedState(
+    const ResourceDesc& resourceDesc,
+    const ResourceStates::Mask graphInitialState,
+    const ResourceStates::Mask externalFinalState
+)noexcept{
+    // Retained resources restore to their descriptor state when a native packet closes. The graph may still use a
+    // different built-in state when it explicitly starts from that descriptor state: compiler-owned barriers then
+    // establish the primitive state and the recorded packet exports the restored state for the next packet. A
+    // mismatched graph declaration has no native source that this helper can prove, and a terminal external state
+    // must agree with the close-time restoration before the graph publishes its handoff.
+    if(!resourceDesc.keepInitialState)
+        return true;
+    return resourceDesc.initialState != ResourceStates::Unknown
+        && graphInitialState == resourceDesc.initialState
+        && (
+            externalFinalState == ResourceStates::Unknown
+            || externalFinalState == resourceDesc.initialState
+        )
+    ;
+}
+
+[[nodiscard]] static bool CopyOrClearTextureDestinationCanMaterializeRetainedState(
+    const TextureDesc& resourceDesc,
+    const ResourceStates::Mask graphInitialState,
+    const ResourceStates::Mask externalFinalState
+)noexcept{
+    if(!resourceDesc.keepInitialState)
+        return true;
+    if(
+        resourceDesc.initialState == ResourceStates::Unknown
+        || (
+            externalFinalState != ResourceStates::Unknown
+            && externalFinalState != resourceDesc.initialState
+        )
+    )
+        return false;
+    // An Unknown write-only destination never invents an input state. Fresh managed subresources lower from
+    // Undefined; accepted retained subresources are restored to descriptor state at packet close and reused by
+    // StateTracker on later packets.
+    return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
+}
+
+[[nodiscard]] static bool ClearTextureValueMatchesFormat(
+    const TextureDesc& textureDesc,
+    const GpuClearTextureTaskDesc& clearDesc
+)noexcept{
+    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
+    const bool depthStencilFormat = formatInfo.hasDepth || formatInfo.hasStencil;
+    switch(clearDesc.valueType){
+    case GpuClearTextureTaskValueType::Float:
+        return !depthStencilFormat
+            && (formatInfo.kind == FormatKind::Normalized || formatInfo.kind == FormatKind::Float)
+        ;
+    case GpuClearTextureTaskValueType::UInt:
+        return !depthStencilFormat && formatInfo.kind == FormatKind::Integer && !formatInfo.isSigned;
+    case GpuClearTextureTaskValueType::Int:
+        return !depthStencilFormat && formatInfo.kind == FormatKind::Integer && formatInfo.isSigned;
+    case GpuClearTextureTaskValueType::DepthStencil:
+        return depthStencilFormat
+            && (!clearDesc.clearDepth || formatInfo.hasDepth)
+            && (!clearDesc.clearStencil || formatInfo.hasStencil)
+        ;
+    default:
+        return false;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuClearBufferTaskDesc& clearDesc){
+    if(clearDesc.acceptedToken)
+        *clearDesc.acceptedToken = {};
+
+    if(
+        desc.resourceUses
+        || desc.resourceUseCount != 0u
+        || desc.resourceSetUses
+        || desc.resourceSetUseCount != 0u
+        || !validResource(clearDesc.destination)
+        || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
+    )
+        return {};
+
+    const GpuGraphResourceNode& destinationResource = m_resources[clearDesc.destination.index];
+    if(
+        destinationResource.type != GpuGraphResourceType::Buffer
+        || !destinationResource.buffer
+        || destinationResource.buffer->getDescription().byteSize == 0u
+        || (destinationResource.buffer->getDescription().byteSize & (sizeof(u32) - 1u)) != 0u
+        || !__hidden_gpu_task_graph_builtin_clears::BuiltInTaskCanMaterializeRetainedState(
+            destinationResource.buffer->getDescription(),
+            destinationResource.initialState,
+            destinationResource.externalFinalState
+        )
+    )
+        return {};
+
+    using ClearTask = __hidden_gpu_task_graph_builtin_clears::ClearBufferTask;
+    ClearTask::Payload* const payload = NewArenaObject<ClearTask::Payload>(m_arena);
+    if(!payload)
+        return {};
+    payload->destinationResource = clearDesc.destination;
+    payload->destination = destinationResource.buffer;
+    payload->clearValue = clearDesc.clearValue;
+    payload->acceptedToken = clearDesc.acceptedToken;
+
+    const GpuTaskResourceUse resourceUse{
+        .resource = clearDesc.destination,
+        .range = {},
+        .requiredState = ResourceStates::CopyDest,
+        .access = GpuTaskResourceAccess::Write,
+    };
+    GpuTaskDesc resolvedDesc = desc;
+    resolvedDesc.setResourceUses(&resourceUse, 1u);
+    const GpuTaskId task = appendTask(
+        resolvedDesc,
+        payload,
+        &RecordPayload<ClearTask>,
+        &AcceptPayload<ClearTask>,
+        &DiscardPayload<ClearTask>,
+        &DestroyPayload<ClearTask::Payload>,
+        sizeof(ClearTask::Payload)
+    );
+    if(!task.valid())
+        discardAndDestroyUnappendedPayload(
+            payload,
+            &DiscardPayload<ClearTask>,
+            &DestroyPayload<ClearTask::Payload>
+        );
+    return task;
+}
+
+GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc){
+    if(clearDesc.acceptedToken)
+        *clearDesc.acceptedToken = {};
+
+    if(
+        desc.resourceUses
+        || desc.resourceUseCount != 0u
+        || desc.resourceSetUses
+        || desc.resourceSetUseCount != 0u
+        || !validResource(clearDesc.destination)
+        || clearDesc.valueType >= GpuClearTextureTaskValueType::kCount
+        || (
+            clearDesc.valueType == GpuClearTextureTaskValueType::DepthStencil
+            && !clearDesc.clearDepth
+            && !clearDesc.clearStencil
+        )
+        || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
+    )
+        return {};
+
+    const GpuGraphResourceNode& destinationResource = m_resources[clearDesc.destination.index];
+    if(
+        destinationResource.type != GpuGraphResourceType::Texture
+        || !destinationResource.texture
+        // vkCmdClear*Image cannot operate on multisampled images outside a render pass. This primitive helper has no
+        // framebuffer/render-pass lowering, so preserve its transfer-only contract by rejecting MSAA up front.
+        || destinationResource.texture->getDescription().sampleCount != 1u
+        || !__hidden_gpu_task_graph_builtin_clears::CopyOrClearTextureDestinationCanMaterializeRetainedState(
+            destinationResource.texture->getDescription(),
+            destinationResource.initialState,
+            destinationResource.externalFinalState
+        )
+    )
+        return {};
+    if(!__hidden_gpu_task_graph_builtin_clears::ClearTextureValueMatchesFormat(
+        destinationResource.texture->getDescription(),
+        clearDesc
+    ))
+        return {};
+    const TextureSubresourceSet resolvedSubresources = clearDesc.subresources.resolve(
+        destinationResource.texture->getDescription(),
+        TextureSubresourceMipResolve::Range
+    );
+    if(resolvedSubresources.numMipLevels == 0u || resolvedSubresources.numArraySlices == 0u)
+        return {};
+
+    using ClearTask = __hidden_gpu_task_graph_builtin_clears::ClearTextureTask;
+    ClearTask::Payload* const payload = NewArenaObject<ClearTask::Payload>(m_arena);
+    if(!payload)
+        return {};
+    payload->destinationResource = clearDesc.destination;
+    payload->destination = destinationResource.texture;
+    payload->clearDesc = clearDesc;
+    // Capture and native lowering retain the same exact graph-declared range rather than an all-subresources alias
+    // that would need the original TextureDesc to resolve during a later validation/replay phase.
+    payload->clearDesc.subresources = resolvedSubresources;
+
+    const GpuTaskResourceUse resourceUse{
+        .resource = clearDesc.destination,
+        .range = GpuTaskResourceRange{
+            .textureSubresources = resolvedSubresources,
+        },
+        .requiredState = ResourceStates::CopyDest,
+        .access = GpuTaskResourceAccess::Write,
+    };
+    GpuTaskDesc resolvedDesc = desc;
+    // A full color clear may use vkCmdClearColorImage outside rendering or an attachment clear inside it. Keep
+    // both Compute and Graphics in the conservative graph contract; depth/stencil always requires Graphics.
+    // The caller's Transfer requirement remains part of the primitive API contract.
+    resolvedDesc.queue.requiredCapabilities |= clearDesc.valueType == GpuClearTextureTaskValueType::DepthStencil
+        ? GpuQueueCapability::Graphics
+        : static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Graphics)
+        )
+    ;
+    resolvedDesc.setResourceUses(&resourceUse, 1u);
+    const GpuTaskId task = appendTask(
+        resolvedDesc,
+        payload,
+        &RecordPayload<ClearTask>,
+        &AcceptPayload<ClearTask>,
+        &DiscardPayload<ClearTask>,
+        &DestroyPayload<ClearTask::Payload>,
+        sizeof(ClearTask::Payload)
+    );
+    if(!task.valid())
+        discardAndDestroyUnappendedPayload(
+            payload,
+            &DiscardPayload<ClearTask>,
+            &DestroyPayload<ClearTask::Payload>
+        );
+    return task;
+}
+
+GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
+    const GpuTaskDesc& desc,
+    const GpuClearTextureRectUIntTaskDesc& clearDesc
+){
+    if(clearDesc.acceptedToken)
+        *clearDesc.acceptedToken = {};
+
+    if(
+        desc.resourceUses
+        || desc.resourceUseCount != 0u
+        || desc.resourceSetUses
+        || desc.resourceSetUseCount != 0u
+        || !validResource(clearDesc.destination)
+        || clearDesc.rect.maxX <= clearDesc.rect.minX
+        || clearDesc.rect.maxY <= clearDesc.rect.minY
+        || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
+    )
+        return {};
+
+    const GpuGraphResourceNode& destinationResource = m_resources[clearDesc.destination.index];
+    if(
+        destinationResource.type != GpuGraphResourceType::Texture
+        || !destinationResource.texture
+        // vkCmdClear*Image cannot operate on multisampled images outside a render pass. This primitive helper has no
+        // framebuffer/render-pass lowering, so preserve its transfer-only contract by rejecting MSAA up front.
+        || destinationResource.texture->getDescription().sampleCount != 1u
+        || !__hidden_gpu_task_graph_builtin_clears::BuiltInTaskCanMaterializeRetainedState(
+            destinationResource.texture->getDescription(),
+            destinationResource.initialState,
+            destinationResource.externalFinalState
+        )
+    )
+        return {};
+    const GpuClearTextureTaskDesc formatValidation{
+        .destination = {},
+        .valueType = GpuClearTextureTaskValueType::UInt,
+    };
+    if(!__hidden_gpu_task_graph_builtin_clears::ClearTextureValueMatchesFormat(
+        destinationResource.texture->getDescription(),
+        formatValidation
+    ))
+        return {};
+    const TextureSubresourceSet resolvedSubresources = clearDesc.subresources.resolve(
+        destinationResource.texture->getDescription(),
+        TextureSubresourceMipResolve::Range
+    );
+    if(resolvedSubresources.numMipLevels == 0u || resolvedSubresources.numArraySlices == 0u)
+        return {};
+
+    using ClearTask = __hidden_gpu_task_graph_builtin_clears::ClearTextureRectUIntTask;
+    ClearTask::Payload* const payload = NewArenaObject<ClearTask::Payload>(m_arena);
+    if(!payload)
+        return {};
+    payload->destinationResource = clearDesc.destination;
+    payload->destination = destinationResource.texture;
+    payload->clearDesc = clearDesc;
+    payload->clearDesc.subresources = resolvedSubresources;
+
+    const GpuTaskResourceUse resourceUse{
+        .resource = clearDesc.destination,
+        .range = GpuTaskResourceRange{
+            .textureSubresources = resolvedSubresources,
+        },
+        .requiredState = ResourceStates::CopyDest,
+        .access = GpuTaskResourceAccess::Write,
+    };
+    GpuTaskDesc resolvedDesc = desc;
+    // The single-sample transfer route is normally selected, but a merged packet may instead clear an active
+    // color attachment, while the native full-clear route is Compute-capable. Keep every permitted route inside
+    // the immutable graph declaration rather than trusting the recorder's dynamic command-list state.
+    resolvedDesc.queue.requiredCapabilities |= static_cast<GpuQueueCapability::Mask>(
+        static_cast<u8>(GpuQueueCapability::Compute)
+        | static_cast<u8>(GpuQueueCapability::Graphics)
+    );
+    resolvedDesc.setResourceUses(&resourceUse, 1u);
+    const GpuTaskId task = appendTask(
+        resolvedDesc,
+        payload,
+        &RecordPayload<ClearTask>,
+        &AcceptPayload<ClearTask>,
+        &DiscardPayload<ClearTask>,
+        &DestroyPayload<ClearTask::Payload>,
+        sizeof(ClearTask::Payload)
+    );
+    if(!task.valid())
+        discardAndDestroyUnappendedPayload(
+            payload,
+            &DiscardPayload<ClearTask>,
+            &DestroyPayload<ClearTask::Payload>
+        );
+    return task;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

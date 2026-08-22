@@ -183,6 +183,18 @@ private:
     bool pickPhysicalDevice();
     bool findQueueFamilies(VkPhysicalDevice physicalDevice);
     bool createVulkanDevice();
+    void logVulkanDeviceConfiguration(
+        Alloc::ScratchArena& scratchArena,
+        const VkPhysicalDeviceProperties& physicalDeviceProperties,
+        bool maintenance4Enabled,
+        const VkPhysicalDeviceMaintenance4Features& maintenance4Features,
+        bool createAsyncComputeQueue,
+        bool createCrossFamilySecondaryComputeQueue,
+        i32 secondaryComputeQueueFamily,
+        bool createDedicatedTransferQueue,
+        bool createCrossFamilySecondaryTransferQueue,
+        i32 secondaryTransferQueueFamily
+    );
     bool createVulkanSwapChain();
     void destroySwapChain();
     void clearSemaphores(SemaphoreVector& semaphores);

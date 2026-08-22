@@ -52,6 +52,81 @@ static TestPath RepoRoot(TestArena& testArena){
 }
 
 
+static bool ReadTaskGraphSources(const TestPath& repoRoot, AString& outSource){
+    static constexpr StringView s_SourcePaths[] = {
+        "kernel/task_graph_frame_recovery_task.h",
+        "kernel/task_graph_frame_recovery_task.cpp",
+        "raytrace/task_graph_surfel_tasks.h",
+        "raytrace/task_graph_surfel_tasks.cpp",
+        "raytrace/task_graph_shadow_visibility_tasks.h",
+        "raytrace/task_graph_shadow_visibility_tasks.cpp",
+        "kernel/task_graph_queue_lookup.h",
+        "raytrace/task_graph_shadow_prepare_tasks.h",
+        "raytrace/task_graph_shadow_prepare_tasks.cpp",
+        "mesh/task_graph_prefix_tasks.h",
+        "mesh/task_graph_prefix_tasks.cpp",
+        "deferred/task_graph_prefix_tasks.h",
+        "deferred/task_graph_prefix_tasks.cpp",
+        "deferred/task_graph_clear_timing.h",
+        "avboit/task_graph_clear_timing.h",
+        "csg/task_graph_clear_timing.h",
+        "shared/task_graph_draw_snapshots.h",
+        "material/task_graph_opaque_compute_emulation_plan.h",
+        "avboit/task_graph_compute_emulation_plan.h",
+        "material/task_graph_compute_emulation_plan.h",
+        "csg/task_graph_opaque_compute_emulation_plan.h",
+        "csg/task_graph_transparent_interval_tasks.h",
+        "csg/task_graph_transparent_interval_tasks.cpp",
+        "material/task_graph_opaque_compute_tasks.h",
+        "material/task_graph_opaque_compute_tasks.cpp",
+        "csg/task_graph_opaque_compute_tasks.h",
+        "csg/task_graph_opaque_compute_tasks.cpp",
+        "deferred/task_graph_gbuffer_task.h",
+        "deferred/task_graph_gbuffer_task.cpp",
+        "raytrace/task_graph_shadow_prepare_finalize_task.h",
+        "raytrace/task_graph_shadow_prepare_finalize_task.cpp",
+        "csg/task_graph_opaque_interval_tasks.h",
+        "csg/task_graph_opaque_interval_tasks.cpp",
+        "kernel/task_graph_queue_requests.h",
+        "raytrace/task_graph_post_gbuffer_normalize_task.h",
+        "raytrace/task_graph_post_gbuffer_normalize_task.cpp",
+        "avboit/task_graph_occupancy_tasks.h",
+        "avboit/task_graph_occupancy_tasks.cpp",
+        "avboit/task_graph_extinction_integration_tasks.h",
+        "avboit/task_graph_extinction_integration_tasks.cpp",
+        "avboit/task_graph_accumulation_tasks.h",
+        "avboit/task_graph_accumulation_tasks.cpp",
+        "deferred/task_graph_present_task.h",
+        "deferred/task_graph_present_task.cpp",
+        "kernel/task_graph_frame_timing_end_task.h",
+        "kernel/task_graph_frame_timing_end_task.cpp",
+        "kernel/task_graph_resource_utils.h",
+        "material/task_graph_resource_sets.h",
+        "csg/task_graph_resource_sets.h",
+        "avboit/task_graph_resource_sets.h",
+        "avboit/task_graph_timing_metadata.h",
+        "raytrace/task_graph_shadow_prepare.cpp",
+        "deferred/task_graph_graphics_prefix.cpp",
+        "raytrace/task_graph_shadow_visibility.cpp",
+        "raytrace/task_graph_caustics.cpp",
+        "raytrace/task_graph_surfel_gi.cpp",
+        "deferred/task_graph_deferred_lighting.cpp",
+    };
+
+    const TestPath rendererDirectory = repoRoot / "impl" / "ecs_render";
+    outSource.clear();
+    for(const StringView sourcePath : s_SourcePaths){
+        AString source;
+        if(!ReadTextFile(rendererDirectory / sourcePath.data(), source))
+            return false;
+        if(!outSource.empty())
+            outSource += "\n\n";
+        outSource.append(source.data(), source.size());
+    }
+    return true;
+}
+
+
 TEST(EcsGraphics, GiMaterialSurfaceDispatchSupportsHeterogeneousFrostInterface){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -120,7 +195,7 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     AString hwCausticSource;
     AString swGiTraceSource;
     AString hwGiTraceSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_surface.cpp", materialSurfaceSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingSystemHeader));
@@ -174,7 +249,7 @@ TEST(EcsGraphics, PreparedMaterialGraphDeclarationsFailClosedWhenResourceSetsAre
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString taskGraphSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_graph.cpp", taskGraphSource));
+    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
 
     EXPECT_TRUE(ContainsBeforeClosingBrace(

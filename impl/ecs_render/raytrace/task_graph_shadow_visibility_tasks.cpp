@@ -1,0 +1,72 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <impl/ecs_render/raytrace/task_graph_shadow_visibility_tasks.h>
+
+#include <impl/ecs_render/kernel/renderer_private.h>
+
+#include <core/graphics/capture/command_ir.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ECSRenderDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool ShadowVisibilityAllLitClearGraphTask::record(
+    const Payload& payload,
+    Core::CommandList& commandList,
+    const Core::GpuTaskRecordContext& context
+){
+    Core::Texture* const destination = context.taskGraph.textureForResource(payload.destination);
+    if(!destination || commandList.isRenderPassActive())
+        return false;
+
+    const Core::GpuClearTextureTaskDesc clearDesc{
+        .destination = payload.destination,
+        .subresources = s_ShadowVisibilitySubresources,
+        .valueType = Core::GpuClearTextureTaskValueType::Float,
+        .floatValue = Core::Color(1.f, 1.f, 1.f, 1.f),
+    };
+    if(
+        context.commandIrCapture
+        && !context.commandIrCapture->captureClearTexture(
+            context.task,
+            context.packet,
+            context.queue,
+            payload.destination,
+            clearDesc
+        )
+    )
+        return false;
+
+    commandList.clearTextureFloat(destination, clearDesc.subresources, clearDesc.floatValue);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

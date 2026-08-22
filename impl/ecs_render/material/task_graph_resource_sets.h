@@ -1,0 +1,255 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/ecs_render/kernel/renderer_private.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace RendererTaskGraphDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline bool GatherPreparedMaterialGeometryUses(
+    RendererMeshSystem& meshSystem,
+    Core::GpuTaskGraph& graph,
+    const MaterialPassDrawItems* const* const drawItemSets,
+    const usize drawItemSetCount,
+    Core::Alloc::ScratchArena& scratchArena,
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outResourceUses
+){
+    outResourceUses.clear();
+    if(drawItemSetCount != 0u && !drawItemSets)
+        return false;
+
+    Vector<Core::BufferHandle, Core::Alloc::ScratchArena> sourceBuffers{ scratchArena };
+    const auto appendDrawItem = [&](const MaterialPassDrawItem& drawItem){
+        MeshResources* mesh = nullptr;
+        if(!meshSystem.findMeshResources(drawItem.meshKey, mesh) || !mesh)
+            return false;
+
+        bool buffersReady = true;
+        RendererMeshSystem::forEachMeshSourceBuffer(*mesh, [&](const u32, const Core::BufferHandle& buffer, const bool){
+            if(!buffersReady)
+                return;
+            if(!buffer){
+                buffersReady = false;
+                return;
+            }
+            for(const Core::BufferHandle& existing : sourceBuffers){
+                if(existing.get() == buffer.get())
+                    return;
+            }
+            sourceBuffers.push_back(buffer);
+        });
+        return buffersReady;
+    };
+    for(usize drawItemSetIndex = 0u; drawItemSetIndex < drawItemSetCount; ++drawItemSetIndex){
+        const MaterialPassDrawItems* const drawItems = drawItemSets[drawItemSetIndex];
+        if(!drawItems)
+            return false;
+        for(const MaterialPassDrawItem& drawItem : drawItems->meshDrawItems){
+            if(!appendDrawItem(drawItem))
+                return false;
+        }
+        for(const MaterialPassDrawItem& drawItem : drawItems->computeDrawItems){
+            if(!appendDrawItem(drawItem))
+                return false;
+        }
+    }
+
+    outResourceUses.reserve(sourceBuffers.size());
+    for(const Core::BufferHandle& buffer : sourceBuffers){
+        Core::GpuGraphResourceId resource = graph.findImportedBuffer(buffer);
+        if(!resource.valid()){
+            const Name identity = buffer->getDescription().debugName;
+            if(!identity){
+                outResourceUses.clear();
+                return false;
+            }
+            resource = graph.importBuffer(buffer, BufferResourceDesc(identity, "Prepared Material Geometry"));
+        }
+        if(!resource.valid()){
+            outResourceUses.clear();
+            return false;
+        }
+        outResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+    }
+    return true;
+}
+
+// Material geometry is dynamically enumerable from the frozen draw snapshot. Keep collection/import compatibility in
+// the established helper above, then give the graph one immutable named collection so a consuming task can declare
+// the whole bindless geometry set without retaining its own per-buffer use list.
+[[nodiscard]] inline bool GatherPreparedMaterialGeometryResourceSet(
+    RendererMeshSystem& meshSystem,
+    Core::GpuTaskGraph& graph,
+    const MaterialPassDrawItems* const* const drawItemSets,
+    const usize drawItemSetCount,
+    Core::Alloc::ScratchArena& scratchArena,
+    const Name& identity,
+    const AStringView label,
+    Core::GpuGraphResourceSetId& outResourceSet
+){
+    outResourceSet = {};
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
+    if(!GatherPreparedMaterialGeometryUses(
+        meshSystem,
+        graph,
+        drawItemSets,
+        drawItemSetCount,
+        scratchArena,
+        resourceUses
+    ))
+        return false;
+
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> members{ scratchArena };
+    members.reserve(resourceUses.size());
+    for(const Core::GpuTaskResourceUse& use : resourceUses)
+        members.push_back(use.resource);
+
+    outResourceSet = graph.importResourceSet(
+        Core::GpuGraphResourceSetDesc{}
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setMembers(members.data(), members.size())
+    );
+    return outResourceSet.valid();
+}
+
+
+[[nodiscard]] inline bool GatherOpaqueRegularComputeEmulationResourceSet(
+    Core::GpuTaskGraph& graph,
+    const ECSRenderDetail::OpaqueRegularComputeEmulationGraphPlan& plan,
+    Core::Alloc::ScratchArena& scratchArena,
+    const Name& identity,
+    const AStringView label,
+    Core::GpuGraphResourceSetId& outResourceSet
+){
+    outResourceSet = {};
+    if(!plan.captured || plan.outputBuffers.empty())
+        return false;
+
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> members{ scratchArena };
+    members.reserve(plan.outputBuffers.size());
+    for(const Core::BufferHandle& buffer : plan.outputBuffers){
+        if(!buffer)
+            return false;
+        Core::GpuGraphResourceId resource = graph.findImportedBuffer(buffer);
+        if(!resource.valid()){
+            const Name bufferIdentity = buffer->getDescription().debugName;
+            if(!bufferIdentity)
+                return false;
+            resource = graph.importBuffer(buffer, BufferResourceDesc(bufferIdentity, label));
+        }
+        if(!resource.valid())
+            return false;
+        members.push_back(resource);
+    }
+    outResourceSet = graph.importResourceSet(
+        Core::GpuGraphResourceSetDesc{}
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setMembers(members.data(), members.size())
+    );
+    return outResourceSet.valid();
+}
+
+
+[[nodiscard]] inline bool GatherRegularSharedComputeEmulationResource(
+    Core::GpuTaskGraph& graph,
+    const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& plan,
+    const AStringView label,
+    Core::GpuGraphResourceId& outResource
+){
+    outResource = {};
+    if(!plan.captured || !plan.outputBuffer)
+        return false;
+
+    outResource = graph.findImportedBuffer(plan.outputBuffer);
+    if(!outResource.valid()){
+        const Name identity = plan.outputBuffer->getDescription().debugName;
+        if(!identity)
+            return false;
+        outResource = graph.importBuffer(plan.outputBuffer, BufferResourceDesc(identity, label));
+    }
+    return outResource.valid();
+}
+
+
+[[nodiscard]] inline bool GatherPreparedMaterialSampledTextureResourceSet(
+    RendererMaterialSystem& materialSystem,
+    Core::GpuTaskGraph& graph,
+    const MaterialPassDrawItems* const* const drawItemSets,
+    const usize drawItemSetCount,
+    Core::Alloc::ScratchArena& scratchArena,
+    const Name& identity,
+    const AStringView label,
+    Core::GpuGraphResourceSetId& outResourceSet
+){
+    outResourceSet = {};
+    Vector<Core::TextureHandle, Core::Alloc::ScratchArena> sampledTextures{ scratchArena };
+    if(!materialSystem.gatherPreparedMaterialPassSampledTextures(
+        drawItemSets,
+        drawItemSetCount,
+        sampledTextures
+    ))
+        return false;
+
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> members{ scratchArena };
+    members.reserve(sampledTextures.size());
+    for(const Core::TextureHandle& texture : sampledTextures){
+        Core::GpuGraphResourceId resource = graph.findImportedTexture(texture);
+        if(!resource.valid()){
+            const Name textureIdentity = texture->getDescription().name;
+            if(!textureIdentity)
+                return false;
+            resource = graph.importTexture(
+                texture,
+                TextureResourceDesc(textureIdentity, "Prepared Material Sampled Texture")
+            );
+        }
+        if(!resource.valid())
+            return false;
+        members.push_back(resource);
+    }
+    if(members.empty())
+        return true;
+
+    outResourceSet = graph.importResourceSet(
+        Core::GpuGraphResourceSetDesc{}
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setMembers(members.data(), members.size())
+    );
+    return outResourceSet.valid();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

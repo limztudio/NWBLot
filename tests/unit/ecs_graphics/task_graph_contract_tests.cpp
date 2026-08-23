@@ -55,75 +55,16 @@ static TestPath RepoRoot(TestArena& testArena){
 }
 
 
-static bool ReadTaskGraphSources(const TestPath& repoRoot, AString& outSource){
-    static constexpr StringView s_SourcePaths[] = {
-        "kernel/task_graph_frame_recovery_task.h",
-        "kernel/task_graph_frame_recovery_task.cpp",
-        "raytrace/task_graph_surfel_tasks.h",
-        "raytrace/task_graph_surfel_tasks.cpp",
-        "raytrace/task_graph_shadow_visibility_tasks.h",
-        "raytrace/task_graph_shadow_visibility_tasks.cpp",
-        "kernel/task_graph_queue_lookup.h",
-        "raytrace/task_graph_shadow_prepare_tasks.h",
-        "raytrace/task_graph_shadow_prepare_tasks.cpp",
-        "mesh/task_graph_prefix_tasks.h",
-        "mesh/task_graph_prefix_tasks.cpp",
-        "deferred/task_graph_prefix_tasks.h",
-        "deferred/task_graph_prefix_tasks.cpp",
-        "deferred/task_graph_clear_timing.h",
-        "avboit/task_graph_clear_timing.h",
-        "csg/task_graph_clear_timing.h",
-        "shared/task_graph_draw_snapshots.h",
-        "shared/task_graph_stage.h",
-        "material/task_graph_opaque_compute_emulation_plan.h",
-        "avboit/task_graph_compute_emulation_plan.h",
-        "material/task_graph_compute_emulation_plan.h",
-        "csg/task_graph_opaque_compute_emulation_plan.h",
-        "csg/task_graph_transparent_interval_tasks.h",
-        "csg/task_graph_transparent_interval_tasks.cpp",
-        "material/task_graph_opaque_compute_tasks.h",
-        "material/task_graph_opaque_compute_tasks.cpp",
-        "csg/task_graph_opaque_compute_tasks.h",
-        "csg/task_graph_opaque_compute_tasks.cpp",
-        "deferred/task_graph_gbuffer_task.h",
-        "deferred/task_graph_gbuffer_task.cpp",
-        "raytrace/task_graph_shadow_prepare_finalize_task.h",
-        "raytrace/task_graph_shadow_prepare_finalize_task.cpp",
-        "csg/task_graph_opaque_interval_tasks.h",
-        "csg/task_graph_opaque_interval_tasks.cpp",
-        "kernel/task_graph_queue_requests.h",
-        "raytrace/task_graph_post_gbuffer_normalize_task.h",
-        "raytrace/task_graph_post_gbuffer_normalize_task.cpp",
-        "avboit/task_graph_occupancy_tasks.h",
-        "avboit/task_graph_occupancy_tasks.cpp",
-        "avboit/task_graph_extinction_integration_tasks.h",
-        "avboit/task_graph_extinction_integration_tasks.cpp",
-        "avboit/task_graph_accumulation_tasks.h",
-        "avboit/task_graph_accumulation_tasks.cpp",
-        "deferred/task_graph_present_task.h",
-        "deferred/task_graph_present_task.cpp",
-        "kernel/task_graph_frame_timing_end_task.h",
-        "kernel/task_graph_frame_timing_end_task.cpp",
-        "kernel/task_graph_resource_utils.h",
-        "material/task_graph_resource_sets.h",
-        "csg/task_graph_resource_sets.h",
-        "avboit/task_graph_resource_sets.h",
-        "avboit/task_graph_timing_metadata.h",
-        "raytrace/task_graph_shadow_prepare.cpp",
-        "deferred/task_graph_graphics_prefix.cpp",
-        "raytrace/task_graph_shadow_visibility.cpp",
-        "raytrace/task_graph_caustics.cpp",
-        "raytrace/task_graph_surfel_gi.cpp",
-        "deferred/task_graph_deferred_lighting.cpp",
-        "avboit/task_graph_stage.h",
-        "avboit/task_graph_stage.cpp",
-        "avboit/task_graph_stage_validation.cpp",
-        "avboit/task_graph_stage_submission.cpp",
-    };
-
+// Source contracts name only their implementation owners. Do not sweep every task-graph source here: an unrelated
+// file split must not change a contract that has no dependency on it.
+static bool ReadRendererSources(
+    const TestPath& repoRoot,
+    const InitializerList<StringView> sourcePaths,
+    AString& outSource
+){
     const TestPath rendererDirectory = repoRoot / "impl" / "ecs_render";
     outSource.clear();
-    for(const StringView sourcePath : s_SourcePaths){
+    for(const StringView sourcePath : sourcePaths){
         AString source;
         if(!ReadTextFile(rendererDirectory / sourcePath.data(), source))
             return false;
@@ -336,7 +277,7 @@ TEST(EcsGraphics, DeferredGraphMeasuresDeclarationAttemptBeforeCoreCompile){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString taskGraphSource;
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(repoRoot, { "deferred/task_graph_deferred_lighting.cpp" }, taskGraphSource));
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
 
     const usize lightingOffset = taskGraph.find("void RendererSystem::buildDeferredLightingTaskGraph");
@@ -699,7 +640,23 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
     AString systemSource;
     AString taskGraphSource;
     ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "kernel/task_graph_frame_recovery_task.h",
+            "kernel/task_graph_frame_recovery_task.cpp",
+            "raytrace/task_graph_shadow_prepare_tasks.h",
+            "raytrace/task_graph_shadow_prepare_tasks.cpp",
+            "mesh/task_graph_prefix_tasks.h",
+            "mesh/task_graph_prefix_tasks.cpp",
+            "deferred/task_graph_present_task.h",
+            "deferred/task_graph_present_task.cpp",
+            "kernel/task_graph_frame_timing_end_task.h",
+            "kernel/task_graph_frame_timing_end_task.cpp",
+            "deferred/task_graph_deferred_lighting.cpp",
+        },
+        taskGraphSource
+    ));
     const AStringView system(systemSource.data(), systemSource.size());
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
 
@@ -1305,13 +1262,13 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString surfelSource;
-    AString taskGraphSource;
+    AString surfelTaskGraphSource;
     AString systemSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_surfel_gi.cpp", surfelSource));
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "task_graph_surfel_gi.cpp", surfelTaskGraphSource));
     ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
     const AStringView surfel(surfelSource.data(), surfelSource.size());
-    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const AStringView surfelTaskGraph(surfelTaskGraphSource.data(), surfelTaskGraphSource.size());
     const AStringView system(systemSource.data(), systemSource.size());
 
     const usize counterOffset = surfel.find("if(!rayTracingState().m_surfelCounterBuffer){");
@@ -1324,12 +1281,9 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
     EXPECT_TRUE(ContainsText(counter, ".setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)"));
     EXPECT_TRUE(ContainsText(counter, ".setDebugName(Name(\"surfel_counter\"))"));
 
-    const usize readbackOffset = taskGraph.find("void RendererSystem::declareDeferredSurfelCountReadbackTask");
-    const usize graphBuildOffset = taskGraph.find("void RendererSystem::buildDeferredLightingTaskGraph", readbackOffset);
+    const usize readbackOffset = surfelTaskGraph.find("void RendererSystem::declareDeferredSurfelCountReadbackTask");
     ASSERT_NE(readbackOffset, AStringView::npos);
-    ASSERT_NE(graphBuildOffset, AStringView::npos);
-    ASSERT_LT(readbackOffset, graphBuildOffset);
-    const AStringView readback = taskGraph.substr(readbackOffset, graphBuildOffset - readbackOffset);
+    const AStringView readback = surfelTaskGraph.substr(readbackOffset);
     EXPECT_TRUE(ContainsText(readback, "m_rayTracingState.m_surfelCounterBuffer"));
     EXPECT_TRUE(ContainsText(readback, ".source = counter,"));
     EXPECT_TRUE(ContainsText(readback, ".setQueue(TransferQueueRequest())"));
@@ -1386,35 +1340,12 @@ TEST(EcsGraphics, ShadowVisibilityAllLitClearUsesComputeGraphCallback){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
-    AString taskGraphSource;
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
-    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
-
-    const usize callbackOffset = taskGraph.find("struct ShadowVisibilityAllLitClearGraphTask");
-    const usize queueForTaskOffset = taskGraph.find(
-        "[[nodiscard]] inline const Core::GpuPhysicalQueueInfo* QueueForTask",
-        callbackOffset
-    );
-    const usize shadowVisibilityOffset = taskGraph.find(
-        "bool RendererSystem::declareDeferredShadowVisibilityTask",
-        queueForTaskOffset
-    );
-    const usize softwareCausticsOffset = taskGraph.find(
-        "bool RendererSystem::declareDeferredSoftwareCausticsTask",
-        shadowVisibilityOffset
-    );
-    ASSERT_NE(callbackOffset, AStringView::npos);
-    ASSERT_NE(queueForTaskOffset, AStringView::npos);
-    ASSERT_NE(shadowVisibilityOffset, AStringView::npos);
-    ASSERT_NE(softwareCausticsOffset, AStringView::npos);
-    ASSERT_LT(callbackOffset, queueForTaskOffset);
-    ASSERT_LT(queueForTaskOffset, shadowVisibilityOffset);
-    ASSERT_LT(shadowVisibilityOffset, softwareCausticsOffset);
-    const AStringView callback = taskGraph.substr(callbackOffset, queueForTaskOffset - callbackOffset);
-    const AStringView shadowVisibility = taskGraph.substr(
-        shadowVisibilityOffset,
-        softwareCausticsOffset - shadowVisibilityOffset
-    );
+    AString allLitClearTaskSource;
+    AString shadowVisibilityTaskGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "task_graph_shadow_visibility_tasks.cpp", allLitClearTaskSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "task_graph_shadow_visibility.cpp", shadowVisibilityTaskGraphSource));
+    const AStringView callback(allLitClearTaskSource.data(), allLitClearTaskSource.size());
+    const AStringView shadowVisibility(shadowVisibilityTaskGraphSource.data(), shadowVisibilityTaskGraphSource.size());
 
     EXPECT_TRUE(ContainsText(callback, "context.taskGraph.textureForResource(payload.destination)"));
     EXPECT_TRUE(ContainsText(callback, "if(!destination || commandList.isRenderPassActive())"));
@@ -1452,7 +1383,7 @@ TEST(EcsGraphics, HardwareCausticsPermitsOptInCrossFamilyGraphicsRouting){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString taskGraphSource;
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(repoRoot, { "deferred/task_graph_deferred_lighting.cpp" }, taskGraphSource));
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
 
     const usize lightingOffset = taskGraph.find("void RendererSystem::buildDeferredLightingTaskGraph");
@@ -1475,7 +1406,15 @@ TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAc
     AString taskGraphSource;
     AString systemSource;
     AString systemHeaderSource;
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/task_graph_caustics.cpp",
+            "raytrace/task_graph_surfel_gi.cpp",
+            "deferred/task_graph_deferred_lighting.cpp",
+        },
+        taskGraphSource
+    ));
     ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", systemHeaderSource));
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
@@ -1638,7 +1577,14 @@ TEST(EcsGraphics, SharedComputeEmulationRetainsFiveRegularDraws){
     AString sharedTaskGraphStageSource;
     AString taskGraphSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "task_graph_stage.h", sharedTaskGraphStageSource));
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "deferred/task_graph_graphics_prefix.cpp",
+            "deferred/task_graph_deferred_lighting.cpp",
+        },
+        taskGraphSource
+    ));
     const AStringView sharedTaskGraphStage(sharedTaskGraphStageSource.data(), sharedTaskGraphStageSource.size());
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
 
@@ -1684,16 +1630,9 @@ TEST(EcsGraphics, ShadowVisibilityPermitsOptInCrossFamilyComputeRouting){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
-    AString taskGraphSource;
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
-    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
-
-    const usize shadowOffset = taskGraph.find("bool RendererSystem::declareDeferredShadowVisibilityTask");
-    const usize softwareCausticsOffset = taskGraph.find("bool RendererSystem::declareDeferredSoftwareCausticsTask", shadowOffset);
-    ASSERT_NE(shadowOffset, AStringView::npos);
-    ASSERT_NE(softwareCausticsOffset, AStringView::npos);
-    ASSERT_LT(shadowOffset, softwareCausticsOffset);
-    const AStringView shadowVisibility = taskGraph.substr(shadowOffset, softwareCausticsOffset - shadowOffset);
+    AString shadowVisibilitySource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "task_graph_shadow_visibility.cpp", shadowVisibilitySource));
+    const AStringView shadowVisibility(shadowVisibilitySource.data(), shadowVisibilitySource.size());
 
     EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(opaqueScheduling)"));
     EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(tailScheduling)"));
@@ -1710,22 +1649,15 @@ TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
-    AString taskGraphSource;
+    AString shadowVisibilitySource;
     AString shadowSource;
     AString softShadowSource;
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "task_graph_shadow_visibility.cpp", shadowVisibilitySource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", shadowSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow.cpp", softShadowSource));
-    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const AStringView shadowVisibility(shadowVisibilitySource.data(), shadowVisibilitySource.size());
     const AStringView shadowSourceView(shadowSource.data(), shadowSource.size());
     const AStringView softShadowSourceView(softShadowSource.data(), softShadowSource.size());
-
-    const usize shadowOffset = taskGraph.find("bool RendererSystem::declareDeferredShadowVisibilityTask");
-    const usize softwareCausticsOffset = taskGraph.find("bool RendererSystem::declareDeferredSoftwareCausticsTask", shadowOffset);
-    ASSERT_NE(shadowOffset, AStringView::npos);
-    ASSERT_NE(softwareCausticsOffset, AStringView::npos);
-    ASSERT_LT(shadowOffset, softwareCausticsOffset);
-    const AStringView shadowVisibility = taskGraph.substr(shadowOffset, softwareCausticsOffset - shadowOffset);
 
     const usize opaqueResourcesOffset = shadowVisibility.find("opaqueResourceUses.reserve(");
     const usize opaqueFirstWaveletOffset = shadowVisibility.find("opaqueFirstWaveletResourceUses.reserve(", opaqueResourcesOffset);
@@ -1807,16 +1739,9 @@ TEST(EcsGraphics, MonolithicShadowVisibilityKeepsFreshScratchAsFirstWrites){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
-    AString taskGraphSource;
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
-    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
-
-    const usize shadowOffset = taskGraph.find("bool RendererSystem::declareDeferredShadowVisibilityTask");
-    const usize softwareCausticsOffset = taskGraph.find("bool RendererSystem::declareDeferredSoftwareCausticsTask", shadowOffset);
-    ASSERT_NE(shadowOffset, AStringView::npos);
-    ASSERT_NE(softwareCausticsOffset, AStringView::npos);
-    ASSERT_LT(shadowOffset, softwareCausticsOffset);
-    const AStringView shadowVisibility = taskGraph.substr(shadowOffset, softwareCausticsOffset - shadowOffset);
+    AString shadowVisibilitySource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "task_graph_shadow_visibility.cpp", shadowVisibilitySource));
+    const AStringView shadowVisibility(shadowVisibilitySource.data(), shadowVisibilitySource.size());
 
     const usize opaqueHistoryHelperOffset = shadowVisibility.find("const auto appendOptionalOpaqueTemporalHistoryTexture");
     const usize transparentHistoryHelperOffset = shadowVisibility.find(
@@ -1938,7 +1863,7 @@ TEST(EcsGraphics, SplitAvboitComputePacketsPermitCrossFamilyRouting){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString taskGraphSource;
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(repoRoot, { "deferred/task_graph_deferred_lighting.cpp" }, taskGraphSource));
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
 
     const usize schedulingOffset = taskGraph.find("Core::GpuTaskSchedulingHint avboitComputeScheduling");
@@ -1968,7 +1893,19 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     AString taskGraphSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", systemHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_timing_feedback.h", timingFeedbackHeaderSource));
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "avboit/task_graph_occupancy_tasks.h",
+            "avboit/task_graph_occupancy_tasks.cpp",
+            "avboit/task_graph_extinction_integration_tasks.h",
+            "avboit/task_graph_extinction_integration_tasks.cpp",
+            "avboit/task_graph_accumulation_tasks.h",
+            "avboit/task_graph_accumulation_tasks.cpp",
+            "deferred/task_graph_deferred_lighting.cpp",
+        },
+        taskGraphSource
+    ));
     const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
     const AStringView timingFeedbackHeader(timingFeedbackHeaderSource.data(), timingFeedbackHeaderSource.size());
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
@@ -2071,7 +2008,20 @@ TEST(EcsGraphics, AvboitMaterialUploadsHaveNoNativeCompatibilityDispatcher){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_resources.cpp", csgResourcesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_interval_peel.cpp", csgIntervalSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "task_graph_occupancy_tasks.cpp", avboitOccupancyTasksSource));
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "shared/task_graph_draw_snapshots.h",
+            "avboit/task_graph_occupancy_tasks.h",
+            "avboit/task_graph_occupancy_tasks.cpp",
+            "avboit/task_graph_extinction_integration_tasks.h",
+            "avboit/task_graph_extinction_integration_tasks.cpp",
+            "avboit/task_graph_accumulation_tasks.h",
+            "avboit/task_graph_accumulation_tasks.cpp",
+            "deferred/task_graph_deferred_lighting.cpp",
+        },
+        taskGraphSource
+    ));
 
     const AStringView avboitHeader(avboitHeaderSource.data(), avboitHeaderSource.size());
     const AStringView avboit(avboitSource.data(), avboitSource.size());
@@ -2143,7 +2093,7 @@ TEST(EcsGraphics, RayTraceMaterialContextSelectorHasNoNativeCompatibilityDispatc
     AString taskGraphSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", shadowSource));
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(repoRoot, { "raytrace/task_graph_shadow_prepare.cpp" }, taskGraphSource));
     const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
     const AStringView shadow(shadowSource.data(), shadowSource.size());
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
@@ -2168,7 +2118,7 @@ TEST(EcsGraphics, CausticEmissionTargetsHaveNoNativeCompatibilityDispatcher){
     AString taskGraphSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_caustics.cpp", causticsSource));
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(repoRoot, { "raytrace/task_graph_shadow_prepare.cpp" }, taskGraphSource));
     const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
     const AStringView caustics(causticsSource.data(), causticsSource.size());
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
@@ -2194,7 +2144,7 @@ TEST(EcsGraphics, SurfelFrameConstantsHaveNoNativeCompatibilityDispatcher){
     AString taskGraphSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_surfel_gi.cpp", surfelSource));
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(repoRoot, { "raytrace/task_graph_shadow_prepare.cpp" }, taskGraphSource));
     const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
     const AStringView surfel(surfelSource.data(), surfelSource.size());
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
@@ -2224,7 +2174,7 @@ TEST(EcsGraphics, DeferredBindlessSelectorHasNoNativeCompatibilityDispatcher){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_targets.cpp", deferredTargetsSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_lighting.cpp", deferredLightingSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_composite.cpp", deferredCompositeSource));
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(repoRoot, { "raytrace/task_graph_shadow_prepare.cpp" }, taskGraphSource));
     const AStringView deferredHeader(deferredHeaderSource.data(), deferredHeaderSource.size());
     const AStringView deferredTargets(deferredTargetsSource.data(), deferredTargetsSource.size());
     const AStringView deferredLighting(deferredLightingSource.data(), deferredLightingSource.size());
@@ -2254,7 +2204,7 @@ TEST(EcsGraphics, LaggedLightingSelectorHasNoNativeCompatibilityDispatcher){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.h", deferredHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_targets.cpp", deferredTargetsSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_lighting.cpp", deferredLightingSource));
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(repoRoot, { "deferred/task_graph_deferred_lighting.cpp" }, taskGraphSource));
     const AStringView deferredHeader(deferredHeaderSource.data(), deferredHeaderSource.size());
     const AStringView deferredTargets(deferredTargetsSource.data(), deferredTargetsSource.size());
     const AStringView deferredLighting(deferredLightingSource.data(), deferredLightingSource.size());
@@ -2278,13 +2228,16 @@ TEST(EcsGraphics, LaggedLightingHistoryConsumersSnapshotPriorAcceptedToken){
 
     AString systemSource;
     AString systemHeaderSource;
-    AString taskGraphSource;
+    AString shadowVisibilityTaskGraphSource;
+    AString deferredLightingTaskGraphSource;
     ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", systemHeaderSource));
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "task_graph_shadow_visibility.cpp", shadowVisibilityTaskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_deferred_lighting.cpp", deferredLightingTaskGraphSource));
     const AStringView system(systemSource.data(), systemSource.size());
     const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
-    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const AStringView shadowVisibility(shadowVisibilityTaskGraphSource.data(), shadowVisibilityTaskGraphSource.size());
+    const AStringView lighting(deferredLightingTaskGraphSource.data(), deferredLightingTaskGraphSource.size());
     const usize renderOffset = system.find("void RendererSystem::render(");
     ASSERT_NE(renderOffset, AStringView::npos);
     const AStringView render = system.substr(renderOffset);
@@ -2340,22 +2293,7 @@ TEST(EcsGraphics, LaggedLightingHistoryConsumersSnapshotPriorAcceptedToken){
     EXPECT_TRUE(ContainsText(render, "!laggedLightingHistoryWriterWaitPending || ("));
     EXPECT_TRUE(ContainsText(render, "device.queueGetCompletedInstance("));
     EXPECT_FALSE(ContainsText(render, "consumeLaggedLightingHistoryWriterDrain"));
-    EXPECT_TRUE(ContainsText(taskGraph, ".acceptedToken = &m_laggedLightingHistorySubmissionToken"));
-
-    const usize shadowVisibilityOffset = taskGraph.find("bool RendererSystem::declareDeferredShadowVisibilityTask");
-    const usize softwareCausticsOffset = taskGraph.find(
-        "bool RendererSystem::declareDeferredSoftwareCausticsTask",
-        shadowVisibilityOffset
-    );
-    const usize lightingOffset = taskGraph.find("void RendererSystem::buildDeferredLightingTaskGraph");
-    ASSERT_NE(shadowVisibilityOffset, AStringView::npos);
-    ASSERT_NE(softwareCausticsOffset, AStringView::npos);
-    ASSERT_NE(lightingOffset, AStringView::npos);
-    const AStringView shadowVisibility = taskGraph.substr(
-        shadowVisibilityOffset,
-        softwareCausticsOffset - shadowVisibilityOffset
-    );
-    const AStringView lighting = taskGraph.substr(lightingOffset);
+    EXPECT_TRUE(ContainsText(lighting, ".acceptedToken = &m_laggedLightingHistorySubmissionToken"));
 
     EXPECT_TRUE(ContainsText(shadowVisibility, "laggedLightingHistoryWriterDependencies"));
     EXPECT_TRUE(ContainsText(
@@ -2411,7 +2349,7 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString taskGraphSource;
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(repoRoot, { "deferred/task_graph_deferred_lighting.cpp" }, taskGraphSource));
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
     const usize lightingOffset = taskGraph.find("void RendererSystem::buildDeferredLightingTaskGraph");
     const usize compileOffset = taskGraph.find("if(!compiler.compile(", lightingOffset);
@@ -2549,7 +2487,20 @@ TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
     AString uiTextureSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets_material" / "asset.h", materialAssetHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_surface.cpp", materialSurfaceSource));
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "material/task_graph_resource_sets.h",
+            "deferred/task_graph_graphics_prefix.cpp",
+            "csg/task_graph_transparent_interval_tasks.cpp",
+            "avboit/task_graph_occupancy_tasks.cpp",
+            "avboit/task_graph_extinction_integration_tasks.cpp",
+            "avboit/task_graph_accumulation_tasks.cpp",
+            "raytrace/task_graph_shadow_prepare.cpp",
+            "deferred/task_graph_deferred_lighting.cpp",
+        },
+        taskGraphSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.h", uiHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "texture_resources.cpp", uiTextureSource));
@@ -2607,7 +2558,15 @@ TEST(EcsGraphics, HybridHardwareFallbackRestoreUsesGraphOwnedBlobsWhenFrozen){
     AString rayTracingHeaderSource;
     AString rayTracingSource;
     AString swBvhSource;
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/task_graph_shadow_prepare_tasks.h",
+            "raytrace/task_graph_shadow_prepare_tasks.cpp",
+            "raytrace/task_graph_shadow_prepare.cpp",
+        },
+        taskGraphSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
@@ -2651,7 +2610,16 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     AString rendererStateHeaderSource;
     AString rendererStateSource;
     AString systemSource;
-    ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/task_graph_shadow_prepare.cpp",
+            "raytrace/task_graph_shadow_visibility.cpp",
+            "raytrace/task_graph_surfel_gi.cpp",
+            "deferred/task_graph_deferred_lighting.cpp",
+        },
+        taskGraphSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));

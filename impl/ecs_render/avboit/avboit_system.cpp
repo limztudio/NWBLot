@@ -21,6 +21,11 @@ RendererAvboitSystem::RendererAvboitSystem(RendererSystem& renderer)
 {}
 
 
+void RendererAvboitSystem::resetTaskGraphStage()noexcept{
+    m_taskGraphStage.reset();
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

@@ -187,34 +187,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
-    m_deferredAvboitClearFirstTask = {};
-    m_deferredAvboitClearTask = {};
-    m_deferredAvboitTransparentCsgIntervalClearFirstTask = {};
-    m_deferredAvboitTransparentCsgIntervalClearTask = {};
-    m_deferredAvboitPreTask = {};
-    m_deferredAvboitCsgReceiverSpanTask = {};
-    m_deferredAvboitCsgIntervalCombineTask = {};
-    m_deferredAvboitOccupancyStreamTask = {};
-    m_deferredAvboitOccupancyComputeEmulationTask = {};
-    for(Core::GpuTaskId& task : m_deferredAvboitOccupancySharedComputeEmulationTasks)
-        task = {};
-    m_deferredAvboitOccupancySharedComputeEmulationTaskCount = 0u;
-    m_deferredAvboitOccupancyTask = {};
-    m_deferredAvboitDepthWarpTask = {};
-    m_deferredAvboitExtinctionStreamTask = {};
-    m_deferredAvboitExtinctionComputeEmulationTask = {};
-    for(Core::GpuTaskId& task : m_deferredAvboitExtinctionSharedComputeEmulationTasks)
-        task = {};
-    m_deferredAvboitExtinctionSharedComputeEmulationTaskCount = 0u;
-    m_deferredAvboitExtinctionTask = {};
-    m_deferredAvboitIntegrationTask = {};
-    m_deferredAvboitAccumulationStreamTask = {};
-    m_deferredAvboitAccumulationComputeEmulationTask = {};
-    for(Core::GpuTaskId& task : m_deferredAvboitAccumulationSharedComputeEmulationTasks)
-        task = {};
-    m_deferredAvboitAccumulationSharedComputeEmulationTaskCount = 0u;
-    m_deferredAvboitAccumulationTask = {};
-    m_deferredAvboitAccumulationFinalizeTask = {};
+    m_avboitSystem.resetTaskGraphStage();
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredPresentationOverlayTask = {};
@@ -2306,7 +2279,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .afterClear = &ECSRenderDetail::EndCsgIntervalClearTiming,
             .discarded = &ECSRenderDetail::DiscardCsgIntervalClearTiming,
         };
-        m_deferredAvboitTransparentCsgIntervalClearFirstTask =
+        m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearFirstTask =
             m_deferredLightingTaskGraph.addClearTextureRectUIntTask(
                 makeTransparentCsgIntervalClearTaskDesc(
                     Name("render.avboit.transparent_csg.interval_clear"),
@@ -2321,7 +2294,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     .recordHooks = transparentCsgIntervalClearBeginHooks,
                 }
             );
-        if(!m_deferredAvboitTransparentCsgIntervalClearFirstTask.valid()){
+        if(!m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearFirstTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned transparent CSG interval-id clear"));
             return;
         }
@@ -2333,9 +2306,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .setMarkerLabel("Transparent CSG Receiver Event Count Clear")
             .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(transparentCsgIntervalClearTailScheduling)
-            .setDependencies(&m_deferredAvboitTransparentCsgIntervalClearFirstTask, 1u)
+            .setDependencies(&m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearFirstTask, 1u)
         ;
-        m_deferredAvboitTransparentCsgIntervalClearTask = m_deferredLightingTaskGraph.addClearTextureRectUIntTask(
+        m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearTask = m_deferredLightingTaskGraph.addClearTextureRectUIntTask(
             transparentCsgIntervalClearTailDesc,
             Core::GpuClearTextureRectUIntTaskDesc{
                 .destination = csgReceiverEventCount,
@@ -2345,11 +2318,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 .recordHooks = transparentCsgIntervalClearEndHooks,
             }
         );
-        if(!m_deferredAvboitTransparentCsgIntervalClearTask.valid()){
+        if(!m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned transparent CSG receiver-event clear"));
             return;
         }
-        transparentCsgUploadTask = m_deferredAvboitTransparentCsgIntervalClearTask;
+        transparentCsgUploadTask = m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearTask;
         avboitPrePayload.transparentCsgIntervalTargetsGraphOwned = true;
         avboitPrePayload.transparentCsgIntervalPeelTargetStatesGraphOwned = true;
         avboitPrePayload.transparentCsgReceiverSurfaceImageStatesGraphOwned = true;
@@ -2563,16 +2536,16 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         avboitCsgIntervalCombinePayload.intervalCombineInputImageStatesGraphOwned = true;
         avboitCsgIntervalCombinePayload.removedIntervalOutputImageStatesGraphOwned = true;
     }
-    m_deferredAvboitPreTask = m_deferredLightingTaskGraph.addTask<AvboitPreGraphTask>(
+    m_avboitSystem.taskGraphStage().m_preTask = m_deferredLightingTaskGraph.addTask<AvboitPreGraphTask>(
         avboitIntervalDesc,
         Move(avboitPrePayload)
     );
-    if(!m_deferredAvboitPreTask.valid()){
+    if(!m_avboitSystem.taskGraphStage().m_preTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG interval graph task"));
         return;
     }
 
-    Core::GpuTaskId avboitIntervalCompletionTask = m_deferredAvboitPreTask;
+    Core::GpuTaskId avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_preTask;
     bool avboitIntervalOutputsGraphOwned = false;
     if(avboitCsgReceiverSpanGraphOwned){
         Core::GpuTaskSchedulingHint avboitIntervalSpanScheduling;
@@ -2586,23 +2559,23 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .setMarkerLabel("Transparent CSG Receiver Span")
             .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(avboitIntervalSpanScheduling)
-            .setDependencies(&m_deferredAvboitPreTask, 1u)
+            .setDependencies(&m_avboitSystem.taskGraphStage().m_preTask, 1u)
             .setResourceUses(
                 avboitIntervalSpanResourceUses.data(),
                 avboitIntervalSpanResourceUses.size()
             )
         ;
-        m_deferredAvboitCsgReceiverSpanTask = m_deferredLightingTaskGraph.addTask<
+        m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask = m_deferredLightingTaskGraph.addTask<
             ECSRenderDetail::AvboitCsgReceiverSpanGraphTask
         >(
             avboitIntervalSpanDesc,
             Move(avboitCsgReceiverSpanPayload)
         );
-        if(!m_deferredAvboitCsgReceiverSpanTask.valid()){
+        if(!m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG receiver-span graph task"));
             return;
         }
-        avboitIntervalCompletionTask = m_deferredAvboitCsgReceiverSpanTask;
+        avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask;
     }
     if(avboitCsgIntervalCombineGraphOwned){
         Core::GpuTaskSchedulingHint avboitIntervalCombineScheduling;
@@ -2622,17 +2595,17 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 avboitIntervalCombineResourceUses.size()
             )
         ;
-        m_deferredAvboitCsgIntervalCombineTask = m_deferredLightingTaskGraph.addTask<
+        m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask = m_deferredLightingTaskGraph.addTask<
             ECSRenderDetail::AvboitCsgIntervalCombineGraphTask
         >(
             avboitIntervalCombineDesc,
             Move(avboitCsgIntervalCombinePayload)
         );
-        if(!m_deferredAvboitCsgIntervalCombineTask.valid()){
+        if(!m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG interval-combine graph task"));
             return;
         }
-        avboitIntervalCompletionTask = m_deferredAvboitCsgIntervalCombineTask;
+        avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask;
         avboitIntervalOutputsGraphOwned = true;
     }
 
@@ -3057,7 +3030,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT low-raster clear"));
             return;
         }
-        m_deferredAvboitClearFirstTask = avboitClearTask;
+        m_avboitSystem.taskGraphStage().m_clearFirstTask = avboitClearTask;
         avboitClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
             makeAvboitClearTaskDesc(
                 Name("render.avboit.clear.accum_color"),
@@ -3148,7 +3121,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT transmittance clear"));
             return;
         }
-        m_deferredAvboitClearTask = avboitClearTask;
+        m_avboitSystem.taskGraphStage().m_clearTask = avboitClearTask;
     }
 
     const bool occupancyCsgIntervalSampleImageStatesGraphOwned =
@@ -3340,7 +3313,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     // immediate dependency; replacing this anchor would hide a broken upload/clear-to-producer handoff.
     const Core::GpuTaskId occupancyStreamTask = occupancyUploadTask;
     if(avboitOccupancyPayload.occupancyStreamsUploaded)
-        m_deferredAvboitOccupancyStreamTask = occupancyStreamTask;
+        m_avboitSystem.taskGraphStage().m_occupancyStreamTask = occupancyStreamTask;
     Core::GpuTaskId occupancyDependency = avboitClearTask;
 
     Core::GpuTaskSchedulingHint avboitOccupancyScheduling;
@@ -3460,19 +3433,19 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 occupancyComputeEmulationResourceSetUseCount
             )
         ;
-        m_deferredAvboitOccupancyComputeEmulationTask = m_deferredLightingTaskGraph.addTask<
+        m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask = m_deferredLightingTaskGraph.addTask<
             AvboitOccupancyComputeEmulationGraphTask
         >(
             occupancyComputeEmulationDesc,
             Move(avboitOccupancyComputeEmulationPayload)
         );
-        if(!m_deferredAvboitOccupancyComputeEmulationTask.valid()){
+        if(!m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT(
                 "RendererSystem: could not declare AVBOIT Occupancy compute-emulation producer"
             ));
             return;
         }
-        occupancyDependency = m_deferredAvboitOccupancyComputeEmulationTask;
+        occupancyDependency = m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask;
         avboitOccupancyScheduling.allowMergeAcrossConsumerFrontier = true;
     }
     if(occupancySharedComputeEmulationOutputStatesGraphOwned){
@@ -3621,7 +3594,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ){
             const bool isRasterPhase =
                 phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
-            m_deferredAvboitOccupancySharedComputeEmulationTasks[phaseIndex] =
+            m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTasks[phaseIndex] =
                 addOccupancySharedComputeEmulationPhase(
                     occupancySharedComputeEmulationPhaseIdentities[phaseIndex],
                     occupancySharedComputeEmulationPhaseMarkers[phaseIndex],
@@ -3637,20 +3610,20 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     occupancyMaterialResourceSetUseCount
                 )
             ;
-            if(!m_deferredAvboitOccupancySharedComputeEmulationTasks[phaseIndex].valid()){
+            if(!m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTasks[phaseIndex].valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT(
                     "RendererSystem: could not declare AVBOIT Occupancy shared compute-emulation phase"
                 ));
                 return;
             }
             occupancySharedComputeEmulationDependency =
-                m_deferredAvboitOccupancySharedComputeEmulationTasks[phaseIndex];
+                m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTasks[phaseIndex];
         }
-        m_deferredAvboitOccupancySharedComputeEmulationTaskCount =
+        m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTaskCount =
             occupancySharedComputeEmulationPhaseCount;
         // The terminal raster is the existing Occupancy semantic endpoint: Depth Warp, timing, state cache, and
         // accepted-token publication remain tied to this packet-local task.
-        m_deferredAvboitOccupancyTask = occupancySharedComputeEmulationDependency;
+        m_avboitSystem.taskGraphStage().m_occupancyTask = occupancySharedComputeEmulationDependency;
     }
     else{
         Core::GpuTaskDesc avboitOccupancyDesc;
@@ -3666,11 +3639,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 occupancyMaterialResourceSetUseCount
             )
         ;
-        m_deferredAvboitOccupancyTask = m_deferredLightingTaskGraph.addTask<AvboitOccupancyGraphTask>(
+        m_avboitSystem.taskGraphStage().m_occupancyTask = m_deferredLightingTaskGraph.addTask<AvboitOccupancyGraphTask>(
             avboitOccupancyDesc,
             Move(avboitOccupancyPayload)
         );
-        if(!m_deferredAvboitOccupancyTask.valid()){
+        if(!m_avboitSystem.taskGraphStage().m_occupancyTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT occupancy graph task"));
             return;
         }
@@ -3693,7 +3666,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     const Core::GpuTaskTimingMetadata avboitIntegrationTiming =
         AvboitIntegrationTimingMetadata(deferredTargets.avboit)
     ;
-    Core::GpuTaskId avboitDepthWarpCompletionTask = m_deferredAvboitOccupancyTask;
+    Core::GpuTaskId avboitDepthWarpCompletionTask = m_avboitSystem.taskGraphStage().m_occupancyTask;
     if(splitAvboitStages){
         const Core::GpuTaskResourceUse depthWarpResourceUses[] = {
             ReadUse(avboitCoverage),
@@ -3701,7 +3674,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             ReadWriteUse(avboitControl, Core::ResourceStates::UnorderedAccess),
             ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
         };
-        const Core::GpuTaskId preDependency[] = { m_deferredAvboitOccupancyTask };
+        const Core::GpuTaskId preDependency[] = { m_avboitSystem.taskGraphStage().m_occupancyTask };
         Core::GpuTaskDesc depthWarpDesc;
         depthWarpDesc
             .setIdentity(Name("render.avboit.depth_warp"))
@@ -3712,7 +3685,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .setDependencies(preDependency, LengthOf(preDependency))
             .setResourceUses(depthWarpResourceUses, LengthOf(depthWarpResourceUses))
         ;
-        m_deferredAvboitDepthWarpTask = m_deferredLightingTaskGraph.addTask<AvboitDepthWarpGraphTask>(
+        m_avboitSystem.taskGraphStage().m_depthWarpTask = m_deferredLightingTaskGraph.addTask<AvboitDepthWarpGraphTask>(
             depthWarpDesc,
             AvboitDepthWarpGraphTask::Payload{
                 .avboitSystem = &m_avboitSystem,
@@ -3722,11 +3695,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 .timingScope = &RendererGpuTimingScope::s_AvboitDepthWarp,
             }
         );
-        if(!m_deferredAvboitDepthWarpTask.valid()){
+        if(!m_avboitSystem.taskGraphStage().m_depthWarpTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
             return;
         }
-        avboitDepthWarpCompletionTask = m_deferredAvboitDepthWarpTask;
+        avboitDepthWarpCompletionTask = m_avboitSystem.taskGraphStage().m_depthWarpTask;
     }
     else if(hasTransparentRenderers){
         // Keep Depth Warp as a distinct Graphics task even on the one-packet route. Occupancy writes coverage via
@@ -3745,7 +3718,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         unsplitDepthWarpScheduling.allowPacketMerge = true;
         unsplitDepthWarpScheduling.mergeWithPrevious = true;
         unsplitDepthWarpScheduling.allowMergeAcrossConsumerFrontier = true;
-        const Core::GpuTaskId occupancyDependency[] = { m_deferredAvboitOccupancyTask };
+        const Core::GpuTaskId occupancyDependency[] = { m_avboitSystem.taskGraphStage().m_occupancyTask };
         Core::GpuTaskDesc unsplitDepthWarpDesc;
         unsplitDepthWarpDesc
             .setIdentity(Name("render.avboit.depth_warp"))
@@ -4330,7 +4303,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     // immediate Extinction dependency; replacing this anchor would hide a broken upload-to-producer handoff.
     const Core::GpuTaskId extinctionStreamTask = extinctionUploadTask;
     if(extinctionStreamsUploaded)
-        m_deferredAvboitExtinctionStreamTask = extinctionStreamTask;
+        m_avboitSystem.taskGraphStage().m_extinctionStreamTask = extinctionStreamTask;
     Core::GpuTaskId extinctionDependency = extinctionUploadTask;
     if(extinctionComputeEmulationOutputStatesGraphOwned){
         avboitExtinctionComputeEmulationPayload.renderer = this;
@@ -4439,19 +4412,19 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 extinctionComputeEmulationResourceSetUseCount
             )
         ;
-        m_deferredAvboitExtinctionComputeEmulationTask = m_deferredLightingTaskGraph.addTask<
+        m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask = m_deferredLightingTaskGraph.addTask<
             AvboitExtinctionComputeEmulationGraphTask
         >(
             extinctionComputeEmulationDesc,
             Move(avboitExtinctionComputeEmulationPayload)
         );
-        if(!m_deferredAvboitExtinctionComputeEmulationTask.valid()){
+        if(!m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT(
                 "RendererSystem: could not declare AVBOIT Extinction compute-emulation producer"
             ));
             return;
         }
-        extinctionDependency = m_deferredAvboitExtinctionComputeEmulationTask;
+        extinctionDependency = m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask;
         avboitExtinctionScheduling.allowMergeAcrossConsumerFrontier = true;
     }
     if(extinctionSharedComputeEmulationOutputStatesGraphOwned){
@@ -4597,7 +4570,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ){
             const bool isRasterPhase =
                 phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
-            m_deferredAvboitExtinctionSharedComputeEmulationTasks[phaseIndex] =
+            m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTasks[phaseIndex] =
                 addExtinctionSharedComputeEmulationPhase(
                     extinctionSharedComputeEmulationPhaseIdentities[phaseIndex],
                     extinctionSharedComputeEmulationPhaseMarkers[phaseIndex],
@@ -4613,20 +4586,20 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     extinctionMaterialResourceSetUseCount
                 )
             ;
-            if(!m_deferredAvboitExtinctionSharedComputeEmulationTasks[phaseIndex].valid()){
+            if(!m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTasks[phaseIndex].valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT(
                     "RendererSystem: could not declare AVBOIT Extinction shared compute-emulation phase"
                 ));
                 return;
             }
             extinctionSharedComputeEmulationDependency =
-                m_deferredAvboitExtinctionSharedComputeEmulationTasks[phaseIndex];
+                m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTasks[phaseIndex];
         }
-        m_deferredAvboitExtinctionSharedComputeEmulationTaskCount =
+        m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTaskCount =
             extinctionSharedComputeEmulationPhaseCount;
         // The terminal raster is the Extinction semantic endpoint.  The common typed Integration task immediately
         // follows it, so packet ranges, timing, and accepted-token ownership remain graph-derived.
-        m_deferredAvboitExtinctionTask = extinctionSharedComputeEmulationDependency;
+        m_avboitSystem.taskGraphStage().m_extinctionTask = extinctionSharedComputeEmulationDependency;
     }
     else{
     Core::GpuTaskDesc extinctionDesc;
@@ -4642,11 +4615,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             extinctionMaterialResourceSetUseCount
         )
     ;
-    m_deferredAvboitExtinctionTask = m_deferredLightingTaskGraph.addTask<AvboitExtinctionGraphTask>(
+    m_avboitSystem.taskGraphStage().m_extinctionTask = m_deferredLightingTaskGraph.addTask<AvboitExtinctionGraphTask>(
         extinctionDesc,
         Move(avboitExtinctionPayload)
     );
-    if(!m_deferredAvboitExtinctionTask.valid()){
+    if(!m_avboitSystem.taskGraphStage().m_extinctionTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
         return;
     }
@@ -4661,7 +4634,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ReadWriteUse(avboitTransmittance, Core::ResourceStates::UnorderedAccess),
         ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
     };
-    const Core::GpuTaskId integrationDependency[] = { m_deferredAvboitExtinctionTask };
+    const Core::GpuTaskId integrationDependency[] = { m_avboitSystem.taskGraphStage().m_extinctionTask };
     Core::GpuTaskDesc integrationDesc;
     if(splitAvboitStages){
         integrationDesc
@@ -4692,7 +4665,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .setDependencies(integrationDependency, LengthOf(integrationDependency))
         .setResourceUses(integrationResourceUses, LengthOf(integrationResourceUses))
     ;
-    m_deferredAvboitIntegrationTask = m_deferredLightingTaskGraph.addTask<AvboitIntegrationGraphTask>(
+    m_avboitSystem.taskGraphStage().m_integrationTask = m_deferredLightingTaskGraph.addTask<AvboitIntegrationGraphTask>(
         integrationDesc,
         AvboitIntegrationGraphTask::Payload{
             .avboitSystem = &m_avboitSystem,
@@ -4704,7 +4677,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .timingScope = splitAvboitStages ? &RendererGpuTimingScope::s_AvboitIntegration : nullptr,
         }
     );
-    if(!m_deferredAvboitIntegrationTask.valid()){
+    if(!m_avboitSystem.taskGraphStage().m_integrationTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
         return;
     }
@@ -4723,7 +4696,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitAccumulationPayload.hasTransparentRenderers = hasTransparentRenderers;
     avboitAccumulationPayload.splitStages = splitAvboitStages;
 
-    Core::GpuTaskId accumulationUploadTask = m_deferredAvboitIntegrationTask;
+    Core::GpuTaskId accumulationUploadTask = m_avboitSystem.taskGraphStage().m_integrationTask;
     bool accumulationStreamsUploaded = false;
     bool accumulationCsgStreamsUploaded = false;
     bool accumulationRegularComputeEmulationPlanCaptured = false;
@@ -5286,7 +5259,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     // immediate Accumulation dependency; replacing this anchor would hide a broken upload-to-producer handoff.
     const Core::GpuTaskId accumulationStreamTask = accumulationUploadTask;
     if(accumulationStreamsUploaded)
-        m_deferredAvboitAccumulationStreamTask = accumulationStreamTask;
+        m_avboitSystem.taskGraphStage().m_accumulationStreamTask = accumulationStreamTask;
     Core::GpuTaskId accumulationDependency = accumulationUploadTask;
     if(accumulationComputeEmulationOutputStatesGraphOwned){
         avboitAccumulationComputeEmulationPayload.renderer = this;
@@ -5394,19 +5367,19 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 accumulationComputeEmulationResourceSetUseCount
             )
         ;
-        m_deferredAvboitAccumulationComputeEmulationTask = m_deferredLightingTaskGraph.addTask<
+        m_avboitSystem.taskGraphStage().m_accumulationComputeEmulationTask = m_deferredLightingTaskGraph.addTask<
             AvboitAccumulationComputeEmulationGraphTask
         >(
             accumulationComputeEmulationDesc,
             Move(avboitAccumulationComputeEmulationPayload)
         );
-        if(!m_deferredAvboitAccumulationComputeEmulationTask.valid()){
+        if(!m_avboitSystem.taskGraphStage().m_accumulationComputeEmulationTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT(
                 "RendererSystem: could not declare AVBOIT Accumulation compute-emulation producer"
             ));
             return;
         }
-        accumulationDependency = m_deferredAvboitAccumulationComputeEmulationTask;
+        accumulationDependency = m_avboitSystem.taskGraphStage().m_accumulationComputeEmulationTask;
         avboitAccumulationScheduling.allowMergeAcrossConsumerFrontier = true;
     }
     if(accumulationSharedComputeEmulationOutputStatesGraphOwned){
@@ -5555,7 +5528,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ){
             const bool isRasterPhase =
                 phaseIndex % ECSRenderDetail::s_SharedComputeEmulationPhasesPerDraw != 0u;
-            m_deferredAvboitAccumulationSharedComputeEmulationTasks[phaseIndex] =
+            m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTasks[phaseIndex] =
                 addAccumulationSharedComputeEmulationPhase(
                     accumulationSharedComputeEmulationPhaseIdentities[phaseIndex],
                     accumulationSharedComputeEmulationPhaseMarkers[phaseIndex],
@@ -5571,20 +5544,20 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     accumulationMaterialResourceSetUseCount
                 )
             ;
-            if(!m_deferredAvboitAccumulationSharedComputeEmulationTasks[phaseIndex].valid()){
+            if(!m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTasks[phaseIndex].valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT(
                     "RendererSystem: could not declare AVBOIT Accumulation shared compute-emulation phase"
                 ));
                 return;
             }
             accumulationSharedComputeEmulationDependency =
-                m_deferredAvboitAccumulationSharedComputeEmulationTasks[phaseIndex];
+                m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTasks[phaseIndex];
         }
-        m_deferredAvboitAccumulationSharedComputeEmulationTaskCount =
+        m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTaskCount =
             accumulationSharedComputeEmulationPhaseCount;
         // The terminal raster is the existing Accumulation semantic endpoint: it feeds the unchanged finalizer,
         // timing ticket, state cache, record range, and accepted-token publication path.
-        m_deferredAvboitAccumulationTask = accumulationSharedComputeEmulationDependency;
+        m_avboitSystem.taskGraphStage().m_accumulationTask = accumulationSharedComputeEmulationDependency;
     }
     else{
         Core::GpuTaskDesc accumulationDesc;
@@ -5600,11 +5573,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 accumulationMaterialResourceSetUseCount
             )
         ;
-        m_deferredAvboitAccumulationTask = m_deferredLightingTaskGraph.addTask<AvboitAccumulationGraphTask>(
+        m_avboitSystem.taskGraphStage().m_accumulationTask = m_deferredLightingTaskGraph.addTask<AvboitAccumulationGraphTask>(
             accumulationDesc,
             Move(avboitAccumulationPayload)
         );
-        if(!m_deferredAvboitAccumulationTask.valid()){
+        if(!m_avboitSystem.taskGraphStage().m_accumulationTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT accumulation graph task"));
             return;
         }
@@ -5628,22 +5601,22 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .setMarkerLabel("AVBOIT Accumulation Finalize")
         .setQueue(GraphicsQueueRequest())
         .setScheduling(accumulationFinalizeScheduling)
-        .setDependencies(&m_deferredAvboitAccumulationTask, 1u)
+        .setDependencies(&m_avboitSystem.taskGraphStage().m_accumulationTask, 1u)
         .setResourceUses(accumulationFinalizeResourceUses, LengthOf(accumulationFinalizeResourceUses))
     ;
-    m_deferredAvboitAccumulationFinalizeTask = m_deferredLightingTaskGraph.addTask<AvboitAccumulationFinalizeGraphTask>(
+    m_avboitSystem.taskGraphStage().m_accumulationFinalizeTask = m_deferredLightingTaskGraph.addTask<AvboitAccumulationFinalizeGraphTask>(
         accumulationFinalizeDesc,
         AvboitAccumulationFinalizeGraphTask::Payload{}
     );
-    if(!m_deferredAvboitAccumulationFinalizeTask.valid()){
+    if(!m_avboitSystem.taskGraphStage().m_accumulationFinalizeTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation finalizer graph task"));
         return;
     }
 
     }
     const Core::GpuTaskId avboitFinalTask = hasTransparentRenderers
-        ? m_deferredAvboitAccumulationFinalizeTask
-        : m_deferredAvboitOccupancyTask
+        ? m_avboitSystem.taskGraphStage().m_accumulationFinalizeTask
+        : m_avboitSystem.taskGraphStage().m_occupancyTask
     ;
 
     const Core::GpuExternalCompletionId laggedLightingExternalDependencies[] = {

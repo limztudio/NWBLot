@@ -150,32 +150,7 @@ void RendererSystem::invalidateResources(){
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
-    m_deferredAvboitClearFirstTask = {};
-    m_deferredAvboitClearTask = {};
-    m_deferredAvboitPreTask = {};
-    m_deferredAvboitCsgReceiverSpanTask = {};
-    m_deferredAvboitCsgIntervalCombineTask = {};
-    m_deferredAvboitOccupancyStreamTask = {};
-    m_deferredAvboitOccupancyComputeEmulationTask = {};
-    for(Core::GpuTaskId& task : m_deferredAvboitOccupancySharedComputeEmulationTasks)
-        task = {};
-    m_deferredAvboitOccupancySharedComputeEmulationTaskCount = 0u;
-    m_deferredAvboitOccupancyTask = {};
-    m_deferredAvboitDepthWarpTask = {};
-    m_deferredAvboitExtinctionStreamTask = {};
-    m_deferredAvboitExtinctionComputeEmulationTask = {};
-    for(Core::GpuTaskId& task : m_deferredAvboitExtinctionSharedComputeEmulationTasks)
-        task = {};
-    m_deferredAvboitExtinctionSharedComputeEmulationTaskCount = 0u;
-    m_deferredAvboitExtinctionTask = {};
-    m_deferredAvboitIntegrationTask = {};
-    m_deferredAvboitAccumulationStreamTask = {};
-    m_deferredAvboitAccumulationComputeEmulationTask = {};
-    for(Core::GpuTaskId& task : m_deferredAvboitAccumulationSharedComputeEmulationTasks)
-        task = {};
-    m_deferredAvboitAccumulationSharedComputeEmulationTaskCount = 0u;
-    m_deferredAvboitAccumulationTask = {};
-    m_deferredAvboitAccumulationFinalizeTask = {};
+    m_avboitSystem.resetTaskGraphStage();
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredPresentationOverlayTask = {};

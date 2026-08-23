@@ -9,6 +9,7 @@
 #include <impl/ecs_render/kernel/task_timing_feedback.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/shared/renderer_state.h>
+#include <impl/ecs_render/shared/task_graph_stage.h>
 #include <impl/ecs_render/kernel/subsystems.h>
 
 #include <core/ecs/system.h>
@@ -65,47 +66,9 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared-output compute emulation alternates one generate and one raster phase for every retained regular
-// draw. Keep the supported range centralized because graph declaration, fixed task storage, and packet
-// validation all depend on the same narrow contract.
-inline constexpr usize s_SharedComputeEmulationPhasesPerDraw = 2u;
-inline constexpr usize s_SharedComputeEmulationMinimumDrawCount = 2u;
-inline constexpr usize s_SharedComputeEmulationMaximumDrawCount = 5u;
-inline constexpr usize s_SharedComputeEmulationMinimumPhaseCount =
-    s_SharedComputeEmulationMinimumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
-inline constexpr usize s_SharedComputeEmulationMaximumPhaseCount =
-    s_SharedComputeEmulationMaximumDrawCount * s_SharedComputeEmulationPhasesPerDraw;
-
-[[nodiscard]] inline constexpr bool IsSupportedSharedComputeEmulationDrawCount(const usize drawCount)noexcept{
-    return drawCount >= s_SharedComputeEmulationMinimumDrawCount
-        && drawCount <= s_SharedComputeEmulationMaximumDrawCount;
-}
-
-[[nodiscard]] inline constexpr usize SharedComputeEmulationPhaseCountForDrawCount(const usize drawCount)noexcept{
-    return drawCount * s_SharedComputeEmulationPhasesPerDraw;
-}
-
-[[nodiscard]] inline constexpr bool IsSupportedSharedComputeEmulationPhaseCount(const usize phaseCount)noexcept{
-    return phaseCount >= s_SharedComputeEmulationMinimumPhaseCount
-        && phaseCount <= s_SharedComputeEmulationMaximumPhaseCount
-        && (phaseCount % s_SharedComputeEmulationPhasesPerDraw) == 0u;
-}
-
 #if defined(NWB_DEBUG)
 struct MaterialTypedInstanceRangeVector;
 #endif
-// Immutable frame facts used while declaring the graph. Queue assignment remains a compiler result; this
-// carries only the features and external-history availability that change which semantic tasks exist.
-struct RendererFrameGraphFeatures{
-    bool frameLaggedAsyncLightingEnabled = false;
-    bool laggedLightingHistoryReady = false;
-    bool laggedLightingHistoryAccepted = false;
-    // A prior Transfer history-copy tail still reads the live producer targets. The next shadow/caustic writers
-    // must wait for it even when current-frame Lighting does not sample history.
-    bool laggedLightingHistoryWriterWaitPending = false;
-    bool hasTransparentRenderers = false;
-    bool hardwareCaustics = false;
-};
 // These semantic prefix stages may coalesce into one native submission or split at a compiler-derived
 // cross-queue frontier. Each stage points at a rebindable timing slot so the renderer can attach one ticket
 // to every actual packet after compilation.
@@ -647,56 +610,6 @@ private:
     // A rare diagnostic tail: it depends on GI but records/submits after Present on Transfer when available.
     Core::GpuTaskId m_deferredSurfelGiCounterReadbackTask;
     Core::GpuTaskId m_deferredHardwareCausticsTask;
-    // The normal graph path keeps its serial first/last typed CopyDest clear tasks in AVBOIT Pre's timed Graphics
-    // packet. Their pair proves the whole nine-clear chain stays at the established semantic endpoint.
-    Core::GpuTaskId m_deferredAvboitClearFirstTask;
-    Core::GpuTaskId m_deferredAvboitClearTask;
-    // Prepared transparent CSG repeats the same two-value work-region clear before its interval producer.
-    Core::GpuTaskId m_deferredAvboitTransparentCsgIntervalClearFirstTask;
-    Core::GpuTaskId m_deferredAvboitTransparentCsgIntervalClearTask;
-    Core::GpuTaskId m_deferredAvboitPreTask;
-    // Prepared transparent CSG split: receiver-span and interval-combine retain the AVBOIT-pre packet so phase-
-    // local occupancy uploads cannot overwrite the frozen CSG stream before those callbacks record.
-    Core::GpuTaskId m_deferredAvboitCsgReceiverSpanTask;
-    Core::GpuTaskId m_deferredAvboitCsgIntervalCombineTask;
-    // The final immutable Occupancy upload and optional graph-owned regular producer with two through five draws
-    // alternating shared-output phases stay in AVBOIT Pre's accepting Graphics packet before its later Depth-Warp
-    // Compute dependency.
-    Core::GpuTaskId m_deferredAvboitOccupancyStreamTask;
-    Core::GpuTaskId m_deferredAvboitOccupancyComputeEmulationTask;
-    Core::GpuTaskId m_deferredAvboitOccupancySharedComputeEmulationTasks[
-        ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount
-    ] = {};
-    usize m_deferredAvboitOccupancySharedComputeEmulationTaskCount = 0u;
-    Core::GpuTaskId m_deferredAvboitOccupancyTask;
-    Core::GpuTaskId m_deferredAvboitDepthWarpTask;
-    // The optional alias-free regular/CSG producer or narrowly retained two-through-five-draw shared-output
-    // phases must remain in Extinction's selected Graphics packet so their material timing interval and
-    // generated-vertex handoff share the consumer's token.
-    Core::GpuTaskId m_deferredAvboitExtinctionComputeEmulationTask;
-    Core::GpuTaskId m_deferredAvboitExtinctionSharedComputeEmulationTasks[ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount] = {};
-    usize m_deferredAvboitExtinctionSharedComputeEmulationTaskCount = 0u;
-    // The final immutable extinction upload, when that phase has visible draws. It must live in the native
-    // extinction packet so rejected/retried packet recording cannot publish only a partial phase stream.
-    Core::GpuTaskId m_deferredAvboitExtinctionStreamTask;
-    Core::GpuTaskId m_deferredAvboitExtinctionTask;
-    Core::GpuTaskId m_deferredAvboitIntegrationTask;
-    // The accumulation phase owns another immutable stream after integration. It must remain in the final
-    // accumulation packet so a rejected/retried recording cannot publish only its upload prefix.
-    Core::GpuTaskId m_deferredAvboitAccumulationStreamTask;
-    // The optional alias-free regular or CSG-only producer stays immediately before Accumulation so the
-    // generated-vertex handoff and its cross-callback timing interval share the terminal Graphics packet and
-    // finalizer.
-    Core::GpuTaskId m_deferredAvboitAccumulationComputeEmulationTask;
-    // A narrowly accepted two-through-five-draw shared-output regular stream retains every alternating D/R
-    // phase so the runtime can prove exact packet order instead of accepting only its two endpoints.
-    Core::GpuTaskId m_deferredAvboitAccumulationSharedComputeEmulationTasks[
-        ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount
-    ] = {};
-    usize m_deferredAvboitAccumulationSharedComputeEmulationTaskCount = 0u;
-    Core::GpuTaskId m_deferredAvboitAccumulationTask;
-    // A no-op Graphics task that returns accumulation color outputs and read-only deferred depth to sampled state.
-    Core::GpuTaskId m_deferredAvboitAccumulationFinalizeTask;
     Core::GpuTaskId m_deferredLightingTask;
     Core::GpuTaskId m_deferredCompositeTask;
     // Optional final overlay appended by a registered presentation contributor. The deferred scene output remains
@@ -799,4 +712,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

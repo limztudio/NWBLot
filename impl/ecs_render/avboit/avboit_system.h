@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <impl/ecs_render/avboit/task_graph_stage.h>
 #include <impl/ecs_render/kernel/subsystem_base.h>
 
 
@@ -20,6 +21,23 @@ NWB_IMPL_BEGIN
 class RendererAvboitSystem final : public RendererSystemSubsystemBase<RendererSystem>{
 public:
     explicit RendererAvboitSystem(RendererSystem& renderer);
+
+public:
+    // The graph host owns the shared graph artifact; AVBOIT owns every graph-local identifier required by its
+    // transparency stage. Cross-domain users consume the typed stage boundary instead of those local identifiers.
+    void resetTaskGraphStage()noexcept;
+    [[nodiscard]] RendererAvboitTaskGraphStageState& taskGraphStage()noexcept{ return m_taskGraphStage; }
+    [[nodiscard]] const RendererAvboitTaskGraphStageState& taskGraphStage()const noexcept{ return m_taskGraphStage; }
+    [[nodiscard]] RendererAvboitTaskGraphValidation validateTaskGraphStage(
+        const Core::GpuCompiledGraph& compiledGraph,
+        bool clearTargets,
+        bool hasTransparentRenderers
+    )const;
+    [[nodiscard]] RendererAvboitTaskGraphSubmission submitTaskGraphStage(
+        RendererAvboitTaskGraphSubmitContext& context,
+        const RendererAvboitTaskGraphValidation& validation
+    )const;
+
 
 public:
     [[nodiscard]] bool createAvboitResources();
@@ -156,6 +174,10 @@ private:
         bool deferIntervalCombine,
         Optional<Core::GpuTimingMeasure>* deferredIntervalTiming
     );
+
+
+private:
+    RendererAvboitTaskGraphStageState m_taskGraphStage;
 };
 
 
@@ -166,4 +188,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

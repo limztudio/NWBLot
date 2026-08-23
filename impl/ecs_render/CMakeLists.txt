@@ -15,6 +15,10 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/kernel/system_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/system_render.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/task_timing_feedback.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/avboit/task_graph_stage.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/avboit/task_graph_stage.h"
+    "${CMAKE_CURRENT_LIST_DIR}/avboit/task_graph_stage_submission.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/avboit/task_graph_stage_validation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/task_graph_accumulation_tasks.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/task_graph_accumulation_tasks.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/task_graph_clear_timing.h"
@@ -72,6 +76,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/task_graph_surfel_tasks.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/task_graph_surfel_tasks.h"
     "${CMAKE_CURRENT_LIST_DIR}/shared/task_graph_draw_snapshots.h"
+    "${CMAKE_CURRENT_LIST_DIR}/shared/task_graph_stage.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_pass.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_target_bindings.cpp"
@@ -158,4 +163,3 @@ target_link_libraries(nwb_ecs_render PRIVATE
     nwb_assets_texture_loader
     nwb_assets_sampler_loader
 )
-

@@ -74,6 +74,7 @@ static bool ReadTaskGraphSources(const TestPath& repoRoot, AString& outSource){
         "avboit/task_graph_clear_timing.h",
         "csg/task_graph_clear_timing.h",
         "shared/task_graph_draw_snapshots.h",
+        "shared/task_graph_stage.h",
         "material/task_graph_opaque_compute_emulation_plan.h",
         "avboit/task_graph_compute_emulation_plan.h",
         "material/task_graph_compute_emulation_plan.h",
@@ -114,6 +115,10 @@ static bool ReadTaskGraphSources(const TestPath& repoRoot, AString& outSource){
         "raytrace/task_graph_caustics.cpp",
         "raytrace/task_graph_surfel_gi.cpp",
         "deferred/task_graph_deferred_lighting.cpp",
+        "avboit/task_graph_stage.h",
+        "avboit/task_graph_stage.cpp",
+        "avboit/task_graph_stage_validation.cpp",
+        "avboit/task_graph_stage_submission.cpp",
     };
 
     const TestPath rendererDirectory = repoRoot / "impl" / "ecs_render";
@@ -606,22 +611,58 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
+    AString systemHeaderSource;
     AString systemSource;
+    AString avboitSystemHeaderSource;
+    AString avboitStageHeaderSource;
+    AString avboitValidationSource;
+    AString avboitSubmissionSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", systemHeaderSource));
     ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_system.h", avboitSystemHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "task_graph_stage.h", avboitStageHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "task_graph_stage_validation.cpp", avboitValidationSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "task_graph_stage_submission.cpp", avboitSubmissionSource));
+    const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
     const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView avboitSystemHeader(avboitSystemHeaderSource.data(), avboitSystemHeaderSource.size());
+    const AStringView avboitStageHeader(avboitStageHeaderSource.data(), avboitStageHeaderSource.size());
+    const AStringView avboitValidation(avboitValidationSource.data(), avboitValidationSource.size());
+    const AStringView avboitSubmission(avboitSubmissionSource.data(), avboitSubmissionSource.size());
 
-    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredAvboitPreTask)"));
-    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredAvboitDepthWarpTask)"));
-    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredAvboitExtinctionTask)"));
-    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredAvboitIntegrationTask)"));
-    EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredAvboitAccumulationTask)"));
-    EXPECT_TRUE(ContainsText(system, "tasksSharePacket(\n            m_deferredAvboitPreTask"));
+    EXPECT_TRUE(ContainsText(avboitSystemHeader, "RendererAvboitTaskGraphValidation validateTaskGraphStage("));
+    EXPECT_TRUE(ContainsText(avboitSystemHeader, "RendererAvboitTaskGraphSubmission submitTaskGraphStage("));
+    EXPECT_TRUE(ContainsText(avboitStageHeader, "struct RendererAvboitTaskGraphValidation"));
+    EXPECT_TRUE(ContainsText(avboitStageHeader, "RendererTaskGraphTransparencyStage m_stage;"));
+    EXPECT_TRUE(ContainsText(avboitStageHeader, "Core::GpuTaskId m_submissionCompletionTask;"));
+    EXPECT_TRUE(ContainsText(avboitValidation, "taskIsCompiled(taskGraphStage.m_preTask)"));
+    EXPECT_TRUE(ContainsText(avboitValidation, "taskIsCompiled(taskGraphStage.m_depthWarpTask)"));
+    EXPECT_TRUE(ContainsText(avboitValidation, "taskIsCompiled(taskGraphStage.m_extinctionTask)"));
+    EXPECT_TRUE(ContainsText(avboitValidation, "taskIsCompiled(taskGraphStage.m_integrationTask)"));
+    EXPECT_TRUE(ContainsText(avboitValidation, "taskIsCompiled(taskGraphStage.m_accumulationTask)"));
+    EXPECT_TRUE(ContainsText(avboitValidation, "compiledGraph.tasksSharePacket(\n            taskGraphStage.m_preTask"));
+    EXPECT_TRUE(ContainsText(avboitValidation, "compiledGraph.packetRangeForTasks("));
+    EXPECT_TRUE(ContainsText(avboitValidation, "compiledGraph.validPacketRange(packetRange)"));
+    EXPECT_TRUE(ContainsText(avboitSubmission, "submitTaskRangeInCompileOrderFromTasks("));
+    EXPECT_TRUE(ContainsText(avboitSubmission, "validation.stage().firstTask,"));
+    EXPECT_TRUE(ContainsText(avboitSubmission, "validation.submissionCompletionTask(),"));
+    EXPECT_TRUE(ContainsText(system, "m_avboitSystem.validateTaskGraphStage("));
+    EXPECT_TRUE(ContainsText(system, "m_avboitSystem.submitTaskGraphStage("));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "if(m_deferredLightingTaskGraphValid){\n"
+        "            RendererAvboitTaskGraphSubmitContext avboitSubmitContext"
+    ));
+    EXPECT_FALSE(ContainsText(systemHeader, "m_deferredAvboit"));
+    EXPECT_FALSE(ContainsText(system, "m_deferredAvboit"));
 
-    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId avboitPrePacket"));
-    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId avboitDepthWarpPacket"));
-    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId avboitExtinctionPacket"));
-    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId avboitIntegrationPacket"));
-    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId avboitAccumulationPacket"));
+    for(const AStringView avboitSource : { avboitValidation, avboitSubmission }){
+        EXPECT_FALSE(ContainsText(avboitSource, "GpuSubmissionPacketId avboitPrePacket"));
+        EXPECT_FALSE(ContainsText(avboitSource, "GpuSubmissionPacketId avboitDepthWarpPacket"));
+        EXPECT_FALSE(ContainsText(avboitSource, "GpuSubmissionPacketId avboitExtinctionPacket"));
+        EXPECT_FALSE(ContainsText(avboitSource, "GpuSubmissionPacketId avboitIntegrationPacket"));
+        EXPECT_FALSE(ContainsText(avboitSource, "GpuSubmissionPacketId avboitAccumulationPacket"));
+    }
 }
 
 
@@ -1581,7 +1622,10 @@ TEST(EcsGraphics, FrontierSafeEffectChainsRetainTheirSemanticPackets){
     EXPECT_TRUE(ContainsText(avboitOccupancy, "avboitOccupancyScheduling.allowMergeAcrossConsumerFrontier = true;"));
     EXPECT_TRUE(ContainsText(avboitOccupancy, ".setDependencies(&occupancyDependency, 1u)"));
     EXPECT_TRUE(ContainsText(avboitAccumulation, "accumulationFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;"));
-    EXPECT_TRUE(ContainsText(avboitAccumulation, ".setDependencies(&m_deferredAvboitAccumulationTask, 1u)"));
+    EXPECT_TRUE(ContainsText(
+        avboitAccumulation,
+        ".setDependencies(&m_avboitSystem.taskGraphStage().m_accumulationTask, 1u)"
+    ));
 }
 
 
@@ -1591,16 +1635,16 @@ TEST(EcsGraphics, SharedComputeEmulationRetainsFiveRegularDraws){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
-    AString systemHeaderSource;
+    AString sharedTaskGraphStageSource;
     AString taskGraphSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", systemHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "task_graph_stage.h", sharedTaskGraphStageSource));
     ASSERT_TRUE(ReadTaskGraphSources(repoRoot, taskGraphSource));
-    const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
+    const AStringView sharedTaskGraphStage(sharedTaskGraphStageSource.data(), sharedTaskGraphStageSource.size());
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
 
-    EXPECT_TRUE(ContainsText(systemHeader, "s_SharedComputeEmulationMaximumDrawCount = 5u;"));
+    EXPECT_TRUE(ContainsText(sharedTaskGraphStage, "s_SharedComputeEmulationMaximumDrawCount = 5u;"));
     EXPECT_TRUE(ContainsText(
-        systemHeader,
+        sharedTaskGraphStage,
         "s_SharedComputeEmulationMaximumPhaseCount =\n"
         "    s_SharedComputeEmulationMaximumDrawCount * s_SharedComputeEmulationPhasesPerDraw;"
     ));

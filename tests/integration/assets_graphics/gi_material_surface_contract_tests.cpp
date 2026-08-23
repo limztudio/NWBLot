@@ -71,6 +71,7 @@ static bool ReadTaskGraphSources(const TestPath& repoRoot, AString& outSource){
         "avboit/task_graph_clear_timing.h",
         "csg/task_graph_clear_timing.h",
         "shared/task_graph_draw_snapshots.h",
+        "shared/task_graph_stage.h",
         "material/task_graph_opaque_compute_emulation_plan.h",
         "avboit/task_graph_compute_emulation_plan.h",
         "material/task_graph_compute_emulation_plan.h",
@@ -111,6 +112,10 @@ static bool ReadTaskGraphSources(const TestPath& repoRoot, AString& outSource){
         "raytrace/task_graph_caustics.cpp",
         "raytrace/task_graph_surfel_gi.cpp",
         "deferred/task_graph_deferred_lighting.cpp",
+        "avboit/task_graph_stage.h",
+        "avboit/task_graph_stage.cpp",
+        "avboit/task_graph_stage_validation.cpp",
+        "avboit/task_graph_stage_submission.cpp",
     };
 
     const TestPath rendererDirectory = repoRoot / "impl" / "ecs_render";

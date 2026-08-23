@@ -129,32 +129,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredSurfelGiTask = {};
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
-    m_deferredAvboitClearFirstTask = {};
-    m_deferredAvboitClearTask = {};
-    m_deferredAvboitPreTask = {};
-    m_deferredAvboitCsgReceiverSpanTask = {};
-    m_deferredAvboitCsgIntervalCombineTask = {};
-    m_deferredAvboitOccupancyStreamTask = {};
-    m_deferredAvboitOccupancyComputeEmulationTask = {};
-    for(Core::GpuTaskId& task : m_deferredAvboitOccupancySharedComputeEmulationTasks)
-        task = {};
-    m_deferredAvboitOccupancySharedComputeEmulationTaskCount = 0u;
-    m_deferredAvboitOccupancyTask = {};
-    m_deferredAvboitDepthWarpTask = {};
-    m_deferredAvboitExtinctionStreamTask = {};
-    m_deferredAvboitExtinctionComputeEmulationTask = {};
-    for(Core::GpuTaskId& task : m_deferredAvboitExtinctionSharedComputeEmulationTasks)
-        task = {};
-    m_deferredAvboitExtinctionSharedComputeEmulationTaskCount = 0u;
-    m_deferredAvboitExtinctionTask = {};
-    m_deferredAvboitIntegrationTask = {};
-    m_deferredAvboitAccumulationStreamTask = {};
-    m_deferredAvboitAccumulationComputeEmulationTask = {};
-    for(Core::GpuTaskId& task : m_deferredAvboitAccumulationSharedComputeEmulationTasks)
-        task = {};
-    m_deferredAvboitAccumulationSharedComputeEmulationTaskCount = 0u;
-    m_deferredAvboitAccumulationTask = {};
-    m_deferredAvboitAccumulationFinalizeTask = {};
+    m_avboitSystem.resetTaskGraphStage();
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredPresentationOverlayTask = {};
@@ -640,18 +615,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         );
     }
     const bool captureLaggedLightingHistory = m_deferredLaggedLightingHistoryTask.valid();
-    // An optional setup task may be in another packet, where its ordinary graph dependency already supplies the
-    // ordering. When it shares the consumer's packet, require strict compiler task order without exposing that
-    // packet's internal task array to renderer policy.
-    const auto optionalTaskPrecedesInSharedPacket = [&](
-        const Core::GpuTaskId optionalTask,
-        const Core::GpuTaskId consumerTask
-    ){
-        return !optionalTask.valid()
-            || !m_deferredLightingCompiledGraph.tasksSharePacket(optionalTask, consumerTask)
-            || m_deferredLightingCompiledGraph.taskPrecedesInSamePacket(optionalTask, consumerTask)
-        ;
-    };
     const auto taskIsCompiled = [&](const Core::GpuTaskId task){
         return m_deferredLightingCompiledGraph.findTask(task) != nullptr;
     };
@@ -1092,601 +1055,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && softwareCausticsQueue
         && softwareCausticsQueue->queueClass == Core::CommandQueue::Compute
     ;
-    const bool avboitPrePacketContainsClear = !clearAvboitTargets || (
-        m_deferredAvboitClearFirstTask.valid()
-        && m_deferredAvboitClearTask.valid()
-        && m_deferredLightingCompiledGraph.tasksSharePacket(
-            m_deferredAvboitPreTask,
-            m_deferredAvboitClearFirstTask
-        )
-        && m_deferredLightingCompiledGraph.tasksSharePacket(
-            m_deferredAvboitPreTask,
-            m_deferredAvboitClearTask
-        )
+    const RendererAvboitTaskGraphValidation avboitValidation = m_avboitSystem.validateTaskGraphStage(
+        m_deferredLightingCompiledGraph,
+        clearAvboitTargets,
+        hasTransparentRenderers
     );
-    // Prepared transparent CSG clears the two persistent interval values through the same first/last primitive
-    // bracket. Keep both with AVBOIT Pre so its stable timing ticket and accepted endpoint remain authoritative.
-    const bool avboitPrePacketContainsTransparentCsgClear =
-        (!m_deferredAvboitTransparentCsgIntervalClearFirstTask.valid()
-            && !m_deferredAvboitTransparentCsgIntervalClearTask.valid())
-        || (
-            m_deferredAvboitTransparentCsgIntervalClearFirstTask.valid()
-            && m_deferredAvboitTransparentCsgIntervalClearTask.valid()
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitPreTask,
-                m_deferredAvboitTransparentCsgIntervalClearFirstTask
-            )
-            && m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitPreTask,
-                m_deferredAvboitTransparentCsgIntervalClearTask
-            )
-        )
-    ;
-    const bool avboitPrePacketContainsOccupancy = m_deferredLightingCompiledGraph.tasksSharePacket(
-        m_deferredAvboitPreTask,
-        m_deferredAvboitOccupancyTask
-    )
-    ;
-    // The transparent Span/Combine callbacks consume the frozen CSG stream before phase-local occupancy uploads
-    // replace it. They share AVBOIT Pre's timing and external state source, so a split is rejected before recording.
-    const bool avboitPrePacketContainsCsgReceiverSpan =
-        !m_deferredAvboitCsgReceiverSpanTask.valid()
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
-            m_deferredAvboitPreTask,
-            m_deferredAvboitCsgReceiverSpanTask
-        )
-    ;
-    const bool avboitPrePacketContainsCsgIntervalCombine =
-        !m_deferredAvboitCsgIntervalCombineTask.valid()
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
-            m_deferredAvboitPreTask,
-            m_deferredAvboitCsgIntervalCombineTask
-        )
-    ;
-    const Core::GpuPhysicalQueueInfo* const avboitPreQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitPreTask);
-    const Core::GpuPhysicalQueueInfo* const avboitOccupancyQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitOccupancyTask);
-    const Core::GpuPhysicalQueueInfo* const avboitOccupancyComputeEmulationQueue =
-        m_deferredAvboitOccupancyComputeEmulationTask.valid()
-            ? m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitOccupancyComputeEmulationTask)
-            : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const avboitOccupancySharedComputeEmulationQueue =
-        m_deferredAvboitOccupancySharedComputeEmulationTaskCount != 0u
-            && m_deferredAvboitOccupancySharedComputeEmulationTasks[0u].valid()
-            ? m_deferredLightingCompiledGraph.queueInfoForTask(
-                m_deferredAvboitOccupancySharedComputeEmulationTasks[0u]
-            )
-            : nullptr
-    ;
-    const bool avboitUsesAsyncCompute = m_deferredAvboitDepthWarpTask.valid();
-    const bool avboitExtinctionPacketContainsStreams = !m_deferredAvboitExtinctionStreamTask.valid()
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
-            m_deferredAvboitExtinctionTask,
-            m_deferredAvboitExtinctionStreamTask
-        )
-    ;
-    const bool avboitUnsplitPrePacketContainsExtinction = !hasTransparentRenderers
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
-            m_deferredAvboitPreTask,
-            m_deferredAvboitExtinctionTask
-        )
-    ;
-    const bool avboitUnsplitPrePacketContainsIntegration = !hasTransparentRenderers
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
-            m_deferredAvboitPreTask,
-            m_deferredAvboitIntegrationTask
-        )
-    ;
-    const bool avboitAccumulationPacketContainsStreams = !m_deferredAvboitAccumulationStreamTask.valid()
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
-            m_deferredAvboitAccumulationTask,
-            m_deferredAvboitAccumulationStreamTask
-        )
-    ;
-    // The graph-only finalizer lowers the final attachment transition, so it is part of accumulation's accepted
-    // Graphics packet and its timing/submission endpoint. A split here would let Composite bypass that handoff.
-    const bool avboitAccumulationPacketContainsFinalizer = !hasTransparentRenderers
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
-            m_deferredAvboitAccumulationTask,
-            m_deferredAvboitAccumulationFinalizeTask
-        )
-    ;
-    const bool avboitUnsplitPrePacketContainsAccumulation = !hasTransparentRenderers
-        || m_deferredLightingCompiledGraph.tasksSharePacket(
-            m_deferredAvboitPreTask,
-            m_deferredAvboitAccumulationTask
-        )
-    ;
-    const Core::GpuPhysicalQueueInfo* const avboitDepthWarpQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitDepthWarpTask);
-    const Core::GpuPhysicalQueueInfo* const avboitExtinctionQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitExtinctionTask);
-    const Core::GpuPhysicalQueueInfo* const avboitExtinctionComputeEmulationQueue =
-        m_deferredAvboitExtinctionComputeEmulationTask.valid()
-            ? m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitExtinctionComputeEmulationTask)
-            : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const avboitExtinctionSharedComputeEmulationQueue =
-        m_deferredAvboitExtinctionSharedComputeEmulationTaskCount != 0u
-            && m_deferredAvboitExtinctionSharedComputeEmulationTasks[0u].valid()
-            ? m_deferredLightingCompiledGraph.queueInfoForTask(
-                m_deferredAvboitExtinctionSharedComputeEmulationTasks[0u]
-            )
-            : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const avboitIntegrationQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitIntegrationTask);
-    const Core::GpuPhysicalQueueInfo* const avboitAccumulationQueue =
-        m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitAccumulationTask);
-    const Core::GpuPhysicalQueueInfo* const avboitAccumulationComputeEmulationQueue =
-        m_deferredAvboitAccumulationComputeEmulationTask.valid()
-            ? m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredAvboitAccumulationComputeEmulationTask)
-            : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const avboitAccumulationSharedComputeEmulationQueue =
-        m_deferredAvboitAccumulationSharedComputeEmulationTaskCount != 0u
-            && m_deferredAvboitAccumulationSharedComputeEmulationTasks[0u].valid()
-            ? m_deferredLightingCompiledGraph.queueInfoForTask(
-                m_deferredAvboitAccumulationSharedComputeEmulationTasks[0u]
-            )
-            : nullptr
-    ;
-    // Integration is now a typed unsplit AVBOIT tail instead of native work hidden inside Extinction.  Require the
-    // exact Extinction -> Integration boundary and its one-packet Pre handoff before packet recording/submission.
-    const bool avboitUnsplitIntegrationTailMerged = [&](){
-        if(avboitUsesAsyncCompute || !hasTransparentRenderers)
-            return true;
-        if(
-            !m_deferredAvboitExtinctionTask.valid()
-            || !m_deferredAvboitIntegrationTask.valid()
-            || !m_deferredAvboitAccumulationTask.valid()
-            || !avboitPreQueue
-            || !avboitExtinctionQueue
-            || !avboitIntegrationQueue
-            || !avboitAccumulationQueue
-            || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitExtinctionQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitIntegrationQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitAccumulationQueue->queueClass != Core::CommandQueue::Graphics
-            || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitPreTask,
-                m_deferredAvboitExtinctionTask
-            )
-            || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitPreTask,
-                m_deferredAvboitIntegrationTask
-            )
-            || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitPreTask,
-                m_deferredAvboitAccumulationTask
-            )
-            || !m_deferredLightingCompiledGraph.taskPrecedesInSamePacket(
-                m_deferredAvboitIntegrationTask,
-                m_deferredAvboitAccumulationTask
-            )
-        )
-            return false;
-        const Core::GpuTaskId tailSequence[] = {
-            m_deferredAvboitExtinctionTask,
-            m_deferredAvboitIntegrationTask,
-        };
-        return m_deferredLightingCompiledGraph.tasksFormContiguousPacketSequence(
-            tailSequence,
-            LengthOf(tailSequence)
-        );
-    }();
-    // Occupancy's measurement spans the generator and raster consumer. Require the exact Pre-packet order so
-    // graph declarations, rather than a callback-local transition, own the output UAV-to-VertexBuffer handoff on
-    // both the split and unsplit AVBOIT routes.
-    const bool avboitOccupancyComputeEmulationMerged = [&](){
-        if(!m_deferredAvboitOccupancyComputeEmulationTask.valid())
-            return true;
-        if(
-            !m_deferredAvboitOccupancyStreamTask.valid()
-            || !avboitOccupancyComputeEmulationQueue
-            || !avboitOccupancyQueue
-            || !avboitPreQueue
-            || avboitOccupancyComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitOccupancyQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
-            || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitPreTask,
-                m_deferredAvboitOccupancyComputeEmulationTask
-            )
-            || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitOccupancyComputeEmulationTask,
-                m_deferredAvboitOccupancyTask
-            )
-            || !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
-                m_deferredAvboitOccupancyStreamTask,
-                m_deferredAvboitOccupancyComputeEmulationTask
-            )
-            || (m_deferredAvboitClearTask.valid()
-                && !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
-                    m_deferredAvboitClearTask,
-                    m_deferredAvboitOccupancyComputeEmulationTask
-                ))
-        )
-            return false;
-        const Core::GpuTaskId producerRasterSequence[] = {
-            m_deferredAvboitOccupancyComputeEmulationTask,
-            m_deferredAvboitOccupancyTask,
-        };
-        return m_deferredLightingCompiledGraph.tasksFormContiguousPacketSequence(
-            producerRasterSequence,
-            LengthOf(producerRasterSequence)
-        ) && optionalTaskPrecedesInSharedPacket(
-            m_deferredAvboitOccupancyStreamTask,
-            m_deferredAvboitOccupancyComputeEmulationTask
-        ) && optionalTaskPrecedesInSharedPacket(
-            m_deferredAvboitClearTask,
-            m_deferredAvboitOccupancyComputeEmulationTask
-        );
-    }();
-    // A shared output needs more than the ordinary producer/raster endpoint check: every alternating D/R callback
-    // must be contiguous in AVBOIT Pre's one Graphics packet, or a later local bridge could overwrite the retained
-    // output between the compiler-owned UAV and VertexBuffer phases.
-    const bool avboitOccupancySharedComputeEmulationMerged = [&](){
-        const usize phaseCount = m_deferredAvboitOccupancySharedComputeEmulationTaskCount;
-        if(phaseCount == 0u){
-            for(const Core::GpuTaskId& task : m_deferredAvboitOccupancySharedComputeEmulationTasks){
-                if(task.valid())
-                    return false;
-            }
-            return true;
-        }
-        if(
-            !ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(phaseCount)
-            || m_deferredAvboitOccupancyComputeEmulationTask.valid()
-            || !m_deferredAvboitOccupancyStreamTask.valid()
-            || !m_deferredAvboitClearTask.valid()
-            || !taskIsCompiled(m_deferredAvboitPreTask)
-            || !avboitOccupancySharedComputeEmulationQueue
-            || !avboitOccupancyQueue
-            || !avboitPreQueue
-            || avboitUsesAsyncCompute
-            || avboitOccupancySharedComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitOccupancyQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
-            || m_deferredAvboitOccupancyTask
-                != m_deferredAvboitOccupancySharedComputeEmulationTasks[phaseCount - 1u]
-            || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitPreTask,
-                m_deferredAvboitOccupancySharedComputeEmulationTasks[0u]
-            )
-            || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitPreTask,
-                m_deferredAvboitOccupancyStreamTask
-            )
-            || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitPreTask,
-                m_deferredAvboitClearTask
-            )
-            || !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
-                m_deferredAvboitOccupancyStreamTask,
-                m_deferredAvboitOccupancySharedComputeEmulationTasks[0u]
-            )
-            || !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
-                m_deferredAvboitClearTask,
-                m_deferredAvboitOccupancySharedComputeEmulationTasks[0u]
-            )
-        )
-            return false;
-        for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
-            const Core::GpuTaskId task = m_deferredAvboitOccupancySharedComputeEmulationTasks[phaseIndex];
-            if(!task.valid())
-                return false;
-            const Core::GpuPhysicalQueueInfo* const queue = m_deferredLightingCompiledGraph.queueInfoForTask(task);
-            if(
-                !queue
-                || queue->queueClass != Core::CommandQueue::Graphics
-                || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                    m_deferredAvboitOccupancySharedComputeEmulationTasks[0u],
-                    task
-                )
-            )
-                return false;
-        }
-        for(usize phaseIndex = phaseCount;
-            phaseIndex < LengthOf(m_deferredAvboitOccupancySharedComputeEmulationTasks);
-            ++phaseIndex
-        ){
-            if(m_deferredAvboitOccupancySharedComputeEmulationTasks[phaseIndex].valid())
-                return false;
-        }
-        return m_deferredLightingCompiledGraph.tasksFormContiguousPacketSequence(
-            m_deferredAvboitOccupancySharedComputeEmulationTasks,
-            phaseCount
-        ) && m_deferredLightingCompiledGraph.taskPrecedesInSamePacket(
-            m_deferredAvboitPreTask,
-            m_deferredAvboitOccupancyStreamTask
-        ) && m_deferredLightingCompiledGraph.taskPrecedesInSamePacket(
-            m_deferredAvboitOccupancyStreamTask,
-            m_deferredAvboitClearTask
-        ) && m_deferredLightingCompiledGraph.taskPrecedesInSamePacket(
-            m_deferredAvboitClearTask,
-            m_deferredAvboitOccupancySharedComputeEmulationTasks[0u]
-        );
-    }();
-    const bool avboitOccupancyAllComputeEmulationMerged =
-        avboitOccupancyComputeEmulationMerged
-        && avboitOccupancySharedComputeEmulationMerged
-    ;
-    // Extinction's measurement spans the generator and raster consumer. Require their exact packet order so the
-    // graph, rather than a callback-local transition, owns the output UAV-to-VertexBuffer handoff on both routes.
-    const bool avboitExtinctionComputeEmulationMerged = [&](){
-        if(!m_deferredAvboitExtinctionComputeEmulationTask.valid())
-            return true;
-        if(
-            !m_deferredAvboitExtinctionStreamTask.valid()
-            || !avboitExtinctionComputeEmulationQueue
-            || !avboitExtinctionQueue
-            || avboitExtinctionComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitExtinctionQueue->queueClass != Core::CommandQueue::Graphics
-            || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitExtinctionComputeEmulationTask,
-                m_deferredAvboitExtinctionTask
-            )
-            || !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
-                m_deferredAvboitExtinctionStreamTask,
-                m_deferredAvboitExtinctionComputeEmulationTask
-            )
-            || (!avboitUsesAsyncCompute && (
-                !taskIsCompiled(m_deferredAvboitPreTask)
-                || !avboitPreQueue
-                || !avboitOccupancyQueue
-                || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
-                || avboitOccupancyQueue->queueClass != Core::CommandQueue::Graphics
-                || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                    m_deferredAvboitPreTask,
-                    m_deferredAvboitExtinctionComputeEmulationTask
-                )
-                || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                    m_deferredAvboitOccupancyTask,
-                    m_deferredAvboitExtinctionComputeEmulationTask
-                )
-            ))
-        )
-            return false;
-        const Core::GpuTaskId producerRasterSequence[] = {
-            m_deferredAvboitExtinctionComputeEmulationTask,
-            m_deferredAvboitExtinctionTask,
-        };
-        return m_deferredLightingCompiledGraph.tasksFormContiguousPacketSequence(
-            producerRasterSequence,
-            LengthOf(producerRasterSequence)
-        ) && optionalTaskPrecedesInSharedPacket(
-            m_deferredAvboitExtinctionStreamTask,
-            m_deferredAvboitExtinctionComputeEmulationTask
-        ) && (avboitUsesAsyncCompute || (
-            optionalTaskPrecedesInSharedPacket(
-                m_deferredAvboitPreTask,
-                m_deferredAvboitExtinctionComputeEmulationTask
-            ) && optionalTaskPrecedesInSharedPacket(
-                m_deferredAvboitOccupancyTask,
-                m_deferredAvboitExtinctionComputeEmulationTask
-            )
-        ));
-    }();
-    // A shared generated-vertex output requires the exact alternating D/R chain to remain contiguous in AVBOIT
-    // Pre's one Graphics packet. Otherwise an intervening dispatch could overwrite the retained output before its
-    // corresponding raster phase consumes the compiler-owned VertexBuffer handoff.
-    const bool avboitExtinctionSharedComputeEmulationMerged = [&](){
-        const usize phaseCount = m_deferredAvboitExtinctionSharedComputeEmulationTaskCount;
-        if(phaseCount == 0u){
-            for(const Core::GpuTaskId& task : m_deferredAvboitExtinctionSharedComputeEmulationTasks){
-                if(task.valid())
-                    return false;
-            }
-            return true;
-        }
-        if(
-            !ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(phaseCount)
-            || m_deferredAvboitExtinctionComputeEmulationTask.valid()
-            || !m_deferredAvboitExtinctionStreamTask.valid()
-            || !taskIsCompiled(m_deferredAvboitExtinctionTask)
-            || !taskIsCompiled(m_deferredAvboitIntegrationTask)
-            || !taskIsCompiled(m_deferredAvboitPreTask)
-            || !avboitExtinctionSharedComputeEmulationQueue
-            || !avboitExtinctionQueue
-            || !avboitIntegrationQueue
-            || !avboitPreQueue
-            || avboitUsesAsyncCompute
-            || avboitExtinctionSharedComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitExtinctionQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitIntegrationQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
-            || m_deferredAvboitExtinctionTask
-                != m_deferredAvboitExtinctionSharedComputeEmulationTasks[phaseCount - 1u]
-            || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitPreTask,
-                m_deferredAvboitExtinctionSharedComputeEmulationTasks[0u]
-            )
-            || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitPreTask,
-                m_deferredAvboitIntegrationTask
-            )
-            || !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
-                m_deferredAvboitExtinctionStreamTask,
-                m_deferredAvboitExtinctionSharedComputeEmulationTasks[0u]
-            )
-        )
-            return false;
-        for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
-            const Core::GpuTaskId task = m_deferredAvboitExtinctionSharedComputeEmulationTasks[phaseIndex];
-            if(!task.valid())
-                return false;
-            const Core::GpuPhysicalQueueInfo* const queue = m_deferredLightingCompiledGraph.queueInfoForTask(task);
-            if(
-                !queue
-                || queue->queueClass != Core::CommandQueue::Graphics
-                || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                    m_deferredAvboitExtinctionSharedComputeEmulationTasks[0u],
-                    task
-                )
-            )
-                return false;
-        }
-        for(usize phaseIndex = phaseCount;
-            phaseIndex < LengthOf(m_deferredAvboitExtinctionSharedComputeEmulationTasks);
-            ++phaseIndex
-        ){
-            if(m_deferredAvboitExtinctionSharedComputeEmulationTasks[phaseIndex].valid())
-                return false;
-        }
-        const Core::GpuTaskId integrationBoundary[] = {
-            m_deferredAvboitExtinctionSharedComputeEmulationTasks[phaseCount - 1u],
-            m_deferredAvboitIntegrationTask,
-        };
-        return m_deferredLightingCompiledGraph.tasksFormContiguousPacketSequence(
-            m_deferredAvboitExtinctionSharedComputeEmulationTasks,
-            phaseCount
-        ) && m_deferredLightingCompiledGraph.tasksFormContiguousPacketSequence(
-            integrationBoundary,
-            LengthOf(integrationBoundary)
-        ) && m_deferredLightingCompiledGraph.taskPrecedesInSamePacket(
-            m_deferredAvboitPreTask,
-            m_deferredAvboitExtinctionSharedComputeEmulationTasks[0u]
-        ) && optionalTaskPrecedesInSharedPacket(
-            m_deferredAvboitExtinctionStreamTask,
-            m_deferredAvboitExtinctionSharedComputeEmulationTasks[0u]
-        );
-    }();
-    const bool avboitExtinctionAllComputeEmulationMerged =
-        avboitExtinctionComputeEmulationMerged
-        && avboitExtinctionSharedComputeEmulationMerged
-    ;
-    // Accumulation's measurement spans the generator and raster consumer. Require their exact packet order so the
-    // graph, rather than a callback-local transition, owns the output UAV-to-VertexBuffer handoff before the
-    // following graph-owned attachment finalizer. The unsplit route additionally keeps this chain in AVBOIT Pre's
-    // single accepting Graphics packet and timing endpoint.
-    const bool avboitAccumulationComputeEmulationMerged = [&](){
-        if(!m_deferredAvboitAccumulationComputeEmulationTask.valid())
-            return true;
-        if(
-            !m_deferredAvboitAccumulationStreamTask.valid()
-            || !avboitAccumulationComputeEmulationQueue
-            || !avboitAccumulationQueue
-            || avboitAccumulationComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitAccumulationQueue->queueClass != Core::CommandQueue::Graphics
-            || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitAccumulationComputeEmulationTask,
-                m_deferredAvboitAccumulationTask
-            )
-            || !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
-                m_deferredAvboitAccumulationStreamTask,
-                m_deferredAvboitAccumulationComputeEmulationTask
-            )
-            || (!avboitUsesAsyncCompute && (
-                !taskIsCompiled(m_deferredAvboitPreTask)
-                || !avboitPreQueue
-                || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
-                || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                    m_deferredAvboitPreTask,
-                    m_deferredAvboitAccumulationComputeEmulationTask
-                )
-            ))
-        )
-            return false;
-        const Core::GpuTaskId producerRasterSequence[] = {
-            m_deferredAvboitAccumulationComputeEmulationTask,
-            m_deferredAvboitAccumulationTask,
-        };
-        return m_deferredLightingCompiledGraph.tasksFormContiguousPacketSequence(
-            producerRasterSequence,
-            LengthOf(producerRasterSequence)
-        ) && optionalTaskPrecedesInSharedPacket(
-            m_deferredAvboitAccumulationStreamTask,
-            m_deferredAvboitAccumulationComputeEmulationTask
-        ) && (avboitUsesAsyncCompute || optionalTaskPrecedesInSharedPacket(
-            m_deferredAvboitPreTask,
-            m_deferredAvboitAccumulationComputeEmulationTask
-        ));
-    }();
-    // A shared output needs more than the ordinary producer/raster endpoint check: every alternating D/R callback
-    // must be contiguous in AVBOIT Pre's one Graphics packet, or a later local bridge could overwrite the retained
-    // output between the compiler-owned UAV and VertexBuffer phases.
-    const bool avboitAccumulationSharedComputeEmulationMerged = [&](){
-        const usize phaseCount = m_deferredAvboitAccumulationSharedComputeEmulationTaskCount;
-        if(phaseCount == 0u){
-            for(const Core::GpuTaskId& task : m_deferredAvboitAccumulationSharedComputeEmulationTasks){
-                if(task.valid())
-                    return false;
-            }
-            return true;
-        }
-        if(
-            !ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(phaseCount)
-            || m_deferredAvboitAccumulationComputeEmulationTask.valid()
-            || !m_deferredAvboitAccumulationStreamTask.valid()
-            || !taskIsCompiled(m_deferredAvboitAccumulationTask)
-            || !m_deferredAvboitAccumulationFinalizeTask.valid()
-            || !taskIsCompiled(m_deferredAvboitPreTask)
-            || !avboitAccumulationSharedComputeEmulationQueue
-            || !avboitAccumulationQueue
-            || !avboitPreQueue
-            || avboitUsesAsyncCompute
-            || avboitAccumulationSharedComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitAccumulationQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
-            || m_deferredAvboitAccumulationTask
-                != m_deferredAvboitAccumulationSharedComputeEmulationTasks[phaseCount - 1u]
-            || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                m_deferredAvboitPreTask,
-                m_deferredAvboitAccumulationSharedComputeEmulationTasks[0u]
-            )
-            || !m_deferredLightingCompiledGraph.taskPrecedesOrSharesPacket(
-                m_deferredAvboitAccumulationStreamTask,
-                m_deferredAvboitAccumulationSharedComputeEmulationTasks[0u]
-            )
-        )
-            return false;
-        for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
-            const Core::GpuTaskId task = m_deferredAvboitAccumulationSharedComputeEmulationTasks[phaseIndex];
-            if(!task.valid())
-                return false;
-            const Core::GpuPhysicalQueueInfo* const queue = m_deferredLightingCompiledGraph.queueInfoForTask(task);
-            if(
-                !queue
-                || queue->queueClass != Core::CommandQueue::Graphics
-                || !m_deferredLightingCompiledGraph.tasksSharePacket(
-                    m_deferredAvboitAccumulationSharedComputeEmulationTasks[0u],
-                    task
-                )
-            )
-                return false;
-        }
-        for(usize phaseIndex = phaseCount;
-            phaseIndex < LengthOf(m_deferredAvboitAccumulationSharedComputeEmulationTasks);
-            ++phaseIndex
-        ){
-            if(m_deferredAvboitAccumulationSharedComputeEmulationTasks[phaseIndex].valid())
-                return false;
-        }
-        const Core::GpuTaskId finalizerBoundary[] = {
-            m_deferredAvboitAccumulationSharedComputeEmulationTasks[phaseCount - 1u],
-            m_deferredAvboitAccumulationFinalizeTask,
-        };
-        return m_deferredLightingCompiledGraph.tasksFormContiguousPacketSequence(
-            m_deferredAvboitAccumulationSharedComputeEmulationTasks,
-            phaseCount
-        ) && m_deferredLightingCompiledGraph.tasksFormContiguousPacketSequence(
-            finalizerBoundary,
-            LengthOf(finalizerBoundary)
-        ) && m_deferredLightingCompiledGraph.taskPrecedesInSamePacket(
-            m_deferredAvboitPreTask,
-            m_deferredAvboitAccumulationSharedComputeEmulationTasks[0u]
-        ) && optionalTaskPrecedesInSharedPacket(
-            m_deferredAvboitAccumulationStreamTask,
-            m_deferredAvboitAccumulationSharedComputeEmulationTasks[0u]
-        );
-    }();
-    const bool avboitAccumulationAllComputeEmulationMerged =
-        avboitAccumulationComputeEmulationMerged
-        && avboitAccumulationSharedComputeEmulationMerged
-    ;
     const Core::GpuTaskId causticsTask = hardwareShadowSupported
         ? m_deferredHardwareCausticsTask
         : m_deferredSoftwareCausticsTask
@@ -1956,14 +1329,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredHardwareCausticsTask,
             m_deferredHardwareCausticsTask
         );
-    const Core::GpuTaskId avboitUnsplitFinalTask = hasTransparentRenderers
-        ? m_deferredAvboitAccumulationFinalizeTask
-        : m_deferredAvboitPreTask
-    ;
-    const Core::GpuSubmissionPacketRange avboitPacketRange = m_deferredLightingCompiledGraph.packetRangeForTasks(
-        m_deferredAvboitPreTask,
-        avboitUsesAsyncCompute ? m_deferredAvboitAccumulationFinalizeTask : avboitUnsplitFinalTask
-    );
     const Core::GpuSubmissionPacketRange deferredLightingCompositePacketRange =
         m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredLightingTask, m_deferredCompositeTask);
     const Core::GpuSubmissionPacketRange deferredPresentPacketRange =
@@ -1990,9 +1355,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredShadowPrepareTask,
             m_deferredFrameRecoveryTask
         );
-    const usize expectedAvboitPacketCount = avboitUsesAsyncCompute
-        ? RendererSystemRenderDetail::s_AvboitAsyncComputePacketCount
-        : RendererSystemRenderDetail::s_SinglePacketCount;
     const usize expectedDeferredTailPacketCount = RendererSystemRenderDetail::s_SinglePacketCount
         + (m_deferredSurfelGiCounterReadbackTask.valid()
             ? RendererSystemRenderDetail::s_SinglePacketCount
@@ -2118,54 +1480,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !hardwareCausticsQueue
             || hardwareCausticsQueue->queueClass != Core::CommandQueue::Graphics
         ))
-        || !m_deferredAvboitPreTask.valid()
-        || !m_deferredAvboitOccupancyTask.valid()
-        || !taskIsCompiled(m_deferredAvboitPreTask)
-        || !avboitPrePacketContainsClear
-        || !avboitPrePacketContainsTransparentCsgClear
-        || !avboitPrePacketContainsCsgReceiverSpan
-        || !avboitPrePacketContainsCsgIntervalCombine
-        || !avboitPrePacketContainsOccupancy
-        || !avboitOccupancyAllComputeEmulationMerged
-        || !avboitExtinctionPacketContainsStreams
-        || !avboitExtinctionAllComputeEmulationMerged
-        || !avboitUnsplitIntegrationTailMerged
-        || !avboitAccumulationAllComputeEmulationMerged
-        || !avboitAccumulationPacketContainsStreams
-        || !avboitAccumulationPacketContainsFinalizer
-        || (hasTransparentRenderers && (
-            !m_deferredAvboitExtinctionTask.valid()
-            || !m_deferredAvboitAccumulationTask.valid()
-            || !m_deferredAvboitAccumulationFinalizeTask.valid()
-            || !taskIsCompiled(m_deferredAvboitExtinctionTask)
-            || !taskIsCompiled(m_deferredAvboitAccumulationTask)
-            || !m_deferredLightingCompiledGraph.findTask(m_deferredAvboitAccumulationFinalizeTask)
-            || (!avboitUsesAsyncCompute && (
-                !avboitUnsplitPrePacketContainsExtinction
-                || !avboitUnsplitPrePacketContainsIntegration
-                || !avboitUnsplitPrePacketContainsAccumulation
-            ))
-        ))
-        || !avboitPreQueue
-        || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
-        || (avboitUsesAsyncCompute && (
-            !m_deferredAvboitDepthWarpTask.valid()
-            || !m_deferredAvboitExtinctionTask.valid()
-            || !m_deferredAvboitIntegrationTask.valid()
-            || !m_deferredAvboitAccumulationTask.valid()
-            || !taskIsCompiled(m_deferredAvboitDepthWarpTask)
-            || !taskIsCompiled(m_deferredAvboitExtinctionTask)
-            || !taskIsCompiled(m_deferredAvboitIntegrationTask)
-            || !taskIsCompiled(m_deferredAvboitAccumulationTask)
-            || !avboitDepthWarpQueue
-            || !avboitExtinctionQueue
-            || !avboitIntegrationQueue
-            || !avboitAccumulationQueue
-            || avboitDepthWarpQueue->queueClass != Core::CommandQueue::Compute
-            || avboitExtinctionQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitIntegrationQueue->queueClass != Core::CommandQueue::Compute
-            || avboitAccumulationQueue->queueClass != Core::CommandQueue::Graphics
-        ))
+        || !avboitValidation.valid()
         || !m_deferredLightingTask.valid()
         || !m_deferredCompositeTask.valid()
         || !m_deferredPresentTask.valid()
@@ -2228,8 +1543,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             !hardwareCausticsPacketRange.valid()
             || hardwareCausticsPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount
         ))
-        || !avboitPacketRange.valid()
-        || avboitPacketRange.packetCount != expectedAvboitPacketCount
         || !deferredLightingCompositePacketRange.valid()
         || deferredLightingCompositePacketRange.packetCount
             != RendererSystemRenderDetail::s_DeferredLightingCompositePacketCount
@@ -2846,7 +2159,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             deferredStateBindings,
             LengthOf(deferredStateBindings),
             deferredStateBindingCount,
-            m_deferredAvboitPreTask,
+            avboitValidation.stage().firstTask,
             avboitPreStateSources,
             LengthOf(avboitPreStateSources)
         )
@@ -2916,43 +2229,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredHardwareCausticsTask.valid()
             && taskIsCompiled(m_deferredHardwareCausticsTask)
         ))
-        && m_deferredAvboitPreTask.valid()
-        && m_deferredAvboitOccupancyTask.valid()
-        && taskIsCompiled(m_deferredAvboitPreTask)
-        && avboitPrePacketContainsClear
-        && avboitPrePacketContainsCsgReceiverSpan
-        && avboitPrePacketContainsCsgIntervalCombine
-        && avboitPrePacketContainsOccupancy
-        && avboitOccupancyAllComputeEmulationMerged
-        && avboitExtinctionPacketContainsStreams
-        && avboitExtinctionAllComputeEmulationMerged
-        && avboitUnsplitIntegrationTailMerged
-        && avboitAccumulationAllComputeEmulationMerged
-        && avboitAccumulationPacketContainsStreams
-        && avboitAccumulationPacketContainsFinalizer
-        && (!hasTransparentRenderers || (
-            m_deferredAvboitExtinctionTask.valid()
-            && m_deferredAvboitAccumulationTask.valid()
-            && m_deferredAvboitAccumulationFinalizeTask.valid()
-            && taskIsCompiled(m_deferredAvboitExtinctionTask)
-            && taskIsCompiled(m_deferredAvboitAccumulationTask)
-            && m_deferredLightingCompiledGraph.findTask(m_deferredAvboitAccumulationFinalizeTask)
-            && (avboitUsesAsyncCompute || (
-                avboitUnsplitPrePacketContainsExtinction
-                && avboitUnsplitPrePacketContainsIntegration
-                && avboitUnsplitPrePacketContainsAccumulation
-            ))
-        ))
-        && (!avboitUsesAsyncCompute || (
-            m_deferredAvboitDepthWarpTask.valid()
-            && m_deferredAvboitExtinctionTask.valid()
-            && m_deferredAvboitIntegrationTask.valid()
-            && m_deferredAvboitAccumulationTask.valid()
-            && taskIsCompiled(m_deferredAvboitDepthWarpTask)
-            && taskIsCompiled(m_deferredAvboitExtinctionTask)
-            && taskIsCompiled(m_deferredAvboitIntegrationTask)
-            && taskIsCompiled(m_deferredAvboitAccumulationTask)
-        ))
+        && avboitValidation.valid()
         && m_deferredLightingTask.valid()
         && m_deferredCompositeTask.valid()
         && m_deferredPresentTask.valid()
@@ -3070,12 +2347,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::QueueSubmissionToken hardwareCausticsSubmissionToken;
     Core::QueueSubmissionToken softwareCausticsSubmissionToken;
     Core::QueueSubmissionToken surfelGiSubmissionToken;
-    Core::QueueSubmissionToken avboitPreSubmissionToken;
-    Core::QueueSubmissionToken avboitDepthWarpSubmissionToken;
-    Core::QueueSubmissionToken avboitExtinctionSubmissionToken;
-    Core::QueueSubmissionToken avboitIntegrationSubmissionToken;
-    Core::QueueSubmissionToken avboitAccumulationSubmissionToken;
-    Core::QueueSubmissionToken avboitFinalSubmissionToken;
     Core::QueueSubmissionToken deferredLightingSubmissionToken;
     Core::QueueSubmissionToken deferredCompositeSubmissionToken;
     const auto submitFrameRecoveryPacket = [&]() -> bool {
@@ -3156,127 +2427,26 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     };
 
     const auto submitAvboitLightingAndComposite = [&]() -> bool {
-        Core::Alloc::ScratchArena deferredScratchArena(RendererArenaScope::s_TaskGraphArena);
-        const Core::GpuTaskGraphSubmitter deferredSubmitter(device);
-        Core::GpuTaskGraphTaskTimingTicket avboitTimingTickets[
-            RendererSystemRenderDetail::s_AvboitTimingTicketCapacity
-        ] = {};
-        usize avboitTimingTicketCount = 0u;
-        const auto appendAvboitTimingTicket = [&avboitTimingTickets, &avboitTimingTicketCount](
-            const Core::GpuTaskId task,
-            Core::GpuTimingSubmissionTicket* const timingTicket
-        ){
-            NWB_ASSERT(avboitTimingTicketCount < LengthOf(avboitTimingTickets));
-            avboitTimingTickets[avboitTimingTicketCount++] = Core::GpuTaskGraphTaskTimingTicket{
-                .task = task,
-                .timingTicket = timingTicket,
+        RendererAvboitTaskGraphSubmission avboitSubmission;
+        if(m_deferredLightingTaskGraphValid){
+            RendererAvboitTaskGraphSubmitContext avboitSubmitContext{
+                .m_device = device,
+                .m_graph = m_deferredLightingTaskGraph,
+                .m_compiledGraph = m_deferredLightingCompiledGraph,
+                .m_recordedGraph = m_deferredLightingRecordedGraph,
+                .m_submissionTransaction = m_deferredLightingSubmissionTransaction,
+                .m_timingTickets = RendererAvboitTaskGraphTimingTickets{
+                    .m_pre = avboitPreTimingTicket,
+                    .m_depthWarp = avboitDepthWarpTimingTicket,
+                    .m_extinction = avboitExtinctionTimingTicket,
+                    .m_integration = avboitIntegrationTimingTicket,
+                    .m_accumulation = avboitAccumulationTimingTicket,
+                },
             };
-        };
-        appendAvboitTimingTicket(m_deferredAvboitPreTask, &avboitPreTimingTicket);
-        if(avboitUsesAsyncCompute){
-            appendAvboitTimingTicket(m_deferredAvboitDepthWarpTask, &avboitDepthWarpTimingTicket);
-            if(m_deferredAvboitExtinctionComputeEmulationTask.valid()){
-                // Both callbacks resolve to one packet and deliberately share the one Extinction timing ticket.
-                appendAvboitTimingTicket(
-                    m_deferredAvboitExtinctionComputeEmulationTask,
-                    &avboitExtinctionTimingTicket
-                );
-            }
-            appendAvboitTimingTicket(m_deferredAvboitExtinctionTask, &avboitExtinctionTimingTicket);
-            appendAvboitTimingTicket(m_deferredAvboitIntegrationTask, &avboitIntegrationTimingTicket);
-            if(m_deferredAvboitAccumulationComputeEmulationTask.valid()){
-                // Both callbacks resolve to one packet and deliberately share the one Accumulation timing ticket.
-                appendAvboitTimingTicket(
-                    m_deferredAvboitAccumulationComputeEmulationTask,
-                    &avboitAccumulationTimingTicket
-                );
-            }
-            appendAvboitTimingTicket(m_deferredAvboitAccumulationTask, &avboitAccumulationTimingTicket);
+            avboitSubmission = m_avboitSystem.submitTaskGraphStage(avboitSubmitContext, avboitValidation);
         }
-        const usize avboitPacketExpectedCount = avboitUsesAsyncCompute
-            ? RendererSystemRenderDetail::s_AvboitAsyncComputePacketCount
-            : RendererSystemRenderDetail::s_SinglePacketCount;
-        const bool avboitPacketsAccepted =
-            m_deferredLightingTaskGraphValid
-            && m_deferredAvboitPreTask.valid()
-            && m_deferredAvboitOccupancyTask.valid()
-            && taskIsCompiled(m_deferredAvboitPreTask)
-            && avboitPrePacketContainsClear
-            && avboitPrePacketContainsCsgReceiverSpan
-            && avboitPrePacketContainsCsgIntervalCombine
-            && avboitPrePacketContainsOccupancy
-            && avboitOccupancyAllComputeEmulationMerged
-            && avboitExtinctionPacketContainsStreams
-            && avboitExtinctionAllComputeEmulationMerged
-            && avboitUnsplitIntegrationTailMerged
-            && avboitAccumulationAllComputeEmulationMerged
-            && avboitAccumulationPacketContainsStreams
-            && avboitAccumulationPacketContainsFinalizer
-            && (!hasTransparentRenderers || (
-                m_deferredAvboitExtinctionTask.valid()
-                && m_deferredAvboitAccumulationTask.valid()
-                && m_deferredAvboitAccumulationFinalizeTask.valid()
-                && taskIsCompiled(m_deferredAvboitExtinctionTask)
-                && taskIsCompiled(m_deferredAvboitAccumulationTask)
-                && m_deferredLightingCompiledGraph.findTask(m_deferredAvboitAccumulationFinalizeTask)
-                && (avboitUsesAsyncCompute || (
-                    avboitUnsplitPrePacketContainsExtinction
-                    && avboitUnsplitPrePacketContainsIntegration
-                    && avboitUnsplitPrePacketContainsAccumulation
-                ))
-            ))
-            && avboitPacketRange.valid()
-            && avboitPacketRange.packetCount == avboitPacketExpectedCount
-            && (!avboitUsesAsyncCompute || (
-                m_deferredAvboitDepthWarpTask.valid()
-                && m_deferredAvboitExtinctionTask.valid()
-                && m_deferredAvboitIntegrationTask.valid()
-                && m_deferredAvboitAccumulationTask.valid()
-                && taskIsCompiled(m_deferredAvboitDepthWarpTask)
-                && taskIsCompiled(m_deferredAvboitExtinctionTask)
-                && taskIsCompiled(m_deferredAvboitIntegrationTask)
-                && taskIsCompiled(m_deferredAvboitAccumulationTask)
-            ))
-            && deferredSubmitter.submitTaskRangeInCompileOrderFromTasks(
-                m_deferredLightingTaskGraph,
-                m_deferredLightingCompiledGraph,
-                m_deferredLightingRecordedGraph,
-                m_deferredAvboitPreTask,
-                avboitUsesAsyncCompute ? m_deferredAvboitAccumulationFinalizeTask : avboitUnsplitFinalTask,
-                nullptr,
-                0u,
-                avboitTimingTickets,
-                avboitTimingTicketCount,
-                m_deferredLightingSubmissionTransaction,
-                deferredScratchArena
-            )
-        ;
-        avboitPreSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
-            m_deferredLightingCompiledGraph,
-            m_deferredAvboitPreTask
-        );
-        avboitDepthWarpSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
-            m_deferredLightingCompiledGraph,
-            m_deferredAvboitDepthWarpTask
-        );
-        avboitExtinctionSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
-            m_deferredLightingCompiledGraph,
-            m_deferredAvboitExtinctionTask
-        );
-        avboitIntegrationSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
-            m_deferredLightingCompiledGraph,
-            m_deferredAvboitIntegrationTask
-        );
-        avboitAccumulationSubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
-            m_deferredLightingCompiledGraph,
-            m_deferredAvboitAccumulationTask
-        );
-        avboitFinalSubmissionToken = (avboitUsesAsyncCompute || hasTransparentRenderers)
-            ? avboitAccumulationSubmissionToken
-            : avboitPreSubmissionToken
-        ;
-        if(!avboitPacketsAccepted || !avboitPreSubmissionToken.valid() || !avboitFinalSubmissionToken.valid()){
-            const bool avboitPreWasRejected = !avboitPreSubmissionToken.valid();
+        if(!m_deferredLightingTaskGraphValid || !avboitSubmission.accepted()){
+            const bool avboitPreWasRejected = !avboitSubmission.preAccepted();
             const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
             if(avboitPreWasRejected)
@@ -3286,6 +2456,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 failFrameRenderRecovery();
             return false;
         }
+
+        Core::Alloc::ScratchArena deferredScratchArena(RendererArenaScope::s_TaskGraphArena);
+        const Core::GpuTaskGraphSubmitter deferredSubmitter(device);
 
         // Prefix and all current-frame producers are internal. Active lagged Lighting alone imports prior history.
         Core::GpuTaskGraphExternalCompletionToken deferredLightingCompletionTokens[

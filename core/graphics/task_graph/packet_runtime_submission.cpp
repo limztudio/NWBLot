@@ -231,6 +231,10 @@ bool GpuTaskGraphSubmitter::submitPacket(
     GpuTimingSubmissionTicket* const timingTicket,
     const QueueSubmissionPreSubmitHook* const preSubmitHook
 )const{
+    GpuGraphSubmissionTransaction::SubmissionOperation submissionOperation(transaction);
+    if(!submissionOperation.valid())
+        return false;
+
     if(
         !compiledGraph.validFor(graph)
         || !graph.validForDeviceGeneration(compiledGraph.deviceGeneration())
@@ -523,15 +527,13 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
             return false;
         }
         const QueueSubmissionToken token = transaction.packetToken(packet);
-        if(acceptedCallback && (!token.valid() || !acceptedCallback->invoke(
-            acceptedCallback->context,
-            packet,
-            token
-        ))){
-            if(outFailedPacket)
-                *outFailedPacket = packet;
-            return false;
-        }
+        bool callbacksAccepted = token.valid();
+        if(
+            acceptedCallback
+            && token.valid()
+            && !acceptedCallback->invoke(acceptedCallback->context, packet, token)
+        )
+            callbacksAccepted = false;
         if(taskAcceptedCallbackCount != 0u){
             const GpuSubmissionPacket& submittedPacket = compiledGraph.packet(packet);
             const GpuTaskId* const submittedTasks = compiledGraph.packetTasks(packet);
@@ -546,13 +548,15 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
                     if(
                         callback.task == submittedTasks[taskIndex]
                         && !callback.invoke(callback.context, token)
-                    ){
-                        if(outFailedPacket)
-                            *outFailedPacket = packet;
-                        return false;
-                    }
+                    )
+                        callbacksAccepted = false;
                 }
             }
+        }
+        if(!callbacksAccepted){
+            if(outFailedPacket)
+                *outFailedPacket = packet;
+            return false;
         }
     }
     return true;

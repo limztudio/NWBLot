@@ -16,6 +16,48 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+thread_local const GpuGraphSubmissionTransaction::SubmissionOperation*
+    GpuGraphSubmissionTransaction::SubmissionOperation::s_activeOperation = nullptr;
+
+
+GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(
+    const GpuGraphSubmissionTransaction& transaction
+)noexcept{
+    for(const SubmissionOperation* operation = s_activeOperation; operation; operation = operation->m_previousOperation){
+        if(operation->m_transaction == &transaction)
+            return;
+    }
+
+    // Top-level callers wait for the transaction publication boundary. Nested work on another transaction may use
+    // an uncontended gate, but never waits while retaining its outer gate and therefore cannot form an ABBA cycle.
+    if(s_activeOperation){
+        if(!transaction.m_submissionMutex.try_lock())
+            return;
+    }
+    else if(!transaction.m_submissionMutex.try_lock()){
+#if !defined(NWB_FINAL)
+        transaction.m_submissionWaiterCount.fetch_add(1u, MemoryOrder::release);
+#endif
+        transaction.m_submissionMutex.lock();
+#if !defined(NWB_FINAL)
+        transaction.m_submissionWaiterCount.fetch_sub(1u, MemoryOrder::release);
+#endif
+    }
+    m_transaction = &transaction;
+    m_previousOperation = s_activeOperation;
+    s_activeOperation = this;
+}
+
+GpuGraphSubmissionTransaction::SubmissionOperation::~SubmissionOperation(){
+    if(!m_transaction)
+        return;
+
+    NWB_ASSERT(s_activeOperation == this);
+    s_activeOperation = m_previousOperation;
+    m_transaction->m_submissionMutex.unlock();
+}
+
+
 bool GpuGraphSubmissionTransaction::validForLocked(const GpuCompiledGraph& compiledGraph)const noexcept{
     return m_valid
         && compiledGraph.valid()
@@ -28,7 +70,21 @@ bool GpuGraphSubmissionTransaction::validForLocked(const GpuCompiledGraph& compi
 }
 
 
+bool GpuGraphSubmissionTransaction::waitForSubmissionPublicationAndHasAcceptedPackets()const noexcept{
+    SubmissionOperation submissionOperation(*this);
+    if(!submissionOperation.valid())
+        return false;
+
+    ScopedLock lock(m_mutex);
+    return m_valid && m_acceptedSubmissionCount != 0u;
+}
+
+
 void GpuGraphSubmissionTransaction::reset(const GpuCompiledGraph& compiledGraph){
+    SubmissionOperation submissionOperation(*this);
+    if(!submissionOperation.valid())
+        return;
+
     ScopedLock lock(m_mutex);
     for(const GpuPacketRuntime& runtime : m_packets){
         if(
@@ -289,6 +345,10 @@ bool GpuGraphSubmissionTransaction::acceptPacket(
     const GpuSubmissionPacketId& packetID,
     const QueueSubmissionToken& token
 )noexcept{
+    SubmissionOperation submissionOperation(*this);
+    if(!submissionOperation.valid())
+        return false;
+
     u64 recordingAttemptGeneration = 0u;
     {
         ScopedLock lock(m_mutex);
@@ -403,7 +463,13 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     bool foundLatestQueue = false;
     for(LatestAcceptedQueueToken& latest : m_latestAcceptedQueueTokens){
         if(latest.queue == packet.queue){
-            latest.token = token;
+            const bool latestMatchesQueue = latest.token.valid()
+                && latest.token.queue == token.queue
+                && latest.token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration)
+            ;
+            NWB_ASSERT_MSG(latestMatchesQueue, "accepted queue frontier token must preserve its exact physical queue identity");
+            if(!latestMatchesQueue || token.value > latest.token.value)
+                latest.token = token;
             foundLatestQueue = true;
             break;
         }

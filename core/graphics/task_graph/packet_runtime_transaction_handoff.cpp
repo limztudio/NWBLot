@@ -349,8 +349,14 @@ const QueueSubmissionToken* GpuGraphSubmissionTransaction::latestAcceptedToken(
 )const noexcept{
     // This borrowed inspection pointer is intended for a caller that serializes reset/query access. Submission and
     // cancellation paths use value copies instead, so they never retain transaction-owned vector storage.
+    if(!queue.valid() || queue.deviceGeneration != m_deviceGeneration)
+        return nullptr;
     for(const LatestAcceptedQueueToken& latest : m_latestAcceptedQueueTokens){
-        if(latest.queue == queue && latest.token.valid())
+        if(
+            latest.queue == queue
+            && latest.token.valid()
+            && latest.token.matchesPhysicalQueue(queue.index, queue.deviceGeneration)
+        )
             return &latest.token;
     }
     return nullptr;
@@ -367,7 +373,12 @@ bool GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(
     for(const LatestAcceptedQueueToken& latest : m_latestAcceptedQueueTokens){
         if(latest.queue == destinationQueue)
             continue;
-        if(!latest.queue.valid() || latest.queue.deviceGeneration != m_deviceGeneration || !latest.token.valid())
+        if(
+            !latest.queue.valid()
+            || latest.queue.deviceGeneration != m_deviceGeneration
+            || !latest.token.valid()
+            || !latest.token.matchesPhysicalQueue(latest.queue.index, latest.queue.deviceGeneration)
+        )
             return false;
         // The transaction holds one newest accepted token per physical queue, so this cannot duplicate a producer
         // even when a queue accepted several packets before the recovery tail is armed.

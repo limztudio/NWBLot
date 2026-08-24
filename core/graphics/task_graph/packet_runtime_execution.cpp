@@ -458,7 +458,7 @@ bool GpuTaskGraphSubmitter::recordAndSubmitAcceptedFrontierTask(
         || !graph.validTask(task)
         || !compiledGraph.findTask(task)
         || !compiledGraph.taskJoinsAcceptedQueueFrontier(task)
-        || !transaction.hasAcceptedPackets()
+        || !transaction.waitForSubmissionPublicationAndHasAcceptedPackets()
     ){
         rejectTask();
         return false;

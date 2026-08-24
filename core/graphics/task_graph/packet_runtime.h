@@ -612,7 +612,29 @@ class GpuGraphSubmissionTransaction final : NoCopy{
 
 
 private:
+    class SubmissionOperation final : NoCopy{
+    private:
+        static thread_local const SubmissionOperation* s_activeOperation;
+
+
+    public:
+        explicit SubmissionOperation(const GpuGraphSubmissionTransaction& transaction)noexcept;
+        ~SubmissionOperation();
+
+
+    public:
+        [[nodiscard]] bool valid()const noexcept{ return m_transaction != nullptr; }
+
+
+    private:
+        const GpuGraphSubmissionTransaction* m_transaction = nullptr;
+        const SubmissionOperation* m_previousOperation = nullptr;
+    };
+
+
+private:
     [[nodiscard]] bool validForLocked(const GpuCompiledGraph& compiledGraph)const noexcept;
+    [[nodiscard]] bool waitForSubmissionPublicationAndHasAcceptedPackets()const noexcept;
 
 
 public:
@@ -678,6 +700,11 @@ public:
     )noexcept;
 
     [[nodiscard]] bool hasAcceptedPackets()const noexcept;
+#if !defined(NWB_FINAL)
+    [[nodiscard]] u32 submissionWaiterCountForTesting()const noexcept{
+        return m_submissionWaiterCount.load(MemoryOrder::acquire);
+    }
+#endif
     [[nodiscard]] GpuTaskGraphSubmissionStatistics submissionStatistics()const noexcept;
     // Aggregates one full physical-queue snapshot while holding the transaction mutex. Invalid/stale queue IDs and
     // a transaction from another compiled plan return an empty result instead of borrowing packet-runtime storage.
@@ -820,6 +847,10 @@ private:
     u64 m_acceptedSubmissionCount = 0u;
     GpuTaskGraphSubmissionStatistics m_submissionStatistics;
     bool m_valid = false;
+#if !defined(NWB_FINAL)
+    mutable Atomic<u32> m_submissionWaiterCount{ 0u };
+#endif
+    mutable Futex m_submissionMutex;
     mutable Futex m_mutex;
 };
 

@@ -627,6 +627,58 @@ TEST(EcsGraphics, SoftwareShadowEffectsTopologyUsesSemanticTaskAnchors){
 }
 
 
+// Snapshot Copy and the timed Surfel GI endpoint must retain distinct packets, but Preparation may alias/share
+// Snapshot and compiler-owned untimed packets may appear inside the semantic task range.
+TEST(EcsGraphics, SurfelGiTopologyUsesSemanticTaskAnchors){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemSource;
+    AString surfelGiSource;
+    ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "task_graph_surfel_gi.cpp", surfelGiSource));
+    const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView surfelGi(surfelGiSource.data(), surfelGiSource.size());
+
+    EXPECT_TRUE(ContainsText(
+        system,
+        "packetRangeForTasks(surfelGiFirstTask, m_deferredSurfelGiTask)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "const bool surfelGiSnapshotCopyAndTimingPacketsAreDistinct =\n"
+        "        !m_deferredSurfelGiSnapshotCopyTask.valid()\n"
+        "        || !m_deferredLightingCompiledGraph.tasksSharePacket(\n"
+        "            m_deferredSurfelGiSnapshotCopyTask,\n"
+        "            m_deferredSurfelGiTask"
+    ));
+    EXPECT_EQ(CountText(system, "surfelGiSnapshotCopyAndTimingPacketsAreDistinct"), 3u);
+    EXPECT_TRUE(ContainsText(system, "|| !surfelGiSnapshotCopyAndTimingPacketsAreDistinct"));
+    EXPECT_TRUE(ContainsText(system, "&& surfelGiSnapshotCopyAndTimingPacketsAreDistinct"));
+    EXPECT_TRUE(ContainsText(system, "surfelGiSubmitter.submitTaskRangeInCompileOrderFromTasks("));
+    EXPECT_TRUE(ContainsText(system, "surfelGiFirstTask,\n                m_deferredSurfelGiTask,"));
+
+    EXPECT_TRUE(ContainsText(
+        surfelGi,
+        "if(!m_deferredSurfelGiPreparationTask.valid())\n"
+        "            m_deferredSurfelGiPreparationTask = m_deferredSurfelGiSnapshotCopyTask;"
+    ));
+    EXPECT_TRUE(ContainsText(system, "|| !surfelGiPreparedPrefixMergedIntoGiPacket"));
+    EXPECT_TRUE(ContainsText(system, "|| !surfelGiInitializationLifecycleMergedIntoPreparationPacket"));
+    EXPECT_FALSE(ContainsText(
+        system,
+        "tasksSharePacket(\n"
+        "            m_deferredSurfelGiPreparationTask,\n"
+        "            m_deferredSurfelGiSnapshotCopyTask"
+    ));
+    EXPECT_FALSE(ContainsText(system, "s_SurfelGiMergedPreparationAndCopyPacketCount"));
+    EXPECT_FALSE(ContainsText(system, "s_SurfelGiSeparatePreparationAndCopyPacketCount"));
+    EXPECT_FALSE(ContainsText(system, "expectedSurfelGiPacketCount"));
+    EXPECT_FALSE(ContainsText(system, "surfelGiPacketRange.packetCount =="));
+    EXPECT_FALSE(ContainsText(system, "surfelGiPacketRange.packetCount !="));
+}
+
+
 // AVBOIT validation follows semantic stage anchors and accepts the compiler-owned packet range between them. It
 // must not constrain that range to the currently generated one-packet or five-packet topology.
 TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){

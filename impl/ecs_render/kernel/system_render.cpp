@@ -30,8 +30,6 @@ namespace RendererSystemRenderDetail{
 // Packet-range checks below encode the fixed semantic topology of the renderer graph. Keep the counts named so
 // validation does not silently drift when a task is added to one of those ranges.
 inline constexpr usize s_SinglePacketCount = 1u;
-inline constexpr usize s_SurfelGiMergedPreparationAndCopyPacketCount = 2u;
-inline constexpr usize s_SurfelGiSeparatePreparationAndCopyPacketCount = 3u;
 inline constexpr usize s_PresentationOverlayPacketCount = 1u;
 
 // These fixed arrays describe the maximum number of independently retained sources/tickets that the graph binds
@@ -1324,14 +1322,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     ;
     const Core::GpuSubmissionPacketRange surfelGiPacketRange =
         m_deferredLightingCompiledGraph.packetRangeForTasks(surfelGiFirstTask, m_deferredSurfelGiTask);
-    const usize expectedSurfelGiPacketCount = m_deferredSurfelGiSnapshotCopyTask.valid()
-        ? (m_deferredLightingCompiledGraph.tasksSharePacket(
-            m_deferredSurfelGiPreparationTask,
-            m_deferredSurfelGiSnapshotCopyTask
+    // Snapshot Copy and the timed Surfel GI endpoint must remain separate, while Preparation may alias/share
+    // Snapshot and the inclusive semantic range may contain compiler-owned untimed packets.
+    const bool surfelGiSnapshotCopyAndTimingPacketsAreDistinct =
+        !m_deferredSurfelGiSnapshotCopyTask.valid()
+        || !m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredSurfelGiSnapshotCopyTask,
+            m_deferredSurfelGiTask
         )
-            ? RendererSystemRenderDetail::s_SurfelGiMergedPreparationAndCopyPacketCount
-            : RendererSystemRenderDetail::s_SurfelGiSeparatePreparationAndCopyPacketCount)
-        : RendererSystemRenderDetail::s_SinglePacketCount
     ;
     const Core::GpuSubmissionPacketRange hardwareCausticsPacketRange =
         m_deferredLightingCompiledGraph.packetRangeForTasks(
@@ -1552,7 +1550,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? shadowEffectsPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount
             : !softwareShadowEffectsTimingPacketsAreDistinct)
         || !surfelGiPacketRange.valid()
-        || surfelGiPacketRange.packetCount != expectedSurfelGiPacketCount
+        || !surfelGiSnapshotCopyAndTimingPacketsAreDistinct
         || (hardwareShadowSupported && (
             !hardwareCausticsPacketRange.valid()
             || hardwareCausticsPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount
@@ -2822,7 +2820,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 && taskIsCompiled(m_deferredSurfelGiSnapshotCopyTask)
             ))
             && surfelGiPacketRange.valid()
-            && surfelGiPacketRange.packetCount == expectedSurfelGiPacketCount
+            && surfelGiSnapshotCopyAndTimingPacketsAreDistinct
             && surfelGiSubmitter.submitTaskRangeInCompileOrderFromTasks(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,

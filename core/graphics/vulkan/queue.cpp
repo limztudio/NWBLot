@@ -864,12 +864,26 @@ u64 Queue::submit(
         }
     }
 
+    const auto finalizeDetachedRecordingAttempts = [&](const bool accepted){
+        for(usize i = 0u; i < numCmd; ++i){
+            CommandList* const commandList = ppCmd[i];
+            if(!commandList || commandList->m_recordingLeaseSerial != expectedCommandLists[i].recordingLeaseSerial)
+                continue;
+
+            if(accepted)
+                commandList->m_stateTracker.commitRecordingAttempt();
+            else
+                commandList->m_stateTracker.rollbackRecordingAttempt();
+        }
+    };
+
     if(cmdBufInfos.empty() && !hasPendingSemaphores)
         return m_lastSubmittedID;
 
     if(m_trackingSemaphore == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Queue submission skipped because timeline semaphore is unavailable."));
 
+        finalizeDetachedRecordingAttempts(false);
         for(auto& tracked : trackedBuffers)
             recycleCommandBuffer(Move(tracked));
         return m_lastSubmittedID;
@@ -888,6 +902,7 @@ u64 Queue::submit(
         if(localWaits[i].semaphore == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait semaphore is null"));
             m_lastSubmittedID = submissionID - 1;
+            finalizeDetachedRecordingAttempts(false);
             for(auto& tracked : trackedBuffers)
                 recycleCommandBuffer(Move(tracked));
             return m_lastSubmittedID;
@@ -940,6 +955,7 @@ u64 Queue::submit(
         // Reject before the driver sees this submission. Global synchronization remains owned by the queue for a
         // retry, while detached command buffers and their tentative timeline value are rolled back.
         m_lastSubmittedID = submissionID - 1;
+        finalizeDetachedRecordingAttempts(false);
         for(auto& tracked : trackedBuffers)
             recycleCommandBuffer(Move(tracked));
         return m_lastSubmittedID;
@@ -960,6 +976,7 @@ u64 Queue::submit(
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command buffers to queue: {}"), ResultToString(res));
         }
 
+        finalizeDetachedRecordingAttempts(false);
         for(auto& tracked : trackedBuffers){
             recycleCommandBuffer(Move(tracked));
         }
@@ -968,6 +985,7 @@ u64 Queue::submit(
     }
 
     clearPendingSemaphores();
+    finalizeDetachedRecordingAttempts(true);
 
     const QueueSubmissionToken submissionToken{
         .queue = m_queueID,

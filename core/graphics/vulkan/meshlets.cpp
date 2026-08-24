@@ -130,10 +130,14 @@ void CommandList::setMeshletState(const MeshletState& state){
     if(state.indirectParams)
         setBufferState(state.indirectParams, ResourceStates::IndirectArgument);
     commitBarriers();
+    if(m_commandRecordingFailed)
+        return;
 
     if(!ensureGraphicsRenderPass(state.framebuffer))
         return;
     commitBarriers();
+    if(m_commandRecordingFailed)
+        return;
     m_currentGraphicsState = {};
     m_currentComputeState = {};
     m_currentRayTracingState = {};

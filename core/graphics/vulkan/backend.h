@@ -187,9 +187,36 @@ bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, 
 bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes);
 
 template<typename... Pointers>
+[[nodiscard]] constexpr bool AreAllPointersValid(Pointers... pointers)noexcept{
+    return (... && (pointers != nullptr));
+}
+
+[[nodiscard]] constexpr bool IsTextureSubresourceRangeValid(const TextureSubresourceSet& subresources)noexcept{
+    return subresources.numMipLevels != 0u && subresources.numArraySlices != 0u;
+}
+
+[[nodiscard]] constexpr bool IsPushConstantByteSizeValid(const u32 byteSize, const u32 maximumByteSize)noexcept{
+    return byteSize != 0u && (byteSize & s_BufferAlignmentMask) == 0u && byteSize <= maximumByteSize;
+}
+
+[[nodiscard]] constexpr bool AreDispatchGroupCountsValid(
+    const u32 groupsX,
+    const u32 groupsY,
+    const u32 groupsZ,
+    const u32* const maximumGroupCounts
+)noexcept{
+    return
+        maximumGroupCounts
+        && groupsX <= maximumGroupCounts[0u]
+        && groupsY <= maximumGroupCounts[1u]
+        && groupsZ <= maximumGroupCounts[2u]
+    ;
+}
+
+template<typename... Pointers>
 inline bool DebugValidateNotNull(const tchar* operationName, const tchar* message, Pointers... pointers){
 #if defined(NWB_DEBUG)
-    if((... || !pointers)){
+    if(!AreAllPointersValid(pointers...)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
         return false;
@@ -281,7 +308,7 @@ inline bool DebugValidateTextureSliceExtentsMatch(
 
 inline bool DebugValidateTextureSubresourceRange(const TextureSubresourceSet& subresources, const tchar* operationName){
 #if defined(NWB_DEBUG)
-    if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
+    if(!IsTextureSubresourceRangeValid(subresources)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: invalid subresource range"), operationName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: invalid subresource range"), operationName);
         return false;
@@ -2167,6 +2194,9 @@ public:
 
 public:
     void reset();
+    void beginRecordingAttempt();
+    void commitRecordingAttempt();
+    void rollbackRecordingAttempt();
     void setPermanentTextureState(Texture& texture, ResourceStates::Mask state);
     void setPermanentBufferState(Buffer& buffer, ResourceStates::Mask state);
 
@@ -2208,12 +2238,15 @@ private:
 private:
     HashMap<Texture*, ResourceStates::Mask, Hasher<Texture*>, EqualTo<Texture*>, Alloc::GlobalArena> m_permanentTextureStates;
     HashMap<Buffer*, ResourceStates::Mask, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_permanentBufferStates;
+    HashMap<Texture*, ResourceStates::Mask, Hasher<Texture*>, EqualTo<Texture*>, Alloc::GlobalArena> m_attemptPermanentTextureStates;
+    HashMap<Buffer*, ResourceStates::Mask, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_attemptPermanentBufferStates;
     HashMap<TextureSubresourceStateKey, ResourceStates::Mask, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureStates;
     HashMap<Buffer*, ResourceStates::Mask, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferStates;
     HashMap<Texture*, bool, Hasher<Texture*>, EqualTo<Texture*>, Alloc::GlobalArena> m_textureUavBarriers;
     HashMap<Buffer*, bool, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferUavBarriers;
 
     const VulkanContext& m_context;
+    bool m_recordingAttemptActive = false;
 };
 
 
@@ -2254,8 +2287,8 @@ public:
     // `hasCommandBuffer` remains true after close so queues can submit it. Tooling that emits commands must use
     // this predicate instead of treating ownership as an active recording scope.
     [[nodiscard]] bool isRecording()const noexcept{ return m_isRecording; }
-    // Sticky for the current open/close attempt. A failed native capability check invalidates the complete list;
-    // close discards its native buffer and open is the only operation that starts a fresh attempt.
+    // Sticky for the current open/close attempt. A failed native capability or command semantic check invalidates
+    // the complete list; close discards its native buffer and open is the only operation that starts a fresh attempt.
     [[nodiscard]] bool commandRecordingFailed()const noexcept{ return m_commandRecordingFailed; }
     // Every open attempt starts a distinct native-buffer lease, including failed attempts. Packet recorders and
     // replay tooling capture this serial before invoking extensible lowering and reject a thunk that closes or
@@ -2422,7 +2455,9 @@ private:
     [[nodiscard]] bool validateCommandRecordingScope(const tchar* operationName)noexcept;
     [[nodiscard]] bool recordAndValidateCommandCapability(GpuQueueCapability::Mask requiredCapabilities, const tchar* operationName)noexcept;
     [[nodiscard]] bool recordAndValidateAnyCommandCapability(GpuQueueCapability::Mask alternativeCapabilities, const tchar* operationName)noexcept;
+    void rejectCommandRecording(const tchar* operationName, const tchar* reason)noexcept;
     void invalidateCommandRecording()noexcept;
+    void discardInvalidCommandBuffer()noexcept;
     bool validateIndirectBuffer(Buffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const;
     bool prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, const tchar* operationLabel, const tchar* commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode, Buffer*& outIndirectBuffer)const;
     void clearColorTexture(Texture* textureResource, TextureSubresourceSet subresources, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);

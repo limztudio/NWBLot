@@ -72,6 +72,13 @@ namespace VulkanStateTrackingDetail{
 
 [[nodiscard]] bool NeedsTextureStateBarrier(ResourceStates::Mask oldState, ResourceStates::Mask stateBits, bool uavBarrierEnabled);
 
+[[nodiscard]] bool ImageBarrierOverlapsTextureSubresources(
+    const VkImageMemoryBarrier2& barrier,
+    VkImage image,
+    VkImageAspectFlags aspectMask,
+    const TextureSubresourceSet& subresources
+)noexcept;
+
 void NormalizeBarrierScopeForQueueCapabilities(
     GpuQueueCapability::Mask capabilities,
     VkPipelineStageFlags2& stageMask,

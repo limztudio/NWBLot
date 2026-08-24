@@ -213,6 +213,8 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
         if(omm->m_dataBuffer)
             setBufferState(omm->m_dataBuffer.get(), ResourceStates::OpacityMicromapWrite);
     }
+    if(m_commandRecordingFailed)
+        return;
 
     if(ommDesc.trackLiveness){
         if(ommDesc.inputBuffer)
@@ -224,6 +226,8 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
     }
 
     commitBarriers();
+    if(m_commandRecordingFailed)
+        return;
 
     VkBuildMicromapFlagBitsEXT buildFlags = static_cast<VkBuildMicromapFlagBitsEXT>(0);
     if(ommDesc.flags & RayTracingOpacityMicromapBuildFlags::FastTrace)

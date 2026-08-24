@@ -783,6 +783,116 @@ TEST(VulkanStateTracking, NormalizesBarrierScopesFromExactPhysicalQueueCapabilit
     );
 }
 
+TEST(VulkanCommandValidation, PureValidatorsRejectInvalidRangesCountsAndPushConstants){
+    using namespace Graphics::GraphicsBackend::VulkanDetail;
+
+    constexpr u32 s_Value = 1u;
+    EXPECT_TRUE(AreAllPointersValid(&s_Value));
+    EXPECT_FALSE(AreAllPointersValid(&s_Value, static_cast<const u32*>(nullptr)));
+
+    Graphics::BufferDesc bufferDesc;
+    bufferDesc.byteSize = 16u;
+    EXPECT_TRUE(IsBufferRangeInBounds(bufferDesc, 0u, 16u));
+    EXPECT_TRUE(IsBufferRangeInBounds(bufferDesc, 16u, 0u));
+    EXPECT_FALSE(IsBufferRangeInBounds(bufferDesc, 16u, 1u));
+    EXPECT_FALSE(IsBufferRangeInBounds(bufferDesc, Limit<u64>::s_Max, 1u));
+    EXPECT_FALSE(BufferRangesOverlap(0u, 4u, 4u, 4u));
+    EXPECT_TRUE(BufferRangesOverlap(0u, 8u, 4u, 4u));
+    EXPECT_TRUE(BufferRangesOverlap(Limit<u64>::s_Max - 1u, 4u, 0u, 4u));
+
+    constexpr u32 s_MaximumGroupCounts[] = { 4u, 5u, 6u };
+    EXPECT_TRUE(AreDispatchGroupCountsValid(4u, 5u, 6u, s_MaximumGroupCounts));
+    EXPECT_FALSE(AreDispatchGroupCountsValid(5u, 5u, 6u, s_MaximumGroupCounts));
+    EXPECT_FALSE(AreDispatchGroupCountsValid(4u, 6u, 6u, s_MaximumGroupCounts));
+    EXPECT_FALSE(AreDispatchGroupCountsValid(4u, 5u, 7u, s_MaximumGroupCounts));
+    EXPECT_FALSE(AreDispatchGroupCountsValid(1u, 1u, 1u, nullptr));
+
+    EXPECT_TRUE(IsPushConstantByteSizeValid(4u, 128u));
+    EXPECT_FALSE(IsPushConstantByteSizeValid(0u, 128u));
+    EXPECT_FALSE(IsPushConstantByteSizeValid(2u, 128u));
+    EXPECT_FALSE(IsPushConstantByteSizeValid(132u, 128u));
+    EXPECT_TRUE(IsTextureSubresourceRangeValid(Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u)));
+    EXPECT_FALSE(IsTextureSubresourceRangeValid(Graphics::TextureSubresourceSet(0u, 0u, 0u, 1u)));
+}
+
+TEST(VulkanStateTracking, DetectsExactActiveAttachmentBarrierOverlap){
+    using Graphics::GraphicsBackend::VulkanStateTrackingDetail::ImageBarrierOverlapsTextureSubresources;
+
+    const VkImage image = reinterpret_cast<VkImage>(static_cast<usize>(1u));
+    const VkImage otherImage = reinterpret_cast<VkImage>(static_cast<usize>(2u));
+    constexpr Graphics::TextureSubresourceSet s_AttachmentSubresources(2u, 1u, 3u, 2u);
+    auto barrier = Graphics::GraphicsBackend::VulkanDetail::MakeVkStruct<VkImageMemoryBarrier2>(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
+    barrier.image = image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseMipLevel = 2u;
+    barrier.subresourceRange.levelCount = 1u;
+    barrier.subresourceRange.baseArrayLayer = 4u;
+    barrier.subresourceRange.layerCount = 1u;
+
+    EXPECT_TRUE(ImageBarrierOverlapsTextureSubresources(
+        barrier,
+        image,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        s_AttachmentSubresources
+    ));
+    EXPECT_FALSE(ImageBarrierOverlapsTextureSubresources(
+        barrier,
+        otherImage,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        s_AttachmentSubresources
+    ));
+
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    EXPECT_FALSE(ImageBarrierOverlapsTextureSubresources(
+        barrier,
+        image,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        s_AttachmentSubresources
+    ));
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+
+    barrier.subresourceRange.baseMipLevel = 3u;
+    EXPECT_FALSE(ImageBarrierOverlapsTextureSubresources(
+        barrier,
+        image,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        s_AttachmentSubresources
+    ));
+    barrier.subresourceRange.baseMipLevel = 1u;
+    barrier.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+    barrier.subresourceRange.baseArrayLayer = 5u;
+    barrier.subresourceRange.layerCount = 1u;
+    EXPECT_FALSE(ImageBarrierOverlapsTextureSubresources(
+        barrier,
+        image,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        s_AttachmentSubresources
+    ));
+    barrier.subresourceRange.baseArrayLayer = 2u;
+    barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+    EXPECT_TRUE(ImageBarrierOverlapsTextureSubresources(
+        barrier,
+        image,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        s_AttachmentSubresources
+    ));
+    barrier.subresourceRange.levelCount = 0u;
+    EXPECT_FALSE(ImageBarrierOverlapsTextureSubresources(
+        barrier,
+        image,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        s_AttachmentSubresources
+    ));
+    barrier.subresourceRange.levelCount = 1u;
+    barrier.subresourceRange.layerCount = 0u;
+    EXPECT_FALSE(ImageBarrierOverlapsTextureSubresources(
+        barrier,
+        image,
+        VK_IMAGE_ASPECT_COLOR_BIT,
+        s_AttachmentSubresources
+    ));
+}
+
 TEST(VulkanDevice, SelectsAnExactComputeCapableQueueForGpuFaultInjection){
     const Graphics::GpuPhysicalQueueInfo queues[] = {
         GraphicsQueue(

@@ -69,6 +69,8 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
         aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
 
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
+    if(m_commandRecordingFailed)
+        return;
     if(texture.m_desc.dimension != TextureDimension::Texture3D && resolvedSubresources.numArraySlices > 1u){
         Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
         Vector<VkImageSubresourceRange, Alloc::ScratchArena> ranges(resolvedSubresources.numArraySlices, scratchArena);
@@ -277,6 +279,8 @@ void CommandList::clearDepthStencilTextureBox(
         return;
 
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
+    if(m_commandRecordingFailed)
+        return;
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
@@ -487,6 +491,8 @@ void CommandList::clearColorTexture(
     if(!recordAndValidateAnyCommandCapability(s_ColorClearCapabilities, NWB_TEXT("clear color texture")))
         return;
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
+    if(m_commandRecordingFailed)
+        return;
     if(texture.m_desc.dimension != TextureDimension::Texture3D && resolvedSubresources.numArraySlices > 1u){
         Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
         Vector<VkImageSubresourceRange, Alloc::ScratchArena> ranges(resolvedSubresources.numArraySlices, scratchArena);
@@ -584,6 +590,8 @@ void CommandList::clearColorTextureBox(
         return;
 
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
+    if(m_commandRecordingFailed)
+        return;
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;

@@ -425,6 +425,38 @@ bool NeedsTextureStateBarrier(const ResourceStates::Mask oldState, const Resourc
     return oldState != stateBits || (oldState == stateBits && uavBarrierEnabled);
 }
 
+bool ImageBarrierOverlapsTextureSubresources(
+    const VkImageMemoryBarrier2& barrier,
+    const VkImage image,
+    const VkImageAspectFlags aspectMask,
+    const TextureSubresourceSet& subresources
+)noexcept{
+    if(barrier.image != image || (barrier.subresourceRange.aspectMask & aspectMask) == 0u)
+        return false;
+    if(
+        barrier.subresourceRange.levelCount == 0u
+        || barrier.subresourceRange.layerCount == 0u
+        || subresources.numMipLevels == 0u
+        || subresources.numArraySlices == 0u
+    )
+        return false;
+
+    const u64 barrierMipEnd = static_cast<u64>(barrier.subresourceRange.baseMipLevel) + barrier.subresourceRange.levelCount;
+    const u64 attachmentMipEnd = static_cast<u64>(subresources.baseMipLevel) + subresources.numMipLevels;
+    if(
+        static_cast<u64>(barrier.subresourceRange.baseMipLevel) >= attachmentMipEnd
+        || static_cast<u64>(subresources.baseMipLevel) >= barrierMipEnd
+    )
+        return false;
+
+    const u64 barrierLayerEnd = static_cast<u64>(barrier.subresourceRange.baseArrayLayer) + barrier.subresourceRange.layerCount;
+    const u64 attachmentLayerEnd = static_cast<u64>(subresources.baseArraySlice) + subresources.numArraySlices;
+    return
+        static_cast<u64>(barrier.subresourceRange.baseArrayLayer) < attachmentLayerEnd
+        && static_cast<u64>(subresources.baseArraySlice) < barrierLayerEnd
+    ;
+}
+
 void AppendTextureStateBarrier(
     Vector<VkImageMemoryBarrier2, Alloc::GlobalArena>& barriers,
     const VkImage image,
@@ -481,6 +513,36 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
     Framebuffer* resumeFramebuffer = nullptr;
     if(m_renderPassActive){
         resumeFramebuffer = m_renderPassFramebuffer;
+
+        const auto attachmentOverlapsBarrier = [&](const FramebufferAttachment& attachment){
+            if(!attachment.texture)
+                return false;
+
+            const TextureSubresourceSet resolvedSubresources = attachment.subresources.resolve(
+                attachment.texture->m_desc,
+                TextureSubresourceMipResolve::Single
+            );
+            for(u32 index = 0u; index < depInfo.imageMemoryBarrierCount; ++index){
+                if(VulkanStateTrackingDetail::ImageBarrierOverlapsTextureSubresources(
+                    depInfo.pImageMemoryBarriers[index],
+                    attachment.texture->m_image,
+                    attachment.texture->m_aspectMask,
+                    resolvedSubresources
+                ))
+                    return true;
+            }
+            return false;
+        };
+
+        const FramebufferDesc& framebufferDesc = resumeFramebuffer->m_desc;
+        bool attachmentTransitioned = attachmentOverlapsBarrier(framebufferDesc.depthAttachment)
+            || attachmentOverlapsBarrier(framebufferDesc.shadingRateAttachment)
+        ;
+        for(const FramebufferAttachment& attachment : framebufferDesc.colorAttachments)
+            attachmentTransitioned = attachmentTransitioned || attachmentOverlapsBarrier(attachment);
+        if(attachmentTransitioned)
+            resumeFramebuffer = nullptr;
+
         endDynamicRendering();
         m_renderPassActive = false;
         m_renderPassFramebuffer = nullptr;
@@ -541,6 +603,8 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
             m_renderPassActive = true;
             m_renderPassFramebuffer = resumeFramebuffer;
         }
+        else
+            rejectCommandRecording(NWB_TEXT("pipeline barrier"), NWB_TEXT("dynamic rendering could not resume after the barrier"));
     }
 }
 
@@ -571,12 +635,14 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
 
     Texture& texture = *textureResource;
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Range);
-    if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSubresources, NWB_TEXT("set texture state")))
+    if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
+        rejectCommandRecording(NWB_TEXT("set texture state"), NWB_TEXT("subresource range is empty or outside the texture"));
         return;
+    }
 
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentTextureState(&texture);
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot change the state of a permanently tracked texture"));
+        rejectCommandRecording(NWB_TEXT("set texture state"), NWB_TEXT("state conflicts with the permanent texture state"));
         return;
     }
 
@@ -596,8 +662,10 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
             if(
                 permanentState == ResourceStates::Unknown
                 && !m_stateTracker.getResolvedTransientTextureState(texture, arraySlice, mipLevel, subresourceOldState)
-            )
+            ){
+                rejectCommandRecording(NWB_TEXT("set texture state"), NWB_TEXT("tracked texture subresource state could not be resolved"));
                 return;
+            }
 
             if(firstSubresource){
                 oldState = subresourceOldState;
@@ -703,13 +771,15 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
     Buffer& buffer = *bufferResource;
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(&buffer);
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot change the state of a permanently tracked buffer"));
+        rejectCommandRecording(NWB_TEXT("set buffer state"), NWB_TEXT("state conflicts with the permanent buffer state"));
         return;
     }
 
     ResourceStates::Mask oldState = permanentState;
-    if(permanentState == ResourceStates::Unknown && !m_stateTracker.getTransientBufferState(buffer, oldState))
+    if(permanentState == ResourceStates::Unknown && !m_stateTracker.getTransientBufferState(buffer, oldState)){
+        rejectCommandRecording(NWB_TEXT("set buffer state"), NWB_TEXT("tracked buffer state could not be resolved"));
         return;
+    }
 
     const bool needsUavBarrier =
         oldState == stateBits
@@ -784,22 +854,22 @@ void CommandList::releaseTextureOwnership(
 
     Texture& texture = *textureResource;
     if(m_stateTracker.isPermanentTexture(texture)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release ownership of a permanently tracked texture"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot release ownership of a permanently tracked texture"));
+        rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("permanently tracked textures cannot transfer ownership"));
         return;
     }
     if(m_device.usesConcurrentQueueSharing(texture.m_desc.queueSharing)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release ownership of a concurrently shared texture"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot release ownership of a concurrently shared texture"));
+        rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("concurrently shared textures do not have exclusive ownership"));
         return;
     }
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Range);
-    if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSubresources, NWB_TEXT("release texture ownership")))
+    if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
+        rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("subresource range is empty or outside the texture"));
         return;
+    }
 
     if(!m_device.getQueue(destinationQueue)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release texture ownership to an unavailable destination queue"));
+        rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("destination queue is unavailable"));
         return;
     }
 
@@ -811,8 +881,7 @@ void CommandList::releaseTextureOwnership(
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
             const ResourceStates::Mask state = m_stateTracker.getTextureState(&texture, arraySlice, mipLevel);
             if(state == ResourceStates::Unknown){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release texture ownership without a known final resource state"));
-                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot release texture ownership without a known final resource state"));
+                rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("final resource state is unknown"));
                 return;
             }
             m_stateTracker.beginTrackingTexture(&texture, TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u), state);
@@ -824,8 +893,7 @@ void CommandList::releaseTextureOwnership(
             const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
             const auto existing = m_textureOwnershipReleaseDestinations.find(key);
             if(existing != m_textureOwnershipReleaseDestinations.end() && existing.value() != destinationQueue){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Texture ownership was released to conflicting destination queues"));
-                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Texture ownership was released to conflicting destination queues"));
+                rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("subresource already targets a conflicting destination queue"));
                 return;
             }
         }
@@ -835,6 +903,7 @@ void CommandList::releaseTextureOwnership(
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel)
             m_textureOwnershipReleaseDestinations.insert_or_assign(TextureSubresourceStateKey{ &texture, mipLevel, arraySlice }, destinationQueue);
     }
+    retainResource(&texture);
 }
 
 void CommandList::releaseBufferOwnership(Buffer* bufferResource, const RenderLane::Enum destinationLane){
@@ -856,18 +925,16 @@ void CommandList::releaseBufferOwnership(
 
     Buffer& buffer = *bufferResource;
     if(m_stateTracker.isPermanentBuffer(buffer)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release ownership of a permanently tracked buffer"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot release ownership of a permanently tracked buffer"));
+        rejectCommandRecording(NWB_TEXT("release buffer ownership"), NWB_TEXT("permanently tracked buffers cannot transfer ownership"));
         return;
     }
     if(m_device.usesConcurrentQueueSharing(buffer.m_desc.queueSharing)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release ownership of a concurrently shared buffer"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot release ownership of a concurrently shared buffer"));
+        rejectCommandRecording(NWB_TEXT("release buffer ownership"), NWB_TEXT("concurrently shared buffers do not have exclusive ownership"));
         return;
     }
 
     if(!m_device.getQueue(destinationQueue)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release buffer ownership to an unavailable destination queue"));
+        rejectCommandRecording(NWB_TEXT("release buffer ownership"), NWB_TEXT("destination queue is unavailable"));
         return;
     }
 
@@ -876,20 +943,19 @@ void CommandList::releaseBufferOwnership(
     if(state == ResourceStates::Unknown)
         state = buffer.m_desc.initialState;
     if(state == ResourceStates::Unknown){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release buffer ownership without a known final resource state"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot release buffer ownership without a known final resource state"));
+        rejectCommandRecording(NWB_TEXT("release buffer ownership"), NWB_TEXT("final resource state is unknown"));
         return;
     }
     m_stateTracker.beginTrackingBuffer(&buffer, state);
 
     const auto existing = m_bufferOwnershipReleaseDestinations.find(&buffer);
     if(existing != m_bufferOwnershipReleaseDestinations.end() && existing.value() != destinationQueue){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Buffer ownership was released to conflicting destination queues"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Buffer ownership was released to conflicting destination queues"));
+        rejectCommandRecording(NWB_TEXT("release buffer ownership"), NWB_TEXT("buffer already targets a conflicting destination queue"));
         return;
     }
 
     m_bufferOwnershipReleaseDestinations.insert_or_assign(&buffer, destinationQueue);
+    retainResource(&buffer);
 }
 
 void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mask stateBits){
@@ -898,21 +964,29 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
     if(!validateCommandRecordingScope(NWB_TEXT("set permanent texture state")))
         return;
     if(stateBits == ResourceStates::Unknown){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot permanently track a texture in an unknown state"));
+        rejectCommandRecording(NWB_TEXT("set permanent texture state"), NWB_TEXT("permanent state cannot be unknown"));
         return;
     }
     if(texture->m_desc.keepInitialState && texture->m_desc.initialState != stateBits){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Permanent texture state must match its retained initial state"));
+        rejectCommandRecording(NWB_TEXT("set permanent texture state"), NWB_TEXT("permanent state conflicts with the retained initial state"));
         return;
     }
 
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentTextureState(texture);
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot replace a texture's permanent state"));
+        rejectCommandRecording(NWB_TEXT("set permanent texture state"), NWB_TEXT("a different permanent state is already tracked"));
         return;
+    }
+    for(auto it = m_textureOwnershipReleaseDestinations.begin(); it != m_textureOwnershipReleaseDestinations.end(); ++it){
+        if(it->first.texture == texture){
+            rejectCommandRecording(NWB_TEXT("set permanent texture state"), NWB_TEXT("texture already has a pending ownership release"));
+            return;
+        }
     }
 
     setTextureState(texture, s_AllSubresources, stateBits);
+    if(m_commandRecordingFailed)
+        return;
     m_stateTracker.setPermanentTextureState(*texture, stateBits);
 }
 
@@ -922,21 +996,27 @@ void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask s
     if(!validateCommandRecordingScope(NWB_TEXT("set permanent buffer state")))
         return;
     if(stateBits == ResourceStates::Unknown){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot permanently track a buffer in an unknown state"));
+        rejectCommandRecording(NWB_TEXT("set permanent buffer state"), NWB_TEXT("permanent state cannot be unknown"));
         return;
     }
     if(buffer->m_desc.keepInitialState && buffer->m_desc.initialState != stateBits){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Permanent buffer state must match its retained initial state"));
+        rejectCommandRecording(NWB_TEXT("set permanent buffer state"), NWB_TEXT("permanent state conflicts with the retained initial state"));
         return;
     }
 
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(buffer);
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot replace a buffer's permanent state"));
+        rejectCommandRecording(NWB_TEXT("set permanent buffer state"), NWB_TEXT("a different permanent state is already tracked"));
+        return;
+    }
+    if(m_bufferOwnershipReleaseDestinations.find(buffer) != m_bufferOwnershipReleaseDestinations.end()){
+        rejectCommandRecording(NWB_TEXT("set permanent buffer state"), NWB_TEXT("buffer already has a pending ownership release"));
         return;
     }
 
     setBufferState(buffer, stateBits);
+    if(m_commandRecordingFailed)
+        return;
     m_stateTracker.setPermanentBufferState(*buffer, stateBits);
 }
 

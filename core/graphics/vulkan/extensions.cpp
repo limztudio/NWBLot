@@ -20,33 +20,25 @@ NWB_VULKAN_BEGIN
 void CommandList::setPushConstants(const void* data, usize byteSize){
     if(byteSize == 0)
         return;
-    if(!data){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: CommandList::setPushConstants: data is null"));
-#if defined(NWB_DEBUG)
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: data is null"));
-#endif
+    if(!VulkanDetail::AreAllPointersValid(data)){
+        rejectCommandRecording(NWB_TEXT("set push constants"), NWB_TEXT("data is null"));
         return;
     }
     if(byteSize > UINT32_MAX){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: CommandList::setPushConstants: byte size exceeds uint32 range"));
-#if defined(NWB_DEBUG)
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: byte size exceeds uint32 range"));
-#endif
+        rejectCommandRecording(NWB_TEXT("set push constants"), NWB_TEXT("byte size exceeds uint32 range"));
         return;
     }
 
     const u32 pushConstantByteSize = static_cast<u32>(byteSize);
-#if defined(NWB_DEBUG)
-    if(!VulkanDetail::ValidatePushConstantByteSize(m_context, pushConstantByteSize, NWB_TEXT("set push constants")))
+    if(!VulkanDetail::IsPushConstantByteSizeValid(pushConstantByteSize, m_context.physicalDeviceProperties.limits.maxPushConstantsSize)){
+        rejectCommandRecording(NWB_TEXT("set push constants"), NWB_TEXT("byte size is unaligned or exceeds the device limit"));
         return;
-#endif
+    }
 
     VkPipelineLayout layout = VK_NULL_HANDLE;
     GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None;
     u32 activePipelineCount = 0u;
-#if defined(NWB_DEBUG)
     u32 pipelinePushConstantByteSize = 0;
-#endif
 
     const auto selectPipeline = [&](
         const VkPipelineLayout candidateLayout,
@@ -56,11 +48,7 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
         ++activePipelineCount;
         layout = candidateLayout;
         requiredCapabilities = candidateCapabilities;
-#if defined(NWB_DEBUG)
         pipelinePushConstantByteSize = candidatePushConstantByteSize;
-#else
-        static_cast<void>(candidatePushConstantByteSize);
-#endif
     };
 
     if(m_currentGraphicsState.pipeline){
@@ -84,31 +72,20 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
     }
 
     if(activePipelineCount != 1u || layout == VK_NULL_HANDLE){
-        NWB_LOGGER_CRITICAL_WARNING(
-            NWB_TEXT("Vulkan: CommandList::setPushConstants: expected exactly one active valid pipeline layout, found {}"),
-            activePipelineCount
-        );
-        invalidateCommandRecording();
+        rejectCommandRecording(NWB_TEXT("set push constants"), NWB_TEXT("exactly one active valid pipeline layout is required"));
         return;
     }
     if(!recordAndValidateCommandCapability(requiredCapabilities, NWB_TEXT("set push constants")))
         return;
 
-#if defined(NWB_DEBUG)
     if(pipelinePushConstantByteSize == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: CommandList::setPushConstants: active pipeline layout has no push constant range"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: active pipeline layout has no push constant range"));
+        rejectCommandRecording(NWB_TEXT("set push constants"), NWB_TEXT("active pipeline layout has no push constant range"));
         return;
     }
     if(pushConstantByteSize > pipelinePushConstantByteSize){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: CommandList::setPushConstants: byte size {} exceeds active pipeline push constant range {}")
-            , pushConstantByteSize
-            , pipelinePushConstantByteSize
-        );
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: byte size exceeds active pipeline push constant range"));
+        rejectCommandRecording(NWB_TEXT("set push constants"), NWB_TEXT("byte size exceeds the active pipeline push constant range"));
         return;
     }
-#endif
 
     vkCmdPushConstants(m_currentCmdBuf->m_cmdBuf, layout, VK_SHADER_STAGE_ALL, 0, pushConstantByteSize, data);
 }
@@ -173,6 +150,8 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         if(outAccelerationStructuresBuffer)
             setBufferState(opDesc.outAccelerationStructuresBuffer, ResourceStates::AccelStructWrite);
     }
+    if(m_commandRecordingFailed)
+        return;
 
     if(indirectArgCountBuffer)
         retainResource(opDesc.inIndirectArgCountBuffer);
@@ -186,6 +165,8 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         retainResource(opDesc.outAccelerationStructuresBuffer);
 
     commitBarriers();
+    if(m_commandRecordingFailed)
+        return;
 
     BufferHandle scratchBufferHandle;
     Buffer* scratchBuffer = nullptr;
@@ -294,6 +275,8 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
 
         validDescs.push_back(&convertDesc);
     }
+    if(m_commandRecordingFailed)
+        return;
 
     Vector<VkConvertCooperativeVectorMatrixInfoNV, Alloc::ScratchArena> vkConvertDescs(validDescs.size(), scratchArena);
     Vector<usize, Alloc::ScratchArena> dstSizes(validDescs.size(), scratchArena);
@@ -337,6 +320,8 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     }
 
     commitBarriers();
+    if(m_commandRecordingFailed)
+        return;
 
     if(vkConvertDescs.size() > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to convert cooperative vector matrices: descriptor count exceeds Vulkan limit"));

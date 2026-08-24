@@ -22,6 +22,8 @@ NWB_VULKAN_BEGIN
 StateTracker::StateTracker(const VulkanContext& context)
     : m_permanentTextureStates(0, Hasher<Texture*>(), EqualTo<Texture*>(), context.objectArena)
     , m_permanentBufferStates(0, Hasher<Buffer*>(), EqualTo<Buffer*>(), context.objectArena)
+    , m_attemptPermanentTextureStates(0, Hasher<Texture*>(), EqualTo<Texture*>(), context.objectArena)
+    , m_attemptPermanentBufferStates(0, Hasher<Buffer*>(), EqualTo<Buffer*>(), context.objectArena)
     , m_textureStates(0, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo(), context.objectArena)
     , m_bufferStates(0, Hasher<Buffer*>(), EqualTo<Buffer*>(), context.objectArena)
     , m_textureUavBarriers(0, Hasher<Texture*>(), EqualTo<Texture*>(), context.objectArena)
@@ -33,6 +35,43 @@ StateTracker::~StateTracker(){}
 void StateTracker::reset(){
     m_textureStates.clear();
     m_bufferStates.clear();
+}
+
+void StateTracker::beginRecordingAttempt(){
+    NWB_ASSERT(!m_recordingAttemptActive);
+    m_attemptPermanentTextureStates.clear();
+    m_attemptPermanentBufferStates.clear();
+    m_attemptPermanentTextureStates.reserve(m_permanentTextureStates.size());
+    m_attemptPermanentBufferStates.reserve(m_permanentBufferStates.size());
+    for(auto it = m_permanentTextureStates.begin(); it != m_permanentTextureStates.end(); ++it)
+        m_attemptPermanentTextureStates.insert_or_assign(it->first, it.value());
+    for(auto it = m_permanentBufferStates.begin(); it != m_permanentBufferStates.end(); ++it)
+        m_attemptPermanentBufferStates.insert_or_assign(it->first, it.value());
+    m_recordingAttemptActive = true;
+}
+
+void StateTracker::commitRecordingAttempt(){
+    m_attemptPermanentTextureStates.clear();
+    m_attemptPermanentBufferStates.clear();
+    m_recordingAttemptActive = false;
+}
+
+void StateTracker::rollbackRecordingAttempt(){
+    if(!m_recordingAttemptActive)
+        return;
+
+    m_permanentTextureStates.clear();
+    m_permanentBufferStates.clear();
+    m_permanentTextureStates.reserve(m_attemptPermanentTextureStates.size());
+    m_permanentBufferStates.reserve(m_attemptPermanentBufferStates.size());
+    for(auto it = m_attemptPermanentTextureStates.begin(); it != m_attemptPermanentTextureStates.end(); ++it)
+        m_permanentTextureStates.insert_or_assign(it->first, it.value());
+    for(auto it = m_attemptPermanentBufferStates.begin(); it != m_attemptPermanentBufferStates.end(); ++it)
+        m_permanentBufferStates.insert_or_assign(it->first, it.value());
+
+    m_attemptPermanentTextureStates.clear();
+    m_attemptPermanentBufferStates.clear();
+    m_recordingAttemptActive = false;
 }
 
 void StateTracker::setPermanentTextureState(Texture& texture, ResourceStates::Mask state){

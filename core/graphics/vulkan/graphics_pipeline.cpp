@@ -436,11 +436,15 @@ bool CommandList::ensureGraphicsRenderPass(Framebuffer* framebuffer){
     if(m_enableAutomaticBarriers){
         setResourceStatesForFramebuffer(*framebuffer);
         commitBarriers();
+        if(m_commandRecordingFailed)
+            return false;
     }
 
     RenderPassParameters params = {};
-    if(!beginDynamicRendering(framebuffer, params))
+    if(!beginDynamicRendering(framebuffer, params)){
+        rejectCommandRecording(NWB_TEXT("begin graphics render pass"), NWB_TEXT("dynamic rendering could not begin"));
         return false;
+    }
     retainResource(framebuffer);
     m_renderPassActive = true;
     m_renderPassFramebuffer = framebuffer;
@@ -462,11 +466,15 @@ void CommandList::setGraphicsState(const GraphicsState& state){
 
     setResourceStatesForGraphicsBuffers(state);
     commitBarriers();
+    if(m_commandRecordingFailed)
+        return;
 
     if(!ensureGraphicsRenderPass(state.framebuffer))
         return;
 
     commitBarriers();
+    if(m_commandRecordingFailed)
+        return;
     m_currentComputeState = {};
     m_currentMeshletState = {};
     m_currentRayTracingState = {};

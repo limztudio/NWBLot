@@ -196,10 +196,17 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         return true;
     };
 
-    ::ContainerDetail::ReserveAdditionalCapacity(m_stateTracker.m_textureStates, states.m_textureStates.size());
+    // Validate the complete handoff before publishing any state. Permanent state survives clearState(), so a
+    // progressive import would otherwise poison later recording attempts when a later entry is incompatible.
     for(const CommandListResourceStateHandoff::TextureState& state : states.m_textureStates){
         if(!state.texture)
             continue;
+
+        const ResourceStates::Mask existingPermanentState = m_stateTracker.getPermanentTextureState(state.texture);
+        if(existingPermanentState != ResourceStates::Unknown && existingPermanentState != state.state){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported texture state conflicts with an existing permanent state"));
+            return false;
+        }
 
         if(!appendTextureAcquire(
             *state.texture,
@@ -210,6 +217,78 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             state.releaseDestinationQueue
         ))
             return false;
+    }
+
+    for(const CommandListResourceStateHandoff::BufferState& state : states.m_bufferStates){
+        if(!state.buffer)
+            continue;
+
+        const ResourceStates::Mask existingPermanentState = m_stateTracker.getPermanentBufferState(state.buffer);
+        if(existingPermanentState != ResourceStates::Unknown && existingPermanentState != state.state){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported buffer state conflicts with an existing permanent state"));
+            return false;
+        }
+
+        if(!appendBufferAcquire(*state.buffer, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
+            return false;
+    }
+
+    for(const CommandListResourceStateHandoff::PermanentTextureState& state : states.m_permanentTextureStates){
+        if(!state.texture)
+            continue;
+
+        const ResourceStates::Mask existingPermanentState = m_stateTracker.getPermanentTextureState(state.texture);
+        if(existingPermanentState != ResourceStates::Unknown && existingPermanentState != state.state){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported permanent texture state conflicts with the command-list contract"));
+            return false;
+        }
+        for(const CommandListResourceStateHandoff::TextureState& transientState : states.m_textureStates){
+            if(transientState.texture == state.texture && transientState.state != state.state){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported transient texture state conflicts with its permanent state"));
+                return false;
+            }
+        }
+        for(const CommandListResourceStateHandoff::PermanentTextureState& otherState : states.m_permanentTextureStates){
+            if(otherState.texture == state.texture && otherState.state != state.state){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff contains conflicting permanent texture states"));
+                return false;
+            }
+        }
+
+        if(!appendTextureAcquire(*state.texture, s_AllSubresources, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
+            return false;
+    }
+
+    for(const CommandListResourceStateHandoff::BufferState& state : states.m_permanentBufferStates){
+        if(!state.buffer)
+            continue;
+
+        const ResourceStates::Mask existingPermanentState = m_stateTracker.getPermanentBufferState(state.buffer);
+        if(existingPermanentState != ResourceStates::Unknown && existingPermanentState != state.state){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported permanent buffer state conflicts with the command-list contract"));
+            return false;
+        }
+        for(const CommandListResourceStateHandoff::BufferState& transientState : states.m_bufferStates){
+            if(transientState.buffer == state.buffer && transientState.state != state.state){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Imported transient buffer state conflicts with its permanent state"));
+                return false;
+            }
+        }
+        for(const CommandListResourceStateHandoff::BufferState& otherState : states.m_permanentBufferStates){
+            if(otherState.buffer == state.buffer && otherState.state != state.state){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff contains conflicting permanent buffer states"));
+                return false;
+            }
+        }
+
+        if(!appendBufferAcquire(*state.buffer, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
+            return false;
+    }
+
+    ::ContainerDetail::ReserveAdditionalCapacity(m_stateTracker.m_textureStates, states.m_textureStates.size());
+    for(const CommandListResourceStateHandoff::TextureState& state : states.m_textureStates){
+        if(!state.texture)
+            continue;
 
         retainResource(state.texture);
         const TextureSubresourceStateKey key{ state.texture, state.mipLevel, state.arraySlice };
@@ -221,9 +300,6 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         if(!state.buffer)
             continue;
 
-        if(!appendBufferAcquire(*state.buffer, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
-            return false;
-
         retainResource(state.buffer);
         m_stateTracker.m_bufferStates.insert_or_assign(state.buffer, state.state);
     }
@@ -233,9 +309,6 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         if(!state.texture)
             continue;
 
-        if(!appendTextureAcquire(*state.texture, s_AllSubresources, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
-            return false;
-
         retainResource(state.texture);
         m_stateTracker.m_permanentTextureStates.insert_or_assign(state.texture, state.state);
     }
@@ -244,9 +317,6 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
     for(const CommandListResourceStateHandoff::BufferState& state : states.m_permanentBufferStates){
         if(!state.buffer)
             continue;
-
-        if(!appendBufferAcquire(*state.buffer, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
-            return false;
 
         retainResource(state.buffer);
         m_stateTracker.m_permanentBufferStates.insert_or_assign(state.buffer, state.state);
@@ -259,6 +329,8 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         depInfo.bufferMemoryBarrierCount = static_cast<u32>(acquireBufferBarriers.size());
         depInfo.pBufferMemoryBarriers = acquireBufferBarriers.data();
         executePipelineBarrier(depInfo);
+        if(m_commandRecordingFailed)
+            return false;
     }
 
     return true;
@@ -374,30 +446,41 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
 
     const u32 sourceQueueFamily = m_device.getQueueFamilyIndex(m_desc.physicalQueue);
     if(sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release resource ownership from an unavailable source queue family"));
+        rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("source queue family is unavailable"));
         return;
     }
 
     for(auto it = m_textureOwnershipReleaseDestinations.begin(); it != m_textureOwnershipReleaseDestinations.end(); ++it){
         const TextureSubresourceStateKey& key = it->first;
         Texture* const texture = key.texture;
-        if(!texture)
-            continue;
+        if(!texture){
+            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("pending texture release has no resource"));
+            return;
+        }
         if(m_device.usesConcurrentQueueSharing(texture->m_desc.queueSharing)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Concurrent texture unexpectedly has a pending ownership release"));
-            continue;
+            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("concurrent texture has a pending exclusive release"));
+            return;
+        }
+        if(m_stateTracker.isPermanentTexture(*texture)){
+            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("permanent texture has a pending ownership release"));
+            return;
         }
 
         const GpuPhysicalQueueId destinationQueue = it.value();
         const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(destinationQueue);
         if(destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release texture ownership to an unavailable destination queue family"));
-            continue;
+            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("texture destination queue family is unavailable"));
+            return;
+        }
+
+        const ResourceStates::Mask state = m_stateTracker.getTextureState(texture, key.arraySlice, key.mipLevel);
+        if(state == ResourceStates::Unknown){
+            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("texture final state is unknown"));
+            return;
         }
         if(destinationQueueFamily == sourceQueueFamily)
             continue;
 
-        const ResourceStates::Mask state = m_stateTracker.getTextureState(texture, key.arraySlice, key.mipLevel);
         m_pendingImageBarriers.push_back(VulkanStateTrackingDetail::BuildTextureOwnershipReleaseBarrier(
             texture->m_image,
             texture->m_aspectMask,
@@ -412,23 +495,34 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
 
     for(auto it = m_bufferOwnershipReleaseDestinations.begin(); it != m_bufferOwnershipReleaseDestinations.end(); ++it){
         Buffer* const buffer = it->first;
-        if(!buffer)
-            continue;
+        if(!buffer){
+            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("pending buffer release has no resource"));
+            return;
+        }
         if(m_device.usesConcurrentQueueSharing(buffer->m_desc.queueSharing)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Concurrent buffer unexpectedly has a pending ownership release"));
-            continue;
+            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("concurrent buffer has a pending exclusive release"));
+            return;
+        }
+        if(m_stateTracker.isPermanentBuffer(*buffer)){
+            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("permanent buffer has a pending ownership release"));
+            return;
         }
 
         const GpuPhysicalQueueId destinationQueue = it.value();
         const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(destinationQueue);
         if(destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release buffer ownership to an unavailable destination queue family"));
-            continue;
+            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("buffer destination queue family is unavailable"));
+            return;
+        }
+
+        const ResourceStates::Mask state = m_stateTracker.getBufferState(buffer);
+        if(state == ResourceStates::Unknown){
+            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("buffer final state is unknown"));
+            return;
         }
         if(destinationQueueFamily == sourceQueueFamily)
             continue;
 
-        const ResourceStates::Mask state = m_stateTracker.getBufferState(buffer);
         m_pendingBufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferOwnershipReleaseBarrier(
             buffer->m_buffer,
             state,

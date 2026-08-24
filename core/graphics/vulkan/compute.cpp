@@ -86,51 +86,61 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 void CommandList::setComputeState(const ComputeState& state){
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("set compute state")))
         return;
+    if(!state.pipeline){
+        rejectCommandRecording(NWB_TEXT("set compute state"), NWB_TEXT("compute pipeline is null"));
+        return;
+    }
+    if(state.pipeline->m_pipeline == VK_NULL_HANDLE || state.pipeline->m_pipelineLayout == VK_NULL_HANDLE){
+        rejectCommandRecording(NWB_TEXT("set compute state"), NWB_TEXT("compute pipeline has no valid native pipeline or layout"));
+        return;
+    }
+    if(
+        state.indirectParams
+        && (
+            state.indirectParams->m_buffer == VK_NULL_HANDLE
+            || !state.indirectParams->m_desc.isDrawIndirectArgs
+        )
+    ){
+        rejectCommandRecording(NWB_TEXT("set compute state"), NWB_TEXT("indirect buffer has no valid native buffer or indirect-argument usage"));
+        return;
+    }
 
     endActiveRenderPass();
     if(state.indirectParams)
         setBufferState(state.indirectParams, ResourceStates::IndirectArgument);
+    if(m_commandRecordingFailed)
+        return;
     commitBarriers();
+    if(m_commandRecordingFailed)
+        return;
+
     m_currentGraphicsState = {};
     m_currentMeshletState = {};
     m_currentRayTracingState = {};
     m_currentComputeState = state;
 
     auto* pipeline = state.pipeline;
-    if(pipeline){
-        vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipeline);
-        retainResource(pipeline);
-    }
+    vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipeline);
+    retainResource(pipeline);
 
-    if(pipeline)
-        bindDescriptorBufferEmptySet(VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipelineLayout);
+    bindDescriptorBufferEmptySet(VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipelineLayout);
 }
 
 void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("dispatch")))
-        return;
     if(groupsX == 0 || groupsY == 0 || groupsZ == 0)
         return;
-#if defined(NWB_DEBUG)
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("dispatch")))
+        return;
     if(!m_currentComputeState.pipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch compute: no compute pipeline is bound"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch compute: no compute pipeline is bound"));
+        rejectCommandRecording(NWB_TEXT("dispatch"), NWB_TEXT("no compute pipeline is bound"));
         return;
     }
+
     const auto& limits = m_context.physicalDeviceProperties.limits;
-    if(groupsX > limits.maxComputeWorkGroupCount[0] || groupsY > limits.maxComputeWorkGroupCount[1] || groupsZ > limits.maxComputeWorkGroupCount[2]){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch compute: group counts ({}, {}, {}) exceed device limits ({}, {}, {})")
-            , groupsX
-            , groupsY
-            , groupsZ
-            , limits.maxComputeWorkGroupCount[0]
-            , limits.maxComputeWorkGroupCount[1]
-            , limits.maxComputeWorkGroupCount[2]
-        );
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch compute: group counts exceed device limits"));
+    if(!VulkanDetail::AreDispatchGroupCountsValid(groupsX, groupsY, groupsZ, limits.maxComputeWorkGroupCount)){
+        rejectCommandRecording(NWB_TEXT("dispatch"), NWB_TEXT("group counts exceed device limits"));
         return;
     }
-#endif
 
     vkCmdDispatch(m_currentCmdBuf->m_cmdBuf, groupsX, groupsY, groupsZ);
 }
@@ -138,18 +148,31 @@ void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
 void CommandList::dispatchIndirect(u32 offsetBytes){
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("dispatch indirect")))
         return;
-#if defined(NWB_DEBUG)
     if(!m_currentComputeState.pipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch compute indirect: no compute pipeline is bound"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to dispatch compute indirect: no compute pipeline is bound"));
+        rejectCommandRecording(NWB_TEXT("dispatch indirect"), NWB_TEXT("no compute pipeline is bound"));
         return;
     }
-    if(!validateIndirectBuffer(m_currentComputeState.indirectParams, offsetBytes, sizeof(DispatchIndirectArguments), 1, NWB_TEXT("dispatchIndirect")))
+    if(!m_currentComputeState.indirectParams){
+        rejectCommandRecording(NWB_TEXT("dispatch indirect"), NWB_TEXT("no indirect buffer is bound"));
         return;
-#endif
+    }
+
     auto* buffer = m_currentComputeState.indirectParams;
+    if(!buffer->m_desc.isDrawIndirectArgs){
+        rejectCommandRecording(NWB_TEXT("dispatch indirect"), NWB_TEXT("buffer was not created with indirect-argument usage"));
+        return;
+    }
+    if((offsetBytes & s_BufferAlignmentMask) != 0u){
+        rejectCommandRecording(NWB_TEXT("dispatch indirect"), NWB_TEXT("indirect argument offset is not 4-byte aligned"));
+        return;
+    }
+    if(!VulkanDetail::IsBufferRangeInBounds(buffer->m_desc, offsetBytes, sizeof(DispatchIndirectArguments))){
+        rejectCommandRecording(NWB_TEXT("dispatch indirect"), NWB_TEXT("indirect argument range is outside the buffer"));
+        return;
+    }
+
     vkCmdDispatchIndirect(m_currentCmdBuf->m_cmdBuf, buffer->m_buffer, offsetBytes);
-    retainResource(m_currentComputeState.indirectParams);
+    retainResource(buffer);
 }
 
 

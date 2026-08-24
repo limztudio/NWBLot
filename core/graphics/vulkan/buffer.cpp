@@ -488,26 +488,35 @@ bool CommandList::tryWriteBuffer(Buffer* bufferResource, const void* data, usize
     if(dataSize == 0)
         return false;
 
-    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("write buffer"), NWB_TEXT("buffer or data is null"), bufferResource, data))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("write buffer")))
         return false;
+    if(!VulkanDetail::AreAllPointersValid(bufferResource, data)){
+        rejectCommandRecording(NWB_TEXT("write buffer"), NWB_TEXT("buffer or data is null"));
+        return false;
+    }
 
     Buffer& buffer = *bufferResource;
     const BufferDesc& desc = buffer.getDescription();
-    if(!VulkanDetail::DebugValidateBufferRange(desc, destOffsetBytes, static_cast<u64>(dataSize), NWB_TEXT("write buffer"), NWB_TEXT("destination")))
-        return false;
-    if((destOffsetBytes & s_BufferAlignmentMask) != 0u || (dataSize & s_BufferAlignmentMask) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write buffer: copy offset and size must be 4-byte aligned"));
+    if(!VulkanDetail::IsBufferRangeInBounds(desc, destOffsetBytes, static_cast<u64>(dataSize))){
+        rejectCommandRecording(NWB_TEXT("write buffer"), NWB_TEXT("destination range is outside the buffer"));
         return false;
     }
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("write buffer")))
+    if((destOffsetBytes & s_BufferAlignmentMask) != 0u || (dataSize & s_BufferAlignmentMask) != 0u){
+        rejectCommandRecording(NWB_TEXT("write buffer"), NWB_TEXT("copy offset and size must be 4-byte aligned"));
         return false;
+    }
 
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
-    if(!prepareUploadStaging(data, dataSize, NWB_TEXT("writeBuffer"), stagingBuffer, stagingOffset))
+    if(!prepareUploadStaging(data, dataSize, NWB_TEXT("writeBuffer"), stagingBuffer, stagingOffset)){
+        rejectCommandRecording(NWB_TEXT("write buffer"), NWB_TEXT("staging allocation failed"));
         return false;
+    }
 
+    endActiveRenderPass();
     setBufferState(bufferResource, ResourceStates::CopyDest);
+    if(m_commandRecordingFailed)
+        return false;
 
     VkBufferCopy region{};
     region.srcOffset = stagingOffset;
@@ -527,21 +536,24 @@ void CommandList::writeBuffer(Buffer* bufferResource, const void* data, usize da
 }
 
 void CommandList::clearBufferUInt(Buffer* bufferResource, u32 clearValue){
-    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear buffer"), NWB_TEXT("buffer is null"), bufferResource))
-        return;
-
-    Buffer& buffer = *bufferResource;
-#if defined(NWB_DEBUG)
-    if((buffer.m_desc.byteSize & s_BufferAlignmentMask) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear buffer: buffer size is not 4-byte aligned"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear buffer: buffer size is not 4-byte aligned"));
-        return;
-    }
-#endif
-
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("clear buffer")))
         return;
+    if(!VulkanDetail::AreAllPointersValid(bufferResource)){
+        rejectCommandRecording(NWB_TEXT("clear buffer"), NWB_TEXT("buffer is null"));
+        return;
+    }
+
+    Buffer& buffer = *bufferResource;
+    if((buffer.m_desc.byteSize & s_BufferAlignmentMask) != 0u){
+        rejectCommandRecording(NWB_TEXT("clear buffer"), NWB_TEXT("buffer size is not 4-byte aligned"));
+        return;
+    }
+
+    endActiveRenderPass();
     setBufferState(bufferResource, ResourceStates::CopyDest);
+    if(m_commandRecordingFailed)
+        return;
+
     vkCmdFillBuffer(m_currentCmdBuf->m_cmdBuf, buffer.m_buffer, 0, VK_WHOLE_SIZE, clearValue);
     retainResource(bufferResource);
 }
@@ -550,8 +562,12 @@ void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* 
     if(dataSizeBytes == 0)
         return;
 
-    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("copy buffer"), NWB_TEXT("resource is invalid"), destResource, srcResource))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("copy buffer")))
         return;
+    if(!VulkanDetail::AreAllPointersValid(destResource, srcResource)){
+        rejectCommandRecording(NWB_TEXT("copy buffer"), NWB_TEXT("source or destination buffer is null"));
+        return;
+    }
 
     Buffer& dest = *destResource;
     Buffer& src = *srcResource;
@@ -559,24 +575,31 @@ void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* 
     const BufferDesc& destDesc = dest.getDescription();
     const BufferDesc& srcDesc = src.getDescription();
 
-    if(!VulkanDetail::DebugValidateBufferRange(destDesc, destOffsetBytes, dataSizeBytes, NWB_TEXT("copy buffer"), NWB_TEXT("destination")))
-        return;
-
-    if(!VulkanDetail::DebugValidateBufferRange(srcDesc, srcOffsetBytes, dataSizeBytes, NWB_TEXT("copy buffer"), NWB_TEXT("source")))
-        return;
-
-#if defined(NWB_DEBUG)
-    if(dest.m_buffer == src.m_buffer && VulkanDetail::BufferRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to copy buffer: source and destination ranges overlap in the same buffer"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to copy buffer: source and destination ranges overlap in the same buffer"));
+    if(!VulkanDetail::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)){
+        rejectCommandRecording(NWB_TEXT("copy buffer"), NWB_TEXT("destination range is outside the buffer"));
         return;
     }
-#endif
 
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("copy buffer")))
+    if(!VulkanDetail::IsBufferRangeInBounds(srcDesc, srcOffsetBytes, dataSizeBytes)){
+        rejectCommandRecording(NWB_TEXT("copy buffer"), NWB_TEXT("source range is outside the buffer"));
         return;
-    setBufferState(srcResource, ResourceStates::CopySource);
-    setBufferState(destResource, ResourceStates::CopyDest);
+    }
+
+    if(dest.m_buffer == src.m_buffer && VulkanDetail::BufferRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)){
+        rejectCommandRecording(NWB_TEXT("copy buffer"), NWB_TEXT("source and destination ranges overlap in the same buffer"));
+        return;
+    }
+
+    endActiveRenderPass();
+    if(dest.m_buffer == src.m_buffer)
+        setBufferState(srcResource, ResourceStates::CopySource | ResourceStates::CopyDest);
+    else{
+        setBufferState(srcResource, ResourceStates::CopySource);
+        if(!m_commandRecordingFailed)
+            setBufferState(destResource, ResourceStates::CopyDest);
+    }
+    if(m_commandRecordingFailed)
+        return;
 
     VkBufferCopy region{};
     region.srcOffset = srcOffsetBytes;
@@ -599,31 +622,34 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
     // This is intentionally narrower than copyBuffer: command-IR replay has already validated every operand
     // against the compiled graph, while graph packet recording has already made the CopySource/CopyDest states
     // authoritative. Keep the direct lowerer from silently reintroducing per-command state tracking.
-    if(
-        !m_isRecording
-        || m_renderPassActive
-        || !m_currentCmdBuf
-        || m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE
-        || !destResource
-        || !srcResource
-        || dataSizeBytes == 0u
-    )
+    if(dataSizeBytes == 0u)
         return false;
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("direct command-IR copy buffer")))
+        return false;
+    if(!VulkanDetail::AreAllPointersValid(destResource, srcResource)){
+        rejectCommandRecording(NWB_TEXT("direct command-IR copy buffer"), NWB_TEXT("source or destination buffer is null"));
+        return false;
+    }
 
     Buffer& dest = *destResource;
     Buffer& src = *srcResource;
     const BufferDesc& destDesc = dest.getDescription();
     const BufferDesc& srcDesc = src.getDescription();
-    if(
-        !VulkanDetail::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)
-        || !VulkanDetail::IsBufferRangeInBounds(srcDesc, srcOffsetBytes, dataSizeBytes)
-        || (
-            dest.m_buffer == src.m_buffer
-            && VulkanDetail::BufferRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)
-        )
-    )
+    if(!VulkanDetail::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)){
+        rejectCommandRecording(NWB_TEXT("direct command-IR copy buffer"), NWB_TEXT("destination range is outside the buffer"));
         return false;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("direct command-IR copy buffer")))
+    }
+    if(!VulkanDetail::IsBufferRangeInBounds(srcDesc, srcOffsetBytes, dataSizeBytes)){
+        rejectCommandRecording(NWB_TEXT("direct command-IR copy buffer"), NWB_TEXT("source range is outside the buffer"));
+        return false;
+    }
+    if(dest.m_buffer == src.m_buffer && VulkanDetail::BufferRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)){
+        rejectCommandRecording(NWB_TEXT("direct command-IR copy buffer"), NWB_TEXT("source and destination ranges overlap in the same buffer"));
+        return false;
+    }
+
+    endActiveRenderPass();
+    if(m_commandRecordingFailed)
         return false;
 
     VkBufferCopy region{};

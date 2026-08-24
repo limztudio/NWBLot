@@ -4656,6 +4656,645 @@ TEST_F(DescriptorBufferRoundTripTest, StickyNativeRecordingFailureCannotSubmitAn
 }
 
 
+TEST_F(DescriptorBufferRoundTripTest, BufferSemanticRejectionsDiscardPriorWorkAndReopenInAllBuilds){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    static constexpr u32 s_InitialWords[] = { 1u, 2u, 3u, 4u };
+    constexpr u32 s_DiscardedClearValue = 0xa5a55a5au;
+
+    const BufferHandle buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(s_InitialWords))
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+            .setCpuAccess(CpuAccessMode::Read)
+    );
+    const BufferHandle otherBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(s_InitialWords))
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    const BufferHandle unalignedSizeBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(6u)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(buffer);
+    ASSERT_TRUE(otherBuffer);
+    ASSERT_TRUE(unalignedSizeBuffer);
+
+    auto commandList = device.createCommandList();
+    ASSERT_TRUE(commandList);
+    const auto submit = [&](){
+        CommandList* const commandLists[] = { commandList.get() };
+        return device.executeCommandLists(
+            commandLists,
+            LengthOf(commandLists),
+            commandList->getDescription().physicalQueue,
+            QueueSubmissionDesc{}
+        );
+    };
+
+    commandList->open();
+    commandList->writeBuffer(buffer.get(), s_InitialWords, sizeof(s_InitialWords));
+    commandList->close();
+    QueueSubmissionToken lastAcceptedToken = submit();
+    ASSERT_TRUE(lastAcceptedToken.valid());
+
+    enum class Operation : u8{
+        NullWriteBuffer,
+        NullWriteData,
+        WriteDestinationOutOfBounds,
+        WriteOffsetUnaligned,
+        WriteSizeUnaligned,
+        NullClearBuffer,
+        ClearSizeUnaligned,
+        NullCopyDestination,
+        NullCopySource,
+        CopyDestinationOutOfBounds,
+        CopySourceOutOfBounds,
+        CopyOffsetOverflow,
+        OverlappingSelfCopy,
+    };
+    struct Case{
+        Operation operation;
+        const char* label;
+    };
+    const Case cases[] = {
+        { Operation::NullWriteBuffer, "null write buffer" },
+        { Operation::NullWriteData, "null write data" },
+        { Operation::WriteDestinationOutOfBounds, "write destination out of bounds" },
+        { Operation::WriteOffsetUnaligned, "write offset unaligned" },
+        { Operation::WriteSizeUnaligned, "write size unaligned" },
+        { Operation::NullClearBuffer, "null clear buffer" },
+        { Operation::ClearSizeUnaligned, "clear size unaligned" },
+        { Operation::NullCopyDestination, "null copy destination" },
+        { Operation::NullCopySource, "null copy source" },
+        { Operation::CopyDestinationOutOfBounds, "copy destination out of bounds" },
+        { Operation::CopySourceOutOfBounds, "copy source out of bounds" },
+        { Operation::CopyOffsetOverflow, "copy offset overflow" },
+        { Operation::OverlappingSelfCopy, "overlapping self copy" },
+    };
+
+    for(const Case& testCase : cases){
+        SCOPED_TRACE(testCase.label);
+        commandList->open();
+        ASSERT_TRUE(commandList->isRecording());
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+        commandList->clearBufferUInt(buffer.get(), s_DiscardedClearValue);
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+
+        switch(testCase.operation){
+        case Operation::NullWriteBuffer:
+            commandList->writeBuffer(nullptr, s_InitialWords, sizeof(s_InitialWords));
+            break;
+        case Operation::NullWriteData:
+            commandList->writeBuffer(buffer.get(), nullptr, sizeof(u32));
+            break;
+        case Operation::WriteDestinationOutOfBounds:
+            commandList->writeBuffer(buffer.get(), s_InitialWords, sizeof(s_InitialWords), sizeof(u32));
+            break;
+        case Operation::WriteOffsetUnaligned:
+            commandList->writeBuffer(buffer.get(), s_InitialWords, sizeof(u32), 2u);
+            break;
+        case Operation::WriteSizeUnaligned:
+            commandList->writeBuffer(buffer.get(), s_InitialWords, 2u);
+            break;
+        case Operation::NullClearBuffer:
+            commandList->clearBufferUInt(nullptr, s_DiscardedClearValue);
+            break;
+        case Operation::ClearSizeUnaligned:
+            commandList->clearBufferUInt(unalignedSizeBuffer.get(), s_DiscardedClearValue);
+            break;
+        case Operation::NullCopyDestination:
+            commandList->copyBuffer(nullptr, 0u, buffer.get(), 0u, sizeof(u32));
+            break;
+        case Operation::NullCopySource:
+            commandList->copyBuffer(buffer.get(), 0u, nullptr, 0u, sizeof(u32));
+            break;
+        case Operation::CopyDestinationOutOfBounds:
+            commandList->copyBuffer(buffer.get(), sizeof(s_InitialWords), otherBuffer.get(), 0u, sizeof(u32));
+            break;
+        case Operation::CopySourceOutOfBounds:
+            commandList->copyBuffer(buffer.get(), 0u, otherBuffer.get(), sizeof(s_InitialWords), sizeof(u32));
+            break;
+        case Operation::CopyOffsetOverflow:
+            commandList->copyBuffer(buffer.get(), Limit<u64>::s_Max, otherBuffer.get(), 0u, sizeof(u32));
+            break;
+        case Operation::OverlappingSelfCopy:
+            commandList->copyBuffer(buffer.get(), sizeof(u32), buffer.get(), 0u, sizeof(u32) * 2u);
+            break;
+        }
+
+        EXPECT_TRUE(commandList->commandRecordingFailed());
+        CommandListResourceStateHandoff invalidHandoff(DescriptorBufferRoundTripTest::arena());
+        commandList->close(&invalidHandoff);
+        EXPECT_FALSE(invalidHandoff.valid());
+        EXPECT_FALSE(commandList->hasCommandBuffer());
+        EXPECT_FALSE(submit().valid());
+
+        commandList->open();
+        ASSERT_TRUE(commandList->isRecording());
+        EXPECT_FALSE(commandList->commandRecordingFailed());
+        commandList->close();
+        const QueueSubmissionToken recoveredToken = submit();
+        ASSERT_TRUE(recoveredToken.valid());
+        EXPECT_EQ(recoveredToken.value, lastAcceptedToken.value + 1u);
+        lastAcceptedToken = recoveredToken;
+    }
+
+    commandList->open();
+    commandList->writeBuffer(nullptr, nullptr, 0u);
+    commandList->copyBuffer(nullptr, 0u, nullptr, 0u, 0u);
+    EXPECT_FALSE(commandList->commandRecordingFailed());
+    commandList->close();
+    const QueueSubmissionToken zeroWorkToken = submit();
+    ASSERT_TRUE(zeroWorkToken.valid());
+    EXPECT_EQ(zeroWorkToken.value, lastAcceptedToken.value + 1u);
+    lastAcceptedToken = zeroWorkToken;
+
+    commandList->open();
+    commandList->copyBuffer(buffer.get(), sizeof(u32) * 2u, buffer.get(), 0u, sizeof(u32) * 2u);
+    EXPECT_FALSE(commandList->commandRecordingFailed());
+    EXPECT_EQ(commandList->getBufferState(buffer.get()), ResourceStates::CopySource | ResourceStates::CopyDest);
+    commandList->close();
+    const QueueSubmissionToken selfCopyToken = submit();
+    ASSERT_TRUE(selfCopyToken.valid());
+    EXPECT_EQ(selfCopyToken.value, lastAcceptedToken.value + 1u);
+    ASSERT_TRUE(device.waitForIdle());
+
+    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(buffer.get(), CpuAccessMode::Read));
+    ASSERT_NE(copiedWords, nullptr);
+    EXPECT_EQ(copiedWords[0u], s_InitialWords[0u]);
+    EXPECT_EQ(copiedWords[1u], s_InitialWords[1u]);
+    EXPECT_EQ(copiedWords[2u], s_InitialWords[0u]);
+    EXPECT_EQ(copiedWords[3u], s_InitialWords[1u]);
+    device.unmapBuffer(buffer.get());
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, ComputeAndPushSemanticRejectionsDiscardPriorWorkAndReopenInAllBuilds){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    ShaderDesc shaderDesc(DescriptorBufferRoundTripTest::arena());
+    shaderDesc
+        .setShaderType(ShaderType::Compute)
+        .setDebugName(Name("tests/descriptor_buffer/semantic_validation_compute"))
+    ;
+    const ShaderHandle shader = device.createShader(
+        shaderDesc,
+        s_DescriptorHeapRetirementComputeSpirv,
+        sizeof(s_DescriptorHeapRetirementComputeSpirv)
+    );
+    ASSERT_TRUE(shader);
+
+    ComputePipelineDesc zeroRangeDesc;
+    zeroRangeDesc.setComputeShader(shader);
+    const ComputePipelineHandle zeroRangePipeline = device.createComputePipeline(zeroRangeDesc);
+    ASSERT_TRUE(zeroRangePipeline);
+
+    BindingLayoutDesc pushLayoutDesc(DescriptorBufferRoundTripTest::arena());
+    pushLayoutDesc
+        .setVisibility(ShaderType::Compute)
+        .addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32)))
+    ;
+    const BindingLayoutHandle pushLayout = device.createBindingLayout(pushLayoutDesc);
+    ASSERT_TRUE(pushLayout);
+    ComputePipelineDesc pushRangeDesc;
+    pushRangeDesc
+        .setComputeShader(shader)
+        .addBindingLayout(pushLayout)
+    ;
+    const ComputePipelineHandle pushRangePipeline = device.createComputePipeline(pushRangeDesc);
+    ASSERT_TRUE(pushRangePipeline);
+
+    const BufferHandle oracle = device.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(u32) * 4u)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    const BufferHandle indirectBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(DispatchIndirectArguments))
+            .setIsDrawIndirectArgs(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    const BufferHandle wrongUsageBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(DispatchIndirectArguments))
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(oracle);
+    ASSERT_TRUE(indirectBuffer);
+    ASSERT_TRUE(wrongUsageBuffer);
+
+    auto commandList = device.createCommandList();
+    ASSERT_TRUE(commandList);
+    const auto submit = [&](){
+        CommandList* const commandLists[] = { commandList.get() };
+        return device.executeCommandLists(
+            commandLists,
+            LengthOf(commandLists),
+            commandList->getDescription().physicalQueue,
+            QueueSubmissionDesc{}
+        );
+    };
+
+    commandList->open();
+    commandList->close();
+    QueueSubmissionToken lastAcceptedToken = submit();
+    ASSERT_TRUE(lastAcceptedToken.valid());
+
+    enum class Operation : u8{
+        NullPipeline,
+        DispatchWithoutPipeline,
+        WrongIndirectUsage,
+        IndirectWithoutBuffer,
+        IndirectOffsetUnaligned,
+        IndirectRangeOutOfBounds,
+        PushNullData,
+        PushSizeUnaligned,
+        PushWithoutPipeline,
+        PushWithoutRange,
+        PushBeyondPipelineRange,
+        PushBeyondUint32,
+    };
+    struct Case{
+        Operation operation;
+        const char* label;
+    };
+    const Case cases[] = {
+        { Operation::NullPipeline, "null compute pipeline" },
+        { Operation::DispatchWithoutPipeline, "dispatch without pipeline" },
+        { Operation::WrongIndirectUsage, "wrong indirect usage" },
+        { Operation::IndirectWithoutBuffer, "indirect dispatch without buffer" },
+        { Operation::IndirectOffsetUnaligned, "indirect dispatch unaligned offset" },
+        { Operation::IndirectRangeOutOfBounds, "indirect dispatch out of bounds" },
+        { Operation::PushNullData, "push constants null data" },
+        { Operation::PushSizeUnaligned, "push constants unaligned size" },
+        { Operation::PushWithoutPipeline, "push constants without pipeline" },
+        { Operation::PushWithoutRange, "push constants without range" },
+        { Operation::PushBeyondPipelineRange, "push constants beyond pipeline range" },
+        { Operation::PushBeyondUint32, "push constants beyond uint32" },
+    };
+    constexpr u32 s_PushValue = 0x1f2e3d4cu;
+    constexpr u32 s_TwoPushValues[] = { s_PushValue, 0x55667788u };
+
+    for(const Case& testCase : cases){
+        if(testCase.operation == Operation::PushBeyondUint32 && sizeof(usize) <= sizeof(u32))
+            continue;
+
+        SCOPED_TRACE(testCase.label);
+        commandList->open();
+        commandList->clearBufferUInt(oracle.get(), 0x6e57424cu);
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+
+        switch(testCase.operation){
+        case Operation::NullPipeline:
+            commandList->setComputeState(ComputeState{});
+            break;
+        case Operation::DispatchWithoutPipeline:
+            commandList->dispatch(1u, 1u, 1u);
+            break;
+        case Operation::WrongIndirectUsage:
+            commandList->setComputeState(
+                ComputeState().setPipeline(zeroRangePipeline.get()).setIndirectParams(wrongUsageBuffer.get())
+            );
+            break;
+        case Operation::IndirectWithoutBuffer:
+            commandList->setComputeState(ComputeState().setPipeline(zeroRangePipeline.get()));
+            commandList->dispatchIndirect(0u);
+            break;
+        case Operation::IndirectOffsetUnaligned:
+            commandList->setComputeState(
+                ComputeState().setPipeline(zeroRangePipeline.get()).setIndirectParams(indirectBuffer.get())
+            );
+            commandList->dispatchIndirect(2u);
+            break;
+        case Operation::IndirectRangeOutOfBounds:
+            commandList->setComputeState(
+                ComputeState().setPipeline(zeroRangePipeline.get()).setIndirectParams(indirectBuffer.get())
+            );
+            commandList->dispatchIndirect(sizeof(DispatchIndirectArguments));
+            break;
+        case Operation::PushNullData:
+            commandList->setPushConstants(nullptr, sizeof(s_PushValue));
+            break;
+        case Operation::PushSizeUnaligned:
+            commandList->setPushConstants(&s_PushValue, 2u);
+            break;
+        case Operation::PushWithoutPipeline:
+            commandList->setPushConstants(&s_PushValue, sizeof(s_PushValue));
+            break;
+        case Operation::PushWithoutRange:
+            commandList->setComputeState(ComputeState().setPipeline(zeroRangePipeline.get()));
+            commandList->setPushConstants(&s_PushValue, sizeof(s_PushValue));
+            break;
+        case Operation::PushBeyondPipelineRange:
+            commandList->setComputeState(ComputeState().setPipeline(pushRangePipeline.get()));
+            commandList->setPushConstants(s_TwoPushValues, sizeof(s_TwoPushValues));
+            break;
+        case Operation::PushBeyondUint32:
+            commandList->setPushConstants(&s_PushValue, static_cast<usize>(UINT32_MAX) + 1u);
+            break;
+        }
+
+        EXPECT_TRUE(commandList->commandRecordingFailed());
+        commandList->close();
+        EXPECT_FALSE(commandList->hasCommandBuffer());
+        EXPECT_FALSE(submit().valid());
+
+        commandList->open();
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+        commandList->setComputeState(ComputeState().setPipeline(zeroRangePipeline.get()));
+        commandList->dispatch(1u, 1u, 1u);
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+        commandList->close();
+        const QueueSubmissionToken recoveredToken = submit();
+        ASSERT_TRUE(recoveredToken.valid());
+        EXPECT_EQ(recoveredToken.value, lastAcceptedToken.value + 1u);
+        lastAcceptedToken = recoveredToken;
+    }
+
+    commandList->open();
+    commandList->dispatch(0u, 1u, 1u);
+    commandList->setPushConstants(nullptr, 0u);
+    EXPECT_FALSE(commandList->commandRecordingFailed());
+    commandList->close();
+    const QueueSubmissionToken zeroWorkToken = submit();
+    ASSERT_TRUE(zeroWorkToken.valid());
+    EXPECT_EQ(zeroWorkToken.value, lastAcceptedToken.value + 1u);
+    lastAcceptedToken = zeroWorkToken;
+
+    const DispatchIndirectArguments indirectArguments;
+    commandList->open();
+    commandList->writeBuffer(indirectBuffer.get(), &indirectArguments, sizeof(indirectArguments));
+    commandList->setComputeState(
+        ComputeState().setPipeline(zeroRangePipeline.get()).setIndirectParams(indirectBuffer.get())
+    );
+    commandList->dispatchIndirect(0u);
+    commandList->setComputeState(ComputeState().setPipeline(pushRangePipeline.get()));
+    commandList->setPushConstants(&s_PushValue, sizeof(s_PushValue));
+    commandList->dispatch(1u, 1u, 1u);
+    EXPECT_FALSE(commandList->commandRecordingFailed());
+    commandList->close();
+    const QueueSubmissionToken positiveToken = submit();
+    ASSERT_TRUE(positiveToken.valid());
+    EXPECT_EQ(positiveToken.value, lastAcceptedToken.value + 1u);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, TransferCommandsEndRenderingAndAttachmentTransitionsDoNotResumeIt){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const TextureHandle renderTarget = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInRenderTarget(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    const TextureHandle unrelatedTexture = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(renderTarget);
+    ASSERT_TRUE(unrelatedTexture);
+    const FramebufferDesc framebufferDesc = FramebufferDesc().addColorAttachment(renderTarget.get());
+    const FramebufferHandle framebuffer = device.createFramebuffer(framebufferDesc);
+    ASSERT_TRUE(framebuffer);
+
+    const BufferHandle source = device.createBuffer(
+        BufferDesc().setByteSize(sizeof(u32) * 4u).setInitialState(ResourceStates::Common).setKeepInitialState(true)
+    );
+    const BufferHandle destination = device.createBuffer(
+        BufferDesc().setByteSize(sizeof(u32) * 4u).setInitialState(ResourceStates::Common).setKeepInitialState(true)
+    );
+    ASSERT_TRUE(source);
+    ASSERT_TRUE(destination);
+    constexpr u32 s_Words[] = { 7u, 8u, 9u, 10u };
+
+    enum class Operation : u8{
+        Write,
+        Fill,
+        Copy,
+    };
+    for(const Operation operation : { Operation::Write, Operation::Fill, Operation::Copy }){
+        auto commandList = device.createCommandList();
+        ASSERT_TRUE(commandList);
+        commandList->open();
+        if(operation == Operation::Copy){
+            commandList->beginTrackingBufferState(source.get(), ResourceStates::CopySource);
+            commandList->beginTrackingBufferState(destination.get(), ResourceStates::CopyDest);
+        }
+        else
+            commandList->beginTrackingBufferState(destination.get(), ResourceStates::CopyDest);
+
+        commandList->setGraphicsState(GraphicsState().setFramebuffer(framebuffer.get()));
+        ASSERT_TRUE(commandList->isRenderPassActive());
+        switch(operation){
+        case Operation::Write:
+            commandList->writeBuffer(destination.get(), s_Words, sizeof(s_Words));
+            break;
+        case Operation::Fill:
+            commandList->clearBufferUInt(destination.get(), 0x01020304u);
+            break;
+        case Operation::Copy:
+            commandList->copyBuffer(destination.get(), 0u, source.get(), 0u, sizeof(s_Words));
+            break;
+        }
+        EXPECT_FALSE(commandList->isRenderPassActive());
+        EXPECT_FALSE(commandList->commandRecordingFailed());
+        commandList->close();
+
+        CommandList* const commandLists[] = { commandList.get() };
+        EXPECT_TRUE(device.executeCommandLists(
+            commandLists,
+            LengthOf(commandLists),
+            commandList->getDescription().physicalQueue,
+            QueueSubmissionDesc{}
+        ).valid());
+    }
+
+    auto barrierList = device.createCommandList();
+    ASSERT_TRUE(barrierList);
+    barrierList->open();
+    barrierList->beginTrackingBufferState(destination.get(), ResourceStates::Common);
+    barrierList->setGraphicsState(GraphicsState().setFramebuffer(framebuffer.get()));
+    ASSERT_TRUE(barrierList->isRenderPassActive());
+    barrierList->setBufferState(destination.get(), ResourceStates::CopyDest);
+    EXPECT_TRUE(barrierList->isRenderPassActive());
+    barrierList->setTextureState(unrelatedTexture.get(), s_AllSubresources, ResourceStates::CopyDest);
+    EXPECT_TRUE(barrierList->isRenderPassActive());
+    barrierList->setTextureState(renderTarget.get(), s_AllSubresources, ResourceStates::CopySource);
+    EXPECT_FALSE(barrierList->isRenderPassActive());
+    barrierList->endRenderPass();
+    barrierList->endRenderPass();
+    EXPECT_FALSE(barrierList->commandRecordingFailed());
+    barrierList->close();
+    CommandList* const barrierLists[] = { barrierList.get() };
+    EXPECT_TRUE(device.executeCommandLists(
+        barrierLists,
+        LengthOf(barrierLists),
+        barrierList->getDescription().physicalQueue,
+        QueueSubmissionDesc{}
+    ).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, PermanentStateRecordingAttemptsCommitOnlyOnAcceptedSubmission){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const BufferHandle baseline = device.createBuffer(
+        BufferDesc()
+            .setByteSize(16u)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    const BufferHandle provisional = device.createBuffer(
+        BufferDesc()
+            .setByteSize(16u)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    const BufferHandle abandoned = device.createBuffer(
+        BufferDesc()
+            .setByteSize(16u)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    const BufferHandle rejected = device.createBuffer(
+        BufferDesc()
+            .setByteSize(16u)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    const BufferHandle retainedInitial = device.createBuffer(
+        BufferDesc()
+            .setByteSize(16u)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    const BufferHandle releaseCandidate = device.createBuffer(
+        BufferDesc().setByteSize(16u).setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(baseline);
+    ASSERT_TRUE(provisional);
+    ASSERT_TRUE(abandoned);
+    ASSERT_TRUE(rejected);
+    ASSERT_TRUE(retainedInitial);
+    ASSERT_TRUE(releaseCandidate);
+
+    auto commandList = device.createCommandList();
+    ASSERT_TRUE(commandList);
+    const auto submit = [&](){
+        CommandList* const commandLists[] = { commandList.get() };
+        return device.executeCommandLists(
+            commandLists,
+            LengthOf(commandLists),
+            commandList->getDescription().physicalQueue,
+            QueueSubmissionDesc{}
+        );
+    };
+
+    CommandListResourceStateHandoff attemptHandoff(DescriptorBufferRoundTripTest::arena());
+    commandList->open();
+    commandList->setPermanentBufferState(baseline.get(), ResourceStates::UnorderedAccess);
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+    commandList->close(&attemptHandoff);
+    ASSERT_TRUE(attemptHandoff.valid());
+    CommandList* const duplicateLists[] = { commandList.get(), commandList.get() };
+    EXPECT_FALSE(device.executeCommandLists(
+        duplicateLists,
+        LengthOf(duplicateLists),
+        commandList->getDescription().physicalQueue,
+        QueueSubmissionDesc{}
+    ).valid());
+    EXPECT_TRUE(commandList->hasCommandBuffer());
+    EXPECT_EQ(commandList->getPermanentBufferState(baseline.get()), ResourceStates::UnorderedAccess);
+    ASSERT_TRUE(submit().valid());
+    ASSERT_TRUE(device.waitForIdle());
+    EXPECT_EQ(commandList->getPermanentBufferState(baseline.get()), ResourceStates::UnorderedAccess);
+
+    commandList->open();
+    commandList->setPermanentBufferState(provisional.get(), ResourceStates::UnorderedAccess);
+    ASSERT_EQ(commandList->getPermanentBufferState(provisional.get()), ResourceStates::UnorderedAccess);
+    commandList->setBufferState(baseline.get(), ResourceStates::ShaderResource);
+    EXPECT_TRUE(commandList->commandRecordingFailed());
+    commandList->close(&attemptHandoff);
+    EXPECT_FALSE(attemptHandoff.valid());
+    EXPECT_FALSE(commandList->hasCommandBuffer());
+    EXPECT_EQ(commandList->getPermanentBufferState(baseline.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(commandList->getPermanentBufferState(provisional.get()), ResourceStates::Unknown);
+
+    commandList->open();
+    commandList->setPermanentBufferState(abandoned.get(), ResourceStates::UnorderedAccess);
+    ASSERT_EQ(commandList->getPermanentBufferState(abandoned.get()), ResourceStates::UnorderedAccess);
+    commandList->close();
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+    commandList->open();
+    EXPECT_EQ(commandList->getPermanentBufferState(abandoned.get()), ResourceStates::Unknown);
+    EXPECT_EQ(commandList->getPermanentBufferState(baseline.get()), ResourceStates::UnorderedAccess);
+    commandList->close();
+    ASSERT_TRUE(submit().valid());
+
+#if !defined(NWB_FINAL)
+    commandList->open();
+    commandList->setPermanentBufferState(rejected.get(), ResourceStates::UnorderedAccess);
+    ASSERT_EQ(commandList->getPermanentBufferState(rejected.get()), ResourceStates::UnorderedAccess);
+    commandList->close();
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    EXPECT_FALSE(submit().valid());
+    EXPECT_FALSE(commandList->hasCommandBuffer());
+    EXPECT_EQ(commandList->getPermanentBufferState(rejected.get()), ResourceStates::Unknown);
+    EXPECT_EQ(commandList->getPermanentBufferState(baseline.get()), ResourceStates::UnorderedAccess);
+#endif
+
+    commandList->open();
+    commandList->setPermanentBufferState(provisional.get(), ResourceStates::Unknown);
+    EXPECT_TRUE(commandList->commandRecordingFailed());
+    commandList->close();
+    EXPECT_EQ(commandList->getPermanentBufferState(provisional.get()), ResourceStates::Unknown);
+
+    commandList->open();
+    commandList->setPermanentBufferState(retainedInitial.get(), ResourceStates::CopyDest);
+    EXPECT_TRUE(commandList->commandRecordingFailed());
+    commandList->close();
+    EXPECT_EQ(commandList->getPermanentBufferState(retainedInitial.get()), ResourceStates::Unknown);
+
+    commandList->open();
+    commandList->setBufferState(nullptr, ResourceStates::CopyDest);
+    commandList->setPermanentBufferState(nullptr, ResourceStates::CopyDest);
+    commandList->releaseBufferOwnership(nullptr, commandList->getDescription().physicalQueue);
+    EXPECT_FALSE(commandList->commandRecordingFailed());
+    commandList->close();
+    ASSERT_TRUE(submit().valid());
+
+    commandList->open();
+    commandList->releaseBufferOwnership(releaseCandidate.get(), commandList->getDescription().physicalQueue);
+    EXPECT_FALSE(commandList->commandRecordingFailed());
+    commandList->close();
+    EXPECT_TRUE(commandList->commandRecordingFailed());
+    EXPECT_FALSE(commandList->hasCommandBuffer());
+    EXPECT_EQ(commandList->getPermanentBufferState(baseline.get()), ResourceStates::UnorderedAccess);
+
+    commandList->open();
+    EXPECT_FALSE(commandList->commandRecordingFailed());
+    commandList->close();
+    EXPECT_TRUE(submit().valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 TEST_F(DescriptorBufferRoundTripTest, NativePacketRecorderRejectsTaskRecordingLeaseReplacementInAllBuilds){
     auto& device = DescriptorBufferRoundTripTest::device();
     const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
@@ -46644,27 +47283,10 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferStateValidatesMatchingUavAn
     EXPECT_EQ(producer->getPermanentBufferState(matchingBuffer.get()), ResourceStates::UnorderedAccess);
 
     // This matching repeated call must emit the same-state UAV dependency while retaining the permanent state.
+    // Invalid setter attempts have their own disposable recording-attempt test above; this producer remains valid
+    // so its handoff and accepted submission continue proving the matching contract.
     producer->setPermanentBufferState(matchingBuffer.get(), ResourceStates::UnorderedAccess);
     EXPECT_EQ(producer->getPermanentBufferState(matchingBuffer.get()), ResourceStates::UnorderedAccess);
-#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
-    EXPECT_DEATH_IF_SUPPORTED({
-        producer->setBufferState(matchingBuffer.get(), ResourceStates::ShaderResource);
-    }, "");
-    EXPECT_DEATH_IF_SUPPORTED({
-        producer->setPermanentBufferState(matchingBuffer.get(), ResourceStates::ShaderResource);
-    }, "");
-    EXPECT_DEATH_IF_SUPPORTED({
-        producer->setPermanentBufferState(unknownCandidate.get(), ResourceStates::Unknown);
-    }, "");
-    EXPECT_DEATH_IF_SUPPORTED({
-        producer->setPermanentBufferState(retainedCandidate.get(), ResourceStates::CopyDest);
-    }, "");
-#else
-    producer->setBufferState(matchingBuffer.get(), ResourceStates::ShaderResource);
-    producer->setPermanentBufferState(matchingBuffer.get(), ResourceStates::ShaderResource);
-    producer->setPermanentBufferState(unknownCandidate.get(), ResourceStates::Unknown);
-    producer->setPermanentBufferState(retainedCandidate.get(), ResourceStates::CopyDest);
-#endif
     EXPECT_EQ(producer->getPermanentBufferState(matchingBuffer.get()), ResourceStates::UnorderedAccess);
     EXPECT_EQ(producer->getBufferState(matchingBuffer.get()), ResourceStates::UnorderedAccess);
     EXPECT_EQ(producer->getPermanentBufferState(unknownCandidate.get()), ResourceStates::Unknown);

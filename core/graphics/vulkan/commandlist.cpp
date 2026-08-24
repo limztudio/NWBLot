@@ -32,6 +32,7 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
         m_device.getGpuCrashTracker().registerGpuCrashMarkerTracker(m_gpuCrashMarkerTracker);
 }
 CommandList::~CommandList(){
+    m_stateTracker.rollbackRecordingAttempt();
     resetMarkerState();
     if(m_currentCmdBuf)
         m_currentCmdBuf->discardRetainedTextureStateCommits();
@@ -76,7 +77,8 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
         ++m_recordingLeaseSerial;
 
     NWB_ASSERT_MSG(m_markerDepth == 0u, NWB_TEXT("Vulkan: Command list reopened with unterminated marker scopes"));
-    resetMarkerState();
+    m_stateTracker.rollbackRecordingAttempt();
+    clearState();
     if(m_currentCmdBuf)
         m_currentCmdBuf->discardRetainedTextureStateCommits();
     discardUnsubmittedUploadChunks();
@@ -127,15 +129,12 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     m_isRecording = true;
 
     m_stateTracker.reset();
+    m_stateTracker.beginRecordingAttempt();
     m_textureOwnershipReleaseDestinations.clear();
     m_bufferOwnershipReleaseDestinations.clear();
     if(initialStates && !importResourceStateHandoff(*initialStates)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot open command list from an incompatible cross-queue resource-state handoff"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot open command list from an incompatible cross-queue resource-state handoff"));
-        discardUnsubmittedUploadChunks();
-        m_currentCmdBuf.reset();
-        m_isRecording = false;
-        clearState();
+        rejectCommandRecording(NWB_TEXT("open command list"), NWB_TEXT("resource-state handoff is incompatible"));
+        discardInvalidCommandBuffer();
     }
 }
 
@@ -144,31 +143,14 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
         finalStates->reset();
 
     if(!m_currentCmdBuf){
+        m_stateTracker.rollbackRecordingAttempt();
         m_isRecording = false;
         clearState();
         return;
     }
 
     if(m_commandRecordingFailed){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Discarding a command list after native command recording failed"));
-        if(m_isRecording){
-            endActiveRenderPass();
-            resetMarkerState();
-
-            const VkResult invalidEndResult = vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
-            m_isRecording = false;
-            if(invalidEndResult != VK_SUCCESS){
-                NWB_LOGGER_WARNING(
-                    NWB_TEXT("Vulkan: Failed to end an invalidated command buffer before discarding it: {}"),
-                    ResultToString(invalidEndResult)
-                );
-            }
-        }
-
-        m_currentCmdBuf->discardRetainedTextureStateCommits();
-        discardUnsubmittedUploadChunks();
-        m_currentCmdBuf.reset();
-        clearState();
+        discardInvalidCommandBuffer();
         return;
     }
 
@@ -184,16 +166,23 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
         !finalStates
         && (!m_textureOwnershipReleaseDestinations.empty() || !m_bufferOwnershipReleaseDestinations.empty())
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Closing a command list with an ownership release requires a final resource-state handoff"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Closing a command list with an ownership release requires a final resource-state handoff"));
-        m_textureOwnershipReleaseDestinations.clear();
-        m_bufferOwnershipReleaseDestinations.clear();
+        rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("ownership release requires a final resource-state handoff"));
+        discardInvalidCommandBuffer();
+        return;
     }
 
     endActiveRenderPass();
     m_stateTracker.appendKeepInitialStateBarriers(*m_currentCmdBuf, m_pendingImageBarriers, m_pendingBufferBarriers);
     commitBarriers();
+    if(m_commandRecordingFailed){
+        discardInvalidCommandBuffer();
+        return;
+    }
     appendPendingOwnershipReleaseBarriers();
+    if(m_commandRecordingFailed){
+        discardInvalidCommandBuffer();
+        return;
+    }
     resetMarkerState();
 
     const VkResult res = vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
@@ -201,10 +190,8 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to end command buffer recording: {}"), ResultToString(res));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to end command buffer recording"));
-        m_currentCmdBuf->discardRetainedTextureStateCommits();
-        discardUnsubmittedUploadChunks();
-        m_currentCmdBuf.reset();
-        clearState();
+        rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("native command buffer could not be ended"));
+        discardInvalidCommandBuffer();
         return;
     }
 
@@ -373,8 +360,45 @@ bool CommandList::recordAndValidateAnyCommandCapability(
     return recordAndValidateCommandCapability(static_cast<GpuQueueCapability::Mask>(selectedBit), operationName);
 }
 
+void CommandList::rejectCommandRecording(const tchar* const operationName, const tchar* const reason)noexcept{
+    if(!m_commandRecordingFailed){
+        NWB_LOGGER_CRITICAL_WARNING(
+            NWB_TEXT("Vulkan: Rejecting {} command recording: {}"),
+            operationName ? operationName : NWB_TEXT("unnamed command"),
+            reason ? reason : NWB_TEXT("invalid command semantics")
+        );
+    }
+    invalidateCommandRecording();
+}
+
 void CommandList::invalidateCommandRecording()noexcept{
     m_commandRecordingFailed = true;
+}
+
+void CommandList::discardInvalidCommandBuffer()noexcept{
+    m_stateTracker.rollbackRecordingAttempt();
+    if(!m_currentCmdBuf)
+        return;
+
+    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Discarding a command list after command recording failed"));
+    if(m_isRecording){
+        endActiveRenderPass();
+        resetMarkerState();
+
+        const VkResult invalidEndResult = vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
+        m_isRecording = false;
+        if(invalidEndResult != VK_SUCCESS){
+            NWB_LOGGER_WARNING(
+                NWB_TEXT("Vulkan: Failed to end an invalidated command buffer before discarding it: {}"),
+                ResultToString(invalidEndResult)
+            );
+        }
+    }
+
+    m_currentCmdBuf->discardRetainedTextureStateCommits();
+    discardUnsubmittedUploadChunks();
+    m_currentCmdBuf.reset();
+    clearState();
 }
 
 #if defined(NWB_DEBUG)

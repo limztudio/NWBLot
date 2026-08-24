@@ -107,8 +107,11 @@ void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSli
     region.dstOffset = { static_cast<int32_t>(resolvedDst.x), static_cast<int32_t>(resolvedDst.y), static_cast<int32_t>(resolvedDst.z) };
     region.extent = { resolvedDst.width, resolvedDst.height, resolvedDst.depth };
 
+    endActiveRenderPass();
     setTextureState(srcResource, TextureSubresourceSet(resolvedSrc.mipLevel, 1u, resolvedSrc.arraySlice, 1u), ResourceStates::CopySource);
     setTextureState(destResource, TextureSubresourceSet(resolvedDst.mipLevel, 1u, resolvedDst.arraySlice, 1u), ResourceStates::CopyDest);
+    if(m_commandRecordingFailed)
+        return;
 
     vkCmdCopyImage(m_currentCmdBuf->m_cmdBuf, src.m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
@@ -139,7 +142,10 @@ void CommandList::copyTexture(StagingTexture* dest, const TextureSlice& destSlic
     if(!recordAndValidateCommandCapability(requiredCapabilities, NWB_TEXT("copy texture to staging texture")))
         return;
 
+    endActiveRenderPass();
     setTextureState(src, TextureSubresourceSet(region.imageSubresource.mipLevel, 1u, region.imageSubresource.baseArrayLayer, 1u), ResourceStates::CopySource);
+    if(m_commandRecordingFailed)
+        return;
 
     vkCmdCopyImageToBuffer(m_currentCmdBuf->m_cmdBuf, src->m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest->m_buffer, 1, &region);
 
@@ -170,7 +176,10 @@ void CommandList::copyTexture(Texture* dest, const TextureSlice& destSlice, Stag
     if(!recordAndValidateCommandCapability(requiredCapabilities, NWB_TEXT("copy staging texture to texture")))
         return;
 
+    endActiveRenderPass();
     setTextureState(dest, TextureSubresourceSet(region.imageSubresource.mipLevel, 1u, region.imageSubresource.baseArrayLayer, 1u), ResourceStates::CopyDest);
+    if(m_commandRecordingFailed)
+        return;
 
     vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, src->m_buffer, dest->m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
@@ -245,6 +254,7 @@ bool CommandList::tryWriteTexture(
     if(!recordAndValidateCommandCapability(requiredCapabilities, NWB_TEXT("write texture")))
         return false;
 
+    endActiveRenderPass();
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
     const usize uploadSize = static_cast<usize>(copyLayout.requiredSize);
@@ -252,6 +262,8 @@ bool CommandList::tryWriteTexture(
         return false;
 
     setTextureState(destResource, TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u), ResourceStates::CopyDest);
+    if(m_commandRecordingFailed)
+        return false;
 
     VkBufferImageCopy region{};
     region.bufferOffset = stagingOffset;

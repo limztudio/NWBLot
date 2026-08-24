@@ -1419,6 +1419,138 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
     EXPECT_FALSE(writeTextureBarrier->isGraphInitialState);
 }
 
+
+TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
+    constexpr Graphics::ResourceQueueSharing::Mask s_NativeQueueSharing =
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute;
+    constexpr Graphics::ResourceQueueSharing::Mask s_MismatchedQueueSharing =
+        Graphics::ResourceQueueSharing::GraphicsAndTransfer;
+
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+
+    Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+        testArena.arena,
+        context,
+        allocator
+    );
+    Graphics::Buffer* const bufferObject = NewArenaObject<Graphics::Buffer>(
+        testArena.arena,
+        context,
+        allocator
+    );
+    Graphics::RayTracingAccelStruct* const accelStructObject = NewArenaObject<Graphics::RayTracingAccelStruct>(
+        testArena.arena,
+        context
+    );
+    ASSERT_NE(textureObject, nullptr);
+    ASSERT_NE(bufferObject, nullptr);
+    ASSERT_NE(accelStructObject, nullptr);
+
+    Graphics::TextureHandle texture(
+        textureObject,
+        Graphics::TextureHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::BufferHandle buffer(
+        bufferObject,
+        Graphics::BufferHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::RayTracingAccelStructHandle accelStruct(
+        accelStructObject,
+        Graphics::RayTracingAccelStructHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::TextureDesc& textureDesc = const_cast<Graphics::TextureDesc&>(texture->getDescription());
+    Graphics::BufferDesc& bufferDesc = const_cast<Graphics::BufferDesc&>(buffer->getDescription());
+    Graphics::RayTracingAccelStructDesc& accelStructDesc = const_cast<Graphics::RayTracingAccelStructDesc&>(
+        accelStruct->getDescription()
+    );
+    textureDesc.queueSharing = s_NativeQueueSharing;
+    bufferDesc.queueSharing = s_NativeQueueSharing;
+    accelStructDesc.queueSharing = s_NativeQueueSharing;
+
+    const auto expectQueueSharingContract = [&](
+        const auto& import,
+        const Graphics::GpuGraphResourceType::Enum type,
+        const Name& identity,
+        const AStringView markerLabel
+    ){
+        {
+            Graphics::GpuTaskGraph graph(testArena.arena);
+            const Graphics::GpuGraphResourceId resource = import(
+                graph,
+                Graphics::GpuGraphResourceDesc{}
+                    .setIdentity(identity)
+                    .setMarkerLabel(markerLabel)
+                    .setType(type)
+                    .setInitialState(Graphics::ResourceStates::Common)
+            );
+            ASSERT_TRUE(resource.valid());
+            EXPECT_EQ(graph.resourceAt(resource.index).queueSharing, s_NativeQueueSharing);
+        }
+
+        {
+            Graphics::GpuTaskGraph graph(testArena.arena);
+            const Graphics::GpuGraphResourceId resource = import(
+                graph,
+                Graphics::GpuGraphResourceDesc{}
+                    .setIdentity(identity)
+                    .setMarkerLabel(markerLabel)
+                    .setType(type)
+                    .setInitialState(Graphics::ResourceStates::Common)
+                    .setQueueSharing(s_NativeQueueSharing)
+            );
+            ASSERT_TRUE(resource.valid());
+            EXPECT_EQ(graph.resourceAt(resource.index).queueSharing, s_NativeQueueSharing);
+        }
+
+        {
+            Graphics::GpuTaskGraph graph(testArena.arena);
+            EXPECT_FALSE(import(
+                graph,
+                Graphics::GpuGraphResourceDesc{}
+                    .setIdentity(identity)
+                    .setMarkerLabel(markerLabel)
+                    .setType(type)
+                    .setInitialState(Graphics::ResourceStates::Common)
+                    .setQueueSharing(s_MismatchedQueueSharing)
+            ).valid());
+            EXPECT_EQ(graph.resourceCount(), 0u);
+        }
+    };
+
+    expectQueueSharingContract(
+        [&](Graphics::GpuTaskGraph& graph, const Graphics::GpuGraphResourceDesc& desc){
+            return graph.importTexture(texture, desc);
+        },
+        Graphics::GpuGraphResourceType::Texture,
+        Name("tests/task_graph/native_queue_sharing_texture"),
+        "Native Queue Sharing Texture"
+    );
+    expectQueueSharingContract(
+        [&](Graphics::GpuTaskGraph& graph, const Graphics::GpuGraphResourceDesc& desc){
+            return graph.importBuffer(buffer, desc);
+        },
+        Graphics::GpuGraphResourceType::Buffer,
+        Name("tests/task_graph/native_queue_sharing_buffer"),
+        "Native Queue Sharing Buffer"
+    );
+    expectQueueSharingContract(
+        [&](Graphics::GpuTaskGraph& graph, const Graphics::GpuGraphResourceDesc& desc){
+            return graph.importAccelStruct(accelStruct, desc);
+        },
+        Graphics::GpuGraphResourceType::AccelStruct,
+        Name("tests/task_graph/native_queue_sharing_accel_struct"),
+        "Native Queue Sharing Accel Struct"
+    );
+}
+
+
 TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
     constexpr u16 s_SourceDeviceGeneration = 7u;
     constexpr u16 s_TargetDeviceGeneration = 8u;

@@ -113,9 +113,9 @@ GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, con
     if(!texture || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphResourceType::Texture)
         return {};
 
+    const TextureDesc& textureDesc = texture->getDescription();
     GpuGraphResourceDesc resolvedDesc = desc;
     if(!resolvedDesc.hasExplicitInitialState && resolvedDesc.initialState == ResourceStates::Unknown){
-        const TextureDesc& textureDesc = texture->getDescription();
         // A mixed retained texture has no single physical layout: an accepted partial upload restored only part of
         // it, while its remaining subresources are still Undefined. Preserve the legacy descriptor fallback for
         // all-unknown fresh textures and all-known native imports, but force this ambiguous typed import to name
@@ -125,8 +125,9 @@ GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, con
             : textureDesc.initialState
         ;
     }
-    if(resolvedDesc.queueSharing == ResourceQueueSharing::Exclusive)
-        resolvedDesc.queueSharing = texture->getDescription().queueSharing;
+    if(resolvedDesc.queueSharing != ResourceQueueSharing::Exclusive && resolvedDesc.queueSharing != textureDesc.queueSharing)
+        return {};
+    resolvedDesc.queueSharing = textureDesc.queueSharing;
 
     for(usize resourceIndex = 0u; resourceIndex < m_resources.size(); ++resourceIndex){
         const GpuGraphResourceNode& existing = m_resources[resourceIndex];
@@ -156,11 +157,13 @@ GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const 
     if(!buffer || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphResourceType::Buffer)
         return {};
 
+    const BufferDesc& bufferDesc = buffer->getDescription();
     GpuGraphResourceDesc resolvedDesc = desc;
     if(!resolvedDesc.hasExplicitInitialState && resolvedDesc.initialState == ResourceStates::Unknown)
-        resolvedDesc.initialState = buffer->getDescription().initialState;
-    if(resolvedDesc.queueSharing == ResourceQueueSharing::Exclusive)
-        resolvedDesc.queueSharing = buffer->getDescription().queueSharing;
+        resolvedDesc.initialState = bufferDesc.initialState;
+    if(resolvedDesc.queueSharing != ResourceQueueSharing::Exclusive && resolvedDesc.queueSharing != bufferDesc.queueSharing)
+        return {};
+    resolvedDesc.queueSharing = bufferDesc.queueSharing;
 
     for(usize resourceIndex = 0u; resourceIndex < m_resources.size(); ++resourceIndex){
         const GpuGraphResourceNode& existing = m_resources[resourceIndex];
@@ -217,9 +220,14 @@ GpuGraphResourceId GpuTaskGraph::importAccelStruct(
     if(!accelStruct || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphResourceType::AccelStruct)
         return {};
 
+    const RayTracingAccelStructDesc& accelStructDesc = accelStruct->getDescription();
     GpuGraphResourceDesc resolvedDesc = desc;
-    if(resolvedDesc.queueSharing == ResourceQueueSharing::Exclusive)
-        resolvedDesc.queueSharing = accelStruct->getDescription().queueSharing;
+    if(
+        resolvedDesc.queueSharing != ResourceQueueSharing::Exclusive
+        && resolvedDesc.queueSharing != accelStructDesc.queueSharing
+    )
+        return {};
+    resolvedDesc.queueSharing = accelStructDesc.queueSharing;
 
     for(usize resourceIndex = 0u; resourceIndex < m_resources.size(); ++resourceIndex){
         const GpuGraphResourceNode& existing = m_resources[resourceIndex];

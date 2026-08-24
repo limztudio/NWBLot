@@ -468,8 +468,11 @@ struct GpuTaskGraphTaskSubmissionHook{
 };
 
 
-// Runs immediately after a packet accepts its submission token. Returning false stops the current range traversal,
-// but retains the accepted packet so the caller can submit an appropriate recovery or finalization tail.
+// Synchronous compatibility obligation run after the graph's typed accepted hooks and Accepted lifecycle, but
+// before the transaction publishes this packet's token or accepted frontier. Returning false stops later range
+// traversal without hiding the native-accepted packet. The callback runs while the transaction's submission gate
+// is held, but without its state mutex or the graph lifecycle mutex. It must not reenter or synchronously wait for
+// work that needs the same transaction gate; same-transaction nested submission fails immediately.
 struct GpuTaskGraphPacketAcceptedCallback{
     void* context = nullptr;
     [[nodiscard]] bool (*invoke)(
@@ -479,9 +482,10 @@ struct GpuTaskGraphPacketAcceptedCallback{
     ) = nullptr;
 };
 
-// Semantic acceptance binding for one declared task. The submitter resolves the task after compilation and invokes
-// bindings in compiled task order once their containing native packet has accepted. Returning false stops range
-// traversal after retaining that accepted packet, just like the packet-wide compatibility callback.
+// Semantic compatibility binding for one declared task. After the packet-wide compatibility callback, the submitter
+// invokes every matching binding in compiled task order even if an earlier callback returned false. The aggregate
+// false result stops later range traversal only after the accepted token/frontier publishes. These callbacks share
+// the same synchronous submission-gate and deadlock restrictions as GpuTaskGraphPacketAcceptedCallback.
 struct GpuTaskGraphTaskAcceptedCallback{
     GpuTaskId task;
     void* context = nullptr;
@@ -777,7 +781,10 @@ private:
         GpuSubmissionPacketId packet,
         const QueueSubmissionToken& token,
         GpuTaskPacketSubmissionLease& lease,
-        const NativeSubmissionInfo* nativeSubmissionInfo = nullptr
+        const NativeSubmissionInfo* nativeSubmissionInfo = nullptr,
+        const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr,
+        const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr,
+        usize taskAcceptedCallbackCount = 0u
     )noexcept;
     void rejectSubmittingPacket(
         GpuTaskGraph& graph,
@@ -887,6 +894,27 @@ struct GpuTaskGraphRuntimeStatistics{
 
 
 class GpuTaskGraphSubmitter final : NoCopy{
+private:
+    // The caller owns one valid SubmissionOperation for the full native-accept, compatibility-callback, and
+    // transaction-publication sequence. Range submission supplies its synchronous compatibility obligations here;
+    // the public single-packet API deliberately supplies none.
+    [[nodiscard]] bool submitPacketWithinSubmissionOperation(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuRecordedGraph& recordedGraph,
+        const GpuSubmissionPacketId& packet,
+        const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
+        usize externalCompletionTokenCount,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuTimingSubmissionTicket* timingTicket,
+        const QueueSubmissionPreSubmitHook* preSubmitHook,
+        const GpuTaskGraphPacketAcceptedCallback* acceptedCallback,
+        const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks,
+        usize taskAcceptedCallbackCount
+    )const;
+
+
 public:
     explicit GpuTaskGraphSubmitter(Device& device)
         : m_device(device)
@@ -894,6 +922,8 @@ public:
 
 
 public:
+    // One-packet compatibility entry point. It publishes graph and transaction acceptance synchronously after the
+    // native submit and carries no packet/task compatibility callback obligation.
     [[nodiscard]] bool submitPacket(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -907,8 +937,9 @@ public:
         const QueueSubmissionPreSubmitHook* preSubmitHook = nullptr
     )const;
     // Submits one compiler-derived non-empty contiguous range. Dependencies outside the range must already be
-    // accepted in the transaction; this preserves graph-owned waits while allowing intentional late tails. An
-    // accepted callback may stop the range after retaining its packet for recovery or finalization.
+    // accepted in the transaction; this preserves graph-owned waits while allowing intentional late tails. Every
+    // accepted callback completes synchronously before that packet's token/frontier becomes observable. A callback
+    // false result stops later packets after publishing the accepted packet for recovery or finalization.
     [[nodiscard]] bool submitPacketRangeInCompileOrder(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

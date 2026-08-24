@@ -3840,6 +3840,12 @@ struct NativePacketCaptureRetryTask{
 };
 
 
+struct NativeTaskAcceptanceOrder{
+    u32 invocationCount = 0u;
+    u32 markers[8] = {};
+};
+
+
 #if !defined(NWB_FINAL)
 struct NativePacketSubmissionSerializationContext{
     GpuTaskGraph* graph = nullptr;
@@ -3849,15 +3855,25 @@ struct NativePacketSubmissionSerializationContext{
     GpuGraphSubmissionTransaction* transaction = nullptr;
     const GpuTaskGraphSubmitter* submitter = nullptr;
     Alloc::ScratchArena* scratchArena = nullptr;
-    AtomicFlag acceptedEntered;
-    AtomicFlag releaseAccepted;
-    QueueSubmissionToken acceptedToken;
+    NativeTaskAcceptanceOrder* acceptanceOrder = nullptr;
+    u32 compatibilityOrderMarker = 0u;
+    AtomicFlag compatibilityEntered;
+    AtomicFlag releaseCompatibility;
+    QueueSubmissionToken typedAcceptedToken;
+    QueueSubmissionToken compatibilityAcceptedToken;
+    u32 typedAcceptedCount = 0u;
+    u32 compatibilityAcceptedCount = 0u;
     bool reentrantSubmissionResult = true;
+    bool callbackInputsValid = false;
+    bool packetTokenHiddenDuringCallback = false;
+    bool acceptedFrontierHiddenDuringCallback = false;
+    bool acceptanceOrderOverflow = false;
 };
 
 struct NativePacketSubmissionSerializationTask{
     struct Payload{
         NativePacketSubmissionSerializationContext* context = nullptr;
+        u32 acceptanceOrderMarker = 0u;
     };
 
     [[nodiscard]] static bool record(
@@ -3871,19 +3887,52 @@ struct NativePacketSubmissionSerializationTask{
 
     static void accepted(Payload& payload, const QueueSubmissionToken& token){
         NativePacketSubmissionSerializationContext* const context = payload.context;
-        if(
-            !context
-            || !context->graph
-            || !context->compiledGraph
-            || !context->recordedGraph
-            || !context->packet.valid()
-            || !context->transaction
-            || !context->submitter
-            || !context->scratchArena
-        )
+        if(!context)
             return;
 
-        context->acceptedToken = token;
+        context->typedAcceptedToken = token;
+        ++context->typedAcceptedCount;
+        if(context->acceptanceOrder){
+            if(context->acceptanceOrder->invocationCount < LengthOf(context->acceptanceOrder->markers)){
+                context->acceptanceOrder->markers[context->acceptanceOrder->invocationCount++] =
+                    payload.acceptanceOrderMarker
+                ;
+            }
+            else{
+                context->acceptanceOrderOverflow = true;
+            }
+        }
+    }
+};
+
+[[nodiscard]] static bool BlockNativePacketCompatibilityPublication(
+    void* const rawContext,
+    const GpuSubmissionPacketId& packet,
+    const QueueSubmissionToken& token
+){
+    NativePacketSubmissionSerializationContext* const context =
+        static_cast<NativePacketSubmissionSerializationContext*>(rawContext)
+    ;
+    if(!context)
+        return false;
+
+    context->callbackInputsValid =
+        context->graph
+        && context->compiledGraph
+        && context->recordedGraph
+        && packet == context->packet
+        && token.valid()
+        && context->transaction
+        && context->submitter
+        && context->scratchArena
+    ;
+    if(context->callbackInputsValid){
+        context->compatibilityAcceptedToken = token;
+        ++context->compatibilityAcceptedCount;
+        context->packetTokenHiddenDuringCallback = !context->transaction->packetToken(packet).valid();
+        context->acceptedFrontierHiddenDuringCallback = context->transaction->latestAcceptedToken(
+            context->compiledGraph->packet(packet).queue
+        ) == nullptr;
         context->reentrantSubmissionResult = context->submitter->submitPacket(
             *context->graph,
             *context->compiledGraph,
@@ -3894,12 +3943,23 @@ struct NativePacketSubmissionSerializationTask{
             *context->transaction,
             *context->scratchArena
         );
-        context->acceptedEntered.test_and_set(MemoryOrder::release);
-        context->acceptedEntered.notify_all();
-        while(!context->releaseAccepted.test(MemoryOrder::acquire))
-            context->releaseAccepted.wait(false, MemoryOrder::acquire);
+        if(context->acceptanceOrder){
+            if(context->acceptanceOrder->invocationCount < LengthOf(context->acceptanceOrder->markers)){
+                context->acceptanceOrder->markers[context->acceptanceOrder->invocationCount++] =
+                    context->compatibilityOrderMarker
+                ;
+            }
+            else{
+                context->acceptanceOrderOverflow = true;
+            }
+        }
     }
-};
+    context->compatibilityEntered.test_and_set(MemoryOrder::release);
+    context->compatibilityEntered.notify_all();
+    while(!context->releaseCompatibility.test(MemoryOrder::acquire))
+        context->releaseCompatibility.wait(false, MemoryOrder::acquire);
+    return false;
+}
 #endif
 
 
@@ -6095,11 +6155,6 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
     EXPECT_TRUE(device.waitForIdle());
 }
 
-
-struct NativeTaskAcceptanceOrder{
-    u32 invocationCount = 0u;
-    u32 markers[4] = {};
-};
 
 struct NativePacketRangeAcceptanceObserver{
     u32 acceptedCount = 0u;
@@ -44577,10 +44632,11 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
 }
 
 
-// A native Transfer submit has already succeeded when its graph accepted hook begins. A concurrent Graphics
-// recovery must wait for that hook and transaction publication, then capture the exact newly published frontier.
-// The accepted hook also proves same-transaction recursive submission fails instead of acquiring its own gate.
-TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryWaitsForAcceptedPublicationBeforeJoiningFrontier){
+// The native Transfer packet has accepted and both typed hooks have reached graph Accepted before the compatibility
+// callback blocks. The transaction token/frontier must remain hidden until every compatibility callback finishes;
+// a concurrent Graphics recovery then joins the exact published Transfer packet. A false callback stops the later
+// ordinary packet without losing that accepted publication, and same-transaction reentry remains fail-fast.
+TEST_F(DescriptorBufferRoundTripTest, NativePacketCompatibilityCallbacksGateAcceptedFrontierPublication){
     HeadlessGraphicsScope transferScope;
     ASSERT_TRUE(transferScope.setTransferQueueEnabled(true));
     if(!transferScope.initialize())
@@ -44612,21 +44668,64 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryWaitsForAcceptedPublic
         false,
         false,
     };
-    GpuTaskSchedulingHint packetScheduling;
-    packetScheduling.cost = GpuTaskCostHint::Tiny;
-    packetScheduling.forceSubmissionBoundary = true;
-    packetScheduling.allowPacketMerge = false;
+    GpuTaskSchedulingHint transferScheduling;
+    transferScheduling.cost = GpuTaskCostHint::Tiny;
+    transferScheduling.allowPacketMerge = true;
 
+    NativeTaskAcceptanceOrder acceptanceOrder;
     NativePacketSubmissionSerializationContext serializationContext;
+    serializationContext.acceptanceOrder = &acceptanceOrder;
+    serializationContext.compatibilityOrderMarker = 3u;
     const GpuTaskId transferTask = graph.addTask<NativePacketSubmissionSerializationTask>(
         GpuTaskDesc{}
             .setIdentity(Name("tests/descriptor_buffer/submission_serialization_transfer"))
             .setMarkerLabel("Submission Serialization Transfer")
             .setQueue(transferRequest)
-            .setScheduling(packetScheduling),
-        NativePacketSubmissionSerializationTask::Payload{ .context = &serializationContext }
+            .setScheduling(transferScheduling),
+        NativePacketSubmissionSerializationTask::Payload{
+            .context = &serializationContext,
+            .acceptanceOrderMarker = 1u,
+        }
     );
     ASSERT_TRUE(transferTask.valid());
+
+    const GpuTaskId mergedTransferDependencies[] = { transferTask };
+    GpuTaskSchedulingHint mergedTransferScheduling = transferScheduling;
+    mergedTransferScheduling.mergeWithPrevious = true;
+    const GpuTaskId mergedTransferTask = graph.addTask<NativePacketSubmissionSerializationTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/submission_serialization_merged_transfer"))
+            .setMarkerLabel("Submission Serialization Merged Transfer")
+            .setQueue(transferRequest)
+            .setScheduling(mergedTransferScheduling)
+            .setDependencies(mergedTransferDependencies, LengthOf(mergedTransferDependencies)),
+        NativePacketSubmissionSerializationTask::Payload{
+            .context = &serializationContext,
+            .acceptanceOrderMarker = 2u,
+        }
+    );
+    ASSERT_TRUE(mergedTransferTask.valid());
+
+    GpuTaskSchedulingHint packetScheduling;
+    packetScheduling.cost = GpuTaskCostHint::Tiny;
+    packetScheduling.forceSubmissionBoundary = true;
+    packetScheduling.allowPacketMerge = false;
+    const GpuTaskId suffixDependencies[] = { mergedTransferTask };
+    bool suffixShouldRecord = true;
+    bool suffixRecorded = false;
+    const GpuTaskId suffixTask = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/submission_serialization_suffix"))
+            .setMarkerLabel("Submission Serialization Suffix")
+            .setQueue(graphicsRequest)
+            .setScheduling(packetScheduling)
+            .setDependencies(suffixDependencies, LengthOf(suffixDependencies)),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &suffixShouldRecord,
+            .attempted = &suffixRecorded,
+        }
+    );
+    ASSERT_TRUE(suffixTask.valid());
 
     bool recoveryShouldRecord = true;
     bool recoveryRecorded = false;
@@ -44652,32 +44751,56 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryWaitsForAcceptedPublic
     Alloc::ScratchArena compileScratch(Name("tests/descriptor_buffer/submission_serialization_compile_scratch"));
     const GpuTaskGraphCompiler compiler;
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, compileScratch));
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
 
     const GpuTaskQueueAssignment* const transferAssignment = assignments.find(transferTask);
+    const GpuTaskQueueAssignment* const mergedTransferAssignment = assignments.find(mergedTransferTask);
+    const GpuTaskQueueAssignment* const suffixAssignment = assignments.find(suffixTask);
     const GpuTaskQueueAssignment* const recoveryAssignment = assignments.find(recoveryTask);
     ASSERT_NE(transferAssignment, nullptr);
+    ASSERT_NE(mergedTransferAssignment, nullptr);
+    ASSERT_NE(suffixAssignment, nullptr);
     ASSERT_NE(recoveryAssignment, nullptr);
     EXPECT_EQ(transferAssignment->queue, transferQueue);
+    EXPECT_EQ(mergedTransferAssignment->queue, transferQueue);
+    EXPECT_EQ(suffixAssignment->queue, graphicsQueue);
     EXPECT_EQ(recoveryAssignment->queue, graphicsQueue);
     const GpuSubmissionPacketId transferPacket = compiledGraph.packetForTask(transferTask);
+    const GpuSubmissionPacketId suffixPacket = compiledGraph.packetForTask(suffixTask);
     const GpuSubmissionPacketId recoveryPacket = compiledGraph.packetForTask(recoveryTask);
     ASSERT_TRUE(transferPacket.valid());
+    ASSERT_EQ(compiledGraph.packetForTask(mergedTransferTask), transferPacket);
+    ASSERT_TRUE(suffixPacket.valid());
     ASSERT_TRUE(recoveryPacket.valid());
+    ASSERT_NE(transferPacket, suffixPacket);
     ASSERT_NE(transferPacket, recoveryPacket);
+    ASSERT_NE(suffixPacket, recoveryPacket);
+    const GpuTaskId* const transferPacketTasks = compiledGraph.packetTasks(transferPacket);
+    ASSERT_NE(transferPacketTasks, nullptr);
+    ASSERT_EQ(compiledGraph.packet(transferPacket).taskCount, 2u);
+    EXPECT_EQ(transferPacketTasks[0u], transferTask);
+    EXPECT_EQ(transferPacketTasks[1u], mergedTransferTask);
     ASSERT_TRUE(compiledGraph.packet(recoveryPacket).joinsAcceptedQueueFrontier);
     ASSERT_EQ(compiledGraph.packet(recoveryPacket).dependencyCount, 0u);
+    const GpuSubmissionPacketRange ordinaryRange = compiledGraph.packetRangeForTasks(transferTask, suffixTask);
+    ASSERT_TRUE(ordinaryRange.valid());
+    ASSERT_EQ(ordinaryRange.first, transferPacket);
+    ASSERT_EQ(ordinaryRange.packetCount, 2u);
 
     GpuRecordedGraph recordedGraph(transferScope.arena());
     GpuGraphSubmissionTransaction transaction(transferScope.arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(
+    ASSERT_TRUE(recorder.recordTaskRangeInCompileOrder(
         graph,
         compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = transferPacket },
+        transferTask,
+        suffixTask,
+        nullptr,
+        0u,
         recordedGraph
     ));
+    EXPECT_TRUE(suffixRecorded);
 
     const GpuTaskGraphSubmitter submitter(device);
     serializationContext.graph = &graph;
@@ -44687,33 +44810,85 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryWaitsForAcceptedPublic
     serializationContext.transaction = &transaction;
     serializationContext.submitter = &submitter;
 
-    bool transferSubmissionResult = false;
-    Thread transferSubmissionThread([&](){
+    const GpuTaskGraphPacketAcceptedCallback acceptedCallback{
+        .context = &serializationContext,
+        .invoke = BlockNativePacketCompatibilityPublication,
+    };
+    NativeTaskAcceptanceObserver firstTaskAcceptance{
+        .acceptedCount = 0u,
+        .lastToken = {},
+        .continueSubmission = false,
+        .order = &acceptanceOrder,
+        .orderMarker = 4u,
+    };
+    NativeTaskAcceptanceObserver secondTaskAcceptance{
+        .acceptedCount = 0u,
+        .lastToken = {},
+        .order = &acceptanceOrder,
+        .orderMarker = 5u,
+    };
+    const GpuTaskGraphTaskAcceptedCallback taskAcceptedCallbacks[] = {
+        GpuTaskGraphTaskAcceptedCallback{
+            .task = transferTask,
+            .context = &firstTaskAcceptance,
+            .invoke = ObserveNativeTaskAcceptance,
+        },
+        GpuTaskGraphTaskAcceptedCallback{
+            .task = mergedTransferTask,
+            .context = &secondTaskAcceptance,
+            .invoke = ObserveNativeTaskAcceptance,
+        },
+    };
+    GpuSubmissionPacketId failedSubmissionPacket;
+    bool rangeSubmissionResult = true;
+    Thread rangeSubmissionThread([&](){
         Alloc::ScratchArena submissionScratch(
             Name("tests/descriptor_buffer/submission_serialization_transfer_thread_scratch")
         );
         serializationContext.scratchArena = &submissionScratch;
-        transferSubmissionResult = submitter.submitPacket(
+        rangeSubmissionResult = submitter.submitPacketRangeInCompileOrder(
             graph,
             compiledGraph,
             recordedGraph,
-            transferPacket,
+            ordinaryRange,
+            nullptr,
+            0u,
             nullptr,
             0u,
             transaction,
-            submissionScratch
+            submissionScratch,
+            &failedSubmissionPacket,
+            &acceptedCallback,
+            nullptr,
+            0u,
+            taskAcceptedCallbacks,
+            LengthOf(taskAcceptedCallbacks)
         );
     });
 
-    while(!serializationContext.acceptedEntered.test(MemoryOrder::acquire))
-        serializationContext.acceptedEntered.wait(false, MemoryOrder::acquire);
-    EXPECT_TRUE(serializationContext.acceptedToken.valid());
-    EXPECT_TRUE(serializationContext.acceptedToken.matchesPhysicalQueue(
+    while(!serializationContext.compatibilityEntered.test(MemoryOrder::acquire))
+        serializationContext.compatibilityEntered.wait(false, MemoryOrder::acquire);
+    EXPECT_TRUE(serializationContext.callbackInputsValid);
+    EXPECT_FALSE(serializationContext.acceptanceOrderOverflow);
+    EXPECT_EQ(serializationContext.typedAcceptedCount, 2u);
+    EXPECT_EQ(serializationContext.compatibilityAcceptedCount, 1u);
+    EXPECT_TRUE(serializationContext.typedAcceptedToken.valid());
+    EXPECT_TRUE(serializationContext.compatibilityAcceptedToken.valid());
+    EXPECT_TRUE(serializationContext.compatibilityAcceptedToken.matchesPhysicalQueue(
         transferQueue.index,
         transferQueue.deviceGeneration
     ));
+    EXPECT_EQ(serializationContext.typedAcceptedToken.value, serializationContext.compatibilityAcceptedToken.value);
     EXPECT_FALSE(serializationContext.reentrantSubmissionResult);
+    EXPECT_TRUE(serializationContext.packetTokenHiddenDuringCallback);
+    EXPECT_TRUE(serializationContext.acceptedFrontierHiddenDuringCallback);
     EXPECT_FALSE(transaction.hasAcceptedPackets());
+    EXPECT_FALSE(transaction.packetToken(transferPacket).valid());
+    EXPECT_EQ(transaction.latestAcceptedToken(transferQueue), nullptr);
+    ASSERT_EQ(acceptanceOrder.invocationCount, 3u);
+    EXPECT_EQ(acceptanceOrder.markers[0u], 1u);
+    EXPECT_EQ(acceptanceOrder.markers[1u], 2u);
+    EXPECT_EQ(acceptanceOrder.markers[2u], 3u);
 
     device.clearSubmissionWaitTokensForTesting();
     device.armSubmissionWaitCaptureForTesting();
@@ -44750,27 +44925,78 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryWaitsForAcceptedPublic
         && !recoveryFinished.test(MemoryOrder::acquire)
     ;
 
-    serializationContext.releaseAccepted.test_and_set(MemoryOrder::release);
-    serializationContext.releaseAccepted.notify_all();
-    transferSubmissionThread.join();
+    serializationContext.releaseCompatibility.test_and_set(MemoryOrder::release);
+    serializationContext.releaseCompatibility.notify_all();
+    rangeSubmissionThread.join();
     recoverySubmissionThread.join();
 
     EXPECT_TRUE(recoveryBlockedForPublication);
-    EXPECT_TRUE(transferSubmissionResult);
+    EXPECT_FALSE(rangeSubmissionResult);
+    EXPECT_EQ(failedSubmissionPacket, transferPacket);
     EXPECT_TRUE(recoverySubmissionResult);
     EXPECT_TRUE(recoveryRecorded);
+    EXPECT_EQ(firstTaskAcceptance.acceptedCount, 1u);
+    EXPECT_EQ(secondTaskAcceptance.acceptedCount, 1u);
+    EXPECT_FALSE(serializationContext.acceptanceOrderOverflow);
+    ASSERT_EQ(acceptanceOrder.invocationCount, 5u);
+    EXPECT_EQ(acceptanceOrder.markers[0u], 1u);
+    EXPECT_EQ(acceptanceOrder.markers[1u], 2u);
+    EXPECT_EQ(acceptanceOrder.markers[2u], 3u);
+    EXPECT_EQ(acceptanceOrder.markers[3u], 4u);
+    EXPECT_EQ(acceptanceOrder.markers[4u], 5u);
     EXPECT_EQ(transaction.submissionWaiterCountForTesting(), 0u);
     const QueueSubmissionToken transferToken = transaction.packetToken(transferPacket);
+    const QueueSubmissionToken suffixToken = transaction.packetToken(suffixPacket);
     const QueueSubmissionToken recoveryToken = transaction.packetToken(recoveryPacket);
     ASSERT_TRUE(transferToken.valid());
+    EXPECT_FALSE(suffixToken.valid());
     ASSERT_TRUE(recoveryToken.valid());
-    EXPECT_EQ(transferToken.value, serializationContext.acceptedToken.value);
+    EXPECT_EQ(transferToken.value, serializationContext.typedAcceptedToken.value);
+    EXPECT_EQ(transferToken.value, serializationContext.compatibilityAcceptedToken.value);
+    EXPECT_EQ(transferToken.value, firstTaskAcceptance.lastToken.value);
+    EXPECT_EQ(transferToken.value, secondTaskAcceptance.lastToken.value);
     ASSERT_EQ(device.lastSubmissionWaitTokenCountForTesting(graphicsQueue), 1u);
     const QueueSubmissionToken recoveryWait = device.lastSubmissionWaitTokenForTesting(graphicsQueue, 0u);
     EXPECT_EQ(recoveryWait.queue, transferToken.queue);
     EXPECT_EQ(recoveryWait.value, transferToken.value);
     EXPECT_EQ(recoveryWait.physicalQueueIndex, transferToken.physicalQueueIndex);
     EXPECT_EQ(recoveryWait.deviceGeneration, transferToken.deviceGeneration);
+
+    const u32 acceptedOrderCount = acceptanceOrder.invocationCount;
+    Alloc::ScratchArena retryScratch(Name("tests/descriptor_buffer/submission_serialization_retry_scratch"));
+    GpuSubmissionPacketId retryFailedPacket;
+    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        ordinaryRange,
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        retryScratch,
+        &retryFailedPacket,
+        &acceptedCallback,
+        nullptr,
+        0u,
+        taskAcceptedCallbacks,
+        LengthOf(taskAcceptedCallbacks)
+    ));
+    EXPECT_EQ(retryFailedPacket, transferPacket);
+    EXPECT_EQ(serializationContext.typedAcceptedCount, 2u);
+    EXPECT_EQ(serializationContext.compatibilityAcceptedCount, 1u);
+    EXPECT_EQ(firstTaskAcceptance.acceptedCount, 1u);
+    EXPECT_EQ(secondTaskAcceptance.acceptedCount, 1u);
+    EXPECT_EQ(acceptanceOrder.invocationCount, acceptedOrderCount);
+
+    EXPECT_TRUE(transaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        recordedGraph.recordingAttemptGeneration()
+    ));
+    ASSERT_NE(transaction.packetRuntime(suffixPacket), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(suffixPacket)->state, GpuPacketRuntimeState::Rejected);
     ASSERT_TRUE(device.waitForIdle());
 }
 

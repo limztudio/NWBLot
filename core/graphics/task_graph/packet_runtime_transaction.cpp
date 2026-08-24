@@ -383,7 +383,10 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     const GpuSubmissionPacketId packetID,
     const QueueSubmissionToken& token,
     GpuTaskPacketSubmissionLease& lease,
-    const NativeSubmissionInfo* const nativeSubmissionInfo
+    const NativeSubmissionInfo* const nativeSubmissionInfo,
+    const GpuTaskGraphPacketAcceptedCallback* const acceptedCallback,
+    const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
+    const usize taskAcceptedCallbackCount
 )noexcept{
     if(
         !validFor(compiledGraph)
@@ -413,6 +416,22 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
         lease
     ))
         return false;
+
+    // Compatibility callbacks are synchronous publication obligations. Graph typed accepted hooks and the final
+    // Accepted lifecycle transition have completed, while the transaction token/frontier remains hidden. Invoke
+    // every matching task callback in compiled order even after an earlier false result; publication below is
+    // unconditional because the native submission has already accepted.
+    bool callbacksAccepted = true;
+    if(acceptedCallback && !acceptedCallback->invoke(acceptedCallback->context, packetID, token))
+        callbacksAccepted = false;
+    const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
+    for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
+        for(usize callbackIndex = 0u; callbackIndex < taskAcceptedCallbackCount; ++callbackIndex){
+            const GpuTaskGraphTaskAcceptedCallback& callback = taskAcceptedCallbacks[callbackIndex];
+            if(callback.task == tasks[taskIndex] && !callback.invoke(callback.context, token))
+                callbacksAccepted = false;
+        }
+    }
 
     ScopedLock lock(m_mutex);
     // reset(), public acceptance, and cancellation cannot cross a graph-owned submission lease. Once the graph
@@ -480,7 +499,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
             .token = token,
         });
     }
-    return true;
+    return callbacksAccepted;
 }
 
 

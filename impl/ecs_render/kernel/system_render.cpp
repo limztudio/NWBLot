@@ -33,7 +33,6 @@ inline constexpr usize s_SinglePacketCount = 1u;
 inline constexpr usize s_SoftwareShadowEffectsPacketCount = 2u;
 inline constexpr usize s_SurfelGiMergedPreparationAndCopyPacketCount = 2u;
 inline constexpr usize s_SurfelGiSeparatePreparationAndCopyPacketCount = 3u;
-inline constexpr usize s_DeferredLightingCompositePacketCount = 2u;
 inline constexpr usize s_PresentationOverlayPacketCount = 1u;
 
 // These fixed arrays describe the maximum number of independently retained sources/tickets that the graph binds
@@ -1333,6 +1332,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         );
     const Core::GpuSubmissionPacketRange deferredLightingCompositePacketRange =
         m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredLightingTask, m_deferredCompositeTask);
+    const bool deferredLightingCompositeTimingPacketsAreDistinct = !m_deferredLightingCompiledGraph.tasksSharePacket(
+        m_deferredLightingTask,
+        m_deferredCompositeTask
+    );
     const Core::GpuSubmissionPacketRange deferredPresentPacketRange =
         m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredPresentTask, m_deferredPresentTask);
     const Core::GpuSubmissionPacketRange terminalPresentationPacketRange =
@@ -1547,8 +1550,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || hardwareCausticsPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount
         ))
         || !deferredLightingCompositePacketRange.valid()
-        || deferredLightingCompositePacketRange.packetCount
-            != RendererSystemRenderDetail::s_DeferredLightingCompositePacketCount
+        || !deferredLightingCompositeTimingPacketsAreDistinct
         || !deferredPresentPacketRange.valid()
         || deferredPresentPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount
         || !terminalPresentationPacketRange.valid()
@@ -2552,7 +2554,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && taskIsCompiled(m_deferredLightingTask)
             && taskIsCompiled(m_deferredCompositeTask)
             && deferredLightingCompositePacketRange.valid()
-            && deferredLightingCompositePacketRange.packetCount == LengthOf(deferredLightingCompositeTimingTickets)
+            && deferredLightingCompositeTimingPacketsAreDistinct
             && deferredSubmitter.submitTaskRangeInCompileOrderFromTasks(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,

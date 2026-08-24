@@ -653,6 +653,33 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
 }
 
 
+// Lighting and Composite own distinct timing tickets, but their semantic range may contain untimed compiler
+// packets. Preserve the non-merge requirement without constraining the inclusive range to exactly two packets.
+TEST(EcsGraphics, DeferredLightingCompositeTopologyUsesSemanticTaskAnchors){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemSource;
+    ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
+    const AStringView system(systemSource.data(), systemSource.size());
+
+    EXPECT_TRUE(ContainsText(
+        system,
+        "packetRangeForTasks(m_deferredLightingTask, m_deferredCompositeTask)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "const bool deferredLightingCompositeTimingPacketsAreDistinct = !m_deferredLightingCompiledGraph.tasksSharePacket("
+    ));
+    EXPECT_TRUE(ContainsText(system, "&& deferredLightingCompositeTimingPacketsAreDistinct"));
+    EXPECT_TRUE(ContainsText(system, "deferredSubmitter.submitTaskRangeInCompileOrderFromTasks("));
+    EXPECT_TRUE(ContainsText(system, "m_deferredLightingTask,\n                m_deferredCompositeTask,"));
+    EXPECT_FALSE(ContainsText(system, "s_DeferredLightingCompositePacketCount"));
+    EXPECT_FALSE(ContainsText(system, "deferredLightingCompositePacketRange.packetCount =="));
+    EXPECT_FALSE(ContainsText(system, "deferredLightingCompositePacketRange.packetCount\n            !="));
+}
+
+
 // The exact terminal packet is retained solely in compiler-owned presentation metadata for the swap-chain binary
 // signal. Every other normal renderer readiness check uses a declared task anchor or a semantic task range.
 TEST(EcsGraphics, OnlyTerminalPresentationRetainsAPacketIdentity){

@@ -26,15 +26,14 @@ class GpuTimingRecorder;
 class GpuTimingSubmissionTicket;
 
 struct GpuTimingScope{
-    GpuTimingAccumulator* accumulator = nullptr;
-    TimerQuery* query = nullptr;
+    Name scopeName = NAME_NONE;
     u32 index = Limit<u32>::s_Max;
-    // Distinguishes a reused query-pool slot from an earlier scope that was discarded after its command list failed
-    // to submit. Submission tickets only release a record when this reservation still owns it.
+    // Epoch and reservation distinguish a recreated accumulator and reused query-pool slot from an earlier scope.
+    u32 epoch = 0u;
     u64 reservation = 0u;
     GpuTimingSubmissionTicket* submissionTicket = nullptr;
 
-    [[nodiscard]] bool valid()const{ return accumulator != nullptr && query != nullptr && index != Limit<u32>::s_Max && reservation != 0u; }
+    [[nodiscard]] bool valid()const{ return scopeName != NAME_NONE && index != Limit<u32>::s_Max && epoch != 0u && reservation != 0u; }
 };
 
 
@@ -286,8 +285,9 @@ private:
     [[nodiscard]] bool recordDeferredScopeEnd(CommandList& commandList, const GpuTimingScope& scope);
     [[nodiscard]] bool confirmDeferredScope(const GpuTimingScope& scope, bool publishSample);
     void discardScope(const GpuTimingScope& scope);
-    [[nodiscard]] GpuTimingAccumulator* findOrCreateAccumulator(const Name& scopeName);
     [[nodiscard]] GpuTimingSubmissionTicket* activeSubmissionTicket()const;
+    [[nodiscard]] GpuTimingAccumulator* findAccumulator(const GpuTimingScope& scope);
+    [[nodiscard]] GpuTimingAccumulator* findOrCreateAccumulator(const Name& scopeName);
     void collectLocked(
         Device& device,
         u64 publishFrameIndex,

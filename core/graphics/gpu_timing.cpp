@@ -158,16 +158,16 @@ bool GpuTimingAccumulator::beginQuery(
     if(m_nextReservation == 0u)
         ++m_nextReservation;
     record.reservation = m_nextReservation;
-    outScope = GpuTimingScope{ this, record.query.get(), index, record.reservation };
+    outScope = GpuTimingScope{ m_scopeName, index, epoch, record.reservation };
     return true;
 }
 
 bool GpuTimingAccumulator::endQuery(CommandList& commandList, const GpuTimingScope& scope){
-    if(!scope.valid() || scope.accumulator != this || scope.index >= m_queries.size())
+    if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 
     QueryRecord& record = m_queries[scope.index];
-    if(record.query.get() != scope.query || record.reservation != scope.reservation || !record.recording)
+    if(record.epoch != scope.epoch || record.reservation != scope.reservation || !record.recording)
         return false;
     if(!commandList.endTimerQuery(record.query.get())){
         releaseQuery(record);
@@ -177,22 +177,22 @@ bool GpuTimingAccumulator::endQuery(CommandList& commandList, const GpuTimingSco
 }
 
 bool GpuTimingAccumulator::recordQueryEnd(CommandList& commandList, const GpuTimingScope& scope){
-    if(!scope.valid() || scope.accumulator != this || scope.index >= m_queries.size())
+    if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 
     QueryRecord& record = m_queries[scope.index];
-    if(record.query.get() != scope.query || record.reservation != scope.reservation || !record.recording)
+    if(record.epoch != scope.epoch || record.reservation != scope.reservation || !record.recording)
         return false;
 
     return commandList.endTimerQuery(record.query.get());
 }
 
 bool GpuTimingAccumulator::confirmQuery(const GpuTimingScope& scope, const bool publishSample){
-    if(!scope.valid() || scope.accumulator != this || scope.index >= m_queries.size())
+    if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 
     QueryRecord& record = m_queries[scope.index];
-    if(record.query.get() != scope.query || record.reservation != scope.reservation || !record.recording)
+    if(record.epoch != scope.epoch || record.reservation != scope.reservation || !record.recording)
         return false;
 
     record.recording = false;
@@ -202,11 +202,11 @@ bool GpuTimingAccumulator::confirmQuery(const GpuTimingScope& scope, const bool 
 }
 
 void GpuTimingAccumulator::discardQuery(const GpuTimingScope& scope){
-    if(!scope.valid() || scope.accumulator != this || scope.index >= m_queries.size())
+    if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return;
 
     QueryRecord& record = m_queries[scope.index];
-    if(record.query.get() != scope.query || record.reservation != scope.reservation)
+    if(record.epoch != scope.epoch || record.reservation != scope.reservation)
         return;
 
     releaseQuery(record);
@@ -565,7 +565,8 @@ void GpuTimingRecorder::endScope(CommandList& commandList, const GpuTimingScope&
         // Do not retain this lock while trackScope() takes the ticket lock: discard() rolls tickets back in the
         // opposite direction (ticket first, recorder second).
         ScopedLock lock(m_mutex);
-        ended = scope.accumulator->endQuery(commandList, scope);
+        GpuTimingAccumulator* accumulator = findAccumulator(scope);
+        ended = accumulator && accumulator->endQuery(commandList, scope);
     }
     if(!ended)
         return;
@@ -579,7 +580,8 @@ bool GpuTimingRecorder::recordDeferredScopeEnd(CommandList& commandList, const G
         return true;
 
     ScopedLock lock(m_mutex);
-    return scope.accumulator->recordQueryEnd(commandList, scope);
+    GpuTimingAccumulator* accumulator = findAccumulator(scope);
+    return accumulator && accumulator->recordQueryEnd(commandList, scope);
 }
 
 bool GpuTimingRecorder::confirmDeferredScope(const GpuTimingScope& scope, const bool publishSample){
@@ -587,7 +589,8 @@ bool GpuTimingRecorder::confirmDeferredScope(const GpuTimingScope& scope, const 
         return true;
 
     ScopedLock lock(m_mutex);
-    return scope.accumulator->confirmQuery(scope, publishSample);
+    GpuTimingAccumulator* accumulator = findAccumulator(scope);
+    return accumulator && accumulator->confirmQuery(scope, publishSample);
 }
 
 void GpuTimingRecorder::discardScope(const GpuTimingScope& scope){
@@ -595,12 +598,19 @@ void GpuTimingRecorder::discardScope(const GpuTimingScope& scope){
         return;
 
     ScopedLock lock(m_mutex);
-    scope.accumulator->discardQuery(scope);
+    GpuTimingAccumulator* accumulator = findAccumulator(scope);
+    if(accumulator)
+        accumulator->discardQuery(scope);
 }
 
 GpuTimingSubmissionTicket* GpuTimingRecorder::activeSubmissionTicket()const{
     GpuTimingSubmissionTicket* ticket = s_activeSubmissionTicket;
     return ticket && &ticket->m_recorder == this ? ticket : nullptr;
+}
+
+GpuTimingAccumulator* GpuTimingRecorder::findAccumulator(const GpuTimingScope& scope){
+    const auto found = m_accumulators.find(scope.scopeName);
+    return found != m_accumulators.end() ? found.value().get() : nullptr;
 }
 
 GpuTimingAccumulator* GpuTimingRecorder::findOrCreateAccumulator(const Name& scopeName){

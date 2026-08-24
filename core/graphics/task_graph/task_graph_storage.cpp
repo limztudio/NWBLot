@@ -206,6 +206,7 @@ GpuTaskId GpuTaskGraph::appendTask(
 
     const u32 index = static_cast<u32>(m_tasks.size());
     m_tasks.push_back(Move(task));
+    m_declarationRevision = allocateGeneration();
     return GpuTaskId{ index, m_generation };
 }
 
@@ -412,6 +413,7 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
 
     const u32 index = static_cast<u32>(m_resources.size());
     m_resources.push_back(Move(resource));
+    m_declarationRevision = allocateGeneration();
     return GpuGraphResourceId{ index, m_generation };
 }
 
@@ -451,6 +453,7 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
 
     const u32 index = static_cast<u32>(m_resourceSets.size());
     m_resourceSets.push_back(Move(resourceSet));
+    m_declarationRevision = allocateGeneration();
     return GpuGraphResourceSetId{ index, m_generation };
 }
 
@@ -476,6 +479,7 @@ GpuGraphPipelineId GpuTaskGraph::appendPipeline(const GpuGraphPipelineDesc& desc
 
     const u32 index = static_cast<u32>(m_pipelines.size());
     m_pipelines.push_back(Move(pipeline));
+    m_declarationRevision = allocateGeneration();
     return GpuGraphPipelineId{ index, m_generation };
 }
 
@@ -497,6 +501,7 @@ GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternal
 
     const u32 index = static_cast<u32>(m_externalCompletions.size());
     m_externalCompletions.push_back(Move(completion));
+    m_declarationRevision = allocateGeneration();
     return GpuExternalCompletionId{ index, m_generation };
 }
 

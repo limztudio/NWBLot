@@ -469,8 +469,8 @@ public:
     void reset();
 
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
-    // Endpoint declarations do not change task/resource handles, but they do invalidate every compiler snapshot
-    // that did not include the newly declared native presentation contract.
+    // Every successful compile-relevant declaration or owned-storage mutation advances this revision, including
+    // changes that leave task/resource handle generations and counts unchanged.
     [[nodiscard]] u64 declarationRevision()const noexcept{ return m_declarationRevision; }
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
     // Starts or validates one native-recording attempt for the supplied graph tasks. A retry can begin only after

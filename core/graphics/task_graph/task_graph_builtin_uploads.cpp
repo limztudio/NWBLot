@@ -304,6 +304,7 @@ GpuUploadBlobId GpuTaskGraph::copyUploadData(
         m_uploadBlobs.pop_back();
         return {};
     }
+    m_declarationRevision = allocateGeneration();
     return GpuUploadBlobId{ static_cast<u32>(m_uploadBlobs.size() - 1u), m_generation };
 }
 

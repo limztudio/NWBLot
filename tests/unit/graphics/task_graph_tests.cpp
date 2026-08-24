@@ -1029,6 +1029,213 @@ TEST(GpuTaskGraph, OwnsPipelineMetadataAndInvalidatesPipelineIdsOnReset){
     EXPECT_NE(replacement, pipeline);
 }
 
+TEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    ASSERT_TRUE(AddTask(
+        graph,
+        Name("tests/task_graph/declaration_revision_base"),
+        "Declaration Revision Base"
+    ).valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(analysis.validFor(graph));
+    ASSERT_TRUE(assignments.validFor(graph));
+    ASSERT_TRUE(compiledGraph.validFor(graph));
+
+    const auto recompileAfterMutation = [&](){
+        EXPECT_FALSE(analysis.validFor(graph));
+        EXPECT_FALSE(assignments.validFor(graph));
+        EXPECT_FALSE(compiledGraph.validFor(graph));
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_TRUE(analysis.validFor(graph));
+        EXPECT_TRUE(assignments.validFor(graph));
+        EXPECT_TRUE(compiledGraph.validFor(graph));
+    };
+
+    u64 previousRevision = graph.declarationRevision();
+    ASSERT_TRUE(AddTask(
+        graph,
+        Name("tests/task_graph/declaration_revision_task"),
+        "Declaration Revision Task"
+    ).valid());
+    EXPECT_NE(graph.declarationRevision(), previousRevision);
+    recompileAfterMutation();
+
+    previousRevision = graph.declarationRevision();
+    const Graphics::GpuGraphResourceId resource = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/declaration_revision_resource"),
+        "Declaration Revision Resource"
+    );
+    ASSERT_TRUE(resource.valid());
+    EXPECT_NE(graph.declarationRevision(), previousRevision);
+    recompileAfterMutation();
+
+    const Graphics::GpuGraphResourceId resourceSetMembers[] = { resource };
+    previousRevision = graph.declarationRevision();
+    const Graphics::GpuGraphResourceSetId resourceSet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/declaration_revision_resource_set"))
+            .setMarkerLabel("Declaration Revision Resource Set")
+            .setMembers(resourceSetMembers, LengthOf(resourceSetMembers))
+    );
+    ASSERT_TRUE(resourceSet.valid());
+    EXPECT_NE(graph.declarationRevision(), previousRevision);
+    recompileAfterMutation();
+
+    previousRevision = graph.declarationRevision();
+    const Graphics::GpuGraphPipelineId pipeline = AddPipelineMetadata(
+        graph,
+        Name("tests/task_graph/declaration_revision_pipeline"),
+        "Declaration Revision Pipeline",
+        Graphics::GpuGraphPipelineType::Compute
+    );
+    ASSERT_TRUE(pipeline.valid());
+    EXPECT_NE(graph.declarationRevision(), previousRevision);
+    recompileAfterMutation();
+
+    previousRevision = graph.declarationRevision();
+    const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
+        Graphics::GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/task_graph/declaration_revision_completion"))
+            .setMarkerLabel("Declaration Revision Completion")
+    );
+    ASSERT_TRUE(completion.valid());
+    EXPECT_NE(graph.declarationRevision(), previousRevision);
+    recompileAfterMutation();
+
+    const u8 uploadBytes[] = { 0x17u, 0x3au, 0x5cu, 0x8eu };
+    previousRevision = graph.declarationRevision();
+    const Graphics::GpuUploadBlobId upload = graph.copyUploadData(uploadBytes, sizeof(uploadBytes), alignof(u32));
+    ASSERT_TRUE(upload.valid());
+    EXPECT_NE(graph.declarationRevision(), previousRevision);
+    recompileAfterMutation();
+}
+
+TEST(GpuTaskGraph, FailedAndIdempotentDeclarationsPreserveCompilerSnapshots){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    const Graphics::GpuGraphResourceDesc resourceDesc = Graphics::GpuGraphResourceDesc{}
+        .setIdentity(Name("tests/task_graph/stable_declaration_resource"))
+        .setMarkerLabel("Stable Declaration Resource")
+        .setType(Graphics::GpuGraphResourceType::Buffer)
+        .setInitialState(Graphics::ResourceStates::Common)
+    ;
+    const Graphics::GpuGraphResourceId resource = graph.importResource(resourceDesc);
+    ASSERT_TRUE(resource.valid());
+    const Graphics::GpuGraphResourceId resourceSetMembers[] = { resource };
+    const Graphics::GpuGraphResourceSetDesc resourceSetDesc = Graphics::GpuGraphResourceSetDesc{}
+        .setIdentity(Name("tests/task_graph/stable_declaration_resource_set"))
+        .setMarkerLabel("Stable Declaration Resource Set")
+        .setMembers(resourceSetMembers, LengthOf(resourceSetMembers))
+    ;
+    const Graphics::GpuGraphResourceSetId resourceSet = graph.importResourceSet(resourceSetDesc);
+    ASSERT_TRUE(resourceSet.valid());
+    const Graphics::GpuGraphPipelineDesc pipelineDesc = Graphics::GpuGraphPipelineDesc{}
+        .setIdentity(Name("tests/task_graph/stable_declaration_pipeline"))
+        .setMarkerLabel("Stable Declaration Pipeline")
+        .setType(Graphics::GpuGraphPipelineType::Compute)
+    ;
+    const Graphics::GpuGraphPipelineId pipeline = graph.importPipeline(pipelineDesc);
+    ASSERT_TRUE(pipeline.valid());
+    const Graphics::GpuExternalCompletionDesc completionDesc = Graphics::GpuExternalCompletionDesc{}
+        .setIdentity(Name("tests/task_graph/stable_declaration_completion"))
+        .setMarkerLabel("Stable Declaration Completion")
+    ;
+    const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(completionDesc);
+    ASSERT_TRUE(completion.valid());
+    const u8 uploadBytes[] = { 0x17u };
+    ASSERT_TRUE(graph.copyUploadData(uploadBytes, sizeof(uploadBytes), alignof(u8)).valid());
+    ASSERT_TRUE(AddTask(
+        graph,
+        Name("tests/task_graph/stable_declaration_task"),
+        "Stable Declaration Task"
+    ).valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const u64 compiledRevision = graph.declarationRevision();
+
+    EXPECT_EQ(graph.importResource(resourceDesc), resource);
+    EXPECT_EQ(graph.importResourceSet(resourceSetDesc), resourceSet);
+    EXPECT_EQ(graph.importPipeline(pipelineDesc), pipeline);
+    EXPECT_EQ(graph.importExternalCompletion(completionDesc), completion);
+    EXPECT_EQ(graph.declarationRevision(), compiledRevision);
+    EXPECT_TRUE(analysis.validFor(graph));
+    EXPECT_TRUE(assignments.validFor(graph));
+    EXPECT_TRUE(compiledGraph.validFor(graph));
+
+    EXPECT_FALSE(graph.addTask(Graphics::GpuTaskDesc{}).valid());
+    EXPECT_FALSE(graph.importResource(Graphics::GpuGraphResourceDesc{}).valid());
+    EXPECT_FALSE(graph.importResourceSet(Graphics::GpuGraphResourceSetDesc{}).valid());
+    EXPECT_FALSE(graph.importPipeline(Graphics::GpuGraphPipelineDesc{}).valid());
+    EXPECT_FALSE(graph.importExternalCompletion(Graphics::GpuExternalCompletionDesc{}).valid());
+    EXPECT_FALSE(graph.copyUploadData(nullptr, sizeof(uploadBytes), alignof(u8)).valid());
+    EXPECT_EQ(graph.declarationRevision(), compiledRevision);
+    EXPECT_TRUE(analysis.validFor(graph));
+    EXPECT_TRUE(assignments.validFor(graph));
+    EXPECT_TRUE(compiledGraph.validFor(graph));
+}
+
+TEST(GpuTaskGraph, ExternalFinalResourceDeclarationInvalidatesPriorCompiledPlan){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    ASSERT_TRUE(AddTask(
+        graph,
+        Name("tests/task_graph/external_final_revision_base"),
+        "External Final Revision Base"
+    ).valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis priorAnalysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments priorAssignments(testArena.arena);
+    Graphics::GpuCompiledGraph priorCompiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, priorAnalysis, topology, priorAssignments, priorCompiledGraph));
+    ASSERT_TRUE(priorCompiledGraph.validFor(graph));
+
+    const u64 compiledRevision = graph.declarationRevision();
+    const Graphics::GpuGraphResourceId externalFinalResource = graph.importResource(
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/external_final_revision_resource"))
+            .setMarkerLabel("External Final Revision Resource")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(Graphics::ResourceStates::Common)
+            .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
+    );
+    ASSERT_TRUE(externalFinalResource.valid());
+    EXPECT_NE(graph.declarationRevision(), compiledRevision);
+    EXPECT_FALSE(priorAnalysis.validFor(graph));
+    EXPECT_FALSE(priorAssignments.validFor(graph));
+    EXPECT_FALSE(priorCompiledGraph.validFor(graph));
+
+    Graphics::GpuTaskGraphAnalysis freshAnalysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments freshAssignments(testArena.arena);
+    Graphics::GpuCompiledGraph freshCompiledGraph(testArena.arena);
+    EXPECT_FALSE(Compile(graph, freshAnalysis, topology, freshAssignments, freshCompiledGraph));
+    EXPECT_FALSE(freshCompiledGraph.valid());
+}
+
 TEST(GpuTaskGraph, MarksAndMaterializesDeclaredInitialResourceStates){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

@@ -129,12 +129,15 @@ typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
 typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 
 // Raw device-timestamp values for one timer query. Vulkan exposes only the low timestampValidBits from one physical
-// queue family, so durations use modular tick arithmetic and endpoints share a locally unwrapped query epoch.
+// queue family, so ordinary durations use modular tick arithmetic. Absolute endpoints are available only when the
+// logical device enabled and successfully probed calibrated timestamps and the exact queue exposes all 64 bits.
 struct TimerQueryResult{
     u64 beginTicks = 0u;
     u64 endTicks = 0u;
     f64 secondsPerTick = 0.0;
     u32 timestampValidBits = 0u;
+    GpuPhysicalQueueId physicalQueue;
+    bool comparableAcrossSubmissions = false;
 
     [[nodiscard]] bool valid()const{
         return timestampValidBits > 0u && timestampValidBits <= 64u && secondsPerTick > 0.0;
@@ -153,9 +156,16 @@ struct TimerQueryResult{
         const u64 duration = (endTicks & mask) - (beginTicks & mask);
         return timestampValidBits == 64u ? duration : duration & mask;
     }
-    [[nodiscard]] f64 beginSeconds()const{ return static_cast<f64>(maskedBeginTicks()) * secondsPerTick; }
     [[nodiscard]] f64 durationSeconds()const{ return static_cast<f64>(durationTicks()) * secondsPerTick; }
-    [[nodiscard]] f64 endSeconds()const{ return beginSeconds() + durationSeconds(); }
+    [[nodiscard]] bool hasComparableRange()const{
+        return
+            valid()
+            && comparableAcrossSubmissions
+            && timestampValidBits == 64u
+            && physicalQueue.valid()
+            && beginTicks <= endTicks
+        ;
+    }
 };
 
 

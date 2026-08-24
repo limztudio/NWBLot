@@ -74,11 +74,18 @@ void GpuTimingAccumulator::collect(
         const f64 durationSeconds = result.durationSeconds();
         if(publishSample){
             recorder.m_timing.recordSample(m_timingScope, durationSeconds, record.frameIndex);
-            recorder.recordTimestampRange(
-                m_scopeName,
-                record.frameIndex,
-                GpuTimingRecorder::TimestampRange{ result.beginSeconds(), result.endSeconds() }
-            );
+            if(result.hasComparableRange()){
+                recorder.recordTimestampRange(
+                    m_scopeName,
+                    record.frameIndex,
+                    GpuComparableTimestampRange{
+                        result.beginTicks,
+                        result.endTicks,
+                        result.secondsPerTick,
+                        result.physicalQueue,
+                    }
+                );
+            }
         }
         if(completedSamples && record.attribution != s_NoGpuTimingSampleAttribution){
             completedSamples->push_back(GpuTimingSample{
@@ -844,7 +851,7 @@ GpuTimingAccumulator* GpuTimingRecorder::findOrCreateAccumulator(const Name& sco
 void GpuTimingRecorder::recordTimestampRange(
     const Name& scopeName,
     const u64 frameIndex,
-    const TimestampRange& range
+    const GpuComparableTimestampRange& range
 ){
     // collectLocked() holds m_mutex. Keep this deliberately bounded: a rejected packet yields at most one endpoint,
     // and that orphan must not turn a long-running capture into an unbounded correlation cache.
@@ -886,9 +893,11 @@ void GpuTimingRecorder::recordTimestampRange(
         if(!frame->hasFirst || !frame->hasSecond)
             continue;
 
-        const f64 beginSeconds = Max(frame->first.beginSeconds, frame->second.beginSeconds);
-        const f64 endSeconds = Min(frame->first.endSeconds, frame->second.endSeconds);
-        m_timing.recordSample(record.outputScope, Max(0.0, endSeconds - beginSeconds), frameIndex);
+        u64 overlapTicks = 0u;
+        if(TryComputeGpuTimestampOverlap(frame->first, frame->second, overlapTicks)){
+            const f64 overlapSeconds = static_cast<f64>(overlapTicks) * frame->first.secondsPerTick;
+            m_timing.recordSample(record.outputScope, overlapSeconds, frameIndex);
+        }
         for(auto it = record.pendingFrames.begin(); it != record.pendingFrames.end(); ++it){
             if(&*it == frame){
                 record.pendingFrames.erase(it);

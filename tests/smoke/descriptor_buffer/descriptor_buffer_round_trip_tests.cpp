@@ -69,6 +69,7 @@ inline constexpr GpuTimingScopeDefinition s_TimerQueryFailureScope("tests/timing
 inline constexpr GpuTimingScopeDefinition s_TimerQueryAcceptedRecoveryScope("tests/timing_query_accepted_recovery");
 inline constexpr GpuTimingScopeDefinition s_TimerQueryForeignDeviceScope("tests/timing_query_foreign_device");
 inline constexpr GpuTimingScopeDefinition s_TimerQueryUnsupportedQueueScope("tests/timing_query_unsupported_queue");
+inline constexpr GpuTimingScopeDefinition s_TimerQueryComparableEpochScope("tests/timing_query_comparable_epoch");
 inline constexpr GpuTimingScopeDefinition s_AcceptedCompletionScope("tests/timing_accepted_completion");
 inline constexpr GpuTimingScopeDefinition s_AuxiliaryCompletionScope("tests/timing_auxiliary_completion");
 inline constexpr GpuTimingScopeDefinition s_SharedOpaqueComputeEmulationScope(
@@ -1221,6 +1222,10 @@ TEST_F(DescriptorBufferRoundTripTest, NativePhysicalQueueRegistryDrivesExactSubm
             queue.timestampValidBits == 0u
             || (queue.timestampValidBits >= 36u && queue.timestampValidBits <= 64u)
         );
+        EXPECT_EQ(
+            nativeDevice.supportsComparableGpuTimestamps(queue.id),
+            nativeDevice.supportsComparableGpuTimestamps() && queue.timestampValidBits == 64u
+        );
         EXPECT_NE(nativeDevice.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, queue.id), Object(nullptr));
         foundGraphicsQueue = foundGraphicsQueue || queue.id == graphicsQueue;
     }
@@ -1311,9 +1316,17 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryResultCarriesNativePhysicalQueue
     ASSERT_TRUE(nativeDevice.getTimerQueryResult(query.get(), result));
     EXPECT_TRUE(result.valid());
     EXPECT_EQ(result.timestampValidBits, queueInfo->timestampValidBits);
+    EXPECT_EQ(result.physicalQueue, graphicsQueue);
     EXPECT_GT(result.secondsPerTick, 0.0);
     EXPECT_GE(result.durationSeconds(), 0.0);
-    EXPECT_DOUBLE_EQ(result.endSeconds(), result.beginSeconds() + result.durationSeconds());
+    EXPECT_EQ(
+        result.comparableAcrossSubmissions,
+        nativeDevice.supportsComparableGpuTimestamps(graphicsQueue)
+    );
+    EXPECT_EQ(
+        result.hasComparableRange(),
+        result.comparableAcrossSubmissions && result.beginTicks <= result.endTicks
+    );
 }
 
 
@@ -1379,6 +1392,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryRejectsDifferentExactPhysicalQue
     TimerQueryResult result;
     ASSERT_TRUE(nativeDevice.getTimerQueryResult(query.get(), result));
     EXPECT_EQ(result.timestampValidBits, primaryInfo->timestampValidBits);
+    EXPECT_EQ(result.physicalQueue, primaryQueue);
 }
 
 
@@ -41620,6 +41634,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketStaleScopeCannotR
 TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionStaleScopeCannotReleaseRecreatedAccumulatorSlot){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& timing = s_scope->graphics().gpuTiming();
+    if(!device.supportsComparableGpuTimestamps(device.getPrimaryPhysicalQueue(CommandQueue::Graphics)))
+        GTEST_SKIP() << "GPU timing stale frame transaction: comparable 64-bit device timestamps are unavailable.";
 
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();
@@ -42600,6 +42616,39 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingUnsupportedPhysicalQueueIsSuccess
 }
 
 
+// Frame transactions span submissions and therefore require an extension-backed absolute device epoch in addition
+// to queue-local timestamp support. A closed-list end distinguishes the active backend path from the inactive no-op.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionFollowsComparableTimestampCapability){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const bool comparableTimestamps = device.supportsComparableGpuTimestamps(graphicsQueue);
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_TimerQueryComparableEpochScope.identity, device, 1u));
+    timing.beginFrame(202u);
+
+    CommandListParameters parameters;
+    parameters.setPhysicalQueue(graphicsQueue);
+    auto commandList = device.createCommandList(parameters);
+    ASSERT_NE(commandList.get(), nullptr);
+    GpuTimingFrameTransaction transaction(timing);
+    GpuTimingSubmissionTicket timingTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
+        commandList->open();
+        ASSERT_TRUE(transaction.begin(s_TimerQueryComparableEpochScope, device, *commandList));
+        commandList->close();
+        EXPECT_EQ(transaction.recordEnd(*commandList), !comparableTimestamps);
+    }
+    EXPECT_FALSE(transaction.needsRetirement());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
 // Closed-list begin/end failures are hard recording failures, not inactive timing. A failure before begin acceptance
 // releases the single reservation immediately; a failure after acceptance keeps it owned for an exact-queue recovery
 // endpoint. Successful follow-up samples prove neither path leaks the one prepared query slot.
@@ -42612,8 +42661,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionPropagatesBackend
         device.getPrimaryPhysicalQueue(CommandQueue::Graphics)
     );
     ASSERT_NE(graphicsQueueInfo, nullptr);
-    if(graphicsQueueInfo->timestampValidBits == 0u)
-        GTEST_SKIP() << "GPU timing failure propagation: primary Graphics queue does not support timestamps.";
+    if(!device.supportsComparableGpuTimestamps(graphicsQueueInfo->id))
+        GTEST_SKIP() << "GPU timing failure propagation: comparable 64-bit device timestamps are unavailable.";
 
     s_scope->setGpuTimingEnabled(true);
     ASSERT_TRUE(timing.prepareScopeQueries(s_TimerQueryFailureScope.identity, device, 1u));
@@ -42762,6 +42811,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionPropagatesBackend
 TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPrefixAfterRejectedFinal){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
+    if(!device.supportsComparableGpuTimestamps(device.getPrimaryPhysicalQueue(CommandQueue::Graphics)))
+        GTEST_SKIP() << "GPU timing recovery transaction: comparable 64-bit device timestamps are unavailable.";
     auto& timing = graphics.gpuTiming();
     auto& timingSink = s_scope->gpuTimingSink();
     GpuTimingSampleCapture completedSamples;
@@ -42921,6 +42972,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
 TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInSharedTransaction){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
+    if(!device.supportsComparableGpuTimestamps(device.getPrimaryPhysicalQueue(CommandQueue::Graphics)))
+        GTEST_SKIP() << "GPU timing native recovery: comparable 64-bit device timestamps are unavailable.";
     auto& timing = graphics.gpuTiming();
     auto& timingSink = s_scope->gpuTimingSink();
 
@@ -43992,6 +44045,8 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierTaskRangeHelperPreservesRecov
 TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraphTasks){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
+    if(!device.supportsComparableGpuTimestamps(device.getPrimaryPhysicalQueue(CommandQueue::Graphics)))
+        GTEST_SKIP() << "GPU timing task bindings: comparable 64-bit device timestamps are unavailable.";
     auto& timing = graphics.gpuTiming();
     auto& timingSink = s_scope->gpuTimingSink();
 

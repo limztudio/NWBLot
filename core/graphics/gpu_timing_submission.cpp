@@ -242,7 +242,15 @@ bool GpuTimingFrameTransaction::begin(
 ){
     if(m_state != State::Idle)
         return false;
+    if(&commandList.getDevice() != &device){
+        m_state = State::Resolved;
+        return false;
+    }
     if(!scopeDefinition.valid()){
+        m_state = State::Inactive;
+        return true;
+    }
+    if(!device.supportsComparableGpuTimestamps(commandList.getDescription().physicalQueue)){
         m_state = State::Inactive;
         return true;
     }

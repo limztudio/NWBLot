@@ -579,6 +579,9 @@ struct VulkanContext{
     bool clusterAccelerationStructureFeatureEnabled = false;
     bool rayTracingInvocationReorderFeatureEnabled = false;
     bool rayTracingInvocationReorderExtFeatureEnabled = false;
+    // True only after an enabled calibrated-timestamp extension exposes the DEVICE domain and its dispatch pair
+    // completes a device-domain probe. It is immutable after Device construction.
+    bool comparableGpuTimestamps = false;
     // Descriptor-buffer limits used for layout and offsets.
     VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties{};
     VkPhysicalDeviceCooperativeVectorPropertiesNV coopVecProperties{};
@@ -604,11 +607,13 @@ struct VulkanContext{
 
     struct Extensions{
         bool KHR_synchronization2 = false;
+        bool KHR_calibrated_timestamps = false;
         bool KHR_ray_tracing_pipeline = false;
         bool KHR_ray_query = false;
         bool KHR_acceleration_structure = false;
         bool buffer_device_address = false;
         bool EXT_descriptor_buffer = false;
+        bool EXT_calibrated_timestamps = false;
         bool EXT_debug_utils = false;
         bool KHR_swapchain = false;
         bool KHR_dynamic_rendering = false;
@@ -2628,6 +2633,13 @@ public:
     [[nodiscard]] GpuPhysicalQueueId getPrimaryPhysicalQueue(CommandQueue::Enum queue)const noexcept;
     [[nodiscard]] GpuPhysicalQueueTopology getPhysicalQueueTopology()const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* getPhysicalQueueInfo(const GpuPhysicalQueueId& queue)const noexcept;
+    [[nodiscard]] bool supportsComparableGpuTimestamps()const noexcept{ return m_context.comparableGpuTimestamps; }
+    // Absolute ranges require the extension-backed logical-device epoch and a complete 64-bit queue timestamp.
+    // Partial-width timestamps remain valid for modular ordinary durations only.
+    [[nodiscard]] bool supportsComparableGpuTimestamps(const GpuPhysicalQueueId& queue)const noexcept{
+        const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(queue);
+        return supportsComparableGpuTimestamps() && queueInfo && queueInfo->timestampValidBits == 64u;
+    }
     [[nodiscard]] GpuCommandArenaStatistics getCommandArenaStatistics(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] GpuCommandArenaWorkerStatistics getCommandArenaWorkerStatistics(
         const GpuPhysicalQueueId& queue,
@@ -2645,7 +2657,8 @@ public:
     [[nodiscard]] bool validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept;
     // Device loss requires full device recreation.
     [[nodiscard]] bool isDeviceLost()const noexcept{ return m_deviceLost.load(MemoryOrder::acquire); }
-    // Cross-queue timing requires Graphics and Compute timestamp support.
+    // Reports core Graphics+Compute timestamp-stage support only; it does not imply that distinct submissions share
+    // a comparable timestamp epoch. Use supportsComparableGpuTimestamps() for absolute ranges.
     [[nodiscard]] bool supportsGraphicsAndComputeTimestamps()const{
         return m_context.physicalDeviceProperties.limits.timestampComputeAndGraphics == VK_TRUE;
     }

@@ -36,6 +36,43 @@ struct GpuTimingScope{
     [[nodiscard]] bool valid()const{ return scopeName != NAME_NONE && index != Limit<u32>::s_Max && epoch != 0u && reservation != 0u; }
 };
 
+// One absolute device-timestamp range proven comparable across submissions. Queue indices may differ, but every
+// range retains its logical-device generation and exact tick period so overlap consumers can reject stale or
+// mismatched data before conversion to floating-point seconds.
+struct GpuComparableTimestampRange{
+    u64 beginTicks = 0u;
+    u64 endTicks = 0u;
+    f64 secondsPerTick = 0.0;
+    GpuPhysicalQueueId physicalQueue;
+
+    [[nodiscard]] bool valid()const{
+        return physicalQueue.valid() && beginTicks <= endTicks && secondsPerTick > 0.0;
+    }
+};
+
+// Returns false when the ranges do not share one calibrated logical-device epoch and exact tick period. Comparable
+// disjoint ranges return true with zero overlap. Integer intersection preserves precision beyond f64's exact range.
+[[nodiscard]] inline bool TryComputeGpuTimestampOverlap(
+    const GpuComparableTimestampRange& first,
+    const GpuComparableTimestampRange& second,
+    u64& outOverlapTicks
+){
+    outOverlapTicks = 0u;
+    if(
+        !first.valid()
+        || !second.valid()
+        || first.physicalQueue.deviceGeneration != second.physicalQueue.deviceGeneration
+        || first.secondsPerTick != second.secondsPerTick
+    )
+        return false;
+
+    const u64 overlapBegin = Max(first.beginTicks, second.beginTicks);
+    const u64 overlapEnd = Min(first.endTicks, second.endTicks);
+    if(overlapEnd > overlapBegin)
+        outOverlapTicks = overlapEnd - overlapBegin;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -209,11 +246,6 @@ private:
     using AccumulatorPtr = GlobalUniquePtr<GpuTimingAccumulator>;
     using AccumulatorMap = HashMap<Name, AccumulatorPtr, Hasher<Name>, EqualTo<Name>, Alloc::GlobalArena>;
 
-    struct TimestampRange{
-        f64 beginSeconds = 0.0;
-        f64 endSeconds = 0.0;
-    };
-
     struct QueueCompletion{
         GpuPhysicalQueueId queue;
         u64 value = 0u;
@@ -221,8 +253,8 @@ private:
 
     struct PendingOverlapFrame{
         u64 frameIndex = 0u;
-        TimestampRange first;
-        TimestampRange second;
+        GpuComparableTimestampRange first;
+        GpuComparableTimestampRange second;
         bool hasFirst = false;
         bool hasSecond = false;
     };
@@ -332,7 +364,7 @@ private:
         u64 listenerGeneration
     );
     void retirePendingAttributionsLocked(Vector<GpuTimingSample, Alloc::GlobalArena>& outSamples);
-    void recordTimestampRange(const Name& scopeName, u64 frameIndex, const TimestampRange& range);
+    void recordTimestampRange(const Name& scopeName, u64 frameIndex, const GpuComparableTimestampRange& range);
     void discardFrameResetLocked();
     void syncActiveState();
     void advanceEpoch();

@@ -36,6 +36,74 @@ static Atomic<u32> s_NextDeviceGeneration{ 1u };
     return generation;
 }
 
+static constexpr u32 s_CalibratedTimestampProbeAttemptCount = 4u;
+
+template<typename EnumerateTimeDomains, typename GetCalibratedTimestamps>
+[[nodiscard]] static bool ProbeComparableGpuTimestamps(
+    const VkPhysicalDevice physicalDevice,
+    const VkDevice device,
+    EnumerateTimeDomains enumerateTimeDomains,
+    GetCalibratedTimestamps getCalibratedTimestamps,
+    Alloc::ScratchArena& scratchArena
+){
+    if(!enumerateTimeDomains || !getCalibratedTimestamps){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Calibrated timestamp entry points are unavailable."));
+        return false;
+    }
+
+    for(u32 attempt = 0u; attempt < s_CalibratedTimestampProbeAttemptCount; ++attempt){
+        u32 timeDomainCount = 0u;
+        const VkResult countResult = enumerateTimeDomains(physicalDevice, &timeDomainCount, nullptr);
+        if(countResult == VK_INCOMPLETE)
+            continue;
+        if(countResult != VK_SUCCESS){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to enumerate calibrated timestamp domains. {}"), ResultToString(countResult));
+            return false;
+        }
+        if(timeDomainCount == 0u)
+            return false;
+
+        Vector<VkTimeDomainKHR, Alloc::ScratchArena> timeDomains(timeDomainCount, scratchArena);
+        u32 writtenTimeDomainCount = timeDomainCount;
+        const VkResult domainsResult = enumerateTimeDomains(physicalDevice, &writtenTimeDomainCount, timeDomains.data());
+        if(domainsResult == VK_INCOMPLETE)
+            continue;
+        if(domainsResult != VK_SUCCESS){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to read calibrated timestamp domains. {}"), ResultToString(domainsResult));
+            return false;
+        }
+        if(writtenTimeDomainCount > timeDomains.size()){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Calibrated timestamp domain enumeration returned an invalid count."));
+            return false;
+        }
+
+        bool hasDeviceTimeDomain = false;
+        for(u32 domainIndex = 0u; domainIndex < writtenTimeDomainCount; ++domainIndex){
+            if(timeDomains[domainIndex] == VK_TIME_DOMAIN_DEVICE_KHR){
+                hasDeviceTimeDomain = true;
+                break;
+            }
+        }
+        if(!hasDeviceTimeDomain)
+            return false;
+
+        VkCalibratedTimestampInfoKHR timestampInfo{};
+        timestampInfo.sType = VK_STRUCTURE_TYPE_CALIBRATED_TIMESTAMP_INFO_KHR;
+        timestampInfo.timeDomain = VK_TIME_DOMAIN_DEVICE_KHR;
+        u64 timestamp = 0u;
+        u64 maxDeviation = 0u;
+        const VkResult timestampResult = getCalibratedTimestamps(device, 1u, &timestampInfo, &timestamp, &maxDeviation);
+        if(timestampResult != VK_SUCCESS){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to probe the calibrated device timestamp domain. {}"), ResultToString(timestampResult));
+            return false;
+        }
+        return true;
+    }
+
+    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Calibrated timestamp domain enumeration did not stabilize."));
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -192,6 +260,8 @@ Device::Device(const DeviceDesc& desc)
         const char* ext = desc.deviceExtensions[i];
         if(NWB_STRCMP(ext, VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME) == 0)
             m_context.extensions.KHR_synchronization2 = true;
+        else if(NWB_STRCMP(ext, VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME) == 0)
+            m_context.extensions.KHR_calibrated_timestamps = true;
         else if(NWB_STRCMP(ext, VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME) == 0)
             m_context.extensions.KHR_ray_tracing_pipeline = true;
         else if(NWB_STRCMP(ext, VK_KHR_RAY_QUERY_EXTENSION_NAME) == 0)
@@ -204,6 +274,8 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.KHR_dynamic_rendering = true;
         else if(NWB_STRCMP(ext, VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME) == 0)
             m_context.extensions.EXT_descriptor_buffer = true;
+        else if(NWB_STRCMP(ext, VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME) == 0)
+            m_context.extensions.EXT_calibrated_timestamps = true;
         else if(NWB_STRCMP(ext, VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME) == 0)
             m_context.extensions.EXT_opacity_micromap = true;
         else if(NWB_STRCMP(ext, VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME) == 0)
@@ -229,6 +301,28 @@ Device::Device(const DeviceDesc& desc)
         else if(NWB_STRCMP(ext, VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME) == 0)
             m_context.extensions.NV_ray_tracing_linear_swept_spheres = true;
     }
+
+    Alloc::ScratchArena calibratedTimestampProbeArena(VulkanArenaScope::s_DeviceExtensionSetupArena);
+    bool comparableGpuTimestamps = false;
+    if(m_context.extensions.KHR_calibrated_timestamps){
+        comparableGpuTimestamps = __hidden_vulkan_device::ProbeComparableGpuTimestamps(
+            m_context.physicalDevice,
+            m_context.device,
+            vkGetPhysicalDeviceCalibrateableTimeDomainsKHR,
+            vkGetCalibratedTimestampsKHR,
+            calibratedTimestampProbeArena
+        );
+    }
+    if(!comparableGpuTimestamps && m_context.extensions.EXT_calibrated_timestamps){
+        comparableGpuTimestamps = __hidden_vulkan_device::ProbeComparableGpuTimestamps(
+            m_context.physicalDevice,
+            m_context.device,
+            vkGetPhysicalDeviceCalibrateableTimeDomainsEXT,
+            vkGetCalibratedTimestampsEXT,
+            calibratedTimestampProbeArena
+        );
+    }
+    m_context.comparableGpuTimestamps = comparableGpuTimestamps;
 
     m_context.meshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
     if(m_context.extensions.EXT_mesh_shader){

@@ -94,6 +94,8 @@ private:
     };
     static constexpr ExtEntry s_OptionalDeviceExts[] = {
         { VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, DeviceExtensionFeature::None },
+        { VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, DeviceExtensionFeature::None },
+        { VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME, DeviceExtensionFeature::FragmentShadingRate },
         { VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_KHR_MAINTENANCE_4_EXTENSION_NAME, DeviceExtensionFeature::None },

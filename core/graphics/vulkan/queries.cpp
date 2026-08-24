@@ -220,6 +220,8 @@ bool Device::getTimerQueryResult(TimerQuery* queryResource, TimerQueryResult& ou
     outResult.endTicks = timestamps[s_TimerQueryEndIndex];
     outResult.secondsPerTick = secondsPerTick;
     outResult.timestampValidBits = query->m_timestampValidBits;
+    outResult.physicalQueue = query->m_timestampQueue;
+    outResult.comparableAcrossSubmissions = supportsComparableGpuTimestamps(query->m_timestampQueue);
     return outResult.valid();
 }
 

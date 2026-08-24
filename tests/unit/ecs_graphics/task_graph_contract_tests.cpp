@@ -563,8 +563,8 @@ TEST(EcsGraphics, EffectsTopologyUsesSemanticTaskAnchors){
 }
 
 
-// Prefix and shadow record spans are task-addressed. The renderer can still query the compiler for the exact
-// terminal presentation packet elsewhere, but ordinary readiness and merge validation must not mirror packet IDs.
+// Prefix and shadow record spans are task-addressed. Shadow Preparation and Mesh View Setup keep distinct timing
+// packets without requiring adjacency, while the later normal-range partition remains an exact coverage invariant.
 TEST(EcsGraphics, PrefixAndShadowTopologyUsesSemanticTaskAnchors){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -579,6 +579,34 @@ TEST(EcsGraphics, PrefixAndShadowTopologyUsesSemanticTaskAnchors){
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredShadowVisibilityTask)"));
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredSoftwareCausticsTask)"));
     EXPECT_TRUE(ContainsText(system, "tasksSharePacket(\n            m_graphicsPrefixDeferredClearFirstTask"));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "packetRangeForTasks(m_deferredShadowPrepareTask, m_graphicsPrefixTask)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "const bool shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct =\n"
+        "        !m_deferredLightingCompiledGraph.tasksSharePacket(\n"
+        "            m_deferredShadowPrepareTask,\n"
+        "            m_graphicsPrefixMeshViewSetupTask"
+    ));
+    EXPECT_EQ(CountText(system, "shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct"), 3u);
+    EXPECT_TRUE(ContainsText(system, "|| !shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct"));
+    EXPECT_TRUE(ContainsText(system, "&& shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct"));
+    EXPECT_TRUE(ContainsText(system, "shadowPreparePrefixSubmitter.submitTaskRangeInCompileOrderFromTasks("));
+    EXPECT_TRUE(ContainsText(system, "m_deferredShadowPrepareTask,\n                m_graphicsPrefixTask,"));
+
+    EXPECT_FALSE(ContainsText(
+        system,
+        "shadowPrepareThroughPrefixPacketRange.packetCount\n"
+        "            != shadowPreparePacketRange.packetCount + graphicsPrefixWorkPacketRange.packetCount"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "deferredNormalPacketRange.packetCount\n"
+        "            != shadowPrepareThroughPrefixPacketRange.packetCount + effectsThroughPresentationPacketRange.packetCount"
+    ));
+    EXPECT_TRUE(ContainsText(system, "shadowPreparePrefixTimingTicketCount == 1u + graphicsPrefixUniquePacketCount"));
 
     EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId shadowPreparePacket"));
     EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId graphicsPrefixPacket"));

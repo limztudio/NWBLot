@@ -1303,6 +1303,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.packetRangeForTasks(m_graphicsPrefixTask, m_graphicsPrefixTask);
     const Core::GpuSubmissionPacketRange shadowPrepareThroughPrefixPacketRange =
         m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredShadowPrepareTask, m_graphicsPrefixTask);
+    // Shadow Preparation and Mesh View Setup own distinct timing tickets. Their endpoint packets cannot merge,
+    // while the inclusive semantic range may contain compiler-owned untimed packets between those anchors.
+    const bool shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct =
+        !m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredShadowPrepareTask,
+            m_graphicsPrefixMeshViewSetupTask
+        )
+    ;
     const Core::GpuSubmissionPacketRange shadowEffectsPacketRange = m_deferredLightingCompiledGraph.packetRangeForTasks(
         m_deferredShadowVisibilityTask,
         hardwareShadowSupported ? m_deferredShadowVisibilityTask : m_deferredSoftwareCausticsTask
@@ -1543,8 +1551,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !graphicsPrefixPacketRange.valid()
         || graphicsPrefixPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount
         || !shadowPrepareThroughPrefixPacketRange.valid()
-        || shadowPrepareThroughPrefixPacketRange.packetCount
-            != shadowPreparePacketRange.packetCount + graphicsPrefixWorkPacketRange.packetCount
+        || !shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct
         || !shadowEffectsPacketRange.valid()
         || (hardwareShadowSupported
             ? shadowEffectsPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount
@@ -3028,6 +3035,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationMerged
             && graphicsPrefixWorkPacketRange.valid()
             && shadowPrepareThroughPrefixPacketRange.valid()
+            && shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct
             && shadowPreparePrefixTimingTicketsValid
             && prefixTimingAcceptance.shadowPrepareStateReady
             && shadowPreparePrefixTimingTicketCount == 1u + graphicsPrefixUniquePacketCount

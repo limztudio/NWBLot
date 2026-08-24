@@ -48,7 +48,11 @@ GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
 {}
 
 GpuTaskGraph::~GpuTaskGraph(){
-    NWB_FATAL_ASSERT_MSG(destroyTaskPayloads(), "GpuTaskGraph destruction requires in-flight task work to resolve first");
+    const bool taskPayloadsDestroyed = destroyTaskPayloads();
+    if(!taskPayloadsDestroyed){
+        NWB_FATAL_ASSERT_MSG(false, "GpuTaskGraph destruction requires in-flight task work to resolve first");
+        return;
+    }
     destroyTaskStateSnapshots();
     destroyResourceStateSnapshots();
 }

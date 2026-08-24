@@ -101,6 +101,29 @@ struct GpuCommandArenaStatistics{
     [[nodiscard]] bool valid()const noexcept{ return queue.valid(); }
 };
 
+// Immutable snapshot for one logical recording worker on one physical queue. Direct recording is always queryable
+// as domain/index {0,0}; explicit shards use the exact domain/index retained by GpuRecordedPacket. Fields are
+// sampled independently from thread-safe counters and may advance during the query. The native-storage estimate is
+// a lower bound over VkCommandPool/VkCommandBuffer handle objects only; opaque driver memory is deliberately absent.
+struct GpuCommandArenaWorkerStatistics{
+    GpuPhysicalQueueId queue;
+    u64 recordingWorkerDomain = 0u;
+    u32 recordingWorkerIndex = 0u;
+    u64 commandPoolEpochCount = 0u;
+    u64 pendingCommandPoolEpochCount = 0u;
+    u64 currentCommandBufferCount = 0u;
+    u64 highWaterCommandBufferCount = 0u;
+    u64 reusableCommandBufferCount = 0u;
+    u64 leasedCommandBufferCount = 0u;
+    u64 pendingCommandBufferCount = 0u;
+    u64 growthEventCount = 0u;
+    u64 resetEventCount = 0u;
+    u64 nativeHandleStorageLowerBoundBytes = 0u;
+
+
+    [[nodiscard]] bool valid()const noexcept{ return queue.valid(); }
+};
+
 typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
 typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 

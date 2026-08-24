@@ -170,11 +170,16 @@ TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){
     EXPECT_TRUE(ContainsText(frameGraph, "\"CPU: declaration={:.3f} ms compile={:.3f} ms record={:.3f} ms submit={:.3f} ms\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.declarationSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "\"CPU compile phases: analysis={:.3f} ms queue assignment={:.3f} ms planning={:.3f} ms\\n\""));
-    EXPECT_TRUE(ContainsText(frameGraph, "\"CPU planning detail: packetization={:.3f} ms resource states={:.3f} ms packet dependencies={:.3f} ms\\n\""));
+    EXPECT_TRUE(ContainsText(frameGraph, "\"CPU analysis detail: validation={:.3f} ms dependencies={:.3f} ms hazards={:.3f} ms cycles/topology={:.3f} ms\\n\""));
+    EXPECT_TRUE(ContainsText(frameGraph, "\"CPU planning detail: packetization={:.3f} ms resource states/barriers={:.3f} ms packet dependencies={:.3f} ms\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"CPU recording phases: command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task recording={:.3f} ms\""));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.analysisSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.queueAssignmentSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.planningSeconds * 1000.0,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.validationSeconds * 1000.0,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.dependencyAnalysisSeconds * 1000.0,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.hazardAnalysisSeconds * 1000.0,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.topologicalOrderSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.packetizationSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.resourceStatePlanningSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.packetDependencyPlanningSeconds * 1000.0,"));
@@ -331,6 +336,8 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
 
     EXPECT_TRUE(ContainsText(commandHeader, "Borrowed immutable topology view; its producer owns the storage."));
     EXPECT_TRUE(ContainsText(commandHeader, "struct GpuCommandArenaStatistics{"));
+    EXPECT_TRUE(ContainsText(commandHeader, "struct GpuCommandArenaWorkerStatistics{"));
+    EXPECT_TRUE(ContainsText(commandHeader, "Direct recording is always queryable"));
     EXPECT_TRUE(ContainsText(commandHeader, "nativeHandleStorageLowerBoundBytes counts only the"));
     EXPECT_TRUE(ContainsText(compiledGraphHeader, "GpuPhysicalQueueTopology queueTopology()const noexcept;"));
     EXPECT_TRUE(ContainsText(compiledGraphHeader, "Borrowed immutable-plan topology view."));
@@ -443,6 +450,27 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     ));
     EXPECT_TRUE(ContainsText(frameGraph, "commandArenaStatistics.pendingCommandPoolEpochCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "commandArenaStatistics.nativeHandleStorageLowerBoundBytes"));
+    EXPECT_TRUE(ContainsText(frameGraph, "__hidden_frame_graph_export::AppendCommandArenaWorkerStatistics("));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "m_graphics.getDevice().getCommandArenaWorkerStatistics(queueInfo.id, 0u, 0u)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "m_deferredLightingCompiledGraph.packetIdAt(packetIndex)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "previousRecordedPacket->recordingWorkerDomain == recordedPacket->recordingWorkerDomain"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "previousRecordedPacket->recordingWorkerIndex == recordedPacket->recordingWorkerIndex"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "Worker arena domain={} index={}: epochs={} pending epochs={} command buffers current/high-water={}/{}"
+    ));
     EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.queue.index,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.queue.deviceGeneration,"));
     EXPECT_TRUE(ContainsText(frameGraph, "__hidden_frame_graph_export::PhysicalQueueClassLabel(queueStatistics.queueClass),"));

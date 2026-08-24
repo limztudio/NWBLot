@@ -4,6 +4,8 @@
 
 #include "compiler_internal.h"
 
+#include <global/timer.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -155,6 +157,10 @@ void GpuTaskGraphAnalysis::reset(){
     m_cyclePath.clear();
     m_cycleEdges.clear();
     m_diagnostic = GpuTaskGraphAnalysisDiagnostic{};
+    m_validationSeconds = 0.0;
+    m_dependencyAnalysisSeconds = 0.0;
+    m_hazardAnalysisSeconds = 0.0;
+    m_topologicalOrderSeconds = 0.0;
     m_generation = 0u;
     m_declarationRevision = 0u;
     m_taskCount = 0u;
@@ -213,6 +219,7 @@ bool GpuTaskGraphCompiler::analyze(
     outAnalysis.m_resourceCount = graph.resourceCount();
     outAnalysis.m_externalCompletionCount = graph.externalCompletionCount();
 
+    const Timer validationBegin = TimerNow();
     const auto fail = [&](const GpuTaskGraphAnalysisStatus::Enum status, const GpuTaskId task = {}, const GpuTaskId relatedTask = {}, const GpuGraphResourceId resource = {}){
         outAnalysis.m_diagnostic.status = status;
         outAnalysis.m_diagnostic.task = task;
@@ -274,7 +281,9 @@ bool GpuTaskGraphCompiler::analyze(
                 return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, task.id, {}, use.resource);
         }
     }
+    f64 validationSeconds = DurationInSeconds<f64>(TimerNow(), validationBegin);
 
+    const Timer dependencyAnalysisBegin = TimerNow();
     const auto appendSchedulingEdge = [&](const GpuTaskDependencyEdge& edge){
         for(GpuTaskDependencyEdge& existing : outAnalysis.m_edges){
             if(existing.producer != edge.producer || existing.consumer != edge.consumer)
@@ -333,7 +342,9 @@ bool GpuTaskGraphCompiler::analyze(
             });
         }
     }
+    const f64 dependencyAnalysisSeconds = DurationInSeconds<f64>(TimerNow(), dependencyAnalysisBegin);
 
+    const Timer explicitTopologyBegin = TimerNow();
     if(!BuildTopologicalOrder(
         graph,
         outAnalysis.m_edges,
@@ -354,7 +365,9 @@ bool GpuTaskGraphCompiler::analyze(
             cycleEdge ? cycleEdge->resource : GpuGraphResourceId{}
         );
     }
+    const f64 explicitTopologySeconds = DurationInSeconds<f64>(TimerNow(), explicitTopologyBegin);
 
+    const Timer hazardAnalysisBegin = TimerNow();
     // Process resource use in the explicit stable order. Explicit relationships therefore outrank declaration
     // order, while per-resource writer/readers state emits only the nearest required RAW/WAR/WAW dependencies.
     usize potentialAccessCount = 0u;
@@ -456,7 +469,9 @@ bool GpuTaskGraphCompiler::analyze(
             }
         }
     }
+    const f64 hazardAnalysisSeconds = DurationInSeconds<f64>(TimerNow(), hazardAnalysisBegin);
 
+    const Timer finalTopologyBegin = TimerNow();
     if(!BuildTopologicalOrder(
         graph,
         outAnalysis.m_edges,
@@ -477,7 +492,11 @@ bool GpuTaskGraphCompiler::analyze(
             cycleEdge ? cycleEdge->resource : GpuGraphResourceId{}
         );
     }
+    const f64 topologicalOrderSeconds = explicitTopologySeconds
+        + DurationInSeconds<f64>(TimerNow(), finalTopologyBegin)
+    ;
 
+    const Timer presentationValidationBegin = TimerNow();
     if(const GpuPresentEndpoint* const endpoint = graph.presentEndpoint()){
         if(!graph.validTask(endpoint->producer) || !graph.validResource(endpoint->backBuffer))
             return fail(GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint, endpoint->producer, {}, endpoint->backBuffer);
@@ -529,7 +548,12 @@ bool GpuTaskGraphCompiler::analyze(
         if(!hasBackBufferWriter)
             return fail(GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint, endpoint->producer, {}, endpoint->backBuffer);
     }
+    validationSeconds += DurationInSeconds<f64>(TimerNow(), presentationValidationBegin);
 
+    outAnalysis.m_validationSeconds = validationSeconds;
+    outAnalysis.m_dependencyAnalysisSeconds = dependencyAnalysisSeconds;
+    outAnalysis.m_hazardAnalysisSeconds = hazardAnalysisSeconds;
+    outAnalysis.m_topologicalOrderSeconds = topologicalOrderSeconds;
     outAnalysis.m_diagnostic.status = GpuTaskGraphAnalysisStatus::Success;
     outAnalysis.m_valid = true;
     return true;

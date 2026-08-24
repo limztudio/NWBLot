@@ -155,8 +155,10 @@ struct CommandListParameters{
     // structure for ordinary command validation while physicalQueue selects the native transport.
     RenderLane::Enum renderLane = RenderLane::Graphics;
     bool resolveRenderLane = false;
-    // Zero is the ordinary serial/direct lease. Ready-frontier graph recording assigns a stable nonzero logical
-    // ThreadPool worker identity so each physical queue can keep native command-buffer pools worker-affined.
+    // Worker zero is the ordinary serial/direct lease. Ready-frontier graph recording combines a stable nonzero
+    // ThreadPool domain with its local nonzero worker index so different pools cannot alias one native arena shard.
+    // Manual nonzero worker indices may leave the domain at zero when the caller deliberately owns that namespace.
+    u64 recordingWorkerDomain = 0u;
     u32 recordingWorkerIndex = 0u;
 
     constexpr CommandListParameters& setQueueType(CommandQueue::Enum value){
@@ -177,7 +179,13 @@ struct CommandListParameters{
         return *this;
     }
     constexpr CommandListParameters& setRecordingWorkerIndex(const u32 value){
+        recordingWorkerDomain = 0u;
         recordingWorkerIndex = value;
+        return *this;
+    }
+    constexpr CommandListParameters& setRecordingWorker(const u64 domain, const u32 index){
+        recordingWorkerDomain = index == 0u ? 0u : domain;
+        recordingWorkerIndex = index;
         return *this;
     }
 };

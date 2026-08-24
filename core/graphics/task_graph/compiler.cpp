@@ -420,6 +420,10 @@ bool GpuTaskGraphCompiler::compile(
         : 0.0
     ;
     statistics.analysisSeconds = analysisSeconds;
+    statistics.validationSeconds = outAnalysis.m_validationSeconds;
+    statistics.dependencyAnalysisSeconds = outAnalysis.m_dependencyAnalysisSeconds;
+    statistics.hazardAnalysisSeconds = outAnalysis.m_hazardAnalysisSeconds;
+    statistics.topologicalOrderSeconds = outAnalysis.m_topologicalOrderSeconds;
     statistics.queueAssignmentSeconds = queueAssignmentSeconds;
     statistics.planningSeconds = DurationInSeconds<f64>(TimerNow(), planningBegin);
     statistics.packetizationSeconds = packetizationSeconds;

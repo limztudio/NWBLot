@@ -197,6 +197,20 @@ GpuCommandArenaStatistics Device::getCommandArenaStatistics(const GpuPhysicalQue
     return physicalQueue ? physicalQueue->commandArenaStatistics() : GpuCommandArenaStatistics{};
 }
 
+GpuCommandArenaWorkerStatistics Device::getCommandArenaWorkerStatistics(
+    const GpuPhysicalQueueId& queue,
+    const u64 recordingWorkerDomain,
+    const u32 recordingWorkerIndex
+)const noexcept{
+    if(!getPhysicalQueueInfo(queue) || queue.index >= m_physicalQueues.size())
+        return {};
+    const Queue* const physicalQueue = m_physicalQueues[queue.index];
+    return physicalQueue
+        ? physicalQueue->commandArenaWorkerStatistics(recordingWorkerDomain, recordingWorkerIndex)
+        : GpuCommandArenaWorkerStatistics{}
+    ;
+}
+
 bool Device::matchesPhysicalQueueIdentity(
     const CommandQueue::Enum queue,
     const u16 physicalQueueIndex,
@@ -293,6 +307,8 @@ void Device::captureSubmissionWaitTokensForTesting(
 
 CommandListHandle Device::createCommandList(const CommandListParameters& params){
     CommandListParameters resolvedParams = params;
+    if(resolvedParams.recordingWorkerIndex == 0u)
+        resolvedParams.recordingWorkerDomain = 0u;
     if(resolvedParams.resolveRenderLane){
         resolvedParams.queueType = resolveRenderLane(resolvedParams.renderLane);
         resolvedParams.resolveRenderLane = false;

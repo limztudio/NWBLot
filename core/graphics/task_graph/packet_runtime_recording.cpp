@@ -291,7 +291,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
 
     CommandListParameters parameters;
     parameters.setPhysicalQueue(packet.queue);
-    parameters.setRecordingWorkerIndex(desc.recordingWorkerIndex);
+    parameters.setRecordingWorker(desc.recordingWorkerDomain, desc.recordingWorkerIndex);
     const Timer commandListAcquisitionBegin = TimerNow();
     CommandListHandle commandList = m_device.createCommandList(parameters);
     if(!commandList){
@@ -437,6 +437,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     recordedPacket.graphBarrierRecordingSeconds = graphBarrierRecordingSeconds;
     recordedPacket.taskRecordSeconds = taskRecordSeconds;
     recordedPacket.recordingSeconds = DurationInSeconds<f64>(TimerNow(), recordingBegin);
+    recordedPacket.recordingWorkerDomain = desc.recordingWorkerDomain;
     recordedPacket.recordingWorkerIndex = desc.recordingWorkerIndex;
     // Publish the slot only after its owned native list is retained. Frontier workers are joined before callers can
     // submit, but this order also keeps the slot self-consistent for diagnostic reads.

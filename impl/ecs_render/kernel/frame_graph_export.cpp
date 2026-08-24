@@ -38,6 +38,28 @@ namespace __hidden_frame_graph_export{
     }
 }
 
+static void AppendCommandArenaWorkerStatistics(
+    AString<Core::Alloc::GlobalArena>& label,
+    const Core::GpuCommandArenaWorkerStatistics& statistics
+){
+    StringAppendFormat(
+        label,
+        "\n    Worker arena domain={} index={}: epochs={} pending epochs={} command buffers current/high-water={}/{} reusable={} leased={} pending={} growth={} resets={} native handle storage lower bound={} bytes",
+        statistics.recordingWorkerDomain,
+        statistics.recordingWorkerIndex,
+        statistics.commandPoolEpochCount,
+        statistics.pendingCommandPoolEpochCount,
+        statistics.currentCommandBufferCount,
+        statistics.highWaterCommandBufferCount,
+        statistics.reusableCommandBufferCount,
+        statistics.leasedCommandBufferCount,
+        statistics.pendingCommandBufferCount,
+        statistics.growthEventCount,
+        statistics.resetEventCount,
+        statistics.nativeHandleStorageLowerBoundBytes
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -84,7 +106,8 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             "Submission: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} submissions={} command lists={} waits={} failed submissions={}\n"
             "CPU: declaration={:.3f} ms compile={:.3f} ms record={:.3f} ms submit={:.3f} ms\n"
             "CPU compile phases: analysis={:.3f} ms queue assignment={:.3f} ms planning={:.3f} ms\n"
-            "CPU planning detail: packetization={:.3f} ms resource states={:.3f} ms packet dependencies={:.3f} ms\n"
+            "CPU analysis detail: validation={:.3f} ms dependencies={:.3f} ms hazards={:.3f} ms cycles/topology={:.3f} ms\n"
+            "CPU planning detail: packetization={:.3f} ms resource states/barriers={:.3f} ms packet dependencies={:.3f} ms\n"
             "CPU recording phases: command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task recording={:.3f} ms",
             compileStatistics.taskCount,
             compileStatistics.packetCount,
@@ -120,6 +143,10 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             compileStatistics.analysisSeconds * 1000.0,
             compileStatistics.queueAssignmentSeconds * 1000.0,
             compileStatistics.planningSeconds * 1000.0,
+            compileStatistics.validationSeconds * 1000.0,
+            compileStatistics.dependencyAnalysisSeconds * 1000.0,
+            compileStatistics.hazardAnalysisSeconds * 1000.0,
+            compileStatistics.topologicalOrderSeconds * 1000.0,
             compileStatistics.packetizationSeconds * 1000.0,
             compileStatistics.resourceStatePlanningSeconds * 1000.0,
             compileStatistics.packetDependencyPlanningSeconds * 1000.0,
@@ -217,6 +244,62 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
                 commandArenaStatistics.resetEventCount,
                 commandArenaStatistics.nativeHandleStorageLowerBoundBytes
             );
+
+            const Core::GpuCommandArenaWorkerStatistics directCommandArenaStatistics =
+                m_graphics.getDevice().getCommandArenaWorkerStatistics(queueInfo.id, 0u, 0u)
+            ;
+            if(directCommandArenaStatistics.valid())
+                __hidden_frame_graph_export::AppendCommandArenaWorkerStatistics(
+                    m_frameGraphRendererLabel,
+                    directCommandArenaStatistics
+                );
+
+            // Recorded packets retain the exact worker domain/index used for native allocation. Walk the immutable
+            // compiled order and reject any identity already seen on this queue; telemetry packet counts are small,
+            // so this allocation-free quadratic pass is preferable to persistent mutable enumeration storage.
+            for(usize packetIndex = 0u; packetIndex < m_deferredLightingCompiledGraph.packetCount(); ++packetIndex){
+                const Core::GpuSubmissionPacketId packet = m_deferredLightingCompiledGraph.packetIdAt(packetIndex);
+                if(m_deferredLightingCompiledGraph.packet(packet).queue != queueInfo.id)
+                    continue;
+                const Core::GpuRecordedPacket* const recordedPacket = m_deferredLightingRecordedGraph.find(packet);
+                if(!recordedPacket || recordedPacket->recordingWorkerIndex == 0u)
+                    continue;
+
+                bool alreadyAppended = false;
+                for(usize previousPacketIndex = 0u; previousPacketIndex < packetIndex; ++previousPacketIndex){
+                    const Core::GpuSubmissionPacketId previousPacket =
+                        m_deferredLightingCompiledGraph.packetIdAt(previousPacketIndex)
+                    ;
+                    if(m_deferredLightingCompiledGraph.packet(previousPacket).queue != queueInfo.id)
+                        continue;
+                    const Core::GpuRecordedPacket* const previousRecordedPacket =
+                        m_deferredLightingRecordedGraph.find(previousPacket)
+                    ;
+                    if(
+                        previousRecordedPacket
+                        && previousRecordedPacket->recordingWorkerDomain == recordedPacket->recordingWorkerDomain
+                        && previousRecordedPacket->recordingWorkerIndex == recordedPacket->recordingWorkerIndex
+                    ){
+                        alreadyAppended = true;
+                        break;
+                    }
+                }
+                if(alreadyAppended)
+                    continue;
+
+                const Core::GpuCommandArenaWorkerStatistics workerCommandArenaStatistics =
+                    m_graphics.getDevice().getCommandArenaWorkerStatistics(
+                        queueInfo.id,
+                        recordedPacket->recordingWorkerDomain,
+                        recordedPacket->recordingWorkerIndex
+                    )
+                ;
+                if(workerCommandArenaStatistics.valid())
+                    __hidden_frame_graph_export::AppendCommandArenaWorkerStatistics(
+                        m_frameGraphRendererLabel,
+                        workerCommandArenaStatistics
+                    );
+            }
         }
     }
     else

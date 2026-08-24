@@ -162,7 +162,14 @@ struct GpuTaskGraphCompileStatistics{
     usize packetizationDecisionCounts[s_PacketizationDecisionCount] = {};
     // Sanitized caller-measured graph declaration/build wall time. totalSeconds covers the core compiler only.
     f64 declarationSeconds = 0.0;
+    // analysisSeconds remains the backward-compatible umbrella duration. The detail buckets measure disjoint named
+    // analysis passes, but unclassified scaffolding and timing overhead mean they need not sum to analysisSeconds.
     f64 analysisSeconds = 0.0;
+    f64 validationSeconds = 0.0;
+    f64 dependencyAnalysisSeconds = 0.0;
+    f64 hazardAnalysisSeconds = 0.0;
+    // Includes cycle detection and stable ordering for both explicit-only and final inferred dependency graphs.
+    f64 topologicalOrderSeconds = 0.0;
     f64 queueAssignmentSeconds = 0.0;
     f64 planningSeconds = 0.0;
     f64 totalSeconds = 0.0;

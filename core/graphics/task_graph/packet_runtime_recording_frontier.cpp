@@ -354,7 +354,9 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 GpuRecordedGraph::PacketRecordingScratch* const scratch = outRecordedGraph.packetRecordingScratch(desc.packet);
                 GpuNativePacketRecordDesc workerDesc = desc;
                 // Reserve zero for serial/direct command lists. ThreadPool's caller is worker zero, so shift every
-                // ready-frontier lease by one and retain a stable distinction even when the caller records a chunk.
+                // ready-frontier lease by one. The stable pool domain prevents a second ThreadPool with the same
+                // local worker index from aliasing this native command-pool shard.
+                workerDesc.recordingWorkerDomain = workerPool.domainIdentity();
                 workerDesc.recordingWorkerIndex = static_cast<u32>(workerPool.currentWorkerIndex() + 1u);
                 parallelResults[parallelIndex] = scratch && recordPacketWithScratch(
                     graph,

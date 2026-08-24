@@ -47,8 +47,9 @@ struct GpuRecordedPacket{
     f64 graphBarrierRecordingSeconds = 0.0;
     f64 taskRecordSeconds = 0.0;
     f64 recordingSeconds = 0.0;
-    // Zero is serial/default recording. Nonzero values identify the ready-frontier worker lease that opened this
-    // packet's native command list; kept for transactional diagnostics and worker-affinity smoke coverage.
+    // Worker zero is serial/default recording. Ready-frontier workers retain both their process-unique ThreadPool
+    // domain and pool-local index for transactional diagnostics and native arena-affinity smoke coverage.
+    u64 recordingWorkerDomain = 0u;
     u32 recordingWorkerIndex = 0u;
 };
 
@@ -230,8 +231,9 @@ struct GpuNativePacketRecordDesc{
     GpuSubmissionPacketId packet;
     const GpuExternalPacketStateSource* externalStateSources = nullptr;
     usize externalStateSourceCount = 0u;
-    // Internal ready-frontier lease selector. Direct callers leave this at zero; the recorder derives nonzero
-    // values from Alloc::ThreadPool rather than exposing backend-native command-pool handles to task payloads.
+    // Internal ready-frontier lease selector. Direct callers leave both fields at zero; the recorder derives a
+    // process-unique ThreadPool domain and nonzero local index without exposing backend-native pool handles.
+    u64 recordingWorkerDomain = 0u;
     u32 recordingWorkerIndex = 0u;
 };
 

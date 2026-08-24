@@ -8870,6 +8870,17 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         packetizationDecisionCount += count;
     EXPECT_EQ(packetizationDecisionCount, compiledGraph.taskCount());
     EXPECT_GE(compileStatistics.analysisSeconds, 0.0);
+    EXPECT_GE(compileStatistics.validationSeconds, 0.0);
+    EXPECT_GE(compileStatistics.dependencyAnalysisSeconds, 0.0);
+    EXPECT_GE(compileStatistics.hazardAnalysisSeconds, 0.0);
+    EXPECT_GE(compileStatistics.topologicalOrderSeconds, 0.0);
+    EXPECT_LE(
+        compileStatistics.validationSeconds
+            + compileStatistics.dependencyAnalysisSeconds
+            + compileStatistics.hazardAnalysisSeconds
+            + compileStatistics.topologicalOrderSeconds,
+        compileStatistics.analysisSeconds + 1.0e-9
+    );
     EXPECT_GE(compileStatistics.queueAssignmentSeconds, 0.0);
     EXPECT_GE(compileStatistics.planningSeconds, 0.0);
     EXPECT_GE(compileStatistics.packetizationSeconds, 0.0);
@@ -9303,6 +9314,10 @@ TEST(GpuTaskGraph, PublishesDeclarationStructureStatisticsOnlyForAcceptedPlans){
     EXPECT_EQ(resetStatistics.payloadObjectBytes, 0u);
     EXPECT_EQ(resetStatistics.uploadBlobCount, 0u);
     EXPECT_EQ(resetStatistics.uploadBlobBytes, 0u);
+    EXPECT_EQ(resetStatistics.validationSeconds, 0.0);
+    EXPECT_EQ(resetStatistics.dependencyAnalysisSeconds, 0.0);
+    EXPECT_EQ(resetStatistics.hazardAnalysisSeconds, 0.0);
+    EXPECT_EQ(resetStatistics.topologicalOrderSeconds, 0.0);
     EXPECT_EQ(resetStatistics.packetizationSeconds, 0.0);
     EXPECT_EQ(resetStatistics.resourceStatePlanningSeconds, 0.0);
     EXPECT_EQ(resetStatistics.packetDependencyPlanningSeconds, 0.0);
@@ -9323,6 +9338,10 @@ TEST(GpuTaskGraph, PublishesDeclarationStructureStatisticsOnlyForAcceptedPlans){
     EXPECT_EQ(failedStatistics.payloadObjectBytes, 0u);
     EXPECT_EQ(failedStatistics.uploadBlobCount, 0u);
     EXPECT_EQ(failedStatistics.uploadBlobBytes, 0u);
+    EXPECT_EQ(failedStatistics.validationSeconds, 0.0);
+    EXPECT_EQ(failedStatistics.dependencyAnalysisSeconds, 0.0);
+    EXPECT_EQ(failedStatistics.hazardAnalysisSeconds, 0.0);
+    EXPECT_EQ(failedStatistics.topologicalOrderSeconds, 0.0);
     EXPECT_EQ(failedStatistics.packetizationSeconds, 0.0);
     EXPECT_EQ(failedStatistics.resourceStatePlanningSeconds, 0.0);
     EXPECT_EQ(failedStatistics.packetDependencyPlanningSeconds, 0.0);

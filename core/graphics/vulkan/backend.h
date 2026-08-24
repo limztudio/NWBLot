@@ -746,7 +746,8 @@ public:
         const VulkanContext& context,
         u32 queueFamilyIndex,
         VkCommandPool commandPool,
-        bool ownsCommandPool
+        bool ownsCommandPool,
+        Futex* sharedCommandPoolMutex
     );
     ~TrackedCommandBuffer();
 
@@ -762,6 +763,7 @@ private:
     VkCommandBuffer m_cmdBuf = VK_NULL_HANDLE;
     VkCommandPool m_cmdPool = VK_NULL_HANDLE;
     bool m_ownsCmdPool = false;
+    Futex* m_sharedCommandPoolMutex = nullptr;
 
     Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_referencedResources;
     Vector<BufferHandle, Alloc::GlobalArena> m_referencedStagingBuffers;
@@ -772,6 +774,7 @@ private:
     u64 m_submissionID = 0;
     // Explicit graph-worker leases own one queue-local Vulkan pool each. Recycled buffers retain that identity
     // until the queue timeline retires them; default/direct lease zero instead keeps its private pool.
+    u64 m_recordingWorkerDomain = 0u;
     u32 m_recordingWorkerIndex = 0u;
 
     const VulkanContext& m_context;
@@ -796,8 +799,15 @@ public:
 
 
 public:
-    [[nodiscard]] TrackedCommandBufferPtr getOrCreateCommandBuffer(u32 recordingWorkerIndex = 0u);
+    [[nodiscard]] TrackedCommandBufferPtr getOrCreateCommandBuffer(
+        u64 recordingWorkerDomain = 0u,
+        u32 recordingWorkerIndex = 0u
+    );
     [[nodiscard]] GpuCommandArenaStatistics commandArenaStatistics()const noexcept;
+    [[nodiscard]] GpuCommandArenaWorkerStatistics commandArenaWorkerStatistics(
+        u64 recordingWorkerDomain,
+        u32 recordingWorkerIndex
+    )const noexcept;
 
     void addWaitSemaphore(VkSemaphore semaphore, u64 value);
     void addSignalSemaphore(VkSemaphore semaphore, u64 value);
@@ -827,21 +837,29 @@ public:
 
 private:
     struct WorkerCommandArena{
+        u64 recordingWorkerDomain = 0u;
         u32 recordingWorkerIndex = 0u;
         VkCommandPool commandPool = VK_NULL_HANDLE;
         Futex mutex;
         Atomic<WorkerCommandArena*> next = nullptr;
+        Atomic<u64> currentCommandBufferCount = 0u;
+        Atomic<u64> highWaterCommandBufferCount = 0u;
+        Atomic<u64> reusableCommandBufferCount = 0u;
+        Atomic<u64> leasedCommandBufferCount = 0u;
         Atomic<u64> pendingCommandBufferCount = 0u;
+        Atomic<u64> growthEventCount = 0u;
+        Atomic<u64> resetEventCount = 0u;
         List<TrackedCommandBufferPtr, Alloc::GlobalArena> commandBuffersPool;
 
 
-        WorkerCommandArena(Alloc::GlobalArena& arena, const u32 workerIndex)
-            : recordingWorkerIndex(workerIndex)
+        WorkerCommandArena(Alloc::GlobalArena& arena, const u64 workerDomain, const u32 workerIndex)
+            : recordingWorkerDomain(workerDomain)
+            , recordingWorkerIndex(workerIndex)
             , commandBuffersPool(arena)
         {}
     };
 
-    void updateCommandBufferHighWater(u64 currentCount)noexcept;
+    static void updateCommandBufferHighWater(Atomic<u64>& highWaterCount, u64 currentCount)noexcept;
     void registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
     void transitionCommandBufferState(
         TrackedCommandBuffer& commandBuffer,
@@ -852,12 +870,17 @@ private:
     // has completed their submission, then preserves each worker-affine lease in its own reusable pool.
     void collectCompletedCommandBuffers();
     // Default/direct lease zero stays private per command buffer because external callers may record it from
-    // unrelated threads. Explicit graph workers use one Vulkan pool shard per physical queue and worker index.
-    [[nodiscard]] TrackedCommandBufferPtr createCommandBuffer(VkCommandPool commandPool, u32 recordingWorkerIndex);
-    [[nodiscard]] WorkerCommandArena* findWorkerCommandArena(u32 recordingWorkerIndex);
-    [[nodiscard]] WorkerCommandArena* getOrCreateWorkerCommandArena(u32 recordingWorkerIndex);
+    // unrelated threads. Explicit graph workers use one Vulkan pool shard per physical queue and worker identity.
+    [[nodiscard]] TrackedCommandBufferPtr createCommandBuffer(
+        VkCommandPool commandPool,
+        Futex* sharedCommandPoolMutex,
+        u64 recordingWorkerDomain,
+        u32 recordingWorkerIndex
+    );
+    [[nodiscard]] WorkerCommandArena* findWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex)const;
+    [[nodiscard]] WorkerCommandArena* getOrCreateWorkerCommandArena(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     [[nodiscard]] TrackedCommandBufferPtr getOrCreateDirectCommandBuffer();
-    [[nodiscard]] TrackedCommandBufferPtr getOrCreateWorkerCommandBuffer(u32 recordingWorkerIndex);
+    [[nodiscard]] TrackedCommandBufferPtr getOrCreateWorkerCommandBuffer(u64 recordingWorkerDomain, u32 recordingWorkerIndex);
     void destroyWorkerCommandArenas();
     void clearPendingSemaphores();
     void recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf);
@@ -894,7 +917,12 @@ private:
 
     Atomic<u64> m_explicitWorkerArenaCount = 0u;
     Atomic<u64> m_directCommandBufferCount = 0u;
+    Atomic<u64> m_directHighWaterCommandBufferCount = 0u;
+    Atomic<u64> m_directReusableCommandBufferCount = 0u;
+    Atomic<u64> m_directLeasedCommandBufferCount = 0u;
     Atomic<u64> m_pendingDirectCommandBufferCount = 0u;
+    Atomic<u64> m_directCommandBufferGrowthEventCount = 0u;
+    Atomic<u64> m_directCommandBufferResetEventCount = 0u;
     Atomic<u64> m_pendingWorkerEpochCount = 0u;
     Atomic<u64> m_currentCommandBufferCount = 0u;
     Atomic<u64> m_highWaterCommandBufferCount = 0u;
@@ -2593,6 +2621,11 @@ public:
     [[nodiscard]] GpuPhysicalQueueTopology getPhysicalQueueTopology()const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* getPhysicalQueueInfo(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] GpuCommandArenaStatistics getCommandArenaStatistics(const GpuPhysicalQueueId& queue)const noexcept;
+    [[nodiscard]] GpuCommandArenaWorkerStatistics getCommandArenaWorkerStatistics(
+        const GpuPhysicalQueueId& queue,
+        u64 recordingWorkerDomain,
+        u32 recordingWorkerIndex
+    )const noexcept;
     [[nodiscard]] bool matchesPhysicalQueueIdentity(
         CommandQueue::Enum queue,
         u16 physicalQueueIndex,

@@ -167,6 +167,10 @@ private:
     GraphicsVector<GpuTaskId> m_cyclePath;
     GraphicsVector<GpuTaskDependencyEdge> m_cycleEdges;
     GpuTaskGraphAnalysisDiagnostic m_diagnostic;
+    f64 m_validationSeconds = 0.0;
+    f64 m_dependencyAnalysisSeconds = 0.0;
+    f64 m_hazardAnalysisSeconds = 0.0;
+    f64 m_topologicalOrderSeconds = 0.0;
     u64 m_generation = 0u;
     u64 m_declarationRevision = 0u;
     usize m_taskCount = 0u;

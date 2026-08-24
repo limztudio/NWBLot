@@ -67,6 +67,7 @@ bool Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc){
         || (providedCapabilities & requiredCapabilities) != requiredCapabilities
         || (providedCapabilities & static_cast<u8>(~knownCapabilities)) != 0u
         || missingRequiredTransferCapability
+        || (desc.timestampValidBits != 0u && (desc.timestampValidBits < 36u || desc.timestampValidBits > 64u))
         || m_physicalQueueInfos.size() >= static_cast<usize>(Limit<u16>::s_Max)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing invalid physical queue registry entry."));
@@ -89,6 +90,7 @@ bool Device::registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc){
         .capabilities = desc.capabilities,
         .familyIndex = desc.familyIndex,
         .queueIndex = desc.queueIndex,
+        .timestampValidBits = desc.timestampValidBits,
         .dedicated = desc.dedicated,
     };
     Queue* const queue = NewArenaObject<Queue>(m_context.objectArena, m_context, *this, info, desc.queue);

@@ -55,7 +55,7 @@ void GpuTimingAccumulator::collect(
             recorder.recordTimestampRange(
                 m_scopeName,
                 record.frameIndex,
-                GpuTimingRecorder::TimestampRange{ result.beginSeconds, result.endSeconds }
+                GpuTimingRecorder::TimestampRange{ result.beginSeconds(), result.endSeconds() }
             );
         }
         if(completedSamples && record.attribution != s_NoGpuTimingSampleAttribution){
@@ -121,32 +121,36 @@ bool GpuTimingAccumulator::materializeRequestedQueries(Device& device){
     return m_requestedQueryCount == 0u || reserveQueries(device, m_requestedQueryCount);
 }
 
-GpuTimingScope GpuTimingAccumulator::beginQuery(
+bool GpuTimingAccumulator::beginQuery(
     CommandList& commandList,
     const u64 frameIndex,
     const u32 epoch,
-    const GpuTimingSampleAttribution attribution
+    const GpuTimingSampleAttribution attribution,
+    GpuTimingScope& outScope
 ){
+    outScope = {};
     if(!m_enabled)
-        return {};
+        return true;
 
     const u32 index = findAvailableQuery();
     if(index == Limit<u32>::s_Max)
-        return {};
+        return true;
 
     QueryRecord& record = m_queries[index];
     // beginTimerQuery self-resets an already prepared pool when recording outside a render pass. Inside a render pass
     // that reset is illegal, so only pools that recordFrameReset() made deviceReady are eligible. Under-reserved or
     // undeclared scopes skip their sample instead of allocating persistent query pools from a recording path.
     if(!record.deviceReady && !commandList.canResetTimerQueryHere())
-        return {};
+        return true;
+
+    // A device-timeline reset authorizes exactly one timestamp pair. Consume it as soon as the reservation records
+    // its begin endpoint, even if that command buffer is later discarded before submission.
+    if(!commandList.beginTimerQuery(record.query.get()))
+        return false;
 
     record.recording = true;
     record.publishSample = true;
-    // A device-timeline reset authorizes exactly one timestamp pair. Consume it as soon as the reservation records
-    // its begin endpoint, even if that command buffer is later discarded before submission.
     record.deviceReady = false;
-    commandList.beginTimerQuery(record.query.get());
     record.frameIndex = frameIndex;
     record.attribution = attribution;
     record.epoch = epoch;
@@ -154,12 +158,21 @@ GpuTimingScope GpuTimingAccumulator::beginQuery(
     if(m_nextReservation == 0u)
         ++m_nextReservation;
     record.reservation = m_nextReservation;
-    return GpuTimingScope{ this, record.query.get(), index, record.reservation };
+    outScope = GpuTimingScope{ this, record.query.get(), index, record.reservation };
+    return true;
 }
 
 bool GpuTimingAccumulator::endQuery(CommandList& commandList, const GpuTimingScope& scope){
-    if(!recordQueryEnd(commandList, scope))
+    if(!scope.valid() || scope.accumulator != this || scope.index >= m_queries.size())
         return false;
+
+    QueryRecord& record = m_queries[scope.index];
+    if(record.query.get() != scope.query || record.reservation != scope.reservation || !record.recording)
+        return false;
+    if(!commandList.endTimerQuery(record.query.get())){
+        releaseQuery(record);
+        return false;
+    }
     return confirmQuery(scope, true);
 }
 
@@ -171,8 +184,7 @@ bool GpuTimingAccumulator::recordQueryEnd(CommandList& commandList, const GpuTim
     if(record.query.get() != scope.query || record.reservation != scope.reservation || !record.recording)
         return false;
 
-    commandList.endTimerQuery(record.query.get());
-    return true;
+    return commandList.endTimerQuery(record.query.get());
 }
 
 bool GpuTimingAccumulator::confirmQuery(const GpuTimingScope& scope, const bool publishSample){
@@ -197,13 +209,7 @@ void GpuTimingAccumulator::discardQuery(const GpuTimingScope& scope){
     if(record.query.get() != scope.query || record.reservation != scope.reservation)
         return;
 
-    // A discarded command buffer may already contain timestamp writes. Require another accepted preamble reset
-    // before a dynamic-rendering scope reuses this pool; outside a render pass beginTimerQuery() resets it itself.
-    record.recording = false;
-    record.pending = false;
-    record.publishSample = true;
-    record.attribution = s_NoGpuTimingSampleAttribution;
-    record.deviceReady = false;
+    releaseQuery(record);
 }
 
 bool GpuTimingAccumulator::reserveQueries(Device& device, const u32 queryCount){
@@ -231,6 +237,16 @@ u32 GpuTimingAccumulator::appendQuery(Device& device){
 
     m_queries.push_back(Move(record));
     return static_cast<u32>(m_queries.size() - 1u);
+}
+
+void GpuTimingAccumulator::releaseQuery(QueryRecord& record){
+    // A discarded command buffer may already contain timestamp writes. Require another accepted preamble reset
+    // before a dynamic-rendering scope reuses this pool; outside a render pass beginTimerQuery() resets it itself.
+    record.recording = false;
+    record.pending = false;
+    record.publishSample = true;
+    record.attribution = s_NoGpuTimingSampleAttribution;
+    record.deviceReady = false;
 }
 
 void GpuTimingAccumulator::retireAttributions(Vector<GpuTimingSample, Alloc::GlobalArena>& outSamples){
@@ -487,44 +503,57 @@ void GpuTimingRecorder::discardFrameResetLocked(){
         it.value()->discardFrameReset();
 }
 
-GpuTimingScope GpuTimingRecorder::beginScope(
+bool GpuTimingRecorder::beginScope(
     const Name& scopeName,
     Device& device,
     CommandList& commandList,
-    const GpuTimingSampleAttribution attribution
+    const GpuTimingSampleAttribution attribution,
+    GpuTimingScope& outScope
 ){
+    outScope = {};
     ScopedLock lock(m_mutex);
     syncActiveState();
     if(!m_accumulatorsActive || !scopeName)
-        return {};
+        return true;
+    if(&commandList.getDevice() != &device)
+        return false;
+
+    const GpuPhysicalQueueInfo* const queueInfo = device.getPhysicalQueueInfo(commandList.getDescription().physicalQueue);
+    if(!queueInfo)
+        return false;
+    if(queueInfo->timestampValidBits == 0u)
+        return true;
 
     GpuTimingSubmissionTicket* const ticket = activeSubmissionTicket();
     NWB_ASSERT_MSG(ticket, NWB_TEXT("GPU timing scopes must be recorded inside a submission ticket"));
     if(!ticket)
-        return {};
+        return false;
 
     const auto found = m_accumulators.find(scopeName);
     if(found == m_accumulators.end())
-        return {};
+        return true;
 
-    static_cast<void>(device);
-    GpuTimingScope scope = found.value()->beginQuery(commandList, m_currentFrameIndex, m_epoch, attribution);
-    scope.submissionTicket = ticket;
-    return scope;
+    if(!found.value()->beginQuery(commandList, m_currentFrameIndex, m_epoch, attribution, outScope))
+        return false;
+    if(outScope.valid())
+        outScope.submissionTicket = ticket;
+    return true;
 }
 
-GpuTimingScope GpuTimingRecorder::beginDeferredScope(
+bool GpuTimingRecorder::beginDeferredScope(
     const Name& scopeName,
     Device& device,
     CommandList& commandList,
-    const GpuTimingSampleAttribution attribution
+    const GpuTimingSampleAttribution attribution,
+    GpuTimingScope& outScope
 ){
-    GpuTimingScope scope = beginScope(scopeName, device, commandList, attribution);
+    if(!beginScope(scopeName, device, commandList, attribution, outScope))
+        return false;
     // The frame transaction owns this reservation until the end packet is accepted. The begin packet's submission
     // ticket deliberately has no rollback handle for it: a later recovery endpoint may be required after that begin
     // has already executed on the device timeline.
-    scope.submissionTicket = nullptr;
-    return scope;
+    outScope.submissionTicket = nullptr;
+    return true;
 }
 
 void GpuTimingRecorder::endScope(CommandList& commandList, const GpuTimingScope& scope){

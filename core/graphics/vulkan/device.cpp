@@ -113,6 +113,11 @@ Device::Device(const DeviceDesc& desc)
                 legacyQueueFamilies[static_cast<usize>(queueFamily)].queueFlags
             );
         };
+        const auto timestampValidBitsForLegacyQueue = [&legacyQueueFamilies](const i32 queueFamily){
+            if(queueFamily < 0 || static_cast<usize>(queueFamily) >= legacyQueueFamilies.size())
+                return 0u;
+            return legacyQueueFamilies[static_cast<usize>(queueFamily)].timestampValidBits;
+        };
         const VulkanPhysicalQueueDesc legacyQueues[] = {
             VulkanPhysicalQueueDesc{
                 .queue = desc.graphicsQueue,
@@ -122,6 +127,7 @@ Device::Device(const DeviceDesc& desc)
                     ? static_cast<u32>(desc.graphicsQueueIndex)
                     : Limit<u32>::s_Max,
                 .queueIndex = s_GraphicsQueueIndex,
+                .timestampValidBits = timestampValidBitsForLegacyQueue(desc.graphicsQueueIndex),
                 .dedicated = false,
                 .primaryForClass = true,
             },
@@ -133,6 +139,7 @@ Device::Device(const DeviceDesc& desc)
                     ? static_cast<u32>(desc.computeQueueIndex)
                     : Limit<u32>::s_Max,
                 .queueIndex = s_ComputeQueueIndex,
+                .timestampValidBits = timestampValidBitsForLegacyQueue(desc.computeQueueIndex),
                 .dedicated = desc.asyncComputeLaneEnabled,
                 .primaryForClass = true,
             },
@@ -144,6 +151,7 @@ Device::Device(const DeviceDesc& desc)
                     ? static_cast<u32>(desc.transferQueueIndex)
                     : Limit<u32>::s_Max,
                 .queueIndex = s_TransferQueueIndex,
+                .timestampValidBits = timestampValidBitsForLegacyQueue(desc.transferQueueIndex),
                 .dedicated = desc.transferQueueEnabled,
                 .primaryForClass = true,
             },

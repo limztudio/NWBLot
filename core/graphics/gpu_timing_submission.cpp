@@ -235,7 +235,11 @@ bool GpuTimingFrameTransaction::begin(
         return true;
     }
 
-    m_scope = m_recorder.beginDeferredScope(scopeDefinition.identity, device, commandList, attribution);
+    if(!m_recorder.beginDeferredScope(scopeDefinition.identity, device, commandList, attribution, m_scope)){
+        m_scope = {};
+        m_state = State::Resolved;
+        return false;
+    }
     m_state = m_scope.valid() ? State::BeginRecorded : State::Inactive;
     return true;
 }
@@ -249,8 +253,14 @@ bool GpuTimingFrameTransaction::recordEnd(CommandList& commandList){
     )
         return false;
 
-    if(!m_recorder.recordDeferredScopeEnd(commandList, m_scope))
+    if(!m_recorder.recordDeferredScopeEnd(commandList, m_scope)){
+        if(m_state == State::BeginRecorded){
+            m_recorder.discardScope(m_scope);
+            m_scope = {};
+            m_state = State::Resolved;
+        }
         return false;
+    }
     m_state = State::EndRecorded;
     return true;
 }
@@ -328,7 +338,8 @@ GpuTimingMeasure::GpuTimingMeasure(
 
     m_commandList.beginMarker(scopeDefinition.markerLabel);
     m_markerOpen = true;
-    m_scope = m_recorder.beginScope(scopeDefinition.identity, device, commandList, attribution);
+    if(!m_recorder.beginScope(scopeDefinition.identity, device, commandList, attribution, m_scope))
+        m_scope = {};
 }
 GpuTimingMeasure::~GpuTimingMeasure(){
     finishTiming(m_commandList);

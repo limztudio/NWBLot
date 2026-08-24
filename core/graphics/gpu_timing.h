@@ -152,11 +152,12 @@ public:
     void requestQueries(u32 queryCount);
     [[nodiscard]] bool materializeRequestedQueries(Device& device);
     [[nodiscard]] bool reserveQueries(Device& device, u32 queryCount);
-    [[nodiscard]] GpuTimingScope beginQuery(
+    [[nodiscard]] bool beginQuery(
         CommandList& commandList,
         u64 frameIndex,
         u32 epoch,
-        GpuTimingSampleAttribution attribution
+        GpuTimingSampleAttribution attribution,
+        GpuTimingScope& outScope
     );
     [[nodiscard]] bool endQuery(CommandList& commandList, const GpuTimingScope& scope);
     [[nodiscard]] bool recordQueryEnd(CommandList& commandList, const GpuTimingScope& scope);
@@ -167,6 +168,7 @@ public:
 private:
     [[nodiscard]] u32 findAvailableQuery()const;
     [[nodiscard]] u32 appendQuery(Device& device);
+    void releaseQuery(QueryRecord& record);
     void retireAttributions(Vector<GpuTimingSample, Alloc::GlobalArena>& outSamples);
 
 
@@ -266,17 +268,19 @@ public:
 
 
 private:
-    [[nodiscard]] GpuTimingScope beginScope(
+    [[nodiscard]] bool beginScope(
         const Name& scopeName,
         Device& device,
         CommandList& commandList,
-        GpuTimingSampleAttribution attribution
+        GpuTimingSampleAttribution attribution,
+        GpuTimingScope& outScope
     );
-    [[nodiscard]] GpuTimingScope beginDeferredScope(
+    [[nodiscard]] bool beginDeferredScope(
         const Name& scopeName,
         Device& device,
         CommandList& commandList,
-        GpuTimingSampleAttribution attribution
+        GpuTimingSampleAttribution attribution,
+        GpuTimingScope& outScope
     );
     void endScope(CommandList& commandList, const GpuTimingScope& scope);
     [[nodiscard]] bool recordDeferredScopeEnd(CommandList& commandList, const GpuTimingScope& scope);

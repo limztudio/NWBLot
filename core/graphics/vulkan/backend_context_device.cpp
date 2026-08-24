@@ -618,7 +618,8 @@ bool BackendContext::createVulkanDevice(){
     const auto registerSameClassQueues = [
         this,
         &sameClassQueueRequests,
-        &capabilitiesForSameClassQueue
+        &capabilitiesForSameClassQueue,
+        &physicalQueueFamilies
     ](
         const CommandQueue::Enum queueClass,
         VkQueue& secondaryQueue,
@@ -645,6 +646,7 @@ bool BackendContext::createVulkanDevice(){
                 .capabilities = capabilitiesForSameClassQueue(request.family),
                 .familyIndex = static_cast<u32>(request.family),
                 .queueIndex = request.queueIndex,
+                .timestampValidBits = physicalQueueFamilies[static_cast<usize>(request.family)].timestampValidBits,
                 .dedicated = queueClass != CommandQueue::Graphics,
                 .primaryForClass = false,
             });

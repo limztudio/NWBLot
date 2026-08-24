@@ -271,8 +271,8 @@ concept CommandListApi = requires(
     commandList.executeMultiIndirectClusterOperation(clusterOperationDesc);
     commandList.buildTopLevelAccelStructFromBuffer(accelStruct, buffer, u64{}, usize{}, RayTracingAccelStructBuildFlags::None);
     commandList.convertCoopVecMatrices(coopVecConvertDescs, usize{});
-    commandList.beginTimerQuery(timerQuery);
-    commandList.endTimerQuery(timerQuery);
+    { commandList.beginTimerQuery(timerQuery) }->SameAs<bool>;
+    { commandList.endTimerQuery(timerQuery) }->SameAs<bool>;
     commandList.beginMarker(markerName);
     commandList.endMarker();
 

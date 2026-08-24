@@ -48,6 +48,7 @@ struct VulkanPhysicalQueueDesc{
     GpuQueueCapability::Mask capabilities = GpuQueueCapability::None;
     u32 familyIndex = Limit<u32>::s_Max;
     u32 queueIndex = 0u;
+    u32 timestampValidBits = 0u;
     bool dedicated = false;
     bool primaryForClass = false;
 };

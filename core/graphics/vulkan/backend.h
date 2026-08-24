@@ -2348,8 +2348,8 @@ public:
 
     void resetTimerQuery(TimerQuery* query);
     [[nodiscard]] bool canResetTimerQueryHere()const;
-    void beginTimerQuery(TimerQuery* query);
-    void endTimerQuery(TimerQuery* query);
+    [[nodiscard]] bool beginTimerQuery(TimerQuery* query);
+    [[nodiscard]] bool endTimerQuery(TimerQuery* query);
     void beginMarker(const AStringView name);
     void endMarker();
 
@@ -2492,6 +2492,8 @@ public:
 
 private:
     VkQueryPool m_queryPool = VK_NULL_HANDLE;
+    GpuPhysicalQueueId m_timestampQueue;
+    u32 m_timestampValidBits = 0u;
 
     const VulkanContext& m_context;
 };

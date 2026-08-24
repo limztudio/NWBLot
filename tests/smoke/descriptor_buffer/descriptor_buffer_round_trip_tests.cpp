@@ -65,6 +65,10 @@ namespace Tests{
 using namespace Core;
 
 inline constexpr GpuTimingScopeDefinition s_FrameTransactionScope("tests/timing_frame_transaction");
+inline constexpr GpuTimingScopeDefinition s_TimerQueryFailureScope("tests/timing_query_failure");
+inline constexpr GpuTimingScopeDefinition s_TimerQueryAcceptedRecoveryScope("tests/timing_query_accepted_recovery");
+inline constexpr GpuTimingScopeDefinition s_TimerQueryForeignDeviceScope("tests/timing_query_foreign_device");
+inline constexpr GpuTimingScopeDefinition s_TimerQueryUnsupportedQueueScope("tests/timing_query_unsupported_queue");
 inline constexpr GpuTimingScopeDefinition s_SharedOpaqueComputeEmulationScope(
     "tests/timing_shared_opaque_compute_emulation"
 );
@@ -1211,6 +1215,10 @@ TEST_F(DescriptorBufferRoundTripTest, NativePhysicalQueueRegistryDrivesExactSubm
             queue.id.index,
             queue.id.deviceGeneration
         ));
+        EXPECT_TRUE(
+            queue.timestampValidBits == 0u
+            || (queue.timestampValidBits >= 36u && queue.timestampValidBits <= 64u)
+        );
         EXPECT_NE(nativeDevice.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, queue.id), Object(nullptr));
         foundGraphicsQueue = foundGraphicsQueue || queue.id == graphicsQueue;
     }
@@ -1262,6 +1270,113 @@ TEST_F(DescriptorBufferRoundTripTest, NativePhysicalQueueRegistryDrivesExactSubm
 #endif
 
     EXPECT_TRUE(nativeDevice.waitForIdle());
+}
+
+
+// The backend result must carry the exact physical queue family's native timestamp width and preserve raw ticks
+// until modular duration conversion. This is the real Vulkan complement to the synthetic wrap-math unit cases.
+TEST_F(DescriptorBufferRoundTripTest, TimerQueryResultCarriesNativePhysicalQueueWidth){
+    auto& nativeDevice = device();
+    const GpuPhysicalQueueId graphicsQueue = nativeDevice.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueInfo* const queueInfo = nativeDevice.getPhysicalQueueInfo(graphicsQueue);
+    ASSERT_NE(queueInfo, nullptr);
+    if(queueInfo->timestampValidBits == 0u)
+        GTEST_SKIP() << "Timer query result: primary Graphics queue does not support timestamps.";
+
+    auto query = nativeDevice.createTimerQuery();
+    ASSERT_NE(query.get(), nullptr);
+    CommandListParameters parameters;
+    parameters.setPhysicalQueue(graphicsQueue);
+    auto commandList = nativeDevice.createCommandList(parameters);
+    ASSERT_NE(commandList.get(), nullptr);
+
+    commandList->open();
+    ASSERT_TRUE(commandList->beginTimerQuery(query.get()));
+    ASSERT_TRUE(commandList->endTimerQuery(query.get()));
+    commandList->close();
+
+    CommandList* const commandLists[] = { commandList.get() };
+    const QueueSubmissionToken token = nativeDevice.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        graphicsQueue,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(token.valid());
+    ASSERT_TRUE(nativeDevice.waitForIdle());
+
+    TimerQueryResult result;
+    ASSERT_TRUE(nativeDevice.getTimerQueryResult(query.get(), result));
+    EXPECT_TRUE(result.valid());
+    EXPECT_EQ(result.timestampValidBits, queueInfo->timestampValidBits);
+    EXPECT_GT(result.secondsPerTick, 0.0);
+    EXPECT_GE(result.durationSeconds(), 0.0);
+    EXPECT_DOUBLE_EQ(result.endSeconds(), result.beginSeconds() + result.durationSeconds());
+}
+
+
+// Even same-family queues have distinct execution timelines. A query begun on one exact VkQueue must reject an end
+// recorded on another, while the original queue remains able to complete and publish the same reservation.
+TEST_F(DescriptorBufferRoundTripTest, TimerQueryRejectsDifferentExactPhysicalQueueEnd){
+    HeadlessGraphicsScope multiQueueScope;
+    ASSERT_TRUE(multiQueueScope.setSameClassMultiQueueEnabled(true));
+    if(!multiQueueScope.initialize())
+        GTEST_SKIP() << "Timer query exact queue: no usable multi-queue headless Vulkan device on this host.";
+
+    auto& nativeDevice = multiQueueScope.graphics().getDevice();
+    const GpuPhysicalQueueTopology topology = nativeDevice.getPhysicalQueueTopology();
+    const GpuPhysicalQueueId primaryQueue = nativeDevice.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueInfo* const primaryInfo = nativeDevice.getPhysicalQueueInfo(primaryQueue);
+    ASSERT_NE(primaryInfo, nullptr);
+    if(primaryInfo->timestampValidBits == 0u)
+        GTEST_SKIP() << "Timer query exact queue: primary Graphics queue does not support timestamps.";
+
+    const GpuPhysicalQueueInfo* secondaryInfo = nullptr;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+        if(
+            candidate.id != primaryQueue
+            && candidate.familyIndex == primaryInfo->familyIndex
+            && candidate.timestampValidBits != 0u
+        ){
+            secondaryInfo = &candidate;
+            break;
+        }
+    }
+    if(!secondaryInfo)
+        GTEST_SKIP() << "Timer query exact queue: adapter exposes only one timestamp-capable queue in the Graphics family.";
+
+    CommandListParameters primaryParameters;
+    primaryParameters.setPhysicalQueue(primaryQueue);
+    CommandListParameters secondaryParameters;
+    secondaryParameters.setPhysicalQueue(secondaryInfo->id);
+    auto primaryCommandList = nativeDevice.createCommandList(primaryParameters);
+    auto secondaryCommandList = nativeDevice.createCommandList(secondaryParameters);
+    auto query = nativeDevice.createTimerQuery();
+    ASSERT_NE(primaryCommandList.get(), nullptr);
+    ASSERT_NE(secondaryCommandList.get(), nullptr);
+    ASSERT_NE(query.get(), nullptr);
+
+    primaryCommandList->open();
+    secondaryCommandList->open();
+    ASSERT_TRUE(primaryCommandList->beginTimerQuery(query.get()));
+    EXPECT_FALSE(secondaryCommandList->endTimerQuery(query.get()));
+    ASSERT_TRUE(primaryCommandList->endTimerQuery(query.get()));
+    secondaryCommandList->close();
+    primaryCommandList->close();
+
+    CommandList* const commandLists[] = { primaryCommandList.get() };
+    ASSERT_TRUE(nativeDevice.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        primaryQueue,
+        QueueSubmissionDesc{}
+    ).valid());
+    ASSERT_TRUE(nativeDevice.waitForIdle());
+
+    TimerQueryResult result;
+    ASSERT_TRUE(nativeDevice.getTimerQueryResult(query.get(), result));
+    EXPECT_EQ(result.timestampValidBits, primaryInfo->timestampValidBits);
 }
 
 
@@ -41096,6 +41211,215 @@ TEST_F(DescriptorBufferRoundTripTest, GarbageCollectionRetiresCompletedCommandBu
     }
     EXPECT_EQ(retainedBuffer->getReferenceCount(), 1u)
         << "periodic device GC did not retire the completed command-buffer resource reference";
+}
+
+
+// Device identity is part of timing preflight, independently of physical queue ID values. A command list from a
+// second live Device must reject before the backend can bind a query pool from the first Device's recorder.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRejectsForeignCommandListDevice){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_TimerQueryForeignDeviceScope.identity, device, 1u));
+    timing.beginFrame(200u);
+
+    HeadlessGraphicsScope foreignScope;
+    if(!foreignScope.initialize()){
+        s_scope->setGpuTimingEnabled(false);
+        timing.resetQueries();
+        GTEST_SKIP() << "GPU timing foreign device: second headless Vulkan device is unavailable.";
+    }
+
+    auto foreignCommandList = foreignScope.graphics().getDevice().createCommandList();
+    ASSERT_NE(foreignCommandList.get(), nullptr);
+    GpuTimingFrameTransaction transaction(timing);
+    GpuTimingSubmissionTicket timingTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
+        foreignCommandList->open();
+        EXPECT_FALSE(transaction.begin(s_TimerQueryForeignDeviceScope, device, *foreignCommandList));
+        foreignCommandList->close();
+    }
+    EXPECT_FALSE(transaction.needsRetirement());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
+// timestampValidBits==0 is a legitimate queue-family capability. If the adapter exposes such a queue, an optional
+// frame scope becomes a successful inactive transaction and never asks the backend to emit an invalid timestamp.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingUnsupportedPhysicalQueueIsSuccessfulInactiveScope){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueInfo* unsupportedQueue = nullptr;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        if(topology.queues[queueIndex].timestampValidBits == 0u){
+            unsupportedQueue = &topology.queues[queueIndex];
+            break;
+        }
+    }
+    if(!unsupportedQueue)
+        GTEST_SKIP() << "GPU timing unsupported queue: every exposed physical queue supports timestamps.";
+
+    auto& timing = graphics.gpuTiming();
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_TimerQueryUnsupportedQueueScope.identity, device, 1u));
+    timing.beginFrame(201u);
+
+    CommandListParameters parameters;
+    parameters.setPhysicalQueue(unsupportedQueue->id);
+    auto commandList = device.createCommandList(parameters);
+    ASSERT_NE(commandList.get(), nullptr);
+    GpuTimingFrameTransaction transaction(timing);
+    GpuTimingSubmissionTicket timingTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
+        commandList->open();
+        EXPECT_TRUE(transaction.begin(s_TimerQueryUnsupportedQueueScope, device, *commandList));
+        EXPECT_FALSE(transaction.needsRetirement());
+        EXPECT_TRUE(transaction.recordEnd(*commandList));
+        commandList->close();
+    }
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
+// Closed-list begin/end failures are hard recording failures, not inactive timing. A failure before begin acceptance
+// releases the single reservation immediately; a failure after acceptance keeps it owned for an exact-queue recovery
+// endpoint. Successful follow-up samples prove neither path leaks the one prepared query slot.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionPropagatesBackendFailuresWithoutLeakingReservations){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+    const GpuPhysicalQueueInfo* const graphicsQueueInfo = device.getPhysicalQueueInfo(
+        device.getPrimaryPhysicalQueue(CommandQueue::Graphics)
+    );
+    ASSERT_NE(graphicsQueueInfo, nullptr);
+    if(graphicsQueueInfo->timestampValidBits == 0u)
+        GTEST_SKIP() << "GPU timing failure propagation: primary Graphics queue does not support timestamps.";
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_TimerQueryFailureScope.identity, device, 1u));
+    ASSERT_TRUE(timing.prepareScopeQueries(s_TimerQueryAcceptedRecoveryScope.identity, device, 1u));
+    timing.beginFrame(202u);
+
+    auto unopenedBegin = device.createCommandList();
+    ASSERT_NE(unopenedBegin.get(), nullptr);
+    GpuTimingFrameTransaction failedBeginTransaction(timing);
+    GpuTimingSubmissionTicket failedBeginTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(failedBeginTicket);
+        EXPECT_FALSE(failedBeginTransaction.begin(s_TimerQueryFailureScope, device, *unopenedBegin));
+    }
+    EXPECT_FALSE(failedBeginTransaction.needsRetirement());
+
+    auto abandonedBegin = device.createCommandList();
+    auto unopenedEnd = device.createCommandList();
+    ASSERT_NE(abandonedBegin.get(), nullptr);
+    ASSERT_NE(unopenedEnd.get(), nullptr);
+    GpuTimingFrameTransaction abandonedTransaction(timing);
+    GpuTimingSubmissionTicket abandonedTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(abandonedTicket);
+        abandonedBegin->open();
+        ASSERT_TRUE(abandonedTransaction.begin(s_TimerQueryFailureScope, device, *abandonedBegin));
+        EXPECT_FALSE(abandonedTransaction.recordEnd(*unopenedEnd));
+        abandonedBegin->close();
+    }
+    EXPECT_FALSE(abandonedTransaction.needsRetirement());
+    abandonedBegin.reset();
+    unopenedEnd.reset();
+
+    auto acceptedCommandList = device.createCommandList();
+    ASSERT_NE(acceptedCommandList.get(), nullptr);
+    GpuTimingFrameTransaction acceptedTransaction(timing);
+    GpuTimingSubmissionTicket acceptedTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(acceptedTicket);
+        acceptedCommandList->open();
+        ASSERT_TRUE(acceptedTransaction.begin(s_TimerQueryFailureScope, device, *acceptedCommandList));
+        ASSERT_TRUE(acceptedTransaction.recordEnd(*acceptedCommandList));
+        acceptedCommandList->close();
+    }
+    CommandList* acceptedCommandLists[] = { acceptedCommandList.get() };
+    ASSERT_TRUE(acceptedTicket.submit(device, acceptedCommandLists, LengthOf(acceptedCommandLists)));
+    acceptedTransaction.confirmBeginSubmission();
+    ASSERT_TRUE(acceptedTransaction.confirmEndSubmission(true));
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 203u);
+    EXPECT_TRUE(timingSink.stats(s_TimerQueryFailureScope.identity).valid());
+
+    timing.beginFrame(203u);
+    auto acceptedPrefix = device.createCommandList();
+    ASSERT_NE(acceptedPrefix.get(), nullptr);
+    GpuTimingFrameTransaction recoveryTransaction(timing);
+    GpuTimingSubmissionTicket acceptedPrefixTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(acceptedPrefixTicket);
+        acceptedPrefix->open();
+        ASSERT_TRUE(recoveryTransaction.begin(s_TimerQueryAcceptedRecoveryScope, device, *acceptedPrefix));
+        acceptedPrefix->close();
+    }
+    CommandList* acceptedPrefixCommandLists[] = { acceptedPrefix.get() };
+    ASSERT_TRUE(acceptedPrefixTicket.submit(device, acceptedPrefixCommandLists, LengthOf(acceptedPrefixCommandLists)));
+    recoveryTransaction.confirmBeginSubmission();
+    ASSERT_TRUE(recoveryTransaction.needsRetirement());
+
+    auto failedAcceptedEnd = device.createCommandList();
+    ASSERT_NE(failedAcceptedEnd.get(), nullptr);
+    EXPECT_FALSE(recoveryTransaction.recordEnd(*failedAcceptedEnd));
+    EXPECT_TRUE(recoveryTransaction.needsRetirement());
+
+    auto recoveryCommandList = device.createCommandList();
+    ASSERT_NE(recoveryCommandList.get(), nullptr);
+    recoveryCommandList->open();
+    ASSERT_TRUE(recoveryTransaction.recordEnd(*recoveryCommandList));
+    recoveryCommandList->close();
+    CommandList* recoveryCommandLists[] = { recoveryCommandList.get() };
+    ASSERT_TRUE(device.executeCommandLists(
+        recoveryCommandLists,
+        LengthOf(recoveryCommandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
+    ASSERT_TRUE(recoveryTransaction.confirmEndSubmission(false));
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 204u);
+    EXPECT_FALSE(timingSink.stats(s_TimerQueryAcceptedRecoveryScope.identity).valid());
+
+    timing.beginFrame(204u);
+    auto postRecoveryCommandList = device.createCommandList();
+    ASSERT_NE(postRecoveryCommandList.get(), nullptr);
+    GpuTimingFrameTransaction postRecoveryTransaction(timing);
+    GpuTimingSubmissionTicket postRecoveryTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(postRecoveryTicket);
+        postRecoveryCommandList->open();
+        ASSERT_TRUE(postRecoveryTransaction.begin(
+            s_TimerQueryAcceptedRecoveryScope,
+            device,
+            *postRecoveryCommandList
+        ));
+        ASSERT_TRUE(postRecoveryTransaction.recordEnd(*postRecoveryCommandList));
+        postRecoveryCommandList->close();
+    }
+    CommandList* postRecoveryCommandLists[] = { postRecoveryCommandList.get() };
+    ASSERT_TRUE(postRecoveryTicket.submit(device, postRecoveryCommandLists, LengthOf(postRecoveryCommandLists)));
+    postRecoveryTransaction.confirmBeginSubmission();
+    ASSERT_TRUE(postRecoveryTransaction.confirmEndSubmission(true));
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 205u);
+    EXPECT_TRUE(timingSink.stats(s_TimerQueryAcceptedRecoveryScope.identity).valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
 }
 
 

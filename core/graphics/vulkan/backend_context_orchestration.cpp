@@ -116,6 +116,14 @@ bool BackendContext::createDevice(){
             physicalQueueFamilies[static_cast<usize>(queueFamily)].queueFlags
         );
     };
+    const auto timestampValidBitsForFamily = [&physicalQueueFamilies](const i32 queueFamily){
+        if(
+            queueFamily == s_InvalidQueueFamilyIndex
+            || static_cast<usize>(queueFamily) >= physicalQueueFamilies.size()
+        )
+            return 0u;
+        return physicalQueueFamilies[static_cast<usize>(queueFamily)].timestampValidBits;
+    };
     const GpuQueueCapability::Mask graphicsQueueCapabilities = queueCapabilitiesForFamily(m_graphicsQueueFamily);
     const GpuQueueCapability::Mask computeQueueCapabilities = queueCapabilitiesForFamily(m_computeQueueFamily);
     const GpuQueueCapability::Mask transferQueueCapabilities = queueCapabilitiesForFamily(m_transferQueueFamily);
@@ -145,6 +153,7 @@ bool BackendContext::createDevice(){
         .capabilities = graphicsQueueCapabilities,
         .familyIndex = static_cast<u32>(m_graphicsQueueFamily),
         .queueIndex = s_GraphicsQueueIndex,
+        .timestampValidBits = timestampValidBitsForFamily(m_graphicsQueueFamily),
         .dedicated = false,
         .primaryForClass = true,
     });
@@ -156,6 +165,7 @@ bool BackendContext::createDevice(){
             .capabilities = computeQueueCapabilities,
             .familyIndex = static_cast<u32>(m_computeQueueFamily),
             .queueIndex = s_ComputeQueueIndex,
+            .timestampValidBits = timestampValidBitsForFamily(m_computeQueueFamily),
             .dedicated = true,
             .primaryForClass = true,
         });
@@ -168,6 +178,7 @@ bool BackendContext::createDevice(){
             .capabilities = transferQueueCapabilities,
             .familyIndex = static_cast<u32>(m_transferQueueFamily),
             .queueIndex = s_TransferQueueIndex,
+            .timestampValidBits = timestampValidBitsForFamily(m_transferQueueFamily),
             .dedicated = true,
             .primaryForClass = true,
         });

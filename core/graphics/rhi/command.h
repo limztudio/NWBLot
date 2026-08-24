@@ -68,6 +68,7 @@ struct GpuPhysicalQueueInfo{
     GpuQueueCapability::Mask capabilities = GpuQueueCapability::None;
     u32 familyIndex = Limit<u32>::s_Max;
     u32 queueIndex = 0u;
+    u32 timestampValidBits = 0u;
     bool dedicated = false;
 };
 
@@ -127,13 +128,34 @@ struct GpuCommandArenaWorkerStatistics{
 typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
 typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 
-// Absolute device-timestamp values for one timer query. GPU timing uses the duration for ordinary scopes and the
-// endpoints to derive cross-queue packet overlap without summing concurrent work.
+// Raw device-timestamp values for one timer query. Vulkan exposes only the low timestampValidBits from one physical
+// queue family, so durations use modular tick arithmetic and endpoints share a locally unwrapped query epoch.
 struct TimerQueryResult{
-    f64 beginSeconds = 0.0;
-    f64 endSeconds = 0.0;
+    u64 beginTicks = 0u;
+    u64 endTicks = 0u;
+    f64 secondsPerTick = 0.0;
+    u32 timestampValidBits = 0u;
 
-    [[nodiscard]] f64 durationSeconds()const{ return endSeconds - beginSeconds; }
+    [[nodiscard]] bool valid()const{
+        return timestampValidBits > 0u && timestampValidBits <= 64u && secondsPerTick > 0.0;
+    }
+    [[nodiscard]] u64 timestampMask()const{
+        if(!valid())
+            return 0u;
+        return timestampValidBits == 64u ? Limit<u64>::s_Max : (static_cast<u64>(1u) << timestampValidBits) - 1u;
+    }
+    [[nodiscard]] u64 maskedBeginTicks()const{ return beginTicks & timestampMask(); }
+    [[nodiscard]] u64 durationTicks()const{
+        const u64 mask = timestampMask();
+        if(mask == 0u)
+            return 0u;
+
+        const u64 duration = (endTicks & mask) - (beginTicks & mask);
+        return timestampValidBits == 64u ? duration : duration & mask;
+    }
+    [[nodiscard]] f64 beginSeconds()const{ return static_cast<f64>(maskedBeginTicks()) * secondsPerTick; }
+    [[nodiscard]] f64 durationSeconds()const{ return static_cast<f64>(durationTicks()) * secondsPerTick; }
+    [[nodiscard]] f64 endSeconds()const{ return beginSeconds() + durationSeconds(); }
 };
 
 

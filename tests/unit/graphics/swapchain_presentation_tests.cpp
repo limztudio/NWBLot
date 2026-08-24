@@ -25,9 +25,11 @@ namespace Tests{
 namespace __hidden_swapchain_presentation_tests{
 
 namespace Format = Core::Format;
+namespace QueuePresentWaitDisposition = Core::GraphicsBackend::VulkanDetail::QueuePresentWaitDisposition;
 namespace SwapChainOutputMode = Core::SwapChainOutputMode;
 using Core::GpuPhysicalQueueId;
 using Core::GpuPhysicalQueueInfo;
+using Core::GraphicsBackend::VulkanDetail::ClassifyQueuePresentWaitDisposition;
 using Core::GraphicsBackend::VulkanDetail::IsPrimaryGraphicsPresentationQueue;
 using Core::GraphicsBackend::VulkanDetail::SelectSurfaceFormat;
 using Core::GraphicsBackend::VulkanDetail::SwapChainSurfaceFormatSelection;
@@ -158,6 +160,32 @@ TEST(SwapChainPresentation, RestrictsGraphPresentationSignalsToPrimaryGraphicsTr
     EXPECT_FALSE(IsPrimaryGraphicsPresentationQueue(primaryGraphicsQueue, &sameFamilyAuxiliaryGraphicsInfo));
     EXPECT_FALSE(IsPrimaryGraphicsPresentationQueue(primaryGraphicsQueue, &crossFamilyAuxiliaryGraphicsInfo));
     EXPECT_FALSE(IsPrimaryGraphicsPresentationQueue({}, &primaryGraphicsInfo));
+}
+
+
+TEST(SwapChainPresentation, ClassifiesWhetherQueuePresentConsumedItsBinaryWait){
+    EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_SUCCESS), QueuePresentWaitDisposition::Consumed);
+    EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_SUBOPTIMAL_KHR), QueuePresentWaitDisposition::Consumed);
+    EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_ERROR_OUT_OF_DATE_KHR), QueuePresentWaitDisposition::Consumed);
+    EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_ERROR_SURFACE_LOST_KHR), QueuePresentWaitDisposition::Consumed);
+    EXPECT_EQ(
+        ClassifyQueuePresentWaitDisposition(VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT),
+        QueuePresentWaitDisposition::Consumed
+    );
+    EXPECT_EQ(
+        ClassifyQueuePresentWaitDisposition(VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT),
+        QueuePresentWaitDisposition::Consumed
+    );
+    EXPECT_EQ(
+        ClassifyQueuePresentWaitDisposition(VK_ERROR_OUT_OF_HOST_MEMORY),
+        QueuePresentWaitDisposition::NotConsumed
+    );
+    EXPECT_EQ(
+        ClassifyQueuePresentWaitDisposition(VK_ERROR_OUT_OF_DEVICE_MEMORY),
+        QueuePresentWaitDisposition::NotConsumed
+    );
+    EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_ERROR_DEVICE_LOST), QueuePresentWaitDisposition::DeviceLost);
+    EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_ERROR_UNKNOWN), QueuePresentWaitDisposition::Unknown);
 }
 
 

@@ -744,14 +744,14 @@ u64 Queue::submit(
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_QueueSubmitArena);
 
     const bool hasCommands = ppCmd && numCmd > 0;
+    // Queue-global synchronization belongs to the next accepted native submission. Validation and injected
+    // pre-driver rejection must leave it pending, especially when it contains the acquired swap-chain semaphore.
     if(localWaitCount > 0u && !localWaits){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait array is null"));
-        clearPendingSemaphores();
         return m_lastSubmittedID;
     }
     if(localSignalCount > 0u && !localSignals){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local signal array is null"));
-        clearPendingSemaphores();
         return m_lastSubmittedID;
     }
 
@@ -763,7 +763,6 @@ u64 Queue::submit(
 
     if(hasCommands && numCmd > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list count exceeds Vulkan limit"));
-        clearPendingSemaphores();
         return m_lastSubmittedID;
     }
     if(
@@ -773,12 +772,10 @@ u64 Queue::submit(
         || m_signalSemaphores.size() >= static_cast<usize>(Limit<u32>::s_Max) - localSignalCount
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queued semaphore count exceeds Vulkan limit"));
-        clearPendingSemaphores();
         return m_lastSubmittedID;
     }
     if((hasCommands || hasPendingSemaphores) && m_lastSubmittedID == Limit<u64>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queue submission ID exhausted"));
-        clearPendingSemaphores();
         return m_lastSubmittedID;
     }
     if(hasCommands){
@@ -793,7 +790,6 @@ u64 Queue::submit(
                 )
             ){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list physical queue does not match the execution queue"));
-                clearPendingSemaphores();
                 return m_lastSubmittedID;
             }
         }
@@ -801,7 +797,6 @@ u64 Queue::submit(
     for(usize i = 0u; i < localSignalCount; ++i){
         if(localSignals[i].semaphore == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local signal semaphore is null"));
-            clearPendingSemaphores();
             return m_lastSubmittedID;
         }
     }
@@ -832,7 +827,6 @@ u64 Queue::submit(
 
     if(m_trackingSemaphore == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Queue submission skipped because timeline semaphore is unavailable."));
-        clearPendingSemaphores();
 
         for(auto& tracked : trackedBuffers)
             recycleCommandBuffer(Move(tracked));
@@ -852,7 +846,6 @@ u64 Queue::submit(
         if(localWaits[i].semaphore == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait semaphore is null"));
             m_lastSubmittedID = submissionID - 1;
-            clearPendingSemaphores();
             for(auto& tracked : trackedBuffers)
                 recycleCommandBuffer(Move(tracked));
             return m_lastSubmittedID;
@@ -902,10 +895,8 @@ u64 Queue::submit(
 
 #if !defined(NWB_FINAL)
     if(m_device.consumeSubmissionRejectionForTesting(m_queueID)){
-        // Match the real vkQueueSubmit2 rejection path exactly: the detached command buffers return to this queue's
-        // pool, the tentative timeline value is rolled back, and Device::executeCommandLists performs its normal
-        // upload/scratch cleanup after observing outSubmissionAccepted=false.
-        clearPendingSemaphores();
+        // Reject before the driver sees this submission. Global synchronization remains owned by the queue for a
+        // retry, while detached command buffers and their tentative timeline value are rolled back.
         m_lastSubmittedID = submissionID - 1;
         for(auto& tracked : trackedBuffers)
             recycleCommandBuffer(Move(tracked));
@@ -915,12 +906,11 @@ u64 Queue::submit(
 
     const VkResult res = vkQueueSubmit2(m_queue, 1, &submitInfo, VK_NULL_HANDLE);
 
-    clearPendingSemaphores();
-
     if(res != VK_SUCCESS){
         m_lastSubmittedID = submissionID - 1;
 
         if(res == VK_ERROR_DEVICE_LOST){
+            clearPendingSemaphores();
             m_device.captureGpuCrash("queue submit");
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Device was lost during queue submission."));
         }
@@ -934,6 +924,8 @@ u64 Queue::submit(
 
         return m_lastSubmittedID;
     }
+
+    clearPendingSemaphores();
 
     const QueueSubmissionToken submissionToken{
         .queue = m_queueID,

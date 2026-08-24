@@ -308,10 +308,12 @@ bool BackendContext::beginFrame(const BackBufferResizeCallbacks& callbacks){
     VkResult res = VK_SUCCESS;
     VkSemaphore semaphore = VK_NULL_HANDLE;
 
-    // A previous frame can abort after its terminal graph packet accepted but before present() consumed the binary
-    // semaphore. Retire it before acquiring another image so no swap-chain semaphore is signalled twice.
+    if(m_frameAcquired){
+        NWB_LOGGER_ERROR(NWB_TEXT("Cannot begin a Vulkan frame while the previous acquired swap-chain image remains unresolved"));
+        return false;
+    }
+
     cancelFramePresentationSignal();
-    m_frameAcquired = false;
 
     if(!m_swapChain || m_acquireSemaphores.empty()){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: beginFrame skipped because swap chain or acquire semaphores are not ready."));
@@ -391,30 +393,49 @@ bool BackendContext::present(){
     if(!m_frameAcquired || !m_swapChain || m_presentSemaphores.empty() || m_swapChainImages.empty()){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: present skipped because swap chain or present semaphores are not ready."));
         cancelFramePresentationSignal();
-        m_frameAcquired = false;
         return false;
     }
 
     if(m_swapChainIndex >= m_presentSemaphores.size() || m_swapChainIndex >= m_swapChainImages.size()){
         cancelFramePresentationSignal();
-        m_swapChainIndex = 0;
+        NWB_LOGGER_ERROR(NWB_TEXT("Cannot present Vulkan swap-chain image because its acquired index is invalid"));
+        return false;
     }
 
     const VkSemaphore& semaphore = m_presentSemaphores[m_swapChainIndex];
 
-    const bool graphSignalAccepted =
+    bool frameSignalAccepted =
         m_framePresentationSignalState == FramePresentationSignalState::Accepted
         && m_framePresentationSwapChainIndex == m_swapChainIndex
         && m_framePresentationSemaphore == semaphore
     ;
 
-    if(!graphSignalAccepted){
+    if(!frameSignalAccepted){
         cancelFramePresentationSignal();
 
-        m_rhiDevice->queueSignalSemaphore(CommandQueue::Graphics, semaphore, 0);
+        const QueueSubmissionPreSubmitHook presentationSignalHook = claimFramePresentationSignal();
+        const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
+        if(!presentationSignalHook.valid() || !primaryGraphicsQueue.valid()){
+            cancelFramePresentationSignal();
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to claim compatibility presentation on the primary Graphics queue."));
+            return false;
+        }
 
-        // Compatibility fallback for render paths that have not claimed the graph-owned terminal packet signal.
-        m_rhiDevice->executeCommandLists(nullptr, 0);
+        QueueSubmissionDesc submitDesc;
+        submitDesc.setPreSubmitHook(presentationSignalHook);
+        const QueueSubmissionToken fallbackToken = m_rhiDevice->executeCommandLists(
+            nullptr,
+            0u,
+            primaryGraphicsQueue,
+            submitDesc
+        );
+        if(!fallbackToken.valid() || !confirmFramePresentationSignal(fallbackToken)){
+            cancelFramePresentationSignal();
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Compatibility presentation signal submission was rejected."));
+            return false;
+        }
+
+        frameSignalAccepted = true;
     }
 
     VkPresentInfoKHR presentInfo = {};
@@ -426,22 +447,34 @@ bool BackendContext::present(){
     presentInfo.pImageIndices = &m_swapChainIndex;
 
     res = vkQueuePresentKHR(m_presentQueue, &presentInfo);
-    if(!(res == VK_SUCCESS || res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)){
-        // A failed present is not guaranteed to consume the binary signal. Replace the graph-owned semaphore after
-        // joining the device instead of allowing a later frame to signal the same binary semaphore again.
-        if(graphSignalAccepted && m_rhiDevice && m_rhiDevice->waitForIdle())
+    const VulkanDetail::QueuePresentWaitDisposition::Enum presentWaitDisposition =
+        VulkanDetail::ClassifyQueuePresentWaitDisposition(res);
+    if(presentWaitDisposition != VulkanDetail::QueuePresentWaitDisposition::Consumed){
+        // Host/device OOM and unknown failures do not prove the accepted binary signal was consumed. Quarantine it
+        // after joining successful submissions; device loss is terminal and tears the whole backend down instead.
+        if(
+            presentWaitDisposition != VulkanDetail::QueuePresentWaitDisposition::DeviceLost
+            && frameSignalAccepted
+            && m_rhiDevice
+            && m_rhiDevice->waitForIdle()
+        )
             replaceFramePresentationSemaphoreAfterIdle();
         resetFramePresentationSignal();
-        m_frameAcquired = false;
-        if(res == VK_ERROR_DEVICE_LOST && m_rhiDevice)
+        if(presentWaitDisposition == VulkanDetail::QueuePresentWaitDisposition::DeviceLost && m_rhiDevice)
             m_rhiDevice->captureGpuCrash("present");
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue present failed. {}"), ResultToString(res));
         return false;
     }
 
-    // vkQueuePresentKHR has consumed the graph signal on every success/suboptimal path before the frame fence work.
+    // Every consumed disposition has retired the binary wait even when the surface itself must be recreated.
     resetFramePresentationSignal();
     m_frameAcquired = false;
+    if(!(res == VK_SUCCESS || res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue present consumed synchronization but requires recreation. {}")
+            , ResultToString(res)
+        );
+        return false;
+    }
 
     while(m_framesInFlight.size() >= m_maxFramesInFlight){
         auto query = m_framesInFlight.front();

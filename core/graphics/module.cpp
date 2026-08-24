@@ -726,8 +726,9 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
                 if(phaseTiming)
                     phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsFramePreambleCpuTimingScope, framePreambleBegin);
                 if(!preamblePrepared){
-                    if(device.isDeviceLost())
-                        requestDeviceRecreation();
+                    // beginFrame has already acquired an image and queued its binary wait. A rejected preamble
+                    // cannot safely advance to another acquisition without tearing down that unresolved frame.
+                    requestDeviceRecreation();
                     return false;
                 }
 
@@ -751,8 +752,9 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
                 if(phaseTiming)
                     phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsPresentCpuTimingScope, presentBegin);
                 if(!presented){
-                    if(device.isDeviceLost())
-                        requestDeviceRecreation();
+                    // Presentation failure leaves binary acquire/signal ownership backend-dependent. Recreate
+                    // before another beginFrame instead of reusing a potentially signaled semaphore.
+                    requestDeviceRecreation();
                     return false;
                 }
 

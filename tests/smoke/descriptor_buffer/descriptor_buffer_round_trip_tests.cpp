@@ -40984,6 +40984,44 @@ TEST_F(DescriptorBufferRoundTripTest, DirectCommandListCanRetryAfterRejectedSubm
 }
 
 
+// Frame acquisition is a queue-global binary wait. A pre-driver rejection must leave global synchronization owned
+// by the queue so an accepted compatibility submission can consume it instead of reusing a still-signaled semaphore.
+TEST_F(DescriptorBufferRoundTripTest, QueueGlobalSynchronizationSurvivesPreDriverRejection){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+
+    auto producer = device.createCommandList();
+    ASSERT_NE(producer.get(), nullptr);
+    producer->open();
+    producer->close();
+    ASSERT_TRUE(producer->hasCommandBuffer());
+
+    CommandList* producerCommandLists[] = { producer.get() };
+    const QueueSubmissionToken producerToken = device.executeCommandLists(
+        producerCommandLists,
+        LengthOf(producerCommandLists),
+        graphicsQueue,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(producerToken.valid());
+    ASSERT_TRUE(device.waitForIdle());
+
+    device.queueWaitForCommandList(CommandQueue::Graphics, producerToken.queue, producerToken.value);
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    EXPECT_FALSE(device.executeCommandLists(nullptr, 0u, graphicsQueue, QueueSubmissionDesc{}).valid());
+
+    const QueueSubmissionToken retryToken = device.executeCommandLists(
+        nullptr,
+        0u,
+        graphicsQueue,
+        QueueSubmissionDesc{}
+    );
+    EXPECT_TRUE(retryToken.valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Queue completion must release a direct command list's retained resource during periodic device GC, even when no
 // later command-list acquire or explicit wait-for-idle happens to trigger the same queue sweep.
 TEST_F(DescriptorBufferRoundTripTest, GarbageCollectionRetiresCompletedCommandBufferResources){

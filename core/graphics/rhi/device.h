@@ -223,6 +223,8 @@ public:
 public:
     usize pushEvent(const char* name);
     void popEvent();
+    // Clears only active nesting. Historical hash-to-string mappings remain available for in-flight crash reports.
+    void resetEventStack();
     ResolvedMarker getEventString(usize hash);
 
 

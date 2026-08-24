@@ -2416,6 +2416,7 @@ private:
         const tchar* operationName
     );
     [[nodiscard]] bool attachAccelStructBuildScratchBuffer(VkAccelerationStructureBuildGeometryInfoKHR& buildInfo, u64 buildScratchSize, const char* debugName, const tchar* operationName);
+    void resetMarkerState();
     void discardUnsubmittedUploadChunks();
 
 
@@ -2427,6 +2428,7 @@ private:
     bool m_isRecording = false;
     bool m_renderPassActive = false;
     bool m_descriptorBuffersBound = false;
+    u32 m_markerDepth = 0u;
     Framebuffer* m_renderPassFramebuffer = nullptr;
 #if defined(NWB_DEBUG)
     GpuQueueCapability::Mask m_taskCapabilitiesUsed = GpuQueueCapability::None;

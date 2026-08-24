@@ -46384,6 +46384,56 @@ TEST_F(DescriptorBufferRoundTripTest, StateFanInRejectsConflictingBranchFinalSta
 }
 
 
+// Marker depth is logical state even when vendor crash-marker extensions are unavailable. Close recovers an
+// unterminated native label before vkEndCommandBuffer, while clear/reopen require a clean logical boundary.
+TEST_F(DescriptorBufferRoundTripTest, CommandListMarkerStateBalancesBeforeReuseAndEnforcesCleanBoundaries){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    CommandListHandle commandList = device.createCommandList();
+    ASSERT_NE(commandList.get(), nullptr);
+
+    commandList->open();
+    ASSERT_TRUE(commandList->isRecording());
+    commandList->beginMarker("tests/marker_recovery/close");
+    commandList->close();
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+    EXPECT_FALSE(commandList->isRecording());
+
+    commandList->open();
+    ASSERT_TRUE(commandList->isRecording());
+    commandList->beginMarker("tests/marker_recovery/clear");
+    commandList->endMarker();
+    commandList->clearState();
+    EXPECT_TRUE(commandList->isRecording());
+    commandList->beginMarker("tests/marker_recovery/reused");
+    commandList->endMarker();
+    commandList->close();
+
+    CommandList* commandLists[] = { commandList.get() };
+    bool submitted = false;
+    EXPECT_GT(device.executeCommandLists(commandLists, LengthOf(commandLists), CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_TRUE(submitted);
+    EXPECT_TRUE(device.waitForIdle());
+
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    CommandListHandle clearInvariant = device.createCommandList();
+    ASSERT_NE(clearInvariant.get(), nullptr);
+    EXPECT_DEATH_IF_SUPPORTED({
+        clearInvariant->open();
+        clearInvariant->beginMarker("tests/marker_invariant/clear");
+        clearInvariant->clearState();
+    }, "");
+
+    CommandListHandle openInvariant = device.createCommandList();
+    ASSERT_NE(openInvariant.get(), nullptr);
+    EXPECT_DEATH_IF_SUPPORTED({
+        openInvariant->open();
+        openInvariant->beginMarker("tests/marker_invariant/open");
+        openInvariant->open();
+    }, "");
+#endif
+}
+
+
 // Independent primary command lists use distinct Vulkan command-pool shards. Start both recording jobs at the same
 // latch, then record a second batch after timeline retirement to cover worker-affine recycler reuse.
 TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcurrentlyOnGraphicsWorkers){

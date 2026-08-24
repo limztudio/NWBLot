@@ -263,6 +263,8 @@ void CommandList::endTimerQuery(TimerQuery* queryResource){
 }
 
 void CommandList::beginMarker(const AStringView name){
+    ++m_markerDepth;
+
     const bool useDebugUtils = m_context.extensions.EXT_debug_utils;
     const bool useNvCheckpoint = m_device.isGpuCrashDiagnosticsEnabled();
     const bool useAmdBreadcrumb = m_device.isAmdBreadcrumbEnabled();
@@ -292,11 +294,21 @@ void CommandList::beginMarker(const AStringView name){
 }
 
 void CommandList::endMarker(){
-    if(m_context.extensions.EXT_debug_utils)
+    if(m_markerDepth == 0u){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring an unmatched command-list marker end"));
+        return;
+    }
+
+    const bool useDebugUtils = m_context.extensions.EXT_debug_utils;
+    const bool useGpuMarkers = m_device.isAnyGpuMarkerEnabled();
+
+    if(useDebugUtils)
         vkCmdEndDebugUtilsLabelEXT(m_currentCmdBuf->m_cmdBuf);
 
-    if(m_device.isAnyGpuMarkerEnabled())
+    if(useGpuMarkers)
         m_gpuCrashMarkerTracker.popEvent();
+
+    --m_markerDepth;
 }
 
 

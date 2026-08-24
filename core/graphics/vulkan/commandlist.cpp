@@ -32,12 +32,31 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
         m_device.getGpuCrashTracker().registerGpuCrashMarkerTracker(m_gpuCrashMarkerTracker);
 }
 CommandList::~CommandList(){
+    resetMarkerState();
     if(m_currentCmdBuf)
         m_currentCmdBuf->discardRetainedTextureStateCommits();
     discardUnsubmittedUploadChunks();
 
     if(m_device.isAnyGpuMarkerEnabled())
         m_device.getGpuCrashTracker().unRegisterGpuCrashMarkerTracker(m_gpuCrashMarkerTracker);
+}
+
+void CommandList::resetMarkerState(){
+    if(m_markerDepth != 0u)
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Recovering {} unterminated command-list marker scope(s)"), m_markerDepth);
+
+    if(
+        m_isRecording
+        && m_currentCmdBuf
+        && m_currentCmdBuf->m_cmdBuf != VK_NULL_HANDLE
+        && m_context.extensions.EXT_debug_utils
+    ){
+        for(u32 markerIndex = 0u; markerIndex < m_markerDepth; ++markerIndex)
+            vkCmdEndDebugUtilsLabelEXT(m_currentCmdBuf->m_cmdBuf);
+    }
+
+    m_gpuCrashMarkerTracker.resetEventStack();
+    m_markerDepth = 0u;
 }
 
 void CommandList::discardUnsubmittedUploadChunks(){
@@ -52,6 +71,8 @@ void CommandList::discardUnsubmittedUploadChunks(){
 }
 
 void CommandList::open(const CommandListResourceStateHandoff* initialStates){
+    NWB_ASSERT_MSG(m_markerDepth == 0u, NWB_TEXT("Vulkan: Command list reopened with unterminated marker scopes"));
+    resetMarkerState();
     if(m_currentCmdBuf)
         m_currentCmdBuf->discardRetainedTextureStateCommits();
     discardUnsubmittedUploadChunks();
@@ -140,6 +161,7 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
     m_stateTracker.appendKeepInitialStateBarriers(*m_currentCmdBuf, m_pendingImageBarriers, m_pendingBufferBarriers);
     commitBarriers();
     appendPendingOwnershipReleaseBarriers();
+    resetMarkerState();
 
     const VkResult res = vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
     m_isRecording = false;
@@ -160,8 +182,10 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
 }
 
 void CommandList::clearState(){
+    NWB_ASSERT_MSG(m_markerDepth == 0u, NWB_TEXT("Vulkan: Command-list logical state cleared with unterminated marker scopes"));
     if(m_currentCmdBuf && m_renderPassActive)
         endActiveRenderPass();
+    resetMarkerState();
 
     m_stateTracker.reset();
 

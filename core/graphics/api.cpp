@@ -542,6 +542,11 @@ void GpuCrashMarkerTracker::popEvent(){
     m_eventStackOffsets.pop_back();
 }
 
+void GpuCrashMarkerTracker::resetEventStack(){
+    m_eventStack.clear();
+    m_eventStackOffsets.clear();
+}
+
 ResolvedMarker GpuCrashMarkerTracker::getEventString(usize hash){
     auto found = m_eventStrings.find(hash);
     if(found != m_eventStrings.end())

@@ -410,11 +410,11 @@ struct GpuCommandIrReplayResult{
     GpuSubmissionPacketId packet
 )noexcept;
 
-// Re-runs complete preflight before lowering only `packet`'s commands. The command list must be open, have the
-// packet's resolved queue class and device generation, and have no active render pass. The bytes and graph must
-// remain unchanged for the duration of the call, and resources must belong to that command list's device. This does
-// not apply graph state seeds or barriers and does not submit work; callers retain the surrounding packet-recording
-// contract.
+// Re-runs complete preflight before lowering only `packet`'s commands. The command list must be open on the packet's
+// exact resolved physical queue, retain that queue's broad class, and have no active render pass. The bytes and graph
+// must remain unchanged for the duration of the call, and resources must belong to that command list's device. This
+// does not apply graph state seeds or barriers and does not submit work; callers retain the surrounding
+// packet-recording contract.
 [[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
     BinaryByteView bytes,
     const GpuTaskGraph& graph,
@@ -426,9 +426,10 @@ struct GpuCommandIrReplayResult{
 // Experimental Vulkan-only tooling lowerer for a CopyBuffer-only packet body. It repeats complete graph-aware
 // preflight and rejects any selected opcode it cannot lower before recording the first native command. The caller
 // must already have applied the compiler-owned initial-state seed and CopySource/CopyDest barriers to commandList.
-// The command list must use the compiled graph's device generation. Unlike ReplayGpuCommandIrPacket, this path
-// deliberately bypasses CommandList's automatic copy-state tracking. It is not part of native packet recording and
-// does not own barriers, state snapshots, or submission.
+// The command list must be open on the packet's exact resolved physical queue, retain that queue's broad class, and
+// have no active render pass. Unlike ReplayGpuCommandIrPacket, this path deliberately bypasses CommandList's
+// automatic copy-state tracking. It is not part of native packet recording and does not own barriers, state
+// snapshots, or submission.
 [[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
     BinaryByteView bytes,
     const GpuTaskGraph& graph,

@@ -246,6 +246,33 @@ struct Result{
     );
 }
 
+[[nodiscard]] static bool DiscardRecordedPacket(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId packet,
+    GpuRecordedGraph& recordedGraph
+){
+    if(!compiledGraph.validPacket(packet) || !recordedGraph.validFor(graph, compiledGraph))
+        return false;
+    const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
+    const GpuTaskId* const tasks = compiledGraph.packetTasks(packet);
+    if(
+        !tasks
+        || packetPlan.taskCount == 0u
+        || !graph.discardUnacceptedPacket(
+            compiledGraph,
+            tasks,
+            packetPlan.taskCount,
+            recordedGraph.recordingAttemptGeneration()
+        )
+    )
+        return false;
+
+    // Discard resolves the graph's exact recording attempt; reset then releases the unsubmitted native artifact.
+    recordedGraph.reset(compiledGraph);
+    return true;
+}
+
 [[nodiscard]] static bool DecodeRecords(const BinaryByteView bytes, const u64 expectedCount, u64& outCount){
     outCount = 0u;
     GpuCommandIrStreamReader reader(bytes);
@@ -284,6 +311,22 @@ struct Result{
     return outCount == expectedCount;
 }
 
+[[nodiscard]] static CommandListHandle CreatePacketCommandList(
+    Device& device,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId packet
+){
+    if(!compiledGraph.validPacket(packet))
+        return {};
+    const GpuPhysicalQueueId packetQueue = compiledGraph.packet(packet).queue;
+    if(!compiledGraph.queueInfo(packetQueue))
+        return {};
+
+    CommandListParameters parameters;
+    parameters.setPhysicalQueue(packetQueue);
+    return device.createCommandList(parameters);
+}
+
 [[nodiscard]] static bool ReplayRecords(
     Device& device,
     const BinaryByteView bytes,
@@ -298,7 +341,7 @@ struct Result{
     if(outNanoseconds)
         *outNanoseconds = 0.0;
 
-    CommandListHandle commandList = device.createCommandList();
+    CommandListHandle commandList = CreatePacketCommandList(device, compiledGraph, packet);
     if(!commandList)
         return false;
     commandList->open();
@@ -350,7 +393,7 @@ struct Result{
     if(outNanoseconds)
         *outNanoseconds = 0.0;
 
-    CommandListHandle commandList = device.createCommandList();
+    CommandListHandle commandList = CreatePacketCommandList(device, compiledGraph, packet);
     if(!commandList)
         return false;
     commandList->open();
@@ -387,7 +430,7 @@ struct Result{
     const usize byteCount,
     Result& outResult
 ){
-    CommandListHandle commandList = device.createCommandList();
+    CommandListHandle commandList = CreatePacketCommandList(device, compiledGraph, packet);
     if(!commandList)
         return false;
     commandList->open();
@@ -400,8 +443,12 @@ struct Result{
         return false;
 
     CommandList* const commandLists[] = { commandList.get() };
+    const GpuPhysicalQueueId packetQueue = compiledGraph.packet(packet).queue;
     bool submitted = false;
-    if(device.executeCommandLists(commandLists, LengthOf(commandLists), CommandQueue::Graphics, &submitted) == 0u || !submitted)
+    if(
+        device.executeCommandLists(commandLists, LengthOf(commandLists), packetQueue, &submitted) == 0u
+        || !submitted
+    )
         return false;
     if(!device.waitForIdle())
         return false;
@@ -427,7 +474,7 @@ struct Result{
     const usize byteCount,
     Result& outResult
 ){
-    CommandListHandle commandList = device.createCommandList();
+    CommandListHandle commandList = CreatePacketCommandList(device, compiledGraph, packet);
     if(!commandList)
         return false;
     commandList->open();
@@ -446,8 +493,12 @@ struct Result{
         return false;
 
     CommandList* const commandLists[] = { commandList.get() };
+    const GpuPhysicalQueueId packetQueue = compiledGraph.packet(packet).queue;
     bool submitted = false;
-    if(device.executeCommandLists(commandLists, LengthOf(commandLists), CommandQueue::Graphics, &submitted) == 0u || !submitted)
+    if(
+        device.executeCommandLists(commandLists, LengthOf(commandLists), packetQueue, &submitted) == 0u
+        || !submitted
+    )
         return false;
     if(!device.waitForIdle())
         return false;
@@ -584,8 +635,12 @@ struct Result{
     const auto warmup = [&]{
         if(!RecordPacket(recorder, graph, compiledGraph, packet, nativeRecordedGraph, nullptr))
             return false;
+        if(!DiscardRecordedPacket(graph, compiledGraph, packet, nativeRecordedGraph))
+            return false;
         capture.reset();
         if(!RecordPacket(recorder, graph, compiledGraph, packet, captureRecordedGraph, &capture))
+            return false;
+        if(!DiscardRecordedPacket(graph, compiledGraph, packet, captureRecordedGraph))
             return false;
         if(capture.recordCount() != arguments.recordCount)
             return false;
@@ -629,9 +684,12 @@ struct Result{
         const Timer nativeBegin = TimerNow();
         if(!RecordPacket(recorder, graph, compiledGraph, packet, nativeRecordedGraph, nullptr))
             return false;
-        return outResult.nativeRecord.append(
+        const bool appended = outResult.nativeRecord.append(
             DurationInNS<f64>(TimerNow(), nativeBegin) / static_cast<f64>(arguments.recordCount)
         );
+        if(!DiscardRecordedPacket(graph, compiledGraph, packet, nativeRecordedGraph))
+            return false;
+        return appended;
     };
     const auto recordCaptureSample = [&]{
         const Timer captureBegin = TimerNow();
@@ -640,11 +698,14 @@ struct Result{
         capture.reset();
         if(!RecordPacket(recorder, graph, compiledGraph, packet, captureRecordedGraph, &capture))
             return false;
-        if(capture.recordCount() != arguments.recordCount)
-            return false;
-        return outResult.captureRecord.append(
+        const bool appended = outResult.captureRecord.append(
             DurationInNS<f64>(TimerNow(), captureBegin) / static_cast<f64>(arguments.recordCount)
         );
+        if(!DiscardRecordedPacket(graph, compiledGraph, packet, captureRecordedGraph))
+            return false;
+        if(capture.recordCount() != arguments.recordCount)
+            return false;
+        return appended;
     };
     for(u32 sampleIndex = 0u; sampleIndex < arguments.sampleCount; ++sampleIndex){
         // Alternate arm order so a fixed cache/pool order cannot systematically favor direct or capture recording.

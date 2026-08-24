@@ -37513,6 +37513,45 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersC
     EXPECT_EQ(firstCapture->packet, packet);
     EXPECT_EQ(secondCapture->task, secondCopyTask);
     EXPECT_EQ(secondCapture->packet, secondPacket);
+
+    const GpuPhysicalQueueTopology deviceTopology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueInfo* sameClassOtherQueue = nullptr;
+    for(usize queueIndex = 0u; queueIndex < deviceTopology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& candidate = deviceTopology.queues[queueIndex];
+        if(candidate.queueClass == queue.queueClass && candidate.id != queue.id){
+            sameClassOtherQueue = &candidate;
+            break;
+        }
+    }
+    if(sameClassOtherQueue){
+        CommandListParameters wrongQueueParameters;
+        wrongQueueParameters.setPhysicalQueue(sameClassOtherQueue->id);
+        CommandListHandle wrongQueueReplay = device.createCommandList(wrongQueueParameters);
+        ASSERT_NE(wrongQueueReplay.get(), nullptr);
+        wrongQueueReplay->open();
+        ASSERT_TRUE(wrongQueueReplay->isRecording());
+
+        const GpuCommandIrReplayResult wrongQueueResult = ReplayGpuCommandIrPacket(
+            capture.commandBytes(),
+            graph,
+            compiledGraph,
+            packet,
+            *wrongQueueReplay
+        );
+        EXPECT_EQ(wrongQueueResult.error, GpuCommandIrReplayError::CommandListQueueMismatch);
+        EXPECT_TRUE(wrongQueueResult.streamValidation.valid());
+        const GpuCommandIrReplayResult wrongDirectQueueResult = ReplayGpuCommandIrPacketDirectVulkan(
+            capture.commandBytes(),
+            graph,
+            compiledGraph,
+            packet,
+            *wrongQueueReplay
+        );
+        EXPECT_EQ(wrongDirectQueueResult.error, GpuCommandIrReplayError::CommandListQueueMismatch);
+        EXPECT_TRUE(wrongDirectQueueResult.streamValidation.valid());
+        wrongQueueReplay->close();
+    }
+
     auto unopenedReplay = device.createCommandList();
     ASSERT_NE(unopenedReplay.get(), nullptr);
     const GpuCommandIrReplayResult unopenedResult = ReplayGpuCommandIrPacket(
@@ -37525,7 +37564,9 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersC
     EXPECT_EQ(unopenedResult.error, GpuCommandIrReplayError::CommandListNotRecording);
     EXPECT_TRUE(unopenedResult.streamValidation.valid());
 
-    auto replay = device.createCommandList();
+    CommandListParameters exactQueueParameters;
+    exactQueueParameters.setPhysicalQueue(queue.id);
+    auto replay = device.createCommandList(exactQueueParameters);
     ASSERT_NE(replay.get(), nullptr);
     replay->open();
     ASSERT_TRUE(replay->isRecording());
@@ -37545,7 +37586,7 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersC
     EXPECT_GT(device.executeCommandLists(
         replayCommandLists,
         LengthOf(replayCommandLists),
-        CommandQueue::Graphics,
+        queue.id,
         &replaySubmitted
     ), 0u);
     ASSERT_TRUE(replaySubmitted);
@@ -37630,7 +37671,7 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersC
 
     // Model the graph recorder's already-established packet state, then lower only the selected CopyBuffer body
     // directly to Vulkan. The direct lowerer must not create implicit state transitions of its own.
-    auto directVulkanReplay = device.createCommandList();
+    auto directVulkanReplay = device.createCommandList(exactQueueParameters);
     ASSERT_NE(directVulkanReplay.get(), nullptr);
     directVulkanReplay->open();
     ASSERT_TRUE(directVulkanReplay->isRecording());
@@ -37652,7 +37693,7 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersC
     EXPECT_GT(device.executeCommandLists(
         directVulkanCommandLists,
         LengthOf(directVulkanCommandLists),
-        CommandQueue::Graphics,
+        queue.id,
         &directVulkanSubmitted
     ), 0u);
     ASSERT_TRUE(directVulkanSubmitted);

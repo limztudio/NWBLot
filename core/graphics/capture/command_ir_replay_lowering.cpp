@@ -18,6 +18,34 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace GpuCommandIrDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GpuCommandIrReplayError::Enum ValidateReplayCommandListQueue(
+    const CommandListParameters& commandListDescription,
+    const GpuPhysicalQueueId& packetQueue,
+    const CommandQueue::Enum packetQueueClass
+)noexcept{
+    if(commandListDescription.physicalQueue != packetQueue)
+        return GpuCommandIrReplayError::CommandListQueueMismatch;
+    if(commandListDescription.queueType != packetQueueClass)
+        return GpuCommandIrReplayError::CommandListQueueMismatch;
+    return GpuCommandIrReplayError::None;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_gpu_command_ir_replay_lowering{
 
 
@@ -200,15 +228,14 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
         );
     }
     const CommandListParameters& commandListDescription = commandList.getDescription();
-    if(commandListDescription.physicalQueue.deviceGeneration != compiledGraph.deviceGeneration()){
+    const GpuCommandIrReplayError::Enum commandListQueueError = GpuCommandIrDetail::ValidateReplayCommandListQueue(
+        commandListDescription,
+        packetPlan.queue,
+        queue->queueClass
+    );
+    if(commandListQueueError != GpuCommandIrReplayError::None){
         return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
-            GpuCommandIrReplayError::CommandListQueueMismatch,
-            result.streamValidation
-        );
-    }
-    if(commandListDescription.queueType != queue->queueClass){
-        return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
-            GpuCommandIrReplayError::CommandListQueueMismatch,
+            commandListQueueError,
             result.streamValidation
         );
     }
@@ -298,15 +325,14 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
         );
     }
     const CommandListParameters& commandListDescription = commandList.getDescription();
-    if(commandListDescription.physicalQueue.deviceGeneration != compiledGraph.deviceGeneration()){
+    const GpuCommandIrReplayError::Enum commandListQueueError = GpuCommandIrDetail::ValidateReplayCommandListQueue(
+        commandListDescription,
+        packetPlan.queue,
+        queue->queueClass
+    );
+    if(commandListQueueError != GpuCommandIrReplayError::None){
         return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
-            GpuCommandIrReplayError::CommandListQueueMismatch,
-            result.streamValidation
-        );
-    }
-    if(commandListDescription.queueType != queue->queueClass){
-        return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
-            GpuCommandIrReplayError::CommandListQueueMismatch,
+            commandListQueueError,
             result.streamValidation
         );
     }

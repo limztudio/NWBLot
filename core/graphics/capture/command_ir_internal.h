@@ -24,6 +24,11 @@ namespace GpuCommandIrDetail{
 
 
 [[nodiscard]] bool ValidateBuiltinRecord(const GpuCommandIrBuiltinTaskRecord& record)noexcept;
+[[nodiscard]] GpuCommandIrReplayError::Enum ValidateReplayCommandListQueue(
+    const CommandListParameters& commandListDescription,
+    const GpuPhysicalQueueId& packetQueue,
+    CommandQueue::Enum packetQueueClass
+)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

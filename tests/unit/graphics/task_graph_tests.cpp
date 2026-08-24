@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <core/graphics/capture/command_ir.h>
+#include <core/graphics/capture/command_ir_internal.h>
 #include <core/graphics/task_graph/compiler.h>
 #include <core/graphics/task_graph/packet_runtime.h>
 #include <core/graphics/vulkan/backend.h>
@@ -4864,6 +4865,45 @@ TEST(GpuCommandIrStreamReader, RejectsMalformedRecordsWithoutPublishingPartialOu
             static_cast<u64>(bytes.size() - sizeof(Graphics::GpuCommandIrStreamHeader))
         );
     }, Graphics::GpuCommandIrStreamValidationError::TruncatedRecord);
+}
+
+TEST(GpuCommandIrReplay, RequiresExactPhysicalQueueBeyondBroadQueueClass){
+    const Graphics::GpuPhysicalQueueInfo packetQueue = GraphicsQueue();
+    const Graphics::GpuPhysicalQueueInfo sameClassOtherQueue = GraphicsQueue(1u);
+
+    Graphics::CommandListParameters exactDescription;
+    exactDescription.setPhysicalQueue(packetQueue.id);
+    EXPECT_EQ(
+        Graphics::GpuCommandIrDetail::ValidateReplayCommandListQueue(
+            exactDescription,
+            packetQueue.id,
+            packetQueue.queueClass
+        ),
+        Graphics::GpuCommandIrReplayError::None
+    );
+
+    Graphics::CommandListParameters sameClassWrongDescription;
+    sameClassWrongDescription.setPhysicalQueue(sameClassOtherQueue.id);
+    EXPECT_EQ(
+        Graphics::GpuCommandIrDetail::ValidateReplayCommandListQueue(
+            sameClassWrongDescription,
+            packetQueue.id,
+            packetQueue.queueClass
+        ),
+        Graphics::GpuCommandIrReplayError::CommandListQueueMismatch
+    );
+
+    Graphics::CommandListParameters wrongClassDescription;
+    wrongClassDescription.setPhysicalQueue(packetQueue.id);
+    wrongClassDescription.queueType = Graphics::CommandQueue::Compute;
+    EXPECT_EQ(
+        Graphics::GpuCommandIrDetail::ValidateReplayCommandListQueue(
+            wrongClassDescription,
+            packetQueue.id,
+            packetQueue.queueClass
+        ),
+        Graphics::GpuCommandIrReplayError::CommandListQueueMismatch
+    );
 }
 
 TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeLowering){

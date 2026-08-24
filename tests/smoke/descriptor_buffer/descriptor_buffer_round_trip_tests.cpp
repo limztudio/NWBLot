@@ -5554,8 +5554,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedExternalCompletionSuppliesNative
 
 
 // A source outside the graph may release an exclusive buffer to a fixed first graph packet. The graph owns the
-// completion wait and imports the producer's handoff before lowering its first declared transition; the adapter
-// gate is intentional because a real queue-family acquire needs a dedicated Compute family.
+// completion wait, imports the producer's actual state, then materializes its different declared initial state;
+// the adapter gate is intentional because a real queue-family acquire needs a dedicated Compute family.
 TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquiresCrossQueue){
     HeadlessGraphicsScope asyncScope;
     ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
@@ -5629,7 +5629,7 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
             .setIdentity(Name("tests/descriptor_buffer/initial_owner_compute_buffer"))
             .setMarkerLabel("Initial Owner Compute Buffer")
             .setType(GpuGraphResourceType::Buffer)
-            .setInitialState(ResourceStates::UnorderedAccess)
+            .setInitialState(ResourceStates::ShaderResource)
             .setInitialOwnerQueue(computeQueue)
             .setInitialOwnerReleaseDestinationQueue(graphicsQueue)
             .setInitialOwnerCompletion(completion)
@@ -5689,6 +5689,15 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
     const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
     ASSERT_NE(compiledTask, nullptr);
     EXPECT_EQ(compiledTask->queue, graphicsQueue);
+    ASSERT_EQ(compiledTask->prologueBarrierCount, 2u);
+    const GpuCompiledBarrier* const prologueBarriers = compiledGraph.taskPrologueBarriers(task);
+    ASSERT_NE(prologueBarriers, nullptr);
+    EXPECT_EQ(prologueBarriers[0u].type, GpuCompiledBarrierType::BufferOwnershipAcquire);
+    EXPECT_TRUE(prologueBarriers[0u].isInitialOwnerHandoff);
+    EXPECT_EQ(prologueBarriers[1u].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(prologueBarriers[1u].before, ResourceStates::ShaderResource);
+    EXPECT_EQ(prologueBarriers[1u].after, ResourceStates::ShaderResource);
+    EXPECT_TRUE(prologueBarriers[1u].isGraphInitialState);
     const GpuSubmissionPacketId packet = compiledTask->packet;
     ASSERT_TRUE(packet.valid());
     EXPECT_EQ(compiledGraph.packet(packet).externalDependencyCount, 1u);

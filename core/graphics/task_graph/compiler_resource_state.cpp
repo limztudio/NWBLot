@@ -307,13 +307,12 @@ namespace GpuTaskGraphCompilerDetail{
                         !previousState
                         && (initialOwnerHandoffSource != nullptr || usesInitialOwnerOnlyHandoff)
                     ;
-                    // An initial-owner handoff opens the packet with its immutable producer snapshot, so that
-                    // snapshot already materializes the native starting state. Ordinary initial fragments still
-                    // need an explicit marker: their declared state can differ from creation metadata and can be
-                    // a no-op transition whose state must survive into the packet snapshot.
+                    // An initial-owner handoff opens the packet with its immutable producer snapshot, which
+                    // materializes the authoritative native starting state. A known graph initial state still
+                    // needs an explicit marker after the acquire: it can differ from that snapshot and can be a
+                    // no-op transition whose declared state must survive into the packet snapshot.
                     const bool materializesGraphInitialState =
                         !previousState
-                        && !hasInitialOwnerStateSeed
                         && resource.initialState != ResourceStates::Unknown
                     ;
                     const bool requiresExplicitInitialStateSource =
@@ -489,10 +488,10 @@ namespace GpuTaskGraphCompilerDetail{
             }
 
             const ResourceStates::Mask before = previousState ? previousState->state : resource.initialState;
-            // An initial-owner handoff opens the packet with its immutable producer snapshot, so that snapshot
-            // already materializes the native starting state. Ordinary first uses still need an explicit marker:
-            // the graph declaration may differ from the resource's creation metadata and can also be a no-op
-            // transition whose state must survive into the packet snapshot.
+            // An initial-owner handoff opens the packet with its immutable producer snapshot, which materializes
+            // the authoritative native starting state. A known graph initial state still needs an explicit marker
+            // after the acquire: it can differ from that snapshot and can be a no-op transition whose declared
+            // state must survive into the packet snapshot.
             const bool hasInitialOwnerStateSeed =
                 !previousState
                 && (
@@ -505,7 +504,6 @@ namespace GpuTaskGraphCompilerDetail{
             ;
             const bool materializesGraphInitialState =
                 !previousState
-                && !hasInitialOwnerStateSeed
                 && resource.initialState != ResourceStates::Unknown
             ;
             const bool requiresExplicitInitialStateSource =

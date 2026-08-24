@@ -8156,7 +8156,7 @@ TEST(GpuTaskGraph, CompilesExplicitInitialExclusiveOwnershipHandoff){
         EXPECT_EQ(barriers[0u].destinationQueue, queues[1u].id);
         EXPECT_TRUE(barriers[0u].isInitialOwnerHandoff);
         EXPECT_EQ(barriers[1u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
-        EXPECT_FALSE(barriers[1u].isGraphInitialState);
+        EXPECT_TRUE(barriers[1u].isGraphInitialState);
 
         const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics sourceQueueCompileStatistics =
             compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
@@ -8264,6 +8264,124 @@ TEST(GpuTaskGraph, CompilesExplicitInitialExclusiveOwnershipHandoff){
         EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
         EXPECT_FALSE(compiledGraph.valid());
     }
+}
+
+TEST(GpuTaskGraph, MaterializesKnownInitialStateAfterInitialOwnerAcquire){
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    const Graphics::GpuQueueRequest computeQueue{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
+        Graphics::GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/task_graph/known_initial_owner_completion"))
+            .setMarkerLabel("Known Initial Owner Completion")
+    );
+    ASSERT_TRUE(completion.valid());
+    Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
+    const Graphics::QueueSubmissionToken minimumCompletionToken{
+        .queue = Graphics::CommandQueue::Graphics,
+        .value = 7u,
+        .physicalQueueIndex = queues[0u].id.index,
+        .deviceGeneration = queues[0u].id.deviceGeneration,
+    };
+    const auto importResource = [&](
+        const Graphics::GpuGraphResourceType::Enum type,
+        const Graphics::ResourceStates::Mask initialState,
+        const Name& identity,
+        const AStringView label
+    ){
+        return graph.importResource(
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(type)
+                .setInitialState(initialState)
+                .setInitialOwnerQueue(queues[0u].id)
+                .setInitialOwnerReleaseDestinationQueue(queues[1u].id)
+                .setInitialOwnerCompletion(completion)
+                .setInitialOwnerMinimumCompletionToken(minimumCompletionToken)
+                .setInitialOwnerStateSource(&stateSource)
+        );
+    };
+    const Graphics::GpuGraphResourceId buffer = importResource(
+        Graphics::GpuGraphResourceType::Buffer,
+        Graphics::ResourceStates::ShaderResource,
+        Name("tests/task_graph/known_initial_owner_buffer"),
+        "Known Initial Owner Buffer"
+    );
+    const Graphics::GpuGraphResourceId accelStruct = importResource(
+        Graphics::GpuGraphResourceType::AccelStruct,
+        Graphics::ResourceStates::AccelStructRead,
+        Name("tests/task_graph/known_initial_owner_accel_struct"),
+        "Known Initial Owner Accel Struct"
+    );
+    ASSERT_TRUE(buffer.valid());
+    ASSERT_TRUE(accelStruct.valid());
+
+    const Graphics::GpuTaskResourceUse uses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = buffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = accelStruct,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::AccelStructRead,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskDesc taskDesc;
+    taskDesc
+        .setIdentity(Name("tests/task_graph/known_initial_owner_use"))
+        .setMarkerLabel("Known Initial Owner Use")
+        .setQueue(computeQueue)
+        .setResourceUses(uses, LengthOf(uses))
+    ;
+    const Graphics::GpuTaskId task = graph.addTask(taskDesc);
+    ASSERT_TRUE(task.valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+    ASSERT_NE(compiledTask, nullptr);
+    EXPECT_EQ(compiledTask->queue, queues[1u].id);
+    ASSERT_EQ(compiledTask->prologueBarrierCount, 4u);
+
+    const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+    ASSERT_NE(barriers, nullptr);
+    EXPECT_EQ(barriers[0u].type, Graphics::GpuCompiledBarrierType::BufferOwnershipAcquire);
+    EXPECT_EQ(barriers[0u].resource, buffer);
+    EXPECT_TRUE(barriers[0u].isInitialOwnerHandoff);
+    EXPECT_EQ(barriers[1u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(barriers[1u].resource, buffer);
+    EXPECT_EQ(barriers[1u].before, Graphics::ResourceStates::ShaderResource);
+    EXPECT_EQ(barriers[1u].after, Graphics::ResourceStates::ShaderResource);
+    EXPECT_TRUE(barriers[1u].isGraphInitialState);
+    EXPECT_EQ(barriers[2u].type, Graphics::GpuCompiledBarrierType::AccelStructOwnershipAcquire);
+    EXPECT_EQ(barriers[2u].resource, accelStruct);
+    EXPECT_TRUE(barriers[2u].isInitialOwnerHandoff);
+    EXPECT_EQ(barriers[3u].type, Graphics::GpuCompiledBarrierType::AccelStructTransition);
+    EXPECT_EQ(barriers[3u].resource, accelStruct);
+    EXPECT_EQ(barriers[3u].before, Graphics::ResourceStates::AccelStructRead);
+    EXPECT_EQ(barriers[3u].after, Graphics::ResourceStates::AccelStructRead);
+    EXPECT_TRUE(barriers[3u].isGraphInitialState);
 }
 
 TEST(GpuTaskGraph, CompilesMultiSourceInitialTextureOwnershipHandoff){
@@ -8402,20 +8520,32 @@ TEST(GpuTaskGraph, CompilesMultiSourceInitialTextureOwnershipHandoff){
         const Graphics::GpuCompiledTask* const compiledMip1 = compiledGraph.findTask(mip1Task);
         ASSERT_NE(compiledMip0, nullptr);
         ASSERT_NE(compiledMip1, nullptr);
-        ASSERT_EQ(compiledMip0->prologueBarrierCount, 1u);
-        ASSERT_EQ(compiledMip1->prologueBarrierCount, 1u);
-        const Graphics::GpuCompiledBarrier* const mip0Barrier = compiledGraph.taskPrologueBarriers(mip0Task);
-        const Graphics::GpuCompiledBarrier* const mip1Barrier = compiledGraph.taskPrologueBarriers(mip1Task);
-        ASSERT_NE(mip0Barrier, nullptr);
-        ASSERT_NE(mip1Barrier, nullptr);
-        EXPECT_EQ(mip0Barrier[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire);
-        EXPECT_TRUE(mip0Barrier[0u].isInitialOwnerHandoff);
-        EXPECT_EQ(mip0Barrier[0u].sourceQueue, queues[0u].id);
-        EXPECT_EQ(mip0Barrier[0u].destinationQueue, queues[0u].id);
-        EXPECT_EQ(mip1Barrier[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire);
-        EXPECT_TRUE(mip1Barrier[0u].isInitialOwnerHandoff);
-        EXPECT_EQ(mip1Barrier[0u].sourceQueue, queues[1u].id);
-        EXPECT_EQ(mip1Barrier[0u].destinationQueue, queues[0u].id);
+        ASSERT_EQ(compiledMip0->prologueBarrierCount, 2u);
+        ASSERT_EQ(compiledMip1->prologueBarrierCount, 2u);
+        const Graphics::GpuCompiledBarrier* const mip0Barriers = compiledGraph.taskPrologueBarriers(mip0Task);
+        const Graphics::GpuCompiledBarrier* const mip1Barriers = compiledGraph.taskPrologueBarriers(mip1Task);
+        ASSERT_NE(mip0Barriers, nullptr);
+        ASSERT_NE(mip1Barriers, nullptr);
+        EXPECT_EQ(mip0Barriers[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire);
+        EXPECT_TRUE(mip0Barriers[0u].isInitialOwnerHandoff);
+        EXPECT_EQ(mip0Barriers[0u].sourceQueue, queues[0u].id);
+        EXPECT_EQ(mip0Barriers[0u].destinationQueue, queues[0u].id);
+        EXPECT_EQ(mip0Barriers[0u].range.textureSubresources, sources[0u].range.textureSubresources);
+        EXPECT_EQ(mip0Barriers[1u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
+        EXPECT_EQ(mip0Barriers[1u].before, Graphics::ResourceStates::ShaderResource);
+        EXPECT_EQ(mip0Barriers[1u].after, Graphics::ResourceStates::ShaderResource);
+        EXPECT_TRUE(mip0Barriers[1u].isGraphInitialState);
+        EXPECT_EQ(mip0Barriers[1u].range.textureSubresources, sources[0u].range.textureSubresources);
+        EXPECT_EQ(mip1Barriers[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire);
+        EXPECT_TRUE(mip1Barriers[0u].isInitialOwnerHandoff);
+        EXPECT_EQ(mip1Barriers[0u].sourceQueue, queues[1u].id);
+        EXPECT_EQ(mip1Barriers[0u].destinationQueue, queues[0u].id);
+        EXPECT_EQ(mip1Barriers[0u].range.textureSubresources, sources[1u].range.textureSubresources);
+        EXPECT_EQ(mip1Barriers[1u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
+        EXPECT_EQ(mip1Barriers[1u].before, Graphics::ResourceStates::ShaderResource);
+        EXPECT_EQ(mip1Barriers[1u].after, Graphics::ResourceStates::ShaderResource);
+        EXPECT_TRUE(mip1Barriers[1u].isGraphInitialState);
+        EXPECT_EQ(mip1Barriers[1u].range.textureSubresources, sources[1u].range.textureSubresources);
 
         const Graphics::GpuExternalCompletionId* const mip0Dependencies =
             compiledGraph.packetExternalDependencies(compiledMip0->packet)
@@ -8540,7 +8670,7 @@ TEST(GpuTaskGraph, CompilesMultiSourceInitialTextureOwnershipHandoff){
 
         const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
         ASSERT_NE(compiledTask, nullptr);
-        ASSERT_EQ(compiledTask->prologueBarrierCount, 2u);
+        ASSERT_EQ(compiledTask->prologueBarrierCount, 4u);
         const Graphics::GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
         ASSERT_NE(barriers, nullptr);
         bool hasMipZeroAcquire = false;

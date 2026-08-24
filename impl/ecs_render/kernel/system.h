@@ -339,7 +339,7 @@ private:
         Core::GpuGraphResourceSetId softwareTraceGeometrySet,
         Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
         Core::GpuTaskId prefixTask,
-        Core::GpuExternalCompletionId laggedLightingHistoryWriterCompletion,
+        Core::GpuExternalCompletionId laggedLightingHistoryWriterDrainCompletion,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming,
         Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
@@ -434,6 +434,9 @@ private:
         Core::GpuTimingSubmissionTicket& lightingTimingTicket,
         Core::GpuTimingSubmissionTicket& compositeTimingTicket,
         Core::GpuTimingSubmissionTicket& presentTimingTicket,
+        const Core::QueueSubmissionToken& surfelCounterReadbackCompletionToken,
+        const Core::QueueSubmissionToken& laggedLightingHistoryReadReadyToken,
+        const Core::QueueSubmissionToken& laggedLightingHistoryWriterDrainToken,
         bool includeLaggedLightingHistoryCapture
     );
     void reportLaggedLightingTransition(LaggedLightingReport report, u64 targetGeneration);
@@ -625,7 +628,10 @@ private:
     Core::GpuTaskId m_deferredFrameRecoveryTask;
     // Imported only while the preceding frame's diagnostic Transfer readback remains in flight.
     Core::GpuExternalCompletionId m_deferredSurfelGiCounterReadbackCompletion;
-    Core::GpuExternalCompletionId m_deferredLightingHistoryCompletion;
+    // These are distinct semantic completions even when both refer to the same accepted prior history-copy token:
+    // Lighting waits for readable history, while current-frame producers wait until the prior copy stops reading.
+    Core::GpuExternalCompletionId m_deferredLightingHistoryReadReadyCompletion;
+    Core::GpuExternalCompletionId m_deferredLightingHistoryWriterDrainCompletion;
     bool m_graphicsPrefixMeshViewSetupReady = false;
     bool m_graphicsPrefixSceneShadingSetupReady = false;
     bool m_deferredFrameRecoveryArmed = false;

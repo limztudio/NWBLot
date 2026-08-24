@@ -373,6 +373,12 @@ struct GpuTaskGraphExternalCompletionToken{
     QueueSubmissionToken token;
 
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
+    // Compatibility bindings are valid only for metadata-only nodes. A graph-owned completion deliberately rejects
+    // a second runtime token so one semantic edge can never acquire two competing native timeline identities.
+    [[nodiscard]] bool validFallbackFor(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph
+    )const noexcept;
 };
 
 // One accepted terminal packet that contributes to a graph-to-external resource handoff. Several disjoint texture

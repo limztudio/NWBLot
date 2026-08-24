@@ -166,9 +166,21 @@ bool GpuTaskGraphExternalCompletionToken::validFor(const GpuCompiledGraph& compi
     )
         return false;
 
-    // The producer can be absent from this frame's topology (for example after an async lane is disabled), so the
-    // graph validates device lifetime here and leaves concrete queue validation to the submitting Device.
+    // A metadata-only compatibility binding may originate on a current-device queue omitted from the assignment topology.
+    // Graph-owned tokens instead require complete-topology validation during compile; this fallback validates device
+    // lifetime here and leaves concrete queue validation to the submitting Device.
     return token.deviceGeneration == compiledGraph.deviceGeneration();
+}
+
+bool GpuTaskGraphExternalCompletionToken::validFallbackFor(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph
+)const noexcept{
+    return compiledGraph.validFor(graph)
+        && graph.validExternalCompletion(completion)
+        && !graph.externalCompletionToken(completion)
+        && validFor(compiledGraph)
+    ;
 }
 
 bool GpuTaskGraphExternalResourceHandoff::validFor(const GpuCompiledGraph& compiledGraph)const noexcept{

@@ -55,7 +55,7 @@ inline constexpr usize s_SharedComputeEmulationMaximumPhaseCount =
 struct RendererFrameGraphFeatures{
     bool frameLaggedAsyncLightingEnabled = false;
     bool laggedLightingHistoryReady = false;
-    bool laggedLightingHistoryAccepted = false;
+    bool laggedLightingHistoryReadReady = false;
     // A prior Transfer history-copy tail still reads the live producer targets. The next shadow/caustic writers
     // must wait for it even when current-frame Lighting does not sample history.
     bool laggedLightingHistoryWriterWaitPending = false;

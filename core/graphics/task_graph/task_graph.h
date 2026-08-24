@@ -105,6 +105,8 @@ struct GpuTaskGraphExternalCompletionView{
     GpuExternalCompletionId id;
     Name identity = NAME_NONE;
     AStringView markerLabel;
+    QueueSubmissionToken token;
+    bool hasToken = false;
 };
 
 // One graph-declared presentation completion. The producer is intentionally allowed to contain no direct use of
@@ -304,8 +306,10 @@ private:
 
     struct GpuExternalCompletionNode{
         Name identity = NAME_NONE;
+        QueueSubmissionToken token;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
+        bool hasToken = false;
     };
 
     struct GpuUploadBlobNode{
@@ -498,6 +502,12 @@ public:
     [[nodiscard]] GpuTaskGraphResourceSetView resourceSetAt(usize index)const;
     [[nodiscard]] GpuTaskGraphPipelineView pipelineAt(usize index)const;
     [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const;
+    // Returns the immutable accepted token retained by a bound completion. Metadata-only and stale IDs return null
+    // so submission may apply its temporary compatibility fallback without confusing it with graph ownership. The
+    // borrowed pointer is invalidated by a later external-completion import or graph reset.
+    [[nodiscard]] const QueueSubmissionToken* externalCompletionToken(
+        const GpuExternalCompletionId& completion
+    )const noexcept;
     [[nodiscard]] Texture* textureForResource(const GpuGraphResourceId& resource)const noexcept;
     [[nodiscard]] Buffer* bufferForResource(const GpuGraphResourceId& resource)const noexcept;
     // Acceleration structures expose their concrete backing allocation only for graph-runtime state handoffs.

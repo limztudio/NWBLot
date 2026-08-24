@@ -159,7 +159,8 @@ void RendererSystem::invalidateResources(){
     m_deferredLaggedLightingHistoryTask = {};
     m_deferredFrameRecoveryTask = {};
     m_deferredSurfelGiCounterReadbackCompletion = {};
-    m_deferredLightingHistoryCompletion = {};
+    m_deferredLightingHistoryReadReadyCompletion = {};
+    m_deferredLightingHistoryWriterDrainCompletion = {};
     m_deferredFrameRecoveryArmed = false;
     m_deferredFrameRecoveryRetiresTiming = false;
     m_preparedTaskGraphPresentationContributor = nullptr;

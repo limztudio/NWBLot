@@ -158,12 +158,18 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
                 );
             if(!queueRecordingStatistics.valid())
                 continue;
+            const Core::GpuCommandArenaStatistics commandArenaStatistics =
+                m_graphics.getDevice().getCommandArenaStatistics(queueInfo.id)
+            ;
+            if(!commandArenaStatistics.valid())
+                continue;
 
             StringAppendFormat(
                 m_frameGraphRendererLabel,
                 "\nPhysical queue index={} generation={} class={} family index={} native queue index={} dedicated={}: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} native submissions={} rejected submit paths={} command lists={} planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={} accepted frontier={} CPU={:.3f} ms"
                 "\n  Compile plan: tasks={} packets={} merged tasks={} prologue barriers={} epilogue barriers={} ownership release barriers (subset)={} ownership acquire barriers (subset)={}"
-                "\n  Recording: packets={} tasks={} command lists={} barriers={} parallel={} CPU command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task recording={:.3f} ms total={:.3f} ms",
+                "\n  Recording: packets={} tasks={} command lists={} barriers={} parallel={} CPU command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task recording={:.3f} ms total={:.3f} ms"
+                "\n  Command arena: workers={} epochs={} pending epochs={} command buffers current/high-water={}/{} reusable={} leased={} pending={} growth={} resets={} native handle storage lower bound={} bytes",
                 queueStatistics.queue.index,
                 queueStatistics.queue.deviceGeneration,
                 __hidden_frame_graph_export::PhysicalQueueClassLabel(queueStatistics.queueClass),
@@ -198,7 +204,18 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
                 queueRecordingStatistics.commandListAcquisitionSeconds * 1000.0,
                 queueRecordingStatistics.graphBarrierRecordingSeconds * 1000.0,
                 queueRecordingStatistics.taskRecordSeconds * 1000.0,
-                queueRecordingStatistics.recordingSeconds * 1000.0
+                queueRecordingStatistics.recordingSeconds * 1000.0,
+                commandArenaStatistics.workerArenaCount,
+                commandArenaStatistics.commandPoolEpochCount,
+                commandArenaStatistics.pendingCommandPoolEpochCount,
+                commandArenaStatistics.currentCommandBufferCount,
+                commandArenaStatistics.highWaterCommandBufferCount,
+                commandArenaStatistics.reusableCommandBufferCount,
+                commandArenaStatistics.leasedCommandBufferCount,
+                commandArenaStatistics.pendingCommandBufferCount,
+                commandArenaStatistics.growthEventCount,
+                commandArenaStatistics.resetEventCount,
+                commandArenaStatistics.nativeHandleStorageLowerBoundBytes
             );
         }
     }

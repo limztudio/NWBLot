@@ -111,6 +111,27 @@ namespace __hidden_gpu_packet_runtime_submission{
     }
     return true;
 }
+
+[[nodiscard]] bool ValidateExternalCompletionBindings(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuTaskGraphExternalCompletionToken* const bindings,
+    const usize bindingCount
+){
+    if(bindingCount != 0u && !bindings)
+        return false;
+
+    for(usize bindingIndex = 0u; bindingIndex < bindingCount; ++bindingIndex){
+        const GpuTaskGraphExternalCompletionToken& binding = bindings[bindingIndex];
+        if(!binding.validFallbackFor(graph, compiledGraph))
+            return false;
+        for(usize previousIndex = 0u; previousIndex < bindingIndex; ++previousIndex){
+            if(bindings[previousIndex].completion == binding.completion)
+                return false;
+        }
+    }
+    return true;
+}
 // Ordinary external completions may originate on any current-device queue. A completion paired with an imported
 // ownership acquire is narrower: it must prove the exact physical source queue that released the resource, or the
 // consumer could wait an unrelated timeline and race the Vulkan acquire.
@@ -217,7 +238,12 @@ bool GpuTaskGraphSubmitter::submitPacket(
         || !compiledGraph.validPacket(packetID)
         || !recordedGraph.validFor(graph, compiledGraph)
         || !transaction.validFor(compiledGraph)
-        || (externalCompletionTokenCount > 0u && !externalCompletionTokens)
+        || !__hidden_gpu_packet_runtime_submission::ValidateExternalCompletionBindings(
+            graph,
+            compiledGraph,
+            externalCompletionTokens,
+            externalCompletionTokenCount
+        )
         || (preSubmitHook && !preSubmitHook->valid())
     )
         return false;
@@ -268,28 +294,35 @@ bool GpuTaskGraphSubmitter::submitPacket(
     const GpuExternalCompletionId* const externalDependencies = compiledGraph.packetExternalDependencies(packetID);
     for(u32 dependencyIndex = 0u; dependencyIndex < packet.externalDependencyCount; ++dependencyIndex){
         const GpuExternalCompletionId completion = externalDependencies[dependencyIndex];
-        QueueSubmissionToken token;
-        for(usize tokenIndex = 0u; tokenIndex < externalCompletionTokenCount; ++tokenIndex){
-            const GpuTaskGraphExternalCompletionToken& binding = externalCompletionTokens[tokenIndex];
-            if(binding.completion == completion){
-                if(
-                    !binding.validFor(compiledGraph)
-                    || !__hidden_gpu_packet_runtime_submission::ValidateInitialOwnershipCompletion(
-                        graph,
-                        compiledGraph,
-                        packetID,
-                        completion,
-                        binding.token
-                    )
-                )
-                    return false;
-                token = binding.token;
-                break;
+        const QueueSubmissionToken* token = graph.externalCompletionToken(completion);
+        if(!token){
+            for(usize tokenIndex = 0u; tokenIndex < externalCompletionTokenCount; ++tokenIndex){
+                const GpuTaskGraphExternalCompletionToken& binding = externalCompletionTokens[tokenIndex];
+                if(binding.completion == completion){
+                    token = &binding.token;
+                    break;
+                }
             }
         }
-        if(!token.valid())
+        if(!token)
             return false;
-        waitTokens.push_back(token);
+        const GpuPhysicalQueueInfo* const externalQueue = m_device.getPhysicalQueueInfo(GpuPhysicalQueueId{
+            token->physicalQueueIndex,
+            token->deviceGeneration,
+        });
+        if(
+            !externalQueue
+            || externalQueue->queueClass != token->queue
+            || !__hidden_gpu_packet_runtime_submission::ValidateInitialOwnershipCompletion(
+                graph,
+                compiledGraph,
+                packetID,
+                completion,
+                *token
+            )
+        )
+            return false;
+        waitTokens.push_back(*token);
     }
 
     if(
@@ -402,7 +435,12 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
         || !recordedGraph.validFor(graph, compiledGraph)
         || !transaction.validFor(compiledGraph)
         || !compiledGraph.validPacketRange(range)
-        || (externalCompletionTokenCount != 0u && !externalCompletionTokens)
+        || !__hidden_gpu_packet_runtime_submission::ValidateExternalCompletionBindings(
+            graph,
+            compiledGraph,
+            externalCompletionTokens,
+            externalCompletionTokenCount
+        )
         || (timingTicketCount != 0u && !timingTickets)
         || (submissionHookCount != 0u && !submissionHooks)
         || (acceptedCallback && !acceptedCallback->invoke)
@@ -416,15 +454,6 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
     )
         return false;
 
-    for(usize tokenIndex = 0u; tokenIndex < externalCompletionTokenCount; ++tokenIndex){
-        const GpuTaskGraphExternalCompletionToken& token = externalCompletionTokens[tokenIndex];
-        if(!token.validFor(compiledGraph))
-            return false;
-        for(usize previousIndex = 0u; previousIndex < tokenIndex; ++previousIndex){
-            if(externalCompletionTokens[previousIndex].completion == token.completion)
-                return false;
-        }
-    }
     for(usize ticketIndex = 0u; ticketIndex < timingTicketCount; ++ticketIndex){
         const GpuTaskGraphPacketTimingTicket& ticket = timingTickets[ticketIndex];
         if(

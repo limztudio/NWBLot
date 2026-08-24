@@ -18,6 +18,7 @@ NWB_VULKAN_BEGIN
 
 
 TrackedCommandBuffer::TrackedCommandBuffer(
+    Queue& queue,
     const VulkanContext& context,
     const u32 queueFamilyIndex,
     const VkCommandPool commandPool,
@@ -31,6 +32,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(
     , m_referencedDescriptorHeaps(context.objectArena)
     , m_retainedTextureStateCommits(context.objectArena)
     , m_context(context)
+    , m_queue(queue)
 {
     if(m_ownsCmdPool){
         auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
@@ -83,6 +85,7 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
     m_ownsCmdPool = false;
 
     clearTrackedReferences();
+    m_queue.unregisterCommandBuffer(*this);
 }
 
 void TrackedCommandBuffer::appendRetainedTextureStateCommit(
@@ -188,6 +191,139 @@ Queue::~Queue(){
     }
 }
 
+GpuCommandArenaStatistics Queue::commandArenaStatistics()const noexcept{
+    const u64 directCommandBufferCount = m_directCommandBufferCount.load(MemoryOrder::relaxed);
+    const u64 explicitWorkerArenaCount = m_explicitWorkerArenaCount.load(MemoryOrder::relaxed);
+    const u64 currentCommandBufferCount = m_currentCommandBufferCount.load(MemoryOrder::relaxed);
+    const u64 commandPoolEpochCount = directCommandBufferCount + explicitWorkerArenaCount;
+
+    return GpuCommandArenaStatistics{
+        .queue = m_physicalQueue,
+        .workerArenaCount = explicitWorkerArenaCount + (directCommandBufferCount > 0u ? 1u : 0u),
+        .commandPoolEpochCount = commandPoolEpochCount,
+        .pendingCommandPoolEpochCount =
+            m_pendingDirectCommandBufferCount.load(MemoryOrder::relaxed)
+            + m_pendingWorkerEpochCount.load(MemoryOrder::relaxed),
+        .currentCommandBufferCount = currentCommandBufferCount,
+        .highWaterCommandBufferCount = m_highWaterCommandBufferCount.load(MemoryOrder::relaxed),
+        .reusableCommandBufferCount = m_reusableCommandBufferCount.load(MemoryOrder::relaxed),
+        .leasedCommandBufferCount = m_leasedCommandBufferCount.load(MemoryOrder::relaxed),
+        .pendingCommandBufferCount = m_pendingCommandBufferCount.load(MemoryOrder::relaxed),
+        .growthEventCount = m_commandBufferGrowthEventCount.load(MemoryOrder::relaxed),
+        .resetEventCount = m_commandBufferResetEventCount.load(MemoryOrder::relaxed),
+        .nativeHandleStorageLowerBoundBytes =
+            commandPoolEpochCount * sizeof(VkCommandPool)
+            + currentCommandBufferCount * sizeof(VkCommandBuffer),
+    };
+}
+
+void Queue::updateCommandBufferHighWater(const u64 currentCount)noexcept{
+    u64 highWater = m_highWaterCommandBufferCount.load(MemoryOrder::relaxed);
+    while(highWater < currentCount){
+        if(m_highWaterCommandBufferCount.compare_exchange_weak(highWater, currentCount, MemoryOrder::relaxed))
+            return;
+    }
+}
+
+void Queue::registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
+    NWB_ASSERT(commandBuffer.m_arenaState == TrackedCommandBufferArenaState::Untracked);
+    commandBuffer.m_arenaState = TrackedCommandBufferArenaState::Leased;
+    const u64 currentCount = m_currentCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+    m_leasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+    m_commandBufferGrowthEventCount.fetch_add(1u, MemoryOrder::relaxed);
+    if(commandBuffer.m_recordingWorkerIndex == 0u)
+        m_directCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+    updateCommandBufferHighWater(currentCount);
+}
+
+void Queue::transitionCommandBufferState(
+    TrackedCommandBuffer& commandBuffer,
+    const TrackedCommandBufferArenaState::Enum nextState
+)noexcept{
+    const TrackedCommandBufferArenaState::Enum previousState = commandBuffer.m_arenaState;
+    if(previousState == nextState)
+        return;
+
+    switch(previousState){
+    case TrackedCommandBufferArenaState::Leased:{
+        const u64 previousLeasedCount = m_leasedCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+        if(previousLeasedCount == 0u)
+            NWB_ASSERT_MSG(false, NWB_TEXT("Command arena leased-buffer count underflow"));
+        break;
+    }
+    case TrackedCommandBufferArenaState::Reusable:{
+        const u64 previousReusableCount = m_reusableCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+        if(previousReusableCount == 0u)
+            NWB_ASSERT_MSG(false, NWB_TEXT("Command arena reusable-buffer count underflow"));
+        break;
+    }
+    case TrackedCommandBufferArenaState::Pending:{
+        const u64 previousPendingCommandBufferCount = m_pendingCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+        if(previousPendingCommandBufferCount == 0u)
+            NWB_ASSERT_MSG(false, NWB_TEXT("Command arena pending-buffer count underflow"));
+        if(commandBuffer.m_recordingWorkerIndex == 0u){
+            const u64 previousDirectPendingCount = m_pendingDirectCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+            if(previousDirectPendingCount == 0u)
+                NWB_ASSERT_MSG(false, NWB_TEXT("Command arena direct pending-buffer count underflow"));
+        }
+        else{
+            WorkerCommandArena* const arena = findWorkerCommandArena(commandBuffer.m_recordingWorkerIndex);
+            NWB_ASSERT(arena);
+            if(arena){
+                const u64 previousPendingCount = arena->pendingCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+                NWB_ASSERT(previousPendingCount > 0u);
+                if(previousPendingCount == 1u){
+                    const u64 previousPendingEpochCount = m_pendingWorkerEpochCount.fetch_sub(1u, MemoryOrder::relaxed);
+                    if(previousPendingEpochCount == 0u)
+                        NWB_ASSERT_MSG(false, NWB_TEXT("Command arena pending worker-epoch count underflow"));
+                }
+            }
+        }
+        break;
+    }
+    default:
+        break;
+    }
+
+    switch(nextState){
+    case TrackedCommandBufferArenaState::Leased:
+        m_leasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+        break;
+    case TrackedCommandBufferArenaState::Reusable:
+        m_reusableCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+        break;
+    case TrackedCommandBufferArenaState::Pending:
+        m_pendingCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+        if(commandBuffer.m_recordingWorkerIndex == 0u)
+            m_pendingDirectCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
+        else{
+            WorkerCommandArena* const arena = findWorkerCommandArena(commandBuffer.m_recordingWorkerIndex);
+            NWB_ASSERT(arena);
+            if(arena && arena->pendingCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) == 0u)
+                m_pendingWorkerEpochCount.fetch_add(1u, MemoryOrder::relaxed);
+        }
+        break;
+    default:
+        break;
+    }
+    commandBuffer.m_arenaState = nextState;
+}
+
+void Queue::unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
+    if(commandBuffer.m_arenaState == TrackedCommandBufferArenaState::Untracked)
+        return;
+
+    transitionCommandBufferState(commandBuffer, TrackedCommandBufferArenaState::Untracked);
+    const u64 previousCurrentCount = m_currentCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+    if(previousCurrentCount == 0u)
+        NWB_ASSERT_MSG(false, NWB_TEXT("Command arena current-buffer count underflow"));
+    if(commandBuffer.m_recordingWorkerIndex == 0u){
+        const u64 previousDirectCount = m_directCommandBufferCount.fetch_sub(1u, MemoryOrder::relaxed);
+        if(previousDirectCount == 0u)
+            NWB_ASSERT_MSG(false, NWB_TEXT("Command arena direct-buffer count underflow"));
+    }
+}
+
 TrackedCommandBufferPtr Queue::createCommandBuffer(const VkCommandPool commandPool, const u32 recordingWorkerIndex){
     const bool ownsCommandPool = recordingWorkerIndex == 0u;
     if(!ownsCommandPool && commandPool == VK_NULL_HANDLE){
@@ -201,6 +337,7 @@ TrackedCommandBufferPtr Queue::createCommandBuffer(const VkCommandPool commandPo
 
     auto* cmdBuf = NewArenaObject<TrackedCommandBuffer>(
         m_context.objectArena,
+        *this,
         m_context,
         m_queueFamilyIndex,
         commandPool,
@@ -221,6 +358,7 @@ TrackedCommandBufferPtr Queue::createCommandBuffer(const VkCommandPool commandPo
 
     cmdBuf->m_recordingID = m_lastRecordingID.fetch_add(1u, MemoryOrder::relaxed) + 1u;
     cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
+    registerCommandBuffer(*cmdBuf);
     return TrackedCommandBufferPtr(cmdBuf, TrackedCommandBufferPtr::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
@@ -230,8 +368,11 @@ Queue::WorkerCommandArena* Queue::findWorkerCommandArena(const u32 recordingWork
     if(recordingWorkerIndex == 0u)
         return nullptr;
 
-    ScopedLock lock(m_workerCommandArenasMutex);
-    for(WorkerCommandArena* const arena : m_workerCommandArenas){
+    for(
+        WorkerCommandArena* arena = m_workerCommandArenaHead.load(MemoryOrder::acquire);
+        arena;
+        arena = arena->next.load(MemoryOrder::acquire)
+    ){
         if(arena && arena->recordingWorkerIndex == recordingWorkerIndex)
             return arena;
     }
@@ -244,11 +385,12 @@ Queue::WorkerCommandArena* Queue::getOrCreateWorkerCommandArena(const u32 record
     if(recordingWorkerIndex == 0u)
         return nullptr;
 
+    if(WorkerCommandArena* const arena = findWorkerCommandArena(recordingWorkerIndex))
+        return arena;
+
     ScopedLock lock(m_workerCommandArenasMutex);
-    for(WorkerCommandArena* const arena : m_workerCommandArenas){
-        if(arena && arena->recordingWorkerIndex == recordingWorkerIndex)
-            return arena;
-    }
+    if(WorkerCommandArena* const arena = findWorkerCommandArena(recordingWorkerIndex))
+        return arena;
 
     auto* const arena = NewArenaObject<WorkerCommandArena>(
         m_context.objectArena,
@@ -286,6 +428,9 @@ Queue::WorkerCommandArena* Queue::getOrCreateWorkerCommandArena(const u32 record
     }
 
     m_workerCommandArenas.push_back(arena);
+    arena->next.store(m_workerCommandArenaHead.load(MemoryOrder::relaxed), MemoryOrder::relaxed);
+    m_workerCommandArenaHead.store(arena, MemoryOrder::release);
+    m_explicitWorkerArenaCount.fetch_add(1u, MemoryOrder::relaxed);
     return arena;
 }
 
@@ -316,6 +461,8 @@ TrackedCommandBufferPtr Queue::getOrCreateDirectCommandBuffer(){
             return createCommandBuffer(VK_NULL_HANDLE, 0u);
         }
 
+        transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Leased);
+        m_commandBufferResetEventCount.fetch_add(1u, MemoryOrder::relaxed);
         cmdBuf->m_recordingID = m_lastRecordingID.fetch_add(1u, MemoryOrder::relaxed) + 1u;
         cmdBuf->m_recordingWorkerIndex = 0u;
 
@@ -349,6 +496,8 @@ TrackedCommandBufferPtr Queue::getOrCreateWorkerCommandBuffer(const u32 recordin
             return createCommandBuffer(arena->commandPool, recordingWorkerIndex);
         }
 
+        transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Leased);
+        m_commandBufferResetEventCount.fetch_add(1u, MemoryOrder::relaxed);
         cmdBuf->m_recordingID = m_lastRecordingID.fetch_add(1u, MemoryOrder::relaxed) + 1u;
         cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
         return cmdBuf;
@@ -370,6 +519,7 @@ TrackedCommandBufferPtr Queue::getOrCreateCommandBuffer(const u32 recordingWorke
 
 void Queue::destroyWorkerCommandArenas(){
     ScopedLock workerArenasLock(m_workerCommandArenasMutex);
+    m_workerCommandArenaHead.store(nullptr, MemoryOrder::release);
     for(WorkerCommandArena* const arena : m_workerCommandArenas){
         if(!arena)
             continue;
@@ -632,6 +782,7 @@ u64 Queue::submit(
     };
     for(auto& tracked : trackedBuffers){
         tracked->commitRetainedTextureStateCommits();
+        transitionCommandBufferState(*tracked, TrackedCommandBufferArenaState::Pending);
         for(GpuDescriptorHeap* heap : tracked->m_referencedDescriptorHeaps){
             if(heap)
                 heap->submitCommandBufferUse(*tracked, submissionToken);
@@ -690,6 +841,7 @@ void Queue::recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf){
         return;
 
     cmdBuf->clearTrackedReferences();
+    transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Reusable);
     if(cmdBuf->m_recordingWorkerIndex == 0u){
         m_commandBuffersPool.push_back(Move(cmdBuf));
         return;

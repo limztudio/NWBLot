@@ -190,6 +190,13 @@ const GpuPhysicalQueueInfo* Device::getPhysicalQueueInfo(const GpuPhysicalQueueI
     return info.id == queue ? &info : nullptr;
 }
 
+GpuCommandArenaStatistics Device::getCommandArenaStatistics(const GpuPhysicalQueueId& queue)const noexcept{
+    if(!getPhysicalQueueInfo(queue) || queue.index >= m_physicalQueues.size())
+        return {};
+    const Queue* const physicalQueue = m_physicalQueues[queue.index];
+    return physicalQueue ? physicalQueue->commandArenaStatistics() : GpuCommandArenaStatistics{};
+}
+
 bool Device::matchesPhysicalQueueIdentity(
     const CommandQueue::Enum queue,
     const u16 physicalQueueIndex,

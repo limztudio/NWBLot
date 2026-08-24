@@ -724,6 +724,15 @@ struct RetainedTextureStateCommit{
     ArraySlice arraySlice = 0;
 };
 
+namespace TrackedCommandBufferArenaState{
+    enum Enum : u8{
+        Untracked = 0u,
+        Leased,
+        Reusable,
+        Pending,
+    };
+};
+
 class TrackedCommandBuffer final : public RefCounter<GraphicsResource>, NoCopy{
     friend class CommandList;
     friend class Queue;
@@ -733,6 +742,7 @@ class TrackedCommandBuffer final : public RefCounter<GraphicsResource>, NoCopy{
 
 public:
     TrackedCommandBuffer(
+        Queue& queue,
         const VulkanContext& context,
         u32 queueFamilyIndex,
         VkCommandPool commandPool,
@@ -765,6 +775,8 @@ private:
     u32 m_recordingWorkerIndex = 0u;
 
     const VulkanContext& m_context;
+    Queue& m_queue;
+    TrackedCommandBufferArenaState::Enum m_arenaState = TrackedCommandBufferArenaState::Untracked;
 };
 typedef Handle<TrackedCommandBuffer> TrackedCommandBufferPtr;
 
@@ -775,6 +787,7 @@ typedef Handle<TrackedCommandBuffer> TrackedCommandBufferPtr;
 
 class Queue final : NoCopy{
     friend class Device;
+    friend class TrackedCommandBuffer;
 
 
 public:
@@ -784,6 +797,7 @@ public:
 
 public:
     [[nodiscard]] TrackedCommandBufferPtr getOrCreateCommandBuffer(u32 recordingWorkerIndex = 0u);
+    [[nodiscard]] GpuCommandArenaStatistics commandArenaStatistics()const noexcept;
 
     void addWaitSemaphore(VkSemaphore semaphore, u64 value);
     void addSignalSemaphore(VkSemaphore semaphore, u64 value);
@@ -816,6 +830,8 @@ private:
         u32 recordingWorkerIndex = 0u;
         VkCommandPool commandPool = VK_NULL_HANDLE;
         Futex mutex;
+        Atomic<WorkerCommandArena*> next = nullptr;
+        Atomic<u64> pendingCommandBufferCount = 0u;
         List<TrackedCommandBufferPtr, Alloc::GlobalArena> commandBuffersPool;
 
 
@@ -825,6 +841,13 @@ private:
         {}
     };
 
+    void updateCommandBufferHighWater(u64 currentCount)noexcept;
+    void registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
+    void transitionCommandBufferState(
+        TrackedCommandBuffer& commandBuffer,
+        TrackedCommandBufferArenaState::Enum nextState
+    )noexcept;
+    void unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
     // Requires m_mutex. Releases native command-buffer resource/staging references only after the queue timeline
     // has completed their submission, then preserves each worker-affine lease in its own reusable pool.
     void collectCompletedCommandBuffers();
@@ -865,6 +888,21 @@ private:
     List<TrackedCommandBufferPtr, Alloc::GlobalArena> m_commandBuffersInFlight;
     List<TrackedCommandBufferPtr, Alloc::GlobalArena> m_commandBuffersPool;
     Vector<WorkerCommandArena*, Alloc::GlobalArena> m_workerCommandArenas;
+    // Published worker nodes are append-only while the queue is usable. Device teardown joins recording clients
+    // before destroyWorkerCommandArenas() clears the head and reclaims the stable nodes.
+    Atomic<WorkerCommandArena*> m_workerCommandArenaHead = nullptr;
+
+    Atomic<u64> m_explicitWorkerArenaCount = 0u;
+    Atomic<u64> m_directCommandBufferCount = 0u;
+    Atomic<u64> m_pendingDirectCommandBufferCount = 0u;
+    Atomic<u64> m_pendingWorkerEpochCount = 0u;
+    Atomic<u64> m_currentCommandBufferCount = 0u;
+    Atomic<u64> m_highWaterCommandBufferCount = 0u;
+    Atomic<u64> m_reusableCommandBufferCount = 0u;
+    Atomic<u64> m_leasedCommandBufferCount = 0u;
+    Atomic<u64> m_pendingCommandBufferCount = 0u;
+    Atomic<u64> m_commandBufferGrowthEventCount = 0u;
+    Atomic<u64> m_commandBufferResetEventCount = 0u;
 };
 
 
@@ -2554,6 +2592,7 @@ public:
     [[nodiscard]] GpuPhysicalQueueId getPrimaryPhysicalQueue(CommandQueue::Enum queue)const noexcept;
     [[nodiscard]] GpuPhysicalQueueTopology getPhysicalQueueTopology()const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* getPhysicalQueueInfo(const GpuPhysicalQueueId& queue)const noexcept;
+    [[nodiscard]] GpuCommandArenaStatistics getCommandArenaStatistics(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] bool matchesPhysicalQueueIdentity(
         CommandQueue::Enum queue,
         u16 physicalQueueIndex,

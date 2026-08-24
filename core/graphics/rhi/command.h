@@ -78,6 +78,29 @@ struct GpuPhysicalQueueTopology{
     usize queueCount = 0u;
 };
 
+// Current backend-native command storage for one physical queue. Counts cover the direct worker-zero path and
+// every explicit recording-worker shard. A snapshot is sampled from thread-safe counters, so fields may advance
+// independently while recording/submission is concurrent. nativeHandleStorageLowerBoundBytes counts only the
+// client-visible native pool and command-buffer handle objects; opaque driver allocations and wrapper/container
+// capacity are deliberately excluded.
+struct GpuCommandArenaStatistics{
+    GpuPhysicalQueueId queue;
+    u64 workerArenaCount = 0u;
+    u64 commandPoolEpochCount = 0u;
+    u64 pendingCommandPoolEpochCount = 0u;
+    u64 currentCommandBufferCount = 0u;
+    u64 highWaterCommandBufferCount = 0u;
+    u64 reusableCommandBufferCount = 0u;
+    u64 leasedCommandBufferCount = 0u;
+    u64 pendingCommandBufferCount = 0u;
+    u64 growthEventCount = 0u;
+    u64 resetEventCount = 0u;
+    u64 nativeHandleStorageLowerBoundBytes = 0u;
+
+
+    [[nodiscard]] bool valid()const noexcept{ return queue.valid(); }
+};
+
 typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
 typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 

@@ -195,6 +195,17 @@ bool GpuTaskGraph::validForDeviceGeneration(const u16 deviceGeneration)const noe
         )
             return false;
     }
+    for(const GpuExternalCompletionNode& completion : m_externalCompletions){
+        if(
+            completion.hasToken
+            && (
+                !completion.token.valid()
+                || !completion.token.hasPhysicalQueueIdentity()
+                || completion.token.deviceGeneration != deviceGeneration
+            )
+        )
+            return false;
+    }
     return true;
 }
 
@@ -312,7 +323,17 @@ GpuTaskGraphExternalCompletionView GpuTaskGraph::externalCompletionAt(const usiz
         .id = GpuExternalCompletionId{ static_cast<u32>(index), m_generation },
         .identity = completion.identity,
         .markerLabel = markerLabel(completion.markerLabelOffset, completion.markerLabelSize),
+        .token = completion.token,
+        .hasToken = completion.hasToken,
     };
+}
+
+const QueueSubmissionToken* GpuTaskGraph::externalCompletionToken(
+    const GpuExternalCompletionId& completion
+)const noexcept{
+    if(!validExternalCompletion(completion) || !m_externalCompletions[completion.index].hasToken)
+        return nullptr;
+    return &m_externalCompletions[completion.index].token;
 }
 
 Texture* GpuTaskGraph::textureForResource(const GpuGraphResourceId& resource)const noexcept{

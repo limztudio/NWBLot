@@ -214,14 +214,17 @@ struct GpuGraphPipelineDesc{
     constexpr GpuGraphPipelineDesc& setType(const GpuGraphPipelineType::Enum value){ type = value; return *this; }
 };
 
-// Phase 1 represents prior-frame and other out-of-graph completions as named metadata nodes. It deliberately does
-// not make QueueSubmissionToken authoritative until the physical-queue and device-generation contracts arrive.
+// Prior-frame and other out-of-graph completions may retain the authoritative accepted native token directly in
+// graph-owned storage. An empty token preserves metadata-only declaration for compatibility callers that bind the
+// completion immediately before submission.
 struct GpuExternalCompletionDesc{
     Name identity = NAME_NONE;
     AStringView markerLabel;
+    QueueSubmissionToken token;
 
     constexpr GpuExternalCompletionDesc& setIdentity(const Name& value){ identity = value; return *this; }
     constexpr GpuExternalCompletionDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
+    constexpr GpuExternalCompletionDesc& setToken(const QueueSubmissionToken& value){ token = value; return *this; }
 };
 
 struct GpuTaskDesc{

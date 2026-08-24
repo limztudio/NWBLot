@@ -330,6 +330,8 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     const AStringView frameGraph(frameGraphSource.data(), frameGraphSource.size());
 
     EXPECT_TRUE(ContainsText(commandHeader, "Borrowed immutable topology view; its producer owns the storage."));
+    EXPECT_TRUE(ContainsText(commandHeader, "struct GpuCommandArenaStatistics{"));
+    EXPECT_TRUE(ContainsText(commandHeader, "nativeHandleStorageLowerBoundBytes counts only the"));
     EXPECT_TRUE(ContainsText(compiledGraphHeader, "GpuPhysicalQueueTopology queueTopology()const noexcept;"));
     EXPECT_TRUE(ContainsText(compiledGraphHeader, "Borrowed immutable-plan topology view."));
     EXPECT_TRUE(ContainsText(compiledGraphHeader, "serialize access\n    // with reset/recompile"));
@@ -382,6 +384,11 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     ));
     EXPECT_TRUE(ContainsText(frameGraph, "if(!queueCompileStatistics.valid())\n                continue;"));
     EXPECT_TRUE(ContainsText(frameGraph, "if(!queueRecordingStatistics.valid())\n                continue;"));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "m_graphics.getDevice().getCommandArenaStatistics(queueInfo.id)"
+    ));
+    EXPECT_TRUE(ContainsText(frameGraph, "if(!commandArenaStatistics.valid())\n                continue;"));
     const usize terminalSubmissionGateOffset = frameGraph.find(
         "queueStatistics.acceptedPacketCount == 0u && queueStatistics.rejectedPacketCount == 0u"
     );
@@ -430,6 +437,12 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
         frameGraph,
         "  Recording: packets={} tasks={} command lists={} barriers={} parallel={} CPU command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task recording={:.3f} ms total={:.3f} ms"
     ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "  Command arena: workers={} epochs={} pending epochs={} command buffers current/high-water={}/{} reusable={} leased={} pending={} growth={} resets={} native handle storage lower bound={} bytes"
+    ));
+    EXPECT_TRUE(ContainsText(frameGraph, "commandArenaStatistics.pendingCommandPoolEpochCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "commandArenaStatistics.nativeHandleStorageLowerBoundBytes"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.queue.index,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.queue.deviceGeneration,"));
     EXPECT_TRUE(ContainsText(frameGraph, "__hidden_frame_graph_export::PhysicalQueueClassLabel(queueStatistics.queueClass),"));
@@ -2219,10 +2232,10 @@ TEST(EcsGraphics, LaggedLightingSelectorHasNoNativeCompatibilityDispatcher){
 }
 
 
-// The next graph declaration clears its history-tail output token. Active Lighting keeps its immutable prior token,
-// while Shadow and Hardware Caustics also wait before their first live writes. Disabling lagged Lighting preserves
-// that tail as a drain until its Transfer timeline completes rather than trusting packet-state metadata alone.
-TEST(EcsGraphics, LaggedLightingHistoryConsumersSnapshotPriorAcceptedToken){
+// The next graph declaration clears its history-tail output token. Lighting owns a read-ready completion for the
+// immutable prior snapshot, while Shadow and Hardware Caustics own a distinct writer-drain completion before their
+// first live writes. Even when both carry one native token, no semantic graph ID can be rebound at submission time.
+TEST(EcsGraphics, LaggedLightingHistoryConsumersOwnSemanticPriorTokens){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
@@ -2241,21 +2254,23 @@ TEST(EcsGraphics, LaggedLightingHistoryConsumersSnapshotPriorAcceptedToken){
     const usize renderOffset = system.find("void RendererSystem::render(");
     ASSERT_NE(renderOffset, AStringView::npos);
     const AStringView render = system.substr(renderOffset);
-    const usize priorTokenOffset = render.find("const Core::QueueSubmissionToken priorLaggedLightingHistoryToken");
+    const usize priorReadReadyOffset = render.find(
+        "const Core::QueueSubmissionToken priorLaggedLightingHistoryReadReadyToken"
+    );
     const usize priorDrainOffset = render.find("const Core::QueueSubmissionToken priorLaggedLightingHistoryWriterDrainToken");
     const usize armDrainOffset = render.find(
         "m_laggedLightingHistoryWriterDrainToken = laggedLightingHistorySubmissionToken"
     );
     const usize graphBuildOffset = render.find("buildDeferredLightingTaskGraph(");
-    ASSERT_NE(priorTokenOffset, AStringView::npos);
+    ASSERT_NE(priorReadReadyOffset, AStringView::npos);
     ASSERT_NE(priorDrainOffset, AStringView::npos);
     ASSERT_NE(armDrainOffset, AStringView::npos);
     ASSERT_NE(graphBuildOffset, AStringView::npos);
 
-    EXPECT_LT(priorTokenOffset, graphBuildOffset);
+    EXPECT_LT(priorReadReadyOffset, graphBuildOffset);
     EXPECT_LT(priorDrainOffset, graphBuildOffset);
     EXPECT_LT(armDrainOffset, graphBuildOffset);
-    EXPECT_TRUE(ContainsText(render, "&& priorLaggedLightingHistoryToken.valid()"));
+    EXPECT_TRUE(ContainsText(render, "&& priorLaggedLightingHistoryReadReadyToken.valid()"));
     EXPECT_TRUE(ContainsText(render, "const auto laggedLightingHistoryTokenPending ="));
     EXPECT_TRUE(ContainsText(render, "tokenTargetGeneration == laggedLightingHistoryTargetGeneration"));
     EXPECT_TRUE(ContainsText(render, "const bool laggedLightingHistorySubmissionPending = laggedLightingHistoryTokenPending("));
@@ -2263,59 +2278,87 @@ TEST(EcsGraphics, LaggedLightingHistoryConsumersSnapshotPriorAcceptedToken){
     EXPECT_TRUE(ContainsText(render, "else if(\n        m_laggedLightingHistoryWriterDrainToken.valid()"));
     EXPECT_TRUE(ContainsText(render, ") < token.value"));
     EXPECT_TRUE(ContainsText(render, "laggedLightingHistoryWriterWaitPending"));
-    EXPECT_TRUE(ContainsText(render, "laggedLightingHistoryWriterCompletionToken"));
-    EXPECT_TRUE(ContainsText(
-        render,
-        "const bool laggedLightingHistoryCompletionRequired =\n"
-        "        laggedAsyncLightingSchedule\n"
-        "        || laggedLightingHistoryWriterWaitPending"
-    ));
-    EXPECT_TRUE(ContainsText(render, "laggedLightingHistoryCompletionRequired && !m_deferredLightingHistoryCompletion.valid()"));
     EXPECT_TRUE(ContainsText(
         render,
         "const bool laggedLightingHistoryWriterWaitPending = priorLaggedLightingHistoryWriterDrainToken.valid();"
     ));
-    EXPECT_TRUE(ContainsText(render, ".laggedLightingHistoryAccepted = priorLaggedLightingHistoryToken.valid()"));
+    EXPECT_TRUE(ContainsText(
+        render,
+        ".laggedLightingHistoryReadReady = priorLaggedLightingHistoryReadReadyToken.valid()"
+    ));
     EXPECT_TRUE(ContainsText(render, ".laggedLightingHistoryWriterWaitPending = laggedLightingHistoryWriterWaitPending"));
-    EXPECT_EQ(CountText(render, ".token = priorLaggedLightingHistoryToken"), 1u);
-    EXPECT_EQ(CountText(render, ".token = laggedLightingHistoryWriterCompletionToken"), 2u);
+    EXPECT_EQ(CountText(render, "priorLaggedLightingHistoryReadReadyToken,"), 2u);
+    EXPECT_EQ(CountText(render, "priorLaggedLightingHistoryWriterDrainToken,"), 2u);
+    EXPECT_FALSE(ContainsText(render, "GpuTaskGraphExternalCompletionToken"));
+    EXPECT_FALSE(ContainsText(render, "deferredLightingCompletionTokens"));
+    EXPECT_FALSE(ContainsText(render, "shadowEffectsCompletionTokens"));
+    EXPECT_FALSE(ContainsText(render, "hardwareCausticsCompletionTokens"));
     EXPECT_FALSE(ContainsText(render, ".token = m_laggedLightingHistorySubmissionToken"));
-    EXPECT_TRUE(ContainsText(render, "shadowEffectsCompletionTokens"));
-    EXPECT_TRUE(ContainsText(render, "hardwareCausticsCompletionTokens"));
     EXPECT_TRUE(ContainsText(
         render,
-        "shadowEffectsCompletionTokens,\n                shadowEffectsCompletionCount,\n                shadowEffectsTimingTickets"
+        "laggedAsyncLightingSchedule && !m_deferredLightingHistoryReadReadyCompletion.valid()"
     ));
     EXPECT_TRUE(ContainsText(
         render,
-        "hardwareCausticsCompletionTokens,\n                    hardwareCausticsCompletionCount,\n                    hardwareCausticsTimingTickets"
+        "laggedLightingHistoryWriterWaitPending && !m_deferredLightingHistoryWriterDrainCompletion.valid()"
     ));
-    EXPECT_TRUE(ContainsText(render, "!laggedLightingHistoryWriterWaitPending || ("));
+    EXPECT_EQ(CountText(
+        render,
+        "!laggedLightingHistoryWriterWaitPending || m_deferredLightingHistoryWriterDrainCompletion.valid()"
+    ), 3u);
     EXPECT_TRUE(ContainsText(render, "device.queueGetCompletedInstance("));
     EXPECT_FALSE(ContainsText(render, "consumeLaggedLightingHistoryWriterDrain"));
     EXPECT_TRUE(ContainsText(lighting, ".acceptedToken = &m_laggedLightingHistorySubmissionToken"));
-
-    EXPECT_TRUE(ContainsText(shadowVisibility, "laggedLightingHistoryWriterDependencies"));
+    EXPECT_TRUE(ContainsText(lighting, "if(useLaggedLightingHistory){"));
+    EXPECT_TRUE(ContainsText(lighting, "if(features.laggedLightingHistoryWriterWaitPending){"));
+    EXPECT_EQ(CountText(lighting, ".setToken(laggedLightingHistoryReadReadyToken)"), 1u);
+    EXPECT_EQ(CountText(lighting, ".setToken(laggedLightingHistoryWriterDrainToken)"), 1u);
+    EXPECT_TRUE(ContainsText(lighting, "render.deferred_lighting.lagged_history_read_ready"));
+    EXPECT_TRUE(ContainsText(lighting, "render.deferred_lighting.lagged_history_writer_drain"));
     EXPECT_TRUE(ContainsText(
-        shadowVisibility,
-        "Core::GpuExternalCompletionId laggedLightingHistoryWriterCompletion"
+        lighting,
+        "const Core::GpuExternalCompletionId laggedLightingExternalDependencies[] = {\n"
+        "        m_deferredLightingHistoryReadReadyCompletion,"
     ));
-    EXPECT_TRUE(ContainsText(
-        systemHeader,
-        "Core::GpuExternalCompletionId laggedLightingHistoryWriterCompletion"
-    ));
-    EXPECT_TRUE(ContainsText(shadowVisibility, ".setExternalDependencies(\n                laggedLightingHistoryWriterDependencies,"));
-    EXPECT_TRUE(ContainsText(shadowVisibility, ".setExternalDependencies(\n            laggedLightingHistoryWriterDependencies,"));
-    EXPECT_TRUE(ContainsText(lighting, "const bool waitsForLaggedLightingHistoryWriter = useLaggedLightingHistory"));
-    EXPECT_TRUE(ContainsText(lighting, "if(waitsForLaggedLightingHistoryWriter){"));
     EXPECT_TRUE(ContainsText(
         lighting,
         "features.laggedLightingHistoryWriterWaitPending\n"
-        "            ? m_deferredLightingHistoryCompletion\n"
+        "            ? m_deferredLightingHistoryWriterDrainCompletion\n"
         "            : Core::GpuExternalCompletionId{}"
     ));
-    EXPECT_TRUE(ContainsText(lighting, "hardwareExternalDependencies = features.laggedLightingHistoryWriterWaitPending"));
-    EXPECT_TRUE(ContainsText(lighting, "lightingExternalDependencies = useLaggedLightingHistory"));
+    EXPECT_TRUE(ContainsText(
+        lighting,
+        "hardwareExternalDependencies = features.laggedLightingHistoryWriterWaitPending\n"
+        "            ? &m_deferredLightingHistoryWriterDrainCompletion"
+    ));
+    EXPECT_FALSE(ContainsText(lighting, "m_deferredLightingHistoryCompletion"));
+    EXPECT_EQ(CountText(system, "m_deferredLightingHistoryReadReadyCompletion = {};"), 2u);
+    EXPECT_EQ(CountText(system, "m_deferredLightingHistoryWriterDrainCompletion = {};"), 2u);
+    EXPECT_EQ(CountText(lighting, "m_deferredLightingHistoryReadReadyCompletion = {};"), 1u);
+    EXPECT_EQ(CountText(lighting, "m_deferredLightingHistoryWriterDrainCompletion = {};"), 1u);
+
+    EXPECT_TRUE(ContainsText(shadowVisibility, "laggedLightingHistoryWriterDrainDependencies"));
+    EXPECT_TRUE(ContainsText(
+        shadowVisibility,
+        "Core::GpuExternalCompletionId laggedLightingHistoryWriterDrainCompletion"
+    ));
+    EXPECT_TRUE(ContainsText(
+        systemHeader,
+        "Core::GpuExternalCompletionId laggedLightingHistoryWriterDrainCompletion"
+    ));
+    EXPECT_TRUE(ContainsText(shadowVisibility, ".setExternalDependencies(\n                laggedLightingHistoryWriterDrainDependencies,"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, ".setExternalDependencies(\n            laggedLightingHistoryWriterDrainDependencies,"));
+    EXPECT_TRUE(ContainsText(
+        systemHeader,
+        "const Core::QueueSubmissionToken& laggedLightingHistoryReadReadyToken"
+    ));
+    EXPECT_TRUE(ContainsText(
+        systemHeader,
+        "const Core::QueueSubmissionToken& laggedLightingHistoryWriterDrainToken"
+    ));
+    EXPECT_TRUE(ContainsText(systemHeader, "m_deferredLightingHistoryReadReadyCompletion;"));
+    EXPECT_TRUE(ContainsText(systemHeader, "m_deferredLightingHistoryWriterDrainCompletion;"));
+    EXPECT_FALSE(ContainsText(systemHeader, "m_deferredLightingHistoryCompletion;"));
 
     const usize setterOffset = systemHeader.find("void setFrameLaggedAsyncLightingEnabled(");
     const usize nextSetterOffset = systemHeader.find("[[nodiscard]] bool frameLaggedAsyncLightingEnabled", setterOffset);

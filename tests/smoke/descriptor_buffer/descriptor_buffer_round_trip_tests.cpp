@@ -5372,6 +5372,158 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerMatchesFirstPacketQueu
 }
 
 
+// A completion with an authoritative graph-owned token must reject caller-side rebinding before acceptance, then
+// forward the stored token into the real Device submission when no compatibility array is supplied.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedExternalCompletionSuppliesNativeWaitWithoutFallback){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const GpuPhysicalQueueId graphicsQueue = BackendQueueId(device, CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+
+    CommandListParameters producerParameters;
+    producerParameters.setPhysicalQueue(graphicsQueue);
+    const CommandListHandle producer = device.createCommandList(producerParameters);
+    ASSERT_NE(producer.get(), nullptr);
+    producer->open();
+    producer->close();
+    CommandList* const producerLists[] = { producer.get() };
+    const QueueSubmissionToken producerToken = device.executeCommandLists(
+        producerLists,
+        LengthOf(producerLists),
+        graphicsQueue,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(producerToken.valid());
+    ASSERT_TRUE(producerToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
+
+    const BufferHandle buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuExternalCompletionId completion = graph.importExternalCompletion(
+        GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/graph_owned_external_completion"))
+            .setMarkerLabel("Graph Owned External Completion")
+            .setToken(producerToken)
+    );
+    ASSERT_TRUE(completion.valid());
+    const GpuGraphResourceId resource = graph.importBuffer(
+        buffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/graph_owned_external_buffer"))
+            .setMarkerLabel("Graph Owned External Buffer")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(resource.valid());
+    const GpuTaskResourceUse use{
+        .resource = resource,
+        .range = {},
+        .requiredState = ResourceStates::CopyDest,
+        .access = GpuTaskResourceAccess::Write,
+    };
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskDesc taskDesc;
+    taskDesc
+        .setIdentity(Name("tests/descriptor_buffer/graph_owned_external_consumer"))
+        .setMarkerLabel("Graph Owned External Consumer")
+        .setQueue(graphicsRequest)
+        .setExternalDependencies(&completion, 1u)
+        .setResourceUses(&use, 1u)
+    ;
+    bool taskRecorded = false;
+    QueueSubmissionToken acceptedToken;
+    const GpuTaskId task = graph.addTask<NativePacketPrefixTask>(
+        taskDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = buffer.get(),
+            .expectedState = ResourceStates::CopyDest,
+            .recorded = &taskRecorded,
+            .acceptedToken = &acceptedToken,
+        }
+    );
+    ASSERT_TRUE(task.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/graph_owned_external_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = packet },
+        recordedGraph
+    ));
+    EXPECT_TRUE(taskRecorded);
+
+    const GpuTaskGraphExternalCompletionToken forbiddenFallback{
+        .completion = completion,
+        .token = producerToken,
+    };
+    const GpuTaskGraphSubmitter submitter(device);
+    EXPECT_FALSE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        packet,
+        &forbiddenFallback,
+        1u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_FALSE(transaction.hasAcceptedPackets());
+    EXPECT_FALSE(transaction.packetToken(packet).valid());
+    EXPECT_FALSE(acceptedToken.valid());
+    transaction.reset(compiledGraph);
+
+#if !defined(NWB_FINAL)
+    device.clearSubmissionWaitTokensForTesting();
+    device.armSubmissionWaitCaptureForTesting();
+#endif
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        packet,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.hasAcceptedPackets());
+    EXPECT_TRUE(transaction.packetToken(packet).valid());
+    EXPECT_TRUE(acceptedToken.valid());
+#if !defined(NWB_FINAL)
+    ASSERT_EQ(device.lastSubmissionWaitTokenCountForTesting(graphicsQueue), 1u);
+    const QueueSubmissionToken capturedWait = device.lastSubmissionWaitTokenForTesting(graphicsQueue, 0u);
+    EXPECT_EQ(capturedWait.queue, producerToken.queue);
+    EXPECT_EQ(capturedWait.value, producerToken.value);
+    EXPECT_EQ(capturedWait.physicalQueueIndex, producerToken.physicalQueueIndex);
+    EXPECT_EQ(capturedWait.deviceGeneration, producerToken.deviceGeneration);
+#endif
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // A source outside the graph may release an exclusive buffer to a fixed first graph packet. The graph owns the
 // completion wait and imports the producer's handoff before lowering its first declared transition; the adapter
 // gate is intentional because a real queue-family acquire needs a dedicated Compute family.
@@ -46235,6 +46387,17 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
     auto& device = DescriptorBufferRoundTripTest::device();
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     ASSERT_TRUE(graphicsQueue.valid());
+    ASSERT_TRUE(device.waitForIdle());
+    device.runGarbageCollection();
+    const GpuCommandArenaStatistics beforeStatistics = device.getCommandArenaStatistics(graphicsQueue);
+    ASSERT_TRUE(beforeStatistics.valid());
+    EXPECT_EQ(beforeStatistics.queue, graphicsQueue);
+    EXPECT_EQ(
+        beforeStatistics.currentCommandBufferCount,
+        beforeStatistics.reusableCommandBufferCount
+            + beforeStatistics.leasedCommandBufferCount
+            + beforeStatistics.pendingCommandBufferCount
+    );
     auto firstBuffer = device.createBuffer(
         BufferDesc()
             .setByteSize(256u)
@@ -46250,22 +46413,27 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
     ASSERT_NE(firstBuffer.get(), nullptr);
     ASSERT_NE(secondBuffer.get(), nullptr);
 
+    // Reserve worker identities at the far end of the index domain for this smoke. Existing process-wide queue
+    // storage may be populated by earlier tests, while these two shards still have deterministic first-growth and
+    // second-recording reuse transitions.
+    constexpr u32 s_FirstTelemetryWorkerIndex = Limit<u32>::s_Max - 1u;
+    constexpr u32 s_SecondTelemetryWorkerIndex = Limit<u32>::s_Max - 2u;
     CommandListParameters firstParameters;
     firstParameters
         .setPhysicalQueue(graphicsQueue)
-        .setRecordingWorkerIndex(1u)
+        .setRecordingWorkerIndex(s_FirstTelemetryWorkerIndex)
     ;
     CommandListParameters secondParameters;
     secondParameters
         .setPhysicalQueue(graphicsQueue)
-        .setRecordingWorkerIndex(2u)
+        .setRecordingWorkerIndex(s_SecondTelemetryWorkerIndex)
     ;
     auto firstCommandList = device.createCommandList(firstParameters);
     auto secondCommandList = device.createCommandList(secondParameters);
     ASSERT_NE(firstCommandList.get(), nullptr);
     ASSERT_NE(secondCommandList.get(), nullptr);
-    EXPECT_EQ(firstCommandList->getDescription().recordingWorkerIndex, 1u);
-    EXPECT_EQ(secondCommandList->getDescription().recordingWorkerIndex, 2u);
+    EXPECT_EQ(firstCommandList->getDescription().recordingWorkerIndex, s_FirstTelemetryWorkerIndex);
+    EXPECT_EQ(secondCommandList->getDescription().recordingWorkerIndex, s_SecondTelemetryWorkerIndex);
 
     Latch recordingStarted(2);
     bool firstRecorded = false;
@@ -46294,12 +46462,38 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
     EXPECT_TRUE(firstRecorded);
     EXPECT_TRUE(secondRecorded);
 
+    const GpuCommandArenaStatistics growthStatistics = device.getCommandArenaStatistics(graphicsQueue);
+    ASSERT_TRUE(growthStatistics.valid());
+    EXPECT_EQ(growthStatistics.growthEventCount, beforeStatistics.growthEventCount + 2u);
+    EXPECT_EQ(growthStatistics.currentCommandBufferCount, beforeStatistics.currentCommandBufferCount + 2u);
+    EXPECT_GE(growthStatistics.highWaterCommandBufferCount, growthStatistics.currentCommandBufferCount);
+    EXPECT_GE(growthStatistics.highWaterCommandBufferCount, beforeStatistics.highWaterCommandBufferCount);
+    EXPECT_EQ(growthStatistics.workerArenaCount, beforeStatistics.workerArenaCount + 2u);
+    EXPECT_EQ(growthStatistics.commandPoolEpochCount, beforeStatistics.commandPoolEpochCount + 2u);
+    EXPECT_EQ(growthStatistics.leasedCommandBufferCount, beforeStatistics.leasedCommandBufferCount + 2u);
+    EXPECT_GE(growthStatistics.commandPoolEpochCount, growthStatistics.workerArenaCount);
+    EXPECT_GT(
+        growthStatistics.nativeHandleStorageLowerBoundBytes,
+        beforeStatistics.nativeHandleStorageLowerBoundBytes
+    );
+
     CommandList* commandLists[] = { firstCommandList.get(), secondCommandList.get() };
     bool submitted = false;
-    EXPECT_GT(device.executeCommandLists(commandLists, 2u, CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_GT(device.executeCommandLists(commandLists, 2u, graphicsQueue, &submitted), 0u);
     EXPECT_TRUE(submitted);
+    const GpuCommandArenaStatistics pendingStatistics = device.getCommandArenaStatistics(graphicsQueue);
+    ASSERT_TRUE(pendingStatistics.valid());
+    EXPECT_EQ(pendingStatistics.pendingCommandBufferCount, beforeStatistics.pendingCommandBufferCount + 2u);
+    EXPECT_EQ(pendingStatistics.pendingCommandPoolEpochCount, beforeStatistics.pendingCommandPoolEpochCount + 2u);
     EXPECT_TRUE(device.waitForIdle());
     device.runGarbageCollection();
+    const GpuCommandArenaStatistics retiredStatistics = device.getCommandArenaStatistics(graphicsQueue);
+    ASSERT_TRUE(retiredStatistics.valid());
+    EXPECT_LT(retiredStatistics.pendingCommandBufferCount, pendingStatistics.pendingCommandBufferCount);
+    EXPECT_GE(
+        retiredStatistics.reusableCommandBufferCount,
+        pendingStatistics.reusableCommandBufferCount + 2u
+    );
 
     Latch reusedRecordingStarted(2);
     firstRecorded = false;
@@ -46327,9 +46521,18 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
     graphics.waitJob(reusedSecondJob);
     EXPECT_TRUE(firstRecorded);
     EXPECT_TRUE(secondRecorded);
+    const GpuCommandArenaStatistics reusedStatistics = device.getCommandArenaStatistics(graphicsQueue);
+    ASSERT_TRUE(reusedStatistics.valid());
+    EXPECT_GE(reusedStatistics.resetEventCount, retiredStatistics.resetEventCount + 2u);
+    EXPECT_GE(reusedStatistics.leasedCommandBufferCount, retiredStatistics.leasedCommandBufferCount + 2u);
+    EXPECT_GE(
+        retiredStatistics.reusableCommandBufferCount,
+        reusedStatistics.reusableCommandBufferCount + 2u
+    );
 
+    CommandList* reusedCommandLists[] = { firstCommandList.get(), secondCommandList.get() };
     bool reusedSubmitted = false;
-    EXPECT_GT(device.executeCommandLists(commandLists, 2u, CommandQueue::Graphics, &reusedSubmitted), 0u);
+    EXPECT_GT(device.executeCommandLists(reusedCommandLists, 2u, graphicsQueue, &reusedSubmitted), 0u);
     EXPECT_TRUE(reusedSubmitted);
     EXPECT_TRUE(device.waitForIdle());
 }

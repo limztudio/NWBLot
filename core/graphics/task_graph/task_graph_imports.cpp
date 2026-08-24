@@ -60,6 +60,25 @@ namespace __hidden_gpu_task_graph_imports{
     return pipeline.identity == desc.identity && pipeline.type == desc.type;
 }
 
+[[nodiscard]] static bool HasExternalCompletionTokenValue(const QueueSubmissionToken& token)noexcept{
+    return token.queue != CommandQueue::kCount
+        || token.value != 0u
+        || token.physicalQueueIndex != Limit<u16>::s_Max
+        || token.deviceGeneration != 0u
+    ;
+}
+
+[[nodiscard]] static bool SameSubmissionToken(
+    const QueueSubmissionToken& lhs,
+    const QueueSubmissionToken& rhs
+)noexcept{
+    return lhs.queue == rhs.queue
+        && lhs.value == rhs.value
+        && lhs.physicalQueueIndex == rhs.physicalQueueIndex
+        && lhs.deviceGeneration == rhs.deviceGeneration
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -381,12 +400,34 @@ GpuGraphPipelineId GpuTaskGraph::importRayTracingPipeline(
 }
 
 GpuExternalCompletionId GpuTaskGraph::importExternalCompletion(const GpuExternalCompletionDesc& desc){
-    if(!desc.identity || desc.markerLabel.empty())
+    const bool hasToken = __hidden_gpu_task_graph_imports::HasExternalCompletionTokenValue(desc.token);
+    if(
+        !desc.identity
+        || desc.markerLabel.empty()
+        || (hasToken && (
+            !desc.token.valid()
+            || !desc.token.hasPhysicalQueueIdentity()
+            || !validForDeviceGeneration(desc.token.deviceGeneration)
+        ))
+    )
         return {};
 
     for(usize completionIndex = 0u; completionIndex < m_externalCompletions.size(); ++completionIndex){
-        if(m_externalCompletions[completionIndex].identity == desc.identity)
-            return GpuExternalCompletionId{ static_cast<u32>(completionIndex), m_generation };
+        GpuExternalCompletionNode& existing = m_externalCompletions[completionIndex];
+        if(existing.identity != desc.identity)
+            continue;
+        if(hasToken){
+            if(existing.hasToken){
+                if(!__hidden_gpu_task_graph_imports::SameSubmissionToken(existing.token, desc.token))
+                    return {};
+            }
+            else{
+                existing.token = desc.token;
+                existing.hasToken = true;
+                m_declarationRevision = allocateGeneration();
+            }
+        }
+        return GpuExternalCompletionId{ static_cast<u32>(completionIndex), m_generation };
     }
 
     return appendExternalCompletion(desc);

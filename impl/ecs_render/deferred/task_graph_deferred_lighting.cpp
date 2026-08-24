@@ -110,6 +110,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::GpuTimingSubmissionTicket& lightingTimingTicket,
     Core::GpuTimingSubmissionTicket& compositeTimingTicket,
     Core::GpuTimingSubmissionTicket& presentTimingTicket,
+    const Core::QueueSubmissionToken& surfelCounterReadbackCompletionToken,
+    const Core::QueueSubmissionToken& laggedLightingHistoryReadReadyToken,
+    const Core::QueueSubmissionToken& laggedLightingHistoryWriterDrainToken,
     const bool includeLaggedLightingHistoryCapture
 ){
     using namespace RendererTaskGraphDetail;
@@ -196,7 +199,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredLaggedLightingHistoryTask = {};
     m_deferredFrameRecoveryTask = {};
     m_deferredSurfelGiCounterReadbackCompletion = {};
-    m_deferredLightingHistoryCompletion = {};
+    m_deferredLightingHistoryReadReadyCompletion = {};
+    m_deferredLightingHistoryWriterDrainCompletion = {};
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
     m_deferredFrameRecoveryArmed = false;
@@ -221,10 +225,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     const bool useLaggedLightingHistory = dedicatedAsyncCompute
         && features.frameLaggedAsyncLightingEnabled
         && features.laggedLightingHistoryReady
-        && features.laggedLightingHistoryAccepted
-    ;
-    const bool waitsForLaggedLightingHistoryWriter = useLaggedLightingHistory
-        || features.laggedLightingHistoryWriterWaitPending
+        && features.laggedLightingHistoryReadReady
     ;
     const bool splitAvboitStages = !useLaggedLightingHistory
         && dedicatedAsyncCompute
@@ -946,17 +947,34 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         return;
     }
 
-    if(waitsForLaggedLightingHistoryWriter){
-        Core::GpuExternalCompletionDesc lightingHistoryCompletionDesc;
-        lightingHistoryCompletionDesc
-            .setIdentity(Name("render.deferred_lighting.lagged_history_complete"))
-            .setMarkerLabel("Lagged Lighting History Complete")
+    if(useLaggedLightingHistory){
+        Core::GpuExternalCompletionDesc lightingHistoryReadReadyDesc;
+        lightingHistoryReadReadyDesc
+            .setIdentity(Name("render.deferred_lighting.lagged_history_read_ready"))
+            .setMarkerLabel("Lagged Lighting History Read Ready")
+            .setToken(laggedLightingHistoryReadReadyToken)
         ;
-        m_deferredLightingHistoryCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
-            lightingHistoryCompletionDesc
+        m_deferredLightingHistoryReadReadyCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
+            lightingHistoryReadReadyDesc
         );
-        if(!m_deferredLightingHistoryCompletion.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import lagged-lighting history completion"));
+        if(!m_deferredLightingHistoryReadReadyCompletion.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import lagged-lighting history read-ready completion"));
+            return;
+        }
+    }
+
+    if(features.laggedLightingHistoryWriterWaitPending){
+        Core::GpuExternalCompletionDesc lightingHistoryWriterDrainDesc;
+        lightingHistoryWriterDrainDesc
+            .setIdentity(Name("render.deferred_lighting.lagged_history_writer_drain"))
+            .setMarkerLabel("Lagged Lighting History Writer Drain")
+            .setToken(laggedLightingHistoryWriterDrainToken)
+        ;
+        m_deferredLightingHistoryWriterDrainCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
+            lightingHistoryWriterDrainDesc
+        );
+        if(!m_deferredLightingHistoryWriterDrainCompletion.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import lagged-lighting history writer-drain completion"));
             return;
         }
     }
@@ -969,6 +987,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         surfelCounterReadbackCompletionDesc
             .setIdentity(Name("render.surfel_gi.counter_readback_complete"))
             .setMarkerLabel("Surfel Counter Readback Complete")
+            .setToken(surfelCounterReadbackCompletionToken)
         ;
         m_deferredSurfelGiCounterReadbackCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
             surfelCounterReadbackCompletionDesc
@@ -999,7 +1018,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         traceMaterialSampledTextureSet,
         m_graphicsPrefixTask,
         features.laggedLightingHistoryWriterWaitPending
-            ? m_deferredLightingHistoryCompletion
+            ? m_deferredLightingHistoryWriterDrainCompletion
             : Core::GpuExternalCompletionId{},
         shadowVisibilityTimingTicket,
         shadowVisibilityAsyncTiming,
@@ -1458,7 +1477,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
 
         const Core::GpuTaskId hardwareDependencies[] = { m_graphicsPrefixTask };
         const Core::GpuExternalCompletionId* const hardwareExternalDependencies = features.laggedLightingHistoryWriterWaitPending
-            ? &m_deferredLightingHistoryCompletion
+            ? &m_deferredLightingHistoryWriterDrainCompletion
             : nullptr
         ;
         const usize hardwareExternalDependencyCount = features.laggedLightingHistoryWriterWaitPending ? 1u : 0u;
@@ -5620,7 +5639,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     ;
 
     const Core::GpuExternalCompletionId laggedLightingExternalDependencies[] = {
-        m_deferredLightingHistoryCompletion,
+        m_deferredLightingHistoryReadReadyCompletion,
     };
     const Core::GpuExternalCompletionId* const lightingExternalDependencies = useLaggedLightingHistory
         ? laggedLightingExternalDependencies

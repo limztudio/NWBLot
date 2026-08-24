@@ -46,7 +46,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     const Core::GpuGraphResourceSetId softwareTraceGeometrySet,
     const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
     const Core::GpuTaskId prefixTask,
-    const Core::GpuExternalCompletionId laggedLightingHistoryWriterCompletion,
+    const Core::GpuExternalCompletionId laggedLightingHistoryWriterDrainCompletion,
     Core::GpuTimingSubmissionTicket& timingTicket,
     Optional<Core::GpuTimingMeasure>& asyncTiming,
     Optional<Core::GpuTimingMeasure>& shadowVisibilityTiming,
@@ -84,10 +84,10 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     )
         return false;
 
-    const Core::GpuExternalCompletionId* const laggedLightingHistoryWriterDependencies =
-        laggedLightingHistoryWriterCompletion.valid() ? &laggedLightingHistoryWriterCompletion : nullptr
+    const Core::GpuExternalCompletionId* const laggedLightingHistoryWriterDrainDependencies =
+        laggedLightingHistoryWriterDrainCompletion.valid() ? &laggedLightingHistoryWriterDrainCompletion : nullptr
     ;
-    const usize laggedLightingHistoryWriterDependencyCount = laggedLightingHistoryWriterCompletion.valid() ? 1u : 0u;
+    const usize laggedLightingHistoryWriterDrainDependencyCount = laggedLightingHistoryWriterDrainCompletion.valid() ? 1u : 0u;
 
     opaqueProduced = false;
     transparentTraceProduced = false;
@@ -832,8 +832,8 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             .setScheduling(opaqueScheduling)
             .setDependencies(&prefixTask, 1u)
             .setExternalDependencies(
-                laggedLightingHistoryWriterDependencies,
-                laggedLightingHistoryWriterDependencyCount
+                laggedLightingHistoryWriterDrainDependencies,
+                laggedLightingHistoryWriterDrainDependencyCount
             )
             .setResourceUses(opaqueResourceUses.data(), opaqueResourceUses.size())
             .setResourceSetUses(
@@ -1142,8 +1142,8 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         .setScheduling(allLitClearScheduling)
         .setDependencies(&shadowVisibilityDependency, 1u)
         .setExternalDependencies(
-            laggedLightingHistoryWriterDependencies,
-            laggedLightingHistoryWriterDependencyCount
+            laggedLightingHistoryWriterDrainDependencies,
+            laggedLightingHistoryWriterDrainDependencyCount
         )
         .setResourceUses(&allLitClearResourceUse, 1u)
     ;

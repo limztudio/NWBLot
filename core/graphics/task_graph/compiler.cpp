@@ -95,6 +95,27 @@ bool GpuTaskGraphCompiler::compile(
     )
         return false;
 
+    for(usize completionIndex = 0u; completionIndex < graph.externalCompletionCount(); ++completionIndex){
+        const GpuTaskGraphExternalCompletionView completion = graph.externalCompletionAt(completionIndex);
+        if(!completion.hasToken)
+            continue;
+
+        const GpuPhysicalQueueId producerQueue{
+            completion.token.physicalQueueIndex,
+            completion.token.deviceGeneration,
+        };
+        bool validProducerQueue = false;
+        for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+            const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
+            if(queue.id != producerQueue || queue.queueClass != completion.token.queue)
+                continue;
+            validProducerQueue = true;
+            break;
+        }
+        if(!validProducerQueue)
+            return false;
+    }
+
     outCompiledGraph.m_generation = graph.generation();
     outCompiledGraph.m_declarationRevision = graph.declarationRevision();
     outCompiledGraph.m_planGeneration = AllocateCompiledPlanGeneration();

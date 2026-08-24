@@ -490,8 +490,10 @@ GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternal
 
     GpuExternalCompletionNode completion;
     completion.identity = desc.identity;
+    completion.token = desc.token;
     completion.markerLabelOffset = markerLabelOffset;
     completion.markerLabelSize = markerLabelSize;
+    completion.hasToken = desc.token.valid() && desc.token.hasPhysicalQueueIdentity();
 
     const u32 index = static_cast<u32>(m_externalCompletions.size());
     m_externalCompletions.push_back(Move(completion));

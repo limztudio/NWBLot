@@ -14,25 +14,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_avboit_task_graph_stage_validation{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-constexpr usize s_SinglePacketCount = 1u;
-constexpr usize s_AsyncComputePacketCount = 5u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
     const Core::GpuCompiledGraph& compiledGraph,
     const bool clearTargets,
@@ -659,10 +640,6 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         taskGraphStage.m_preTask,
         submissionCompletionTask
     );
-    const usize expectedPacketCount = avboitUsesAsyncCompute
-        ? __hidden_avboit_task_graph_stage_validation::s_AsyncComputePacketCount
-        : __hidden_avboit_task_graph_stage_validation::s_SinglePacketCount
-    ;
     return {
         .m_stage = stage,
         .m_submissionCompletionTask = submissionCompletionTask,
@@ -716,8 +693,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
                 && avboitIntegrationQueue->queueClass == Core::CommandQueue::Compute
                 && avboitAccumulationQueue->queueClass == Core::CommandQueue::Graphics
             ))
-            && compiledGraph.validPacketRange(packetRange)
-            && packetRange.packetCount == expectedPacketCount,
+            && compiledGraph.validPacketRange(packetRange),
     };
 }
 

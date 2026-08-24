@@ -33,7 +33,6 @@ inline constexpr usize s_SinglePacketCount = 1u;
 inline constexpr usize s_SoftwareShadowEffectsPacketCount = 2u;
 inline constexpr usize s_SurfelGiMergedPreparationAndCopyPacketCount = 2u;
 inline constexpr usize s_SurfelGiSeparatePreparationAndCopyPacketCount = 3u;
-inline constexpr usize s_AvboitAsyncComputePacketCount = 5u;
 inline constexpr usize s_DeferredLightingCompositePacketCount = 2u;
 inline constexpr usize s_PresentationOverlayPacketCount = 1u;
 

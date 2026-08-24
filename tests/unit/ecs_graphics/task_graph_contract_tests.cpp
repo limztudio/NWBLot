@@ -587,8 +587,8 @@ TEST(EcsGraphics, PrefixAndShadowTopologyUsesSemanticTaskAnchors){
 }
 
 
-// The AVBOIT routing choice can still produce one or five submissions, but validation must ask whether semantic
-// stages compiled and share their declared packet rather than duplicate packet IDs for each stage.
+// AVBOIT validation follows semantic stage anchors and accepts the compiler-owned packet range between them. It
+// must not constrain that range to the currently generated one-packet or five-packet topology.
 TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -625,6 +625,10 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
     EXPECT_TRUE(ContainsText(avboitValidation, "compiledGraph.tasksSharePacket(\n            taskGraphStage.m_preTask"));
     EXPECT_TRUE(ContainsText(avboitValidation, "compiledGraph.packetRangeForTasks("));
     EXPECT_TRUE(ContainsText(avboitValidation, "compiledGraph.validPacketRange(packetRange)"));
+    EXPECT_FALSE(ContainsText(avboitValidation, "s_AsyncComputePacketCount"));
+    EXPECT_FALSE(ContainsText(avboitValidation, "s_SinglePacketCount"));
+    EXPECT_FALSE(ContainsText(avboitValidation, "expectedPacketCount"));
+    EXPECT_FALSE(ContainsText(avboitValidation, "packetRange.packetCount =="));
     EXPECT_TRUE(ContainsText(avboitSubmission, "submitTaskRangeInCompileOrderFromTasks("));
     EXPECT_TRUE(ContainsText(avboitSubmission, "validation.stage().firstTask,"));
     EXPECT_TRUE(ContainsText(avboitSubmission, "validation.submissionCompletionTask(),"));
@@ -637,6 +641,7 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
     ));
     EXPECT_FALSE(ContainsText(systemHeader, "m_deferredAvboit"));
     EXPECT_FALSE(ContainsText(system, "m_deferredAvboit"));
+    EXPECT_FALSE(ContainsText(system, "s_AvboitAsyncComputePacketCount"));
 
     for(const AStringView avboitSource : { avboitValidation, avboitSubmission }){
         EXPECT_FALSE(ContainsText(avboitSource, "GpuSubmissionPacketId avboitPrePacket"));

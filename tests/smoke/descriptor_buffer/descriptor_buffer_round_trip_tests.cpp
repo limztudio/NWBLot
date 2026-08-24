@@ -35097,6 +35097,307 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitExtinctionComputeEmulationShare
 }
 
 
+// AVBOIT submission is anchored by five semantic stages, but compiler-owned work may introduce another packet
+// inside that range. The auxiliary Graphics packet deliberately has no timing binding; task-derived submission
+// must still accept it together with the five timed G/C/G/C/G stage packets.
+TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitSemanticRangeAcceptsAuxiliaryCompilerPacket){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Async AVBOIT semantic range: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& graphics = asyncScope.graphics();
+    auto& device = graphics.getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Async AVBOIT semantic range: adapter has no dedicated compute-only queue family.";
+
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = asyncScope.gpuTimingSink();
+    asyncScope.setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_AsyncAvboitExtinctionLifecycleScope.identity, device, 5u));
+    auto timingResetCommandList = device.createCommandList();
+    ASSERT_NE(timingResetCommandList.get(), nullptr);
+    timingResetCommandList->open();
+    timing.recordFrameReset(*timingResetCommandList);
+    timingResetCommandList->close();
+    CommandList* timingResetCommandLists[] = { timingResetCommandList.get() };
+    bool timingResetSubmitted = false;
+    device.executeCommandLists(
+        timingResetCommandLists,
+        LengthOf(timingResetCommandLists),
+        CommandQueue::Graphics,
+        &timingResetSubmitted
+    );
+    ASSERT_TRUE(timingResetSubmitted);
+    timing.confirmFrameReset();
+    ASSERT_TRUE(device.waitForIdle());
+
+    auto workBuffer = device.createBuffer(
+        BufferDesc()
+            .setDebugName(Name("tests/descriptor_buffer/async_avboit_semantic_range_work"))
+            .setByteSize(sizeof(u32) * 4u)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    ASSERT_NE(workBuffer.get(), nullptr);
+
+    GpuTaskGraph graph(asyncScope.arena());
+    const BufferDesc& workBufferDesc = workBuffer->getDescription();
+    const GpuGraphResourceId workResource = graph.importBuffer(
+        workBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(workBufferDesc.debugName)
+            .setMarkerLabel("AVBOIT Semantic Range Work")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(workBufferDesc.initialState)
+            .setQueueSharing(workBufferDesc.queueSharing)
+    );
+    ASSERT_TRUE(workResource.valid());
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const GpuQueueRequest computeQueue{
+        GpuQueueCapability::Compute,
+        GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    const GpuTaskResourceUse workUse{
+        .resource = workResource,
+        .range = {},
+        .requiredState = ResourceStates::UnorderedAccess,
+        .access = GpuTaskResourceAccess::ReadWrite,
+    };
+
+    GpuTimingSubmissionTicket preTimingTicket(timing);
+    GpuTimingSubmissionTicket depthWarpTimingTicket(timing);
+    GpuTimingSubmissionTicket extinctionTimingTicket(timing);
+    GpuTimingSubmissionTicket integrationTimingTicket(timing);
+    GpuTimingSubmissionTicket accumulationTimingTicket(timing);
+    GpuTimingSubmissionTicket* const taskTimingTickets[] = {
+        &preTimingTicket,
+        &depthWarpTimingTicket,
+        &extinctionTimingTicket,
+        nullptr,
+        &integrationTimingTicket,
+        &accumulationTimingTicket,
+    };
+    bool tasksRecorded[6u] = {};
+    QueueSubmissionToken acceptedTaskTokens[6u] = {};
+    u32 recordOrdinal = 0u;
+    const auto addTask = [&](
+        const Name& identity,
+        const AStringView markerLabel,
+        const GpuQueueRequest& queue,
+        const GpuTaskId dependency,
+        GpuTimingSubmissionTicket* const timingTicket,
+        const usize taskIndex
+    ){
+        NativePacketAsyncAvboitExtinctionLifecycleTask::Payload payload;
+        payload.expectations[0u] = { workBuffer.get(), ResourceStates::UnorderedAccess };
+        payload.expectationCount = 1u;
+        payload.recordOrdinal = &recordOrdinal;
+        payload.expectedOrdinal = static_cast<u32>(taskIndex);
+        payload.device = timingTicket ? &device : nullptr;
+        payload.timing = timingTicket ? &timing : nullptr;
+        payload.timingTicket = timingTicket;
+        payload.recordTiming = timingTicket != nullptr;
+        payload.recorded = &tasksRecorded[taskIndex];
+        payload.acceptedToken = &acceptedTaskTokens[taskIndex];
+
+        GpuTaskDesc taskDesc;
+        taskDesc
+            .setIdentity(identity)
+            .setMarkerLabel(markerLabel)
+            .setQueue(queue)
+            .setScheduling(scheduling)
+            .setResourceUses(&workUse, 1u)
+        ;
+        if(dependency.valid())
+            taskDesc.setDependencies(&dependency, 1u);
+        return graph.addTask<NativePacketAsyncAvboitExtinctionLifecycleTask>(taskDesc, Move(payload));
+    };
+
+    GpuTaskId tasks[6u] = {};
+    tasks[0u] = addTask(
+        Name("tests/descriptor_buffer/async_avboit_semantic_pre"),
+        "AVBOIT Pre",
+        graphicsQueue,
+        {},
+        taskTimingTickets[0u],
+        0u
+    );
+    tasks[1u] = addTask(
+        Name("tests/descriptor_buffer/async_avboit_semantic_depth_warp"),
+        "AVBOIT Depth Warp",
+        computeQueue,
+        tasks[0u],
+        taskTimingTickets[1u],
+        1u
+    );
+    tasks[2u] = addTask(
+        Name("tests/descriptor_buffer/async_avboit_semantic_extinction"),
+        "AVBOIT Extinction",
+        graphicsQueue,
+        tasks[1u],
+        taskTimingTickets[2u],
+        2u
+    );
+    tasks[3u] = addTask(
+        Name("tests/descriptor_buffer/async_avboit_semantic_auxiliary"),
+        "AVBOIT Compiler Auxiliary",
+        graphicsQueue,
+        tasks[2u],
+        taskTimingTickets[3u],
+        3u
+    );
+    tasks[4u] = addTask(
+        Name("tests/descriptor_buffer/async_avboit_semantic_integration"),
+        "AVBOIT Integration",
+        computeQueue,
+        tasks[3u],
+        taskTimingTickets[4u],
+        4u
+    );
+    tasks[5u] = addTask(
+        Name("tests/descriptor_buffer/async_avboit_semantic_accumulation"),
+        "AVBOIT Accumulation",
+        graphicsQueue,
+        tasks[4u],
+        taskTimingTickets[5u],
+        5u
+    );
+    for(const GpuTaskId task : tasks)
+        ASSERT_TRUE(task.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueId primaryComputeQueue = device.getPrimaryPhysicalQueue(CommandQueue::Compute);
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 1u);
+    ASSERT_TRUE(primaryGraphicsQueue.valid());
+    ASSERT_TRUE(primaryComputeQueue.valid());
+    ASSERT_NE(primaryGraphicsQueue, primaryComputeQueue);
+
+    GpuTaskGraphAnalysis analysis(asyncScope.arena());
+    GpuTaskGraphQueueAssignments assignments(asyncScope.arena());
+    GpuCompiledGraph compiledGraph(asyncScope.arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/async_avboit_semantic_range_scratch"));
+    GpuTaskGraphCompileOptions compileOptions;
+    compileOptions.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions));
+    ASSERT_EQ(analysis.topologicalOrder().size(), LengthOf(tasks));
+    ASSERT_EQ(compiledGraph.packetCount(), LengthOf(tasks));
+
+    const CommandQueue::Enum expectedQueueClasses[] = {
+        CommandQueue::Graphics,
+        CommandQueue::Compute,
+        CommandQueue::Graphics,
+        CommandQueue::Graphics,
+        CommandQueue::Compute,
+        CommandQueue::Graphics,
+    };
+    const GpuPhysicalQueueId expectedQueues[] = {
+        primaryGraphicsQueue,
+        primaryComputeQueue,
+        primaryGraphicsQueue,
+        primaryGraphicsQueue,
+        primaryComputeQueue,
+        primaryGraphicsQueue,
+    };
+    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
+        EXPECT_EQ(analysis.topologicalOrder()[taskIndex], tasks[taskIndex]);
+        const GpuTaskQueueAssignment* const assignment = assignments.find(tasks[taskIndex]);
+        ASSERT_NE(assignment, nullptr);
+        EXPECT_EQ(assignment->queue, expectedQueues[taskIndex]);
+        EXPECT_EQ(assignment->queueClass, expectedQueueClasses[taskIndex]);
+        const GpuSubmissionPacketId packet = compiledGraph.packetForTask(tasks[taskIndex]);
+        ASSERT_TRUE(packet.valid());
+        EXPECT_EQ(compiledGraph.packetIdAt(taskIndex), packet);
+    }
+
+    const GpuSubmissionPacketRange packetRange = compiledGraph.packetRangeForTasks(tasks[0u], tasks[5u]);
+    ASSERT_TRUE(packetRange.valid());
+    ASSERT_TRUE(compiledGraph.validPacketRange(packetRange));
+    ASSERT_EQ(packetRange.packetCount, LengthOf(tasks));
+
+    GpuRecordedGraph recordedGraph(asyncScope.arena());
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordTaskRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        tasks[0u],
+        tasks[5u],
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+    EXPECT_EQ(recordOrdinal, LengthOf(tasks));
+    for(const bool recorded : tasksRecorded)
+        EXPECT_TRUE(recorded);
+
+    const GpuTaskGraphTaskTimingTicket timingBindings[] = {
+        GpuTaskGraphTaskTimingTicket{ .task = tasks[0u], .timingTicket = taskTimingTickets[0u] },
+        GpuTaskGraphTaskTimingTicket{ .task = tasks[1u], .timingTicket = taskTimingTickets[1u] },
+        GpuTaskGraphTaskTimingTicket{ .task = tasks[2u], .timingTicket = taskTimingTickets[2u] },
+        GpuTaskGraphTaskTimingTicket{ .task = tasks[4u], .timingTicket = taskTimingTickets[4u] },
+        GpuTaskGraphTaskTimingTicket{ .task = tasks[5u], .timingTicket = taskTimingTickets[5u] },
+    };
+    GpuGraphSubmissionTransaction transaction(asyncScope.arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitTaskRangeInCompileOrderFromTasks(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        tasks[0u],
+        tasks[5u],
+        nullptr,
+        0u,
+        timingBindings,
+        LengthOf(timingBindings),
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.hasAcceptedPackets());
+    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
+        const GpuSubmissionPacketId packet = compiledGraph.packetForTask(tasks[taskIndex]);
+        const QueueSubmissionToken packetToken = transaction.packetToken(packet);
+        const QueueSubmissionToken taskToken = transaction.taskToken(compiledGraph, tasks[taskIndex]);
+        ASSERT_TRUE(packetToken.valid());
+        ASSERT_TRUE(taskToken.valid());
+        ASSERT_TRUE(acceptedTaskTokens[taskIndex].valid());
+        EXPECT_EQ(taskToken.queue, packetToken.queue);
+        EXPECT_EQ(taskToken.value, packetToken.value);
+        EXPECT_EQ(acceptedTaskTokens[taskIndex].queue, packetToken.queue);
+        EXPECT_EQ(acceptedTaskTokens[taskIndex].value, packetToken.value);
+        EXPECT_TRUE(packetToken.matchesPhysicalQueue(
+            expectedQueues[taskIndex].index,
+            expectedQueues[taskIndex].deviceGeneration
+        ));
+    }
+
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 1u);
+    const auto timingStats = timingSink.stats(s_AsyncAvboitExtinctionLifecycleScope.identity);
+    ASSERT_TRUE(timingStats.valid());
+    EXPECT_EQ(timingStats.sampleCount, LengthOf(timingBindings));
+
+    asyncScope.setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
 // Accumulation is the final split AVBOIT Graphics phase. Its alias-free generator follows the immutable stream
 // upload, shares raster's timing ticket, and leaves the attachment finalizer in that accepted packet before
 // Deferred Composite returns to dedicated Compute.

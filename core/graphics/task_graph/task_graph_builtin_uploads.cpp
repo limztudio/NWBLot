@@ -467,6 +467,9 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
         .access = GpuTaskResourceAccess::Write,
     };
     GpuTaskDesc resolvedDesc = desc;
+    const FormatInfo& destinationFormatInfo = GetFormatInfo(destinationDesc.format);
+    if(destinationFormatInfo.hasDepth || destinationFormatInfo.hasStencil)
+        resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Graphics;
     resolvedDesc.setResourceUses(&resourceUse, 1u);
     const GpuTaskId task = appendTask(
         resolvedDesc,

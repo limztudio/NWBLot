@@ -221,6 +221,12 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
             result.streamValidation
         );
     }
+    if(commandList.commandRecordingFailed()){
+        return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
+            GpuCommandIrReplayError::CommandListRecordingFailed,
+            result.streamValidation
+        );
+    }
     if(commandList.isRenderPassActive()){
         return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
             GpuCommandIrReplayError::CommandListRenderPassActive,
@@ -239,7 +245,7 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
             result.streamValidation
         );
     }
-
+    const u64 recordingLeaseSerial = commandList.recordingLeaseSerial();
     // Preflight above establishes all graph/resource legality before any void Core::CommandList operation can
     // mutate its state tracker. The byte view and graph are caller-stable for this tooling call, so a second walk
     // can lower without allocating a duplicate command list or per-command object graph.
@@ -281,6 +287,13 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
         }
 
         __hidden_gpu_command_ir_replay_lowering::LowerOperation(record, graph, commandList);
+        if(!commandList.matchesRecordingLease(recordingLeaseSerial) || commandList.commandRecordingFailed()){
+            return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
+                GpuCommandIrReplayError::CommandListRecordingFailed,
+                result.streamValidation,
+                recordIndex
+            );
+        }
         ++recordIndex;
     }
 }
@@ -318,6 +331,12 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
             result.streamValidation
         );
     }
+    if(commandList.commandRecordingFailed()){
+        return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
+            GpuCommandIrReplayError::CommandListRecordingFailed,
+            result.streamValidation
+        );
+    }
     if(commandList.isRenderPassActive()){
         return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
             GpuCommandIrReplayError::CommandListRenderPassActive,
@@ -336,6 +355,7 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
             result.streamValidation
         );
     }
+    const u64 recordingLeaseSerial = commandList.recordingLeaseSerial();
 
     // The caller has already lowered the graph-owned state seed and packet barriers into commandList. This second
     // reader walk deliberately bypasses CommandList::copyBuffer, so it can measure/directly exercise only Vulkan
@@ -377,13 +397,21 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
                 recordIndex
             );
         }
-        if(!commandList.recordPreflightedCopyBufferDirectVulkan(
+        const bool lowered = commandList.recordPreflightedCopyBufferDirectVulkan(
             graph.bufferForResource(record.destination),
             record.destinationOffsetBytes,
             graph.bufferForResource(record.source),
             record.sourceOffsetBytes,
             record.dataSizeBytes
-        )){
+        );
+        if(!commandList.matchesRecordingLease(recordingLeaseSerial) || commandList.commandRecordingFailed()){
+            return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
+                GpuCommandIrReplayError::CommandListRecordingFailed,
+                result.streamValidation,
+                recordIndex
+            );
+        }
+        if(!lowered){
             return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
                 GpuCommandIrReplayError::DirectVulkanLoweringFailed,
                 result.streamValidation,

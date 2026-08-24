@@ -30,6 +30,23 @@ void CommandList::bindDescriptorBufferHeap(
     if(!m_context.descriptorBufferManager || !m_context.descriptorBufferManager->isEnabled())
         return;
 
+    GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None;
+    switch(bindPoint){
+    case VK_PIPELINE_BIND_POINT_GRAPHICS:
+        requiredCapabilities = GpuQueueCapability::Graphics;
+        break;
+    case VK_PIPELINE_BIND_POINT_COMPUTE:
+    case VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR:
+        requiredCapabilities = GpuQueueCapability::Compute;
+        break;
+    default:
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot bind a descriptor-buffer heap at unsupported pipeline bind point {}"), static_cast<u32>(bindPoint));
+        invalidateCommandRecording();
+        return;
+    }
+    if(!recordAndValidateCommandCapability(requiredCapabilities, NWB_TEXT("bind descriptor-buffer heap")))
+        return;
+
     // Register before reading heap blocks so a concurrent free cannot recycle a descriptor while this command buffer
     // is about to bind it. The accepted queue submission later converts this recording use into a timeline token.
     heap.trackCommandBufferUse(*m_currentCmdBuf);

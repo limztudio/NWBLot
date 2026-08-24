@@ -104,6 +104,7 @@ void GpuTimingAccumulator::recordFrameReset(CommandList& commandList){
     if(!m_enabled)
         return;
 
+    const bool canReset = commandList.canResetTimerQueryHere();
     // Retain pending pools until their result is observable instead of erasing a late GPU sample. Pools that are
     // already available this frame are reset on the device timeline, but do not become usable by dynamic-rendering
     // scopes until the caller confirms this command list submitted successfully.
@@ -112,7 +113,7 @@ void GpuTimingAccumulator::recordFrameReset(CommandList& commandList){
         // A render-pass scope must observe this frame's reset, not merely a reset that happened during an earlier
         // frame. Leave the pool unavailable until confirmFrameReset() observes a successful preamble submission.
         record.deviceReady = false;
-        if(!record.query || record.state != QueryState::Available)
+        if(!canReset || !record.query || record.state != QueryState::Available)
             continue;
 
         commandList.resetTimerQuery(record.query.get());
@@ -167,7 +168,15 @@ bool GpuTimingAccumulator::beginQuery(
     // beginTimerQuery self-resets an already prepared pool when recording outside a render pass. Inside a render pass
     // that reset is illegal, so only pools that recordFrameReset() made deviceReady are eligible. Under-reserved or
     // undeclared scopes skip their sample instead of allocating persistent query pools from a recording path.
-    if(!record.deviceReady && !commandList.canResetTimerQueryHere())
+    if(!commandList.isRecording() || !commandList.hasCommandBuffer() || commandList.commandRecordingFailed())
+        return false;
+    if(!commandList.canRecordTimerQueryHere())
+        return true;
+    if(commandList.isRenderPassActive()){
+        if(!record.deviceReady)
+            return true;
+    }
+    else if(!commandList.canResetTimerQueryHere())
         return true;
 
     // A device-timeline reset authorizes exactly one timestamp pair. Consume it as soon as the reservation records

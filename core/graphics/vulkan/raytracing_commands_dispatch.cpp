@@ -17,11 +17,8 @@ NWB_VULKAN_BEGIN
 
 
 void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
-    if(!validateNonTransferCommand(NWB_TEXT("dispatch rays")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("dispatch rays")))
         return;
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Compute);
-#endif
     if(!m_context.extensions.KHR_ray_tracing_pipeline)
         return;
 

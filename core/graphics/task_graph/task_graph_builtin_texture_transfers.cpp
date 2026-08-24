@@ -379,6 +379,7 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
     };
 
     bool valid = true;
+    bool requiresGraphicsQueue = false;
     for(usize regionIndex = 0u; regionIndex < copyDesc.regionCount && valid; ++regionIndex){
         const GpuCopyTextureTaskRegion& region = copyDesc.regions[regionIndex];
         if(!validResource(region.source) || !validResource(region.destination)){
@@ -426,6 +427,12 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
             )
         ;
         if(valid){
+            const TextureDesc& sourceDesc = sourceResource.texture->getDescription();
+            const FormatInfo& formatInfo = GetFormatInfo(sourceDesc.format);
+            requiresGraphicsQueue = requiresGraphicsQueue || (
+                sourceDesc.sampleCount > 1u
+                && (formatInfo.hasDepth || formatInfo.hasStencil)
+            );
             payload->copies.push_back(CopyTask::Copy{
                 .sourceResource = region.source,
                 .source = sourceResource.texture,
@@ -446,6 +453,8 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
     }
 
     GpuTaskDesc resolvedDesc = desc;
+    if(requiresGraphicsQueue)
+        resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Graphics;
     resolvedDesc.setResourceUses(resourceUses.data(), resourceUses.size());
     const GpuTaskId task = appendTask(
         resolvedDesc,

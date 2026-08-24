@@ -4,6 +4,7 @@
 
 #include "backend.h"
 #include "arena_names.h"
+#include "device_detail.h"
 
 #include <core/common/log.h>
 
@@ -740,6 +741,7 @@ void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
 u64 Queue::submit(
     CommandList* const* ppCmd,
     const usize numCmd,
+    const SubmissionCommandListIdentity* const expectedCommandLists,
     const SubmissionWait* const localWaits,
     const usize localWaitCount,
     bool* const outSubmissionAccepted,
@@ -752,7 +754,15 @@ u64 Queue::submit(
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_QueueSubmitArena);
 
-    const bool hasCommands = ppCmd && numCmd > 0;
+    if(numCmd > 0u && !ppCmd){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list array is null"));
+        return m_lastSubmittedID;
+    }
+    const bool hasCommands = numCmd > 0u;
+    if(hasCommands && !expectedCommandLists){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: expected command-list identity array is null"));
+        return m_lastSubmittedID;
+    }
     // Queue-global synchronization belongs to the next accepted native submission. Validation and injected
     // pre-driver rejection must leave it pending, especially when it contains the acquired swap-chain semaphore.
     if(localWaitCount > 0u && !localWaits){
@@ -790,15 +800,41 @@ u64 Queue::submit(
     if(hasCommands){
         for(usize i = 0; i < numCmd; ++i){
             auto* cmdList = ppCmd[i];
+            for(usize previous = 0u; previous < i; ++previous){
+                if(ppCmd[previous] == cmdList){
+                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is duplicated"), i);
+                    return m_lastSubmittedID;
+                }
+            }
             if(
-                cmdList
-                && cmdList->m_currentCmdBuf
-                && (
-                    cmdList->m_desc.queueType != m_queueID
-                    || cmdList->m_desc.physicalQueue != m_physicalQueue
-                )
+                !cmdList
+                || &cmdList->m_device != &m_device
+                || !cmdList->m_currentCmdBuf
+                || cmdList->m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE
             ){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list physical queue does not match the execution queue"));
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is null, foreign, or has no native command buffer"), i);
+                return m_lastSubmittedID;
+            }
+            if(cmdList->commandRecordingFailed()){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: a command list has a sticky native recording failure"));
+                return m_lastSubmittedID;
+            }
+            if(cmdList->m_isRecording){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is still recording"), i);
+                return m_lastSubmittedID;
+            }
+            if(!VulkanDetail::SubmissionCommandListMatchesExecutionQueue(cmdList->m_desc, m_physicalQueue, m_queueID)){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list physical queue does not match the execution queue"));
+                return m_lastSubmittedID;
+            }
+            const SubmissionCommandListIdentity& expected = expectedCommandLists[i];
+            if(
+                !expected.owner
+                || expected.owner.get() != cmdList->m_currentCmdBuf.get()
+                || expected.recordingLeaseSerial == 0u
+                || expected.recordingLeaseSerial != cmdList->m_recordingLeaseSerial
+            ){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} replaced its validated native recording lease"), i);
                 return m_lastSubmittedID;
             }
         }
@@ -819,9 +855,6 @@ u64 Queue::submit(
 
         for(usize i = 0; i < numCmd; ++i){
             auto* cmdList = ppCmd[i];
-            if(!cmdList || !cmdList->m_currentCmdBuf)
-                continue;
-
             auto cmdBufInfo = VulkanDetail::MakeVkStruct<VkCommandBufferSubmitInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO);
             cmdBufInfo.commandBuffer = cmdList->m_currentCmdBuf->m_cmdBuf;
             cmdBufInfos.push_back(cmdBufInfo);

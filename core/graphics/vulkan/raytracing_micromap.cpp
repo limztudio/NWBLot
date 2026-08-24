@@ -155,7 +155,7 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
 }
 
 void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicromapResource, const RayTracingOpacityMicromapDesc& ommDesc){
-    if(!validateNonTransferCommand(NWB_TEXT("build opacity micromap")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("build opacity micromap")))
         return;
     if(!m_context.extensions.EXT_opacity_micromap)
         return;

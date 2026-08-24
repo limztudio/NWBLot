@@ -499,6 +499,8 @@ bool CommandList::tryWriteBuffer(Buffer* bufferResource, const void* data, usize
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write buffer: copy offset and size must be 4-byte aligned"));
         return false;
     }
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("write buffer")))
+        return false;
 
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
@@ -512,9 +514,6 @@ bool CommandList::tryWriteBuffer(Buffer* bufferResource, const void* data, usize
     region.dstOffset = destOffsetBytes;
     region.size = dataSize;
 
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Transfer);
-#endif
     vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, buffer.m_buffer, 1, &region);
 
     retainResource(bufferResource);
@@ -540,10 +539,9 @@ void CommandList::clearBufferUInt(Buffer* bufferResource, u32 clearValue){
     }
 #endif
 
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("clear buffer")))
+        return;
     setBufferState(bufferResource, ResourceStates::CopyDest);
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Transfer);
-#endif
     vkCmdFillBuffer(m_currentCmdBuf->m_cmdBuf, buffer.m_buffer, 0, VK_WHOLE_SIZE, clearValue);
     retainResource(bufferResource);
 }
@@ -575,6 +573,8 @@ void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* 
     }
 #endif
 
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("copy buffer")))
+        return;
     setBufferState(srcResource, ResourceStates::CopySource);
     setBufferState(destResource, ResourceStates::CopyDest);
 
@@ -583,9 +583,6 @@ void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* 
     region.dstOffset = destOffsetBytes;
     region.size = dataSizeBytes;
 
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Transfer);
-#endif
     vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, src.m_buffer, dest.m_buffer, 1, &region);
 
     retainResource(srcResource);
@@ -626,14 +623,13 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
         )
     )
         return false;
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("direct command-IR copy buffer")))
+        return false;
 
     VkBufferCopy region{};
     region.srcOffset = srcOffsetBytes;
     region.dstOffset = destOffsetBytes;
     region.size = dataSizeBytes;
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Transfer);
-#endif
     vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, src.m_buffer, dest.m_buffer, 1u, &region);
 
     retainResource(srcResource);

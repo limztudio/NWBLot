@@ -232,11 +232,12 @@ f32 Device::getTimerQueryTime(TimerQuery* queryResource){
     return static_cast<f32>(result.durationSeconds());
 }
 
-void Device::resetTimerQuery(TimerQuery* queryResource){
+bool Device::resetTimerQuery(TimerQuery* queryResource){
     auto* query = queryResource;
-    if(!query || query->m_queryPool == VK_NULL_HANDLE)
-        return;
+    if(!query || query->m_queryPool == VK_NULL_HANDLE || &query->m_context != &m_context)
+        return false;
     vkResetQueryPool(m_context.device, query->m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
+    return true;
 }
 
 
@@ -245,8 +246,21 @@ void Device::resetTimerQuery(TimerQuery* queryResource){
 
 void CommandList::resetTimerQuery(TimerQuery* queryResource){
     auto* query = queryResource;
-    if(!query || query->m_queryPool == VK_NULL_HANDLE)
+    if(!query || query->m_queryPool == VK_NULL_HANDLE || &query->m_context != &m_context){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot reset an invalid or foreign timer query"));
+        invalidateCommandRecording();
         return;
+    }
+
+    if(!validateCommandRecordingScope(NWB_TEXT("reset timer query")))
+        return;
+    if(!canResetTimerQueryHere()){
+        NWB_LOGGER_CRITICAL_WARNING(
+            NWB_TEXT("Vulkan: Cannot reset a timer query outside recording or on an exact physical queue without Graphics or Compute capability")
+        );
+        invalidateCommandRecording();
+        return;
+    }
 
     // Device-timeline reset: recorded into the command buffer so the validation layer can order it before the
     // timestamp writes issued later this frame. MUST be recorded OUTSIDE any dynamic render pass, because
@@ -255,27 +269,60 @@ void CommandList::resetTimerQuery(TimerQuery* queryResource){
     retainResource(query);
 }
 
+bool CommandList::canRecordTimerQueryHere()const{
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_desc.physicalQueue);
+    constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Graphics)
+        | static_cast<u8>(GpuQueueCapability::Compute)
+        | static_cast<u8>(GpuQueueCapability::Transfer)
+    ;
+    return
+        !m_commandRecordingFailed
+        && m_isRecording
+        && m_currentCmdBuf
+        && m_currentCmdBuf->m_cmdBuf != VK_NULL_HANDLE
+        && m_desc.physicalQueue.valid()
+        && queueInfo
+        && queueInfo->id == m_desc.physicalQueue
+        && queueInfo->queueClass == m_desc.queueType
+        && (static_cast<u8>(queueInfo->capabilities) & s_KnownCapabilityBits) != 0u
+        && queueInfo->timestampValidBits > 0u
+        && queueInfo->timestampValidBits <= 64u
+    ;
+}
+
 bool CommandList::canResetTimerQueryHere()const{
-    return !m_renderPassActive;
+    if(m_renderPassActive || !canRecordTimerQueryHere())
+        return false;
+
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_desc.physicalQueue);
+    constexpr u8 s_ResetCapableBits = static_cast<u8>(GpuQueueCapability::Graphics)
+        | static_cast<u8>(GpuQueueCapability::Compute)
+    ;
+    return (static_cast<u8>(queueInfo->capabilities) & s_ResetCapableBits) != 0u;
 }
 
 bool CommandList::beginTimerQuery(TimerQuery* queryResource){
     auto* query = queryResource;
-    if(
-        !query
-        || query->m_queryPool == VK_NULL_HANDLE
-        || &query->m_context != &m_context
-        || !m_isRecording
-        || !m_currentCmdBuf
-        || m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to begin timer query on an invalid command list or device."));
+    if(!query || query->m_queryPool == VK_NULL_HANDLE || &query->m_context != &m_context){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to begin an invalid or foreign timer query"));
+        invalidateCommandRecording();
+        return false;
+    }
+    if(!validateCommandRecordingScope(NWB_TEXT("begin timer query")))
+        return false;
+
+    if(!m_renderPassActive && !canResetTimerQueryHere()){
+        NWB_LOGGER_CRITICAL_WARNING(
+            NWB_TEXT("Vulkan: Cannot begin a timer query outside rendering on an exact physical queue without Graphics or Compute capability")
+        );
+        invalidateCommandRecording();
         return false;
     }
 
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_desc.physicalQueue);
     if(!queueInfo || queueInfo->timestampValidBits == 0u || queueInfo->timestampValidBits > 64u){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to begin timer query on a queue without timestamp support."));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to begin timer query on a queue without timestamp support"));
+        invalidateCommandRecording();
         return false;
     }
 
@@ -296,17 +343,13 @@ bool CommandList::beginTimerQuery(TimerQuery* queryResource){
 
 bool CommandList::endTimerQuery(TimerQuery* queryResource){
     auto* query = queryResource;
-    if(
-        !query
-        || query->m_queryPool == VK_NULL_HANDLE
-        || &query->m_context != &m_context
-        || !m_isRecording
-        || !m_currentCmdBuf
-        || m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to end timer query on an invalid command list or device."));
+    if(!query || query->m_queryPool == VK_NULL_HANDLE || &query->m_context != &m_context){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to end an invalid or foreign timer query"));
+        invalidateCommandRecording();
         return false;
     }
+    if(!validateCommandRecordingScope(NWB_TEXT("end timer query")))
+        return false;
 
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_desc.physicalQueue);
     if(
@@ -315,7 +358,8 @@ bool CommandList::endTimerQuery(TimerQuery* queryResource){
         || query->m_timestampValidBits == 0u
         || query->m_timestampValidBits != queueInfo->timestampValidBits
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to end timer query on a different physical queue."));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to end timer query on a different physical queue"));
+        invalidateCommandRecording();
         return false;
     }
 
@@ -325,6 +369,9 @@ bool CommandList::endTimerQuery(TimerQuery* queryResource){
 }
 
 void CommandList::beginMarker(const AStringView name){
+    if(!validateCommandRecordingScope(NWB_TEXT("begin command-list marker")))
+        return;
+
     ++m_markerDepth;
 
     const bool useDebugUtils = m_context.extensions.EXT_debug_utils;

@@ -10,6 +10,7 @@
 
 // DEBUG / TEST ONLY. Deliberately faults the GPU to exercise the device-lost -> GPU crash capture path.
 #include "backend.h"
+#include "device_detail.h"
 
 #include <core/common/log.h>
 
@@ -65,9 +66,16 @@ inline constexpr u32 s_FaultComputeSpirv[] = {
 void Device::debugTriggerGpuFault(const u64 faultDeviceAddress){
     using namespace __hidden_debug_gpu_fault;
 
-    Queue* const graphicsQueue = getQueue(CommandQueue::Graphics);
-    if(!graphicsQueue){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: [debug] GPU fault injection skipped; no graphics queue."));
+    const GpuPhysicalQueueTopology topology = getPhysicalQueueTopology();
+    const GpuPhysicalQueueId preferredComputeQueue = getPrimaryPhysicalQueue(CommandQueue::Compute);
+    const GpuPhysicalQueueInfo* const computeQueueInfo = VulkanDetail::SelectComputeCapableQueue(
+        topology.queues,
+        topology.queueCount,
+        preferredComputeQueue
+    );
+    Queue* const computeQueue = computeQueueInfo ? getQueue(computeQueueInfo->id) : nullptr;
+    if(!computeQueue){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: [debug] GPU fault injection skipped; no exact Compute-capable queue."));
         return;
     }
 
@@ -111,7 +119,7 @@ void Device::debugTriggerGpuFault(const u64 faultDeviceAddress){
 
     auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);
     poolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-    poolInfo.queueFamilyIndex = graphicsQueue->m_queueFamilyIndex;
+    poolInfo.queueFamilyIndex = computeQueue->m_queueFamilyIndex;
     if(vkCreateCommandPool(m_context.device, &poolInfo, m_context.allocationCallbacks, &commandPool) == VK_SUCCESS){
         auto allocInfo = VulkanDetail::MakeVkStruct<VkCommandBufferAllocateInfo>(VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO);
         allocInfo.commandPool = commandPool;
@@ -129,7 +137,7 @@ void Device::debugTriggerGpuFault(const u64 faultDeviceAddress){
             auto submitInfo = VulkanDetail::MakeVkStruct<VkSubmitInfo>(VK_STRUCTURE_TYPE_SUBMIT_INFO);
             submitInfo.commandBufferCount = 1;
             submitInfo.pCommandBuffers = &commandBuffer;
-            vkQueueSubmit(graphicsQueue->m_queue, 1, &submitInfo, VK_NULL_HANDLE);
+            vkQueueSubmit(computeQueue->m_queue, 1, &submitInfo, VK_NULL_HANDLE);
 
             // Block until the page fault trips device-lost; waitForIdle() captures the GPU crash and ships
             // the package (vendor-neutral report + Aftermath .nv-gpudmp) through the registered sink.

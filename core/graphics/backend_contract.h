@@ -131,7 +131,7 @@ concept DeviceApi = requires(
     { device.pollTimerQuery(timerQuery) }->SameAs<bool>;
     { device.getTimerQueryResult(timerQuery, timerQueryResult) }->SameAs<bool>;
     { device.getTimerQueryTime(timerQuery) }->SameAs<f32>;
-    device.resetTimerQuery(timerQuery);
+    { device.resetTimerQuery(timerQuery) }->SameAs<bool>;
 
     { device.createFramebuffer(framebufferDesc) }->SameAs<FramebufferHandle>;
     { device.createGraphicsPipeline(graphicsPipelineDesc, framebufferInfo) }->SameAs<GraphicsPipelineHandle>;

@@ -384,8 +384,13 @@ namespace GpuCommandIrReplayError{
         StreamChangedDuringReplay,
         UnsupportedDirectVulkanOpcode,
         DirectVulkanLoweringFailed,
+        CommandListRecordingFailed,
     };
 };
+
+static_assert(static_cast<u8>(GpuCommandIrReplayError::StreamChangedDuringReplay) == 24u);
+static_assert(static_cast<u8>(GpuCommandIrReplayError::DirectVulkanLoweringFailed) == 26u);
+static_assert(static_cast<u8>(GpuCommandIrReplayError::CommandListRecordingFailed) == 27u);
 
 struct GpuCommandIrReplayResult{
     GpuCommandIrReplayError::Enum error = GpuCommandIrReplayError::None;

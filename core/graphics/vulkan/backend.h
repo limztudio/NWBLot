@@ -826,10 +826,15 @@ public:
         VkSemaphore semaphore = VK_NULL_HANDLE;
         u64 value = 0u;
     };
+    struct SubmissionCommandListIdentity{
+        TrackedCommandBufferPtr owner;
+        u64 recordingLeaseSerial = 0u;
+    };
 
     u64 submit(
         CommandList* const* ppCmd,
         usize numCmd,
+        const SubmissionCommandListIdentity* expectedCommandLists = nullptr,
         const SubmissionWait* localWaits = nullptr,
         usize localWaitCount = 0u,
         bool* outSubmissionAccepted = nullptr,
@@ -2245,10 +2250,25 @@ public:
     // Final state snapshot follows keepInitialState restoration.
     void close(CommandListResourceStateHandoff* finalStates = nullptr);
     // False when no submit-ready command buffer is owned.
-    [[nodiscard]] bool hasCommandBuffer()const{ return m_currentCmdBuf != nullptr; }
+    [[nodiscard]] bool hasCommandBuffer()const{ return m_currentCmdBuf && m_currentCmdBuf->m_cmdBuf != VK_NULL_HANDLE; }
     // `hasCommandBuffer` remains true after close so queues can submit it. Tooling that emits commands must use
     // this predicate instead of treating ownership as an active recording scope.
     [[nodiscard]] bool isRecording()const noexcept{ return m_isRecording; }
+    // Sticky for the current open/close attempt. A failed native capability check invalidates the complete list;
+    // close discards its native buffer and open is the only operation that starts a fresh attempt.
+    [[nodiscard]] bool commandRecordingFailed()const noexcept{ return m_commandRecordingFailed; }
+    // Every open attempt starts a distinct native-buffer lease, including failed attempts. Packet recorders and
+    // replay tooling capture this serial before invoking extensible lowering and reject a thunk that closes or
+    // replaces the command buffer while claiming success.
+    [[nodiscard]] u64 recordingLeaseSerial()const noexcept{ return m_recordingLeaseSerial; }
+    [[nodiscard]] bool matchesRecordingLease(u64 serial)const noexcept{
+        return serial != 0u
+            && serial == m_recordingLeaseSerial
+            && m_isRecording
+            && m_currentCmdBuf
+            && m_currentCmdBuf->m_cmdBuf != VK_NULL_HANDLE
+        ;
+    }
     [[nodiscard]] bool isRenderPassActive()const noexcept{ return m_renderPassActive; }
     void clearState();
     void endRenderPass();
@@ -2353,6 +2373,7 @@ public:
     void convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs);
 
     void resetTimerQuery(TimerQuery* query);
+    [[nodiscard]] bool canRecordTimerQueryHere()const;
     [[nodiscard]] bool canResetTimerQueryHere()const;
     [[nodiscard]] bool beginTimerQuery(TimerQuery* query);
     [[nodiscard]] bool endTimerQuery(TimerQuery* query);
@@ -2362,8 +2383,9 @@ public:
 #if defined(NWB_DEBUG)
     // Task-graph recording opens one scope around each record thunk. Command methods report the capabilities they
     // actually consume so the packet recorder can reject a declaration that is incompatible with that task.
-    void beginTaskCapabilityTracking();
+    void beginTaskCapabilityTracking(GpuQueueCapability::Mask declaredCapabilities);
     [[nodiscard]] GpuQueueCapability::Mask endTaskCapabilityTracking();
+    void cancelTaskCapabilityTracking();
 #endif
 
     void setEnableUavBarriersForTexture(Texture* texture, bool enableBarriers);
@@ -2397,10 +2419,10 @@ private:
     bool ensureGraphicsRenderPass(Framebuffer* framebuffer);
     void endActiveRenderPass();
     void executePipelineBarrier(const VkDependencyInfo& depInfo);
-    [[nodiscard]] bool validateNonTransferCommand(const tchar* operationName)const;
-#if defined(NWB_DEBUG)
-    void recordTaskCapability(GpuQueueCapability::Mask capability)noexcept;
-#endif
+    [[nodiscard]] bool validateCommandRecordingScope(const tchar* operationName)noexcept;
+    [[nodiscard]] bool recordAndValidateCommandCapability(GpuQueueCapability::Mask requiredCapabilities, const tchar* operationName)noexcept;
+    [[nodiscard]] bool recordAndValidateAnyCommandCapability(GpuQueueCapability::Mask alternativeCapabilities, const tchar* operationName)noexcept;
+    void invalidateCommandRecording()noexcept;
     bool validateIndirectBuffer(Buffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const;
     bool prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, const tchar* operationLabel, const tchar* commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode, Buffer*& outIndirectBuffer)const;
     void clearColorTexture(Texture* textureResource, TextureSubresourceSet subresources, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
@@ -2436,12 +2458,15 @@ private:
     StateTracker m_stateTracker;
     bool m_enableAutomaticBarriers = true;
     bool m_isRecording = false;
+    bool m_commandRecordingFailed = false;
+    u64 m_recordingLeaseSerial = 0u;
     bool m_renderPassActive = false;
     bool m_descriptorBuffersBound = false;
     u32 m_markerDepth = 0u;
     Framebuffer* m_renderPassFramebuffer = nullptr;
 #if defined(NWB_DEBUG)
     GpuQueueCapability::Mask m_taskCapabilitiesUsed = GpuQueueCapability::None;
+    GpuQueueCapability::Mask m_taskDeclaredCapabilities = GpuQueueCapability::None;
     bool m_taskCapabilityTracking = false;
 #endif
 
@@ -2578,7 +2603,7 @@ public:
     bool pollTimerQuery(TimerQuery* query);
     [[nodiscard]] bool getTimerQueryResult(TimerQuery* query, TimerQueryResult& outResult);
     f32 getTimerQueryTime(TimerQuery* query);
-    void resetTimerQuery(TimerQuery* query);
+    bool resetTimerQuery(TimerQuery* query);
     [[nodiscard]] FramebufferHandle createFramebuffer(const FramebufferDesc& desc);
     [[nodiscard]] GraphicsPipelineHandle createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo);
     [[nodiscard]] ComputePipelineHandle createComputePipeline(const ComputePipelineDesc& desc);
@@ -2700,6 +2725,8 @@ public:
 #if !defined(NWB_FINAL)
     // Test-only validated-submit seams exercise production cleanup and retain the exact submission-local waits
     // received by Device after graph/runtime assembly.
+    [[nodiscard]] bool createSubmissionSignalForTesting(QueueSubmissionNativeSignal& outSignal);
+    void destroySubmissionSignalForTesting(QueueSubmissionNativeSignal& signal);
     void rejectNextSubmissionForTesting(CommandQueue::Enum queue);
     void clearSubmissionRejectionsForTesting();
     void clearSubmissionWaitTokensForTesting();

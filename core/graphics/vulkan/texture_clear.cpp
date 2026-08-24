@@ -35,9 +35,6 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
         return;
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear depth/stencil texture"), NWB_TEXT("texture is null"), textureResource))
         return;
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Graphics);
-#endif
 
     Texture& texture = *textureResource;
     if(!VulkanTextureDetail::ValidateTextureDepthStencilClearAspects(
@@ -50,6 +47,8 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSubresources, NWB_TEXT("clear depth/stencil texture")))
+        return;
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("clear depth/stencil texture")))
         return;
 
     VkClearDepthStencilValue clearValue{};
@@ -231,9 +230,6 @@ void CommandList::clearDepthStencilTextureBox(
     }
 
     if(m_renderPassActive || desc.sampleCount != 1u){
-#if defined(NWB_DEBUG)
-        recordTaskCapability(GpuQueueCapability::Graphics);
-#endif
         const Box resolvedBox = VulkanTextureDetail::ResolveTextureClearBox(desc, resolvedSubresources.baseMipLevel, box);
         if(VulkanTextureDetail::TextureClearBoxEmpty(resolvedBox))
             return;
@@ -244,6 +240,8 @@ void CommandList::clearDepthStencilTextureBox(
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: attachment bounded clears require the box to cover the full attachment depth"));
             return;
         }
+        if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("clear depth/stencil texture box as attachment")))
+            return;
 
         const Rect rect(resolvedBox.minX, resolvedBox.maxX, resolvedBox.minY, resolvedBox.maxY);
         if(clearActiveRenderPassDepthStencilTextureRect(texture, resolvedSubresources, rect, clearDepth, depth, clearStencil, stencil))
@@ -260,9 +258,6 @@ void CommandList::clearDepthStencilTextureBox(
     if(desc.dimension == TextureDimension::Texture3D)
         return;
 
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Transfer);
-#endif
     u8 depthPattern[VulkanTextureDetail::s_TextureClearDepthPatternBytes] = {};
     u32 depthPatternSize = 0u;
     if(clearDepth && !VulkanTextureDetail::BuildTextureDepthClearPattern(desc.format, depth, depthPattern, depthPatternSize)){
@@ -278,6 +273,8 @@ void CommandList::clearDepthStencilTextureBox(
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded stencil box clears do not support texture format"));
         return;
     }
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("clear depth/stencil texture box through staging")))
+        return;
 
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
 
@@ -476,18 +473,19 @@ void CommandList::clearColorTexture(
         return;
 
     if(m_renderPassActive){
-#if defined(NWB_DEBUG)
-        recordTaskCapability(GpuQueueCapability::Graphics);
-#endif
+        if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("clear color attachment")))
+            return;
         const Rect fullRect(0, Limit<i32>::s_Max, 0, Limit<i32>::s_Max);
         if(clearActiveRenderPassColorTextureRect(texture, resolvedSubresources, fullRect, clearValue, valueName))
             retainResource(textureResource);
         return;
     }
 
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Compute);
-#endif
+    constexpr GpuQueueCapability::Mask s_ColorClearCapabilities = static_cast<GpuQueueCapability::Mask>(
+        static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute)
+    );
+    if(!recordAndValidateAnyCommandCapability(s_ColorClearCapabilities, NWB_TEXT("clear color texture")))
+        return;
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
     if(texture.m_desc.dimension != TextureDimension::Texture3D && resolvedSubresources.numArraySlices > 1u){
         Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
@@ -545,9 +543,6 @@ void CommandList::clearColorTextureBox(
     }
 
     if(m_renderPassActive || desc.sampleCount != 1u){
-#if defined(NWB_DEBUG)
-        recordTaskCapability(GpuQueueCapability::Graphics);
-#endif
         const Box resolvedBox = VulkanTextureDetail::ResolveTextureClearBox(desc, resolvedSubresources.baseMipLevel, box);
         if(VulkanTextureDetail::TextureClearBoxEmpty(resolvedBox))
             return;
@@ -558,15 +553,14 @@ void CommandList::clearColorTextureBox(
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture box with {}: attachment bounded box clears must cover the full attachment depth"), valueName);
             return;
         }
+        if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("clear color texture box as attachment")))
+            return;
 
         if(clearActiveRenderPassColorTextureRect(texture, resolvedSubresources, Rect(resolvedBox.minX, resolvedBox.maxX, resolvedBox.minY, resolvedBox.maxY), clearValue, valueName))
             retainResource(textureResource);
         return;
     }
 
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Transfer);
-#endif
     u8 clearPattern[VulkanTextureDetail::s_TextureClearMaxPatternBytes] = {};
     u32 clearPatternSize = 0u;
     const bool patternReady = !integerValue
@@ -586,6 +580,8 @@ void CommandList::clearColorTextureBox(
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture box with {}: bounded texture box clears do not support texture format"), valueName);
         return;
     }
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("clear color texture box through staging")))
+        return;
 
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
 

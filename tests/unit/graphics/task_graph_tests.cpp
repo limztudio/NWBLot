@@ -13,6 +13,8 @@
 #include <core/graphics/task_graph/compiler.h>
 #include <core/graphics/task_graph/packet_runtime.h>
 #include <core/graphics/vulkan/backend.h>
+#include <core/graphics/vulkan/device_detail.h>
+#include <core/graphics/vulkan/state_tracking_detail.h>
 #include <core/telemetry/frame_graph_contributor.h>
 
 
@@ -515,6 +517,396 @@ static void WriteCommandIrPod(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(VulkanStateTracking, NormalizesBarrierScopesFromExactPhysicalQueueCapabilities){
+    const auto normalize = [](
+        const Graphics::GpuQueueCapability::Mask capabilities,
+        const VkPipelineStageFlags2 initialStage,
+        const VkAccessFlags2 initialAccess
+    ){
+        VkPipelineStageFlags2 stage = initialStage;
+        VkAccessFlags2 access = initialAccess;
+        Graphics::GraphicsBackend::VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(capabilities, stage, access);
+        return MakePair(stage, access);
+    };
+    const auto expectNormalized = [&normalize](
+        const Graphics::GpuQueueCapability::Mask capabilities,
+        const VkPipelineStageFlags2 initialStage,
+        const VkAccessFlags2 initialAccess,
+        const VkPipelineStageFlags2 expectedStage,
+        const VkAccessFlags2 expectedAccess
+    ){
+        const auto normalized = normalize(capabilities, initialStage, initialAccess);
+        EXPECT_EQ(normalized.first(), expectedStage);
+        EXPECT_EQ(normalized.second(), expectedAccess);
+    };
+    const Graphics::GpuQueueCapability::Mask graphicsCompute = QueueCapabilities(
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueueCapability::Compute
+    );
+
+    expectNormalized(
+        graphicsCompute,
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_2_SHADER_READ_BIT,
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_2_SHADER_READ_BIT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Graphics,
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_NONE,
+        0u
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Graphics,
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_NONE,
+        0u
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Graphics,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Graphics,
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_NONE,
+        0u
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Graphics,
+        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Graphics,
+        VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT,
+        VK_ACCESS_2_INDEX_READ_BIT | VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
+        VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT,
+        VK_ACCESS_2_INDEX_READ_BIT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Graphics,
+        VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT,
+        VK_ACCESS_2_INDEX_READ_BIT | VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
+        VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT,
+        VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Compute,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Transfer,
+        VK_PIPELINE_STAGE_2_COPY_BIT,
+        VK_ACCESS_2_TRANSFER_READ_BIT,
+        VK_PIPELINE_STAGE_2_COPY_BIT,
+        VK_ACCESS_2_TRANSFER_READ_BIT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Transfer,
+        VK_PIPELINE_STAGE_2_COPY_BIT,
+        VK_ACCESS_2_TRANSFER_READ_BIT | VK_ACCESS_2_SHADER_READ_BIT,
+        VK_PIPELINE_STAGE_2_COPY_BIT,
+        VK_ACCESS_2_TRANSFER_READ_BIT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Transfer,
+        VK_PIPELINE_STAGE_2_CLEAR_BIT,
+        VK_ACCESS_2_TRANSFER_READ_BIT,
+        VK_PIPELINE_STAGE_2_NONE,
+        0u
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Transfer,
+        VK_PIPELINE_STAGE_2_CLEAR_BIT,
+        VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_CLEAR_BIT,
+        VK_ACCESS_2_TRANSFER_WRITE_BIT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Transfer,
+        VK_PIPELINE_STAGE_2_CONVERT_COOPERATIVE_VECTOR_MATRIX_BIT_NV,
+        VK_ACCESS_2_TRANSFER_READ_BIT,
+        VK_PIPELINE_STAGE_2_CONVERT_COOPERATIVE_VECTOR_MATRIX_BIT_NV,
+        VK_ACCESS_2_TRANSFER_READ_BIT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Transfer,
+        VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR,
+        VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
+        VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR,
+        VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Transfer,
+        VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_COPY_BIT_KHR,
+        VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR
+            | VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR
+            | VK_ACCESS_2_TRANSFER_READ_BIT,
+        VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_COPY_BIT_KHR,
+        VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR
+            | VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR
+            | VK_ACCESS_2_TRANSFER_READ_BIT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Compute,
+        VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+        VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_2_TRANSFER_READ_BIT,
+        VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+        VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_2_TRANSFER_READ_BIT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Compute,
+        VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+        VK_ACCESS_2_SHADER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_NONE,
+        0u
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Graphics,
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Graphics,
+        VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+        VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+        VK_PIPELINE_STAGE_2_NONE,
+        0u
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Graphics,
+        VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+        VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+        VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+        VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Compute,
+        VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT,
+        VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_TRANSFER_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT,
+        VK_ACCESS_2_SHADER_READ_BIT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Compute,
+        VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT,
+        VK_ACCESS_2_SHADER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_NONE,
+        0u
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Compute,
+        VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+        VK_ACCESS_2_MICROMAP_READ_BIT_EXT | VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT,
+        VK_PIPELINE_STAGE_2_NONE,
+        0u
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Compute,
+        VK_PIPELINE_STAGE_2_CONDITIONAL_RENDERING_BIT_EXT,
+        VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT,
+        VK_PIPELINE_STAGE_2_CONDITIONAL_RENDERING_BIT_EXT,
+        VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Graphics,
+        VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+        VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT,
+        VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+        VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Graphics,
+        VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+        VK_ACCESS_2_INVOCATION_MASK_READ_BIT_HUAWEI,
+        VK_PIPELINE_STAGE_2_NONE,
+        0u
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Graphics,
+        VK_PIPELINE_STAGE_2_INVOCATION_MASK_BIT_HUAWEI,
+        VK_ACCESS_2_INVOCATION_MASK_READ_BIT_HUAWEI,
+        VK_PIPELINE_STAGE_2_INVOCATION_MASK_BIT_HUAWEI,
+        VK_ACCESS_2_INVOCATION_MASK_READ_BIT_HUAWEI
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Compute,
+        VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+        VK_ACCESS_2_MEMORY_DECOMPRESSION_READ_BIT_EXT,
+        VK_PIPELINE_STAGE_2_NONE,
+        0u
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Compute,
+        VK_PIPELINE_STAGE_2_MEMORY_DECOMPRESSION_BIT_EXT,
+        VK_ACCESS_2_MEMORY_DECOMPRESSION_READ_BIT_EXT | VK_ACCESS_2_MEMORY_DECOMPRESSION_WRITE_BIT_EXT,
+        VK_PIPELINE_STAGE_2_MEMORY_DECOMPRESSION_BIT_EXT,
+        VK_ACCESS_2_MEMORY_DECOMPRESSION_READ_BIT_EXT | VK_ACCESS_2_MEMORY_DECOMPRESSION_WRITE_BIT_EXT
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Graphics,
+        VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR | VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT,
+        VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT,
+        VK_PIPELINE_STAGE_2_NONE,
+        0u
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::Transfer,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+        VK_PIPELINE_STAGE_2_NONE,
+        0u
+    );
+    expectNormalized(
+        Graphics::GpuQueueCapability::None,
+        VK_PIPELINE_STAGE_2_COPY_BIT,
+        VK_ACCESS_2_TRANSFER_READ_BIT,
+        VK_PIPELINE_STAGE_2_NONE,
+        0u
+    );
+}
+
+TEST(VulkanDevice, SelectsAnExactComputeCapableQueueForGpuFaultInjection){
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(
+            0u,
+            QueueCapabilities(Graphics::GpuQueueCapability::Graphics, Graphics::GpuQueueCapability::Transfer)
+        ),
+        DedicatedComputeQueue(1u),
+        GraphicsQueue(
+            2u,
+            QueueCapabilities(
+                Graphics::GpuQueueCapability::Graphics,
+                Graphics::GpuQueueCapability::Compute,
+                Graphics::GpuQueueCapability::Transfer
+            )
+        ),
+    };
+    const Graphics::GpuPhysicalQueueInfo* selected =
+        Graphics::GraphicsBackend::VulkanDetail::SelectComputeCapableQueue(
+            queues,
+            LengthOf(queues),
+            queues[2u].id
+        )
+    ;
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->id, queues[2u].id);
+
+    selected = Graphics::GraphicsBackend::VulkanDetail::SelectComputeCapableQueue(
+        queues,
+        LengthOf(queues),
+        queues[0u].id
+    );
+    ASSERT_NE(selected, nullptr);
+    EXPECT_EQ(selected->id, queues[1u].id);
+
+    const Graphics::GpuPhysicalQueueInfo graphicsOnly[] = { queues[0u] };
+    EXPECT_EQ(
+        Graphics::GraphicsBackend::VulkanDetail::SelectComputeCapableQueue(
+            graphicsOnly,
+            LengthOf(graphicsOnly),
+            graphicsOnly[0u].id
+        ),
+        nullptr
+    );
+}
+
+TEST(VulkanDevice, MatchesExactCommandListSubmissionQueueIdentity){
+    using Graphics::GraphicsBackend::VulkanDetail::SubmissionCommandListMatchesExecutionQueue;
+
+    constexpr Graphics::GpuPhysicalQueueId s_ExactQueue{ 3u, 7u };
+    constexpr Graphics::GpuPhysicalQueueId s_OtherIndex{ 4u, 7u };
+    constexpr Graphics::GpuPhysicalQueueId s_OtherGeneration{ 3u, 8u };
+    constexpr Graphics::CommandListParameters s_CommandList{
+        .queueType = Graphics::CommandQueue::Graphics,
+        .physicalQueue = s_ExactQueue,
+    };
+    EXPECT_TRUE(SubmissionCommandListMatchesExecutionQueue(
+        s_CommandList,
+        s_ExactQueue,
+        Graphics::CommandQueue::Graphics
+    ));
+    EXPECT_FALSE(SubmissionCommandListMatchesExecutionQueue(
+        s_CommandList,
+        s_OtherIndex,
+        Graphics::CommandQueue::Graphics
+    ));
+    EXPECT_FALSE(SubmissionCommandListMatchesExecutionQueue(
+        s_CommandList,
+        s_OtherGeneration,
+        Graphics::CommandQueue::Graphics
+    ));
+    EXPECT_FALSE(SubmissionCommandListMatchesExecutionQueue(
+        s_CommandList,
+        s_ExactQueue,
+        Graphics::CommandQueue::Compute
+    ));
+    EXPECT_FALSE(SubmissionCommandListMatchesExecutionQueue(
+        Graphics::CommandListParameters{},
+        s_ExactQueue,
+        Graphics::CommandQueue::Graphics
+    ));
+}
+
+TEST(VulkanStateTracking, MapsAccelerationStructureBuildInputsAndReadScopesExactly){
+    using Graphics::GraphicsBackend::VulkanDetail::GetVkAccessFlags;
+    using Graphics::GraphicsBackend::VulkanDetail::GetVkPipelineStageFlags;
+
+    EXPECT_EQ(
+        GetVkAccessFlags(Graphics::ResourceStates::AccelStructBuildInput),
+        VK_ACCESS_2_SHADER_READ_BIT
+    );
+    EXPECT_EQ(
+        GetVkAccessFlags(Graphics::ResourceStates::OpacityMicromapBuildInput),
+        VK_ACCESS_2_SHADER_READ_BIT
+    );
+    EXPECT_EQ(
+        GetVkPipelineStageFlags(Graphics::ResourceStates::AccelStructBuildInput, false),
+        VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
+    );
+    EXPECT_EQ(
+        GetVkPipelineStageFlags(Graphics::ResourceStates::OpacityMicromapBuildInput, false),
+        VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT
+    );
+    constexpr VkPipelineStageFlags2 s_AccelStructReadStages =
+        VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
+        | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
+    ;
+    EXPECT_EQ(
+        GetVkPipelineStageFlags(Graphics::ResourceStates::AccelStructRead, false),
+        s_AccelStructReadStages
+    );
+    EXPECT_EQ(
+        GetVkPipelineStageFlags(Graphics::ResourceStates::AccelStructRead, true),
+        s_AccelStructReadStages | VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR
+    );
+    EXPECT_EQ(
+        GetVkPipelineStageFlags(Graphics::ResourceStates::AccelStructWrite, true),
+        VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
+    );
+    EXPECT_EQ(
+        GetVkPipelineStageFlags(Graphics::ResourceStates::AccelStructBuildBlas, true),
+        VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
+    );
+}
 
 
 TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
@@ -3924,11 +4316,7 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
     ASSERT_TRUE(colorTask.valid());
     EXPECT_EQ(
         colorGraph.taskAt(colorTask.index).queue.requiredCapabilities,
-        QueueCapabilities(
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueueCapability::Compute,
-            Graphics::GpuQueueCapability::Graphics
-        )
+        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
     );
 
     Graphics::GpuClearTextureRectUIntTaskDesc colorRectClear;
@@ -3947,11 +4335,29 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
     ASSERT_TRUE(colorRectTask.valid());
     EXPECT_EQ(
         colorGraph.taskAt(colorRectTask.index).queue.requiredCapabilities,
-        QueueCapabilities(
-            Graphics::GpuQueueCapability::Transfer,
-            Graphics::GpuQueueCapability::Compute,
-            Graphics::GpuQueueCapability::Graphics
-        )
+        Graphics::GpuQueueCapability::Transfer
+    );
+
+    Graphics::GpuTaskGraph rectGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId rectResource = rectGraph.importTexture(
+        colorTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/rect_clear_color"))
+            .setMarkerLabel("Rect Clear Color")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    ASSERT_TRUE(rectResource.valid());
+    Graphics::GpuClearTextureRectUIntTaskDesc isolatedRectClear = colorRectClear;
+    isolatedRectClear.destination = rectResource;
+    const Graphics::GpuTaskId isolatedRectTask = rectGraph.addClearTextureRectUIntTask(
+        rectTransferDesc,
+        isolatedRectClear
+    );
+    ASSERT_TRUE(isolatedRectTask.valid());
+    EXPECT_EQ(
+        rectGraph.taskAt(isolatedRectTask.index).queue.requiredCapabilities,
+        Graphics::GpuQueueCapability::Transfer
     );
 
     Graphics::GpuTaskGraph depthGraph(testArena.arena);
@@ -4008,12 +4414,174 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
     };
 
     expectCompileRejected(colorGraph, DedicatedTransferQueue());
-    expectCompileRejected(colorGraph, DedicatedComputeQueue());
+    expectCompiledOn(colorGraph, colorTask, DedicatedComputeQueue(), Graphics::CommandQueue::Compute);
+    expectCompiledOn(colorGraph, colorRectTask, DedicatedComputeQueue(), Graphics::CommandQueue::Compute);
     expectCompiledOn(colorGraph, colorTask, GraphicsQueue(), Graphics::CommandQueue::Graphics);
     expectCompiledOn(colorGraph, colorRectTask, GraphicsQueue(), Graphics::CommandQueue::Graphics);
+    expectCompiledOn(rectGraph, isolatedRectTask, DedicatedTransferQueue(), Graphics::CommandQueue::Transfer);
     expectCompileRejected(depthGraph, DedicatedTransferQueue());
     expectCompileRejected(depthGraph, DedicatedComputeQueue());
     expectCompiledOn(depthGraph, depthTask, GraphicsQueue(), Graphics::CommandQueue::Graphics);
+}
+
+TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapabilities){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+    const auto createTexture = [&](const Graphics::TextureDesc& sourceDescription){
+        Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+            testArena.arena,
+            context,
+            allocator
+        );
+        if(!textureObject)
+            return Graphics::TextureHandle{};
+
+        Graphics::TextureHandle texture(
+            textureObject,
+            Graphics::TextureHandle::deleter_type(&testArena.arena),
+            AdoptRef
+        );
+        Graphics::TextureDesc& destinationDescription = const_cast<Graphics::TextureDesc&>(
+            texture->getDescription()
+        );
+        destinationDescription = sourceDescription;
+        return texture;
+    };
+
+    Graphics::GpuTaskDesc transferDesc;
+    transferDesc
+        .setIdentity(Name("tests/task_graph/depth_upload_exact_queue"))
+        .setMarkerLabel("Depth Upload Exact Queue")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+
+    Graphics::TextureDesc uploadDescription = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Graphics::Format::D32)
+        .setInitialState(Graphics::ResourceStates::CopyDest)
+    ;
+    Graphics::TextureHandle uploadTexture = createTexture(uploadDescription);
+    ASSERT_TRUE(uploadTexture);
+    Graphics::GpuTaskGraph uploadGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId uploadDestination = uploadGraph.importTexture(
+        uploadTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/depth_upload_destination"))
+            .setMarkerLabel("Depth Upload Destination")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    ASSERT_TRUE(uploadDestination.valid());
+    const u32 uploadTexels[16u]{};
+    const Graphics::GpuUploadBlobId uploadSource = uploadGraph.copyUploadData(
+        uploadTexels,
+        sizeof(uploadTexels),
+        alignof(u32)
+    );
+    ASSERT_TRUE(uploadSource.valid());
+    const Graphics::GpuTaskId uploadTask = uploadGraph.addUploadTextureTask(
+        transferDesc,
+        Graphics::GpuUploadTextureTaskDesc{
+            .source = uploadSource,
+            .destination = uploadDestination,
+            .finalState = Graphics::ResourceStates::CopyDest,
+        }
+    );
+    ASSERT_TRUE(uploadTask.valid());
+    EXPECT_EQ(
+        uploadGraph.taskAt(uploadTask.index).queue.requiredCapabilities,
+        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+    );
+
+    Graphics::TextureDesc multisampleDescription = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setSampleCount(4u)
+        .setFormat(Graphics::Format::D32)
+        .setInitialState(Graphics::ResourceStates::CopySource)
+    ;
+    Graphics::TextureHandle copySourceTexture = createTexture(multisampleDescription);
+    multisampleDescription.setInitialState(Graphics::ResourceStates::CopyDest);
+    Graphics::TextureHandle copyDestinationTexture = createTexture(multisampleDescription);
+    ASSERT_TRUE(copySourceTexture);
+    ASSERT_TRUE(copyDestinationTexture);
+    Graphics::GpuTaskGraph copyGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId copySource = copyGraph.importTexture(
+        copySourceTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/multisample_depth_copy_source"))
+            .setMarkerLabel("Multisample Depth Copy Source")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopySource)
+    );
+    const Graphics::GpuGraphResourceId copyDestination = copyGraph.importTexture(
+        copyDestinationTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/multisample_depth_copy_destination"))
+            .setMarkerLabel("Multisample Depth Copy Destination")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    ASSERT_TRUE(copySource.valid());
+    ASSERT_TRUE(copyDestination.valid());
+    const Graphics::GpuCopyTextureTaskRegion copyRegion{
+        .source = copySource,
+        .sourceSlice = {},
+        .destination = copyDestination,
+        .destinationSlice = {},
+    };
+    Graphics::GpuTaskDesc copyTaskDesc = transferDesc;
+    copyTaskDesc
+        .setIdentity(Name("tests/task_graph/multisample_depth_copy_exact_queue"))
+        .setMarkerLabel("Multisample Depth Copy Exact Queue")
+    ;
+    const Graphics::GpuTaskId copyTask = copyGraph.addCopyTextureTask(
+        copyTaskDesc,
+        Graphics::GpuCopyTextureTaskDesc{
+            .regions = &copyRegion,
+            .regionCount = 1u,
+        }
+    );
+    ASSERT_TRUE(copyTask.valid());
+    EXPECT_EQ(
+        copyGraph.taskAt(copyTask.index).queue.requiredCapabilities,
+        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+    );
+
+    const auto expectCompiledOn = [&](
+        const Graphics::GpuTaskGraph& graph,
+        const Graphics::GpuTaskId task,
+        const Graphics::GpuPhysicalQueueInfo& queue,
+        const bool expected
+    ){
+        const Graphics::GpuPhysicalQueueInfo queues[] = { queue };
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = queues,
+            .queueCount = LengthOf(queues),
+        };
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        EXPECT_EQ(Compile(graph, analysis, topology, assignments, compiledGraph), expected);
+        if(expected){
+            const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
+            ASSERT_NE(assignment, nullptr);
+            EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
+        }
+    };
+    expectCompiledOn(uploadGraph, uploadTask, DedicatedTransferQueue(), false);
+    expectCompiledOn(uploadGraph, uploadTask, GraphicsQueue(), true);
+    expectCompiledOn(copyGraph, copyTask, DedicatedTransferQueue(), false);
+    expectCompiledOn(copyGraph, copyTask, GraphicsQueue(), true);
 }
 
 TEST(GpuTaskGraph, CopyBufferTaskRequiresTypedBufferImports){

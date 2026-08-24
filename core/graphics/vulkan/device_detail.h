@@ -65,6 +65,42 @@ inline constexpr AStringView s_PipelineCacheVolumeName = "runtime_pipeline_cache
     return static_cast<GpuQueueCapability::Mask>(capabilities);
 }
 
+[[nodiscard]] inline constexpr bool SubmissionCommandListMatchesExecutionQueue(
+    const CommandListParameters& commandList,
+    const GpuPhysicalQueueId& executionQueue,
+    const CommandQueue::Enum executionQueueClass
+)noexcept{
+    return
+        executionQueue.valid()
+        && commandList.physicalQueue.valid()
+        && executionQueueClass < CommandQueue::kCount
+        && commandList.queueType == executionQueueClass
+        && commandList.physicalQueue == executionQueue
+    ;
+}
+
+[[nodiscard]] inline const GpuPhysicalQueueInfo* SelectComputeCapableQueue(
+    const GpuPhysicalQueueInfo* const queues,
+    const usize queueCount,
+    const GpuPhysicalQueueId& preferredQueue
+)noexcept{
+    if(!queues || queueCount == 0u)
+        return nullptr;
+
+    const auto supportsCompute = [](const GpuPhysicalQueueInfo& queue){
+        return (static_cast<u8>(queue.capabilities) & static_cast<u8>(GpuQueueCapability::Compute)) != 0u;
+    };
+    for(usize queueIndex = 0u; queueIndex < queueCount; ++queueIndex){
+        if(queues[queueIndex].id == preferredQueue && supportsCompute(queues[queueIndex]))
+            return &queues[queueIndex];
+    }
+    for(usize queueIndex = 0u; queueIndex < queueCount; ++queueIndex){
+        if(supportsCompute(queues[queueIndex]))
+            return &queues[queueIndex];
+    }
+    return nullptr;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

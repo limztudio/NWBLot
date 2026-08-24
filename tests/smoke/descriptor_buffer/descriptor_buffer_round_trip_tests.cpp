@@ -136,6 +136,7 @@ private:
 
 // Keep an unavailable validation layer as a GPU-optional test condition. BackendContext correctly reports a
 // missing required layer as an error, but that debug diagnostic breaks before Google Test can turn it into a skip.
+#if !defined(NWB_FINAL)
 [[nodiscard]] static bool HasKhronosValidationLayer(){
     if(volkInitialize() != VK_SUCCESS)
         return false;
@@ -155,6 +156,7 @@ private:
     }
     return false;
 }
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -180,6 +182,7 @@ public:
     // SKIPS in that case rather than failing — a CI runner without a GPU or validation layer is an environment
     // condition.
     [[nodiscard]] bool initialize(){
+#if !defined(NWB_FINAL)
         // The graph smoke paths must be validation-backed. This configuration is owned by each Graphics instance
         // and must precede createHeadlessDevice(), which creates the Vulkan instance and enables
         // VK_LAYER_KHRONOS_validation.
@@ -187,6 +190,7 @@ public:
             return false;
         if(!m_graphics.setDebugRuntimeEnabled(true))
             return false;
+#endif
         if(!m_graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()))
             return false;
         return m_graphics.createHeadlessDevice();
@@ -324,7 +328,9 @@ struct FrameCpuTimingCallbackState{
 
 TEST_F(DescriptorBufferRoundTripTest, FramePublishesMainThreadCpuTimingScopes){
     Frame frame(nullptr, 1u, 1u);
+#if !defined(NWB_FINAL)
     ASSERT_TRUE(frame.graphics().setDebugRuntimeEnabled(true));
+#endif
     ASSERT_TRUE(frame.graphics().setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()));
     if(!frame.graphics().createHeadlessDevice())
         GTEST_SKIP() << "Frame CPU timing: no usable headless Vulkan device on this host.";
@@ -4026,6 +4032,127 @@ struct NativePacketComputeCapabilityMismatchTask{
 };
 
 
+// These operations deliberately have no valid native body on a Transfer-only physical queue. Setup-only state is
+// important because no later dispatch can retroactively expose it, while the terminal dispatch proves Final builds
+// reject the command before Vulkan sees a compute opcode without an active pipeline.
+struct NativePacketExactTransferCapabilityMismatchTask{
+    enum class Operation : u8{
+        SetComputeState,
+        Dispatch,
+    };
+
+    struct Payload{
+        Operation operation = Operation::SetComputeState;
+        bool* attempted = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(payload.attempted)
+            *payload.attempted = true;
+
+        switch(payload.operation){
+        case Operation::SetComputeState:
+            commandList.setComputeState(ComputeState{});
+            return true;
+        case Operation::Dispatch:
+            commandList.dispatch(1u, 1u, 1u);
+            return true;
+        default:
+            return false;
+        }
+    }
+};
+
+
+// A task thunk is not allowed to replace or end the recorder-owned native command-buffer lease. Both variants
+// return success deliberately so the packet boundary, rather than the task result, must reject the recording.
+struct NativePacketRecordingBoundaryViolationTask{
+    enum class Operation : u8{
+        Close,
+        CloseAndOpen,
+    };
+
+    struct Payload{
+        Operation operation = Operation::Close;
+        bool* attempted = nullptr;
+        u32* discardedCount = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(payload.attempted)
+            *payload.attempted = true;
+
+        commandList.close();
+        if(payload.operation == Operation::CloseAndOpen)
+            commandList.open();
+        return true;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.discardedCount)
+            ++*payload.discardedCount;
+    }
+};
+
+
+struct NativePacketSubmissionHookObserver{
+    u32 invocationCount = 0u;
+};
+
+[[nodiscard]] static bool RejectNativePacketSubmissionHook(
+    void* const rawContext,
+    const GpuPhysicalQueueId& executionQueue,
+    QueueSubmissionNativeSignal& outSignal
+){
+    NativePacketSubmissionHookObserver* const context =
+        static_cast<NativePacketSubmissionHookObserver*>(rawContext)
+    ;
+    if(!context || !executionQueue.valid())
+        return false;
+    ++context->invocationCount;
+    outSignal = {};
+    return false;
+}
+
+
+#if !defined(NWB_FINAL)
+struct NativePacketSubmissionLeaseMutationContext{
+    CommandList* commandList = nullptr;
+    QueueSubmissionNativeSignal signal;
+    u32 invocationCount = 0u;
+};
+
+[[nodiscard]] static bool ReplaceNativePacketSubmissionLease(
+    void* const rawContext,
+    const GpuPhysicalQueueId& executionQueue,
+    QueueSubmissionNativeSignal& outSignal
+){
+    NativePacketSubmissionLeaseMutationContext* const context =
+        static_cast<NativePacketSubmissionLeaseMutationContext*>(rawContext)
+    ;
+    if(!context || !context->commandList || !executionQueue.valid() || !context->signal.valid())
+        return false;
+
+    ++context->invocationCount;
+    context->commandList->close();
+    context->commandList->open();
+    context->commandList->close();
+    outSignal = context->signal;
+    return true;
+}
+#endif
+
+
 // The probe observes a graph-owned entry state, then can deliberately perform a task-local transition. That lets
 // the smoke test prove the terminal export reasserts its contract after native task-local state work.
 struct NativePacketExternalFinalTextureProbeTask{
@@ -4133,6 +4260,773 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecorderRejectsCommandsOutside
     EXPECT_TRUE(attempted);
     EXPECT_EQ(recordedGraph.find(packet), nullptr);
 #endif
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, NativePacketRecorderRejectsComputeSetupAndDispatchOnExactTransferQueueInAllBuilds){
+    HeadlessGraphicsScope transferScope;
+    ASSERT_TRUE(transferScope.setTransferQueueEnabled(true));
+    if(!transferScope.initialize())
+        GTEST_SKIP() << "Exact capability validation: no usable dedicated-transfer headless Vulkan device on this host.";
+
+    auto& device = transferScope.graphics().getDevice();
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+
+    const GpuPhysicalQueueInfo* transferOnlyQueue = nullptr;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+        const u8 capabilityBits = static_cast<u8>(candidate.capabilities);
+        if(
+            candidate.queueClass == CommandQueue::Transfer
+            && (capabilityBits & static_cast<u8>(GpuQueueCapability::Transfer)) != 0u
+            && (capabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) == 0u
+            && (capabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) == 0u
+        ){
+            transferOnlyQueue = &candidate;
+            break;
+        }
+    }
+    if(!transferOnlyQueue)
+        GTEST_SKIP() << "Exact capability validation: adapter exposes no physical Transfer-only queue.";
+
+    struct Case{
+        NativePacketExactTransferCapabilityMismatchTask::Operation operation;
+        const char* identity;
+        const char* label;
+    };
+    const Case cases[] = {
+        {
+            NativePacketExactTransferCapabilityMismatchTask::Operation::SetComputeState,
+            "tests/descriptor_buffer/exact_transfer_set_compute_state",
+            "Exact Transfer Set Compute State",
+        },
+        {
+            NativePacketExactTransferCapabilityMismatchTask::Operation::Dispatch,
+            "tests/descriptor_buffer/exact_transfer_dispatch",
+            "Exact Transfer Dispatch",
+        },
+    };
+
+    for(const Case& testCase : cases){
+        SCOPED_TRACE(testCase.label);
+        GpuTaskGraph graph(transferScope.arena());
+        bool attempted = false;
+        GpuTaskSchedulingHint scheduling;
+        scheduling.forceSubmissionBoundary = true;
+        scheduling.allowPacketMerge = false;
+        GpuTaskDesc taskDesc;
+        taskDesc
+            .setIdentity(Name(testCase.identity))
+            .setMarkerLabel(testCase.label)
+            .setQueue(GpuQueueRequest{
+                GpuQueueCapability::Transfer,
+                GpuQueuePreference::Transfer,
+                false,
+                false,
+            })
+            .setScheduling(scheduling)
+        ;
+        const GpuTaskId task = graph.addTask<NativePacketExactTransferCapabilityMismatchTask>(
+            taskDesc,
+            NativePacketExactTransferCapabilityMismatchTask::Payload{
+                .operation = testCase.operation,
+                .attempted = &attempted,
+            }
+        );
+        ASSERT_TRUE(task.valid());
+
+        GpuTaskGraphAnalysis analysis(transferScope.arena());
+        GpuTaskGraphQueueAssignments assignments(transferScope.arena());
+        GpuCompiledGraph compiledGraph(transferScope.arena());
+        Alloc::ScratchArena scratchArena(Name(testCase.identity));
+        const GpuTaskGraphCompiler compiler;
+        ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+
+        const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+        ASSERT_TRUE(packet.valid());
+        const GpuPhysicalQueueInfo* const assignedQueue = compiledGraph.queueInfo(compiledGraph.packet(packet).queue);
+        ASSERT_NE(assignedQueue, nullptr);
+        const u8 assignedCapabilityBits = static_cast<u8>(assignedQueue->capabilities);
+        EXPECT_TRUE(assignedQueue->id.valid());
+        EXPECT_TRUE(device.matchesPhysicalQueueIdentity(assignedQueue->id));
+        EXPECT_EQ(assignedQueue->queueClass, CommandQueue::Transfer);
+        EXPECT_TRUE(assignedQueue->dedicated);
+        EXPECT_NE(assignedCapabilityBits & static_cast<u8>(GpuQueueCapability::Transfer), 0u);
+        EXPECT_EQ(assignedCapabilityBits & static_cast<u8>(GpuQueueCapability::Graphics), 0u);
+        EXPECT_EQ(assignedCapabilityBits & static_cast<u8>(GpuQueueCapability::Compute), 0u);
+
+        GpuRecordedGraph recordedGraph(transferScope.arena());
+        const GpuNativePacketRecorder recorder(device);
+        EXPECT_FALSE(recorder.recordPacket(
+            graph,
+            compiledGraph,
+            GpuNativePacketRecordDesc{ .packet = packet },
+            recordedGraph
+        ));
+        EXPECT_TRUE(attempted);
+        EXPECT_EQ(recordedGraph.find(packet), nullptr);
+
+        GpuGraphSubmissionTransaction transaction(transferScope.arena());
+        transaction.reset(compiledGraph);
+        EXPECT_FALSE(transaction.hasAcceptedPackets());
+        EXPECT_FALSE(transaction.packetToken(packet).valid());
+    }
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, TimerQueryResetRejectsExactTransferQueueAndOptionalTimingSkipsIt){
+    HeadlessGraphicsScope transferScope;
+    ASSERT_TRUE(transferScope.setTransferQueueEnabled(true));
+    if(!transferScope.initialize())
+        GTEST_SKIP() << "Timer-query exact capability validation: no usable dedicated-transfer headless Vulkan device on this host.";
+
+    auto& graphics = transferScope.graphics();
+    auto& device = graphics.getDevice();
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueInfo* transferOnlyQueue = nullptr;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+        const u8 capabilityBits = static_cast<u8>(candidate.capabilities);
+        if(
+            candidate.queueClass == CommandQueue::Transfer
+            && (capabilityBits & static_cast<u8>(GpuQueueCapability::Transfer)) != 0u
+            && (capabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) == 0u
+            && (capabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) == 0u
+        ){
+            transferOnlyQueue = &candidate;
+            break;
+        }
+    }
+    if(!transferOnlyQueue)
+        GTEST_SKIP() << "Timer-query exact capability validation: adapter exposes no physical Transfer-only queue.";
+
+    auto query = device.createTimerQuery();
+    ASSERT_NE(query.get(), nullptr);
+    CommandListParameters transferParameters;
+    transferParameters.setPhysicalQueue(transferOnlyQueue->id);
+
+    auto resetCommandList = device.createCommandList(transferParameters);
+    ASSERT_NE(resetCommandList.get(), nullptr);
+    resetCommandList->open();
+    EXPECT_FALSE(resetCommandList->canResetTimerQueryHere());
+    resetCommandList->resetTimerQuery(query.get());
+    EXPECT_TRUE(resetCommandList->commandRecordingFailed());
+    resetCommandList->close();
+    EXPECT_FALSE(resetCommandList->hasCommandBuffer());
+
+    auto beginCommandList = device.createCommandList(transferParameters);
+    ASSERT_NE(beginCommandList.get(), nullptr);
+    beginCommandList->open();
+    EXPECT_FALSE(beginCommandList->beginTimerQuery(query.get()));
+    EXPECT_TRUE(beginCommandList->commandRecordingFailed());
+    beginCommandList->close();
+    EXPECT_FALSE(beginCommandList->hasCommandBuffer());
+
+    auto& timing = graphics.gpuTiming();
+    transferScope.setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_TimerQueryUnsupportedQueueScope.identity, device, 1u));
+    timing.beginFrame(251u);
+    GpuTimingFrameTransaction transaction(timing);
+    GpuTimingSubmissionTicket ticket(timing);
+    auto optionalTimingCommandList = device.createCommandList(transferParameters);
+    ASSERT_NE(optionalTimingCommandList.get(), nullptr);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(ticket);
+        optionalTimingCommandList->open();
+        timing.recordFrameReset(*optionalTimingCommandList);
+        EXPECT_FALSE(optionalTimingCommandList->commandRecordingFailed());
+        EXPECT_TRUE(transaction.begin(s_TimerQueryUnsupportedQueueScope, device, *optionalTimingCommandList));
+        EXPECT_FALSE(transaction.needsRetirement());
+        EXPECT_TRUE(transaction.recordEnd(*optionalTimingCommandList));
+        EXPECT_FALSE(optionalTimingCommandList->commandRecordingFailed());
+        optionalTimingCommandList->close();
+    }
+    EXPECT_TRUE(optionalTimingCommandList->hasCommandBuffer());
+
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueInfo* const graphicsQueueInfo = device.getPhysicalQueueInfo(graphicsQueue);
+    ASSERT_NE(graphicsQueueInfo, nullptr);
+    if(graphicsQueueInfo->timestampValidBits != 0u){
+        CommandListParameters graphicsParameters;
+        graphicsParameters.setPhysicalQueue(graphicsQueue);
+        auto graphicsCommandList = device.createCommandList(graphicsParameters);
+        ASSERT_NE(graphicsCommandList.get(), nullptr);
+        graphicsCommandList->open();
+        EXPECT_TRUE(graphicsCommandList->canResetTimerQueryHere());
+        graphicsCommandList->resetTimerQuery(query.get());
+        EXPECT_FALSE(graphicsCommandList->commandRecordingFailed());
+        ASSERT_TRUE(graphicsCommandList->beginTimerQuery(query.get()));
+        ASSERT_TRUE(graphicsCommandList->endTimerQuery(query.get()));
+        graphicsCommandList->close();
+        CommandList* const commandLists[] = { graphicsCommandList.get() };
+        const QueueSubmissionToken token = device.executeCommandLists(
+            commandLists,
+            LengthOf(commandLists),
+            graphicsQueue,
+            QueueSubmissionDesc{}
+        );
+        EXPECT_TRUE(token.valid());
+        EXPECT_TRUE(device.waitForIdle());
+    }
+
+    transferScope.setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, OrdinaryCommandIrReplayReportsStickyExactQueueCapabilityFailure){
+    HeadlessGraphicsScope transferScope;
+    ASSERT_TRUE(transferScope.setTransferQueueEnabled(true));
+    if(!transferScope.initialize())
+        GTEST_SKIP() << "Command-IR exact capability replay: no usable dedicated-transfer headless Vulkan device on this host.";
+
+    auto& device = transferScope.graphics().getDevice();
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    bool hasTransferOnlyQueue = false;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const u8 capabilityBits = static_cast<u8>(topology.queues[queueIndex].capabilities);
+        hasTransferOnlyQueue = hasTransferOnlyQueue || (
+            topology.queues[queueIndex].queueClass == CommandQueue::Transfer
+            && (capabilityBits & static_cast<u8>(GpuQueueCapability::Transfer)) != 0u
+            && (capabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) == 0u
+            && (capabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) == 0u
+        );
+    }
+    if(!hasTransferOnlyQueue)
+        GTEST_SKIP() << "Command-IR exact capability replay: adapter exposes no physical Transfer-only queue.";
+
+    const TextureDesc textureDesc = TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Format::RGBA8_UINT)
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+    ;
+    auto texture = device.createTexture(textureDesc);
+    ASSERT_NE(texture.get(), nullptr);
+
+    GpuTaskGraph graph(transferScope.arena());
+    const GpuGraphResourceId textureResource = graph.importTexture(
+        texture,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/replay_exact_transfer_texture"))
+            .setMarkerLabel("Replay Exact Transfer Texture")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(textureResource.valid());
+
+    GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    GpuTaskDesc taskDesc;
+    GpuClearTextureTaskDesc clearDesc;
+    clearDesc.destination = textureResource;
+    clearDesc.subresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
+    clearDesc.valueType = GpuClearTextureTaskValueType::UInt;
+    clearDesc.uintValue = UIntColor(1u, 2u, 3u, 4u);
+    const GpuTaskResourceUse uses[] = {
+        GpuTaskResourceUse{
+            .resource = textureResource,
+            .range = GpuTaskResourceRange{ .textureSubresources = clearDesc.subresources },
+            .requiredState = ResourceStates::CopyDest,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    taskDesc
+        .setIdentity(Name("tests/descriptor_buffer/replay_exact_transfer_clear"))
+        .setMarkerLabel("Replay Exact Transfer Clear")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Transfer,
+            GpuQueuePreference::Transfer,
+            false,
+            false,
+        })
+        .setScheduling(scheduling)
+        .setResourceUses(uses, LengthOf(uses))
+    ;
+    const GpuTaskId task = graph.addTask<NativePacketExactTransferCapabilityMismatchTask>(
+        taskDesc,
+        NativePacketExactTransferCapabilityMismatchTask::Payload{}
+    );
+    ASSERT_TRUE(task.valid());
+
+    GpuTaskGraphAnalysis analysis(transferScope.arena());
+    GpuTaskGraphQueueAssignments assignments(transferScope.arena());
+    GpuCompiledGraph compiledGraph(transferScope.arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/replay_exact_transfer_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+    const GpuPhysicalQueueInfo* const assignedQueue = compiledGraph.queueInfo(compiledGraph.packet(packet).queue);
+    ASSERT_NE(assignedQueue, nullptr);
+    const u8 assignedCapabilityBits = static_cast<u8>(assignedQueue->capabilities);
+    ASSERT_EQ(assignedQueue->queueClass, CommandQueue::Transfer);
+    ASSERT_NE(assignedCapabilityBits & static_cast<u8>(GpuQueueCapability::Transfer), 0u);
+    ASSERT_EQ(assignedCapabilityBits & static_cast<u8>(GpuQueueCapability::Graphics), 0u);
+    ASSERT_EQ(assignedCapabilityBits & static_cast<u8>(GpuQueueCapability::Compute), 0u);
+
+    GpuCommandIrCapture capture(transferScope.arena());
+    ASSERT_TRUE(capture.captureClearTexture(task, packet, assignedQueue->id, textureResource, clearDesc));
+    ASSERT_EQ(capture.recordCount(), 1u);
+
+    CommandListParameters commandListParameters;
+    commandListParameters.setPhysicalQueue(assignedQueue->id);
+    auto replayCommandList = device.createCommandList(commandListParameters);
+    ASSERT_NE(replayCommandList.get(), nullptr);
+    replayCommandList->open();
+    ASSERT_TRUE(replayCommandList->isRecording());
+
+    const GpuCommandIrReplayResult replayResult = ReplayGpuCommandIrPacket(
+        capture.commandBytes(),
+        graph,
+        compiledGraph,
+        packet,
+        *replayCommandList
+    );
+    EXPECT_EQ(replayResult.error, GpuCommandIrReplayError::CommandListRecordingFailed);
+    EXPECT_EQ(replayResult.recordIndex, 0u);
+    EXPECT_TRUE(replayCommandList->commandRecordingFailed());
+
+    replayCommandList->close();
+    EXPECT_FALSE(replayCommandList->hasCommandBuffer());
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, StickyNativeRecordingFailureCannotSubmitAndResetsOnlyOnOpen){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto commandList = device.createCommandList();
+    ASSERT_NE(commandList.get(), nullptr);
+
+    commandList->open();
+    ASSERT_TRUE(commandList->isRecording());
+    constexpr u32 s_PushConstant = 0x6f4d2b19u;
+    commandList->setPushConstants(&s_PushConstant, sizeof(s_PushConstant));
+    EXPECT_TRUE(commandList->commandRecordingFailed());
+    EXPECT_TRUE(commandList->hasCommandBuffer());
+
+    CommandList* const invalidLists[] = { commandList.get() };
+    const QueueSubmissionToken rejectedToken = device.executeCommandLists(
+        invalidLists,
+        LengthOf(invalidLists),
+        commandList->getDescription().physicalQueue,
+        QueueSubmissionDesc{}
+    );
+    EXPECT_FALSE(rejectedToken.valid());
+    EXPECT_TRUE(commandList->hasCommandBuffer());
+
+    commandList->close();
+    EXPECT_FALSE(commandList->isRecording());
+    EXPECT_FALSE(commandList->hasCommandBuffer());
+    EXPECT_TRUE(commandList->commandRecordingFailed());
+
+    commandList->open();
+    ASSERT_TRUE(commandList->isRecording());
+    EXPECT_FALSE(commandList->commandRecordingFailed());
+    commandList->close();
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+
+    commandList->setComputeState(ComputeState{});
+    EXPECT_TRUE(commandList->commandRecordingFailed());
+    EXPECT_TRUE(commandList->hasCommandBuffer());
+    commandList->close();
+    EXPECT_FALSE(commandList->hasCommandBuffer());
+    EXPECT_TRUE(commandList->commandRecordingFailed());
+
+    commandList->open();
+    ASSERT_TRUE(commandList->isRecording());
+    EXPECT_FALSE(commandList->commandRecordingFailed());
+    commandList->close();
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+
+    CommandList* const validLists[] = { commandList.get() };
+    const QueueSubmissionToken acceptedToken = device.executeCommandLists(
+        validLists,
+        LengthOf(validLists),
+        commandList->getDescription().physicalQueue,
+        QueueSubmissionDesc{}
+    );
+    EXPECT_TRUE(acceptedToken.valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, NativePacketRecorderRejectsTaskRecordingLeaseReplacementInAllBuilds){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+
+    struct Case{
+        NativePacketRecordingBoundaryViolationTask::Operation operation;
+        const char* identity;
+        const char* label;
+    };
+    const Case cases[]{
+        {
+            NativePacketRecordingBoundaryViolationTask::Operation::Close,
+            "tests/descriptor_buffer/task_closes_recording_lease",
+            "Task Closes Recording Lease",
+        },
+        {
+            NativePacketRecordingBoundaryViolationTask::Operation::CloseAndOpen,
+            "tests/descriptor_buffer/task_replaces_recording_lease",
+            "Task Replaces Recording Lease",
+        },
+    };
+
+    for(const Case& testCase : cases){
+        SCOPED_TRACE(testCase.label);
+        GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+        bool attempted = false;
+        u32 discardedCount = 0u;
+        GpuTaskSchedulingHint scheduling;
+        scheduling.forceSubmissionBoundary = true;
+        scheduling.allowPacketMerge = false;
+        GpuTaskDesc taskDesc;
+        taskDesc
+            .setIdentity(Name(testCase.identity))
+            .setMarkerLabel(testCase.label)
+            .setQueue(GpuQueueRequest{
+                GpuQueueCapability::Graphics,
+                GpuQueuePreference::Graphics,
+                false,
+                false,
+            })
+            .setScheduling(scheduling)
+        ;
+        const GpuTaskId task = graph.addTask<NativePacketRecordingBoundaryViolationTask>(
+            taskDesc,
+            NativePacketRecordingBoundaryViolationTask::Payload{
+                .operation = testCase.operation,
+                .attempted = &attempted,
+                .discardedCount = &discardedCount,
+            }
+        );
+        ASSERT_TRUE(task.valid());
+
+        GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+        GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+        GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+        Alloc::ScratchArena scratchArena(Name(testCase.identity));
+        const GpuTaskGraphCompiler compiler;
+        ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+        const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+        ASSERT_TRUE(packet.valid());
+
+        GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+        const GpuNativePacketRecorder recorder(device);
+        EXPECT_FALSE(recorder.recordPacket(
+            graph,
+            compiledGraph,
+            GpuNativePacketRecordDesc{ .packet = packet },
+            recordedGraph
+        ));
+        EXPECT_TRUE(attempted);
+        EXPECT_EQ(recordedGraph.find(packet), nullptr);
+        EXPECT_EQ(discardedCount, 1u);
+    }
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, NativeRecordingScopeRejectsStateMarkerAndQueryCommandsOutsideOpenLists){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(16u)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(buffer);
+
+    auto beforeOpen = device.createCommandList();
+    ASSERT_TRUE(beforeOpen);
+    beforeOpen->setBufferState(buffer.get(), ResourceStates::CopyDest);
+    EXPECT_TRUE(beforeOpen->commandRecordingFailed());
+    EXPECT_FALSE(beforeOpen->hasCommandBuffer());
+    beforeOpen->open();
+    ASSERT_TRUE(beforeOpen->isRecording());
+    EXPECT_FALSE(beforeOpen->commandRecordingFailed());
+    beforeOpen->close();
+    CommandList* const beforeOpenLists[]{ beforeOpen.get() };
+    EXPECT_TRUE(device.executeCommandLists(
+        beforeOpenLists,
+        LengthOf(beforeOpenLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
+
+    auto afterCloseState = device.createCommandList();
+    ASSERT_TRUE(afterCloseState);
+    afterCloseState->open();
+    afterCloseState->close();
+    ASSERT_TRUE(afterCloseState->hasCommandBuffer());
+    afterCloseState->setBufferState(buffer.get(), ResourceStates::CopyDest);
+    EXPECT_TRUE(afterCloseState->commandRecordingFailed());
+    afterCloseState->close();
+    EXPECT_FALSE(afterCloseState->hasCommandBuffer());
+
+    auto afterCloseMarker = device.createCommandList();
+    ASSERT_TRUE(afterCloseMarker);
+    afterCloseMarker->open();
+    afterCloseMarker->close();
+    afterCloseMarker->beginMarker("tests/descriptor_buffer/marker_after_close");
+    EXPECT_TRUE(afterCloseMarker->commandRecordingFailed());
+    afterCloseMarker->close();
+    EXPECT_FALSE(afterCloseMarker->hasCommandBuffer());
+
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueInfo* const queueInfo = device.getPhysicalQueueInfo(graphicsQueue);
+    ASSERT_NE(queueInfo, nullptr);
+    if(queueInfo->timestampValidBits != 0u){
+        auto query = device.createTimerQuery();
+        ASSERT_TRUE(query);
+        auto afterCloseBeginQuery = device.createCommandList();
+        auto afterCloseEndQuery = device.createCommandList();
+        ASSERT_TRUE(afterCloseBeginQuery);
+        ASSERT_TRUE(afterCloseEndQuery);
+
+        afterCloseBeginQuery->open();
+        afterCloseBeginQuery->close();
+        EXPECT_FALSE(afterCloseBeginQuery->beginTimerQuery(query.get()));
+        EXPECT_TRUE(afterCloseBeginQuery->commandRecordingFailed());
+        afterCloseBeginQuery->close();
+        EXPECT_FALSE(afterCloseBeginQuery->hasCommandBuffer());
+
+        afterCloseEndQuery->open();
+        afterCloseEndQuery->close();
+        EXPECT_FALSE(afterCloseEndQuery->endTimerQuery(query.get()));
+        EXPECT_TRUE(afterCloseEndQuery->commandRecordingFailed());
+        afterCloseEndQuery->close();
+        EXPECT_FALSE(afterCloseEndQuery->hasCommandBuffer());
+    }
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, SubmissionPreflightRejectsInvalidCommandListsBeforeHookInAllBuilds){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+    NativePacketSubmissionHookObserver hookObserver;
+    const QueueSubmissionDesc hookedSubmission{
+        .preSubmitHook = QueueSubmissionPreSubmitHook{
+            .context = &hookObserver,
+            .invoke = RejectNativePacketSubmissionHook,
+        },
+    };
+
+    CommandList* const nullLists[]{ nullptr };
+    EXPECT_FALSE(device.executeCommandLists(
+        nullLists,
+        LengthOf(nullLists),
+        graphicsQueue,
+        hookedSubmission
+    ).valid());
+    EXPECT_EQ(hookObserver.invocationCount, 0u);
+
+    auto neverOpenedList = device.createCommandList();
+    ASSERT_TRUE(neverOpenedList);
+    ASSERT_FALSE(neverOpenedList->hasCommandBuffer());
+    CommandList* const neverOpenedLists[]{ neverOpenedList.get() };
+    EXPECT_FALSE(device.executeCommandLists(
+        neverOpenedLists,
+        LengthOf(neverOpenedLists),
+        graphicsQueue,
+        hookedSubmission
+    ).valid());
+    EXPECT_EQ(hookObserver.invocationCount, 0u);
+
+    auto openList = device.createCommandList();
+    ASSERT_TRUE(openList);
+    openList->open();
+    CommandList* const openLists[]{ openList.get() };
+    EXPECT_FALSE(device.executeCommandLists(
+        openLists,
+        LengthOf(openLists),
+        graphicsQueue,
+        hookedSubmission
+    ).valid());
+    EXPECT_EQ(hookObserver.invocationCount, 0u);
+    EXPECT_TRUE(openList->hasCommandBuffer());
+    openList->close();
+    EXPECT_TRUE(device.executeCommandLists(
+        openLists,
+        LengthOf(openLists),
+        graphicsQueue,
+        QueueSubmissionDesc{}
+    ).valid());
+
+    auto stickyList = device.createCommandList();
+    ASSERT_TRUE(stickyList);
+    stickyList->open();
+    stickyList->close();
+    constexpr u32 s_InvalidPushConstant = 0xb98174c3u;
+    stickyList->setPushConstants(&s_InvalidPushConstant, sizeof(s_InvalidPushConstant));
+    ASSERT_TRUE(stickyList->commandRecordingFailed());
+    CommandList* const stickyLists[]{ stickyList.get() };
+    EXPECT_FALSE(device.executeCommandLists(
+        stickyLists,
+        LengthOf(stickyLists),
+        graphicsQueue,
+        hookedSubmission
+    ).valid());
+    EXPECT_EQ(hookObserver.invocationCount, 0u);
+    stickyList->close();
+
+    auto duplicateList = device.createCommandList();
+    ASSERT_TRUE(duplicateList);
+    duplicateList->open();
+    duplicateList->close();
+    CommandList* const duplicateLists[]{ duplicateList.get(), duplicateList.get() };
+    EXPECT_FALSE(device.executeCommandLists(
+        duplicateLists,
+        LengthOf(duplicateLists),
+        graphicsQueue,
+        hookedSubmission
+    ).valid());
+    EXPECT_EQ(hookObserver.invocationCount, 0u);
+    EXPECT_TRUE(duplicateList->hasCommandBuffer());
+    CommandList* const singleDuplicateList[]{ duplicateList.get() };
+    EXPECT_TRUE(device.executeCommandLists(
+        singleDuplicateList,
+        LengthOf(singleDuplicateList),
+        graphicsQueue,
+        QueueSubmissionDesc{}
+    ).valid());
+
+    HeadlessGraphicsScope foreignScope;
+    ASSERT_TRUE(foreignScope.initialize());
+    auto& foreignDevice = foreignScope.graphics().getDevice();
+    auto foreignList = foreignDevice.createCommandList();
+    ASSERT_TRUE(foreignList);
+    foreignList->open();
+    foreignList->close();
+    CommandList* const foreignLists[]{ foreignList.get() };
+    EXPECT_FALSE(device.executeCommandLists(
+        foreignLists,
+        LengthOf(foreignLists),
+        graphicsQueue,
+        hookedSubmission
+    ).valid());
+    EXPECT_EQ(hookObserver.invocationCount, 0u);
+    EXPECT_TRUE(foreignList->hasCommandBuffer());
+    EXPECT_TRUE(foreignDevice.executeCommandLists(
+        foreignLists,
+        LengthOf(foreignLists),
+        foreignList->getDescription().physicalQueue,
+        QueueSubmissionDesc{}
+    ).valid());
+    EXPECT_TRUE(foreignDevice.waitForIdle());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    ASSERT_NE(topology.queues, nullptr);
+    const GpuPhysicalQueueInfo* alternateQueue = nullptr;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        if(topology.queues[queueIndex].id != graphicsQueue){
+            alternateQueue = &topology.queues[queueIndex];
+            break;
+        }
+    }
+    if(alternateQueue){
+        CommandListParameters alternateParameters;
+        alternateParameters.setPhysicalQueue(alternateQueue->id);
+        auto wrongQueueList = device.createCommandList(alternateParameters);
+        ASSERT_TRUE(wrongQueueList);
+        wrongQueueList->open();
+        wrongQueueList->close();
+        CommandList* const wrongQueueLists[]{ wrongQueueList.get() };
+        EXPECT_FALSE(device.executeCommandLists(
+            wrongQueueLists,
+            LengthOf(wrongQueueLists),
+            graphicsQueue,
+            hookedSubmission
+        ).valid());
+        EXPECT_EQ(hookObserver.invocationCount, 0u);
+        EXPECT_TRUE(wrongQueueList->hasCommandBuffer());
+        EXPECT_TRUE(device.executeCommandLists(
+            wrongQueueLists,
+            LengthOf(wrongQueueLists),
+            alternateQueue->id,
+            QueueSubmissionDesc{}
+        ).valid());
+    }
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+#if !defined(NWB_FINAL)
+TEST_F(DescriptorBufferRoundTripTest, SubmissionHookRecordingLeaseReplacementCannotAdvanceTimeline){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+    ASSERT_TRUE(device.waitForIdle());
+    const u64 completedBeforeRejectedHook = device.queueGetCompletedInstance(graphicsQueue);
+
+    auto commandList = device.createCommandList();
+    ASSERT_TRUE(commandList);
+    commandList->open();
+    commandList->close();
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+
+    QueueSubmissionNativeSignal signal;
+    ASSERT_TRUE(device.createSubmissionSignalForTesting(signal));
+    NativePacketSubmissionLeaseMutationContext hookContext{
+        .commandList = commandList.get(),
+        .signal = signal,
+    };
+    const QueueSubmissionDesc submissionDesc{
+        .preSubmitHook = QueueSubmissionPreSubmitHook{
+            .context = &hookContext,
+            .invoke = ReplaceNativePacketSubmissionLease,
+        },
+    };
+    CommandList* const commandLists[]{ commandList.get() };
+    const QueueSubmissionToken rejectedToken = device.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        graphicsQueue,
+        submissionDesc
+    );
+    if(rejectedToken.valid()){
+        const bool idle = device.waitForIdle();
+        if(idle)
+            device.destroySubmissionSignalForTesting(signal);
+        ASSERT_TRUE(idle);
+        FAIL() << "submission hook lease replacement unexpectedly reached the native queue";
+    }
+    ASSERT_FALSE(rejectedToken.valid());
+    EXPECT_EQ(hookContext.invocationCount, 1u);
+    EXPECT_TRUE(commandList->hasCommandBuffer());
+    EXPECT_EQ(device.queueGetCompletedInstance(graphicsQueue), completedBeforeRejectedHook);
+    device.destroySubmissionSignalForTesting(signal);
+
+    const QueueSubmissionToken acceptedToken = device.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        graphicsQueue,
+        QueueSubmissionDesc{}
+    );
+    EXPECT_TRUE(acceptedToken.valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+#endif
+
+
+TEST_F(DescriptorBufferRoundTripTest, HostTimerResetRejectsForeignDeviceQueryOwnership){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto query = device.createTimerQuery();
+    ASSERT_TRUE(query);
+
+    HeadlessGraphicsScope foreignScope;
+    ASSERT_TRUE(foreignScope.initialize());
+    auto& foreignDevice = foreignScope.graphics().getDevice();
+    EXPECT_FALSE(foreignDevice.resetTimerQuery(query.get()));
+    EXPECT_TRUE(device.resetTimerQuery(query.get()));
 }
 
 
@@ -6244,29 +7138,6 @@ struct NativeTaskAcceptanceObserver{
         context->order->markers[context->order->invocationCount++] = context->orderMarker;
     }
     return context->continueSubmission;
-}
-
-
-// The production presentation hook supplies a real swap-chain binary semaphore. The headless fixture cannot
-// manufacture one through BackendContext, so this probe verifies range validation rejects a hook before native
-// submission or callback invocation.
-struct NativePacketSubmissionHookObserver{
-    u32 invocationCount = 0u;
-};
-
-[[nodiscard]] static bool RejectNativePacketSubmissionHook(
-    void* const rawContext,
-    const GpuPhysicalQueueId& executionQueue,
-    QueueSubmissionNativeSignal& outSignal
-){
-    NativePacketSubmissionHookObserver* const context =
-        static_cast<NativePacketSubmissionHookObserver*>(rawContext)
-    ;
-    if(!context || !executionQueue.valid())
-        return false;
-    ++context->invocationCount;
-    outSignal = {};
-    return false;
 }
 
 
@@ -37852,6 +38723,24 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersC
 
     CommandListParameters exactQueueParameters;
     exactQueueParameters.setPhysicalQueue(queue.id);
+    auto stickyDirectReplay = device.createCommandList(exactQueueParameters);
+    ASSERT_NE(stickyDirectReplay.get(), nullptr);
+    stickyDirectReplay->open();
+    constexpr u32 s_InvalidDirectPushConstant = 0x86c13ea5u;
+    stickyDirectReplay->setPushConstants(&s_InvalidDirectPushConstant, sizeof(s_InvalidDirectPushConstant));
+    ASSERT_TRUE(stickyDirectReplay->commandRecordingFailed());
+    const GpuCommandIrReplayResult stickyDirectResult = ReplayGpuCommandIrPacketDirectVulkan(
+        capture.commandBytes(),
+        graph,
+        compiledGraph,
+        packet,
+        *stickyDirectReplay
+    );
+    EXPECT_EQ(stickyDirectResult.error, GpuCommandIrReplayError::CommandListRecordingFailed);
+    EXPECT_TRUE(stickyDirectResult.streamValidation.valid());
+    stickyDirectReplay->close();
+    EXPECT_FALSE(stickyDirectReplay->hasCommandBuffer());
+
     auto replay = device.createCommandList(exactQueueParameters);
     ASSERT_NE(replay.get(), nullptr);
     replay->open();
@@ -50061,7 +50950,7 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListMarkerStateBalancesBeforeReuseA
     EXPECT_TRUE(submitted);
     EXPECT_TRUE(device.waitForIdle());
 
-#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+#if defined(NWB_DEBUG)
     CommandListHandle clearInvariant = device.createCommandList();
     ASSERT_NE(clearInvariant.get(), nullptr);
     EXPECT_DEATH_IF_SUPPORTED({

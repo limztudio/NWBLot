@@ -438,15 +438,12 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         .access = GpuTaskResourceAccess::Write,
     };
     GpuTaskDesc resolvedDesc = desc;
-    // A full color clear may use vkCmdClearColorImage outside rendering or an attachment clear inside it. Keep
-    // both Compute and Graphics in the conservative graph contract; depth/stencil always requires Graphics.
-    // The caller's Transfer requirement remains part of the primitive API contract.
+    // The recorder ends rendering before this primitive. Full color clears then use the deterministic Compute
+    // route, while depth/stencil clears require Graphics. The caller's Transfer requirement remains part of the
+    // primitive API contract.
     resolvedDesc.queue.requiredCapabilities |= clearDesc.valueType == GpuClearTextureTaskValueType::DepthStencil
         ? GpuQueueCapability::Graphics
-        : static_cast<GpuQueueCapability::Mask>(
-            static_cast<u8>(GpuQueueCapability::Compute)
-            | static_cast<u8>(GpuQueueCapability::Graphics)
-        )
+        : GpuQueueCapability::Compute
     ;
     resolvedDesc.setResourceUses(&resourceUse, 1u);
     const GpuTaskId task = appendTask(
@@ -534,13 +531,8 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
         .access = GpuTaskResourceAccess::Write,
     };
     GpuTaskDesc resolvedDesc = desc;
-    // The single-sample transfer route is normally selected, but a merged packet may instead clear an active
-    // color attachment, while the native full-clear route is Compute-capable. Keep every permitted route inside
-    // the immutable graph declaration rather than trusting the recorder's dynamic command-list state.
-    resolvedDesc.queue.requiredCapabilities |= static_cast<GpuQueueCapability::Mask>(
-        static_cast<u8>(GpuQueueCapability::Compute)
-        | static_cast<u8>(GpuQueueCapability::Graphics)
-    );
+    // The recorder ends rendering and the single-sample contract deterministically selects the staging Transfer
+    // route, so the caller's required Transfer capability is already exact.
     resolvedDesc.setResourceUses(&resourceUse, 1u);
     const GpuTaskId task = appendTask(
         resolvedDesc,

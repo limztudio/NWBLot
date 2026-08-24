@@ -25,6 +25,16 @@ namespace __hidden_vulkan_device_queue{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if !defined(NWB_FINAL)
+[[nodiscard]] static Object EncodeSubmissionNativeSemaphore(const VkSemaphore semaphore)noexcept{
+#if VK_USE_64_BIT_PTR_DEFINES
+    return Object(static_cast<void*>(semaphore));
+#else
+    return Object(static_cast<u64>(semaphore));
+#endif
+}
+#endif
+
 [[nodiscard]] static VkSemaphore DecodeSubmissionNativeSemaphore(const Object& semaphore)noexcept{
 #if VK_USE_64_BIT_PTR_DEFINES
     return static_cast<VkSemaphore>(semaphore.pointer);
@@ -256,6 +266,28 @@ bool Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const
 
 #if !defined(NWB_FINAL)
 
+bool Device::createSubmissionSignalForTesting(QueueSubmissionNativeSignal& outSignal){
+    outSignal = {};
+    auto semaphoreInfo = VulkanDetail::MakeVkStruct<VkSemaphoreCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO);
+    VkSemaphore semaphore = VK_NULL_HANDLE;
+    const VkResult res = vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &semaphore);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create test submission semaphore: {}"), ResultToString(res));
+        return false;
+    }
+
+    outSignal.semaphore = __hidden_vulkan_device_queue::EncodeSubmissionNativeSemaphore(semaphore);
+    outSignal.value = 0u;
+    return true;
+}
+
+void Device::destroySubmissionSignalForTesting(QueueSubmissionNativeSignal& signal){
+    const VkSemaphore semaphore = __hidden_vulkan_device_queue::DecodeSubmissionNativeSemaphore(signal.semaphore);
+    if(semaphore != VK_NULL_HANDLE)
+        vkDestroySemaphore(m_context.device, semaphore, m_context.allocationCallbacks);
+    signal = {};
+}
+
 void Device::rejectNextSubmissionForTesting(const CommandQueue::Enum queue){
     const u32 index = static_cast<u32>(queue);
     if(index >= static_cast<u32>(CommandQueue::kCount))
@@ -399,18 +431,31 @@ u64 Device::executeCommandLists(
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CommandListExecuteArena);
     Vector<TrackedCommandBuffer*, Alloc::ScratchArena> submittedOwners{scratchArena};
+    Vector<Queue::SubmissionCommandListIdentity, Alloc::ScratchArena> expectedCommandLists{scratchArena};
     if(pCommandLists && numCommandLists > 0){
         submittedOwners.reserve(numCommandLists);
+        expectedCommandLists.reserve(numCommandLists);
         for(usize i = 0; i < numCommandLists; ++i){
-            if(!pCommandLists[i])
-                continue;
-            if(pCommandLists[i] && pCommandLists[i]->m_currentCmdBuf)
-                submittedOwners.push_back(pCommandLists[i]->m_currentCmdBuf.get());
+            CommandList* const commandList = pCommandLists[i];
+            const TrackedCommandBufferPtr owner = commandList ? commandList->m_currentCmdBuf : nullptr;
+            expectedCommandLists.push_back(Queue::SubmissionCommandListIdentity{
+                .owner = owner,
+                .recordingLeaseSerial = commandList ? commandList->recordingLeaseSerial() : 0u,
+            });
+            if(owner)
+                submittedOwners.push_back(owner.get());
         }
     }
 
     bool submissionAccepted = false;
-    const u64 submittedID = queue->submit(pCommandLists, numCommandLists, nullptr, 0u, &submissionAccepted);
+    const u64 submittedID = queue->submit(
+        pCommandLists,
+        numCommandLists,
+        expectedCommandLists.empty() ? nullptr : expectedCommandLists.data(),
+        nullptr,
+        0u,
+        &submissionAccepted
+    );
     if(outCommandListsSubmitted)
         *outCommandListsSubmitted = submissionAccepted && !submittedOwners.empty();
 
@@ -479,6 +524,44 @@ QueueSubmissionToken Device::executeCommandLists(
         return {};
     }
 
+    if(numCommandLists > 0u && !pCommandLists){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list array is null"));
+        return {};
+    }
+    if(numCommandLists > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list count exceeds Vulkan limit"));
+        return {};
+    }
+    for(usize i = 0u; i < numCommandLists; ++i){
+        CommandList* const commandList = pCommandLists[i];
+        for(usize previous = 0u; previous < i; ++previous){
+            if(pCommandLists[previous] == commandList){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} is duplicated"), i);
+                return {};
+            }
+        }
+        if(
+            !commandList
+            || &commandList->m_device != this
+            || !commandList->hasCommandBuffer()
+        ){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} is null, foreign, or has no native command buffer"), i);
+            return {};
+        }
+        if(commandList->commandRecordingFailed()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} has a sticky native recording failure"), i);
+            return {};
+        }
+        if(commandList->m_isRecording){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} is still recording"), i);
+            return {};
+        }
+        if(!VulkanDetail::SubmissionCommandListMatchesExecutionQueue(commandList->m_desc, executionQueue, queue->m_queueID)){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} physical queue does not match the execution queue"), i);
+            return {};
+        }
+    }
+
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CommandListExecuteArena);
     Vector<Queue::SubmissionWait, Alloc::ScratchArena> localWaits{scratchArena};
     if(submitDesc.waitTokenCount > 0u){
@@ -513,11 +596,18 @@ QueueSubmissionToken Device::executeCommandLists(
     }
 
     Vector<TrackedCommandBuffer*, Alloc::ScratchArena> submittedOwners{scratchArena};
+    Vector<Queue::SubmissionCommandListIdentity, Alloc::ScratchArena> expectedCommandLists{scratchArena};
     if(pCommandLists && numCommandLists > 0u){
         submittedOwners.reserve(numCommandLists);
+        expectedCommandLists.reserve(numCommandLists);
         for(usize i = 0u; i < numCommandLists; ++i){
-            if(pCommandLists[i] && pCommandLists[i]->m_currentCmdBuf)
-                submittedOwners.push_back(pCommandLists[i]->m_currentCmdBuf.get());
+            CommandList* const commandList = pCommandLists[i];
+            const TrackedCommandBufferPtr owner = commandList->m_currentCmdBuf;
+            expectedCommandLists.push_back(Queue::SubmissionCommandListIdentity{
+                .owner = owner,
+                .recordingLeaseSerial = commandList->recordingLeaseSerial(),
+            });
+            submittedOwners.push_back(owner.get());
         }
     }
 
@@ -561,6 +651,7 @@ QueueSubmissionToken Device::executeCommandLists(
     const u64 submittedID = queue->submit(
         pCommandLists,
         numCommandLists,
+        expectedCommandLists.empty() ? nullptr : expectedCommandLists.data(),
         localWaits.empty() ? nullptr : localWaits.data(),
         localWaits.size(),
         &submissionAccepted,

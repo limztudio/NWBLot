@@ -18,22 +18,22 @@ NWB_VULKAN_BEGIN
 
 
 void CommandList::setPushConstants(const void* data, usize byteSize){
-    if(!validateNonTransferCommand(NWB_TEXT("set push constants")))
-        return;
     if(byteSize == 0)
         return;
-#if defined(NWB_DEBUG)
     if(!data){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: CommandList::setPushConstants: data is null"));
+#if defined(NWB_DEBUG)
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: data is null"));
+#endif
         return;
     }
     if(byteSize > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: CommandList::setPushConstants: byte size exceeds uint32 range"));
+#if defined(NWB_DEBUG)
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: byte size exceeds uint32 range"));
+#endif
         return;
     }
-#endif
 
     const u32 pushConstantByteSize = static_cast<u32>(byteSize);
 #if defined(NWB_DEBUG)
@@ -42,48 +42,59 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 #endif
 
     VkPipelineLayout layout = VK_NULL_HANDLE;
+    GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None;
+    u32 activePipelineCount = 0u;
 #if defined(NWB_DEBUG)
     u32 pipelinePushConstantByteSize = 0;
 #endif
 
+    const auto selectPipeline = [&](
+        const VkPipelineLayout candidateLayout,
+        const u32 candidatePushConstantByteSize,
+        const GpuQueueCapability::Mask candidateCapabilities
+    ){
+        ++activePipelineCount;
+        layout = candidateLayout;
+        requiredCapabilities = candidateCapabilities;
+#if defined(NWB_DEBUG)
+        pipelinePushConstantByteSize = candidatePushConstantByteSize;
+#else
+        static_cast<void>(candidatePushConstantByteSize);
+#endif
+    };
+
     if(m_currentGraphicsState.pipeline){
         auto* gp = m_currentGraphicsState.pipeline;
-        layout = gp->m_pipelineLayout;
-#if defined(NWB_DEBUG)
-        pipelinePushConstantByteSize = gp->m_pushConstantByteSize;
-#endif
+        selectPipeline(gp->m_pipelineLayout, gp->m_pushConstantByteSize, GpuQueueCapability::Graphics);
     }
-    else if(m_currentComputeState.pipeline){
+    if(m_currentComputeState.pipeline){
         auto* cp = m_currentComputeState.pipeline;
-        layout = cp->m_pipelineLayout;
-#if defined(NWB_DEBUG)
-        pipelinePushConstantByteSize = cp->m_pushConstantByteSize;
-#endif
+        selectPipeline(cp->m_pipelineLayout, cp->m_pushConstantByteSize, GpuQueueCapability::Compute);
     }
-    else if(m_currentMeshletState.pipeline){
+    if(m_currentMeshletState.pipeline){
         auto* mp = m_currentMeshletState.pipeline;
-        layout = mp->m_pipelineLayout;
-#if defined(NWB_DEBUG)
-        pipelinePushConstantByteSize = mp->m_pushConstantByteSize;
-#endif
+        selectPipeline(mp->m_pipelineLayout, mp->m_pushConstantByteSize, GpuQueueCapability::Graphics);
     }
-    else if(m_currentRayTracingState.shaderTable){
+    if(m_currentRayTracingState.shaderTable){
         auto* rtp = m_currentRayTracingState.shaderTable->getPipeline();
-        if(rtp){
-            auto* rtpImpl = rtp;
-            layout = rtpImpl->m_pipelineLayout;
-#if defined(NWB_DEBUG)
-            pipelinePushConstantByteSize = rtpImpl->m_pushConstantByteSize;
-#endif
-        }
+        if(rtp)
+            selectPipeline(rtp->m_pipelineLayout, rtp->m_pushConstantByteSize, GpuQueueCapability::Compute);
+        else
+            ++activePipelineCount;
     }
 
-#if defined(NWB_DEBUG)
-    if(layout == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: CommandList::setPushConstants: no active pipeline layout"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: no active pipeline layout"));
+    if(activePipelineCount != 1u || layout == VK_NULL_HANDLE){
+        NWB_LOGGER_CRITICAL_WARNING(
+            NWB_TEXT("Vulkan: CommandList::setPushConstants: expected exactly one active valid pipeline layout, found {}"),
+            activePipelineCount
+        );
+        invalidateCommandRecording();
         return;
     }
+    if(!recordAndValidateCommandCapability(requiredCapabilities, NWB_TEXT("set push constants")))
+        return;
+
+#if defined(NWB_DEBUG)
     if(pipelinePushConstantByteSize == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: CommandList::setPushConstants: active pipeline layout has no push constant range"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: CommandList::setPushConstants: active pipeline layout has no push constant range"));
@@ -108,11 +119,8 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 
 
 void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& opDesc){
-    if(!validateNonTransferCommand(NWB_TEXT("execute cluster acceleration operation")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("execute cluster acceleration operation")))
         return;
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Compute);
-#endif
     if(!m_context.extensions.NV_cluster_acceleration_structure)
         return;
 
@@ -151,14 +159,17 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     }
 
     if(m_enableAutomaticBarriers){
+        constexpr ResourceStates::Mask s_ClusterIndirectInputState = static_cast<ResourceStates::Mask>(
+            static_cast<u32>(ResourceStates::AccelStructBuildInput) | static_cast<u32>(ResourceStates::IndirectArgument)
+        );
         if(indirectArgsBuffer)
-            setBufferState(opDesc.inIndirectArgsBuffer, ResourceStates::ShaderResource);
+            setBufferState(opDesc.inIndirectArgsBuffer, s_ClusterIndirectInputState);
         if(indirectArgCountBuffer)
-            setBufferState(opDesc.inIndirectArgCountBuffer, ResourceStates::ShaderResource);
+            setBufferState(opDesc.inIndirectArgCountBuffer, s_ClusterIndirectInputState);
         if(inOutAddressesBuffer)
-            setBufferState(opDesc.inOutAddressesBuffer, ResourceStates::UnorderedAccess);
+            setBufferState(opDesc.inOutAddressesBuffer, ResourceStates::AccelStructWrite);
         if(outSizesBuffer)
-            setBufferState(opDesc.outSizesBuffer, ResourceStates::UnorderedAccess);
+            setBufferState(opDesc.outSizesBuffer, ResourceStates::AccelStructWrite);
         if(outAccelerationStructuresBuffer)
             setBufferState(opDesc.outAccelerationStructuresBuffer, ResourceStates::AccelStructWrite);
     }
@@ -232,11 +243,11 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
 
 
 void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs){
-    if(!validateNonTransferCommand(NWB_TEXT("convert cooperative-vector matrices")))
+    constexpr GpuQueueCapability::Mask s_ConvertCapabilities = static_cast<GpuQueueCapability::Mask>(
+        static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute)
+    );
+    if(!recordAndValidateAnyCommandCapability(s_ConvertCapabilities, NWB_TEXT("convert cooperative-vector matrices")))
         return;
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Compute);
-#endif
     if(!m_context.extensions.NV_cooperative_vector || !m_context.coopVecFeatures.cooperativeVector)
         return;
 

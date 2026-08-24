@@ -366,6 +366,9 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
 }
 
 void CommandList::appendPendingOwnershipReleaseBarriers(){
+    if(!validateCommandRecordingScope(NWB_TEXT("append ownership-release barriers")))
+        return;
+
     if(m_textureOwnershipReleaseDestinations.empty() && m_bufferOwnershipReleaseDestinations.empty())
         return;
 

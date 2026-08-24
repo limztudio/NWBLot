@@ -65,9 +65,6 @@ inline VkBufferImageCopy BuildStagingTextureCopyRegion(
 void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSlice, Texture* srcResource, const TextureSlice& srcSlice){
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("copy texture"), NWB_TEXT("resource is invalid"), destResource, srcResource))
         return;
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Transfer);
-#endif
 
     Texture& dest = *destResource;
     Texture& src = *srcResource;
@@ -87,6 +84,20 @@ void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSli
         return;
 
     if(!VulkanDetail::DebugValidateTextureSliceExtentsMatch(resolvedDst, resolvedSrc, NWB_TEXT("copy texture"), NWB_TEXT("source and destination extents do not match")))
+        return;
+    constexpr VkImageAspectFlags s_DepthStencilAspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+    const bool sourceDepthStencil = (src.m_aspectMask & s_DepthStencilAspectMask) != 0u;
+    const bool destinationDepthStencil = (dest.m_aspectMask & s_DepthStencilAspectMask) != 0u;
+    const bool crossesColorDepthStencilAspects = sourceDepthStencil != destinationDepthStencil;
+    const bool multisampledDepthStencilCopy =
+        (sourceDepthStencil || destinationDepthStencil)
+        && (src.m_desc.sampleCount != 1u || dest.m_desc.sampleCount != 1u)
+    ;
+    const GpuQueueCapability::Mask requiredCapabilities = crossesColorDepthStencilAspects || multisampledDepthStencilCopy
+        ? GpuQueueCapability::Graphics
+        : GpuQueueCapability::Transfer
+    ;
+    if(!recordAndValidateCommandCapability(requiredCapabilities, NWB_TEXT("copy texture")))
         return;
 
     VkImageCopy region{};
@@ -108,9 +119,6 @@ void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSli
 void CommandList::copyTexture(StagingTexture* dest, const TextureSlice& destSlice, Texture* src, const TextureSlice& srcSlice){
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("copy texture to staging texture"), NWB_TEXT("resource is invalid"), dest, src))
         return;
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Transfer);
-#endif
 
     VkBufferImageCopy region{};
     if(!prepareStagingTextureCopy(
@@ -122,6 +130,13 @@ void CommandList::copyTexture(StagingTexture* dest, const TextureSlice& destSlic
         NWB_TEXT("source texture must be single-sampled"),
         region
     ))
+        return;
+    const bool depthStencilCopy = (src->m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
+    const GpuQueueCapability::Mask requiredCapabilities = depthStencilCopy
+        ? GpuQueueCapability::Graphics
+        : GpuQueueCapability::Transfer
+    ;
+    if(!recordAndValidateCommandCapability(requiredCapabilities, NWB_TEXT("copy texture to staging texture")))
         return;
 
     setTextureState(src, TextureSubresourceSet(region.imageSubresource.mipLevel, 1u, region.imageSubresource.baseArrayLayer, 1u), ResourceStates::CopySource);
@@ -135,9 +150,6 @@ void CommandList::copyTexture(StagingTexture* dest, const TextureSlice& destSlic
 void CommandList::copyTexture(Texture* dest, const TextureSlice& destSlice, StagingTexture* src, const TextureSlice& srcSlice){
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("copy staging texture to texture"), NWB_TEXT("resource is invalid"), dest, src))
         return;
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Transfer);
-#endif
 
     VkBufferImageCopy region{};
     if(!prepareStagingTextureCopy(
@@ -149,6 +161,13 @@ void CommandList::copyTexture(Texture* dest, const TextureSlice& destSlice, Stag
         NWB_TEXT("destination texture must be single-sampled"),
         region
     ))
+        return;
+    const bool depthStencilCopy = (dest->m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
+    const GpuQueueCapability::Mask requiredCapabilities = depthStencilCopy
+        ? GpuQueueCapability::Graphics
+        : GpuQueueCapability::Transfer
+    ;
+    if(!recordAndValidateCommandCapability(requiredCapabilities, NWB_TEXT("copy staging texture to texture")))
         return;
 
     setTextureState(dest, TextureSubresourceSet(region.imageSubresource.mipLevel, 1u, region.imageSubresource.baseArrayLayer, 1u), ResourceStates::CopyDest);
@@ -169,9 +188,6 @@ bool CommandList::tryWriteTexture(
 ){
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("write texture"), NWB_TEXT("destination texture is null"), destResource))
         return false;
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Transfer);
-#endif
 
     Texture& dest = *destResource;
     const TextureDesc& texDesc = dest.m_desc;
@@ -197,7 +213,7 @@ bool CommandList::tryWriteTexture(
 
     const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(texDesc, mipLevel);
 
-    if(!VulkanDetail::DebugValidateBufferImageCopyAspect(dest.m_aspectMask, NWB_TEXT("write texture")))
+    if(!VulkanDetail::ValidateBufferImageCopyAspectMask(dest.m_aspectMask, NWB_TEXT("write texture")))
         return false;
 
     VulkanDetail::BufferImageCopyLayout copyLayout;
@@ -221,6 +237,13 @@ bool CommandList::tryWriteTexture(
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: upload size exceeds addressable memory"));
         return false;
     }
+    const bool depthStencilCopy = (dest.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u;
+    const GpuQueueCapability::Mask requiredCapabilities = depthStencilCopy
+        ? GpuQueueCapability::Graphics
+        : GpuQueueCapability::Transfer
+    ;
+    if(!recordAndValidateCommandCapability(requiredCapabilities, NWB_TEXT("write texture")))
+        return false;
 
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
@@ -252,9 +275,6 @@ void CommandList::writeTexture(Texture* destResource, u32 arraySlice, u32 mipLev
 void CommandList::resolveTexture(Texture* destResource, const TextureSubresourceSet& dstSubresources, Texture* srcResource, const TextureSubresourceSet& srcSubresources){
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("resolve texture"), NWB_TEXT("resource is invalid"), destResource, srcResource))
         return;
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Graphics);
-#endif
 
     Texture& dest = *destResource;
     Texture& src = *srcResource;
@@ -289,6 +309,9 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
         return;
     }
 #endif
+
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("resolve texture")))
+        return;
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureResolveArena);
     Vector<VkImageResolve, Alloc::ScratchArena> regions(resolvedSrc.numMipLevels, scratchArena);
@@ -357,20 +380,21 @@ bool CommandList::prepareStagingTextureCopy(
 )const{
     const TextureDesc& stagingDesc = stagingResource.m_desc;
     const TextureDesc& textureDesc = textureResource.m_desc;
-#if defined(NWB_DEBUG)
     if(textureDesc.sampleCount != 1){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, singleSampleRequirement);
+#if defined(NWB_DEBUG)
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, singleSampleRequirement);
+#endif
         return false;
     }
+    if(!VulkanDetail::ValidateBufferImageCopyAspectMask(stagingResource.m_aspectMask, operationName))
+        return false;
+#if defined(NWB_DEBUG)
     if(textureDesc.format != stagingDesc.format){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: source and destination formats do not match"), operationName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: source and destination formats do not match"), operationName);
         return false;
     }
-
-    if(!VulkanDetail::DebugValidateBufferImageCopyAspect(stagingResource.m_aspectMask, operationName))
-        return false;
 
     TextureSlice resolvedStaging;
     TextureSlice resolvedTexture;

@@ -362,19 +362,67 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         if(recorded)
             commandList->commitBarriers();
         graphBarrierRecordingSeconds += DurationInSeconds<f64>(TimerNow(), graphPrologueRecordingBegin);
-        commandList->beginMarker(taskView.markerLabel);
+        const u64 taskRecordingLeaseSerial = commandList->recordingLeaseSerial();
+        bool taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
+        if(recorded && (!taskRecordingLeaseIntact || commandList->commandRecordingFailed())){
+            NWB_LOGGER_CRITICAL_WARNING(
+                NWB_TEXT("Gpu task graph: rejecting task '{}' because its prologue invalidated or replaced the native command buffer"),
+                StringConvert(taskView.markerLabel)
+            );
+            recorded = false;
+        }
+        bool taskMarkerStarted = false;
+        if(recorded){
+            commandList->beginMarker(taskView.markerLabel);
+            taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
+            taskMarkerStarted = taskRecordingLeaseIntact && !commandList->commandRecordingFailed();
+            if(!taskMarkerStarted){
+                NWB_LOGGER_CRITICAL_WARNING(
+                    NWB_TEXT("Gpu task graph: rejecting task '{}' because its marker invalidated or replaced the native command buffer"),
+                    StringConvert(taskView.markerLabel)
+                );
+                recorded = false;
+            }
+        }
 #if defined(NWB_DEBUG)
-        commandList->beginTaskCapabilityTracking();
+        bool taskCapabilityTrackingStarted = false;
+        if(recorded){
+            commandList->beginTaskCapabilityTracking(taskView.queue.requiredCapabilities);
+            taskCapabilityTrackingStarted = true;
+        }
 #endif
         if(recorded){
             const Timer taskRecordBegin = TimerNow();
             recorded = graph.recordTask(task, *commandList, context, recordingLease);
             taskRecordSeconds += DurationInSeconds<f64>(TimerNow(), taskRecordBegin);
+            taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
+            if(!taskRecordingLeaseIntact){
+                NWB_LOGGER_CRITICAL_WARNING(
+                    NWB_TEXT("Gpu task graph: rejecting task '{}' because its record thunk closed or replaced the native command buffer"),
+                    StringConvert(taskView.markerLabel)
+                );
+                recorded = false;
+            }
+            else if(commandList->commandRecordingFailed()){
+                NWB_LOGGER_CRITICAL_WARNING(
+                    NWB_TEXT("Gpu task graph: rejecting task '{}' because native command recording failed on exact queue {}:{}"),
+                    StringConvert(taskView.markerLabel),
+                    packet.queue.index,
+                    packet.queue.deviceGeneration
+                );
+                recorded = false;
+            }
         }
         if(recorded)
             commandList->endRenderPass();
 #if defined(NWB_DEBUG)
-        const GpuQueueCapability::Mask usedCapabilities = commandList->endTaskCapabilityTracking();
+        GpuQueueCapability::Mask usedCapabilities = GpuQueueCapability::None;
+        if(taskCapabilityTrackingStarted){
+            if(taskRecordingLeaseIntact)
+                usedCapabilities = commandList->endTaskCapabilityTracking();
+            else
+                commandList->cancelTaskCapabilityTracking();
+        }
         if(
             recorded
             && (
@@ -397,7 +445,8 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
             recorded = false;
         }
 #endif
-        commandList->endMarker();
+        if(taskMarkerStarted && taskRecordingLeaseIntact)
+            commandList->endMarker();
         const GpuCompiledBarrier* const epilogueBarriers = compiledGraph.taskEpilogueBarriers(task);
         if(compiledTask->epilogueBarrierCount > 0u && !epilogueBarriers)
             recorded = false;

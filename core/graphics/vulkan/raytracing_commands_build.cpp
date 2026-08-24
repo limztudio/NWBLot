@@ -18,11 +18,8 @@ NWB_VULKAN_BEGIN
 
 
 void CommandList::setRayTracingState(const RayTracingState& state){
-    if(!validateNonTransferCommand(NWB_TEXT("set ray-tracing state")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("set ray-tracing state")))
         return;
-#if defined(NWB_DEBUG)
-    recordTaskCapability(GpuQueueCapability::Compute);
-#endif
 
     endActiveRenderPass();
     commitBarriers();
@@ -144,7 +141,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
 
 
 void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags){
-    if(!validateNonTransferCommand(NWB_TEXT("build bottom-level acceleration structure")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("build bottom-level acceleration structure")))
         return;
     if(!accelStructResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is null"));
@@ -400,7 +397,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(
     usize numInstances,
     RayTracingAccelStructBuildFlags::Mask buildFlags
 ){
-    if(!validateNonTransferCommand(NWB_TEXT("build top-level acceleration structure from buffer")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("build top-level acceleration structure from buffer")))
         return;
     if(!accelStructResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is null"));
@@ -450,7 +447,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(
 }
 
 void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingInstanceDesc* pInstances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){
-    if(!validateNonTransferCommand(NWB_TEXT("build top-level acceleration structure")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("build top-level acceleration structure")))
         return;
     if(!accelStructResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure is null"));

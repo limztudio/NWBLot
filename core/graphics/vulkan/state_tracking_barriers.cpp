@@ -25,6 +25,295 @@ namespace VulkanStateTrackingDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void NormalizeBarrierScopeForQueueCapabilities(
+    const GpuQueueCapability::Mask capabilities,
+    VkPipelineStageFlags2& stageMask,
+    VkAccessFlags2& accessMask
+)noexcept{
+    const u8 capabilityBits = static_cast<u8>(capabilities);
+    const bool graphicsCapable = (capabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
+    const bool computeCapable = (capabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) != 0u;
+    const bool transferCapable = (capabilityBits & static_cast<u8>(GpuQueueCapability::Transfer)) != 0u;
+    const bool hadAccess = accessMask != 0u;
+    if(!graphicsCapable && !computeCapable && !transferCapable){
+        stageMask = VK_PIPELINE_STAGE_2_NONE;
+        accessMask = 0u;
+        return;
+    }
+
+    constexpr VkPipelineStageFlags2 s_UniversalStageMask =
+        VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT
+        | VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT
+        | VK_PIPELINE_STAGE_2_HOST_BIT
+        | VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
+    ;
+    constexpr VkPipelineStageFlags2 s_TransferStageMask =
+        VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT
+        | VK_PIPELINE_STAGE_2_TRANSFER_BIT
+        | VK_PIPELINE_STAGE_2_COPY_BIT
+        | VK_PIPELINE_STAGE_2_RESOLVE_BIT
+        | VK_PIPELINE_STAGE_2_BLIT_BIT
+        | VK_PIPELINE_STAGE_2_CLEAR_BIT
+        | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_COPY_BIT_KHR
+        | VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR
+        | VK_PIPELINE_STAGE_2_CONVERT_COOPERATIVE_VECTOR_MATRIX_BIT_NV
+    ;
+    constexpr VkPipelineStageFlags2 s_GraphicsOnlyStageMask =
+        VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT
+        | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT
+        | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT
+        | VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT
+        | VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT
+        | VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT
+        | VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT
+        | VK_PIPELINE_STAGE_2_PRE_RASTERIZATION_SHADERS_BIT
+        | VK_PIPELINE_STAGE_2_TRANSFORM_FEEDBACK_BIT_EXT
+        | VK_PIPELINE_STAGE_2_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR
+        | VK_PIPELINE_STAGE_2_FRAGMENT_DENSITY_PROCESS_BIT_EXT
+        | VK_PIPELINE_STAGE_2_TASK_SHADER_BIT_EXT
+        | VK_PIPELINE_STAGE_2_MESH_SHADER_BIT_EXT
+        | VK_PIPELINE_STAGE_2_SUBPASS_SHADER_BIT_HUAWEI
+        | VK_PIPELINE_STAGE_2_INVOCATION_MASK_BIT_HUAWEI
+        | VK_PIPELINE_STAGE_2_CLUSTER_CULLING_SHADER_BIT_HUAWEI
+    ;
+    constexpr VkPipelineStageFlags2 s_ComputeOnlyStageMask =
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR
+        | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
+        | VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT
+    ;
+    constexpr VkPipelineStageFlags2 s_GraphicsOrComputeStageMask =
+        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT
+        | VK_PIPELINE_STAGE_2_COMMAND_PREPROCESS_BIT_EXT
+        | VK_PIPELINE_STAGE_2_CONDITIONAL_RENDERING_BIT_EXT
+        | VK_PIPELINE_STAGE_2_MEMORY_DECOMPRESSION_BIT_EXT
+    ;
+    VkPipelineStageFlags2 allowedStageMask = s_UniversalStageMask | s_TransferStageMask;
+    if(graphicsCapable)
+        allowedStageMask |= s_GraphicsOnlyStageMask | s_GraphicsOrComputeStageMask;
+    if(computeCapable)
+        allowedStageMask |= s_ComputeOnlyStageMask | s_GraphicsOrComputeStageMask;
+    stageMask &= allowedStageMask;
+
+    if(stageMask == VK_PIPELINE_STAGE_2_NONE){
+        accessMask = 0u;
+        return;
+    }
+
+    constexpr VkPipelineStageFlags2 s_ShaderPipelineStageMask =
+        VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT
+        | VK_PIPELINE_STAGE_2_PRE_RASTERIZATION_SHADERS_BIT
+        | VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR
+        | VK_PIPELINE_STAGE_2_TASK_SHADER_BIT_EXT
+        | VK_PIPELINE_STAGE_2_MESH_SHADER_BIT_EXT
+        | VK_PIPELINE_STAGE_2_SUBPASS_SHADER_BIT_HUAWEI
+        | VK_PIPELINE_STAGE_2_CLUSTER_CULLING_SHADER_BIT_HUAWEI
+    ;
+    constexpr VkPipelineStageFlags2 s_BuildInputShaderReadStageMask =
+        VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
+        | VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT
+    ;
+    constexpr VkPipelineStageFlags2 s_AccelerationStructureReadShaderStageMask =
+        VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT
+        | VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR
+        | VK_PIPELINE_STAGE_2_TASK_SHADER_BIT_EXT
+        | VK_PIPELINE_STAGE_2_MESH_SHADER_BIT_EXT
+        | VK_PIPELINE_STAGE_2_SUBPASS_SHADER_BIT_HUAWEI
+        | VK_PIPELINE_STAGE_2_CLUSTER_CULLING_SHADER_BIT_HUAWEI
+    ;
+    constexpr VkPipelineStageFlags2 s_TransferReadAccessStageMask =
+        (s_TransferStageMask & ~(VK_PIPELINE_STAGE_2_CLEAR_BIT | VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR))
+        | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
+    ;
+    constexpr VkPipelineStageFlags2 s_TransferWriteAccessStageMask =
+        (s_TransferStageMask & ~VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR)
+        | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
+    ;
+    const bool allCommands = (stageMask & VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT) != 0u;
+    const bool allGraphics = graphicsCapable && (stageMask & VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT) != 0u;
+    const auto stripUnless = [&](const VkAccessFlags2 affectedAccess, const bool supported){
+        if(!supported)
+            accessMask &= ~affectedAccess;
+    };
+
+    stripUnless(
+        VK_ACCESS_2_INDEX_READ_BIT,
+        graphicsCapable
+            && (
+                allCommands
+                || allGraphics
+                || (stageMask & (VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT)) != 0u
+            )
+    );
+    stripUnless(
+        VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
+        graphicsCapable
+            && (
+                allCommands
+                || allGraphics
+                || (stageMask & (VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT)) != 0u
+            )
+    );
+    stripUnless(
+        VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
+        graphicsCapable
+            && (
+                allCommands
+                || allGraphics
+                || (stageMask & VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT) != 0u
+            )
+    );
+    stripUnless(
+        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        graphicsCapable && (allCommands || allGraphics || (stageMask & VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT) != 0u)
+    );
+    stripUnless(
+        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+        graphicsCapable
+            && (
+                allCommands
+                || allGraphics
+                || (stageMask & (VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT)) != 0u
+            )
+    );
+    stripUnless(
+        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+        graphicsCapable
+            && (
+                allCommands
+                || allGraphics
+                || (stageMask & (VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT)) != 0u
+            )
+    );
+    stripUnless(
+        VK_ACCESS_2_TRANSFORM_FEEDBACK_WRITE_BIT_EXT,
+        graphicsCapable && (allCommands || allGraphics || (stageMask & VK_PIPELINE_STAGE_2_TRANSFORM_FEEDBACK_BIT_EXT) != 0u)
+    );
+    stripUnless(
+        VK_ACCESS_2_FRAGMENT_SHADING_RATE_ATTACHMENT_READ_BIT_KHR,
+        graphicsCapable && (allCommands || allGraphics || (stageMask & VK_PIPELINE_STAGE_2_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR) != 0u)
+    );
+    stripUnless(
+        VK_ACCESS_2_INPUT_ATTACHMENT_READ_BIT,
+        graphicsCapable
+            && (
+                allCommands
+                || allGraphics
+                || (stageMask & (VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_2_SUBPASS_SHADER_BIT_HUAWEI)) != 0u
+            )
+    );
+    stripUnless(
+        VK_ACCESS_2_SHADER_READ_BIT,
+        (graphicsCapable || computeCapable)
+            && (
+                allCommands
+                || (stageMask & (s_ShaderPipelineStageMask | s_BuildInputShaderReadStageMask)) != 0u
+            )
+    );
+    stripUnless(
+        VK_ACCESS_2_UNIFORM_READ_BIT
+            | VK_ACCESS_2_SHADER_WRITE_BIT
+            | VK_ACCESS_2_SHADER_SAMPLED_READ_BIT
+            | VK_ACCESS_2_SHADER_STORAGE_READ_BIT
+            | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        (graphicsCapable || computeCapable)
+            && (allCommands || (stageMask & s_ShaderPipelineStageMask) != 0u)
+    );
+    stripUnless(
+        VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
+        (graphicsCapable || computeCapable || transferCapable)
+            && (
+                allCommands
+                || (stageMask & (
+                    VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT
+                    | VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT
+                    | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
+                    | VK_PIPELINE_STAGE_2_COPY_INDIRECT_BIT_KHR
+                )) != 0u
+            )
+    );
+    stripUnless(
+        VK_ACCESS_2_TRANSFER_READ_BIT,
+        allCommands || (stageMask & s_TransferReadAccessStageMask) != 0u
+    );
+    stripUnless(
+        VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        allCommands || (stageMask & s_TransferWriteAccessStageMask) != 0u
+    );
+    stripUnless(
+        VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+        allCommands
+            || (stageMask & (
+                VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
+                | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_COPY_BIT_KHR
+                | s_AccelerationStructureReadShaderStageMask
+            )) != 0u
+    );
+    stripUnless(
+        VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
+        allCommands
+            || (stageMask & (
+                VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR
+                | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_COPY_BIT_KHR
+            )) != 0u
+    );
+    stripUnless(
+        VK_ACCESS_2_MICROMAP_READ_BIT_EXT,
+        computeCapable
+            && (stageMask & (VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT | VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR)) != 0u
+    );
+    stripUnless(
+        VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT,
+        computeCapable && (stageMask & VK_PIPELINE_STAGE_2_MICROMAP_BUILD_BIT_EXT) != 0u
+    );
+    stripUnless(
+        VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT,
+        (graphicsCapable || computeCapable)
+            && (allCommands || allGraphics || (stageMask & VK_PIPELINE_STAGE_2_CONDITIONAL_RENDERING_BIT_EXT) != 0u)
+    );
+    stripUnless(
+        VK_ACCESS_2_COMMAND_PREPROCESS_READ_BIT_EXT | VK_ACCESS_2_COMMAND_PREPROCESS_WRITE_BIT_EXT,
+        (graphicsCapable || computeCapable)
+            && (allCommands || (stageMask & VK_PIPELINE_STAGE_2_COMMAND_PREPROCESS_BIT_EXT) != 0u)
+    );
+    stripUnless(
+        VK_ACCESS_2_FRAGMENT_DENSITY_MAP_READ_BIT_EXT,
+        graphicsCapable && (allCommands || allGraphics || (stageMask & VK_PIPELINE_STAGE_2_FRAGMENT_DENSITY_PROCESS_BIT_EXT) != 0u)
+    );
+    stripUnless(
+        VK_ACCESS_2_INVOCATION_MASK_READ_BIT_HUAWEI,
+        graphicsCapable && (stageMask & VK_PIPELINE_STAGE_2_INVOCATION_MASK_BIT_HUAWEI) != 0u
+    );
+    stripUnless(
+        VK_ACCESS_2_MEMORY_DECOMPRESSION_READ_BIT_EXT | VK_ACCESS_2_MEMORY_DECOMPRESSION_WRITE_BIT_EXT,
+        (graphicsCapable || computeCapable)
+            && (stageMask & VK_PIPELINE_STAGE_2_MEMORY_DECOMPRESSION_BIT_EXT) != 0u
+    );
+
+    if(hadAccess && accessMask == 0u)
+        stageMask = VK_PIPELINE_STAGE_2_NONE;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 VkImageMemoryBarrier2 BuildTextureStateBarrier(
     const VkImage image,
     const VkImageAspectFlags aspectMask,
@@ -186,6 +475,9 @@ void AppendTextureStateBarriersBefore(
 
 
 void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
+    if(!validateCommandRecordingScope(NWB_TEXT("pipeline barrier")))
+        return;
+
     Framebuffer* resumeFramebuffer = nullptr;
     if(m_renderPassActive){
         resumeFramebuffer = m_renderPassFramebuffer;
@@ -194,74 +486,30 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
         m_renderPassFramebuffer = nullptr;
     }
 
-    // Compute may use generic shader visibility, while a dedicated transfer family can synchronize only transfer
-    // accesses. Cross-queue semaphore waits make an unsupported producer scope available before this command list;
-    // lower that side to NONE instead of naming an illegal Graphics/Compute access on the transfer queue.
+    // Normalize against the exact selected queue rather than its broad API class. Auxiliary queues may expose a
+    // strict Graphics-only, Compute-only, or Transfer-only capability set even when their class shares a facade.
+    // Cross-queue semaphore waits make an unsupported producer scope available before this command list; lower that
+    // side to NONE instead of naming an illegal local access.
     VkDependencyInfo queueCompatibleDepInfo = depInfo;
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_StateHandoffArena);
     Vector<VkMemoryBarrier2, Alloc::ScratchArena> queueCompatibleMemoryBarriers{scratchArena};
     Vector<VkImageMemoryBarrier2, Alloc::ScratchArena> queueCompatibleImageBarriers{scratchArena};
     Vector<VkBufferMemoryBarrier2, Alloc::ScratchArena> queueCompatibleBufferBarriers{scratchArena};
-    if(m_desc.queueType != CommandQueue::Graphics){
-        constexpr VkAccessFlags2 s_GraphicsAttachmentAccessMask =
-            VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT
-            | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
-            | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT
-            | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
-        ;
-        const auto queueCompatibleStageMask = [this](const VkPipelineStageFlags2 stageMask){
-            return stageMask == VK_PIPELINE_STAGE_2_NONE
-                ? VK_PIPELINE_STAGE_2_NONE
-                : (
-                    m_desc.queueType == CommandQueue::Transfer
-                        ? VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT
-                        : VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
-                )
-            ;
-        };
-        const auto makeSourceScopeQueueCompatible = [&](VkPipelineStageFlags2& stageMask, VkAccessFlags2& accessMask){
-            if(m_desc.queueType == CommandQueue::Transfer){
-                constexpr VkAccessFlags2 s_TransferAccessMask =
-                    VK_ACCESS_2_TRANSFER_READ_BIT
-                    | VK_ACCESS_2_TRANSFER_WRITE_BIT
-                ;
-                if((accessMask & ~s_TransferAccessMask) != 0u){
-                    stageMask = VK_PIPELINE_STAGE_2_NONE;
-                    accessMask = 0u;
-                    return;
-                }
-                stageMask = queueCompatibleStageMask(stageMask);
-                return;
-            }
-
-            // Imported Graphics attachments have no legal local Compute/Copy source scope.
-            if((accessMask & s_GraphicsAttachmentAccessMask) != 0u){
-                stageMask = VK_PIPELINE_STAGE_2_NONE;
-                accessMask = 0u;
-                return;
-            }
-            stageMask = queueCompatibleStageMask(stageMask);
-        };
-        const auto makeDestinationScopeQueueCompatible = [&](VkPipelineStageFlags2& stageMask, VkAccessFlags2& accessMask){
-            if(m_desc.queueType == CommandQueue::Transfer){
-                constexpr VkAccessFlags2 s_TransferAccessMask =
-                    VK_ACCESS_2_TRANSFER_READ_BIT
-                    | VK_ACCESS_2_TRANSFER_WRITE_BIT
-                ;
-                if((accessMask & ~s_TransferAccessMask) != 0u){
-                    stageMask = VK_PIPELINE_STAGE_2_NONE;
-                    accessMask = 0u;
-                    return;
-                }
-            }
-            stageMask = queueCompatibleStageMask(stageMask);
-        };
-
+    const GpuPhysicalQueueInfo* const exactQueueInfo = m_device.getPhysicalQueueInfo(m_desc.physicalQueue);
+    const GpuQueueCapability::Mask exactQueueCapabilities = exactQueueInfo
+        ? exactQueueInfo->capabilities
+        : GpuQueueCapability::None
+    ;
+    const u8 exactCapabilityBits = static_cast<u8>(exactQueueCapabilities);
+    const bool graphicsCapable = (exactCapabilityBits & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
+    const bool computeCapable = (exactCapabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) != 0u;
+    const bool universalGraphicsCompute = graphicsCapable && computeCapable;
+    if(!universalGraphicsCompute){
         queueCompatibleMemoryBarriers.reserve(depInfo.memoryBarrierCount);
         for(u32 index = 0u; index < depInfo.memoryBarrierCount; ++index){
             VkMemoryBarrier2 barrier = depInfo.pMemoryBarriers[index];
-            makeSourceScopeQueueCompatible(barrier.srcStageMask, barrier.srcAccessMask);
-            makeDestinationScopeQueueCompatible(barrier.dstStageMask, barrier.dstAccessMask);
+            VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.srcStageMask, barrier.srcAccessMask);
+            VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.dstStageMask, barrier.dstAccessMask);
             queueCompatibleMemoryBarriers.push_back(barrier);
         }
         queueCompatibleDepInfo.pMemoryBarriers = queueCompatibleMemoryBarriers.data();
@@ -269,8 +517,8 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
         queueCompatibleImageBarriers.reserve(depInfo.imageMemoryBarrierCount);
         for(u32 index = 0u; index < depInfo.imageMemoryBarrierCount; ++index){
             VkImageMemoryBarrier2 barrier = depInfo.pImageMemoryBarriers[index];
-            makeSourceScopeQueueCompatible(barrier.srcStageMask, barrier.srcAccessMask);
-            makeDestinationScopeQueueCompatible(barrier.dstStageMask, barrier.dstAccessMask);
+            VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.srcStageMask, barrier.srcAccessMask);
+            VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.dstStageMask, barrier.dstAccessMask);
             queueCompatibleImageBarriers.push_back(barrier);
         }
         queueCompatibleDepInfo.pImageMemoryBarriers = queueCompatibleImageBarriers.data();
@@ -278,8 +526,8 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
         queueCompatibleBufferBarriers.reserve(depInfo.bufferMemoryBarrierCount);
         for(u32 index = 0u; index < depInfo.bufferMemoryBarrierCount; ++index){
             VkBufferMemoryBarrier2 barrier = depInfo.pBufferMemoryBarriers[index];
-            makeSourceScopeQueueCompatible(barrier.srcStageMask, barrier.srcAccessMask);
-            makeDestinationScopeQueueCompatible(barrier.dstStageMask, barrier.dstAccessMask);
+            VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.srcStageMask, barrier.srcAccessMask);
+            VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.dstStageMask, barrier.dstAccessMask);
             queueCompatibleBufferBarriers.push_back(barrier);
         }
         queueCompatibleDepInfo.pBufferMemoryBarriers = queueCompatibleBufferBarriers.data();
@@ -297,6 +545,9 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
 }
 
 void CommandList::commitBarriers(){
+    if(!validateCommandRecordingScope(NWB_TEXT("commit barriers")))
+        return;
+
     if(m_pendingImageBarriers.empty() && m_pendingBufferBarriers.empty())
         return;
 
@@ -314,6 +565,8 @@ void CommandList::commitBarriers(){
 
 void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
     if(!textureResource)
+        return;
+    if(!validateCommandRecordingScope(NWB_TEXT("set texture state")))
         return;
 
     Texture& texture = *textureResource;
@@ -444,6 +697,8 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
 void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask stateBits){
     if(!bufferResource)
         return;
+    if(!validateCommandRecordingScope(NWB_TEXT("set buffer state")))
+        return;
 
     Buffer& buffer = *bufferResource;
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(&buffer);
@@ -522,7 +777,9 @@ void CommandList::releaseTextureOwnership(
     TextureSubresourceSet subresources,
     const GpuPhysicalQueueId destinationQueue
 ){
-    if(!textureResource || !m_currentCmdBuf)
+    if(!textureResource)
+        return;
+    if(!validateCommandRecordingScope(NWB_TEXT("release texture ownership")))
         return;
 
     Texture& texture = *textureResource;
@@ -592,7 +849,9 @@ void CommandList::releaseBufferOwnership(
     Buffer* bufferResource,
     const GpuPhysicalQueueId destinationQueue
 ){
-    if(!bufferResource || !m_currentCmdBuf)
+    if(!bufferResource)
+        return;
+    if(!validateCommandRecordingScope(NWB_TEXT("release buffer ownership")))
         return;
 
     Buffer& buffer = *bufferResource;
@@ -636,6 +895,8 @@ void CommandList::releaseBufferOwnership(
 void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mask stateBits){
     if(!texture)
         return;
+    if(!validateCommandRecordingScope(NWB_TEXT("set permanent texture state")))
+        return;
     if(stateBits == ResourceStates::Unknown){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot permanently track a texture in an unknown state"));
         return;
@@ -657,6 +918,8 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
 
 void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask stateBits){
     if(!buffer)
+        return;
+    if(!validateCommandRecordingScope(NWB_TEXT("set permanent buffer state")))
         return;
     if(stateBits == ResourceStates::Unknown){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot permanently track a buffer in an unknown state"));

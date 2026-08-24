@@ -587,6 +587,46 @@ TEST(EcsGraphics, PrefixAndShadowTopologyUsesSemanticTaskAnchors){
 }
 
 
+// Software visibility and caustics retain distinct timing tickets, but their semantic range may contain untimed
+// compiler packets. Keep the hardware single-packet invariant while making the software boundary task-based.
+TEST(EcsGraphics, SoftwareShadowEffectsTopologyUsesSemanticTaskAnchors){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemSource;
+    ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
+    const AStringView system(systemSource.data(), systemSource.size());
+
+    EXPECT_TRUE(ContainsText(
+        system,
+        "packetRangeForTasks(\n"
+        "        m_deferredShadowVisibilityTask,\n"
+        "        hardwareShadowSupported ? m_deferredShadowVisibilityTask : m_deferredSoftwareCausticsTask"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "const bool softwareShadowEffectsTimingPacketsAreDistinct =\n"
+        "        !hardwareShadowSupported\n"
+        "        && !m_deferredLightingCompiledGraph.tasksSharePacket("
+    ));
+    EXPECT_EQ(CountText(system, "softwareShadowEffectsTimingPacketsAreDistinct"), 3u);
+    EXPECT_TRUE(ContainsText(
+        system,
+        "hardwareShadowSupported\n"
+        "            ? shadowEffectsPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount"
+    ));
+    EXPECT_TRUE(ContainsText(system, "shadowEffectsSubmitter.submitTaskRangeInCompileOrderFromTasks("));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "m_deferredShadowVisibilityTask,\n"
+        "                hardwareShadowSupported ? m_deferredShadowVisibilityTask : m_deferredSoftwareCausticsTask,"
+    ));
+    EXPECT_TRUE(ContainsText(system, "const usize shadowEffectsTimingTicketCount = hardwareShadowSupported"));
+    EXPECT_FALSE(ContainsText(system, "s_SoftwareShadowEffectsPacketCount"));
+    EXPECT_FALSE(ContainsText(system, "shadowEffectsPacketRange.packetCount == shadowEffectsTimingTicketCount"));
+}
+
+
 // AVBOIT validation follows semantic stage anchors and accepts the compiler-owned packet range between them. It
 // must not constrain that range to the currently generated one-packet or five-packet topology.
 TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){

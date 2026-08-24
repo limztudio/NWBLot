@@ -30,7 +30,6 @@ namespace RendererSystemRenderDetail{
 // Packet-range checks below encode the fixed semantic topology of the renderer graph. Keep the counts named so
 // validation does not silently drift when a task is added to one of those ranges.
 inline constexpr usize s_SinglePacketCount = 1u;
-inline constexpr usize s_SoftwareShadowEffectsPacketCount = 2u;
 inline constexpr usize s_SurfelGiMergedPreparationAndCopyPacketCount = 2u;
 inline constexpr usize s_SurfelGiSeparatePreparationAndCopyPacketCount = 3u;
 inline constexpr usize s_PresentationOverlayPacketCount = 1u;
@@ -1310,6 +1309,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredShadowVisibilityTask,
         hardwareShadowSupported ? m_deferredShadowVisibilityTask : m_deferredSoftwareCausticsTask
     );
+    // Software visibility and caustics own distinct timing tickets, so their endpoint packets cannot merge. The
+    // inclusive semantic range may still contain compiler-owned untimed packets between those anchors.
+    const bool softwareShadowEffectsTimingPacketsAreDistinct =
+        !hardwareShadowSupported
+        && !m_deferredLightingCompiledGraph.tasksSharePacket(
+            m_deferredShadowVisibilityTask,
+            m_deferredSoftwareCausticsTask
+        )
+    ;
     const Core::GpuTaskId surfelGiFirstTask = m_deferredSurfelGiPreparationTask.valid()
         ? m_deferredSurfelGiPreparationTask
         : m_deferredSurfelGiTask
@@ -1540,9 +1548,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || shadowPrepareThroughPrefixPacketRange.packetCount
             != shadowPreparePacketRange.packetCount + graphicsPrefixWorkPacketRange.packetCount
         || !shadowEffectsPacketRange.valid()
-        || shadowEffectsPacketRange.packetCount != (hardwareShadowSupported
-            ? RendererSystemRenderDetail::s_SinglePacketCount
-            : RendererSystemRenderDetail::s_SoftwareShadowEffectsPacketCount)
+        || (hardwareShadowSupported
+            ? shadowEffectsPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount
+            : !softwareShadowEffectsTimingPacketsAreDistinct)
         || !surfelGiPacketRange.valid()
         || surfelGiPacketRange.packetCount != expectedSurfelGiPacketCount
         || (hardwareShadowSupported && (
@@ -3088,7 +3096,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && shadowVisibilityAllLitClearMerged
             && shadowVisibilityAdaptivePrimitivesMerged
             && shadowEffectsPacketRange.valid()
-            && shadowEffectsPacketRange.packetCount == shadowEffectsTimingTicketCount
+            && (hardwareShadowSupported || softwareShadowEffectsTimingPacketsAreDistinct)
             && (hardwareShadowSupported || (
                 m_deferredSoftwareCausticsTask.valid()
                 && taskIsCompiled(m_deferredSoftwareCausticsTask)

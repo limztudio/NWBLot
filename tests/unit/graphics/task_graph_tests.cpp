@@ -821,7 +821,9 @@ TEST(VulkanStateTracking, DetectsExactActiveAttachmentBarrierOverlap){
     const VkImage image = reinterpret_cast<VkImage>(static_cast<usize>(1u));
     const VkImage otherImage = reinterpret_cast<VkImage>(static_cast<usize>(2u));
     constexpr Graphics::TextureSubresourceSet s_AttachmentSubresources(2u, 1u, 3u, 2u);
-    auto barrier = Graphics::GraphicsBackend::VulkanDetail::MakeVkStruct<VkImageMemoryBarrier2>(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
+    auto barrier = Graphics::GraphicsBackend::VulkanDetail::MakeVkStruct<VkImageMemoryBarrier2>(
+        VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2
+    );
     barrier.image = image;
     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     barrier.subresourceRange.baseMipLevel = 2u;

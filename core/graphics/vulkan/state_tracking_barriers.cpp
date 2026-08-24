@@ -604,7 +604,10 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
             m_renderPassFramebuffer = resumeFramebuffer;
         }
         else
-            rejectCommandRecording(NWB_TEXT("pipeline barrier"), NWB_TEXT("dynamic rendering could not resume after the barrier"));
+            rejectCommandRecording(
+                NWB_TEXT("pipeline barrier"),
+                NWB_TEXT("dynamic rendering could not resume after the barrier")
+            );
     }
 }
 
@@ -663,7 +666,10 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
                 permanentState == ResourceStates::Unknown
                 && !m_stateTracker.getResolvedTransientTextureState(texture, arraySlice, mipLevel, subresourceOldState)
             ){
-                rejectCommandRecording(NWB_TEXT("set texture state"), NWB_TEXT("tracked texture subresource state could not be resolved"));
+                rejectCommandRecording(
+                    NWB_TEXT("set texture state"),
+                    NWB_TEXT("tracked texture subresource state could not be resolved")
+                );
                 return;
             }
 
@@ -854,17 +860,26 @@ void CommandList::releaseTextureOwnership(
 
     Texture& texture = *textureResource;
     if(m_stateTracker.isPermanentTexture(texture)){
-        rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("permanently tracked textures cannot transfer ownership"));
+        rejectCommandRecording(
+            NWB_TEXT("release texture ownership"),
+            NWB_TEXT("permanently tracked textures cannot transfer ownership")
+        );
         return;
     }
     if(m_device.usesConcurrentQueueSharing(texture.m_desc.queueSharing)){
-        rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("concurrently shared textures do not have exclusive ownership"));
+        rejectCommandRecording(
+            NWB_TEXT("release texture ownership"),
+            NWB_TEXT("concurrently shared textures do not have exclusive ownership")
+        );
         return;
     }
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
-        rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("subresource range is empty or outside the texture"));
+        rejectCommandRecording(
+            NWB_TEXT("release texture ownership"),
+            NWB_TEXT("subresource range is empty or outside the texture")
+        );
         return;
     }
 
@@ -893,7 +908,10 @@ void CommandList::releaseTextureOwnership(
             const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
             const auto existing = m_textureOwnershipReleaseDestinations.find(key);
             if(existing != m_textureOwnershipReleaseDestinations.end() && existing.value() != destinationQueue){
-                rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("subresource already targets a conflicting destination queue"));
+                rejectCommandRecording(
+                    NWB_TEXT("release texture ownership"),
+                    NWB_TEXT("subresource already targets a conflicting destination queue")
+                );
                 return;
             }
         }
@@ -925,11 +943,17 @@ void CommandList::releaseBufferOwnership(
 
     Buffer& buffer = *bufferResource;
     if(m_stateTracker.isPermanentBuffer(buffer)){
-        rejectCommandRecording(NWB_TEXT("release buffer ownership"), NWB_TEXT("permanently tracked buffers cannot transfer ownership"));
+        rejectCommandRecording(
+            NWB_TEXT("release buffer ownership"),
+            NWB_TEXT("permanently tracked buffers cannot transfer ownership")
+        );
         return;
     }
     if(m_device.usesConcurrentQueueSharing(buffer.m_desc.queueSharing)){
-        rejectCommandRecording(NWB_TEXT("release buffer ownership"), NWB_TEXT("concurrently shared buffers do not have exclusive ownership"));
+        rejectCommandRecording(
+            NWB_TEXT("release buffer ownership"),
+            NWB_TEXT("concurrently shared buffers do not have exclusive ownership")
+        );
         return;
     }
 
@@ -950,7 +974,10 @@ void CommandList::releaseBufferOwnership(
 
     const auto existing = m_bufferOwnershipReleaseDestinations.find(&buffer);
     if(existing != m_bufferOwnershipReleaseDestinations.end() && existing.value() != destinationQueue){
-        rejectCommandRecording(NWB_TEXT("release buffer ownership"), NWB_TEXT("buffer already targets a conflicting destination queue"));
+        rejectCommandRecording(
+            NWB_TEXT("release buffer ownership"),
+            NWB_TEXT("buffer already targets a conflicting destination queue")
+        );
         return;
     }
 
@@ -968,18 +995,27 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
         return;
     }
     if(texture->m_desc.keepInitialState && texture->m_desc.initialState != stateBits){
-        rejectCommandRecording(NWB_TEXT("set permanent texture state"), NWB_TEXT("permanent state conflicts with the retained initial state"));
+        rejectCommandRecording(
+            NWB_TEXT("set permanent texture state"),
+            NWB_TEXT("permanent state conflicts with the retained initial state")
+        );
         return;
     }
 
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentTextureState(texture);
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
-        rejectCommandRecording(NWB_TEXT("set permanent texture state"), NWB_TEXT("a different permanent state is already tracked"));
+        rejectCommandRecording(
+            NWB_TEXT("set permanent texture state"),
+            NWB_TEXT("a different permanent state is already tracked")
+        );
         return;
     }
     for(auto it = m_textureOwnershipReleaseDestinations.begin(); it != m_textureOwnershipReleaseDestinations.end(); ++it){
         if(it->first.texture == texture){
-            rejectCommandRecording(NWB_TEXT("set permanent texture state"), NWB_TEXT("texture already has a pending ownership release"));
+            rejectCommandRecording(
+                NWB_TEXT("set permanent texture state"),
+                NWB_TEXT("texture already has a pending ownership release")
+            );
             return;
         }
     }
@@ -1000,17 +1036,26 @@ void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask s
         return;
     }
     if(buffer->m_desc.keepInitialState && buffer->m_desc.initialState != stateBits){
-        rejectCommandRecording(NWB_TEXT("set permanent buffer state"), NWB_TEXT("permanent state conflicts with the retained initial state"));
+        rejectCommandRecording(
+            NWB_TEXT("set permanent buffer state"),
+            NWB_TEXT("permanent state conflicts with the retained initial state")
+        );
         return;
     }
 
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(buffer);
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
-        rejectCommandRecording(NWB_TEXT("set permanent buffer state"), NWB_TEXT("a different permanent state is already tracked"));
+        rejectCommandRecording(
+            NWB_TEXT("set permanent buffer state"),
+            NWB_TEXT("a different permanent state is already tracked")
+        );
         return;
     }
     if(m_bufferOwnershipReleaseDestinations.find(buffer) != m_bufferOwnershipReleaseDestinations.end()){
-        rejectCommandRecording(NWB_TEXT("set permanent buffer state"), NWB_TEXT("buffer already has a pending ownership release"));
+        rejectCommandRecording(
+            NWB_TEXT("set permanent buffer state"),
+            NWB_TEXT("buffer already has a pending ownership release")
+        );
         return;
     }
 

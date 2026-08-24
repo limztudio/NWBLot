@@ -91,7 +91,10 @@ void CommandList::setComputeState(const ComputeState& state){
         return;
     }
     if(state.pipeline->m_pipeline == VK_NULL_HANDLE || state.pipeline->m_pipelineLayout == VK_NULL_HANDLE){
-        rejectCommandRecording(NWB_TEXT("set compute state"), NWB_TEXT("compute pipeline has no valid native pipeline or layout"));
+        rejectCommandRecording(
+            NWB_TEXT("set compute state"),
+            NWB_TEXT("compute pipeline has no valid native pipeline or layout")
+        );
         return;
     }
     if(
@@ -101,7 +104,10 @@ void CommandList::setComputeState(const ComputeState& state){
             || !state.indirectParams->m_desc.isDrawIndirectArgs
         )
     ){
-        rejectCommandRecording(NWB_TEXT("set compute state"), NWB_TEXT("indirect buffer has no valid native buffer or indirect-argument usage"));
+        rejectCommandRecording(
+            NWB_TEXT("set compute state"),
+            NWB_TEXT("indirect buffer has no valid native buffer or indirect-argument usage")
+        );
         return;
     }
 

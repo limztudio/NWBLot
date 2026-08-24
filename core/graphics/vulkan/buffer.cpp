@@ -643,8 +643,14 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
         rejectCommandRecording(NWB_TEXT("direct command-IR copy buffer"), NWB_TEXT("source range is outside the buffer"));
         return false;
     }
-    if(dest.m_buffer == src.m_buffer && VulkanDetail::BufferRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)){
-        rejectCommandRecording(NWB_TEXT("direct command-IR copy buffer"), NWB_TEXT("source and destination ranges overlap in the same buffer"));
+    if(
+        dest.m_buffer == src.m_buffer
+        && VulkanDetail::BufferRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)
+    ){
+        rejectCommandRecording(
+            NWB_TEXT("direct command-IR copy buffer"),
+            NWB_TEXT("source and destination ranges overlap in the same buffer")
+        );
         return false;
     }
 

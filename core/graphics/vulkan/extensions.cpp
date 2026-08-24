@@ -30,7 +30,10 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
     }
 
     const u32 pushConstantByteSize = static_cast<u32>(byteSize);
-    if(!VulkanDetail::IsPushConstantByteSizeValid(pushConstantByteSize, m_context.physicalDeviceProperties.limits.maxPushConstantsSize)){
+    if(!VulkanDetail::IsPushConstantByteSizeValid(
+        pushConstantByteSize,
+        m_context.physicalDeviceProperties.limits.maxPushConstantsSize
+    )){
         rejectCommandRecording(NWB_TEXT("set push constants"), NWB_TEXT("byte size is unaligned or exceeds the device limit"));
         return;
     }
@@ -72,7 +75,10 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
     }
 
     if(activePipelineCount != 1u || layout == VK_NULL_HANDLE){
-        rejectCommandRecording(NWB_TEXT("set push constants"), NWB_TEXT("exactly one active valid pipeline layout is required"));
+        rejectCommandRecording(
+            NWB_TEXT("set push constants"),
+            NWB_TEXT("exactly one active valid pipeline layout is required")
+        );
         return;
     }
     if(!recordAndValidateCommandCapability(requiredCapabilities, NWB_TEXT("set push constants")))
@@ -83,7 +89,10 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
         return;
     }
     if(pushConstantByteSize > pipelinePushConstantByteSize){
-        rejectCommandRecording(NWB_TEXT("set push constants"), NWB_TEXT("byte size exceeds the active pipeline push constant range"));
+        rejectCommandRecording(
+            NWB_TEXT("set push constants"),
+            NWB_TEXT("byte size exceeds the active pipeline push constant range")
+        );
         return;
     }
 

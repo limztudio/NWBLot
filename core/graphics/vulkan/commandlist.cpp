@@ -166,7 +166,10 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
         !finalStates
         && (!m_textureOwnershipReleaseDestinations.empty() || !m_bufferOwnershipReleaseDestinations.empty())
     ){
-        rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("ownership release requires a final resource-state handoff"));
+        rejectCommandRecording(
+            NWB_TEXT("close command list"),
+            NWB_TEXT("ownership release requires a final resource-state handoff")
+        );
         discardInvalidCommandBuffer();
         return;
     }

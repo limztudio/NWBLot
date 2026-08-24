@@ -229,7 +229,13 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             return false;
         }
 
-        if(!appendBufferAcquire(*state.buffer, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
+        if(!appendBufferAcquire(
+            *state.buffer,
+            state.state,
+            state.queueSharing,
+            state.ownerQueue,
+            state.releaseDestinationQueue
+        ))
             return false;
     }
 
@@ -255,7 +261,14 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             }
         }
 
-        if(!appendTextureAcquire(*state.texture, s_AllSubresources, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
+        if(!appendTextureAcquire(
+            *state.texture,
+            s_AllSubresources,
+            state.state,
+            state.queueSharing,
+            state.ownerQueue,
+            state.releaseDestinationQueue
+        ))
             return false;
     }
 
@@ -281,7 +294,13 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             }
         }
 
-        if(!appendBufferAcquire(*state.buffer, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
+        if(!appendBufferAcquire(
+            *state.buffer,
+            state.state,
+            state.queueSharing,
+            state.ownerQueue,
+            state.releaseDestinationQueue
+        ))
             return false;
     }
 
@@ -454,22 +473,34 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
         const TextureSubresourceStateKey& key = it->first;
         Texture* const texture = key.texture;
         if(!texture){
-            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("pending texture release has no resource"));
+            rejectCommandRecording(
+                NWB_TEXT("append ownership-release barriers"),
+                NWB_TEXT("pending texture release has no resource")
+            );
             return;
         }
         if(m_device.usesConcurrentQueueSharing(texture->m_desc.queueSharing)){
-            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("concurrent texture has a pending exclusive release"));
+            rejectCommandRecording(
+                NWB_TEXT("append ownership-release barriers"),
+                NWB_TEXT("concurrent texture has a pending exclusive release")
+            );
             return;
         }
         if(m_stateTracker.isPermanentTexture(*texture)){
-            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("permanent texture has a pending ownership release"));
+            rejectCommandRecording(
+                NWB_TEXT("append ownership-release barriers"),
+                NWB_TEXT("permanent texture has a pending ownership release")
+            );
             return;
         }
 
         const GpuPhysicalQueueId destinationQueue = it.value();
         const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(destinationQueue);
         if(destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
-            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("texture destination queue family is unavailable"));
+            rejectCommandRecording(
+                NWB_TEXT("append ownership-release barriers"),
+                NWB_TEXT("texture destination queue family is unavailable")
+            );
             return;
         }
 
@@ -496,22 +527,34 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
     for(auto it = m_bufferOwnershipReleaseDestinations.begin(); it != m_bufferOwnershipReleaseDestinations.end(); ++it){
         Buffer* const buffer = it->first;
         if(!buffer){
-            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("pending buffer release has no resource"));
+            rejectCommandRecording(
+                NWB_TEXT("append ownership-release barriers"),
+                NWB_TEXT("pending buffer release has no resource")
+            );
             return;
         }
         if(m_device.usesConcurrentQueueSharing(buffer->m_desc.queueSharing)){
-            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("concurrent buffer has a pending exclusive release"));
+            rejectCommandRecording(
+                NWB_TEXT("append ownership-release barriers"),
+                NWB_TEXT("concurrent buffer has a pending exclusive release")
+            );
             return;
         }
         if(m_stateTracker.isPermanentBuffer(*buffer)){
-            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("permanent buffer has a pending ownership release"));
+            rejectCommandRecording(
+                NWB_TEXT("append ownership-release barriers"),
+                NWB_TEXT("permanent buffer has a pending ownership release")
+            );
             return;
         }
 
         const GpuPhysicalQueueId destinationQueue = it.value();
         const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(destinationQueue);
         if(destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
-            rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("buffer destination queue family is unavailable"));
+            rejectCommandRecording(
+                NWB_TEXT("append ownership-release barriers"),
+                NWB_TEXT("buffer destination queue family is unavailable")
+            );
             return;
         }
 

@@ -42,8 +42,11 @@ bool GpuTaskGraph::applyCompiledBarrier(
     };
     switch(barrier.type){
     case GpuCompiledBarrierType::TextureTransition:
-    case GpuCompiledBarrierType::TextureUav:
+    case GpuCompiledBarrierType::TextureUav:{
         if(resource.type != GpuGraphResourceType::Texture || !resource.texture)
+            return false;
+        const ResourceStates::Mask permanentState = commandList.getPermanentTextureState(resource.texture.get());
+        if(permanentState != ResourceStates::Unknown && permanentState != barrier.after)
             return false;
         if(barrier.isGraphInitialState){
             if(barrier.before == ResourceStates::Unknown)
@@ -75,9 +78,13 @@ bool GpuTaskGraph::applyCompiledBarrier(
             barrier.after
         );
         return true;
+    }
     case GpuCompiledBarrierType::BufferTransition:
-    case GpuCompiledBarrierType::BufferUav:
+    case GpuCompiledBarrierType::BufferUav:{
         if(resource.type != GpuGraphResourceType::Buffer || !resource.buffer)
+            return false;
+        const ResourceStates::Mask permanentState = commandList.getPermanentBufferState(resource.buffer.get());
+        if(permanentState != ResourceStates::Unknown && permanentState != barrier.after)
             return false;
         if(barrier.isGraphInitialState){
             if(barrier.before == ResourceStates::Unknown)
@@ -87,8 +94,12 @@ bool GpuTaskGraph::applyCompiledBarrier(
         }
         commandList.setBufferState(resource.buffer.get(), barrier.after);
         return true;
-    case GpuCompiledBarrierType::TextureStateExport:
+    }
+    case GpuCompiledBarrierType::TextureStateExport:{
         if(resource.type != GpuGraphResourceType::Texture || !resource.texture)
+            return false;
+        const ResourceStates::Mask permanentState = commandList.getPermanentTextureState(resource.texture.get());
+        if(permanentState != ResourceStates::Unknown && permanentState != barrier.after)
             return false;
         // A task thunk may transition internally after its declared entry use. Reapply the compiler-required
         // final state against the native tracker, then retain it even when no Vulkan transition was needed so
@@ -104,17 +115,25 @@ bool GpuTaskGraph::applyCompiledBarrier(
             barrier.after
         );
         return true;
-    case GpuCompiledBarrierType::BufferStateExport:
+    }
+    case GpuCompiledBarrierType::BufferStateExport:{
         if(resource.type != GpuGraphResourceType::Buffer || !resource.buffer)
+            return false;
+        const ResourceStates::Mask permanentState = commandList.getPermanentBufferState(resource.buffer.get());
+        if(permanentState != ResourceStates::Unknown && permanentState != barrier.after)
             return false;
         commandList.setBufferState(resource.buffer.get(), barrier.after);
         commandList.beginTrackingBufferState(resource.buffer.get(), barrier.after);
         return true;
+    }
     case GpuCompiledBarrierType::AccelStructStateExport:{
         if(resource.type != GpuGraphResourceType::AccelStruct || !resource.accelStruct)
             return false;
         Buffer* const backingBuffer = resource.accelStruct->getBackingBuffer();
         if(!backingBuffer)
+            return false;
+        const ResourceStates::Mask permanentState = commandList.getPermanentBufferState(backingBuffer);
+        if(permanentState != ResourceStates::Unknown && permanentState != barrier.after)
             return false;
         // Acceleration-structure state and ownership are represented by Vulkan through the allocation that backs
         // the AS. Keep that lowering private to the graph runtime while retaining one typed graph resource.
@@ -123,20 +142,24 @@ bool GpuTaskGraph::applyCompiledBarrier(
         return true;
     }
     case GpuCompiledBarrierType::AccelStructTransition:
-    case GpuCompiledBarrierType::AccelStructUav:
+    case GpuCompiledBarrierType::AccelStructUav:{
         if(resource.type != GpuGraphResourceType::AccelStruct || !resource.accelStruct)
+            return false;
+        Buffer* const backingBuffer = resource.accelStruct->getBackingBuffer();
+        if(!backingBuffer)
+            return false;
+        const ResourceStates::Mask permanentState = commandList.getPermanentBufferState(backingBuffer);
+        if(permanentState != ResourceStates::Unknown && permanentState != barrier.after)
             return false;
         if(barrier.isGraphInitialState){
             if(barrier.before == ResourceStates::Unknown)
-                return false;
-            Buffer* const backingBuffer = resource.accelStruct->getBackingBuffer();
-            if(!backingBuffer)
                 return false;
             if(!commandList.hasExplicitBufferState(backingBuffer))
                 commandList.beginTrackingBufferState(backingBuffer, barrier.before);
         }
         commandList.setAccelStructState(resource.accelStruct.get(), barrier.after);
         return true;
+    }
     case GpuCompiledBarrierType::TextureOwnershipRelease:{
         const GpuPhysicalQueueInfo* const sourceQueue = compiledGraph.queueInfo(barrier.sourceQueue);
         const GpuPhysicalQueueInfo* const destinationQueue = compiledGraph.queueInfo(barrier.destinationQueue);
@@ -146,6 +169,8 @@ bool GpuTaskGraph::applyCompiledBarrier(
             || !resolveOwnershipQueues()
             || commandList.getDescription().physicalQueue != sourceQueue->id
         )
+            return false;
+        if(commandList.getPermanentTextureState(resource.texture.get()) != ResourceStates::Unknown)
             return false;
         commandList.releaseTextureOwnership(
             resource.texture.get(),
@@ -164,6 +189,8 @@ bool GpuTaskGraph::applyCompiledBarrier(
             || commandList.getDescription().physicalQueue != sourceQueue->id
         )
             return false;
+        if(commandList.getPermanentBufferState(resource.buffer.get()) != ResourceStates::Unknown)
+            return false;
         commandList.releaseBufferOwnership(resource.buffer.get(), destinationQueue->id);
         return true;
     }
@@ -179,6 +206,8 @@ bool GpuTaskGraph::applyCompiledBarrier(
             return false;
         Buffer* const backingBuffer = resource.accelStruct->getBackingBuffer();
         if(!backingBuffer)
+            return false;
+        if(commandList.getPermanentBufferState(backingBuffer) != ResourceStates::Unknown)
             return false;
         commandList.releaseBufferOwnership(backingBuffer, destinationQueue->id);
         return true;

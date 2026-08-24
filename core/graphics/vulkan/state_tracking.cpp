@@ -36,10 +36,22 @@ void StateTracker::reset(){
 }
 
 void StateTracker::setPermanentTextureState(Texture& texture, ResourceStates::Mask state){
+    if(state == ResourceStates::Unknown)
+        return;
+
+    const auto existing = m_permanentTextureStates.find(&texture);
+    if(existing != m_permanentTextureStates.end() && existing.value() != state)
+        return;
     m_permanentTextureStates.insert_or_assign(&texture, state);
 }
 
 void StateTracker::setPermanentBufferState(Buffer& buffer, ResourceStates::Mask state){
+    if(state == ResourceStates::Unknown)
+        return;
+
+    const auto existing = m_permanentBufferStates.find(&buffer);
+    if(existing != m_permanentBufferStates.end() && existing.value() != state)
+        return;
     m_permanentBufferStates.insert_or_assign(&buffer, state);
 }
 
@@ -49,6 +61,22 @@ bool StateTracker::isPermanentTexture(Texture& texture)const{
 
 bool StateTracker::isPermanentBuffer(Buffer& buffer)const{
     return m_permanentBufferStates.find(&buffer) != m_permanentBufferStates.end();
+}
+
+ResourceStates::Mask StateTracker::getPermanentTextureState(Texture* texture)const{
+    if(!texture)
+        return ResourceStates::Unknown;
+
+    const auto existing = m_permanentTextureStates.find(texture);
+    return existing != m_permanentTextureStates.end() ? existing.value() : ResourceStates::Unknown;
+}
+
+ResourceStates::Mask StateTracker::getPermanentBufferState(Buffer* buffer)const{
+    if(!buffer)
+        return ResourceStates::Unknown;
+
+    const auto existing = m_permanentBufferStates.find(buffer);
+    return existing != m_permanentBufferStates.end() ? existing.value() : ResourceStates::Unknown;
 }
 
 ResourceStates::Mask StateTracker::getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const{
@@ -289,6 +317,14 @@ ResourceStates::Mask CommandList::getTextureSubresourceState(Texture* texture, A
 
 ResourceStates::Mask CommandList::getBufferState(Buffer* buffer){
     return m_stateTracker.getBufferState(buffer);
+}
+
+ResourceStates::Mask CommandList::getPermanentTextureState(Texture* texture)const{
+    return m_stateTracker.getPermanentTextureState(texture);
+}
+
+ResourceStates::Mask CommandList::getPermanentBufferState(Buffer* buffer)const{
+    return m_stateTracker.getPermanentBufferState(buffer);
 }
 
 bool CommandList::hasExplicitTextureSubresourceState(

@@ -297,6 +297,8 @@ concept CommandListApi = requires(
     commandList.commitBarriers();
     { commandList.getTextureSubresourceState(texture, ArraySlice{}, MipLevel{}) }->SameAs<ResourceStates::Mask>;
     { commandList.getBufferState(buffer) }->SameAs<ResourceStates::Mask>;
+    { commandList.getPermanentTextureState(texture) }->SameAs<ResourceStates::Mask>;
+    { commandList.getPermanentBufferState(buffer) }->SameAs<ResourceStates::Mask>;
     commandList.getDevice();
     { commandList.getDevice() }->SameAs<Device&>;
     { commandList.getDescription() }->SameAs<const CommandListParameters&>;

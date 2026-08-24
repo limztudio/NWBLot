@@ -1381,10 +1381,25 @@ TEST(GpuStateTracker, DistinguishesRetainedDescriptorFallbackFromExplicitState){
         Graphics::BufferHandle::deleter_type(&testArena.arena),
         AdoptRef
     );
+    Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+        testArena.arena,
+        context,
+        allocator
+    );
+    ASSERT_NE(textureObject, nullptr);
+    Graphics::TextureHandle texture(
+        textureObject,
+        Graphics::TextureHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
     Graphics::BufferDesc& description = const_cast<Graphics::BufferDesc&>(buffer->getDescription());
     description.enableAutomaticStateTracking(Graphics::ResourceStates::ShaderResource);
 
     Graphics::GraphicsBackend::StateTracker stateTracker(context);
+    EXPECT_EQ(stateTracker.getPermanentBufferState(nullptr), Graphics::ResourceStates::Unknown);
+    EXPECT_EQ(stateTracker.getPermanentTextureState(nullptr), Graphics::ResourceStates::Unknown);
+    EXPECT_EQ(stateTracker.getPermanentBufferState(buffer.get()), Graphics::ResourceStates::Unknown);
+    EXPECT_EQ(stateTracker.getPermanentTextureState(texture.get()), Graphics::ResourceStates::Unknown);
     // A retained descriptor provides a useful native fallback, but it is not a packet handoff. The graph may
     // authoritatively materialize its declared initial state over it.
     EXPECT_EQ(stateTracker.getBufferState(buffer.get()), Graphics::ResourceStates::ShaderResource);
@@ -1395,10 +1410,23 @@ TEST(GpuStateTracker, DistinguishesRetainedDescriptorFallbackFromExplicitState){
     EXPECT_EQ(stateTracker.getBufferState(buffer.get()), Graphics::ResourceStates::CopySource);
 
     stateTracker.reset();
+    stateTracker.setPermanentBufferState(*buffer, Graphics::ResourceStates::Unknown);
+    EXPECT_EQ(stateTracker.getPermanentBufferState(buffer.get()), Graphics::ResourceStates::Unknown);
     stateTracker.setPermanentBufferState(*buffer, Graphics::ResourceStates::CopyDest);
     EXPECT_TRUE(stateTracker.hasExplicitBufferState(buffer.get()));
+    EXPECT_EQ(stateTracker.getPermanentBufferState(buffer.get()), Graphics::ResourceStates::CopyDest);
+    stateTracker.setPermanentBufferState(*buffer, Graphics::ResourceStates::ShaderResource);
+    EXPECT_EQ(stateTracker.getPermanentBufferState(buffer.get()), Graphics::ResourceStates::CopyDest);
     stateTracker.beginTrackingBuffer(buffer.get(), Graphics::ResourceStates::ShaderResource);
     EXPECT_EQ(stateTracker.getBufferState(buffer.get()), Graphics::ResourceStates::CopyDest);
+
+    stateTracker.setPermanentTextureState(*texture, Graphics::ResourceStates::Unknown);
+    EXPECT_EQ(stateTracker.getPermanentTextureState(texture.get()), Graphics::ResourceStates::Unknown);
+    stateTracker.setPermanentTextureState(*texture, Graphics::ResourceStates::ShaderResource);
+    EXPECT_EQ(stateTracker.getPermanentTextureState(texture.get()), Graphics::ResourceStates::ShaderResource);
+    stateTracker.setPermanentTextureState(*texture, Graphics::ResourceStates::CopyDest);
+    EXPECT_EQ(stateTracker.getPermanentTextureState(texture.get()), Graphics::ResourceStates::ShaderResource);
+    EXPECT_EQ(stateTracker.getTextureState(texture.get(), 0u, 0u), Graphics::ResourceStates::ShaderResource);
 }
 
 TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){

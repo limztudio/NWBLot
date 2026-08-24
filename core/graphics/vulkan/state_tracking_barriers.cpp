@@ -317,12 +317,15 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
         return;
 
     Texture& texture = *textureResource;
-    if(m_stateTracker.isPermanentTexture(texture))
-        return;
-
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSubresources, NWB_TEXT("set texture state")))
         return;
+
+    const ResourceStates::Mask permanentState = m_stateTracker.getPermanentTextureState(&texture);
+    if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot change the state of a permanently tracked texture"));
+        return;
+    }
 
     ResourceStates::Mask oldState = ResourceStates::Unknown;
     bool firstSubresource = true;
@@ -336,8 +339,11 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
 
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
-            ResourceStates::Mask subresourceOldState = ResourceStates::Unknown;
-            if(!m_stateTracker.getResolvedTransientTextureState(texture, arraySlice, mipLevel, subresourceOldState))
+            ResourceStates::Mask subresourceOldState = permanentState;
+            if(
+                permanentState == ResourceStates::Unknown
+                && !m_stateTracker.getResolvedTransientTextureState(texture, arraySlice, mipLevel, subresourceOldState)
+            )
                 return;
 
             if(firstSubresource){
@@ -400,7 +406,8 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
             m_context.extensions.KHR_ray_tracing_pipeline
         );
 
-        m_stateTracker.beginTrackingResolvedTransientTexture(texture, resolvedSubresources, stateBits);
+        if(permanentState == ResourceStates::Unknown)
+            m_stateTracker.beginTrackingResolvedTransientTexture(texture, resolvedSubresources, stateBits);
 
         if(!m_enableAutomaticBarriers){
             m_pendingImageBarriers.push_back(barrier);
@@ -415,7 +422,8 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
         return;
     }
 
-    m_stateTracker.beginTrackingResolvedTransientTexture(texture, resolvedSubresources, stateBits);
+    if(permanentState == ResourceStates::Unknown)
+        m_stateTracker.beginTrackingResolvedTransientTexture(texture, resolvedSubresources, stateBits);
 
     if(!m_enableAutomaticBarriers)
         return;
@@ -437,11 +445,14 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
         return;
 
     Buffer& buffer = *bufferResource;
-    if(m_stateTracker.isPermanentBuffer(buffer))
+    const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(&buffer);
+    if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot change the state of a permanently tracked buffer"));
         return;
+    }
 
-    ResourceStates::Mask oldState = ResourceStates::Unknown;
-    if(!m_stateTracker.getTransientBufferState(buffer, oldState))
+    ResourceStates::Mask oldState = permanentState;
+    if(permanentState == ResourceStates::Unknown && !m_stateTracker.getTransientBufferState(buffer, oldState))
         return;
 
     const bool needsUavBarrier =
@@ -464,7 +475,8 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
     barrier.offset = 0;
     barrier.size = VK_WHOLE_SIZE;
 
-    m_stateTracker.beginTrackingTransientBuffer(buffer, stateBits);
+    if(permanentState == ResourceStates::Unknown)
+        m_stateTracker.beginTrackingTransientBuffer(buffer, stateBits);
 
     if(!m_enableAutomaticBarriers){
         m_pendingBufferBarriers.push_back(barrier);
@@ -622,6 +634,20 @@ void CommandList::releaseBufferOwnership(
 void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mask stateBits){
     if(!texture)
         return;
+    if(stateBits == ResourceStates::Unknown){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot permanently track a texture in an unknown state"));
+        return;
+    }
+    if(texture->m_desc.keepInitialState && texture->m_desc.initialState != stateBits){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Permanent texture state must match its retained initial state"));
+        return;
+    }
+
+    const ResourceStates::Mask permanentState = m_stateTracker.getPermanentTextureState(texture);
+    if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot replace a texture's permanent state"));
+        return;
+    }
 
     setTextureState(texture, s_AllSubresources, stateBits);
     m_stateTracker.setPermanentTextureState(*texture, stateBits);
@@ -630,6 +656,20 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
 void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask stateBits){
     if(!buffer)
         return;
+    if(stateBits == ResourceStates::Unknown){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot permanently track a buffer in an unknown state"));
+        return;
+    }
+    if(buffer->m_desc.keepInitialState && buffer->m_desc.initialState != stateBits){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Permanent buffer state must match its retained initial state"));
+        return;
+    }
+
+    const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(buffer);
+    if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot replace a buffer's permanent state"));
+        return;
+    }
 
     setBufferState(buffer, stateBits);
     m_stateTracker.setPermanentBufferState(*buffer, stateBits);

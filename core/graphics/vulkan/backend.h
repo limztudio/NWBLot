@@ -2161,6 +2161,8 @@ public:
 
     [[nodiscard]] bool isPermanentTexture(Texture& texture)const;
     [[nodiscard]] bool isPermanentBuffer(Buffer& buffer)const;
+    [[nodiscard]] ResourceStates::Mask getPermanentTextureState(Texture* texture)const;
+    [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const;
     [[nodiscard]] ResourceStates::Mask getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
     [[nodiscard]] ResourceStates::Mask getBufferState(Buffer* buffer)const;
     // Explicit state comes from this command list or an imported packet handoff. A keep-initial-state descriptor
@@ -2364,6 +2366,8 @@ public:
     void beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits);
     ResourceStates::Mask getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel);
     ResourceStates::Mask getBufferState(Buffer* buffer);
+    [[nodiscard]] ResourceStates::Mask getPermanentTextureState(Texture* texture)const;
+    [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const;
     [[nodiscard]] bool hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
     [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer)const;
 

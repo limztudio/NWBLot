@@ -42888,6 +42888,467 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffTransfersFinalBuffe
 }
 
 
+// Permanent state is an exact native contract, not merely a hint that suppresses transitions. Matching UAV use
+// still records its dependency barrier, while conflicting graph entry/export requests reject at the barrier
+// boundary. Invalid permanent setters must not leak contradictory state into a packet handoff.
+TEST_F(DescriptorBufferRoundTripTest, PermanentBufferStateValidatesMatchingUavAndRejectsGraphContradictions){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const BufferHandle matchingBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    const BufferHandle transitionMismatchBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    const BufferHandle exportMismatchBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    const BufferHandle unknownCandidate = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    const BufferHandle retainedCandidate = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_NE(matchingBuffer.get(), nullptr);
+    ASSERT_NE(transitionMismatchBuffer.get(), nullptr);
+    ASSERT_NE(exportMismatchBuffer.get(), nullptr);
+    ASSERT_NE(unknownCandidate.get(), nullptr);
+    ASSERT_NE(retainedCandidate.get(), nullptr);
+
+    CommandListResourceStateHandoff handoff(DescriptorBufferRoundTripTest::arena());
+    const CommandListHandle producer = device.createCommandList();
+    const CommandListHandle handoffVerifier = device.createCommandList();
+    ASSERT_NE(producer.get(), nullptr);
+    ASSERT_NE(handoffVerifier.get(), nullptr);
+    producer->open();
+    producer->setPermanentBufferState(matchingBuffer.get(), ResourceStates::UnorderedAccess);
+    producer->setPermanentBufferState(transitionMismatchBuffer.get(), ResourceStates::UnorderedAccess);
+    producer->setPermanentBufferState(exportMismatchBuffer.get(), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(producer->getPermanentBufferState(matchingBuffer.get()), ResourceStates::UnorderedAccess);
+
+    // This matching repeated call must emit the same-state UAV dependency while retaining the permanent state.
+    producer->setPermanentBufferState(matchingBuffer.get(), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(producer->getPermanentBufferState(matchingBuffer.get()), ResourceStates::UnorderedAccess);
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        producer->setBufferState(matchingBuffer.get(), ResourceStates::ShaderResource);
+    }, "");
+    EXPECT_DEATH_IF_SUPPORTED({
+        producer->setPermanentBufferState(matchingBuffer.get(), ResourceStates::ShaderResource);
+    }, "");
+    EXPECT_DEATH_IF_SUPPORTED({
+        producer->setPermanentBufferState(unknownCandidate.get(), ResourceStates::Unknown);
+    }, "");
+    EXPECT_DEATH_IF_SUPPORTED({
+        producer->setPermanentBufferState(retainedCandidate.get(), ResourceStates::CopyDest);
+    }, "");
+#else
+    producer->setBufferState(matchingBuffer.get(), ResourceStates::ShaderResource);
+    producer->setPermanentBufferState(matchingBuffer.get(), ResourceStates::ShaderResource);
+    producer->setPermanentBufferState(unknownCandidate.get(), ResourceStates::Unknown);
+    producer->setPermanentBufferState(retainedCandidate.get(), ResourceStates::CopyDest);
+#endif
+    EXPECT_EQ(producer->getPermanentBufferState(matchingBuffer.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(producer->getBufferState(matchingBuffer.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(producer->getPermanentBufferState(unknownCandidate.get()), ResourceStates::Unknown);
+    EXPECT_EQ(producer->getPermanentBufferState(retainedCandidate.get()), ResourceStates::Unknown);
+    EXPECT_EQ(producer->getBufferState(retainedCandidate.get()), ResourceStates::Common);
+    producer->close(&handoff);
+    ASSERT_TRUE(handoff.valid());
+
+    handoffVerifier->open(&handoff);
+    EXPECT_EQ(handoffVerifier->getPermanentBufferState(matchingBuffer.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(handoffVerifier->getPermanentBufferState(unknownCandidate.get()), ResourceStates::Unknown);
+    EXPECT_EQ(handoffVerifier->getPermanentBufferState(retainedCandidate.get()), ResourceStates::Unknown);
+    EXPECT_EQ(handoffVerifier->getBufferState(retainedCandidate.get()), ResourceStates::Common);
+    handoffVerifier->close();
+
+    CommandList* const producerLists[] = { producer.get() };
+    const QueueSubmissionToken producerToken = device.executeCommandLists(
+        producerLists,
+        LengthOf(producerLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(producerToken.valid());
+    ASSERT_TRUE(device.waitForIdle());
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId matchingResource = graph.importBuffer(
+        matchingBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/permanent_matching_uav"))
+            .setMarkerLabel("Permanent Matching UAV")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::UnorderedAccess)
+    );
+    const GpuGraphResourceId transitionMismatchResource = graph.importBuffer(
+        transitionMismatchBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/permanent_transition_mismatch"))
+            .setMarkerLabel("Permanent Transition Mismatch")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::CopySource)
+    );
+    const GpuGraphResourceId exportMismatchResource = graph.importBuffer(
+        exportMismatchBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/permanent_export_mismatch"))
+            .setMarkerLabel("Permanent Export Mismatch")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::UnorderedAccess)
+            .setExternalFinalState(ResourceStates::ShaderResource)
+    );
+    ASSERT_TRUE(matchingResource.valid());
+    ASSERT_TRUE(transitionMismatchResource.valid());
+    ASSERT_TRUE(exportMismatchResource.valid());
+
+    const GpuTaskExternalStateSource stateSources[] = {
+        GpuTaskExternalStateSource{ .states = &handoff },
+    };
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const GpuTaskResourceUse matchingUse{
+        .resource = matchingResource,
+        .range = {},
+        .requiredState = ResourceStates::UnorderedAccess,
+        .access = GpuTaskResourceAccess::ReadWrite,
+    };
+    const GpuTaskResourceUse transitionMismatchUse{
+        .resource = transitionMismatchResource,
+        .range = {},
+        .requiredState = ResourceStates::CopySource,
+        .access = GpuTaskResourceAccess::Read,
+    };
+    const GpuTaskResourceUse exportMismatchUse{
+        .resource = exportMismatchResource,
+        .range = {},
+        .requiredState = ResourceStates::UnorderedAccess,
+        .access = GpuTaskResourceAccess::ReadWrite,
+    };
+
+    GpuTaskDesc matchingDesc;
+    matchingDesc
+        .setIdentity(Name("tests/descriptor_buffer/permanent_matching_uav_task"))
+        .setMarkerLabel("Permanent Matching UAV Task")
+        .setQueue(graphicsRequest)
+        .setExternalStateSources(stateSources, LengthOf(stateSources))
+        .setResourceUses(&matchingUse, 1u)
+    ;
+    GpuTaskDesc transitionMismatchDesc;
+    transitionMismatchDesc
+        .setIdentity(Name("tests/descriptor_buffer/permanent_transition_mismatch_task"))
+        .setMarkerLabel("Permanent Transition Mismatch Task")
+        .setQueue(graphicsRequest)
+        .setExternalStateSources(stateSources, LengthOf(stateSources))
+        .setResourceUses(&transitionMismatchUse, 1u)
+    ;
+    GpuTaskDesc exportMismatchDesc;
+    exportMismatchDesc
+        .setIdentity(Name("tests/descriptor_buffer/permanent_export_mismatch_task"))
+        .setMarkerLabel("Permanent Export Mismatch Task")
+        .setQueue(graphicsRequest)
+        .setExternalStateSources(stateSources, LengthOf(stateSources))
+        .setResourceUses(&exportMismatchUse, 1u)
+    ;
+
+    bool matchingRecorded = false;
+    bool transitionMismatchAttempted = false;
+    bool exportMismatchRecorded = false;
+    const bool shouldRecord = true;
+    const GpuTaskId matchingTask = graph.addTask<NativePacketPrefixTask>(
+        matchingDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = matchingBuffer.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .recorded = &matchingRecorded,
+        }
+    );
+    const GpuTaskId transitionMismatchTask = graph.addTask<NativePacketCaptureRetryTask>(
+        transitionMismatchDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &transitionMismatchAttempted,
+        }
+    );
+    const GpuTaskId exportMismatchTask = graph.addTask<NativePacketPrefixTask>(
+        exportMismatchDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = exportMismatchBuffer.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .recorded = &exportMismatchRecorded,
+        }
+    );
+    ASSERT_TRUE(matchingTask.valid());
+    ASSERT_TRUE(transitionMismatchTask.valid());
+    ASSERT_TRUE(exportMismatchTask.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/permanent_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+
+    const GpuSubmissionPacketId matchingPacket = compiledGraph.packetForTask(matchingTask);
+    const GpuSubmissionPacketId transitionMismatchPacket = compiledGraph.packetForTask(transitionMismatchTask);
+    const GpuSubmissionPacketId exportMismatchPacket = compiledGraph.packetForTask(exportMismatchTask);
+    ASSERT_TRUE(matchingPacket.valid());
+    ASSERT_TRUE(transitionMismatchPacket.valid());
+    ASSERT_TRUE(exportMismatchPacket.valid());
+    ASSERT_NE(matchingPacket, transitionMismatchPacket);
+    ASSERT_NE(matchingPacket, exportMismatchPacket);
+    ASSERT_NE(transitionMismatchPacket, exportMismatchPacket);
+
+    const GpuCompiledTask* const compiledMatching = compiledGraph.findTask(matchingTask);
+    const GpuCompiledTask* const compiledTransitionMismatch = compiledGraph.findTask(transitionMismatchTask);
+    const GpuCompiledTask* const compiledExportMismatch = compiledGraph.findTask(exportMismatchTask);
+    ASSERT_NE(compiledMatching, nullptr);
+    ASSERT_NE(compiledTransitionMismatch, nullptr);
+    ASSERT_NE(compiledExportMismatch, nullptr);
+    ASSERT_EQ(compiledMatching->prologueBarrierCount, 1u);
+    ASSERT_EQ(compiledTransitionMismatch->prologueBarrierCount, 1u);
+    ASSERT_EQ(compiledExportMismatch->epilogueBarrierCount, 1u);
+    const GpuCompiledBarrier* const matchingBarriers = compiledGraph.taskPrologueBarriers(matchingTask);
+    const GpuCompiledBarrier* const transitionMismatchBarriers = compiledGraph.taskPrologueBarriers(transitionMismatchTask);
+    const GpuCompiledBarrier* const exportMismatchBarriers = compiledGraph.taskEpilogueBarriers(exportMismatchTask);
+    ASSERT_NE(matchingBarriers, nullptr);
+    ASSERT_NE(transitionMismatchBarriers, nullptr);
+    ASSERT_NE(exportMismatchBarriers, nullptr);
+    EXPECT_EQ(matchingBarriers[0u].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(matchingBarriers[0u].before, ResourceStates::UnorderedAccess);
+    EXPECT_EQ(matchingBarriers[0u].after, ResourceStates::UnorderedAccess);
+    EXPECT_TRUE(matchingBarriers[0u].isGraphInitialState);
+    EXPECT_EQ(transitionMismatchBarriers[0u].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(transitionMismatchBarriers[0u].after, ResourceStates::CopySource);
+    EXPECT_EQ(exportMismatchBarriers[0u].type, GpuCompiledBarrierType::BufferStateExport);
+    EXPECT_EQ(exportMismatchBarriers[0u].after, ResourceStates::ShaderResource);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    EXPECT_FALSE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = transitionMismatchPacket },
+        recordedGraph
+    ));
+    EXPECT_FALSE(transitionMismatchAttempted);
+    EXPECT_FALSE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = exportMismatchPacket },
+        recordedGraph
+    ));
+    EXPECT_TRUE(exportMismatchRecorded);
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = matchingPacket },
+        recordedGraph
+    ));
+    EXPECT_TRUE(matchingRecorded);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        matchingPacket,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// A permanent resource cannot participate in a Vulkan queue-family ownership handoff. The graph recorder must
+// reject the compiler-planned release after recording the producer thunk instead of silently publishing a packet
+// whose native ownership never changed.
+TEST_F(DescriptorBufferRoundTripTest, PermanentBufferOwnershipReleaseFailsClosedAcrossDedicatedQueues){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Permanent ownership release: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Permanent ownership release: adapter has no dedicated compute-only queue family.";
+
+    const GpuPhysicalQueueId graphicsQueue = BackendQueueId(device, CommandQueue::Graphics);
+    const GpuPhysicalQueueId computeQueue = BackendQueueId(device, CommandQueue::Compute);
+    ASSERT_TRUE(graphicsQueue.valid());
+    ASSERT_TRUE(computeQueue.valid());
+    ASSERT_NE(graphicsQueue, computeQueue);
+
+    const BufferHandle buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+
+    CommandListResourceStateHandoff handoff(asyncScope.arena());
+    const CommandListHandle nativeProducer = device.createCommandList();
+    ASSERT_NE(nativeProducer.get(), nullptr);
+    nativeProducer->open();
+    nativeProducer->setPermanentBufferState(buffer.get(), ResourceStates::UnorderedAccess);
+    nativeProducer->close(&handoff);
+    ASSERT_TRUE(handoff.valid());
+    CommandList* const nativeProducerLists[] = { nativeProducer.get() };
+    const QueueSubmissionToken nativeProducerToken = device.executeCommandLists(
+        nativeProducerLists,
+        LengthOf(nativeProducerLists),
+        graphicsQueue,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(nativeProducerToken.valid());
+    ASSERT_TRUE(device.waitForIdle());
+
+    GpuTaskGraph graph(asyncScope.arena());
+    const GpuGraphResourceId resource = graph.importBuffer(
+        buffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/permanent_ownership_release_buffer"))
+            .setMarkerLabel("Permanent Ownership Release Buffer")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::UnorderedAccess)
+    );
+    ASSERT_TRUE(resource.valid());
+
+    const GpuTaskExternalStateSource stateSources[] = {
+        GpuTaskExternalStateSource{ .states = &handoff },
+    };
+    const GpuTaskResourceUse producerUse{
+        .resource = resource,
+        .range = {},
+        .requiredState = ResourceStates::UnorderedAccess,
+        .access = GpuTaskResourceAccess::ReadWrite,
+    };
+    const GpuTaskResourceUse consumerUse{
+        .resource = resource,
+        .range = {},
+        .requiredState = ResourceStates::ShaderResource,
+        .access = GpuTaskResourceAccess::Read,
+    };
+    GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/descriptor_buffer/permanent_ownership_release_producer"))
+        .setMarkerLabel("Permanent Ownership Release Producer")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setExternalStateSources(stateSources, LengthOf(stateSources))
+        .setResourceUses(&producerUse, 1u)
+    ;
+    bool producerRecorded = false;
+    const GpuTaskId producerTask = graph.addTask<NativePacketPrefixTask>(
+        producerDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = buffer.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .recorded = &producerRecorded,
+        }
+    );
+    ASSERT_TRUE(producerTask.valid());
+
+    GpuTaskDesc consumerDesc;
+    consumerDesc
+        .setIdentity(Name("tests/descriptor_buffer/permanent_ownership_release_consumer"))
+        .setMarkerLabel("Permanent Ownership Release Consumer")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Compute,
+            GpuQueuePreference::Compute,
+            false,
+            false,
+        })
+        .setDependencies(&producerTask, 1u)
+        .setResourceUses(&consumerUse, 1u)
+    ;
+    bool consumerRecorded = false;
+    const GpuTaskId consumerTask = graph.addTask<NativePacketPrefixTask>(
+        consumerDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = buffer.get(),
+            .expectedState = ResourceStates::ShaderResource,
+            .recorded = &consumerRecorded,
+        }
+    );
+    ASSERT_TRUE(consumerTask.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    GpuTaskGraphAnalysis analysis(asyncScope.arena());
+    GpuTaskGraphQueueAssignments assignments(asyncScope.arena());
+    GpuCompiledGraph compiledGraph(asyncScope.arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/permanent_ownership_release_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producerTask);
+    const GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumerTask);
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledConsumer, nullptr);
+    EXPECT_EQ(compiledProducer->queue, graphicsQueue);
+    EXPECT_EQ(compiledConsumer->queue, computeQueue);
+
+    bool foundOwnershipRelease = false;
+    const GpuCompiledBarrier* const epilogueBarriers = compiledGraph.taskEpilogueBarriers(producerTask);
+    ASSERT_NE(epilogueBarriers, nullptr);
+    for(u32 barrierIndex = 0u; barrierIndex < compiledProducer->epilogueBarrierCount; ++barrierIndex){
+        if(epilogueBarriers[barrierIndex].type == GpuCompiledBarrierType::BufferOwnershipRelease){
+            foundOwnershipRelease = true;
+            break;
+        }
+    }
+    ASSERT_TRUE(foundOwnershipRelease);
+
+    const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producerTask);
+    ASSERT_TRUE(producerPacket.valid());
+    GpuRecordedGraph recordedGraph(asyncScope.arena());
+    const GpuNativePacketRecorder recorder(device);
+    EXPECT_FALSE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = producerPacket },
+        recordedGraph
+    ));
+    EXPECT_TRUE(producerRecorded);
+    EXPECT_FALSE(consumerRecorded);
+    EXPECT_EQ(recordedGraph.find(producerPacket), nullptr);
+}
+
+
 // Accepted graph state must retain only live typed resources while preserving a later packet's final state across
 // generations. This is the shared cache used by runtime skinning instead of renderer-owned raw handoff fan-in.
 TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheFiltersAndMergesAcceptedBufferStates){

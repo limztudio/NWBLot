@@ -166,6 +166,7 @@ concept DeviceApi = requires(
     { device.getCommandArenaWorkerStatistics(GpuPhysicalQueueId{}, u64{}, u32{}) }->SameAs<GpuCommandArenaWorkerStatistics>;
     { device.matchesPhysicalQueueIdentity(CommandQueue::Graphics, u16{}, u16{}) }->SameAs<bool>;
     { device.matchesPhysicalQueueIdentity(GpuPhysicalQueueId{}) }->SameAs<bool>;
+    { device.validateSubmissionWaitToken(QueueSubmissionToken{}) }->SameAs<bool>;
     { device.isDeviceLost() }->SameAs<bool>;
     { device.waitForIdle() }->SameAs<bool>;
     device.runGarbageCollection();

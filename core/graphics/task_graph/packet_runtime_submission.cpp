@@ -334,6 +334,12 @@ bool GpuTaskGraphSubmitter::submitPacket(
         && !transaction.appendAcceptedQueueFrontierWaitTokens(packet.queue, waitTokens)
     )
         return false;
+    // Validate the fully assembled dependency frontier before reserving graph/task submission state. Device repeats
+    // this check at its final boundary because another queue may still be resolving a concurrent native submit.
+    for(const QueueSubmissionToken& waitToken : waitTokens){
+        if(!m_device.validateSubmissionWaitToken(waitToken))
+            return false;
+    }
 
     GpuGraphSubmissionTransaction::NativeSubmissionInfo nativeSubmissionInfo;
     nativeSubmissionInfo.commandListCount = recordedPacket->commandListCount;

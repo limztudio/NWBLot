@@ -41913,6 +41913,205 @@ TEST_F(DescriptorBufferRoundTripTest, DirectCommandListCanRetryAfterRejectedSubm
 }
 
 
+// A structurally exact token can still name a producer value that was never submitted. Reject that dependency
+// before graph submission reservation so its recorded packet and lifecycle hooks remain available for a real token.
+TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsRecordedAndRetryable){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+
+    CommandListParameters producerParameters;
+    producerParameters.setPhysicalQueue(graphicsQueue);
+    const CommandListHandle producer = device.createCommandList(producerParameters);
+    ASSERT_NE(producer.get(), nullptr);
+    producer->open();
+    producer->close();
+    CommandList* const producerLists[] = { producer.get() };
+    const QueueSubmissionToken producerToken = device.executeCommandLists(
+        producerLists,
+        LengthOf(producerLists),
+        graphicsQueue,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(producerToken.valid());
+    ASSERT_LT(producerToken.value, Limit<u64>::s_Max);
+    ASSERT_TRUE(device.validateSubmissionWaitToken(producerToken));
+
+    QueueSubmissionToken futureToken = producerToken;
+    ++futureToken.value;
+    EXPECT_FALSE(device.validateSubmissionWaitToken(futureToken));
+    QueueSubmissionToken missingIdentityToken = producerToken;
+    missingIdentityToken.physicalQueueIndex = Limit<u16>::s_Max;
+    EXPECT_FALSE(device.validateSubmissionWaitToken(missingIdentityToken));
+    QueueSubmissionToken wrongClassToken = producerToken;
+    wrongClassToken.queue = CommandQueue::Compute;
+    EXPECT_FALSE(device.validateSubmissionWaitToken(wrongClassToken));
+    QueueSubmissionToken staleGenerationToken = producerToken;
+    staleGenerationToken.deviceGeneration = producerToken.deviceGeneration == Limit<u16>::s_Max
+        ? static_cast<u16>(producerToken.deviceGeneration - 1u)
+        : static_cast<u16>(producerToken.deviceGeneration + 1u)
+    ;
+    EXPECT_FALSE(device.validateSubmissionWaitToken(staleGenerationToken));
+
+    const BufferHandle buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuExternalCompletionId completion = graph.importExternalCompletion(
+        GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/future_wait_completion"))
+            .setMarkerLabel("Future Wait Completion")
+    );
+    const GpuGraphResourceId resource = graph.importBuffer(
+        buffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/future_wait_buffer"))
+            .setMarkerLabel("Future Wait Buffer")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(completion.valid());
+    ASSERT_TRUE(resource.valid());
+    const GpuTaskResourceUse use{
+        .resource = resource,
+        .range = {},
+        .requiredState = ResourceStates::CopyDest,
+        .access = GpuTaskResourceAccess::Write,
+    };
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskDesc taskDesc;
+    taskDesc
+        .setIdentity(Name("tests/descriptor_buffer/future_wait_consumer"))
+        .setMarkerLabel("Future Wait Consumer")
+        .setQueue(graphicsRequest)
+        .setExternalDependencies(&completion, 1u)
+        .setResourceUses(&use, 1u)
+    ;
+    bool recorded = false;
+    QueueSubmissionToken acceptedToken;
+    u32 discardedCount = 0u;
+    const GpuTaskId task = graph.addTask<NativePacketPrefixTask>(
+        taskDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = buffer.get(),
+            .expectedState = ResourceStates::CopyDest,
+            .recorded = &recorded,
+            .acceptedToken = &acceptedToken,
+            .discardedCount = &discardedCount,
+        }
+    );
+    ASSERT_TRUE(task.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/future_wait_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+    ASSERT_EQ(compiledGraph.packet(packet).externalDependencyCount, 1u);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = packet },
+        recordedGraph
+    ));
+    ASSERT_TRUE(recorded);
+    ASSERT_TRUE(transaction.markPacketRecorded(
+        graph,
+        compiledGraph,
+        packet,
+        recordedGraph.recordingAttemptGeneration()
+    ));
+    ASSERT_NE(transaction.packetRuntime(packet), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(packet)->state, GpuPacketRuntimeState::Recorded);
+
+    const GpuTaskGraphExternalCompletionToken futureBinding{
+        .completion = completion,
+        .token = futureToken,
+    };
+    const GpuTaskGraphSubmitter submitter(device);
+    device.clearSubmissionWaitTokensForTesting();
+    device.armSubmissionWaitCaptureForTesting();
+    EXPECT_FALSE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        packet,
+        &futureBinding,
+        1u,
+        transaction,
+        scratchArena
+    ));
+    ASSERT_NE(transaction.packetRuntime(packet), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(packet)->state, GpuPacketRuntimeState::Recorded);
+    EXPECT_FALSE(transaction.packetRuntime(packet)->nativeSubmissionRejected);
+    EXPECT_FALSE(transaction.packetToken(packet).valid());
+    EXPECT_FALSE(acceptedToken.valid());
+    EXPECT_EQ(discardedCount, 0u);
+    EXPECT_EQ(device.lastSubmissionWaitTokenCountForTesting(graphicsQueue), 0u);
+    const GpuTaskGraphSubmissionStatistics rejectedStatistics = transaction.submissionStatistics();
+    EXPECT_EQ(rejectedStatistics.acceptedPacketCount, 0u);
+    EXPECT_EQ(rejectedStatistics.rejectedPacketCount, 0u);
+    EXPECT_EQ(rejectedStatistics.nativeSubmissionCount, 0u);
+    EXPECT_EQ(rejectedStatistics.rejectedSubmissionCount, 0u);
+    const GpuTaskGraphPhysicalQueueSubmissionStatistics rejectedQueueStatistics =
+        transaction.physicalQueueSubmissionStatistics(compiledGraph, graphicsQueue);
+    ASSERT_TRUE(rejectedQueueStatistics.valid());
+    EXPECT_EQ(rejectedQueueStatistics.acceptedPacketCount, 0u);
+    EXPECT_EQ(rejectedQueueStatistics.rejectedPacketCount, 0u);
+    EXPECT_EQ(rejectedQueueStatistics.nativeSubmissionCount, 0u);
+    EXPECT_EQ(rejectedQueueStatistics.rejectedSubmissionCount, 0u);
+    const GpuRecordedPacket* const recordedPacket = recordedGraph.find(packet);
+    ASSERT_NE(recordedPacket, nullptr);
+    ASSERT_GT(recordedPacket->commandListCount, 0u);
+    EXPECT_TRUE(recordedPacket->commandLists[0u]->hasCommandBuffer());
+
+    const GpuTaskGraphExternalCompletionToken currentBinding{
+        .completion = completion,
+        .token = producerToken,
+    };
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        packet,
+        &currentBinding,
+        1u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken consumerToken = transaction.packetToken(packet);
+    ASSERT_TRUE(consumerToken.valid());
+    EXPECT_EQ(acceptedToken.value, consumerToken.value);
+    EXPECT_EQ(discardedCount, 0u);
+    ASSERT_EQ(device.lastSubmissionWaitTokenCountForTesting(graphicsQueue), 1u);
+    const QueueSubmissionToken capturedWait = device.lastSubmissionWaitTokenForTesting(graphicsQueue, 0u);
+    EXPECT_EQ(capturedWait.queue, producerToken.queue);
+    EXPECT_EQ(capturedWait.value, producerToken.value);
+    EXPECT_EQ(capturedWait.physicalQueueIndex, producerToken.physicalQueueIndex);
+    EXPECT_EQ(capturedWait.deviceGeneration, producerToken.deviceGeneration);
+    ASSERT_TRUE(device.waitForIdle());
+}
+
+
 // Diagnostic acceptance may publish packets out of native timeline order. The transaction frontier must retain the
 // greatest accepted value for the exact physical queue instead of allowing a later callback to move it backwards.
 TEST_F(DescriptorBufferRoundTripTest, NativePacketDiagnosticAcceptanceKeepsMonotonicExactQueueFrontier){

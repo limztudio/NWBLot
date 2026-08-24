@@ -228,6 +228,32 @@ bool Device::matchesPhysicalQueueIdentity(const GpuPhysicalQueueId& queue)const 
     return getPhysicalQueueInfo(queue) != nullptr;
 }
 
+bool Device::validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept{
+    if(
+        !token.valid()
+        || !token.hasPhysicalQueueIdentity()
+        || !matchesPhysicalQueueIdentity(token.queue, token.physicalQueueIndex, token.deviceGeneration)
+        || token.physicalQueueIndex >= m_physicalQueues.size()
+    )
+        return false;
+
+    Queue* const producerQueue = m_physicalQueues[token.physicalQueueIndex];
+    if(
+        !producerQueue
+        || producerQueue->m_queueID != token.queue
+        || !token.matchesPhysicalQueue(
+            producerQueue->m_physicalQueue.index,
+            producerQueue->m_physicalQueue.deviceGeneration
+        )
+    )
+        return false;
+
+    ScopedLock producerLock(producerQueue->m_mutex);
+    return producerQueue->m_trackingSemaphore != VK_NULL_HANDLE
+        && token.value <= producerQueue->m_lastSubmittedID
+    ;
+}
+
 #if !defined(NWB_FINAL)
 
 void Device::rejectNextSubmissionForTesting(const CommandQueue::Enum queue){
@@ -459,38 +485,13 @@ QueueSubmissionToken Device::executeCommandLists(
         localWaits.reserve(submitDesc.waitTokenCount);
         for(usize i = 0u; i < submitDesc.waitTokenCount; ++i){
             const QueueSubmissionToken& token = submitDesc.waitTokens[i];
-            if(!token.valid()){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: dependency token is not accepted"));
-                return {};
-            }
-            if(
-                !token.hasPhysicalQueueIdentity()
-                || !matchesPhysicalQueueIdentity(
-                    token.queue,
-                    token.physicalQueueIndex,
-                    token.deviceGeneration
-                )
-            ){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: dependency token belongs to a different physical queue or device generation"));
+            if(!validateSubmissionWaitToken(token)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: dependency token is invalid, unavailable, or unsignalled"));
                 return {};
             }
 
-            Queue* const producerQueue = getQueue(
-                GpuPhysicalQueueId{ token.physicalQueueIndex, token.deviceGeneration }
-            );
-            if(!producerQueue || producerQueue->m_trackingSemaphore == VK_NULL_HANDLE){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: dependency producer queue is unavailable"));
-                return {};
-            }
-
-            // Reject fabricated/future timeline tokens that could deadlock a wait.
-            {
-                ScopedLock producerLock(producerQueue->m_mutex);
-                if(token.value > producerQueue->m_lastSubmittedID){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: dependency token refers to an unsignalled timeline value"));
-                    return {};
-                }
-            }
+            Queue* const producerQueue = m_physicalQueues[token.physicalQueueIndex];
+            NWB_ASSERT(producerQueue);
 
             // Queue order already covers same-queue dependencies.
             if(token.matchesPhysicalQueue(executionQueue.index, executionQueue.deviceGeneration))

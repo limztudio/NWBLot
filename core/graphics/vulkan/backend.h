@@ -2640,6 +2640,9 @@ public:
         u16 deviceGeneration
     )const noexcept;
     [[nodiscard]] bool matchesPhysicalQueueIdentity(const GpuPhysicalQueueId& queue)const noexcept;
+    // Validates an accepted token as a current submission wait without changing queue state. The producer timeline
+    // is sampled under its queue mutex so a failed submit cannot expose its tentative value as available work.
+    [[nodiscard]] bool validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept;
     // Device loss requires full device recreation.
     [[nodiscard]] bool isDeviceLost()const noexcept{ return m_deviceLost.load(MemoryOrder::acquire); }
     // Cross-queue timing requires Graphics and Compute timestamp support.

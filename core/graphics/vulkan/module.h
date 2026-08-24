@@ -93,6 +93,11 @@ struct DeviceDesc{
     bool dynamicRenderingSupported = false;
     // Indicates if synchronization2 was enabled at device creation time (via Vulkan 1.3 core or KHR extension)
     bool synchronization2Supported = false;
+    bool independentBlendFeatureEnabled = false;
+    bool fullDrawIndexUint32FeatureEnabled = false;
+    bool multiDrawIndirectFeatureEnabled = false;
+    bool drawIndirectFirstInstanceFeatureEnabled = false;
+    bool meshShaderFeatureEnabled = false;
     // Enabled feature-chain state for optional ray-tracing capabilities.  Keep this distinct from extension-name
     // presence so runtime feature queries do not advertise an extension whose required feature bit was not enabled.
     bool accelerationStructureFeatureEnabled = false;

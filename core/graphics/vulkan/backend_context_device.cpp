@@ -22,6 +22,11 @@ bool BackendContext::createVulkanDevice(){
     m_bufferDeviceAddressSupported = false;
     m_dynamicRenderingSupported = false;
     m_synchronization2Supported = false;
+    m_independentBlendFeatureEnabled = false;
+    m_fullDrawIndexUint32FeatureEnabled = false;
+    m_multiDrawIndirectFeatureEnabled = false;
+    m_drawIndirectFirstInstanceFeatureEnabled = false;
+    m_meshShaderFeatureEnabled = false;
     m_accelerationStructureFeatureEnabled = false;
     m_rayTracingPipelineFeatureEnabled = false;
     m_rayQueryFeatureEnabled = false;
@@ -233,6 +238,10 @@ bool BackendContext::createVulkanDevice(){
         || !requireFeature(supportedCoreFeatures.shaderInt64, "shaderInt64")
         || !requireFeature(supportedCoreFeatures.shaderStorageImageWriteWithoutFormat, "shaderStorageImageWriteWithoutFormat")
         || !requireFeature(supportedCoreFeatures.shaderStorageImageReadWithoutFormat, "shaderStorageImageReadWithoutFormat")
+        || !requireFeature(supportedCoreFeatures.independentBlend, "independentBlend")
+        || !requireFeature(supportedCoreFeatures.fullDrawIndexUint32, "fullDrawIndexUint32")
+        || !requireFeature(supportedCoreFeatures.multiDrawIndirect, "multiDrawIndirect")
+        || !requireFeature(supportedCoreFeatures.drawIndirectFirstInstance, "drawIndirectFirstInstance")
         || !requireFeature(supportedVulkan11Features.storageBuffer16BitAccess, "storageBuffer16BitAccess")
         || !requireFeature(supportedVulkan11Features.storageInputOutput16, "storageInputOutput16")
         || !requireFeature(supportedVulkan11Features.shaderDrawParameters, "shaderDrawParameters")
@@ -252,7 +261,15 @@ bool BackendContext::createVulkanDevice(){
 
     m_dynamicRenderingSupported = true;
     m_synchronization2Supported = true;
+    m_independentBlendFeatureEnabled = true;
+    m_fullDrawIndexUint32FeatureEnabled = true;
+    m_multiDrawIndirectFeatureEnabled = true;
+    m_drawIndirectFirstInstanceFeatureEnabled = true;
     VulkanDetail::FinalizeOptionalDeviceFeatureEnablement(requestedOptionalFeatures, supportedOptionalFeatures);
+    m_meshShaderFeatureEnabled =
+        isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME)
+        && requestedOptionalFeatures.meshShader.meshShader == VK_TRUE
+    ;
     m_accelerationStructureFeatureEnabled =
         isDeviceExtensionEnabled(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME)
         && requestedOptionalFeatures.accelerationStructure.accelerationStructure == VK_TRUE
@@ -282,7 +299,7 @@ bool BackendContext::createVulkanDevice(){
         && requestedOptionalFeatures.rayTracingInvocationReorderExt.rayTracingInvocationReorder == VK_TRUE
     ;
     m_meshTaskShaderSupported =
-        isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME)
+        m_meshShaderFeatureEnabled
         && requestedOptionalFeatures.meshShader.taskShader == VK_TRUE
     ;
     m_rayTracingSpheresSupported =
@@ -537,11 +554,14 @@ bool BackendContext::createVulkanDevice(){
     coreDeviceFeatures.fillModeNonSolid = supportedCoreFeatures.fillModeNonSolid;
     coreDeviceFeatures.fragmentStoresAndAtomics = supportedCoreFeatures.fragmentStoresAndAtomics;
     coreDeviceFeatures.dualSrcBlend = supportedCoreFeatures.dualSrcBlend;
-    coreDeviceFeatures.independentBlend = supportedCoreFeatures.independentBlend;
+    coreDeviceFeatures.independentBlend = VK_TRUE;
     coreDeviceFeatures.vertexPipelineStoresAndAtomics = supportedCoreFeatures.vertexPipelineStoresAndAtomics;
     coreDeviceFeatures.shaderInt64 = supportedCoreFeatures.shaderInt64;
     coreDeviceFeatures.shaderStorageImageWriteWithoutFormat = supportedCoreFeatures.shaderStorageImageWriteWithoutFormat;
     coreDeviceFeatures.shaderStorageImageReadWithoutFormat = supportedCoreFeatures.shaderStorageImageReadWithoutFormat;
+    coreDeviceFeatures.fullDrawIndexUint32 = supportedCoreFeatures.fullDrawIndexUint32;
+    coreDeviceFeatures.multiDrawIndirect = supportedCoreFeatures.multiDrawIndirect;
+    coreDeviceFeatures.drawIndirectFirstInstance = supportedCoreFeatures.drawIndirectFirstInstance;
 
     VkPhysicalDeviceVulkan11Features vulkan11features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan11Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
     vulkan11features.storageBuffer16BitAccess = supportedVulkan11Features.storageBuffer16BitAccess;

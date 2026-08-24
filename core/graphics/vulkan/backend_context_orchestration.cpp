@@ -193,6 +193,11 @@ bool BackendContext::createDevice(){
     deviceDesc.bufferDeviceAddressSupported = m_bufferDeviceAddressSupported;
     deviceDesc.dynamicRenderingSupported = m_dynamicRenderingSupported;
     deviceDesc.synchronization2Supported = m_synchronization2Supported;
+    deviceDesc.independentBlendFeatureEnabled = m_independentBlendFeatureEnabled;
+    deviceDesc.fullDrawIndexUint32FeatureEnabled = m_fullDrawIndexUint32FeatureEnabled;
+    deviceDesc.multiDrawIndirectFeatureEnabled = m_multiDrawIndirectFeatureEnabled;
+    deviceDesc.drawIndirectFirstInstanceFeatureEnabled = m_drawIndirectFirstInstanceFeatureEnabled;
+    deviceDesc.meshShaderFeatureEnabled = m_meshShaderFeatureEnabled;
     deviceDesc.accelerationStructureFeatureEnabled = m_accelerationStructureFeatureEnabled;
     deviceDesc.rayTracingPipelineFeatureEnabled = m_rayTracingPipelineFeatureEnabled;
     deviceDesc.rayQueryFeatureEnabled = m_rayQueryFeatureEnabled;

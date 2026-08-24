@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "command_validation.h"
 #include "arena_names.h"
 #include "resource_bindings_detail.h"
 
@@ -165,6 +166,14 @@ bool BuildPipelineRenderingInfo(
         const VkFormat vkFormat = ConvertFormat(fbinfo.colorFormats[i]);
         if(vkFormat == VK_FORMAT_UNDEFINED){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: color attachment format {} is unsupported"), operationName, i);
+            return false;
+        }
+        if(!VulkanDetail::IsPipelineColorAttachmentFormatClassValid(fbinfo.colorFormats[i])){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create {}: color attachment format {} has depth or stencil aspects"),
+                operationName,
+                i
+            );
             return false;
         }
         outColorFormats.push_back(vkFormat);

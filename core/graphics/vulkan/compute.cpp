@@ -124,6 +124,7 @@ void CommandList::setComputeState(const ComputeState& state){
     m_currentMeshletState = {};
     m_currentRayTracingState = {};
     m_currentComputeState = state;
+    retainResource(state.indirectParams);
 
     auto* pipeline = state.pipeline;
     vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipeline);

@@ -402,7 +402,8 @@ inline VkPipelineRasterizationStateCreateInfo BuildPipelineRasterizationState(
     rasterizer.polygonMode = polygonMode;
     rasterizer.cullMode = ConvertCullMode(rasterState.cullMode);
     rasterizer.frontFace = rasterState.frontCounterClockwise ? VK_FRONT_FACE_COUNTER_CLOCKWISE : VK_FRONT_FACE_CLOCKWISE;
-    rasterizer.depthBiasEnable = rasterState.depthBias != 0 ? VK_TRUE : VK_FALSE;
+    rasterizer.depthBiasEnable =
+        rasterState.depthBias != 0 || rasterState.slopeScaledDepthBias != 0.0f ? VK_TRUE : VK_FALSE;
     rasterizer.depthBiasConstantFactor = static_cast<f32>(rasterState.depthBias);
     rasterizer.depthBiasClamp = rasterState.depthBiasClamp;
     rasterizer.depthBiasSlopeFactor = rasterState.slopeScaledDepthBias;
@@ -609,12 +610,17 @@ struct VulkanContext{
     // True only after an enabled calibrated-timestamp extension exposes the DEVICE domain and its dispatch pair
     // completes a device-domain probe. It is immutable after Device construction.
     bool comparableGpuTimestamps = false;
+    bool independentBlendFeatureEnabled = false;
+    bool fullDrawIndexUint32FeatureEnabled = false;
+    bool multiDrawIndirectFeatureEnabled = false;
+    bool drawIndirectFirstInstanceFeatureEnabled = false;
     // Descriptor-buffer limits used for layout and offsets.
     VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties{};
     VkPhysicalDeviceCooperativeVectorPropertiesNV coopVecProperties{};
     // Retains the cooperative-vector feature bits enabled in the device-create chain, not a later physical-device probe.
     VkPhysicalDeviceCooperativeVectorFeaturesNV coopVecFeatures{};
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
+    VkPhysicalDeviceMeshShaderPropertiesEXT meshShaderProperties{};
     VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV rayTracingLinearSweptSpheresFeatures{};
     VkPhysicalDeviceClusterAccelerationStructurePropertiesNV nvClusterAccelerationStructureProperties{};
     // Core subgroup properties (the engine requires Vulkan 1.3).
@@ -2440,6 +2446,20 @@ public:
     const CommandListParameters& getDescription(){ return m_desc; }
 
 private:
+    [[nodiscard]] bool validateFramebufferForRendering(Framebuffer* framebuffer, const tchar* operationName)noexcept;
+    [[nodiscard]] bool prepareFramebufferForRendering(Framebuffer* framebuffer, const tchar* operationName)noexcept;
+    [[nodiscard]] bool validateViewportState(
+        const ViewportState& viewport,
+        const tchar* operationName
+    )noexcept;
+    [[nodiscard]] bool validateGraphicsState(const GraphicsState& state)noexcept;
+    [[nodiscard]] bool validateMeshletState(const MeshletState& state)noexcept;
+    [[nodiscard]] bool validateGraphicsDrawState(const tchar* operationName, bool indexed)noexcept;
+    [[nodiscard]] bool validateGraphicsDrawArguments(
+        const DrawArguments& arguments,
+        bool indexed,
+        const tchar* operationName
+    )noexcept;
     void setResourceStatesForGraphicsBuffers(const GraphicsState& state);
     [[nodiscard]] bool importResourceStateHandoff(const CommandListResourceStateHandoff& states);
     void exportResourceStateHandoff(CommandListResourceStateHandoff& states)const;
@@ -2462,8 +2482,22 @@ private:
     void rejectCommandRecording(const tchar* operationName, const tchar* reason)noexcept;
     void invalidateCommandRecording()noexcept;
     void discardInvalidCommandBuffer()noexcept;
-    bool validateIndirectBuffer(Buffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const;
-    bool prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, const tchar* operationLabel, const tchar* commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode, Buffer*& outIndirectBuffer)const;
+    [[nodiscard]] bool validateIndirectBuffer(
+        Buffer* buffer,
+        u64 offsetBytes,
+        u64 commandSizeBytes,
+        u32 commandCount,
+        const tchar* commandName
+    )noexcept;
+    [[nodiscard]] bool prepareDrawIndirect(
+        u32 offsetBytes,
+        u32 drawCount,
+        u64 commandSizeBytes,
+        const tchar* operationLabel,
+        const tchar* commandName,
+        VulkanDetail::IndirectDrawIndexMode::Enum indexMode,
+        Buffer*& outIndirectBuffer
+    )noexcept;
     void clearColorTexture(Texture* textureResource, TextureSubresourceSet subresources, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
     void clearColorTextureBox(Texture* textureResource, TextureSubresourceSet subresources, const Box& box, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
     bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, const tchar* valueName);

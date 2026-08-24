@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
 
 #include <cstddef>
@@ -13,6 +14,7 @@
 #include <core/graphics/task_graph/compiler.h>
 #include <core/graphics/task_graph/packet_runtime.h>
 #include <core/graphics/vulkan/backend.h>
+#include <core/graphics/vulkan/command_validation.h>
 #include <core/graphics/vulkan/device_detail.h>
 #include <core/graphics/vulkan/state_tracking_detail.h>
 #include <core/telemetry/frame_graph_contributor.h>
@@ -813,6 +815,219 @@ TEST(VulkanCommandValidation, PureValidatorsRejectInvalidRangesCountsAndPushCons
     EXPECT_FALSE(IsPushConstantByteSizeValid(132u, 128u));
     EXPECT_TRUE(IsTextureSubresourceRangeValid(Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u)));
     EXPECT_FALSE(IsTextureSubresourceRangeValid(Graphics::TextureSubresourceSet(0u, 0u, 0u, 1u)));
+}
+
+TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBoundaries){
+    using namespace Graphics::GraphicsBackend::VulkanDetail;
+
+    EXPECT_EQ(GetPrimitiveTopology(Graphics::PrimitiveType::PointList), VK_PRIMITIVE_TOPOLOGY_POINT_LIST);
+    EXPECT_EQ(GetPrimitiveTopology(Graphics::PrimitiveType::LineStrip), VK_PRIMITIVE_TOPOLOGY_LINE_STRIP);
+    EXPECT_EQ(GetPrimitiveTopology(Graphics::PrimitiveType::PatchList), VK_PRIMITIVE_TOPOLOGY_PATCH_LIST);
+    EXPECT_EQ(
+        GetPrimitiveTopology(static_cast<Graphics::PrimitiveType::Enum>(Limit<u8>::s_Max)),
+        VK_PRIMITIVE_TOPOLOGY_MAX_ENUM
+    );
+
+    VkPhysicalDeviceLimits limits{};
+    limits.maxViewportDimensions[0u] = 4096u;
+    limits.maxViewportDimensions[1u] = 4096u;
+    limits.viewportBoundsRange[0u] = -32768.0f;
+    limits.viewportBoundsRange[1u] = 32767.0f;
+    EXPECT_TRUE(IsViewportValid(Graphics::Viewport(-16.0f, 16.0f, -8.0f, 8.0f, 1.0f, 0.0f), limits));
+    EXPECT_TRUE(IsViewportValid(Graphics::Viewport(0.0f, 16.0f, 4.0f, 4.0f, 0.0f, 1.0f), limits));
+    EXPECT_FALSE(IsViewportValid(Graphics::Viewport(0.0f, 0.0f, 0.0f, 8.0f, 0.0f, 1.0f), limits));
+    EXPECT_FALSE(IsViewportValid(Graphics::Viewport(-32769.0f, 16.0f, 0.0f, 8.0f, 0.0f, 1.0f), limits));
+    EXPECT_FALSE(IsViewportValid(Graphics::Viewport(0.0f, 16.0f, 8.0f, 4.0f, 0.0f, 1.0f), limits));
+    EXPECT_FALSE(IsViewportValid(Graphics::Viewport(0.0f, 16.0f, 0.0f, 8.0f, -0.1f, 1.0f), limits));
+    EXPECT_FALSE(IsViewportValid(Graphics::Viewport(0.0f, 16.0f, 0.0f, 8.0f, 0.0f, 1.1f), limits));
+    EXPECT_FALSE(IsViewportValid(
+        Graphics::Viewport(0.0f, Limit<f32>::s_QuietNaN, 0.0f, 8.0f, 0.0f, 1.0f),
+        limits
+    ));
+    VkPhysicalDeviceLimits exactIntegerLimits = limits;
+    exactIntegerLimits.maxViewportDimensions[0u] = 16777219u;
+    exactIntegerLimits.viewportBoundsRange[1u] = 33554432.0f;
+    EXPECT_FALSE(IsViewportValid(
+        Graphics::Viewport(0.0f, 16777220.0f, 0.0f, 8.0f, 0.0f, 1.0f),
+        exactIntegerLimits
+    ));
+
+    EXPECT_TRUE(IsScissorRectValid(Graphics::Rect(0, 0, 0, 0)));
+    EXPECT_TRUE(IsScissorRectValid(Graphics::Rect(1, 8, 2, 9)));
+    EXPECT_FALSE(IsScissorRectValid(Graphics::Rect(-1, 8, 0, 9)));
+    EXPECT_TRUE(IsImplicitScissorValid(Graphics::Viewport(0.0f, 16.0f, 0.0f, 8.0f, 0.0f, 1.0f)));
+    EXPECT_FALSE(IsImplicitScissorValid(Graphics::Viewport(-1.0f, 16.0f, 0.0f, 8.0f, 0.0f, 1.0f)));
+    EXPECT_FALSE(IsImplicitScissorValid(
+        Graphics::Viewport(0.0f, 2147483648.0f, 0.0f, 8.0f, 0.0f, 1.0f)
+    ));
+    VkRect2D implicitScissor{};
+    EXPECT_TRUE(BuildImplicitScissor(
+        Graphics::Viewport(0.5f, 10.5f, 1.25f, 7.25f, 0.0f, 1.0f),
+        implicitScissor
+    ));
+    EXPECT_EQ(implicitScissor.offset.x, 0);
+    EXPECT_EQ(implicitScissor.offset.y, 1);
+    EXPECT_EQ(implicitScissor.extent.width, 11u);
+    EXPECT_EQ(implicitScissor.extent.height, 7u);
+
+    const Graphics::TextureSubresourceSet firstRange(0u, 1u, 0u, 2u);
+    EXPECT_TRUE(TextureSubresourceRangesOverlap(firstRange, Graphics::TextureSubresourceSet(0u, 1u, 1u, 1u)));
+    EXPECT_FALSE(TextureSubresourceRangesOverlap(firstRange, Graphics::TextureSubresourceSet(1u, 1u, 0u, 2u)));
+
+    Graphics::TextureDesc textureDesc;
+    textureDesc.setDimension(Graphics::TextureDimension::TextureCube);
+    EXPECT_EQ(
+        GetFramebufferAttachmentViewDimension(textureDesc, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u)),
+        Graphics::TextureDimension::Texture2D
+    );
+    EXPECT_EQ(
+        GetFramebufferAttachmentViewDimension(textureDesc, Graphics::TextureSubresourceSet(0u, 1u, 0u, 6u)),
+        Graphics::TextureDimension::Texture2DArray
+    );
+    textureDesc.setDimension(Graphics::TextureDimension::Texture3D);
+    EXPECT_EQ(
+        GetFramebufferAttachmentViewDimension(textureDesc, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u)),
+        Graphics::TextureDimension::Texture2D
+    );
+    EXPECT_EQ(
+        GetFramebufferAttachmentViewDimension(textureDesc, Graphics::TextureSubresourceSet(0u, 1u, 0u, 2u)),
+        Graphics::TextureDimension::Unknown
+    );
+    EXPECT_TRUE(IsFramebufferAttachmentSubresourceSetValid(
+        Graphics::TextureDesc(),
+        Graphics::s_AllSubresources
+    ));
+    EXPECT_TRUE(IsFramebufferAttachmentSubresourceSetValid(
+        Graphics::TextureDesc().setDimension(Graphics::TextureDimension::Texture2DArray).setArraySize(4u),
+        Graphics::TextureSubresourceSet(0u, 1u, 1u, 3u)
+    ));
+    EXPECT_TRUE(IsFramebufferAttachmentSubresourceSetValid(
+        Graphics::TextureDesc().setDimension(Graphics::TextureDimension::Texture2DArray).setArraySize(4u),
+        Graphics::TextureSubresourceSet(0u, 1u, 1u, Graphics::TextureSubresourceSet::AllArraySlices)
+    ));
+    EXPECT_FALSE(IsFramebufferAttachmentSubresourceSetValid(
+        Graphics::TextureDesc().setDimension(Graphics::TextureDimension::Texture2DArray).setArraySize(4u),
+        Graphics::TextureSubresourceSet(0u, 1u, 3u, 2u)
+    ));
+    EXPECT_FALSE(IsFramebufferAttachmentSubresourceSetValid(
+        Graphics::TextureDesc().setDimension(Graphics::TextureDimension::Texture2D),
+        Graphics::TextureSubresourceSet(0u, 1u, 1u, 1u)
+    ));
+    EXPECT_FALSE(IsFramebufferAttachmentSubresourceSetValid(
+        Graphics::TextureDesc().setMipLevels(2u),
+        Graphics::TextureSubresourceSet(2u, 1u, 0u, 1u)
+    ));
+    EXPECT_FALSE(IsFramebufferAttachmentSubresourceSetValid(
+        Graphics::TextureDesc().setMipLevels(2u),
+        Graphics::TextureSubresourceSet(0u, Graphics::TextureSubresourceSet::AllMipLevels, 0u, 1u)
+    ));
+    EXPECT_TRUE(IsFramebufferAttachmentSubresourceSetValid(
+        Graphics::TextureDesc().setMipLevels(2u),
+        Graphics::TextureSubresourceSet(1u, Graphics::TextureSubresourceSet::AllMipLevels, 0u, 1u)
+    ));
+    EXPECT_FALSE(IsFramebufferAttachmentSubresourceSetValid(
+        Graphics::TextureDesc(),
+        Graphics::TextureSubresourceSet(0u, 1u, 0u, 2u)
+    ));
+
+    Graphics::BufferDesc bufferDesc;
+    bufferDesc.byteSize = 64u;
+    EXPECT_TRUE(IsStridedBufferRangeValid(bufferDesc, 0u, 0u, 4u, 16u, 12u));
+    EXPECT_FALSE(IsStridedBufferRangeValid(bufferDesc, 0u, 0u, 5u, 16u, 12u));
+    EXPECT_FALSE(IsStridedBufferRangeValid(bufferDesc, Limit<u64>::s_Max, 1u, 1u, 16u, 12u));
+    EXPECT_TRUE(IsIndexFormatSupported(Graphics::Format::R16_UINT, false));
+    EXPECT_FALSE(IsIndexFormatSupported(Graphics::Format::R32_UINT, false));
+    EXPECT_TRUE(IsIndexFormatSupported(Graphics::Format::R32_UINT, true));
+    EXPECT_FALSE(IsIndexFormatSupported(Graphics::Format::RGBA8_UNORM, true));
+    EXPECT_TRUE(IsIndexDrawRangeValid(bufferDesc, 0u, 4u, 8u, sizeof(u32)));
+    EXPECT_FALSE(IsIndexDrawRangeValid(bufferDesc, 0u, 12u, 8u, sizeof(u32)));
+    EXPECT_FALSE(IsIndexDrawRangeValid(bufferDesc, Limit<u64>::s_Max, 1u, 1u, sizeof(u32)));
+    EXPECT_TRUE(IsIndirectCommandRangeValid(bufferDesc, 0u, 16u, 4u));
+    EXPECT_TRUE(IsIndirectCommandRangeValid(bufferDesc, 48u, 16u, 1u));
+    EXPECT_FALSE(IsIndirectCommandRangeValid(bufferDesc, 2u, 16u, 1u));
+    EXPECT_FALSE(IsIndirectCommandRangeValid(bufferDesc, 52u, 16u, 1u));
+    EXPECT_FALSE(IsIndirectCommandRangeValid(bufferDesc, 0u, Limit<u64>::s_Max, 2u));
+    EXPECT_FALSE(IsIndirectDrawCountValid(0u, 8u, true));
+    EXPECT_FALSE(IsIndirectDrawCountValid(2u, 8u, false));
+    EXPECT_TRUE(IsIndirectDrawCountValid(2u, 8u, true));
+    EXPECT_FALSE(IsIndirectDrawCountValid(9u, 8u, true));
+
+    constexpr u32 s_MaximumMeshGroupCounts[] = { 4u, 5u, 6u };
+    EXPECT_TRUE(AreMeshDispatchGroupCountsValid(4u, 5u, 1u, s_MaximumMeshGroupCounts, 20u));
+    EXPECT_FALSE(AreMeshDispatchGroupCountsValid(0u, 5u, 1u, s_MaximumMeshGroupCounts, 20u));
+    EXPECT_FALSE(AreMeshDispatchGroupCountsValid(1u, 1u, 1u, nullptr, 20u));
+    EXPECT_FALSE(AreMeshDispatchGroupCountsValid(4u, 5u, 2u, s_MaximumMeshGroupCounts, 20u));
+    EXPECT_FALSE(AreMeshDispatchGroupCountsValid(
+        Limit<u32>::s_Max,
+        Limit<u32>::s_Max,
+        Limit<u32>::s_Max,
+        s_MaximumMeshGroupCounts,
+        Limit<u32>::s_Max
+    ));
+    VkPhysicalDeviceMeshShaderPropertiesEXT meshProperties{};
+    meshProperties.maxTaskWorkGroupCount[0u] = 2u;
+    meshProperties.maxTaskWorkGroupTotalCount = 3u;
+    meshProperties.maxMeshWorkGroupCount[0u] = 5u;
+    meshProperties.maxMeshWorkGroupTotalCount = 7u;
+    const MeshDispatchLimits taskLimits = GetMeshDispatchLimits(meshProperties, true);
+    const MeshDispatchLimits meshLimits = GetMeshDispatchLimits(meshProperties, false);
+    EXPECT_EQ(taskLimits.maximumGroupCounts, meshProperties.maxTaskWorkGroupCount);
+    EXPECT_EQ(taskLimits.maximumTotalGroupCount, 3u);
+    EXPECT_EQ(meshLimits.maximumGroupCounts, meshProperties.maxMeshWorkGroupCount);
+    EXPECT_EQ(meshLimits.maximumTotalGroupCount, 7u);
+
+    Graphics::DepthStencilState depthStencilState;
+    EXPECT_FALSE(IsDepthStencilReadOnlyCompatible(depthStencilState, VK_IMAGE_ASPECT_DEPTH_BIT));
+    depthStencilState.disableDepthTest();
+    EXPECT_TRUE(IsDepthStencilReadOnlyCompatible(depthStencilState, VK_IMAGE_ASPECT_DEPTH_BIT));
+    depthStencilState.enableDepthTest();
+    depthStencilState.disableDepthWrite().enableStencil();
+    EXPECT_TRUE(IsDepthStencilReadOnlyCompatible(
+        depthStencilState,
+        VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT
+    ));
+    depthStencilState.frontFaceStencil.setPassOp(Graphics::StencilOp::Replace);
+    EXPECT_FALSE(IsDepthStencilReadOnlyCompatible(depthStencilState, VK_IMAGE_ASPECT_STENCIL_BIT));
+    depthStencilState.frontFaceStencil.setPassOp(Graphics::StencilOp::Keep);
+    depthStencilState.backFaceStencil.setFailOp(Graphics::StencilOp::Replace);
+    EXPECT_FALSE(IsDepthStencilReadOnlyCompatible(depthStencilState, VK_IMAGE_ASPECT_STENCIL_BIT));
+    depthStencilState.backFaceStencil.setFailOp(Graphics::StencilOp::Keep);
+    depthStencilState.backFaceStencil.setDepthFailOp(Graphics::StencilOp::Replace);
+    EXPECT_FALSE(IsDepthStencilReadOnlyCompatible(depthStencilState, VK_IMAGE_ASPECT_STENCIL_BIT));
+    depthStencilState.setStencilWriteMask(0u);
+    EXPECT_TRUE(IsDepthStencilReadOnlyCompatible(depthStencilState, VK_IMAGE_ASPECT_STENCIL_BIT));
+
+    Graphics::RasterState rasterState;
+    EXPECT_EQ(BuildPipelineRasterizationState(rasterState, VK_POLYGON_MODE_FILL, VK_FALSE).depthBiasEnable, VK_FALSE);
+    rasterState.slopeScaledDepthBias = 1.0f;
+    EXPECT_EQ(BuildPipelineRasterizationState(rasterState, VK_POLYGON_MODE_FILL, VK_FALSE).depthBiasEnable, VK_TRUE);
+    EXPECT_EQ(BuildPipelineRasterizationState(rasterState, VK_POLYGON_MODE_FILL, VK_TRUE).depthClampEnable, VK_TRUE);
+
+    EXPECT_TRUE(IsPipelineColorAttachmentFormatClassValid(Graphics::Format::RGBA8_UNORM));
+    EXPECT_FALSE(IsPipelineColorAttachmentFormatClassValid(Graphics::Format::D24S8));
+    EXPECT_FALSE(IsPipelineColorAttachmentFormatClassValid(
+        static_cast<Graphics::Format::Enum>(Limit<u8>::s_Max)
+    ));
+
+    Graphics::Alloc::ScratchArena scratchArena(Name("tests/graphics/pipeline_rendering_validation_scratch"));
+    Graphics::GraphicsBackend::PipelineRenderingFormatVector colorFormats{ scratchArena };
+    VkPipelineRenderingCreateInfo renderingInfo{};
+    EXPECT_TRUE(BuildPipelineRenderingInfo(
+        Graphics::FramebufferInfo().addColorFormat(Graphics::Format::RGBA8_UNORM),
+        NWB_TEXT("unit graphics pipeline"),
+        renderingInfo,
+        colorFormats
+    ));
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    Graphics::Common::LoggerRegistrationGuard loggerGuard(logger);
+    EXPECT_FALSE(BuildPipelineRenderingInfo(
+        Graphics::FramebufferInfo().addColorFormat(Graphics::Format::D24S8),
+        NWB_TEXT("unit graphics pipeline"),
+        renderingInfo,
+        colorFormats
+    ));
+#endif
 }
 
 TEST(VulkanStateTracking, DetectsExactActiveAttachmentBarrierOverlap){

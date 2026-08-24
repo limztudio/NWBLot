@@ -33,16 +33,41 @@ void CommandList::setResourceStatesForFramebuffer(Framebuffer& framebuffer){
 }
 
 void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state){
-    for(const VertexBufferBinding& binding : state.vertexBuffers){
-        if(binding.buffer)
-            setBufferState(binding.buffer, ResourceStates::VertexBuffer);
+    struct BufferStateEntry{
+        Buffer* buffer = nullptr;
+        ResourceStates::Mask state = ResourceStates::Unknown;
+    };
+    BufferStateEntry entries[s_MaxVertexAttributes + 2u]{};
+    u32 entryCount = 0u;
+
+    const auto addRequiredState = [&entries, &entryCount](
+        Buffer* const buffer,
+        const ResourceStates::Mask requiredState
+    )noexcept{
+        if(!buffer)
+            return;
+        for(u32 entryIndex = 0u; entryIndex < entryCount; ++entryIndex){
+            if(entries[entryIndex].buffer == buffer){
+                entries[entryIndex].state |= requiredState;
+                return;
+            }
+        }
+        NWB_ASSERT(entryCount < LengthOf(entries));
+        entries[entryCount].buffer = buffer;
+        entries[entryCount].state = requiredState;
+        ++entryCount;
+    };
+
+    for(const VertexBufferBinding& binding : state.vertexBuffers)
+        addRequiredState(binding.buffer, ResourceStates::VertexBuffer);
+    addRequiredState(state.indexBuffer.buffer, ResourceStates::IndexBuffer);
+    addRequiredState(state.indirectParams, ResourceStates::IndirectArgument);
+
+    for(u32 entryIndex = 0u; entryIndex < entryCount; ++entryIndex){
+        setBufferState(entries[entryIndex].buffer, entries[entryIndex].state);
+        if(m_commandRecordingFailed)
+            return;
     }
-
-    if(state.indexBuffer.buffer)
-        setBufferState(state.indexBuffer.buffer, ResourceStates::IndexBuffer);
-
-    if(state.indirectParams)
-        setBufferState(state.indirectParams, ResourceStates::IndirectArgument);
 }
 
 bool CommandList::importResourceStateHandoff(const CommandListResourceStateHandoff& states){

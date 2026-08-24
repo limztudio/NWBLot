@@ -242,6 +242,10 @@ Device::Device(const DeviceDesc& desc)
     m_context.extensions.buffer_device_address = desc.bufferDeviceAddressSupported;
     m_context.extensions.KHR_dynamic_rendering = desc.dynamicRenderingSupported;
     m_context.extensions.KHR_synchronization2 = desc.synchronization2Supported;
+    m_context.independentBlendFeatureEnabled = desc.independentBlendFeatureEnabled;
+    m_context.fullDrawIndexUint32FeatureEnabled = desc.fullDrawIndexUint32FeatureEnabled;
+    m_context.multiDrawIndirectFeatureEnabled = desc.multiDrawIndirectFeatureEnabled;
+    m_context.drawIndirectFirstInstanceFeatureEnabled = desc.drawIndirectFirstInstanceFeatureEnabled;
     m_context.accelerationStructureFeatureEnabled = desc.accelerationStructureFeatureEnabled;
     m_context.rayTracingPipelineFeatureEnabled = desc.rayTracingPipelineFeatureEnabled;
     m_context.rayQueryFeatureEnabled = desc.rayQueryFeatureEnabled;
@@ -326,7 +330,7 @@ Device::Device(const DeviceDesc& desc)
 
     m_context.meshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
     if(m_context.extensions.EXT_mesh_shader){
-        m_context.meshShaderFeatures.meshShader = VK_TRUE;
+        m_context.meshShaderFeatures.meshShader = desc.meshShaderFeatureEnabled ? VK_TRUE : VK_FALSE;
         m_context.meshShaderFeatures.taskShader = desc.meshTaskShaderSupported ? VK_TRUE : VK_FALSE;
     }
 
@@ -470,6 +474,12 @@ Device::Device(const DeviceDesc& desc)
             m_context.descriptorBufferProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT;
             m_context.descriptorBufferProperties.pNext = pNext;
             pNext = &m_context.descriptorBufferProperties;
+        }
+
+        if(m_context.extensions.EXT_mesh_shader){
+            m_context.meshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
+            m_context.meshShaderProperties.pNext = pNext;
+            pNext = &m_context.meshShaderProperties;
         }
 
         if(m_context.extensions.NV_cluster_acceleration_structure){

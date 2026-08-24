@@ -291,6 +291,11 @@ private:
     bool m_bufferDeviceAddressSupported = false;
     bool m_dynamicRenderingSupported = false;
     bool m_synchronization2Supported = false;
+    bool m_independentBlendFeatureEnabled = false;
+    bool m_fullDrawIndexUint32FeatureEnabled = false;
+    bool m_multiDrawIndirectFeatureEnabled = false;
+    bool m_drawIndirectFirstInstanceFeatureEnabled = false;
+    bool m_meshShaderFeatureEnabled = false;
     bool m_accelerationStructureFeatureEnabled = false;
     bool m_rayTracingPipelineFeatureEnabled = false;
     bool m_rayQueryFeatureEnabled = false;

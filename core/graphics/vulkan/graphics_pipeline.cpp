@@ -4,6 +4,7 @@
 
 #include "backend.h"
 #include "arena_names.h"
+#include "command_validation.h"
 
 #include <core/common/log.h>
 
@@ -25,20 +26,6 @@ namespace VulkanDetail{
 
 constexpr usize s_MaxGraphicsPipelineShaderStageCount = 5u;
 
-
-constexpr VkPrimitiveTopology ConvertPrimitiveTopology(PrimitiveType::Enum primType){
-    switch(primType){
-    case PrimitiveType::PointList:     return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-    case PrimitiveType::LineList:      return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-    case PrimitiveType::TriangleList:  return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    case PrimitiveType::TriangleStrip: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-    case PrimitiveType::TriangleFan:   return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
-    case PrimitiveType::TriangleListWithAdjacency: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY;
-    case PrimitiveType::TriangleStripWithAdjacency: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY;
-    case PrimitiveType::PatchList:     return VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
-    default: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    }
-}
 
 void SetGraphicsDynamicState(VkCommandBuffer commandBuffer, const GraphicsPipelineDesc& desc, const GraphicsState& state){
     const RasterState& rasterState = desc.renderState.rasterState;
@@ -84,39 +71,48 @@ Object GraphicsPipeline::getNativeHandle(ObjectType objectType){
 }
 
 void CommandList::setViewportState(const ViewportState& viewportState){
-    if(viewportState.viewports.empty())
-        return;
+    if(!viewportState.viewports.empty()){
+        const auto& vp = viewportState.viewports[0u];
+        const SIMDVector viewportMinimum = VectorSet(vp.minX, vp.minY, 0.0f, 0.0f);
+        const SIMDVector viewportMaximum = VectorSet(vp.maxX, vp.maxY, 0.0f, 0.0f);
+        const SIMDVector viewportExtent = VectorSubtract(viewportMaximum, viewportMinimum);
+        const SIMDVector viewportOrigin = VectorPermute<0, 5, 0, 0>(viewportMinimum, viewportMaximum);
+        const SIMDVector signedViewportExtent = VectorPermute<0, 5, 0, 0>(
+            viewportExtent,
+            VectorNegate(viewportExtent)
+        );
+        const SIMDVector viewportXYWH = VectorPermute<0, 1, 4, 5>(viewportOrigin, signedViewportExtent);
+        Float4U viewportValues;
+        StoreFloat(viewportXYWH, &viewportValues);
 
-    const auto& vp = viewportState.viewports[0];
-    const SIMDVector viewportMinimum = VectorSet(vp.minX, vp.minY, 0.0f, 0.0f);
-    const SIMDVector viewportMaximum = VectorSet(vp.maxX, vp.maxY, 0.0f, 0.0f);
-    const SIMDVector viewportExtent = VectorSubtract(viewportMaximum, viewportMinimum);
-    const SIMDVector viewportOrigin = VectorPermute<0, 5, 0, 0>(viewportMinimum, viewportMaximum);
-    const SIMDVector signedViewportExtent = VectorPermute<0, 5, 0, 0>(viewportExtent, VectorNegate(viewportExtent));
-    const SIMDVector viewportXYWH = VectorPermute<0, 1, 4, 5>(viewportOrigin, signedViewportExtent);
-    Float4U viewportValues;
-    StoreFloat(viewportXYWH, &viewportValues);
+        VkViewport viewport{};
+        viewport.x = viewportValues.x;
+        viewport.y = viewportValues.y;
+        viewport.width = viewportValues.z;
+        viewport.height = viewportValues.w;
+        viewport.minDepth = vp.minZ;
+        viewport.maxDepth = vp.maxZ;
+        vkCmdSetViewport(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &viewport);
+    }
 
-    VkViewport viewport{};
-    viewport.x = viewportValues.x;
-    viewport.y = viewportValues.y;
-    viewport.width = viewportValues.z;
-    viewport.height = viewportValues.w;
-    viewport.minDepth = vp.minZ;
-    viewport.maxDepth = vp.maxZ;
-    vkCmdSetViewport(m_currentCmdBuf->m_cmdBuf, 0, 1, &viewport);
-
-    VkRect2D scissor{};
     if(!viewportState.scissorRects.empty()){
+        VkRect2D scissor{};
         const auto& sr = viewportState.scissorRects[0];
         scissor.offset = { static_cast<int32_t>(sr.minX), static_cast<int32_t>(sr.minY) };
         scissor.extent = { static_cast<uint32_t>(sr.maxX - sr.minX), static_cast<uint32_t>(sr.maxY - sr.minY) };
+        vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &scissor);
     }
-    else{
-        scissor.offset = { static_cast<int32_t>(vp.minX), static_cast<int32_t>(vp.minY) };
-        scissor.extent = { static_cast<uint32_t>(vp.maxX - vp.minX), static_cast<uint32_t>(vp.maxY - vp.minY) };
+    else if(!viewportState.viewports.empty()){
+        VkRect2D scissor{};
+        const bool implicitScissorBuilt = VulkanDetail::BuildImplicitScissor(
+            viewportState.viewports[0u],
+            scissor
+        );
+        NWB_ASSERT(implicitScissorBuilt);
+        if(!implicitScissorBuilt)
+            return;
+        vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &scissor);
     }
-    vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0, 1, &scissor);
 }
 
 
@@ -157,6 +153,33 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Dynamic rendering extension is required to create graphics pipelines."));
         return nullptr;
     }
+    if(fbinfo.colorFormats.size() > m_context.physicalDeviceProperties.limits.maxColorAttachments){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Graphics pipeline color count exceeds the device limit."));
+        return nullptr;
+    }
+    const VkPrimitiveTopology primitiveTopology = VulkanDetail::GetPrimitiveTopology(desc.primType);
+    if(primitiveTopology == VK_PRIMITIVE_TOPOLOGY_MAX_ENUM){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Graphics pipeline primitive topology is invalid."));
+        return nullptr;
+    }
+    if(desc.renderState.rasterState.depthBiasClamp != 0.0f){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Graphics pipeline depthBiasClamp requires an unsupported logical-device feature.")
+        );
+        return nullptr;
+    }
+    if(desc.shadingRateState.enabled){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Graphics pipeline variable-rate shading is not implemented."));
+        return nullptr;
+    }
+    if(desc.renderState.singlePassStereo.enabled){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Graphics pipeline single-pass stereo is not implemented."));
+        return nullptr;
+    }
+    if(!desc.VS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: vertex shader is required"));
+        return nullptr;
+    }
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_GraphicsPipelineArena, s_GraphicsPipelineScratchArenaBytes);
 
@@ -164,11 +187,27 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pso->m_desc = desc;
     pso->m_framebufferInfo = fbinfo;
 
-    if(!desc.VS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: vertex shader is required"));
+    const auto validateShader = [this, pso](
+        Shader* const shader,
+        const ShaderType::Mask expectedType,
+        const tchar* const stageName
+    ){
+        if(!shader)
+            return true;
+        if(shader->m_shaderModule != VK_NULL_HANDLE && shader->m_desc.shaderType == expectedType)
+            return true;
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Graphics pipeline {} shader has an invalid module or stage."), stageName);
         DestroyArenaObject(m_context.objectArena, pso);
+        return false;
+    };
+    if(
+        !validateShader(desc.VS.get(), ShaderType::Vertex, NWB_TEXT("vertex"))
+        || !validateShader(desc.HS.get(), ShaderType::Hull, NWB_TEXT("hull"))
+        || !validateShader(desc.DS.get(), ShaderType::Domain, NWB_TEXT("domain"))
+        || !validateShader(desc.GS.get(), ShaderType::Geometry, NWB_TEXT("geometry"))
+        || !validateShader(desc.PS.get(), ShaderType::Pixel, NWB_TEXT("pixel"))
+    )
         return nullptr;
-    }
 
     const bool hasTessellationControlShader = static_cast<bool>(desc.HS);
     const bool hasTessellationEvaluationShader = static_cast<bool>(desc.DS);
@@ -246,7 +285,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
 
     auto inputAssembly = VulkanDetail::MakeVkStruct<VkPipelineInputAssemblyStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO);
-    inputAssembly.topology = VulkanDetail::ConvertPrimitiveTopology(desc.primType);
+    inputAssembly.topology = primitiveTopology;
     inputAssembly.primitiveRestartEnable = VK_FALSE;
 
     auto tessellationState = VulkanDetail::MakeVkStruct<VkPipelineTessellationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO);
@@ -331,10 +370,15 @@ bool CommandList::beginDynamicRendering(Framebuffer* framebuffer, const RenderPa
             auto* tex = fbDesc.colorAttachments[i].texture;
 
             const TextureSubresourceSet resolvedColorSubresources = fbDesc.colorAttachments[i].subresources.resolve(tex->m_desc, TextureSubresourceMipResolve::Single);
-            TextureDimension::Enum viewDimension = tex->m_desc.dimension;
-            if(resolvedColorSubresources.numArraySlices == 1)
-                viewDimension = TextureDimension::Texture2D;
-            VkImageView view = tex->getView(fbDesc.colorAttachments[i].subresources, viewDimension, Format::UNKNOWN);
+            const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(
+                tex->m_desc,
+                resolvedColorSubresources
+            );
+            VkImageView view = tex->getView(
+                fbDesc.colorAttachments[i].subresources,
+                viewDimension,
+                fbDesc.colorAttachments[i].format
+            );
             if(view == VK_NULL_HANDLE){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
                 NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: color attachment view is invalid"));
@@ -366,12 +410,15 @@ bool CommandList::beginDynamicRendering(Framebuffer* framebuffer, const RenderPa
     if(fbDesc.depthAttachment.texture){
         auto* depthTex = fbDesc.depthAttachment.texture;
         const TextureSubresourceSet resolvedDepthSubresources = fbDesc.depthAttachment.subresources.resolve(depthTex->m_desc, TextureSubresourceMipResolve::Single);
-        const TextureDimension::Enum depthViewDimension =
-            resolvedDepthSubresources.numArraySlices == 1
-            ? TextureDimension::Texture2D
-            : depthTex->m_desc.dimension
-        ;
-        VkImageView depthView = depthTex->getView(fbDesc.depthAttachment.subresources, depthViewDimension, Format::UNKNOWN);
+        const TextureDimension::Enum depthViewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(
+            depthTex->m_desc,
+            resolvedDepthSubresources
+        );
+        VkImageView depthView = depthTex->getView(
+            fbDesc.depthAttachment.subresources,
+            depthViewDimension,
+            fbDesc.depthAttachment.format
+        );
         if(depthView == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: depth/stencil attachment view is invalid"));
@@ -421,6 +468,10 @@ void CommandList::endDynamicRendering(){
 }
 
 void CommandList::endRenderPass(){
+    if(!m_renderPassActive)
+        return;
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("end render pass")))
+        return;
     endActiveRenderPass();
 }
 
@@ -463,6 +514,10 @@ void CommandList::endActiveRenderPass(){
 void CommandList::setGraphicsState(const GraphicsState& state){
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("set graphics state")))
         return;
+    if(!validateGraphicsState(state))
+        return;
+    if(!prepareFramebufferForRendering(state.framebuffer, NWB_TEXT("set graphics state")))
+        return;
 
     setResourceStatesForGraphicsBuffers(state);
     commitBarriers();
@@ -492,150 +547,54 @@ void CommandList::setGraphicsState(const GraphicsState& state){
 
     setViewportState(state.viewport);
 
-    if(!state.vertexBuffers.empty()){
-        for(u32 i = 0; i < static_cast<u32>(state.vertexBuffers.size()); ++i){
-            const auto& binding = state.vertexBuffers[i];
-            auto* vb = binding.buffer;
-#if defined(NWB_DEBUG)
-            if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("bind vertex buffer"), NWB_TEXT("buffer is null"), vb)){
-                m_currentGraphicsState = {};
-                return;
-            }
-            if(binding.slot >= s_MaxVertexAttributes){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind vertex buffer: slot is out of range"));
-                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind vertex buffer: slot is out of range"));
-                m_currentGraphicsState = {};
-                return;
-            }
-
-            if(!vb->m_desc.isVertexBuffer){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind vertex buffer: buffer was not created with vertex-buffer usage"));
-                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind vertex buffer: buffer was not created with vertex-buffer usage"));
-                m_currentGraphicsState = {};
-                return;
-            }
-            if(!VulkanDetail::DebugValidateBufferRange(vb->m_desc, binding.offset, 1, NWB_TEXT("bind vertex buffer"), NWB_TEXT("vertex buffer"))){
-                m_currentGraphicsState = {};
-                return;
-            }
-#endif
-
-            VkBuffer vertexBuffer = vb->m_buffer;
-            VkDeviceSize offset = binding.offset;
-            vkCmdBindVertexBuffers(m_currentCmdBuf->m_cmdBuf, binding.slot, 1, &vertexBuffer, &offset);
-            retainResource(vb);
-        }
+    for(const VertexBufferBinding& binding : state.vertexBuffers){
+        VkBuffer vertexBuffer = binding.buffer->m_buffer;
+        VkDeviceSize offset = binding.offset;
+        vkCmdBindVertexBuffers(m_currentCmdBuf->m_cmdBuf, binding.slot, 1, &vertexBuffer, &offset);
+        retainResource(binding.buffer);
     }
 
     if(state.indexBuffer.buffer){
         auto* ib = state.indexBuffer.buffer;
-#if defined(NWB_DEBUG)
-        if(!ib->m_desc.isIndexBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind index buffer: buffer was not created with index-buffer usage"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind index buffer: buffer was not created with index-buffer usage"));
-            m_currentGraphicsState = {};
-            return;
-        }
-
-        VkIndexType indexType;
-        u32 indexSizeBytes;
-        if(state.indexBuffer.format == Format::R16_UINT){
-            indexType = VK_INDEX_TYPE_UINT16;
-            indexSizeBytes = sizeof(u16);
-        }
-        else if(state.indexBuffer.format == Format::R32_UINT){
-            indexType = VK_INDEX_TYPE_UINT32;
-            indexSizeBytes = sizeof(u32);
-        }
-        else{
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind index buffer: format must be R16_UINT or R32_UINT"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind index buffer: format must be R16_UINT or R32_UINT"));
-            m_currentGraphicsState = {};
-            return;
-        }
-
-        if((state.indexBuffer.offset % indexSizeBytes) != 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind index buffer: offset is not aligned to the index format"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to bind index buffer: offset is not aligned to the index format"));
-            m_currentGraphicsState = {};
-            return;
-        }
-        if(!VulkanDetail::DebugValidateBufferRange(ib->m_desc, state.indexBuffer.offset, indexSizeBytes, NWB_TEXT("bind index buffer"), NWB_TEXT("index buffer"))){
-            m_currentGraphicsState = {};
-            return;
-        }
-
-        vkCmdBindIndexBuffer(m_currentCmdBuf->m_cmdBuf, ib->m_buffer, state.indexBuffer.offset, indexType);
-#else
         const VkIndexType indexType = state.indexBuffer.format == Format::R16_UINT ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
         vkCmdBindIndexBuffer(m_currentCmdBuf->m_cmdBuf, ib->m_buffer, state.indexBuffer.offset, indexType);
-#endif
         retainResource(ib);
     }
+    retainResource(state.indirectParams);
 }
 
 void CommandList::draw(const DrawArguments& args){
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw")))
-        return;
     if(args.vertexCount == 0 || args.instanceCount == 0)
         return;
-#if defined(NWB_DEBUG)
-    if(!m_renderPassActive || !m_currentGraphicsState.pipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw: no graphics pipeline and active render pass are bound"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw: no graphics pipeline and active render pass are bound"));
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw")))
         return;
-    }
-#endif
+    if(!validateGraphicsDrawArguments(args, false, NWB_TEXT("draw")))
+        return;
 
     vkCmdDraw(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startVertexLocation, args.startInstanceLocation);
 }
 
 void CommandList::drawIndexed(const DrawArguments& args){
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indexed")))
-        return;
     if(args.vertexCount == 0 || args.instanceCount == 0)
         return;
-#if defined(NWB_DEBUG)
-    if(!m_renderPassActive || !m_currentGraphicsState.pipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed: no graphics pipeline and active render pass are bound"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed: no graphics pipeline and active render pass are bound"));
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indexed")))
         return;
-    }
-    if(!m_currentGraphicsState.indexBuffer.buffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed: no index buffer is bound"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed: no index buffer is bound"));
+    if(!validateGraphicsDrawArguments(args, true, NWB_TEXT("draw indexed")))
         return;
-    }
 
-    auto* ib = m_currentGraphicsState.indexBuffer.buffer;
-    u32 indexSizeBytes = 0;
-    if(m_currentGraphicsState.indexBuffer.format == Format::R16_UINT)
-        indexSizeBytes = sizeof(u16);
-    else if(m_currentGraphicsState.indexBuffer.format == Format::R32_UINT)
-        indexSizeBytes = sizeof(u32);
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed: index buffer format must be R16_UINT or R32_UINT"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed: index buffer format must be R16_UINT or R32_UINT"));
-        return;
-    }
-
-    const u64 startIndexByteOffset = static_cast<u64>(args.startIndexLocation) * indexSizeBytes;
-    if(static_cast<u64>(m_currentGraphicsState.indexBuffer.offset) > Limit<u64>::s_Max - startIndexByteOffset){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to draw indexed: index byte offset overflows"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to draw indexed: index byte offset overflows"));
-        return;
-    }
-
-    const u64 indexByteOffset = static_cast<u64>(m_currentGraphicsState.indexBuffer.offset) + startIndexByteOffset;
-    const u64 indexByteSize = static_cast<u64>(args.vertexCount) * indexSizeBytes;
-    if(!VulkanDetail::DebugValidateBufferRange(ib->m_desc, indexByteOffset, indexByteSize, NWB_TEXT("draw indexed"), NWB_TEXT("index")))
-        return;
-#endif
-
-    vkCmdDrawIndexed(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startIndexLocation, args.startVertexLocation, args.startInstanceLocation);
+    vkCmdDrawIndexed(
+        m_currentCmdBuf->m_cmdBuf,
+        args.vertexCount,
+        args.instanceCount,
+        args.startIndexLocation,
+        static_cast<i32>(args.startVertexLocation),
+        args.startInstanceLocation
+    );
 }
 
 void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
+    if(drawCount == 0u)
+        return;
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indirect")))
         return;
     Buffer* indirectBuffer = nullptr;
@@ -655,6 +614,8 @@ void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
 }
 
 void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
+    if(drawCount == 0u)
+        return;
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indexed indirect")))
         return;
     Buffer* indirectBuffer = nullptr;

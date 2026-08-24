@@ -133,7 +133,11 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     if(desc.colorAttachments.size() > kMaxColorAttachments)
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Framebuffer has more than {} color attachments; truncating to {}."), kMaxColorAttachments, kMaxColorAttachments);
 
-    fb->m_resources.reserve(static_cast<usize>(colorAttachmentCount) + (desc.depthAttachment.texture ? 1u : 0u));
+    fb->m_resources.reserve(
+        static_cast<usize>(colorAttachmentCount)
+        + (desc.depthAttachment.texture ? 1u : 0u)
+        + (desc.shadingRateAttachment.texture ? 1u : 0u)
+    );
     for(u32 i = 0; i < colorAttachmentCount; ++i){
         if(desc.colorAttachments[i].texture)
             fb->m_resources.emplace_back(desc.colorAttachments[i].texture, TextureHandle::deleter_type(&m_context.objectArena));
@@ -141,6 +145,8 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
 
     if(desc.depthAttachment.texture)
         fb->m_resources.emplace_back(desc.depthAttachment.texture, TextureHandle::deleter_type(&m_context.objectArena));
+    if(desc.shadingRateAttachment.texture)
+        fb->m_resources.emplace_back(desc.shadingRateAttachment.texture, TextureHandle::deleter_type(&m_context.objectArena));
 
     return FramebufferHandle(fb, FramebufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
@@ -435,6 +441,7 @@ bool CommandList::ensureGraphicsRenderPass(Framebuffer* framebuffer){
     RenderPassParameters params = {};
     if(!beginDynamicRendering(framebuffer, params))
         return false;
+    retainResource(framebuffer);
     m_renderPassActive = true;
     m_renderPassFramebuffer = framebuffer;
     return true;
@@ -471,6 +478,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
     auto* pipeline = state.pipeline;
     if(pipeline){
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
+        retainResource(pipeline);
         VulkanDetail::SetGraphicsDynamicState(m_currentCmdBuf->m_cmdBuf, pipeline->m_desc, state);
     }
 
@@ -510,6 +518,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
             VkBuffer vertexBuffer = vb->m_buffer;
             VkDeviceSize offset = binding.offset;
             vkCmdBindVertexBuffers(m_currentCmdBuf->m_cmdBuf, binding.slot, 1, &vertexBuffer, &offset);
+            retainResource(vb);
         }
     }
 
@@ -556,6 +565,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
         const VkIndexType indexType = state.indexBuffer.format == Format::R16_UINT ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
         vkCmdBindIndexBuffer(m_currentCmdBuf->m_cmdBuf, ib->m_buffer, state.indexBuffer.offset, indexType);
 #endif
+        retainResource(ib);
     }
 }
 

@@ -240,6 +240,7 @@ void StateTracker::appendKeepInitialStateBarriers(
         barrier.offset = 0;
         barrier.size = VK_WHOLE_SIZE;
         bufferBarriers.push_back(barrier);
+        commandBuffer.retainResource(*buffer);
         it.value() = desc.initialState;
     }
 }

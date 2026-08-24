@@ -143,8 +143,10 @@ void CommandList::setMeshletState(const MeshletState& state){
     m_currentMeshletState = state;
 
     auto* pipeline = state.pipeline;
-    if(pipeline)
+    if(pipeline){
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
+        retainResource(pipeline);
+    }
 
     if(pipeline)
         bindDescriptorBufferEmptySet(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipelineLayout);

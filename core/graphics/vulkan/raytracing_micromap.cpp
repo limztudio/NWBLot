@@ -277,6 +277,8 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
     }
     else
         vkCmdBuildMicromapsEXT(m_currentCmdBuf->m_cmdBuf, 1, &buildInfo);
+
+    retainResource(omm);
 }
 
 

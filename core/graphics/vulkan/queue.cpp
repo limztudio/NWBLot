@@ -96,6 +96,15 @@ TrackedCommandBuffer::~TrackedCommandBuffer(){
     m_queue.unregisterCommandBuffer(*this);
 }
 
+void TrackedCommandBuffer::retainResource(GraphicsResource& resource){
+    for(const Handle<GraphicsResource>& retainedResource : m_referencedResources){
+        if(retainedResource.get() == &resource)
+            return;
+    }
+
+    m_referencedResources.emplace_back(&resource, Handle<GraphicsResource>::deleter_type(&m_context.objectArena));
+}
+
 void TrackedCommandBuffer::appendRetainedTextureStateCommit(
     Texture& texture,
     const MipLevel mipLevel,
@@ -103,7 +112,7 @@ void TrackedCommandBuffer::appendRetainedTextureStateCommit(
 ){
     // The closing barrier and its deferred state publication outlive CommandList::clearState(). Keep the texture
     // alive with the command buffer until Queue::submit accepts or discards the command buffer.
-    m_referencedResources.emplace_back(&texture, Handle<GraphicsResource>::deleter_type(&m_context.objectArena));
+    retainResource(texture);
 
     m_retainedTextureStateCommits.push_back(RetainedTextureStateCommit{
         .texture = &texture,

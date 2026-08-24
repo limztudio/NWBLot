@@ -100,8 +100,10 @@ void CommandList::setComputeState(const ComputeState& state){
     m_currentComputeState = state;
 
     auto* pipeline = state.pipeline;
-    if(pipeline)
+    if(pipeline){
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipeline);
+        retainResource(pipeline);
+    }
 
     if(pipeline)
         bindDescriptorBufferEmptySet(VK_PIPELINE_BIND_POINT_COMPUTE, pipeline->m_pipelineLayout);

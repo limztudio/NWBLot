@@ -252,6 +252,7 @@ void CommandList::resetTimerQuery(TimerQuery* queryResource){
     // timestamp writes issued later this frame. MUST be recorded OUTSIDE any dynamic render pass, because
     // vkCmdResetQueryPool is illegal inside a render pass instance -- the caller guarantees that.
     vkCmdResetQueryPool(m_currentCmdBuf->m_cmdBuf, query->m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
+    retainResource(query);
 }
 
 bool CommandList::canResetTimerQueryHere()const{
@@ -287,6 +288,7 @@ bool CommandList::beginTimerQuery(TimerQuery* queryResource){
         vkCmdResetQueryPool(m_currentCmdBuf->m_cmdBuf, query->m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
 
     vkCmdWriteTimestamp(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query->m_queryPool, s_TimerQueryBeginIndex);
+    retainResource(query);
     query->m_timestampQueue = queueInfo->id;
     query->m_timestampValidBits = queueInfo->timestampValidBits;
     return true;
@@ -318,6 +320,7 @@ bool CommandList::endTimerQuery(TimerQuery* queryResource){
     }
 
     vkCmdWriteTimestamp(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, query->m_queryPool, s_TimerQueryEndIndex);
+    retainResource(query);
     return true;
 }
 

@@ -395,6 +395,7 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
 
     if(!needsBarrier)
         return;
+    retainResource(&texture);
 
     if(!usePerSubresourceBarriers){
         const VkImageMemoryBarrier2 barrier = VulkanStateTrackingDetail::BuildTextureStateBarrier(
@@ -463,6 +464,7 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
 
     if(oldState == stateBits && !needsUavBarrier)
         return;
+    retainResource(&buffer);
 
     auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
     barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common, m_context.extensions.KHR_ray_tracing_pipeline);

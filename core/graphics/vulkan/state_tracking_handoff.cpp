@@ -211,6 +211,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         ))
             return false;
 
+        retainResource(state.texture);
         const TextureSubresourceStateKey key{ state.texture, state.mipLevel, state.arraySlice };
         m_stateTracker.m_textureStates.insert_or_assign(key, state.state);
     }
@@ -223,6 +224,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         if(!appendBufferAcquire(*state.buffer, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
             return false;
 
+        retainResource(state.buffer);
         m_stateTracker.m_bufferStates.insert_or_assign(state.buffer, state.state);
     }
 
@@ -234,6 +236,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         if(!appendTextureAcquire(*state.texture, s_AllSubresources, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
             return false;
 
+        retainResource(state.texture);
         m_stateTracker.m_permanentTextureStates.insert_or_assign(state.texture, state.state);
     }
 
@@ -245,6 +248,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         if(!appendBufferAcquire(*state.buffer, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
             return false;
 
+        retainResource(state.buffer);
         m_stateTracker.m_permanentBufferStates.insert_or_assign(state.buffer, state.state);
     }
 
@@ -400,6 +404,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
             destinationQueueFamily,
             m_context.extensions.KHR_ray_tracing_pipeline
         ));
+        retainResource(texture);
     }
 
     for(auto it = m_bufferOwnershipReleaseDestinations.begin(); it != m_bufferOwnershipReleaseDestinations.end(); ++it){
@@ -428,6 +433,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
             destinationQueueFamily,
             m_context.extensions.KHR_ray_tracing_pipeline
         ));
+        retainResource(buffer);
     }
 
     commitBarriers();

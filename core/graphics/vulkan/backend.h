@@ -758,6 +758,7 @@ public:
 
 
 private:
+    void retainResource(GraphicsResource& resource);
     void appendRetainedTextureStateCommit(Texture& texture, MipLevel mipLevel, ArraySlice arraySlice);
     void commitRetainedTextureStateCommits();
     void discardRetainedTextureStateCommits();

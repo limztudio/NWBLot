@@ -209,7 +209,7 @@ void CommandList::clearState(){
 
 void CommandList::retainResource(GraphicsResource* resource){
     if(resource)
-        m_currentCmdBuf->m_referencedResources.emplace_back(resource, Handle<GraphicsResource>::deleter_type(&m_context.objectArena));
+        m_currentCmdBuf->retainResource(*resource);
 }
 
 void CommandList::retainStagingBuffer(Buffer& buffer){

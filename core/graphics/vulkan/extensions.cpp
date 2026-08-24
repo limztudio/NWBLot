@@ -332,8 +332,13 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         return;
     }
 
-    if(!vkConvertDescs.empty())
+    if(!vkConvertDescs.empty()){
         vkCmdConvertCooperativeVectorMatrixNV(m_currentCmdBuf->m_cmdBuf, static_cast<u32>(vkConvertDescs.size()), vkConvertDescs.data());
+        for(const CooperativeVectorConvertMatrixLayoutDesc* convertDesc : validDescs){
+            retainResource(convertDesc->src.buffer);
+            retainResource(convertDesc->dst.buffer);
+        }
+    }
 }
 
 

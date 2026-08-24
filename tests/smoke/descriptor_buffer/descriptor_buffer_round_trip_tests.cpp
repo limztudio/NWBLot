@@ -69,6 +69,8 @@ inline constexpr GpuTimingScopeDefinition s_TimerQueryFailureScope("tests/timing
 inline constexpr GpuTimingScopeDefinition s_TimerQueryAcceptedRecoveryScope("tests/timing_query_accepted_recovery");
 inline constexpr GpuTimingScopeDefinition s_TimerQueryForeignDeviceScope("tests/timing_query_foreign_device");
 inline constexpr GpuTimingScopeDefinition s_TimerQueryUnsupportedQueueScope("tests/timing_query_unsupported_queue");
+inline constexpr GpuTimingScopeDefinition s_AcceptedCompletionScope("tests/timing_accepted_completion");
+inline constexpr GpuTimingScopeDefinition s_AuxiliaryCompletionScope("tests/timing_auxiliary_completion");
 inline constexpr GpuTimingScopeDefinition s_SharedOpaqueComputeEmulationScope(
     "tests/timing_shared_opaque_compute_emulation"
 );
@@ -1378,6 +1380,99 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryRejectsDifferentExactPhysicalQue
     ASSERT_TRUE(nativeDevice.getTimerQueryResult(query.get(), result));
     EXPECT_EQ(result.timestampValidBits, primaryInfo->timestampValidBits);
 }
+
+
+#if !defined(NWB_FINAL)
+
+// Completion ownership follows the exact auxiliary queue token, not its broad Graphics class. Holding that token
+// after the device is idle must block publication; releasing a same-value primary-queue lookalike must not unblock it.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingCompletionTracksExactAuxiliaryPhysicalQueue){
+    HeadlessGraphicsScope multiQueueScope;
+    ASSERT_TRUE(multiQueueScope.setSameClassMultiQueueEnabled(true));
+    if(!multiQueueScope.initialize())
+        GTEST_SKIP() << "GPU timing auxiliary completion: no usable multi-queue headless Vulkan device on this host.";
+
+    auto& graphics = multiQueueScope.graphics();
+    auto& nativeDevice = graphics.getDevice();
+    const GpuPhysicalQueueTopology topology = nativeDevice.getPhysicalQueueTopology();
+    const GpuPhysicalQueueId primaryQueue = nativeDevice.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueInfo* secondaryInfo = nullptr;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+        if(
+            candidate.id != primaryQueue
+            && candidate.queueClass == CommandQueue::Graphics
+            && candidate.timestampValidBits != 0u
+        ){
+            secondaryInfo = &candidate;
+            break;
+        }
+    }
+    if(!secondaryInfo)
+        GTEST_SKIP() << "GPU timing auxiliary completion: adapter exposes no auxiliary timestamp-capable Graphics queue.";
+
+    auto& timing = graphics.gpuTiming();
+    multiQueueScope.setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_AuxiliaryCompletionScope.identity, nativeDevice, 1u));
+    timing.beginFrame(240u);
+    GpuTimingSampleCapture completedSamples;
+    ScopedGpuTimingSampleListener sampleListener(timing, completedSamples);
+    constexpr GpuTimingSampleAttribution s_AuxiliaryAttribution = 24u;
+
+    CommandListParameters parameters;
+    parameters.setPhysicalQueue(secondaryInfo->id);
+    auto commandList = nativeDevice.createCommandList(parameters);
+    ASSERT_NE(commandList.get(), nullptr);
+    GpuTimingSubmissionTicket ticket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(ticket);
+        commandList->open();
+        {
+            GpuTimingMeasure measure(
+                timing,
+                s_AuxiliaryCompletionScope,
+                nativeDevice,
+                *commandList,
+                s_AuxiliaryAttribution
+            );
+            ASSERT_TRUE(measure.valid());
+        }
+        commandList->close();
+    }
+    CommandList* commandLists[] = { commandList.get() };
+    const QueueSubmissionToken token = ticket.submit(
+        nativeDevice,
+        commandLists,
+        LengthOf(commandLists),
+        secondaryInfo->id,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(token.valid());
+    ASSERT_TRUE(token.matchesPhysicalQueue(secondaryInfo->id.index, secondaryInfo->id.deviceGeneration));
+    ASSERT_TRUE(timing.holdSubmissionCompletionForTesting(token));
+    ASSERT_TRUE(nativeDevice.waitForIdle());
+
+    timing.collect(nativeDevice, 241u);
+    EXPECT_EQ(completedSamples.sampleCount, 0u);
+    QueueSubmissionToken primaryLookalike = token;
+    primaryLookalike.physicalQueueIndex = primaryQueue.index;
+    primaryLookalike.deviceGeneration = primaryQueue.deviceGeneration;
+    timing.releaseSubmissionCompletionForTesting(primaryLookalike);
+    timing.collect(nativeDevice, 241u);
+    EXPECT_EQ(completedSamples.sampleCount, 0u);
+
+    timing.releaseSubmissionCompletionForTesting(token);
+    timing.collect(nativeDevice, 241u);
+    ASSERT_EQ(completedSamples.sampleCount, 1u);
+    EXPECT_EQ(completedSamples.samples[0u].scopeName, s_AuxiliaryCompletionScope.identity);
+    EXPECT_EQ(completedSamples.samples[0u].attribution, s_AuxiliaryAttribution);
+    EXPECT_TRUE(completedSamples.samples[0u].published);
+
+    multiQueueScope.setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+#endif
 
 
 // A physical-queue ID is more precise than its broad CommandQueue class. When a Graphics family exposes a second
@@ -6143,7 +6238,7 @@ struct NativeFrameRecoveryPacketTask{
             && *payload.armed
             && *payload.retiresTiming
         ){
-            if(!payload.transaction->confirmEndSubmission(false))
+            if(!payload.transaction->confirmEndSubmission(token, false))
                 payload.transaction->discard();
         }
         if(payload.armed)
@@ -41295,6 +41390,119 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleRollsBackRejectedGrap
     timing.resetQueries();
 }
 
+
+// An available result from seed A must not let capacity-one query B publish or return to the free list before B's
+// exact accepted submission completes. The recorder-local hold makes that ordering deterministic after device idle.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingAcceptedSubmissionCompletionGatesPublicationAndReuse){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = s_scope->graphics().gpuTiming();
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_AcceptedCompletionScope.identity, device, 1u));
+    GpuTimingSampleCapture completedSamples;
+    ScopedGpuTimingSampleListener sampleListener(timing, completedSamples);
+
+    timing.beginFrame(230u);
+    auto seedCommandList = device.createCommandList();
+    ASSERT_NE(seedCommandList.get(), nullptr);
+    GpuTimingSubmissionTicket seedTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(seedTicket);
+        seedCommandList->open();
+        {
+            GpuTimingMeasure seedMeasure(timing, s_AcceptedCompletionScope, device, *seedCommandList);
+            ASSERT_TRUE(seedMeasure.valid());
+        }
+        seedCommandList->close();
+    }
+    CommandList* seedCommandLists[] = { seedCommandList.get() };
+    const QueueSubmissionToken seedToken = seedTicket.submit(
+        device,
+        seedCommandLists,
+        LengthOf(seedCommandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(seedToken.valid());
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 231u);
+    EXPECT_EQ(completedSamples.sampleCount, 0u);
+
+    timing.beginFrame(231u);
+    constexpr GpuTimingSampleAttribution s_AcceptedAttribution = 23u;
+    auto acceptedCommandList = device.createCommandList();
+    ASSERT_NE(acceptedCommandList.get(), nullptr);
+    GpuTimingSubmissionTicket acceptedTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(acceptedTicket);
+        acceptedCommandList->open();
+        {
+            GpuTimingMeasure acceptedMeasure(
+                timing,
+                s_AcceptedCompletionScope,
+                device,
+                *acceptedCommandList,
+                s_AcceptedAttribution
+            );
+            ASSERT_TRUE(acceptedMeasure.valid());
+        }
+        acceptedCommandList->close();
+    }
+    CommandList* acceptedCommandLists[] = { acceptedCommandList.get() };
+    const QueueSubmissionToken acceptedToken = acceptedTicket.submit(
+        device,
+        acceptedCommandLists,
+        LengthOf(acceptedCommandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(acceptedToken.valid());
+    ASSERT_TRUE(timing.holdSubmissionCompletionForTesting(acceptedToken));
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 232u);
+    EXPECT_EQ(completedSamples.sampleCount, 0u);
+
+    auto blockedCommandList = device.createCommandList();
+    ASSERT_NE(blockedCommandList.get(), nullptr);
+    {
+        GpuTimingSubmissionTicket blockedTicket(timing);
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(blockedTicket);
+        blockedCommandList->open();
+        {
+            GpuTimingMeasure blockedMeasure(timing, s_AcceptedCompletionScope, device, *blockedCommandList);
+            EXPECT_FALSE(blockedMeasure.valid());
+        }
+        blockedCommandList->close();
+    }
+
+    timing.releaseSubmissionCompletionForTesting(acceptedToken);
+    timing.collect(device, 232u);
+    ASSERT_EQ(completedSamples.sampleCount, 1u);
+    EXPECT_EQ(completedSamples.samples[0u].scopeName, s_AcceptedCompletionScope.identity);
+    EXPECT_EQ(completedSamples.samples[0u].sourceFrameIndex, 231u);
+    EXPECT_EQ(completedSamples.samples[0u].attribution, s_AcceptedAttribution);
+    EXPECT_TRUE(completedSamples.samples[0u].published);
+
+    auto reusableCommandList = device.createCommandList();
+    ASSERT_NE(reusableCommandList.get(), nullptr);
+    {
+        GpuTimingSubmissionTicket reusableTicket(timing);
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(reusableTicket);
+        reusableCommandList->open();
+        {
+            GpuTimingMeasure reusableMeasure(timing, s_AcceptedCompletionScope, device, *reusableCommandList);
+            ASSERT_TRUE(reusableMeasure.valid());
+            reusableMeasure.discardTiming();
+        }
+        reusableCommandList->close();
+    }
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
 #endif
 
 
@@ -41459,9 +41667,16 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionStaleScopeCannotR
 
     staleTransaction.discard();
     CommandList* acceptedCommandLists[] = { acceptedCommandList.get() };
-    ASSERT_TRUE(acceptedTicket.submit(device, acceptedCommandLists, LengthOf(acceptedCommandLists)));
-    acceptedTransaction.confirmBeginSubmission();
-    ASSERT_TRUE(acceptedTransaction.confirmEndSubmission(true));
+    const QueueSubmissionToken acceptedToken = acceptedTicket.submit(
+        device,
+        acceptedCommandLists,
+        LengthOf(acceptedCommandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(acceptedToken.valid());
+    ASSERT_TRUE(acceptedTransaction.confirmBeginSubmission(acceptedToken));
+    ASSERT_TRUE(acceptedTransaction.confirmEndSubmission(acceptedToken, true));
     ASSERT_TRUE(device.waitForIdle());
     timing.collect(device, 222u);
 
@@ -42444,9 +42659,16 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionPropagatesBackend
         acceptedCommandList->close();
     }
     CommandList* acceptedCommandLists[] = { acceptedCommandList.get() };
-    ASSERT_TRUE(acceptedTicket.submit(device, acceptedCommandLists, LengthOf(acceptedCommandLists)));
-    acceptedTransaction.confirmBeginSubmission();
-    ASSERT_TRUE(acceptedTransaction.confirmEndSubmission(true));
+    const QueueSubmissionToken acceptedToken = acceptedTicket.submit(
+        device,
+        acceptedCommandLists,
+        LengthOf(acceptedCommandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(acceptedToken.valid());
+    ASSERT_TRUE(acceptedTransaction.confirmBeginSubmission(acceptedToken));
+    ASSERT_TRUE(acceptedTransaction.confirmEndSubmission(acceptedToken, true));
     ASSERT_TRUE(device.waitForIdle());
     timing.collect(device, 203u);
     EXPECT_TRUE(timingSink.stats(s_TimerQueryFailureScope.identity).valid());
@@ -42463,8 +42685,15 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionPropagatesBackend
         acceptedPrefix->close();
     }
     CommandList* acceptedPrefixCommandLists[] = { acceptedPrefix.get() };
-    ASSERT_TRUE(acceptedPrefixTicket.submit(device, acceptedPrefixCommandLists, LengthOf(acceptedPrefixCommandLists)));
-    recoveryTransaction.confirmBeginSubmission();
+    const QueueSubmissionToken acceptedPrefixToken = acceptedPrefixTicket.submit(
+        device,
+        acceptedPrefixCommandLists,
+        LengthOf(acceptedPrefixCommandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(acceptedPrefixToken.valid());
+    ASSERT_TRUE(recoveryTransaction.confirmBeginSubmission(acceptedPrefixToken));
     ASSERT_TRUE(recoveryTransaction.needsRetirement());
 
     auto failedAcceptedEnd = device.createCommandList();
@@ -42478,13 +42707,14 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionPropagatesBackend
     ASSERT_TRUE(recoveryTransaction.recordEnd(*recoveryCommandList));
     recoveryCommandList->close();
     CommandList* recoveryCommandLists[] = { recoveryCommandList.get() };
-    ASSERT_TRUE(device.executeCommandLists(
+    const QueueSubmissionToken recoveryToken = device.executeCommandLists(
         recoveryCommandLists,
         LengthOf(recoveryCommandLists),
         CommandQueue::Graphics,
         QueueSubmissionDesc{}
-    ).valid());
-    ASSERT_TRUE(recoveryTransaction.confirmEndSubmission(false));
+    );
+    ASSERT_TRUE(recoveryToken.valid());
+    ASSERT_TRUE(recoveryTransaction.confirmEndSubmission(recoveryToken, false));
     ASSERT_TRUE(device.waitForIdle());
     timing.collect(device, 204u);
     EXPECT_FALSE(timingSink.stats(s_TimerQueryAcceptedRecoveryScope.identity).valid());
@@ -42506,9 +42736,16 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionPropagatesBackend
         postRecoveryCommandList->close();
     }
     CommandList* postRecoveryCommandLists[] = { postRecoveryCommandList.get() };
-    ASSERT_TRUE(postRecoveryTicket.submit(device, postRecoveryCommandLists, LengthOf(postRecoveryCommandLists)));
-    postRecoveryTransaction.confirmBeginSubmission();
-    ASSERT_TRUE(postRecoveryTransaction.confirmEndSubmission(true));
+    const QueueSubmissionToken postRecoveryToken = postRecoveryTicket.submit(
+        device,
+        postRecoveryCommandLists,
+        LengthOf(postRecoveryCommandLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(postRecoveryToken.valid());
+    ASSERT_TRUE(postRecoveryTransaction.confirmBeginSubmission(postRecoveryToken));
+    ASSERT_TRUE(postRecoveryTransaction.confirmEndSubmission(postRecoveryToken, true));
     ASSERT_TRUE(device.waitForIdle());
     timing.collect(device, 205u);
     EXPECT_TRUE(timingSink.stats(s_TimerQueryAcceptedRecoveryScope.identity).valid());
@@ -42527,6 +42764,9 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& timing = graphics.gpuTiming();
     auto& timingSink = s_scope->gpuTimingSink();
+    GpuTimingSampleCapture completedSamples;
+    ScopedGpuTimingSampleListener sampleListener(timing, completedSamples);
+    constexpr GpuTimingSampleAttribution s_RecoveryAttribution = 25u;
 
     s_scope->setGpuTimingEnabled(true);
     ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTransactionScope.identity, device, 1u));
@@ -42544,7 +42784,12 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
     {
         GpuTimingSubmissionTicket::RecordingScope timingRecording(prefixTicket);
         prefix->open();
-        ASSERT_TRUE(rejectedTransaction.begin(s_FrameTransactionScope, device, *prefix));
+        ASSERT_TRUE(rejectedTransaction.begin(
+            s_FrameTransactionScope,
+            device,
+            *prefix,
+            s_RecoveryAttribution
+        ));
         prefix->close();
     }
     GpuTimingSubmissionTicket finalTicket(timing);
@@ -42564,7 +42809,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(prefixToken.valid());
-    rejectedTransaction.confirmBeginSubmission();
+    ASSERT_TRUE(rejectedTransaction.confirmBeginSubmission(prefixToken));
 
     device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
     CommandList* rejectedFinalCommandLists[] = { rejectedFinal.get() };
@@ -42576,7 +42821,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
         QueueSubmissionDesc{}
     ).valid());
 
-    rejectedTransaction.prepareForRecovery();
+    ASSERT_TRUE(rejectedTransaction.prepareForRecovery());
     recovery->open();
     ASSERT_TRUE(rejectedTransaction.recordEnd(*recovery));
     recovery->close();
@@ -42588,10 +42833,36 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
         QueueSubmissionDesc{}
     );
     ASSERT_TRUE(recoveryToken.valid());
-    ASSERT_TRUE(rejectedTransaction.confirmEndSubmission(false));
+#if !defined(NWB_FINAL)
+    ASSERT_TRUE(timing.holdSubmissionCompletionForTesting(recoveryToken));
+#endif
+    ASSERT_TRUE(rejectedTransaction.confirmEndSubmission(recoveryToken, false));
     ASSERT_TRUE(device.waitForIdle());
+#if !defined(NWB_FINAL)
     timing.collect(device, 91u);
+    EXPECT_EQ(completedSamples.sampleCount, 0u);
     EXPECT_FALSE(timingSink.stats(s_FrameTransactionScope.identity).valid());
+
+    auto blockedCommandList = device.createCommandList();
+    ASSERT_NE(blockedCommandList.get(), nullptr);
+    {
+        GpuTimingSubmissionTicket blockedTicket(timing);
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(blockedTicket);
+        blockedCommandList->open();
+        {
+            GpuTimingMeasure blockedMeasure(timing, s_FrameTransactionScope, device, *blockedCommandList);
+            EXPECT_FALSE(blockedMeasure.valid());
+        }
+        blockedCommandList->close();
+    }
+
+    timing.releaseSubmissionCompletionForTesting(recoveryToken);
+#endif
+    timing.collect(device, 91u);
+    ASSERT_EQ(completedSamples.sampleCount, 1u);
+    EXPECT_EQ(completedSamples.samples[0u].scopeName, s_FrameTransactionScope.identity);
+    EXPECT_EQ(completedSamples.samples[0u].attribution, s_RecoveryAttribution);
+    EXPECT_FALSE(completedSamples.samples[0u].published);
 
     timing.beginFrame(91u);
     auto acceptedPrefix = device.createCommandList();
@@ -42616,23 +42887,25 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
     }
 
     CommandList* acceptedPrefixCommandLists[] = { acceptedPrefix.get() };
-    ASSERT_TRUE(acceptedPrefixTicket.submit(
+    const QueueSubmissionToken acceptedPrefixToken = acceptedPrefixTicket.submit(
         device,
         acceptedPrefixCommandLists,
         1u,
         RenderLane::Graphics,
         QueueSubmissionDesc{}
-    ).valid());
-    acceptedTransaction.confirmBeginSubmission();
+    );
+    ASSERT_TRUE(acceptedPrefixToken.valid());
+    ASSERT_TRUE(acceptedTransaction.confirmBeginSubmission(acceptedPrefixToken));
     CommandList* acceptedFinalCommandLists[] = { acceptedFinal.get() };
-    ASSERT_TRUE(acceptedFinalTicket.submit(
+    const QueueSubmissionToken acceptedFinalToken = acceptedFinalTicket.submit(
         device,
         acceptedFinalCommandLists,
         1u,
         RenderLane::Graphics,
         QueueSubmissionDesc{}
-    ).valid());
-    ASSERT_TRUE(acceptedTransaction.confirmEndSubmission(true));
+    );
+    ASSERT_TRUE(acceptedFinalToken.valid());
+    ASSERT_TRUE(acceptedTransaction.confirmEndSubmission(acceptedFinalToken, true));
     ASSERT_TRUE(device.waitForIdle());
     timing.collect(device, 92u);
     EXPECT_TRUE(timingSink.stats(s_FrameTransactionScope.identity).valid());
@@ -42843,7 +43116,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     ));
     const QueueSubmissionToken prefixToken = transaction.packetToken(prefixPacket);
     ASSERT_TRUE(prefixToken.valid());
-    frameTransaction.confirmBeginSubmission();
+    ASSERT_TRUE(frameTransaction.confirmBeginSubmission(prefixToken));
 
     device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
     EXPECT_FALSE(submitter.submitPacket(
@@ -42873,7 +43146,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     EXPECT_FALSE(recoveryDiscarded);
     ASSERT_TRUE(frameTransaction.needsRetirement());
 
-    frameTransaction.prepareForRecovery();
+    ASSERT_TRUE(frameTransaction.prepareForRecovery());
     recoveryArmed = true;
     recoveryRetiresTiming = true;
     ASSERT_TRUE(submitter.recordAndSubmitAcceptedFrontierTask(
@@ -43943,8 +44216,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
     EXPECT_FALSE(transaction.taskToken(compiledGraph, GpuTaskId{}).valid());
     GpuCompiledGraph unrelatedCompiledGraph(DescriptorBufferRoundTripTest::arena());
     EXPECT_FALSE(transaction.taskToken(unrelatedCompiledGraph, beginTask).valid());
-    frameTransaction.confirmBeginSubmission();
-    ASSERT_TRUE(frameTransaction.confirmEndSubmission(true));
+    ASSERT_TRUE(frameTransaction.confirmBeginSubmission(beginTaskToken));
+    ASSERT_TRUE(frameTransaction.confirmEndSubmission(endTaskToken, true));
     ASSERT_TRUE(device.waitForIdle());
     timing.collect(device, 122u);
     EXPECT_TRUE(timingSink.stats(s_FrameTransactionScope.identity).valid());

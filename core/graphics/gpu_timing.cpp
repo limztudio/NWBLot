@@ -39,7 +39,29 @@ void GpuTimingAccumulator::collect(
         completedSamples->reserve(completedSamples->size() + m_queries.size());
 
     for(QueryRecord& record : m_queries){
-        if(!record.pending || !record.query)
+        if(record.state != QueryState::PendingAccepted || !record.query)
+            continue;
+        if(
+            !record.acceptedSubmission.valid()
+            || !record.acceptedSubmission.hasPhysicalQueueIdentity()
+            || record.acceptedSubmission.queue != record.queueClass
+            || !record.acceptedSubmission.matchesPhysicalQueue(
+                record.physicalQueue.index,
+                record.physicalQueue.deviceGeneration
+            )
+            || !device.matchesPhysicalQueueIdentity(
+                record.acceptedSubmission.queue,
+                record.acceptedSubmission.physicalQueueIndex,
+                record.acceptedSubmission.deviceGeneration
+            )
+        ){
+            record.state = QueryState::Quarantined;
+            record.frameResetRecorded = false;
+            record.deviceReady = false;
+            NWB_LOGGER_ERROR(NWB_TEXT("GPU timing query quarantined after its accepted submission lost exact queue identity"));
+            continue;
+        }
+        if(!recorder.submissionCompleted(device, record.acceptedSubmission))
             continue;
         if(!device.pollTimerQuery(record.query.get()))
             continue;
@@ -67,9 +89,7 @@ void GpuTimingAccumulator::collect(
                 .published = publishSample,
             });
         }
-        record.pending = false;
-        record.publishSample = true;
-        record.attribution = s_NoGpuTimingSampleAttribution;
+        releaseQuery(record);
     }
 }
 
@@ -85,7 +105,7 @@ void GpuTimingAccumulator::recordFrameReset(CommandList& commandList){
         // A render-pass scope must observe this frame's reset, not merely a reset that happened during an earlier
         // frame. Leave the pool unavailable until confirmFrameReset() observes a successful preamble submission.
         record.deviceReady = false;
-        if(!record.query || record.recording || record.pending)
+        if(!record.query || record.state != QueryState::Available)
             continue;
 
         commandList.resetTimerQuery(record.query.get());
@@ -99,7 +119,7 @@ void GpuTimingAccumulator::confirmFrameReset(){
             continue;
 
         record.frameResetRecorded = false;
-        if(m_enabled)
+        if(m_enabled && record.state == QueryState::Available)
             record.deviceReady = true;
     }
 }
@@ -148,8 +168,12 @@ bool GpuTimingAccumulator::beginQuery(
     if(!commandList.beginTimerQuery(record.query.get()))
         return false;
 
-    record.recording = true;
+    record.physicalQueue = commandList.getDescription().physicalQueue;
+    record.acceptedSubmission = {};
+    record.queueClass = commandList.getDescription().queueType;
+    record.state = QueryState::Recording;
     record.publishSample = true;
+    record.frameResetRecorded = false;
     record.deviceReady = false;
     record.frameIndex = frameIndex;
     record.attribution = attribution;
@@ -167,13 +191,19 @@ bool GpuTimingAccumulator::endQuery(CommandList& commandList, const GpuTimingSco
         return false;
 
     QueryRecord& record = m_queries[scope.index];
-    if(record.epoch != scope.epoch || record.reservation != scope.reservation || !record.recording)
+    if(
+        record.epoch != scope.epoch
+        || record.reservation != scope.reservation
+        || record.state != QueryState::Recording
+    )
         return false;
     if(!commandList.endTimerQuery(record.query.get())){
-        releaseQuery(record);
+        quarantineQuery(scope);
+        NWB_LOGGER_ERROR(NWB_TEXT("GPU timing query quarantined after its ending timestamp failed to record"));
         return false;
     }
-    return confirmQuery(scope, true);
+    record.state = QueryState::EndedUnaccepted;
+    return true;
 }
 
 bool GpuTimingAccumulator::recordQueryEnd(CommandList& commandList, const GpuTimingScope& scope){
@@ -181,23 +211,75 @@ bool GpuTimingAccumulator::recordQueryEnd(CommandList& commandList, const GpuTim
         return false;
 
     QueryRecord& record = m_queries[scope.index];
-    if(record.epoch != scope.epoch || record.reservation != scope.reservation || !record.recording)
+    if(
+        record.epoch != scope.epoch
+        || record.reservation != scope.reservation
+        || record.state != QueryState::Recording
+    )
         return false;
 
-    return commandList.endTimerQuery(record.query.get());
+    if(!commandList.endTimerQuery(record.query.get()))
+        return false;
+
+    record.state = QueryState::EndedUnaccepted;
+    return true;
 }
 
-bool GpuTimingAccumulator::confirmQuery(const GpuTimingScope& scope, const bool publishSample){
+bool GpuTimingAccumulator::validateQuerySubmission(
+    const GpuTimingScope& scope,
+    const QueueSubmissionToken& token
+)const{
+    if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
+        return false;
+
+    const QueryRecord& record = m_queries[scope.index];
+    if(record.epoch != scope.epoch || record.reservation != scope.reservation)
+        return false;
+    if(record.state != QueryState::Recording && record.state != QueryState::EndedUnaccepted)
+        return false;
+
+    return token.valid()
+        && token.hasPhysicalQueueIdentity()
+        && token.queue == record.queueClass
+        && token.matchesPhysicalQueue(record.physicalQueue.index, record.physicalQueue.deviceGeneration)
+    ;
+}
+
+bool GpuTimingAccumulator::confirmQuery(
+    const GpuTimingScope& scope,
+    const QueueSubmissionToken& token,
+    const bool publishSample
+){
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 
     QueryRecord& record = m_queries[scope.index];
-    if(record.epoch != scope.epoch || record.reservation != scope.reservation || !record.recording)
+    if(record.epoch != scope.epoch || record.reservation != scope.reservation)
+        return false;
+    if(record.state != QueryState::EndedUnaccepted || !validateQuerySubmission(scope, token)){
+        quarantineQuery(scope);
+        return false;
+    }
+
+    record.acceptedSubmission = token;
+    record.state = QueryState::PendingAccepted;
+    record.publishSample = publishSample;
+    return true;
+}
+
+bool GpuTimingAccumulator::prepareQueryForRecovery(const GpuTimingScope& scope){
+    if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;
 
-    record.recording = false;
-    record.pending = true;
-    record.publishSample = publishSample;
+    QueryRecord& record = m_queries[scope.index];
+    if(record.epoch != scope.epoch || record.reservation != scope.reservation)
+        return false;
+    if(record.state != QueryState::EndedUnaccepted){
+        quarantineQuery(scope);
+        return false;
+    }
+
+    record.state = QueryState::Recording;
     return true;
 }
 
@@ -209,7 +291,29 @@ void GpuTimingAccumulator::discardQuery(const GpuTimingScope& scope){
     if(record.epoch != scope.epoch || record.reservation != scope.reservation)
         return;
 
+    if(record.state == QueryState::PendingAccepted){
+        quarantineQuery(scope);
+        NWB_LOGGER_ERROR(NWB_TEXT("GPU timing query quarantined because accepted work attempted rollback release"));
+        return;
+    }
+    if(record.state == QueryState::Quarantined)
+        return;
+
     releaseQuery(record);
+}
+
+void GpuTimingAccumulator::quarantineQuery(const GpuTimingScope& scope){
+    if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
+        return;
+
+    QueryRecord& record = m_queries[scope.index];
+    if(record.epoch != scope.epoch || record.reservation != scope.reservation)
+        return;
+
+    record.state = QueryState::Quarantined;
+    record.publishSample = false;
+    record.frameResetRecorded = false;
+    record.deviceReady = false;
 }
 
 bool GpuTimingAccumulator::reserveQueries(Device& device, const u32 queryCount){
@@ -222,7 +326,7 @@ bool GpuTimingAccumulator::reserveQueries(Device& device, const u32 queryCount){
 
 u32 GpuTimingAccumulator::findAvailableQuery()const{
     for(usize i = 0u; i < m_queries.size(); ++i){
-        if(!m_queries[i].recording && !m_queries[i].pending)
+        if(m_queries[i].state == QueryState::Available)
             return static_cast<u32>(i);
     }
 
@@ -242,10 +346,16 @@ u32 GpuTimingAccumulator::appendQuery(Device& device){
 void GpuTimingAccumulator::releaseQuery(QueryRecord& record){
     // A discarded command buffer may already contain timestamp writes. Require another accepted preamble reset
     // before a dynamic-rendering scope reuses this pool; outside a render pass beginTimerQuery() resets it itself.
-    record.recording = false;
-    record.pending = false;
+    record.physicalQueue = {};
+    record.acceptedSubmission = {};
+    record.frameIndex = 0u;
+    record.epoch = 0u;
+    record.reservation = 0u;
+    record.queueClass = CommandQueue::kCount;
+    record.state = QueryState::Available;
     record.publishSample = true;
     record.attribution = s_NoGpuTimingSampleAttribution;
+    record.frameResetRecorded = false;
     record.deviceReady = false;
 }
 
@@ -271,6 +381,7 @@ GpuTimingRecorder::GpuTimingRecorder(Alloc::GlobalArena& arena, Perf::TimingSink
     : m_arena(arena)
     , m_timing(timing)
     , m_accumulators(0, Hasher<Name>(), EqualTo<Name>(), arena)
+    , m_queueCompletions(arena)
     , m_overlapRecords(arena)
 {}
 
@@ -333,7 +444,11 @@ void GpuTimingRecorder::resetQueries(){
         if(collectSamples)
             retirePendingAttributionsLocked(retiredSamples);
         m_accumulators.clear();
+        m_queueCompletions.clear();
         m_overlapRecords.clear();
+#if !defined(NWB_FINAL)
+        m_heldSubmissionCompletion = {};
+#endif
         advanceEpoch();
         m_accumulatorsActive = false;
         m_currentFrameIndex = 0u;
@@ -378,9 +493,33 @@ void GpuTimingRecorder::collectLocked(
     if(!m_accumulatorsActive)
         return;
 
+    m_queueCompletions.clear();
     for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
         it.value()->collect(device, *this, m_epoch, completedSamples);
     m_timing.publishFrame(publishFrameIndex);
+}
+
+bool GpuTimingRecorder::submissionCompleted(Device& device, const QueueSubmissionToken& token){
+#if !defined(NWB_FINAL)
+    if(
+        m_heldSubmissionCompletion.queue == token.queue
+        && m_heldSubmissionCompletion.value == token.value
+        && m_heldSubmissionCompletion.physicalQueueIndex == token.physicalQueueIndex
+        && m_heldSubmissionCompletion.deviceGeneration == token.deviceGeneration
+    )
+        return false;
+#endif
+
+    const GpuPhysicalQueueId physicalQueue{ token.physicalQueueIndex, token.deviceGeneration };
+    if(m_queueCompletions.size() <= static_cast<usize>(physicalQueue.index))
+        m_queueCompletions.resize(static_cast<usize>(physicalQueue.index) + 1u);
+
+    QueueCompletion& completion = m_queueCompletions[physicalQueue.index];
+    if(completion.queue != physicalQueue){
+        completion.queue = physicalQueue;
+        completion.value = device.queueGetCompletedInstance(physicalQueue);
+    }
+    return completion.value >= token.value;
 }
 
 void GpuTimingRecorder::dispatchCompletedSamples(
@@ -498,6 +637,39 @@ void GpuTimingRecorder::discardFrameReset(){
     discardFrameResetLocked();
 }
 
+#if !defined(NWB_FINAL)
+
+bool GpuTimingRecorder::holdSubmissionCompletionForTesting(const QueueSubmissionToken& token){
+    if(!token.valid() || !token.hasPhysicalQueueIdentity())
+        return false;
+
+    ScopedLock lock(m_mutex);
+    if(m_heldSubmissionCompletion.valid()){
+        return
+            m_heldSubmissionCompletion.queue == token.queue
+            && m_heldSubmissionCompletion.value == token.value
+            && m_heldSubmissionCompletion.physicalQueueIndex == token.physicalQueueIndex
+            && m_heldSubmissionCompletion.deviceGeneration == token.deviceGeneration
+        ;
+    }
+
+    m_heldSubmissionCompletion = token;
+    return true;
+}
+
+void GpuTimingRecorder::releaseSubmissionCompletionForTesting(const QueueSubmissionToken& token){
+    ScopedLock lock(m_mutex);
+    if(
+        m_heldSubmissionCompletion.queue == token.queue
+        && m_heldSubmissionCompletion.value == token.value
+        && m_heldSubmissionCompletion.physicalQueueIndex == token.physicalQueueIndex
+        && m_heldSubmissionCompletion.deviceGeneration == token.deviceGeneration
+    )
+        m_heldSubmissionCompletion = {};
+}
+
+#endif
+
 void GpuTimingRecorder::discardFrameResetLocked(){
     for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
         it.value()->discardFrameReset();
@@ -584,13 +756,38 @@ bool GpuTimingRecorder::recordDeferredScopeEnd(CommandList& commandList, const G
     return accumulator && accumulator->recordQueryEnd(commandList, scope);
 }
 
-bool GpuTimingRecorder::confirmDeferredScope(const GpuTimingScope& scope, const bool publishSample){
+bool GpuTimingRecorder::validateScopeSubmission(
+    const GpuTimingScope& scope,
+    const QueueSubmissionToken& token
+){
     if(!scope.valid())
         return true;
 
     ScopedLock lock(m_mutex);
     GpuTimingAccumulator* accumulator = findAccumulator(scope);
-    return accumulator && accumulator->confirmQuery(scope, publishSample);
+    return accumulator && accumulator->validateQuerySubmission(scope, token);
+}
+
+bool GpuTimingRecorder::confirmScope(
+    const GpuTimingScope& scope,
+    const QueueSubmissionToken& token,
+    const bool publishSample
+){
+    if(!scope.valid())
+        return true;
+
+    ScopedLock lock(m_mutex);
+    GpuTimingAccumulator* accumulator = findAccumulator(scope);
+    return accumulator && accumulator->confirmQuery(scope, token, publishSample);
+}
+
+bool GpuTimingRecorder::prepareDeferredScopeForRecovery(const GpuTimingScope& scope){
+    if(!scope.valid())
+        return true;
+
+    ScopedLock lock(m_mutex);
+    GpuTimingAccumulator* accumulator = findAccumulator(scope);
+    return accumulator && accumulator->prepareQueryForRecovery(scope);
 }
 
 void GpuTimingRecorder::discardScope(const GpuTimingScope& scope){
@@ -601,6 +798,16 @@ void GpuTimingRecorder::discardScope(const GpuTimingScope& scope){
     GpuTimingAccumulator* accumulator = findAccumulator(scope);
     if(accumulator)
         accumulator->discardQuery(scope);
+}
+
+void GpuTimingRecorder::quarantineScope(const GpuTimingScope& scope){
+    if(!scope.valid())
+        return;
+
+    ScopedLock lock(m_mutex);
+    GpuTimingAccumulator* accumulator = findAccumulator(scope);
+    if(accumulator)
+        accumulator->quarantineQuery(scope);
 }
 
 GpuTimingSubmissionTicket* GpuTimingRecorder::activeSubmissionTicket()const{

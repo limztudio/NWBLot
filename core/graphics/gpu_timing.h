@@ -95,16 +95,24 @@ class GpuTimingAccumulator final : NoCopy{
 
 
 private:
+    enum class QueryState : u8{
+        Available,
+        Recording,
+        EndedUnaccepted,
+        PendingAccepted,
+        Quarantined,
+    };
+
     struct QueryRecord{
         TimerQueryHandle query;
+        GpuPhysicalQueueId physicalQueue;
+        QueueSubmissionToken acceptedSubmission;
         u64 frameIndex = 0u;
         GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution;
         u32 epoch = 0u;
         u64 reservation = 0u;
-        // Held from beginQuery() until the matching endQuery() or an explicit discard. A submission ticket can only
-        // roll back completed scopes, so this also keeps two concurrently recording workers from selecting one slot.
-        bool recording = false;
-        bool pending = false;
+        CommandQueue::Enum queueClass = CommandQueue::kCount;
+        QueryState state = QueryState::Available;
         // A recovery endpoint completes an accepted begin after a later frame packet was rejected. The query must
         // still retire on the device timeline, but it must not publish a partial frame sample as a valid frame time.
         bool publishSample = true;
@@ -160,8 +168,15 @@ public:
     );
     [[nodiscard]] bool endQuery(CommandList& commandList, const GpuTimingScope& scope);
     [[nodiscard]] bool recordQueryEnd(CommandList& commandList, const GpuTimingScope& scope);
-    [[nodiscard]] bool confirmQuery(const GpuTimingScope& scope, bool publishSample);
+    [[nodiscard]] bool validateQuerySubmission(const GpuTimingScope& scope, const QueueSubmissionToken& token)const;
+    [[nodiscard]] bool confirmQuery(
+        const GpuTimingScope& scope,
+        const QueueSubmissionToken& token,
+        bool publishSample
+    );
+    [[nodiscard]] bool prepareQueryForRecovery(const GpuTimingScope& scope);
     void discardQuery(const GpuTimingScope& scope);
+    void quarantineQuery(const GpuTimingScope& scope);
 
 
 private:
@@ -197,6 +212,11 @@ private:
     struct TimestampRange{
         f64 beginSeconds = 0.0;
         f64 endSeconds = 0.0;
+    };
+
+    struct QueueCompletion{
+        GpuPhysicalQueueId queue;
+        u64 value = 0u;
     };
 
     struct PendingOverlapFrame{
@@ -264,6 +284,12 @@ public:
     void recordFrameReset(CommandList& commandList);
     void confirmFrameReset();
     void discardFrameReset();
+#if !defined(NWB_FINAL)
+    // Holds one exact accepted token at the recorder boundary after the native queue may already be complete. This
+    // makes query publication/reuse tests deterministic without changing Device timeline state.
+    [[nodiscard]] bool holdSubmissionCompletionForTesting(const QueueSubmissionToken& token);
+    void releaseSubmissionCompletionForTesting(const QueueSubmissionToken& token);
+#endif
 
 
 private:
@@ -283,8 +309,15 @@ private:
     );
     void endScope(CommandList& commandList, const GpuTimingScope& scope);
     [[nodiscard]] bool recordDeferredScopeEnd(CommandList& commandList, const GpuTimingScope& scope);
-    [[nodiscard]] bool confirmDeferredScope(const GpuTimingScope& scope, bool publishSample);
+    [[nodiscard]] bool validateScopeSubmission(const GpuTimingScope& scope, const QueueSubmissionToken& token);
+    [[nodiscard]] bool confirmScope(
+        const GpuTimingScope& scope,
+        const QueueSubmissionToken& token,
+        bool publishSample
+    );
+    [[nodiscard]] bool prepareDeferredScopeForRecovery(const GpuTimingScope& scope);
     void discardScope(const GpuTimingScope& scope);
+    void quarantineScope(const GpuTimingScope& scope);
     [[nodiscard]] GpuTimingSubmissionTicket* activeSubmissionTicket()const;
     [[nodiscard]] GpuTimingAccumulator* findAccumulator(const GpuTimingScope& scope);
     [[nodiscard]] GpuTimingAccumulator* findOrCreateAccumulator(const Name& scopeName);
@@ -293,6 +326,7 @@ private:
         u64 publishFrameIndex,
         Vector<GpuTimingSample, Alloc::GlobalArena>* completedSamples
     );
+    [[nodiscard]] bool submissionCompleted(Device& device, const QueueSubmissionToken& token);
     void dispatchCompletedSamples(
         const Vector<GpuTimingSample, Alloc::GlobalArena>& samples,
         u64 listenerGeneration
@@ -308,6 +342,7 @@ private:
     Alloc::GlobalArena& m_arena;
     Perf::TimingSink& m_timing;
     AccumulatorMap m_accumulators;
+    Vector<QueueCompletion, Alloc::GlobalArena> m_queueCompletions;
     OverlapVector m_overlapRecords;
     // A submission ticket protects its own rollback list, while this lock serializes every query-pool mutation and
     // recorder-map access. Worker command-list recordings may share a ticket and begin timing scopes concurrently.
@@ -320,6 +355,9 @@ private:
     Atomic<bool> m_hasSampleListener{ false };
     u64 m_currentFrameIndex = 0u;
     u32 m_epoch = 1u;
+#if !defined(NWB_FINAL)
+    QueueSubmissionToken m_heldSubmissionCompletion;
+#endif
     bool m_accumulatorsActive = false;
     bool m_enabled = false;
     bool m_feedbackCollectionEnabled = false;
@@ -400,11 +438,11 @@ private:
     // Rejects incomplete batches before they can partially submit a split timing scope. Invalid command-list input
     // releases reservations; a ticket that is already resolved or still recording is left unchanged.
     [[nodiscard]] bool prepareSubmission(CommandList* const* commandLists, usize commandListCount);
-    void resolveSubmission(bool accepted);
+    void resolveSubmission(const QueueSubmissionToken& token);
     void trackScope(const GpuTimingScope& scope);
     [[nodiscard]] GpuTimingSubmissionTicket* activateOnCurrentThread();
     void deactivateOnCurrentThread(GpuTimingSubmissionTicket* previousTicket);
-    void confirm();
+    void confirm(const QueueSubmissionToken& token);
 
 
 private:
@@ -441,12 +479,12 @@ public:
     // Records the end timestamp but deliberately keeps the query reservation private until the containing submission
     // is accepted. This permits a replacement recovery endpoint when a pre-recorded final packet is rejected.
     [[nodiscard]] bool recordEnd(CommandList& commandList);
-    void confirmBeginSubmission();
-    [[nodiscard]] bool confirmEndSubmission(bool publishSample);
+    [[nodiscard]] bool confirmBeginSubmission(const QueueSubmissionToken& token);
+    [[nodiscard]] bool confirmEndSubmission(const QueueSubmissionToken& token, bool publishSample);
     [[nodiscard]] bool needsRetirement()const;
     // Discards the endpoint recorded in a packet that will not be submitted, allowing a recovery command list to
     // write the replacement endpoint after the accepted begin.
-    void prepareForRecovery();
+    [[nodiscard]] bool prepareForRecovery();
     void discard();
 
 
@@ -464,8 +502,8 @@ private:
 private:
     GpuTimingRecorder& m_recorder;
     GpuTimingScope m_scope;
+    QueueSubmissionToken m_beginSubmission;
     State m_state = State::Idle;
-    bool m_beginAccepted = false;
 };
 
 

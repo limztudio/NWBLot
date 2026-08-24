@@ -35,14 +35,13 @@ namespace ECSRenderDetail{
 }
 
 void FrameRecoveryGraphTask::accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-    static_cast<void>(token);
     if(
         payload.armed
         && payload.retiresFrameTiming
         && *payload.armed
         && *payload.retiresFrameTiming
         && payload.frameTimingTransaction
-        && !payload.frameTimingTransaction->confirmEndSubmission(false)
+        && !payload.frameTimingTransaction->confirmEndSubmission(token, false)
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire frame recovery timing query"));
         payload.frameTimingTransaction->discard();

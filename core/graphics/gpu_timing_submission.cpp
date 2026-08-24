@@ -44,10 +44,14 @@ bool GpuTimingSubmissionTicket::submit(
     if(!prepareSubmission(commandLists, commandListCount))
         return false;
 
-    bool submitted = false;
-    device.executeCommandLists(commandLists, commandListCount, executionQueue, &submitted);
-    resolveSubmission(submitted);
-    return submitted;
+    const QueueSubmissionToken token = device.executeCommandLists(
+        commandLists,
+        commandListCount,
+        executionQueue,
+        QueueSubmissionDesc{}
+    );
+    resolveSubmission(token);
+    return token.valid();
 }
 
 QueueSubmissionToken GpuTimingSubmissionTicket::submit(
@@ -66,7 +70,7 @@ QueueSubmissionToken GpuTimingSubmissionTicket::submit(
         executionLane,
         submitDesc
     );
-    resolveSubmission(token.valid());
+    resolveSubmission(token);
     return token;
 }
 
@@ -86,7 +90,7 @@ QueueSubmissionToken GpuTimingSubmissionTicket::submit(
         executionQueue,
         submitDesc
     );
-    resolveSubmission(token.valid());
+    resolveSubmission(token);
     return token;
 }
 
@@ -106,7 +110,7 @@ QueueSubmissionToken GpuTimingSubmissionTicket::submit(
         executionQueue,
         submitDesc
     );
-    resolveSubmission(token.valid());
+    resolveSubmission(token);
     return token;
 }
 
@@ -135,9 +139,9 @@ bool GpuTimingSubmissionTicket::prepareSubmission(CommandList* const* commandLis
     return true;
 }
 
-void GpuTimingSubmissionTicket::resolveSubmission(const bool accepted){
-    if(accepted)
-        confirm();
+void GpuTimingSubmissionTicket::resolveSubmission(const QueueSubmissionToken& token){
+    if(token.valid())
+        confirm(token);
     else
         discard();
 }
@@ -195,7 +199,7 @@ void GpuTimingSubmissionTicket::deactivateOnCurrentThread(GpuTimingSubmissionTic
         --m_recordingScopeCount;
 }
 
-void GpuTimingSubmissionTicket::confirm(){
+void GpuTimingSubmissionTicket::confirm(const QueueSubmissionToken& token){
     ScopedLock lock(m_mutex);
     if(m_resolved)
         return;
@@ -204,8 +208,16 @@ void GpuTimingSubmissionTicket::confirm(){
     if(m_recordingScopeCount != 0u)
         return;
 
-    // endQuery() already marked these records pending so no later scope can reuse them. Successful submission means
-    // collect() now owns retirement; clearing the ticket only drops its rollback handles.
+    bool confirmed = true;
+    for(const GpuTimingScope& scope : m_scopes){
+        if(!m_recorder.confirmScope(scope, token, true)){
+            m_recorder.quarantineScope(scope);
+            confirmed = false;
+        }
+    }
+    if(!confirmed)
+        NWB_LOGGER_ERROR(NWB_TEXT("GPU timing submission accepted with an invalid query ownership transition; affected queries were quarantined"));
+
     m_scopes.clear();
     m_resolved = true;
 }
@@ -265,26 +277,67 @@ bool GpuTimingFrameTransaction::recordEnd(CommandList& commandList){
     return true;
 }
 
-void GpuTimingFrameTransaction::confirmBeginSubmission(){
-    if(m_state == State::Inactive || m_state == State::Resolved)
-        return;
-
-    NWB_ASSERT(m_state == State::BeginRecorded || m_state == State::EndRecorded);
-    if(m_state != State::BeginRecorded && m_state != State::EndRecorded)
-        return;
-
-    m_beginAccepted = true;
-    if(m_state == State::BeginRecorded)
-        m_state = State::BeginAccepted;
-}
-
-bool GpuTimingFrameTransaction::confirmEndSubmission(const bool publishSample){
+bool GpuTimingFrameTransaction::confirmBeginSubmission(const QueueSubmissionToken& token){
     if(m_state == State::Inactive || m_state == State::Resolved)
         return true;
-    if(!m_beginAccepted || m_state != State::EndRecorded)
+
+    NWB_ASSERT(m_state == State::BeginRecorded || m_state == State::EndRecorded);
+    if(
+        (m_state != State::BeginRecorded && m_state != State::EndRecorded)
+        || !m_recorder.validateScopeSubmission(m_scope, token)
+    ){
+        m_recorder.quarantineScope(m_scope);
+        m_scope = {};
+        m_state = State::Resolved;
         return false;
-    if(!m_recorder.confirmDeferredScope(m_scope, publishSample))
+    }
+
+    if(m_beginSubmission.valid()){
+        const bool matches = m_beginSubmission.queue == token.queue
+            && m_beginSubmission.value == token.value
+            && m_beginSubmission.physicalQueueIndex == token.physicalQueueIndex
+            && m_beginSubmission.deviceGeneration == token.deviceGeneration
+        ;
+        if(!matches){
+            m_recorder.quarantineScope(m_scope);
+            m_scope = {};
+            m_state = State::Resolved;
+        }
+        return matches;
+    }
+
+    m_beginSubmission = token;
+    if(m_state == State::BeginRecorded)
+        m_state = State::BeginAccepted;
+    return true;
+}
+
+bool GpuTimingFrameTransaction::confirmEndSubmission(
+    const QueueSubmissionToken& token,
+    const bool publishSample
+){
+    if(m_state == State::Inactive || m_state == State::Resolved)
+        return true;
+
+    const bool orderedSameQueue = m_beginSubmission.valid()
+        && m_beginSubmission.hasPhysicalQueueIdentity()
+        && token.valid()
+        && token.hasPhysicalQueueIdentity()
+        && token.queue == m_beginSubmission.queue
+        && token.physicalQueueIndex == m_beginSubmission.physicalQueueIndex
+        && token.deviceGeneration == m_beginSubmission.deviceGeneration
+        && token.value >= m_beginSubmission.value
+    ;
+    if(
+        m_state != State::EndRecorded
+        || !orderedSameQueue
+        || !m_recorder.confirmScope(m_scope, token, publishSample)
+    ){
+        m_recorder.quarantineScope(m_scope);
+        m_scope = {};
+        m_state = State::Resolved;
         return false;
+    }
 
     m_scope = {};
     m_state = State::Resolved;
@@ -292,23 +345,37 @@ bool GpuTimingFrameTransaction::confirmEndSubmission(const bool publishSample){
 }
 
 bool GpuTimingFrameTransaction::needsRetirement()const{
-    return m_beginAccepted && m_scope.valid();
+    return m_beginSubmission.valid() && m_scope.valid();
 }
 
-void GpuTimingFrameTransaction::prepareForRecovery(){
+bool GpuTimingFrameTransaction::prepareForRecovery(){
     if(!needsRetirement())
-        return;
+        return true;
 
     // The old endpoint lives only in a packet that will not reach Vulkan, so it is safe for the recovery command
     // list to overwrite the timestamp query's end slot. The begin reservation remains held throughout.
-    if(m_state == State::EndRecorded)
+    if(m_state == State::BeginAccepted)
+        return true;
+    if(m_state == State::EndRecorded && m_recorder.prepareDeferredScopeForRecovery(m_scope)){
         m_state = State::BeginAccepted;
+        return true;
+    }
+
+    m_recorder.quarantineScope(m_scope);
+    m_scope = {};
+    m_state = State::Resolved;
+    return false;
 }
 
 void GpuTimingFrameTransaction::discard(){
-    if(m_scope.valid())
-        m_recorder.discardScope(m_scope);
+    if(m_scope.valid()){
+        if(m_beginSubmission.valid())
+            m_recorder.quarantineScope(m_scope);
+        else
+            m_recorder.discardScope(m_scope);
+    }
     m_scope = {};
+    m_beginSubmission = {};
     if(m_state != State::Inactive)
         m_state = State::Resolved;
 }

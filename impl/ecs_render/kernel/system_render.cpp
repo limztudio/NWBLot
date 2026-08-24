@@ -2390,9 +2390,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             frameTimingTransaction.discard();
             return false;
         }
-        const bool retireTiming = frameTimingTransaction.needsRetirement();
-        if(retireTiming)
-            frameTimingTransaction.prepareForRecovery();
+        bool retireTiming = frameTimingTransaction.needsRetirement();
+        if(retireTiming && !frameTimingTransaction.prepareForRecovery()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frame timing recovery preparation failed; continuing resource/frontier recovery"));
+            frameTimingTransaction.discard();
+            retireTiming = false;
+        }
         m_deferredFrameRecoveryArmed = true;
         m_deferredFrameRecoveryRetiresTiming = retireTiming;
         Core::Alloc::ScratchArena recoveryScratchArena(RendererArenaScope::s_TaskGraphArena);
@@ -2714,7 +2717,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             failFrameRenderRecovery();
             return false;
         }
-        if(!frameTimingTransaction.confirmEndSubmission(true)){
+        if(!frameTimingTransaction.confirmEndSubmission(finalPresentationSubmissionToken, true)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm frame critical-path timing"));
             frameTimingTransaction.discard();
         }
@@ -2943,7 +2946,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             void* const rawContext,
             const Core::QueueSubmissionToken& token
         ) -> bool {
-            static_cast<void>(token);
             PrefixTimingAcceptanceContext* const context = static_cast<PrefixTimingAcceptanceContext*>(rawContext);
             if(!context)
                 return false;
@@ -2954,7 +2956,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
             // Shadow Preparation is the first accepted normal-frame packet, including graph-owned setup uploads
             // merged into that packet. Confirm this endpoint before any later accepted-state validation can reject.
-            context->frameTimingTransaction->confirmBeginSubmission();
+            if(!context->frameTimingTransaction->confirmBeginSubmission(token)){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm accepted frame timing prefix; quarantining timing without rejecting native work"));
+                context->frameTimingTransaction->discard();
+            }
 
             RendererSystem& renderer = *context->renderer;
             if(!context->shadowPrepareHasLiveStateBuffers){

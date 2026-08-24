@@ -883,7 +883,7 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
 
     const AStringView recovery = taskGraph.substr(recoveryOffset, deferredPresentOffset - recoveryOffset);
     EXPECT_TRUE(ContainsText(recovery, "frameTimingTransaction->recordEnd(commandList)"));
-    EXPECT_TRUE(ContainsText(recovery, "confirmEndSubmission(false)"));
+    EXPECT_TRUE(ContainsText(recovery, "confirmEndSubmission(token, false)"));
     EXPECT_TRUE(ContainsText(system, "presentationEndpoint->producer"));
     EXPECT_TRUE(ContainsText(system, "presentationEndpoint->queue != primaryGraphicsQueue"));
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredFrameTimingEndTask)"));
@@ -899,7 +899,7 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
         shadowPrepareAcceptanceOffset,
         shadowPreparePrefixAcceptedOffset - shadowPrepareAcceptanceOffset
     );
-    EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, "context->frameTimingTransaction->confirmBeginSubmission()"));
+    EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, "context->frameTimingTransaction->confirmBeginSubmission(token)"));
     EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, ".task = m_deferredShadowPrepareTask,"));
     EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, ".invoke = acceptShadowPrepareTask,"));
     EXPECT_FALSE(ContainsText(system, "acceptGraphicsPrefixBeginTask"));

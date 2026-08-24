@@ -1758,6 +1758,196 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
 }
 
 
+TEST(GpuTaskGraph, TypedImportsValidateRetainedExternalFinalState){
+    constexpr Graphics::ResourceStates::Mask s_NativeInitialState = Graphics::ResourceStates::Common;
+    const Graphics::GpuPhysicalQueueId releaseDestinationQueue = GraphicsQueue().id;
+
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+
+    Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+        testArena.arena,
+        context,
+        allocator
+    );
+    Graphics::Buffer* const bufferObject = NewArenaObject<Graphics::Buffer>(
+        testArena.arena,
+        context,
+        allocator
+    );
+    Graphics::Buffer* const accelStructBackingObject = NewArenaObject<Graphics::Buffer>(
+        testArena.arena,
+        context,
+        allocator
+    );
+    Graphics::RayTracingAccelStruct* const accelStructObject = NewArenaObject<Graphics::RayTracingAccelStruct>(
+        testArena.arena,
+        context
+    );
+    ASSERT_NE(textureObject, nullptr);
+    ASSERT_NE(bufferObject, nullptr);
+    ASSERT_NE(accelStructBackingObject, nullptr);
+    ASSERT_NE(accelStructObject, nullptr);
+
+    Graphics::TextureHandle texture(
+        textureObject,
+        Graphics::TextureHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::BufferHandle buffer(
+        bufferObject,
+        Graphics::BufferHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::BufferHandle accelStructBacking(
+        accelStructBackingObject,
+        Graphics::BufferHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::RayTracingAccelStructHandle accelStruct(
+        accelStructObject,
+        Graphics::RayTracingAccelStructHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::BufferHandle& accelStructBackingHandle = const_cast<Graphics::BufferHandle&>(
+        accelStruct->getBackingBufferHandle()
+    );
+    accelStructBackingHandle = accelStructBacking;
+
+    Graphics::TextureDesc& textureDesc = const_cast<Graphics::TextureDesc&>(texture->getDescription());
+    Graphics::BufferDesc& bufferDesc = const_cast<Graphics::BufferDesc&>(buffer->getDescription());
+    Graphics::BufferDesc& accelStructBackingDesc = const_cast<Graphics::BufferDesc&>(
+        accelStructBacking->getDescription()
+    );
+    textureDesc.initialState = s_NativeInitialState;
+    bufferDesc.initialState = s_NativeInitialState;
+    accelStructBackingDesc.initialState = s_NativeInitialState;
+
+    const auto expectExternalFinalContract = [&](
+        const auto& import,
+        const auto& setKeepInitialState,
+        const Graphics::GpuGraphResourceType::Enum type,
+        const Name& identity,
+        const AStringView markerLabel,
+        const Graphics::ResourceStates::Mask differingFinalState
+    ){
+        setKeepInitialState(true);
+        {
+            Graphics::GpuTaskGraph graph(testArena.arena);
+            const u64 declarationRevision = graph.declarationRevision();
+            EXPECT_FALSE(import(
+                graph,
+                Graphics::GpuGraphResourceDesc{}
+                    .setIdentity(identity)
+                    .setMarkerLabel(markerLabel)
+                    .setType(type)
+                    .setInitialState(s_NativeInitialState)
+                    .setExternalFinalState(differingFinalState)
+                    .setExternalFinalReleaseDestinationQueue(releaseDestinationQueue)
+            ).valid());
+            EXPECT_EQ(graph.resourceCount(), 0u);
+            EXPECT_EQ(graph.declarationRevision(), declarationRevision);
+        }
+
+        {
+            Graphics::GpuTaskGraph graph(testArena.arena);
+            const Graphics::GpuGraphResourceId resource = import(
+                graph,
+                Graphics::GpuGraphResourceDesc{}
+                    .setIdentity(identity)
+                    .setMarkerLabel(markerLabel)
+                    .setType(type)
+                    .setInitialState(s_NativeInitialState)
+                    .setExternalFinalState(s_NativeInitialState)
+                    .setExternalFinalReleaseDestinationQueue(releaseDestinationQueue)
+            );
+            ASSERT_TRUE(resource.valid());
+            EXPECT_EQ(graph.resourceAt(resource.index).externalFinalState, s_NativeInitialState);
+            EXPECT_EQ(
+                graph.resourceAt(resource.index).externalFinalReleaseDestinationQueue,
+                releaseDestinationQueue
+            );
+        }
+
+        {
+            Graphics::GpuTaskGraph graph(testArena.arena);
+            EXPECT_TRUE(import(
+                graph,
+                Graphics::GpuGraphResourceDesc{}
+                    .setIdentity(identity)
+                    .setMarkerLabel(markerLabel)
+                    .setType(type)
+                    .setInitialState(s_NativeInitialState)
+                    .setExternalFinalState(Graphics::ResourceStates::Unknown)
+            ).valid());
+        }
+
+        setKeepInitialState(false);
+        {
+            Graphics::GpuTaskGraph graph(testArena.arena);
+            const Graphics::GpuGraphResourceId resource = import(
+                graph,
+                Graphics::GpuGraphResourceDesc{}
+                    .setIdentity(identity)
+                    .setMarkerLabel(markerLabel)
+                    .setType(type)
+                    .setInitialState(s_NativeInitialState)
+                    .setExternalFinalState(differingFinalState)
+                    .setExternalFinalReleaseDestinationQueue(releaseDestinationQueue)
+            );
+            ASSERT_TRUE(resource.valid());
+            EXPECT_EQ(graph.resourceAt(resource.index).externalFinalState, differingFinalState);
+        }
+        setKeepInitialState(true);
+    };
+
+    expectExternalFinalContract(
+        [&](Graphics::GpuTaskGraph& graph, const Graphics::GpuGraphResourceDesc& desc){
+            return graph.importTexture(texture, desc);
+        },
+        [&](const bool keepInitialState){ textureDesc.keepInitialState = keepInitialState; },
+        Graphics::GpuGraphResourceType::Texture,
+        Name("tests/task_graph/retained_external_final_texture"),
+        "Retained External Final Texture",
+        Graphics::ResourceStates::ShaderResource
+    );
+    expectExternalFinalContract(
+        [&](Graphics::GpuTaskGraph& graph, const Graphics::GpuGraphResourceDesc& desc){
+            return graph.importBuffer(buffer, desc);
+        },
+        [&](const bool keepInitialState){ bufferDesc.keepInitialState = keepInitialState; },
+        Graphics::GpuGraphResourceType::Buffer,
+        Name("tests/task_graph/retained_external_final_buffer"),
+        "Retained External Final Buffer",
+        Graphics::ResourceStates::ShaderResource
+    );
+    expectExternalFinalContract(
+        [&](Graphics::GpuTaskGraph& graph, const Graphics::GpuGraphResourceDesc& desc){
+            return graph.importAccelStruct(accelStruct, desc);
+        },
+        [&](const bool keepInitialState){ accelStructBackingDesc.keepInitialState = keepInitialState; },
+        Graphics::GpuGraphResourceType::AccelStruct,
+        Name("tests/task_graph/retained_external_final_accel_struct"),
+        "Retained External Final Accel Struct",
+        Graphics::ResourceStates::AccelStructRead
+    );
+
+    Graphics::GpuTaskGraph metadataOnlyGraph(testArena.arena);
+    EXPECT_TRUE(metadataOnlyGraph.importResource(
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/metadata_only_external_final"))
+            .setMarkerLabel("Metadata Only External Final")
+            .setType(Graphics::GpuGraphResourceType::Buffer)
+            .setInitialState(s_NativeInitialState)
+            .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
+            .setExternalFinalReleaseDestinationQueue(releaseDestinationQueue)
+    ).valid());
+}
+
+
 TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
     constexpr u16 s_SourceDeviceGeneration = 7u;
     constexpr u16 s_TargetDeviceGeneration = 8u;
@@ -2706,9 +2896,10 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){
     ;
     EXPECT_TRUE(transitionedGraph.addClearBufferTask(desc, transitionedClearDesc).valid());
 
-    // Keep-initial-state restoration happens before a graph packet publishes its terminal handoff. Do not accept a
-    // primitive transition that would therefore advertise an external state different from the restored descriptor.
+    // Keep-initial-state restoration happens before a graph packet publishes its terminal handoff. Reject the
+    // incompatible typed import itself without mutating graph storage or its declaration revision.
     Graphics::GpuTaskGraph externalFinalGraph(testArena.arena);
+    const u64 externalFinalRevision = externalFinalGraph.declarationRevision();
     const Graphics::GpuGraphResourceId externalFinalDestination = externalFinalGraph.importBuffer(
         destination,
         Graphics::GpuGraphResourceDesc{}
@@ -2718,14 +2909,9 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){
             .setInitialState(Graphics::ResourceStates::Common)
             .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
     );
-    ASSERT_TRUE(externalFinalDestination.valid());
-    Graphics::GpuClearBufferTaskDesc externalFinalClearDesc;
-    externalFinalClearDesc.destination = externalFinalDestination;
-    desc
-        .setIdentity(Name("tests/task_graph/retained_clear_buffer_external_final"))
-        .setMarkerLabel("Retained Clear Buffer External Final")
-    ;
-    EXPECT_FALSE(externalFinalGraph.addClearBufferTask(desc, externalFinalClearDesc).valid());
+    EXPECT_FALSE(externalFinalDestination.valid());
+    EXPECT_EQ(externalFinalGraph.resourceCount(), 0u);
+    EXPECT_EQ(externalFinalGraph.declarationRevision(), externalFinalRevision);
 
     // An automatic retained resource needs one concrete descriptor state. Unknown cannot be restored by the
     // native tracker or published as a graph initial state, so do not admit a primitive solely because both

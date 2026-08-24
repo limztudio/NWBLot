@@ -4025,10 +4025,14 @@ TEST_F(DescriptorBufferRoundTripTest, RejectsStaleResourceStateHandoffAfterActua
 }
 
 
-// The compiler establishes ShaderResource for the task, while its local compatibility transition changes that state
-// to CopyDest. The imported final-state contract must restore ShaderResource in the accepted packet snapshot.
-TEST_F(DescriptorBufferRoundTripTest, ImportedFinalStateExportReassertsStateAfterTaskLocalTransition){
-    auto& device = DescriptorBufferRoundTripTest::device();
+// Exercise one imported terminal-state scenario after the task performs an incompatible local transition. Both
+// callers below retain explicit coverage while sharing the native record, submit, snapshot, and handoff assertions.
+static void ExpectImportedFinalStateExportAfterTaskLocalTransition(
+    GraphicsBackend::Device& device,
+    Alloc::GlobalArena& arena,
+    const bool keepInitialState,
+    const ResourceStates::Mask externalFinalState
+){
     const GpuPhysicalQueueId graphicsPhysicalQueue = BackendQueueId(device, CommandQueue::Graphics);
     ASSERT_TRUE(graphicsPhysicalQueue.valid());
     const TextureHandle texture = device.createTexture(
@@ -4037,6 +4041,7 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedFinalStateExportReassertsStateAfte
             .setHeight(4u)
             .setFormat(Format::RGBA8_UNORM)
             .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(keepInitialState)
     );
     ASSERT_NE(texture.get(), nullptr);
     Texture* const initialTextures[] = { texture.get() };
@@ -4047,7 +4052,7 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedFinalStateExportReassertsStateAfte
         ResourceStates::Common
     ));
 
-    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraph graph(arena);
     const GpuGraphResourceId resource = graph.importTexture(
         texture,
         GpuGraphResourceDesc{}
@@ -4055,7 +4060,7 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedFinalStateExportReassertsStateAfte
             .setMarkerLabel("External Final Texture")
             .setType(GpuGraphResourceType::Texture)
             .setInitialState(ResourceStates::Common)
-            .setExternalFinalState(ResourceStates::ShaderResource)
+            .setExternalFinalState(externalFinalState)
             .setExternalFinalReleaseDestinationQueue(graphicsPhysicalQueue)
     );
     ASSERT_TRUE(resource.valid());
@@ -4097,9 +4102,9 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedFinalStateExportReassertsStateAfte
     const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
     ASSERT_NE(topology.queues, nullptr);
     ASSERT_GT(topology.queueCount, 0u);
-    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
-    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
-    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphAnalysis analysis(arena);
+    GpuTaskGraphQueueAssignments assignments(arena);
+    GpuCompiledGraph compiledGraph(arena);
     Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/external_final_texture_scratch"));
     const GpuTaskGraphCompiler compiler;
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
@@ -4124,10 +4129,10 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedFinalStateExportReassertsStateAfte
     EXPECT_EQ(epilogue[0u].type, GpuCompiledBarrierType::TextureStateExport);
     EXPECT_EQ(epilogue[0u].resource, resource);
     EXPECT_EQ(epilogue[0u].before, ResourceStates::ShaderResource);
-    EXPECT_EQ(epilogue[0u].after, ResourceStates::ShaderResource);
+    EXPECT_EQ(epilogue[0u].after, externalFinalState);
 
-    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
-    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    GpuRecordedGraph recordedGraph(arena);
+    GpuGraphSubmissionTransaction transaction(arena);
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
     ASSERT_TRUE(recorder.recordPacket(
@@ -4140,13 +4145,13 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedFinalStateExportReassertsStateAfte
     EXPECT_EQ(observedEntryState, ResourceStates::ShaderResource);
     const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
     ASSERT_NE(finalState, nullptr);
-    // The task-local CopyDest transition is retained by the native tracker, so this proves the epilogue restored
-    // the graph contract before the packet snapshot was captured.
+    // The task-local CopyDest transition is retained by the native tracker, so this proves the graph export was
+    // reasserted before the packet snapshot was captured.
     EXPECT_FALSE(finalState->empty());
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
     stateProbe->open(finalState);
-    EXPECT_EQ(stateProbe->getTextureSubresourceState(texture.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(stateProbe->getTextureSubresourceState(texture.get(), 0u, 0u), externalFinalState);
     stateProbe->close();
 
     const GpuTaskGraphSubmitter submitter(device);
@@ -4170,13 +4175,37 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedFinalStateExportReassertsStateAfte
     EXPECT_EQ(handoff.producerTask, task);
     EXPECT_EQ(handoff.sourceQueue, graphicsPhysicalQueue);
     EXPECT_EQ(handoff.destinationQueue, graphicsPhysicalQueue);
-    EXPECT_EQ(handoff.finalState, ResourceStates::ShaderResource);
+    EXPECT_EQ(handoff.finalState, externalFinalState);
     EXPECT_TRUE(handoff.token.matchesPhysicalQueue(
         graphicsPhysicalQueue.index,
         graphicsPhysicalQueue.deviceGeneration
     ));
     EXPECT_EQ(handoff.stateSource, finalState);
     EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// The compiler establishes ShaderResource for the task, while its local compatibility transition changes that state
+// to CopyDest. A non-retained import may export the different ShaderResource state in its accepted packet snapshot.
+TEST_F(DescriptorBufferRoundTripTest, ImportedFinalStateExportReassertsStateAfterTaskLocalTransition){
+    ExpectImportedFinalStateExportAfterTaskLocalTransition(
+        device(),
+        arena(),
+        false,
+        ResourceStates::ShaderResource
+    );
+}
+
+
+// A retained texture is restored at native close. Its graph-owned terminal export must agree on Common, and the
+// accepted packet snapshot and transaction handoff must both publish that actual restored state.
+TEST_F(DescriptorBufferRoundTripTest, RetainedImportedFinalStateMatchesCloseTimeRestoration){
+    ExpectImportedFinalStateExportAfterTaskLocalTransition(
+        device(),
+        arena(),
+        true,
+        ResourceStates::Common
+    );
 }
 
 

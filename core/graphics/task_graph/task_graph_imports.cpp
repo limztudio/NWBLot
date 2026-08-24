@@ -51,6 +51,16 @@ namespace __hidden_gpu_task_graph_imports{
         && resource.queueSharing == desc.queueSharing;
 }
 
+[[nodiscard]] static bool CompatibleRetainedExternalFinalState(
+    const bool keepInitialState,
+    const ResourceStates::Mask nativeInitialState,
+    const ResourceStates::Mask externalFinalState
+)noexcept{
+    // Native command-list close restores retained resources to their descriptor state. A typed graph import must
+    // not publish a different known terminal state after that restoration.
+    return !keepInitialState || externalFinalState == ResourceStates::Unknown || externalFinalState == nativeInitialState;
+}
+
 [[nodiscard]] static bool CompatiblePipelineMetadata(
     const GpuTaskGraphPipelineView& pipeline,
     const GpuGraphPipelineDesc& desc
@@ -114,6 +124,13 @@ GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, con
         return {};
 
     const TextureDesc& textureDesc = texture->getDescription();
+    if(!__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(
+        textureDesc.keepInitialState,
+        textureDesc.initialState,
+        desc.externalFinalState
+    ))
+        return {};
+
     GpuGraphResourceDesc resolvedDesc = desc;
     if(!resolvedDesc.hasExplicitInitialState && resolvedDesc.initialState == ResourceStates::Unknown){
         // A mixed retained texture has no single physical layout: an accepted partial upload restored only part of
@@ -158,6 +175,13 @@ GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const 
         return {};
 
     const BufferDesc& bufferDesc = buffer->getDescription();
+    if(!__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(
+        bufferDesc.keepInitialState,
+        bufferDesc.initialState,
+        desc.externalFinalState
+    ))
+        return {};
+
     GpuGraphResourceDesc resolvedDesc = desc;
     if(!resolvedDesc.hasExplicitInitialState && resolvedDesc.initialState == ResourceStates::Unknown)
         resolvedDesc.initialState = bufferDesc.initialState;
@@ -221,6 +245,16 @@ GpuGraphResourceId GpuTaskGraph::importAccelStruct(
         return {};
 
     const RayTracingAccelStructDesc& accelStructDesc = accelStruct->getDescription();
+    if(const Buffer* const backingBuffer = accelStruct->getBackingBuffer()){
+        const BufferDesc& backingBufferDesc = backingBuffer->getDescription();
+        if(!__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(
+            backingBufferDesc.keepInitialState,
+            backingBufferDesc.initialState,
+            desc.externalFinalState
+        ))
+            return {};
+    }
+
     GpuGraphResourceDesc resolvedDesc = desc;
     if(
         resolvedDesc.queueSharing != ResourceQueueSharing::Exclusive

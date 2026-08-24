@@ -51,6 +51,7 @@ struct ClearBufferTask{
             )
         )
             return false;
+        commandList.endRenderPass();
         commandList.clearBufferUInt(payload.destination.get(), payload.clearValue);
         return true;
     }
@@ -101,6 +102,7 @@ struct ClearTextureTask{
         )
             return false;
 
+        commandList.endRenderPass();
         bool clearRecorded = false;
         switch(payload.clearDesc.valueType){
         case GpuClearTextureTaskValueType::Float:
@@ -201,6 +203,7 @@ struct ClearTextureRectUIntTask{
         )
             return false;
 
+        commandList.endRenderPass();
         commandList.clearTextureRectUInt(
             payload.destination.get(),
             payload.clearDesc.subresources,

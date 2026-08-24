@@ -51,6 +51,7 @@ struct UploadBufferTask{
         )
             return false;
 
+        commandList.endRenderPass();
         // The compiler tracks `finalState` for later tasks, but the native write itself requires CopyDest. Make the
         // internal transition explicit and commit it before vkCmdCopyBuffer; writeBuffer only queues its own state.
         commandList.setBufferState(payload.destination.get(), ResourceStates::CopyDest);
@@ -103,6 +104,7 @@ struct UploadTextureTask{
         )
             return false;
 
+        commandList.endRenderPass();
         const TextureSubresourceSet subresources(payload.mipLevel, 1u, payload.arraySlice, 1u);
         // See UploadBufferTask: native writes need CopyDest even though graph analysis publishes finalState.
         commandList.setTextureState(payload.destination.get(), subresources, ResourceStates::CopyDest);

@@ -2195,6 +2195,34 @@ struct NativePacketPrefixTask{
 };
 
 
+struct NativePacketRenderPassBoundaryTask{
+    struct Payload{
+        Framebuffer* framebuffer = nullptr;
+        bool* observed = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.observed)
+            return false;
+
+        if(payload.framebuffer){
+            GraphicsState graphicsState;
+            graphicsState.setFramebuffer(payload.framebuffer);
+            commandList.setGraphicsState(graphicsState);
+            *payload.observed = commandList.isRenderPassActive();
+        }else{
+            *payload.observed = !commandList.isRenderPassActive();
+        }
+        return *payload.observed;
+    }
+};
+
+
 // The opaque CSG receiver-span task consumes receiver-surface event StorageImage aliases and publishes span
 // aliases for interval combine. This getter-only probe observes the graph-lowered entry states before the native
 // span dispatcher can perform any compatibility transition.
@@ -38124,6 +38152,479 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     for(usize wordIndex = 0u; wordIndex < 4u; ++wordIndex)
         EXPECT_EQ(clearedWords[wordIndex], 0xdecafbadU);
     device.unmapBuffer(buffer.get());
+}
+
+
+// Merged graph tasks share one native command list but do not share ownership of dynamic rendering. Exercise one
+// primitive from every built-in transfer source and prove both the task boundary and clear-hook boundary are closed.
+TEST_F(DescriptorBufferRoundTripTest, MergedGraphBuiltInsEndInheritedAndHookOpenedDynamicRendering){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    static constexpr u32 s_UploadWords[] = { 0x10203040u, 0x50607080u, 0x90a0b0c0u, 0xd0e0f000u };
+    static constexpr u32 s_ClearValue = 0xdecafbadU;
+
+    const BufferDesc transferBufferDesc = BufferDesc()
+        .setByteSize(sizeof(s_UploadWords))
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+        .setCpuAccess(CpuAccessMode::Read)
+    ;
+    const BufferHandle uploadDestination = device.createBuffer(transferBufferDesc);
+    const BufferHandle copyDestination = device.createBuffer(transferBufferDesc);
+    const BufferHandle clearDestination = device.createBuffer(transferBufferDesc);
+    ASSERT_NE(uploadDestination.get(), nullptr);
+    ASSERT_NE(copyDestination.get(), nullptr);
+    ASSERT_NE(clearDestination.get(), nullptr);
+
+    const TextureDesc copyTextureDesc = TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Format::RGBA8_UNORM)
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+    ;
+    const TextureHandle copySource = device.createTexture(copyTextureDesc);
+    const TextureHandle copyDestinationTexture = device.createTexture(copyTextureDesc);
+    const TextureHandle clearDestinationTexture = device.createTexture(
+        TextureDesc(copyTextureDesc)
+            .setFormat(Format::RGBA8_UINT)
+            .setInRenderTarget(true)
+    );
+    ASSERT_NE(copySource.get(), nullptr);
+    ASSERT_NE(copyDestinationTexture.get(), nullptr);
+    ASSERT_NE(clearDestinationTexture.get(), nullptr);
+    const FramebufferHandle framebuffer = device.createFramebuffer(
+        FramebufferDesc().addColorAttachment(clearDestinationTexture.get())
+    );
+    ASSERT_NE(framebuffer.get(), nullptr);
+    Texture* const initialTextures[] = {
+        copySource.get(),
+        copyDestinationTexture.get(),
+        clearDestinationTexture.get(),
+    };
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        LengthOf(initialTextures),
+        ResourceStates::Common
+    ));
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId uploadDestinationResource = graph.importBuffer(
+        uploadDestination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/merged_rendering_upload_destination"))
+            .setMarkerLabel("Merged Rendering Upload Destination")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId copyDestinationResource = graph.importBuffer(
+        copyDestination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/merged_rendering_copy_destination"))
+            .setMarkerLabel("Merged Rendering Copy Destination")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId clearDestinationResource = graph.importBuffer(
+        clearDestination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/merged_rendering_clear_destination"))
+            .setMarkerLabel("Merged Rendering Clear Destination")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId copySourceResource = graph.importTexture(
+        copySource,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/merged_rendering_copy_source"))
+            .setMarkerLabel("Merged Rendering Copy Source")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId copyDestinationTextureResource = graph.importTexture(
+        copyDestinationTexture,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/merged_rendering_copy_texture_destination"))
+            .setMarkerLabel("Merged Rendering Copy Texture Destination")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId clearDestinationTextureResource = graph.importTexture(
+        clearDestinationTexture,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/merged_rendering_clear_texture_destination"))
+            .setMarkerLabel("Merged Rendering Clear Texture Destination")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(uploadDestinationResource.valid());
+    ASSERT_TRUE(copyDestinationResource.valid());
+    ASSERT_TRUE(clearDestinationResource.valid());
+    ASSERT_TRUE(copySourceResource.valid());
+    ASSERT_TRUE(copyDestinationTextureResource.valid());
+    ASSERT_TRUE(clearDestinationTextureResource.valid());
+    const GpuUploadBlobId uploadBlob = graph.copyUploadData(
+        s_UploadWords,
+        sizeof(s_UploadWords),
+        alignof(u32)
+    );
+    ASSERT_TRUE(uploadBlob.valid());
+
+    const GpuQueueCapability::Mask allCapabilities = static_cast<GpuQueueCapability::Mask>(
+        static_cast<u8>(GpuQueueCapability::Graphics)
+        | static_cast<u8>(GpuQueueCapability::Compute)
+        | static_cast<u8>(GpuQueueCapability::Transfer)
+    );
+    const GpuQueueRequest graphicsTransferQueue{
+        allCapabilities,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint firstScheduling;
+    firstScheduling.cost = GpuTaskCostHint::Tiny;
+    firstScheduling.overlapPreferred = false;
+    firstScheduling.allowPacketMerge = true;
+    GpuTaskSchedulingHint chainedScheduling = firstScheduling;
+    chainedScheduling.mergeWithPrevious = true;
+
+    const GpuTaskResourceUse openerUses[] = {
+        {
+            .resource = clearDestinationTextureResource,
+            .range = {},
+            .requiredState = ResourceStates::RenderTarget,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    bool openerObservedActive = false;
+    GpuTaskDesc openerDesc;
+    openerDesc
+        .setIdentity(Name("tests/descriptor_buffer/merged_rendering_opener"))
+        .setMarkerLabel("Merged Rendering Opener")
+        .setQueue(graphicsTransferQueue)
+        .setScheduling(firstScheduling)
+        .setResourceUses(openerUses, LengthOf(openerUses))
+    ;
+    const GpuTaskId openerTask = graph.addTask<NativePacketRenderPassBoundaryTask>(
+        openerDesc,
+        NativePacketRenderPassBoundaryTask::Payload{
+            .framebuffer = framebuffer.get(),
+            .observed = &openerObservedActive,
+        }
+    );
+    ASSERT_TRUE(openerTask.valid());
+
+    const GpuTaskResourceUse boundaryProbeUses[] = {
+        {
+            .resource = clearDestinationTextureResource,
+            .range = {},
+            .requiredState = ResourceStates::CopyDest,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    bool boundaryObservedInactive = false;
+    GpuTaskDesc boundaryProbeDesc;
+    boundaryProbeDesc
+        .setIdentity(Name("tests/descriptor_buffer/merged_rendering_boundary_probe"))
+        .setMarkerLabel("Merged Rendering Boundary Probe")
+        .setQueue(graphicsTransferQueue)
+        .setScheduling(chainedScheduling)
+        .setDependencies(&openerTask, 1u)
+        .setResourceUses(boundaryProbeUses, LengthOf(boundaryProbeUses))
+    ;
+    const GpuTaskId boundaryProbeTask = graph.addTask<NativePacketRenderPassBoundaryTask>(
+        boundaryProbeDesc,
+        NativePacketRenderPassBoundaryTask::Payload{
+            .observed = &boundaryObservedInactive,
+        }
+    );
+    ASSERT_TRUE(boundaryProbeTask.valid());
+
+    QueueSubmissionToken uploadAcceptedToken;
+    GpuTaskDesc uploadDesc;
+    uploadDesc
+        .setIdentity(Name("tests/descriptor_buffer/merged_rendering_upload"))
+        .setMarkerLabel("Merged Rendering Upload")
+        .setQueue(graphicsTransferQueue)
+        .setScheduling(chainedScheduling)
+        .setDependencies(&boundaryProbeTask, 1u)
+    ;
+    const GpuTaskId uploadTask = graph.addUploadBufferTask(
+        uploadDesc,
+        GpuUploadBufferTaskDesc{
+            .source = uploadBlob,
+            .destination = uploadDestinationResource,
+            .finalState = ResourceStates::CopySource,
+            .acceptedToken = &uploadAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(uploadTask.valid());
+
+    const GpuCopyBufferTaskRegion copyBufferRegion{
+        .source = uploadDestinationResource,
+        .destination = copyDestinationResource,
+        .dataSizeBytes = sizeof(s_UploadWords),
+    };
+    QueueSubmissionToken copyBufferAcceptedToken;
+    GpuTaskDesc copyBufferDesc;
+    copyBufferDesc
+        .setIdentity(Name("tests/descriptor_buffer/merged_rendering_copy_buffer"))
+        .setMarkerLabel("Merged Rendering Buffer Copy")
+        .setQueue(graphicsTransferQueue)
+        .setScheduling(chainedScheduling)
+        .setDependencies(&uploadTask, 1u)
+    ;
+    const GpuTaskId copyBufferTask = graph.addCopyBufferTask(
+        copyBufferDesc,
+        GpuCopyBufferTaskDesc{
+            .regions = &copyBufferRegion,
+            .regionCount = 1u,
+            .acceptedToken = &copyBufferAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(copyBufferTask.valid());
+
+    QueueSubmissionToken clearBufferAcceptedToken;
+    GpuTaskDesc clearBufferDesc;
+    clearBufferDesc
+        .setIdentity(Name("tests/descriptor_buffer/merged_rendering_clear_buffer"))
+        .setMarkerLabel("Merged Rendering Buffer Clear")
+        .setQueue(graphicsTransferQueue)
+        .setScheduling(chainedScheduling)
+        .setDependencies(&copyBufferTask, 1u)
+    ;
+    const GpuTaskId clearBufferTask = graph.addClearBufferTask(
+        clearBufferDesc,
+        GpuClearBufferTaskDesc{
+            .destination = clearDestinationResource,
+            .clearValue = s_ClearValue,
+            .acceptedToken = &clearBufferAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(clearBufferTask.valid());
+
+    const GpuCopyTextureTaskRegion copyTextureRegion{
+        .source = copySourceResource,
+        .sourceSlice = {},
+        .destination = copyDestinationTextureResource,
+        .destinationSlice = {},
+    };
+    QueueSubmissionToken copyTextureAcceptedToken;
+    GpuTaskDesc copyTextureTaskDesc;
+    copyTextureTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/merged_rendering_copy_texture"))
+        .setMarkerLabel("Merged Rendering Texture Copy")
+        .setQueue(graphicsTransferQueue)
+        .setScheduling(chainedScheduling)
+        .setDependencies(&clearBufferTask, 1u)
+    ;
+    const GpuTaskId copyTextureTask = graph.addCopyTextureTask(
+        copyTextureTaskDesc,
+        GpuCopyTextureTaskDesc{
+            .regions = &copyTextureRegion,
+            .regionCount = 1u,
+            .acceptedToken = &copyTextureAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(copyTextureTask.valid());
+
+    struct ClearHookState{
+        Framebuffer* framebuffer = nullptr;
+        bool openedRenderPass = false;
+        bool observedInactiveAfterClear = false;
+    };
+    ClearHookState clearHookState{
+        .framebuffer = framebuffer.get(),
+    };
+    const GpuClearTextureTaskRecordHook beforeClear = [](
+        void* const rawState,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        ClearHookState* const state = static_cast<ClearHookState*>(rawState);
+        if(!state || !state->framebuffer)
+            return false;
+        GraphicsState graphicsState;
+        graphicsState.setFramebuffer(state->framebuffer);
+        commandList.setGraphicsState(graphicsState);
+        state->openedRenderPass = commandList.isRenderPassActive();
+        return state->openedRenderPass;
+    };
+    const GpuClearTextureTaskRecordHook afterClear = [](
+        void* const rawState,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        ClearHookState* const state = static_cast<ClearHookState*>(rawState);
+        if(!state)
+            return false;
+        state->observedInactiveAfterClear = !commandList.isRenderPassActive();
+        return state->observedInactiveAfterClear;
+    };
+    QueueSubmissionToken clearTextureAcceptedToken;
+    GpuClearTextureTaskDesc clearTexturePayload;
+    clearTexturePayload.destination = clearDestinationTextureResource;
+    clearTexturePayload.subresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
+    clearTexturePayload.valueType = GpuClearTextureTaskValueType::UInt;
+    clearTexturePayload.uintValue = UIntColor(0x11u, 0x22u, 0x33u, 0x44u);
+    clearTexturePayload.recordHooks = GpuClearTextureTaskRecordHooks{
+        .context = &clearHookState,
+        .beforeClear = beforeClear,
+        .afterClear = afterClear,
+    };
+    clearTexturePayload.acceptedToken = &clearTextureAcceptedToken;
+    GpuTaskDesc clearTextureTaskDesc;
+    clearTextureTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/merged_rendering_clear_texture"))
+        .setMarkerLabel("Merged Rendering Texture Clear")
+        .setQueue(graphicsTransferQueue)
+        .setScheduling(chainedScheduling)
+        .setDependencies(&copyTextureTask, 1u)
+    ;
+    const GpuTaskId clearTextureTask = graph.addClearTextureTask(clearTextureTaskDesc, clearTexturePayload);
+    ASSERT_TRUE(clearTextureTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = allCapabilities,
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/merged_rendering_scratch"));
+    GpuTaskGraphCompileOptions compileOptions;
+    compileOptions.packetizationPolicy = GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions));
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(openerTask);
+    ASSERT_TRUE(packet.valid());
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    ASSERT_EQ(compiledGraph.packet(packet).taskCount, 7u);
+    EXPECT_EQ(compiledGraph.packetForTask(boundaryProbeTask), packet);
+    EXPECT_EQ(compiledGraph.packetForTask(uploadTask), packet);
+    EXPECT_EQ(compiledGraph.packetForTask(copyBufferTask), packet);
+    EXPECT_EQ(compiledGraph.packetForTask(clearBufferTask), packet);
+    EXPECT_EQ(compiledGraph.packetForTask(copyTextureTask), packet);
+    EXPECT_EQ(compiledGraph.packetForTask(clearTextureTask), packet);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(openerObservedActive);
+    EXPECT_TRUE(boundaryObservedInactive);
+    EXPECT_TRUE(clearHookState.openedRenderPass);
+    EXPECT_TRUE(clearHookState.observedInactiveAfterClear);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    ASSERT_NE(finalState, nullptr);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken packetToken = transaction.packetToken(packet);
+    ASSERT_TRUE(packetToken.valid());
+    ASSERT_TRUE(uploadAcceptedToken.valid());
+    ASSERT_TRUE(copyBufferAcceptedToken.valid());
+    ASSERT_TRUE(clearBufferAcceptedToken.valid());
+    ASSERT_TRUE(copyTextureAcceptedToken.valid());
+    ASSERT_TRUE(clearTextureAcceptedToken.valid());
+    EXPECT_EQ(uploadAcceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(uploadAcceptedToken.value, packetToken.value);
+    EXPECT_EQ(copyBufferAcceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(copyBufferAcceptedToken.value, packetToken.value);
+    EXPECT_EQ(clearBufferAcceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(clearBufferAcceptedToken.value, packetToken.value);
+    EXPECT_EQ(copyTextureAcceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(copyTextureAcceptedToken.value, packetToken.value);
+    EXPECT_EQ(clearTextureAcceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(clearTextureAcceptedToken.value, packetToken.value);
+    ASSERT_TRUE(device.waitForIdle());
+
+    const u32* const copiedWords = static_cast<const u32*>(
+        device.mapBuffer(copyDestination.get(), CpuAccessMode::Read)
+    );
+    ASSERT_NE(copiedWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_UploadWords); ++wordIndex)
+        EXPECT_EQ(copiedWords[wordIndex], s_UploadWords[wordIndex]);
+    device.unmapBuffer(copyDestination.get());
+    const u32* const clearedWords = static_cast<const u32*>(
+        device.mapBuffer(clearDestination.get(), CpuAccessMode::Read)
+    );
+    ASSERT_NE(clearedWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_UploadWords); ++wordIndex)
+        EXPECT_EQ(clearedWords[wordIndex], s_ClearValue);
+    device.unmapBuffer(clearDestination.get());
+
+    const StagingTextureHandle clearTextureReadback = device.createStagingTexture(
+        clearDestinationTexture->getDescription(),
+        CpuAccessMode::Read
+    );
+    ASSERT_NE(clearTextureReadback.get(), nullptr);
+    const CommandListHandle clearTextureReadbackCommandList = device.createCommandList();
+    ASSERT_NE(clearTextureReadbackCommandList.get(), nullptr);
+    clearTextureReadbackCommandList->open(finalState);
+    ASSERT_TRUE(clearTextureReadbackCommandList->hasCommandBuffer());
+    clearTextureReadbackCommandList->copyTexture(
+        clearTextureReadback.get(),
+        TextureSlice{},
+        clearDestinationTexture.get(),
+        TextureSlice{}
+    );
+    clearTextureReadbackCommandList->close();
+    CommandList* const clearTextureReadbackLists[] = { clearTextureReadbackCommandList.get() };
+    ASSERT_TRUE(device.executeCommandLists(
+        clearTextureReadbackLists,
+        LengthOf(clearTextureReadbackLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
+    ASSERT_TRUE(device.waitForIdle());
+    usize clearTextureReadbackRowPitch = 0u;
+    const u8* const clearTextureReadbackBytes = static_cast<const u8*>(device.mapStagingTexture(
+        clearTextureReadback.get(),
+        TextureSlice{},
+        CpuAccessMode::Read,
+        &clearTextureReadbackRowPitch
+    ));
+    ASSERT_NE(clearTextureReadbackBytes, nullptr);
+    ASSERT_GE(clearTextureReadbackRowPitch, 4u * sizeof(u32));
+    for(u32 row = 0u; row < 4u; ++row){
+        for(u32 column = 0u; column < 4u; ++column){
+            const u8* const pixel = clearTextureReadbackBytes
+                + static_cast<usize>(row) * clearTextureReadbackRowPitch
+                + static_cast<usize>(column) * sizeof(u32)
+            ;
+            EXPECT_EQ(pixel[0u], 0x11u);
+            EXPECT_EQ(pixel[1u], 0x22u);
+            EXPECT_EQ(pixel[2u], 0x33u);
+            EXPECT_EQ(pixel[3u], 0x44u);
+        }
+    }
+    device.unmapStagingTexture(clearTextureReadback.get());
 }
 
 

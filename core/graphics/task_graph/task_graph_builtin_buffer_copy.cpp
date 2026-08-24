@@ -71,6 +71,7 @@ struct CopyBufferTask{
                 )
             )
                 return false;
+            commandList.endRenderPass();
             commandList.copyBuffer(
                 copy.destination.get(),
                 copy.destinationOffsetBytes,

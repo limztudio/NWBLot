@@ -371,6 +371,8 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
             recorded = graph.recordTask(task, *commandList, context, recordingLease);
             taskRecordSeconds += DurationInSeconds<f64>(TimerNow(), taskRecordBegin);
         }
+        if(recorded)
+            commandList->endRenderPass();
 #if defined(NWB_DEBUG)
         const GpuQueueCapability::Mask usedCapabilities = commandList->endTaskCapabilityTracking();
         if(

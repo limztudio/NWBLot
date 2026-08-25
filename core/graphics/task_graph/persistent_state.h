@@ -55,6 +55,8 @@ public:
         GraphicsVector<BufferHandle> m_buffers;
     };
 
+
+public:
     explicit GpuPersistentResourceStateCache(GraphicsArena& arena)
         : m_arena(arena)
         , m_states(arena)

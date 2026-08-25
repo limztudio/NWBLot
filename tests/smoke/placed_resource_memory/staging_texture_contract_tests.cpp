@@ -10,6 +10,7 @@
 #include <global/global.h>
 #include <global/unique_ptr.h>
 #include <core/graphics/vulkan/backend.h>
+#include <core/graphics/vulkan/texture_resource_detail.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/headless_graphics_scope.h>
 
@@ -124,6 +125,43 @@ TEST_F(StagingTextureContractTest, CreationRejectsInvalidInputsAndPreservesAllVa
     expectDiagnosticRejection([&](){
         return device.createTexture(invalidDimensionDesc).get() != nullptr;
     });
+
+    struct NonArraySizeCase{
+        TextureDimension::Enum nonArrayDimension;
+        TextureDimension::Enum arrayDimension;
+        u32 height;
+    };
+    static constexpr NonArraySizeCase s_NonArraySizeCases[] = {
+        { TextureDimension::Texture1D, TextureDimension::Texture1DArray, 1u },
+        { TextureDimension::Texture2D, TextureDimension::Texture2DArray, 4u },
+        { TextureDimension::Texture2DMS, TextureDimension::Texture2DMSArray, 4u },
+    };
+    for(const NonArraySizeCase& sizeCase : s_NonArraySizeCases){
+        SCOPED_TRACE(static_cast<u32>(sizeCase.nonArrayDimension));
+        TextureDesc invalidArraySizeDesc = baseDesc;
+        invalidArraySizeDesc.dimension = sizeCase.nonArrayDimension;
+        invalidArraySizeDesc.height = sizeCase.height;
+        invalidArraySizeDesc.arraySize = 2u;
+        EXPECT_FALSE(GraphicsBackend::VulkanTextureDetail::IsTextureDescShapeValid(invalidArraySizeDesc));
+        expectDiagnosticRejection([&](){
+            return device.createStagingTexture(invalidArraySizeDesc, CpuAccessMode::Write).get() != nullptr;
+        });
+        expectDiagnosticRejection([&](){
+            return device.createTexture(invalidArraySizeDesc).get() != nullptr;
+        });
+
+        TextureDesc validSingleLayerArrayDesc = invalidArraySizeDesc;
+        validSingleLayerArrayDesc.dimension = sizeCase.arrayDimension;
+        validSingleLayerArrayDesc.arraySize = 1u;
+        EXPECT_TRUE(GraphicsBackend::VulkanTextureDetail::IsTextureDescShapeValid(validSingleLayerArrayDesc));
+        const StagingTextureHandle validStaging = device.createStagingTexture(
+            validSingleLayerArrayDesc,
+            CpuAccessMode::Write
+        );
+        const TextureHandle validTextureArray = device.createTexture(validSingleLayerArrayDesc);
+        ASSERT_TRUE(validStaging);
+        ASSERT_TRUE(validTextureArray);
+    }
 
     struct ValidShapeCase{
         TextureDimension::Enum dimension;

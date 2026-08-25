@@ -59,6 +59,17 @@ bool ValidateTextureShape(const TextureDesc& desc, const tchar* operationName){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: texture dimension is invalid"), operationName);
         return false;
     }
+    if(
+        (
+            desc.dimension == TextureDimension::Texture1D
+            || desc.dimension == TextureDimension::Texture2D
+            || desc.dimension == TextureDimension::Texture2DMS
+        )
+        && desc.arraySize != 1u
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: non-array texture array size must be 1"), operationName);
+        return false;
+    }
     if((desc.dimension == TextureDimension::Texture1D || desc.dimension == TextureDimension::Texture1DArray) && (desc.height != 1 || desc.depth != 1)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: 1D texture height and depth must be 1"), operationName);
         return false;

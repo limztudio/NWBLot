@@ -62,12 +62,16 @@ inline u32 GetMaxMipLevels(const TextureDesc& desc){
     bool dimensionValid = false;
     switch(desc.dimension){
     case TextureDimension::Texture1D:
+        dimensionValid = desc.height == 1u && desc.depth == 1u && desc.arraySize == 1u;
+        break;
     case TextureDimension::Texture1DArray:
         dimensionValid = desc.height == 1u && desc.depth == 1u;
         break;
     case TextureDimension::Texture2D:
-    case TextureDimension::Texture2DArray:
     case TextureDimension::Texture2DMS:
+        dimensionValid = desc.depth == 1u && desc.arraySize == 1u;
+        break;
+    case TextureDimension::Texture2DArray:
     case TextureDimension::Texture2DMSArray:
         dimensionValid = desc.depth == 1u;
         break;

@@ -27,6 +27,10 @@
 #include "../bindless/bindless_heap_rt.slangi"
 #include "surfel/surfel_heap_resources.slangi"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // The shared scene-shading CB + light list are target-generation heap entries. The surfel trace push block selects the
 // deferred target-generation payload from the global UniformBuffer table, so no local CBV remains.
 #define g_NwbGiHwBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbSurfelHeapPushConstants.deferredResourcesHeapSlot]

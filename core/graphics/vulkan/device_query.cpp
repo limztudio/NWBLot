@@ -252,9 +252,19 @@ Object Device::getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& q
 
 Heap::Heap(const VulkanContext& context, VulkanAllocator& allocator)
     : RefCounter<GraphicsResource>(context.threadPool)
+    , m_bindingReservations(context.objectArena)
+    , m_context(context)
     , m_allocator(allocator)
 {}
 Heap::~Heap(){
+    {
+        ScopedLock lock(m_bindingMutex);
+        if(!m_bindingReservations.empty()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing to free a heap with live placed-resource bindings"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Heap destroyed with live placed-resource bindings"));
+            return;
+        }
+    }
     m_allocator.freeHeap(*this);
 }
 
@@ -262,6 +272,19 @@ Object Heap::getNativeHandle(ObjectType objectType){
     if(objectType == ObjectTypes::VK_DeviceMemory)
         return Object(m_memory);
     return Object(nullptr);
+}
+
+void Heap::eraseBindingReservationLocked(const void* owner){
+    for(auto reservation = m_bindingReservations.begin(); reservation != m_bindingReservations.end(); ++reservation){
+        if(reservation->owner != owner)
+            continue;
+
+        m_bindingReservations.erase(reservation);
+        return;
+    }
+
+    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unregister a placed-resource heap binding"));
+    NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Missing placed-resource heap binding"));
 }
 
 

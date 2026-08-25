@@ -6,6 +6,7 @@
 
 
 #include "module.h"
+#include "heap_binding_contract.h"
 
 #include <core/common/log.h>
 
@@ -1029,9 +1030,20 @@ private:
 
 
 class Heap final : public RefCounter<GraphicsResource>, NoCopy{
+    friend class Buffer;
     friend class Device;
+    friend class Texture;
     friend class VulkanAllocator;
     friend class Queue;
+
+
+private:
+    struct BindingReservation{
+        const void* owner = nullptr;
+        VulkanDetail::HeapBindingResourceClass::Enum resourceClass =
+            VulkanDetail::HeapBindingResourceClass::Buffer;
+        VulkanDetail::HeapBindingRange range;
+    };
 
 
 public:
@@ -1045,12 +1057,19 @@ public:
 
 
 private:
+    void eraseBindingReservationLocked(const void* owner);
+
+
+private:
     HeapDesc m_desc;
     VkDeviceMemory m_memory = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;
     VkDeviceSize m_memoryOffset = 0;
     u32 m_memoryTypeIndex = UINT32_MAX;
+    Vector<BindingReservation, Alloc::GlobalArena> m_bindingReservations;
+    Futex m_bindingMutex;
 
+    const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
 };
 
@@ -1199,6 +1218,9 @@ private:
     VulkanAllocationHandle m_allocation = nullptr;
     u64 m_deviceAddress = 0;
     void* m_mappedMemory = nullptr;
+    HeapHandle m_boundHeap;
+    VulkanDetail::HeapBindingRange m_heapBindingRange;
+    Futex m_memoryBindingMutex;
 
     Vector<u64, Alloc::GlobalArena> m_versionTracking;
     Vector<BufferViewEntry, Alloc::GlobalArena> m_bufferViews;
@@ -1315,6 +1337,9 @@ private:
     VkImage m_image = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;
     VkImageCreateInfo m_imageInfo{};
+    HeapHandle m_boundHeap;
+    VulkanDetail::HeapBindingRange m_heapBindingRange;
+    Futex m_memoryBindingMutex;
 
     HashMap<TextureViewKey, VkImageView, TextureViewKeyHasher, EqualTo<TextureViewKey>, Alloc::GlobalArena> m_views;
     Futex m_viewsMutex;
@@ -2843,15 +2868,16 @@ private:
     )const;
     // Lazily creates the descriptor-buffer gap-set layout for explicit heap sets.
     [[nodiscard]] VkDescriptorSetLayout getOrCreateEmptyDescriptorBufferSetLayout()const;
-#if defined(NWB_DEBUG)
     [[nodiscard]] bool validateHeapMemoryBinding(
         const Heap& heap,
         const VkMemoryRequirements& memoryRequirements,
+        const VkMemoryDedicatedRequirements& dedicatedRequirements,
         u64 offset,
+        VulkanDetail::HeapBindingResourceClass::Enum resourceClass,
         const tchar* operationName,
-        const tchar* resourceName
+        const tchar* resourceName,
+        VulkanDetail::HeapBindingRange& outRange
     )const;
-#endif
     [[nodiscard]] bool configurePipelineBindings(
         const BindingLayoutVector& bindingLayouts,
         const tchar* operationName,

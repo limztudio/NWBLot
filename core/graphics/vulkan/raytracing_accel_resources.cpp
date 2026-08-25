@@ -281,14 +281,34 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 }
 
 MemoryRequirements Device::getAccelStructMemoryRequirements(RayTracingAccelStruct* accelStructResource){
-    MemoryRequirements requirements = {};
-
-    auto* as = accelStructResource;
-    if(as->m_buffer){
-        requirements.size = as->m_buffer->getDescription().byteSize;
-        requirements.alignment = s_AccelerationStructureAlignment; // AS alignment requirement
+    if(!accelStructResource){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to get acceleration structure memory requirements: acceleration structure is null")
+        );
+        return {};
     }
 
+    AccelStruct& accelerationStructure = *accelStructResource;
+    if(&accelerationStructure.m_context != &m_context){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to get acceleration structure memory requirements: resource belongs to another device")
+        );
+        return {};
+    }
+    if(!accelerationStructure.m_desc.isVirtual || !accelerationStructure.m_buffer){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to get acceleration structure memory requirements: resource is not virtual")
+        );
+        return {};
+    }
+
+    NWB_ASSERT(accelerationStructure.getDeviceGeneration()
+        == accelerationStructure.m_buffer->getDeviceGeneration());
+    MemoryRequirements requirements = getBufferMemoryRequirements(accelerationStructure.m_buffer.get());
+    if(requirements.size == 0u || requirements.alignment == 0u)
+        return {};
+
+    requirements.alignment = Max<u64>(requirements.alignment, s_AccelerationStructureAlignment);
     return requirements;
 }
 

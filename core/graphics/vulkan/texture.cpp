@@ -292,7 +292,21 @@ Texture::~Texture(){
         vkDestroyImageView(m_context.device, view, m_context.allocationCallbacks);
     m_views.clear();
 
-    if(m_managed){
+    ScopedLock bindingLock(m_memoryBindingMutex);
+    if(m_boundHeap){
+        Heap* const boundHeap = m_boundHeap.get();
+        {
+            ScopedLock heapLock(boundHeap->m_bindingMutex);
+            if(m_image != VK_NULL_HANDLE){
+                vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
+                m_image = VK_NULL_HANDLE;
+            }
+            boundHeap->eraseBindingReservationLocked(this);
+        }
+        m_heapBindingRange = {};
+        m_boundHeap.reset();
+    }
+    else if(m_managed){
         if(m_desc.isVirtual){
             if(m_image != VK_NULL_HANDLE){
                 vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);

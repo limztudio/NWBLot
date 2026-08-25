@@ -113,12 +113,6 @@ inline VmaAllocationCreateInfo BuildHostMappedBufferAllocationInfo(){
     );
 }
 
-inline u32 BuildAllMemoryTypeBits(const VkPhysicalDeviceMemoryProperties& memoryProperties){
-    if(memoryProperties.memoryTypeCount >= s_VulkanMemoryTypeBitCount)
-        return UINT32_MAX;
-    return (1u << memoryProperties.memoryTypeCount) - 1u;
-}
-
 inline bool BuildRequiresInvalidate(const VkPhysicalDeviceMemoryProperties& memoryProperties, const u32 memoryTypeIndex){
     if(memoryTypeIndex >= memoryProperties.memoryTypeCount)
         return true;
@@ -431,7 +425,9 @@ VkResult VulkanAllocator::allocateHeap(Heap& heap){
     VkMemoryRequirements memRequirements{};
     memRequirements.size = heap.m_desc.capacity;
     memRequirements.alignment = Max<VkDeviceSize>(m_context.physicalDeviceProperties.limits.bufferImageGranularity, 1u);
-    memRequirements.memoryTypeBits = __hidden_vulkan_allocator::BuildAllMemoryTypeBits(m_context.memoryProperties);
+    memRequirements.memoryTypeBits = VulkanDetail::BuildNonProtectedMemoryTypeBits(m_context.memoryProperties);
+    if(memRequirements.memoryTypeBits == 0u)
+        return VK_ERROR_FEATURE_NOT_PRESENT;
 
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildHeapAllocationInfo(heap.m_desc);
     VmaAllocationInfo allocationInfo{};

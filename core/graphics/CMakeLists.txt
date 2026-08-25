@@ -136,6 +136,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context_detail.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/command_validation.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/device_detail.h"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/heap_binding_contract.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/resource_bindings_detail.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/state_tracking_detail.h"

@@ -16,6 +16,10 @@
 #include "sw_shadow_gbuffer.slangi"
 #include "sw_shadow_edge_record.slangi"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // The classify pass reads/writes all worksets through their storage heap slots.
 #define g_NwbSwShadowCoarse NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.coarseStorageSlot)
 #define g_NwbSwShadowVisibility NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)

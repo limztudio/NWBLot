@@ -5,6 +5,10 @@
 #include "../mesh/raster_fields.slangi"
 #include "pixel_runtime.slangi"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #define NWB_CSG_RECEIVER_EVENTS_WRITABLE 1
 #include "interval_sample.slangi"
 #undef NWB_CSG_RECEIVER_EVENTS_WRITABLE

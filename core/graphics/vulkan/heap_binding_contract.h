@@ -41,6 +41,84 @@ struct HeapBindingRange{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline bool TryResolveBufferCpuAccess(
+    const CpuAccessMode::Enum declaredAccess,
+    const bool isVolatile,
+    CpuAccessMode::Enum& outAccess
+)noexcept{
+    outAccess = CpuAccessMode::None;
+    switch(declaredAccess){
+    case CpuAccessMode::None:
+    case CpuAccessMode::Read:
+    case CpuAccessMode::Write:
+        break;
+    default:
+        return false;
+    }
+
+    if(isVolatile){
+        if(declaredAccess == CpuAccessMode::Read)
+            return false;
+        outAccess = CpuAccessMode::Write;
+    }
+    else
+        outAccess = declaredAccess;
+
+    return true;
+}
+
+[[nodiscard]] inline bool IsBufferHeapTypeCompatible(
+    const CpuAccessMode::Enum declaredAccess,
+    const bool isVolatile,
+    const HeapType::Enum heapType
+)noexcept{
+    CpuAccessMode::Enum effectiveAccess = CpuAccessMode::None;
+    if(!TryResolveBufferCpuAccess(declaredAccess, isVolatile, effectiveAccess))
+        return false;
+
+    switch(effectiveAccess){
+    case CpuAccessMode::None:
+        return heapType == HeapType::DeviceLocal;
+    case CpuAccessMode::Read:
+        return heapType == HeapType::Readback;
+    case CpuAccessMode::Write:
+        return heapType == HeapType::Upload;
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] inline bool TryBuildBufferHeapRequirements(
+    const MemoryRequirements& nativeRequirements,
+    const CpuAccessMode::Enum declaredAccess,
+    const bool isVolatile,
+    const u64 nonCoherentAtomSize,
+    MemoryRequirements& outRequirements
+)noexcept{
+    outRequirements = {};
+    if(nativeRequirements.size == 0u || nativeRequirements.alignment == 0u)
+        return false;
+
+    CpuAccessMode::Enum effectiveAccess = CpuAccessMode::None;
+    if(!TryResolveBufferCpuAccess(declaredAccess, isVolatile, effectiveAccess))
+        return false;
+
+    MemoryRequirements adjustedRequirements = nativeRequirements;
+    if(effectiveAccess == CpuAccessMode::Read){
+        const u64 atomSize = Max<u64>(nonCoherentAtomSize, 1u);
+        adjustedRequirements.alignment = Max<u64>(adjustedRequirements.alignment, atomSize);
+        if(!AlignUpChecked(adjustedRequirements.size, atomSize, adjustedRequirements.size))
+            return false;
+    }
+
+    outRequirements = adjustedRequirements;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline bool TryBuildHeapBindingRange(
     const u64 heapCapacity,
     const u64 heapMemoryOffset,

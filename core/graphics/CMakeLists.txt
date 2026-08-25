@@ -57,6 +57,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/timing_feedback.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/allocator.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/buffer.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/buffer_memory.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/command_validation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/commandlist.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/compute.cpp"
@@ -167,4 +168,3 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_compile_definitions(nwb_graphics PRIVATE NWB_WITH_WAYLAND=1)
     endif()
 endif()
-

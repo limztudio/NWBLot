@@ -93,10 +93,18 @@ inline VmaAllocationCreateInfo BuildHeapAllocationInfo(const HeapDesc& desc){
         break;
     case HeapType::Upload:
         allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        allocInfo.flags =
+            VMA_ALLOCATION_CREATE_MAPPED_BIT
+            | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
+        ;
         break;
     case HeapType::Readback:
         allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
         allocInfo.preferredFlags = VK_MEMORY_PROPERTY_HOST_CACHED_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        allocInfo.flags =
+            VMA_ALLOCATION_CREATE_MAPPED_BIT
+            | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
+        ;
         break;
     default:
         break;
@@ -425,6 +433,12 @@ VkResult VulkanAllocator::allocateHeap(Heap& heap){
     VkMemoryRequirements memRequirements{};
     memRequirements.size = heap.m_desc.capacity;
     memRequirements.alignment = Max<VkDeviceSize>(m_context.physicalDeviceProperties.limits.bufferImageGranularity, 1u);
+    if(heap.m_desc.type == HeapType::Readback){
+        memRequirements.alignment = Max<VkDeviceSize>(
+            memRequirements.alignment,
+            m_context.physicalDeviceProperties.limits.nonCoherentAtomSize
+        );
+    }
     memRequirements.memoryTypeBits = VulkanDetail::BuildNonProtectedMemoryTypeBits(m_context.memoryProperties);
     if(memRequirements.memoryTypeBits == 0u)
         return VK_ERROR_FEATURE_NOT_PRESENT;
@@ -445,6 +459,15 @@ VkResult VulkanAllocator::allocateHeap(Heap& heap){
         heap.m_memory = allocationInfo.deviceMemory;
         heap.m_memoryOffset = allocationInfo.offset;
         heap.m_memoryTypeIndex = allocationInfo.memoryType;
+        heap.m_mappedMemory = allocationInfo.pMappedData;
+        heap.m_requiresInvalidate =
+            heap.m_desc.type == HeapType::Readback
+            && __hidden_vulkan_allocator::BuildRequiresInvalidate(m_context.memoryProperties, allocationInfo.memoryType)
+        ;
+        if(heap.m_desc.type != HeapType::DeviceLocal && !heap.m_mappedMemory){
+            freeHeap(heap);
+            return VK_ERROR_MEMORY_MAP_FAILED;
+        }
     }
 
     return res;
@@ -461,6 +484,16 @@ void VulkanAllocator::freeHeap(Heap& heap){
     heap.m_memory = VK_NULL_HANDLE;
     heap.m_memoryOffset = 0;
     heap.m_memoryTypeIndex = UINT32_MAX;
+    heap.m_mappedMemory = nullptr;
+    heap.m_requiresInvalidate = false;
+}
+
+VkResult VulkanAllocator::invalidateHeapMemory(Heap& heap, const u64 offset, const u64 size){
+    if(!heap.m_allocation || !heap.m_mappedMemory)
+        return VK_ERROR_MEMORY_MAP_FAILED;
+    if(!heap.m_requiresInvalidate)
+        return VK_SUCCESS;
+    return __hidden_vulkan_allocator::InvalidateAllocation(m_allocator, heap.m_allocation, offset, size);
 }
 
 VkResult VulkanAllocator::bindHeapBufferMemory(Buffer& buffer, Heap& heap, const u64 offset){

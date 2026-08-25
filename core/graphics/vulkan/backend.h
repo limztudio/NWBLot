@@ -1008,6 +1008,7 @@ public:
     VkResult invalidateStagingTextureMemory(StagingTexture& texture, u64 offset, u64 size);
     VkResult allocateHeap(Heap& heap);
     void freeHeap(Heap& heap);
+    VkResult invalidateHeapMemory(Heap& heap, u64 offset, u64 size);
     VkResult bindHeapBufferMemory(Buffer& buffer, Heap& heap, u64 offset);
     VkResult bindHeapTextureMemory(Texture& texture, Heap& heap, u64 offset);
     VkResult createHostMappedBuffer(
@@ -1066,6 +1067,8 @@ private:
     VulkanAllocationHandle m_allocation = nullptr;
     VkDeviceSize m_memoryOffset = 0;
     u32 m_memoryTypeIndex = UINT32_MAX;
+    void* m_mappedMemory = nullptr;
+    bool m_requiresInvalidate = false;
     Vector<BindingReservation, Alloc::GlobalArena> m_bindingReservations;
     Futex m_bindingMutex;
 
@@ -1206,6 +1209,7 @@ public:
     [[nodiscard]] const BufferDesc& getDescription()const{ return m_desc; }
     [[nodiscard]] GpuVirtualAddress getGpuVirtualAddress()const{ return m_deviceAddress; }
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
+    virtual Object getNativeHandle(ObjectType objectType) override;
 
 
 private:

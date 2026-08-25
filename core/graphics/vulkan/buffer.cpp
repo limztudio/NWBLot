@@ -75,6 +75,9 @@ Buffer::~Buffer(){
             boundHeap->eraseBindingReservationLocked(this);
         }
         m_heapBindingRange = {};
+        m_mappedMemory = nullptr;
+        m_persistentlyMapped = false;
+        m_requiresInvalidate = false;
         m_boundHeap.reset();
     }
     else if(m_managed){
@@ -87,6 +90,13 @@ Buffer::~Buffer(){
         else
             m_allocator.destroyBuffer(*this);
     }
+}
+
+Object Buffer::getNativeHandle(ObjectType objectType){
+    if(objectType != ObjectTypes::VK_Buffer)
+        return nullptr;
+
+    return Object(m_buffer);
 }
 
 
@@ -172,6 +182,18 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     if(d.isVolatile && d.maxVersions == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: maxVersions is zero"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create volatile buffer: maxVersions is zero"));
+        return nullptr;
+    }
+    CpuAccessMode::Enum effectiveCpuAccess = CpuAccessMode::None;
+    if(!VulkanDetail::TryResolveBufferCpuAccess(d.cpuAccess, d.isVolatile, effectiveCpuAccess)){
+        if(d.isVolatile && d.cpuAccess == CpuAccessMode::Read){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: a volatile buffer cannot request CPU read access"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Volatile buffer CPU access contradicts its write-only contract"));
+        }
+        else{
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: invalid CPU access mode"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: invalid CPU access mode"));
+        }
         return nullptr;
     }
 
@@ -268,266 +290,6 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     }
 
     return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
-}
-
-void* Device::mapBuffer(Buffer* bufferResource, CpuAccessMode::Enum){
-    VkResult res = VK_SUCCESS;
-
-    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("map buffer"), NWB_TEXT("buffer is null"), bufferResource))
-        return nullptr;
-
-    Buffer& buffer = *bufferResource;
-#if defined(NWB_DEBUG)
-    if(!buffer.m_desc.isVolatile && buffer.m_desc.cpuAccess == CpuAccessMode::None){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer was created without CPU access"));
-        return nullptr;
-    }
-    if(buffer.m_allocation == nullptr){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer has no bound memory"));
-        return nullptr;
-    }
-#endif
-
-    auto invalidateReadRange = [&]() -> bool{
-        if(buffer.m_desc.cpuAccess != CpuAccessMode::Read)
-            return true;
-
-        res = m_allocator.invalidateBufferMemory(buffer);
-        if(res != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to invalidate readback buffer mapping: {}"), ResultToString(res));
-            return false;
-        }
-        return true;
-    };
-
-    if(buffer.m_mappedMemory){
-        if(!invalidateReadRange())
-            return nullptr;
-        return buffer.m_mappedMemory;
-    }
-
-    void* data = nullptr;
-    res = m_allocator.mapBufferMemory(buffer, &data);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer memory: {}"), ResultToString(res));
-        return nullptr;
-    }
-
-    buffer.m_mappedMemory = data;
-    if(!invalidateReadRange()){
-        m_allocator.unmapBufferMemory(buffer);
-        buffer.m_mappedMemory = nullptr;
-        return nullptr;
-    }
-    return data;
-}
-
-void Device::unmapBuffer(Buffer* bufferResource){
-    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("unmap buffer"), NWB_TEXT("buffer is null"), bufferResource))
-        return;
-
-    Buffer& buffer = *bufferResource;
-
-    if(buffer.m_mappedMemory && !buffer.m_persistentlyMapped){
-        buffer.m_allocator.unmapBufferMemory(buffer);
-        buffer.m_mappedMemory = nullptr;
-    }
-}
-
-MemoryRequirements Device::getBufferMemoryRequirements(Buffer* bufferResource){
-    if(!bufferResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get buffer memory requirements: buffer is null"));
-        return {};
-    }
-
-    Buffer& buffer = *bufferResource;
-    if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get buffer memory requirements: buffer belongs to another device"));
-        return {};
-    }
-    if(!buffer.m_managed || !buffer.m_desc.isVirtual || buffer.m_allocation != nullptr){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get buffer memory requirements: buffer is not a managed virtual buffer"));
-        return {};
-    }
-    if(buffer.m_buffer == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get buffer memory requirements: native buffer is null"));
-        return {};
-    }
-
-    VkBufferMemoryRequirementsInfo2 requirementsInfo{};
-    requirementsInfo.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2;
-    requirementsInfo.buffer = buffer.m_buffer;
-    VkMemoryRequirements2 memoryRequirements{};
-    memoryRequirements.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
-    vkGetBufferMemoryRequirements2(m_context.device, &requirementsInfo, &memoryRequirements);
-
-    MemoryRequirements result;
-    result.size = memoryRequirements.memoryRequirements.size;
-    result.alignment = memoryRequirements.memoryRequirements.alignment;
-    return result;
-}
-
-bool Device::validateHeapMemoryBinding(
-    const Heap& heap,
-    const VkMemoryRequirements& memoryRequirements,
-    const VkMemoryDedicatedRequirements& dedicatedRequirements,
-    const u64 offset,
-    const VulkanDetail::HeapBindingResourceClass::Enum resourceClass,
-    const tchar* operationName,
-    const tchar* resourceName,
-    VulkanDetail::HeapBindingRange& outRange
-)const{
-    outRange = {};
-    if(&heap.m_context != &m_context || &heap.m_allocator != &m_allocator){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: heap belongs to another device"), operationName);
-        return false;
-    }
-    if(heap.m_allocation == nullptr || heap.m_memory == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: heap is invalid"), operationName);
-        return false;
-    }
-    if(!VulkanDetail::AllowsGenericHeapBinding(dedicatedRequirements)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to {}: the {} requires a dedicated allocation")
-            , operationName
-            , resourceName
-        );
-        return false;
-    }
-    if(!VulkanDetail::IsHeapMemoryTypeCompatible(
-        m_context.memoryProperties,
-        heap.m_memoryTypeIndex,
-        memoryRequirements.memoryTypeBits
-    )){
-        NWB_LOGGER_WARNING(
-            NWB_TEXT("Vulkan: Failed to {}: heap memory type is incompatible with the {}"),
-            operationName,
-            resourceName
-        );
-        return false;
-    }
-    if(!VulkanDetail::TryBuildHeapBindingRange(
-        heap.m_desc.capacity,
-        heap.m_memoryOffset,
-        offset,
-        memoryRequirements.size,
-        memoryRequirements.alignment,
-        outRange
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: offset {} size {} is misaligned or outside heap capacity {}")
-            , operationName
-            , offset
-            , static_cast<u64>(memoryRequirements.size)
-            , heap.m_desc.capacity
-        );
-        return false;
-    }
-    const u64 granularity = Max<u64>(m_context.physicalDeviceProperties.limits.bufferImageGranularity, 1u);
-    for(const Heap::BindingReservation& reservation : heap.m_bindingReservations){
-        if(!VulkanDetail::HeapBindingRangesConflict(
-            reservation.range,
-            reservation.resourceClass,
-            outRange,
-            resourceClass,
-            granularity
-        ))
-            continue;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: the {} heap range conflicts with a live binding")
-            , operationName
-            , resourceName
-        );
-        outRange = {};
-        return false;
-    }
-
-    return true;
-}
-
-bool Device::bindBufferMemory(Buffer* bufferResource, Heap* heap, u64 offset){
-    if(!bufferResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer is null"));
-        return false;
-    }
-    if(!heap){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: heap is null"));
-        return false;
-    }
-    Buffer& buffer = *bufferResource;
-    if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer belongs to another device"));
-        return false;
-    }
-    if(!buffer.m_managed || !buffer.m_desc.isVirtual || buffer.m_allocation != nullptr){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer is not a managed virtual buffer"));
-        return false;
-    }
-    if(buffer.m_buffer == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: native buffer is null"));
-        return false;
-    }
-
-    Heap& memoryHeap = *heap;
-    if(&memoryHeap.m_context != &m_context || &memoryHeap.m_allocator != &m_allocator){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: heap belongs to another device"));
-        return false;
-    }
-    if(memoryHeap.m_allocation == nullptr || memoryHeap.m_memory == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: heap is invalid"));
-        return false;
-    }
-    HeapHandle retainedHeap(heap, HeapHandle::deleter_type(&memoryHeap.m_context.objectArena));
-    ScopedLock resourceLock(buffer.m_memoryBindingMutex);
-    if(buffer.m_boundHeap){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer memory was already bound"));
-        return false;
-    }
-
-    VkMemoryDedicatedRequirements dedicatedRequirements{};
-    dedicatedRequirements.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS;
-    VkMemoryRequirements2 memoryRequirements{};
-    memoryRequirements.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2;
-    memoryRequirements.pNext = &dedicatedRequirements;
-    VkBufferMemoryRequirementsInfo2 requirementsInfo{};
-    requirementsInfo.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2;
-    requirementsInfo.buffer = buffer.m_buffer;
-    vkGetBufferMemoryRequirements2(m_context.device, &requirementsInfo, &memoryRequirements);
-
-    ScopedLock heapLock(memoryHeap.m_bindingMutex);
-    VulkanDetail::HeapBindingRange bindingRange;
-    if(!validateHeapMemoryBinding(
-        memoryHeap,
-        memoryRequirements.memoryRequirements,
-        dedicatedRequirements,
-        offset,
-        VulkanDetail::HeapBindingResourceClass::Buffer,
-        NWB_TEXT("bind buffer memory"),
-        NWB_TEXT("buffer"),
-        bindingRange
-    ))
-        return false;
-
-    Heap::BindingReservation reservation;
-    reservation.owner = &buffer;
-    reservation.resourceClass = VulkanDetail::HeapBindingResourceClass::Buffer;
-    reservation.range = bindingRange;
-    memoryHeap.m_bindingReservations.push_back(reservation);
-
-    const VkResult res = m_allocator.bindHeapBufferMemory(buffer, memoryHeap, offset);
-    if(res != VK_SUCCESS){
-        memoryHeap.m_bindingReservations.pop_back();
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: {}"), ResultToString(res));
-        return false;
-    }
-    if(m_context.extensions.buffer_device_address){
-        VkBufferDeviceAddressInfo addressInfo{};
-        addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        addressInfo.buffer = buffer.m_buffer;
-        buffer.m_deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
-    }
-    buffer.m_heapBindingRange = bindingRange;
-    buffer.m_boundHeap = Move(retainedHeap);
-
-    return true;
 }
 
 BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object nativeBufferHandle, const BufferDesc& desc){

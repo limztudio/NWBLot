@@ -131,6 +131,133 @@ TEST(HeapBindingContract, FiltersProtectedAndIncompatibleMemoryTypes){
     EXPECT_FALSE(Binding::AllowsGenericHeapBinding(dedicatedRequirements));
 }
 
+TEST(HeapBindingContract, ResolvesBufferCpuAccessAndMatchesHeapTypes){
+    struct CpuAccessCase{
+        CpuAccessMode::Enum declaredAccess = CpuAccessMode::None;
+        bool isVolatile = false;
+        bool resolves = false;
+        CpuAccessMode::Enum effectiveAccess = CpuAccessMode::None;
+    };
+    static constexpr CpuAccessCase s_CpuAccessCases[] = {
+        { CpuAccessMode::None, false, true, CpuAccessMode::None },
+        { CpuAccessMode::Read, false, true, CpuAccessMode::Read },
+        { CpuAccessMode::Write, false, true, CpuAccessMode::Write },
+        { static_cast<CpuAccessMode::Enum>(UINT8_MAX), false, false, CpuAccessMode::None },
+        { CpuAccessMode::None, true, true, CpuAccessMode::Write },
+        { CpuAccessMode::Read, true, false, CpuAccessMode::None },
+        { CpuAccessMode::Write, true, true, CpuAccessMode::Write },
+        { static_cast<CpuAccessMode::Enum>(UINT8_MAX), true, false, CpuAccessMode::None },
+    };
+    static constexpr HeapType::Enum s_HeapTypes[] = {
+        HeapType::DeviceLocal,
+        HeapType::Upload,
+        HeapType::Readback,
+        static_cast<HeapType::Enum>(UINT8_MAX),
+    };
+
+    for(usize accessIndex = 0u; accessIndex < LengthOf(s_CpuAccessCases); ++accessIndex){
+        const CpuAccessCase& accessCase = s_CpuAccessCases[accessIndex];
+        CpuAccessMode::Enum effectiveAccess = CpuAccessMode::None;
+        EXPECT_EQ(
+            Binding::TryResolveBufferCpuAccess(
+                accessCase.declaredAccess,
+                accessCase.isVolatile,
+                effectiveAccess
+            ),
+            accessCase.resolves
+        ) << "CPU access case " << accessIndex;
+        EXPECT_EQ(effectiveAccess, accessCase.effectiveAccess) << "CPU access case " << accessIndex;
+
+        for(usize heapIndex = 0u; heapIndex < LengthOf(s_HeapTypes); ++heapIndex){
+            const HeapType::Enum heapType = s_HeapTypes[heapIndex];
+            const bool expectedCompatibility =
+                accessCase.resolves
+                && (
+                    (accessCase.effectiveAccess == CpuAccessMode::None && heapType == HeapType::DeviceLocal)
+                    || (accessCase.effectiveAccess == CpuAccessMode::Write && heapType == HeapType::Upload)
+                    || (accessCase.effectiveAccess == CpuAccessMode::Read && heapType == HeapType::Readback)
+                )
+            ;
+            EXPECT_EQ(
+                Binding::IsBufferHeapTypeCompatible(
+                    accessCase.declaredAccess,
+                    accessCase.isVolatile,
+                    heapType
+                ),
+                expectedCompatibility
+            ) << "CPU access case " << accessIndex << ", heap case " << heapIndex;
+        }
+    }
+}
+
+TEST(HeapBindingContract, PadsReadbackRequirementsToWholeNonCoherentAtoms){
+    const MemoryRequirements nativeRequirements{
+        .size = 257u,
+        .alignment = 64u,
+    };
+    MemoryRequirements adjustedRequirements;
+    ASSERT_TRUE(Binding::TryBuildBufferHeapRequirements(
+        nativeRequirements,
+        CpuAccessMode::Read,
+        false,
+        256u,
+        adjustedRequirements
+    ));
+    EXPECT_EQ(adjustedRequirements.size, 512u);
+    EXPECT_EQ(adjustedRequirements.alignment, 256u);
+
+    Binding::HeapBindingRange readbackRange;
+    Binding::HeapBindingRange adjacentRange;
+    ASSERT_TRUE(Binding::TryBuildHeapBindingRange(
+        2048u,
+        0u,
+        0u,
+        adjustedRequirements.size,
+        adjustedRequirements.alignment,
+        readbackRange
+    ));
+    ASSERT_TRUE(Binding::TryBuildHeapBindingRange(2048u, 0u, 257u, 64u, 1u, adjacentRange));
+    EXPECT_TRUE(Binding::HeapBindingRangesConflict(
+        readbackRange,
+        Binding::HeapBindingResourceClass::Buffer,
+        adjacentRange,
+        Binding::HeapBindingResourceClass::OptimalImage,
+        1u
+    ));
+    ASSERT_TRUE(Binding::TryBuildHeapBindingRange(2048u, 0u, 512u, 64u, 1u, adjacentRange));
+    EXPECT_FALSE(Binding::HeapBindingRangesConflict(
+        readbackRange,
+        Binding::HeapBindingResourceClass::Buffer,
+        adjacentRange,
+        Binding::HeapBindingResourceClass::OptimalImage,
+        1u
+    ));
+
+    ASSERT_TRUE(Binding::TryBuildBufferHeapRequirements(
+        nativeRequirements,
+        CpuAccessMode::Write,
+        false,
+        256u,
+        adjustedRequirements
+    ));
+    EXPECT_EQ(adjustedRequirements.size, nativeRequirements.size);
+    EXPECT_EQ(adjustedRequirements.alignment, nativeRequirements.alignment);
+
+    const MemoryRequirements overflowingRequirements{
+        .size = Limit<u64>::s_Max,
+        .alignment = 1u,
+    };
+    EXPECT_FALSE(Binding::TryBuildBufferHeapRequirements(
+        overflowingRequirements,
+        CpuAccessMode::Read,
+        false,
+        256u,
+        adjustedRequirements
+    ));
+    EXPECT_EQ(adjustedRequirements.size, 0u);
+    EXPECT_EQ(adjustedRequirements.alignment, 0u);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -4,6 +4,10 @@ if(TARGET nwb_frame AND TARGET nwb_graphics)
     add_subdirectory(descriptor_buffer)
 endif()
 
+if(TARGET nwb_graphics AND TARGET nwb_assets_graphics)
+    add_subdirectory(placed_resource_memory)
+endif()
+
 if(TARGET rgd_backend)
     add_subdirectory(rgd_decode)
 endif()

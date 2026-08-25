@@ -18,6 +18,9 @@
 #include "../scene/binding_slots.h"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if !defined(NWB_CAUSTIC_SPLAT_VIEW) \
     || !defined(NWB_CAUSTIC_SPLAT_PUSH) \
     || !defined(NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH) \
@@ -25,6 +28,10 @@
     || !defined(NWB_CAUSTIC_SPLAT_ACCUMULATOR)
 #error "caustic/splat.slangi requires the backend resource macros"
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void nwbCausticAccumulate(const int2 pixel, const uint channel, const uint value){
     if(value == 0u)

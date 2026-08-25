@@ -2242,6 +2242,33 @@ class StateTracker final : NoCopy{
     friend class CommandList;
 
 
+private:
+    struct PermanentTextureStateValue{
+        ResourceStates::Mask state = ResourceStates::Unknown;
+        TextureHandle texture;
+    };
+
+    struct PermanentBufferStateValue{
+        ResourceStates::Mask state = ResourceStates::Unknown;
+        BufferHandle buffer;
+    };
+
+    using PermanentTextureStateMap = HashMap<
+        Texture*,
+        PermanentTextureStateValue,
+        Hasher<Texture*>,
+        EqualTo<Texture*>,
+        Alloc::GlobalArena
+    >;
+    using PermanentBufferStateMap = HashMap<
+        Buffer*,
+        PermanentBufferStateValue,
+        Hasher<Buffer*>,
+        EqualTo<Buffer*>,
+        Alloc::GlobalArena
+    >;
+
+
 public:
     StateTracker(const VulkanContext& context);
     ~StateTracker();
@@ -2291,10 +2318,10 @@ private:
 
 
 private:
-    HashMap<Texture*, ResourceStates::Mask, Hasher<Texture*>, EqualTo<Texture*>, Alloc::GlobalArena> m_permanentTextureStates;
-    HashMap<Buffer*, ResourceStates::Mask, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_permanentBufferStates;
-    HashMap<Texture*, ResourceStates::Mask, Hasher<Texture*>, EqualTo<Texture*>, Alloc::GlobalArena> m_attemptPermanentTextureStates;
-    HashMap<Buffer*, ResourceStates::Mask, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_attemptPermanentBufferStates;
+    PermanentTextureStateMap m_permanentTextureStates;
+    PermanentBufferStateMap m_permanentBufferStates;
+    PermanentTextureStateMap m_attemptPermanentTextureStates;
+    PermanentBufferStateMap m_attemptPermanentBufferStates;
     HashMap<TextureSubresourceStateKey, ResourceStates::Mask, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureStates;
     HashMap<Buffer*, ResourceStates::Mask, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferStates;
     HashMap<Texture*, bool, Hasher<Texture*>, EqualTo<Texture*>, Alloc::GlobalArena> m_textureUavBarriers;

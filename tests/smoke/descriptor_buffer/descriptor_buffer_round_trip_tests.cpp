@@ -5567,7 +5567,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsSemanticRejectionsDiscardPriorWork
             .setViewport(viewportState)
             .setIndirectParams(permanentIndirectBuffer.get())
     );
-    EXPECT_EQ(retainedPermanentIndirectBuffer->getReferenceCount(), referencesBeforeRecord + 1u);
+    EXPECT_EQ(retainedPermanentIndirectBuffer->getReferenceCount(), referencesBeforeRecord + 2u);
     permanentIndirectBuffer.reset();
     commandList->drawIndirect(0u, 1u);
     commandList->endRenderPass();

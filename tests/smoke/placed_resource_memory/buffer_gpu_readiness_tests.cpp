@@ -184,7 +184,7 @@ TEST_F(BufferGpuReadinessTest, NullUnknownScopeConflictAndRetentionContractsAreE
     permanentList->setPermanentBufferState(permanent.get(), ResourceStates::Common);
     EXPECT_FALSE(permanentList->commandRecordingFailed());
     EXPECT_EQ(permanentList->getPermanentBufferState(permanent.get()), ResourceStates::Common);
-    EXPECT_EQ(permanent->getReferenceCount(), permanentReferences + 1u);
+    EXPECT_EQ(permanent->getReferenceCount(), permanentReferences + 2u);
     permanentList->close();
     ASSERT_TRUE(permanentList->hasCommandBuffer());
 

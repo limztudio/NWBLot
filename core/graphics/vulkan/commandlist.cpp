@@ -262,7 +262,7 @@ bool CommandList::validateTrackedBuffersReadyForClose()noexcept{
         it != m_stateTracker.m_permanentBufferStates.end();
         ++it
     ){
-        Buffer* const buffer = it->first;
+        Buffer* const buffer = it.value().buffer.get();
         if(!m_device.isBufferReadyForGpuUse(buffer)){
             rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("permanent buffer is not ready for GPU access"));
             return false;
@@ -293,8 +293,9 @@ void CommandList::collectHostReadbackBuffers(){
         it != m_stateTracker.m_permanentBufferStates.end();
         ++it
     ){
-        if(it->first && VulkanDetail::HasBufferDeviceWriteState(it.value()))
-            registerHostReadbackBuffer(*it->first);
+        Buffer* const buffer = it.value().buffer.get();
+        if(buffer && VulkanDetail::HasBufferDeviceWriteState(it.value().state))
+            registerHostReadbackBuffer(*buffer);
     }
 }
 

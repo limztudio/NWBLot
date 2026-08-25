@@ -79,9 +79,17 @@ void StateTracker::setPermanentTextureState(Texture& texture, ResourceStates::Ma
         return;
 
     const auto existing = m_permanentTextureStates.find(&texture);
-    if(existing != m_permanentTextureStates.end() && existing.value() != state)
+    if(existing != m_permanentTextureStates.end())
         return;
-    m_permanentTextureStates.insert_or_assign(&texture, state);
+
+    if(!m_permanentTextureStates.emplace(
+        &texture,
+        PermanentTextureStateValue{
+            state,
+            TextureHandle(&texture, TextureHandle::deleter_type(&texture.m_context.objectArena))
+        }
+    ).second)
+        NWB_ASSERT(false);
 }
 
 void StateTracker::setPermanentBufferState(Buffer& buffer, ResourceStates::Mask state){
@@ -89,9 +97,17 @@ void StateTracker::setPermanentBufferState(Buffer& buffer, ResourceStates::Mask 
         return;
 
     const auto existing = m_permanentBufferStates.find(&buffer);
-    if(existing != m_permanentBufferStates.end() && existing.value() != state)
+    if(existing != m_permanentBufferStates.end())
         return;
-    m_permanentBufferStates.insert_or_assign(&buffer, state);
+
+    if(!m_permanentBufferStates.emplace(
+        &buffer,
+        PermanentBufferStateValue{
+            state,
+            BufferHandle(&buffer, BufferHandle::deleter_type(&buffer.m_context.objectArena))
+        }
+    ).second)
+        NWB_ASSERT(false);
 }
 
 bool StateTracker::isPermanentTexture(Texture& texture)const{
@@ -107,7 +123,7 @@ ResourceStates::Mask StateTracker::getPermanentTextureState(Texture* texture)con
         return ResourceStates::Unknown;
 
     const auto existing = m_permanentTextureStates.find(texture);
-    return existing != m_permanentTextureStates.end() ? existing.value() : ResourceStates::Unknown;
+    return existing != m_permanentTextureStates.end() ? existing.value().state : ResourceStates::Unknown;
 }
 
 ResourceStates::Mask StateTracker::getPermanentBufferState(Buffer* buffer)const{
@@ -115,7 +131,7 @@ ResourceStates::Mask StateTracker::getPermanentBufferState(Buffer* buffer)const{
         return ResourceStates::Unknown;
 
     const auto existing = m_permanentBufferStates.find(buffer);
-    return existing != m_permanentBufferStates.end() ? existing.value() : ResourceStates::Unknown;
+    return existing != m_permanentBufferStates.end() ? existing.value().state : ResourceStates::Unknown;
 }
 
 ResourceStates::Mask StateTracker::getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const{
@@ -124,7 +140,7 @@ ResourceStates::Mask StateTracker::getTextureState(Texture* texture, ArraySlice 
 
     auto permIt = m_permanentTextureStates.find(texture);
     if(permIt != m_permanentTextureStates.end())
-        return permIt.value();
+        return permIt.value().state;
 
     ResourceStates::Mask state = ResourceStates::Unknown;
     return getTransientTextureState(*texture, arraySlice, mipLevel, state) ? state : ResourceStates::Unknown;
@@ -136,7 +152,7 @@ ResourceStates::Mask StateTracker::getBufferState(Buffer* buffer)const{
 
     auto permIt = m_permanentBufferStates.find(buffer);
     if(permIt != m_permanentBufferStates.end())
-        return permIt.value();
+        return permIt.value().state;
 
     ResourceStates::Mask state = ResourceStates::Unknown;
     return getTransientBufferState(*buffer, state) ? state : ResourceStates::Unknown;

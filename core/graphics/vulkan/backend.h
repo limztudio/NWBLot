@@ -146,8 +146,19 @@ bool IsSupportedSampleCount(u32 sampleCount);
 bool ValidateTextureShape(const TextureDesc& desc, const tchar* operationName);
 VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo);
 bool GetTextureFormatBlockLayout(const FormatInfo& formatInfo, TextureFormatBlockLayout& outLayout);
+bool TryComputeUploadSuballocationAlignment(u32 requiredAlignment, u32& outAlignment)noexcept;
+bool IsBufferImageCopyAspectMaskSupported(VkImageAspectFlags aspectMask)noexcept;
 bool ValidateBufferImageCopyAspectMask(VkImageAspectFlags aspectMask, const tchar* operationName);
 VkExtent3D GetTextureMipExtent(const TextureDesc& desc, MipLevel mipLevel);
+bool BuildBufferImageCopyLayout(
+    const VkExtent3D& extent,
+    const TextureFormatBlockLayout& formatLayout,
+    u64 rowPitch,
+    u64 depthPitch,
+    BufferImageCopyRequiredSize::Enum requiredSizeMode,
+    BufferImageCopyPitchFields::Enum pitchFields,
+    BufferImageCopyLayout& outLayout
+);
 bool BuildBufferImageCopyLayout(
     const VkExtent3D& extent,
     const TextureFormatBlockLayout& formatLayout,
@@ -2834,12 +2845,24 @@ private:
         const TextureSlice& stagingSlice,
         Texture& textureResource,
         const TextureSlice& textureSlice,
-        const tchar* operationName,
-        const tchar* singleSampleRequirement,
         VkBufferImageCopy& outRegion
     )const;
-    bool prepareUploadStaging(usize dataSize, const tchar* operationName, Buffer*& outStagingBuffer, u64& outStagingOffset, void*& outCpuVA);
-    bool prepareUploadStaging(const void* data, usize dataSize, const tchar* operationName, Buffer*& outStagingBuffer, u64& outStagingOffset);
+    bool prepareUploadStaging(
+        usize dataSize,
+        const tchar* operationName,
+        Buffer*& outStagingBuffer,
+        u64& outStagingOffset,
+        void*& outCpuVA,
+        u32 alignment = s_DefaultUploadSuballocationAlignment
+    );
+    bool prepareUploadStaging(
+        const void* data,
+        usize dataSize,
+        const tchar* operationName,
+        Buffer*& outStagingBuffer,
+        u64& outStagingOffset,
+        u32 alignment = s_DefaultUploadSuballocationAlignment
+    );
     bool buildTopLevelAccelStructFromInstanceData(
         RayTracingAccelStruct& as,
         VkDeviceAddress instanceDataAddress,

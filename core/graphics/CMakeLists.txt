@@ -98,6 +98,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/texture_clear.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/texture_device.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/texture_transfer.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/texture_transfer_staging.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/upload.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context_adapter.cpp"

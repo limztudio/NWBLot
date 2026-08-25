@@ -352,7 +352,14 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object n
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CommandList::prepareUploadStaging(const usize dataSize, const tchar* operationName, Buffer*& outStagingBuffer, u64& outStagingOffset, void*& outCpuVA){
+bool CommandList::prepareUploadStaging(
+    const usize dataSize,
+    const tchar* operationName,
+    Buffer*& outStagingBuffer,
+    u64& outStagingOffset,
+    void*& outCpuVA,
+    const u32 alignment
+){
     outStagingBuffer = nullptr;
     outStagingOffset = 0;
     outCpuVA = nullptr;
@@ -367,7 +374,8 @@ bool CommandList::prepareUploadStaging(const usize dataSize, const tchar* operat
         &outCpuVA,
         m_currentCmdBuf.get(),
         m_desc.physicalQueue,
-        completedUploadVersion
+        completedUploadVersion,
+        alignment
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to suballocate staging buffer for {}"), operationName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to suballocate staging buffer"));
@@ -377,9 +385,16 @@ bool CommandList::prepareUploadStaging(const usize dataSize, const tchar* operat
     return true;
 }
 
-bool CommandList::prepareUploadStaging(const void* data, const usize dataSize, const tchar* operationName, Buffer*& outStagingBuffer, u64& outStagingOffset){
+bool CommandList::prepareUploadStaging(
+    const void* data,
+    const usize dataSize,
+    const tchar* operationName,
+    Buffer*& outStagingBuffer,
+    u64& outStagingOffset,
+    const u32 alignment
+){
     void* cpuVA = nullptr;
-    if(!prepareUploadStaging(dataSize, operationName, outStagingBuffer, outStagingOffset, cpuVA))
+    if(!prepareUploadStaging(dataSize, operationName, outStagingBuffer, outStagingOffset, cpuVA, alignment))
         return false;
 
     VulkanDetail::CopyHostMemory(taskPool(), cpuVA, data, dataSize);

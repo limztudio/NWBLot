@@ -129,6 +129,8 @@ struct ResolveTextureTask{
                 resolve.source.get(),
                 resolve.sourceSubresources
             );
+            if(commandList.commandRecordingFailed())
+                return false;
         }
         return true;
     }

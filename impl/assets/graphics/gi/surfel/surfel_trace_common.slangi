@@ -29,6 +29,10 @@
 #define g_NwbSurfelSnapshotPool g_NwbHeapSurfelReadOnlyPools[g_NwbSurfelHeapPushConstants.snapshotPoolHeapSlot]
 #define g_NwbSurfelSnapshotCellHead g_NwbHeapSurfelReadOnlyUintBuffers[g_NwbSurfelHeapPushConstants.snapshotCellHeadHeapSlot]
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #define NWB_SURFEL_GATHER_FIELD_POOL g_NwbSurfelSnapshotPool
 #define NWB_SURFEL_GATHER_FIELD_CELL_HEAD g_NwbSurfelSnapshotCellHead
 #define NWB_SURFEL_GATHER_FIELD_CONSTANTS g_NwbSurfelConstants

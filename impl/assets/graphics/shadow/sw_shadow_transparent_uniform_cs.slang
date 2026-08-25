@@ -12,12 +12,20 @@
 
 #include "sw_binding_slots.h"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // TRANSPARENT occluder class: colored transmittance multiplied onto the opaque mask.
 #define NWB_SW_SHADOW_OCCLUDER NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
 
 #include "sw_shadow_gbuffer.slangi"
 
 #include "sw_shadow_ray.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 // The full-res visibility array: read the opaque mask, fold the block's transmittance onto each full-res pixel, write back.
 #define g_NwbSwShadowVisibility NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)

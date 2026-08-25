@@ -77,6 +77,10 @@ int nwbMaterialSignExtendShort(const uint value){
     return int(value & NWB_MATERIAL_TYPED_SIGNED_U16_VALUE_MASK) - int(value & NWB_MATERIAL_TYPED_SIGNED_U16_SIGN_MASK);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #define NWB_MATERIAL_TYPED_NON_HALF_LOAD_FAMILIES(APPLY) \
 APPLY(Bool, bool, 1u) \
 APPLY(Char, char, 1u) \

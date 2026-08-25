@@ -12,10 +12,18 @@
 #include "sw_binding_slots.h"
 #include "../bvh/constants.h"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Each tracing pass chooses its occluder class at compile time.
 #ifndef NWB_SW_SHADOW_OCCLUDER
 #error "each software-shadow trace pass must #define NWB_SW_SHADOW_OCCLUDER before including sw_shadow_traverse.slangi"
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbSwShadowMaterialContextSlots.sceneSlots.w;

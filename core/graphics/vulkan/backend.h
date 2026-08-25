@@ -985,6 +985,10 @@ private:
 
 
 class VulkanAllocator final : NoCopy{
+    friend class Buffer;
+    friend class Device;
+
+
 public:
     explicit VulkanAllocator(const VulkanContext& context);
     ~VulkanAllocator();
@@ -1022,8 +1026,16 @@ public:
 
 
 private:
+    [[nodiscard]] bool tryRegisterBufferNativeIdentity(Buffer& buffer);
+    void unregisterBufferNativeIdentity(VkBuffer nativeBuffer, Buffer& buffer)noexcept;
+    [[nodiscard]] bool isBufferNativeIdentityRegistered(const Buffer& buffer)const noexcept;
+
+
+private:
     const VulkanContext& m_context;
     VulkanAllocatorHandle m_allocator = nullptr;
+    mutable Futex m_bufferNativeIdentityMutex;
+    HashMap<u64, Buffer*, Hasher<u64>, EqualTo<u64>, Alloc::GlobalArena> m_bufferNativeIdentities;
 };
 
 
@@ -2775,6 +2787,7 @@ public:
     // Native wrappers trust caller-managed binding. Managed ordinary buffers require their VMA allocation, while
     // managed virtual buffers require a retained, device-owned bound Heap allocation. CPU mapping is irrelevant.
     [[nodiscard]] bool isBufferReadyForGpuUse(Buffer* buffer)const noexcept;
+    // The caller owns native binding and lifetime. Only one live Buffer wrapper may name a VkBuffer per Device.
     [[nodiscard]] BufferHandle createHandleForNativeBuffer(ObjectType objectType, Object buffer, const BufferDesc& desc);
     [[nodiscard]] ShaderHandle createShader(const ShaderDesc& d, const void* binary, usize binarySize);
     [[nodiscard]] ShaderHandle createShaderSpecialization(Shader* baseShader, const ShaderSpecialization* constants, u32 numConstants);

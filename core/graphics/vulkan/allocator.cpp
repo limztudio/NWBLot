@@ -244,8 +244,21 @@ inline void DestroyBufferAllocation(
 
 VulkanAllocator::VulkanAllocator(const VulkanContext& context)
     : m_context(context)
+    , m_bufferNativeIdentities(0u, Hasher<u64>(), EqualTo<u64>(), context.objectArena)
 {}
 VulkanAllocator::~VulkanAllocator(){
+    usize registeredBufferCount = 0u;
+    {
+        ScopedLock lock(m_bufferNativeIdentityMutex);
+        registeredBufferCount = m_bufferNativeIdentities.size();
+    }
+    if(registeredBufferCount != 0u){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Allocator destruction found {} live native Buffer identities")
+            , registeredBufferCount
+        );
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Buffer resources must not outlive their allocator"));
+    }
+
     if(m_allocator){
         vmaDestroyAllocator(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator));
         m_allocator = nullptr;
@@ -544,6 +557,36 @@ VkResult VulkanAllocator::createHostMappedBuffer(
 
 void VulkanAllocator::destroyHostMappedBuffer(VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory){
     __hidden_vulkan_allocator::DestroyBufferAllocation(m_allocator, buffer, allocation, mappedMemory, true);
+}
+
+bool VulkanAllocator::tryRegisterBufferNativeIdentity(Buffer& buffer){
+    if(buffer.m_buffer == VK_NULL_HANDLE)
+        return false;
+
+    const u64 nativeIdentity = Object(buffer.m_buffer).integer;
+    ScopedLock lock(m_bufferNativeIdentityMutex);
+    return m_bufferNativeIdentities.emplace(nativeIdentity, &buffer).second;
+}
+
+void VulkanAllocator::unregisterBufferNativeIdentity(const VkBuffer nativeBuffer, Buffer& buffer)noexcept{
+    if(nativeBuffer == VK_NULL_HANDLE)
+        return;
+
+    const u64 nativeIdentity = Object(nativeBuffer).integer;
+    ScopedLock lock(m_bufferNativeIdentityMutex);
+    const auto found = m_bufferNativeIdentities.find(nativeIdentity);
+    if(found != m_bufferNativeIdentities.end() && found.value() == &buffer)
+        m_bufferNativeIdentities.erase(found);
+}
+
+bool VulkanAllocator::isBufferNativeIdentityRegistered(const Buffer& buffer)const noexcept{
+    if(buffer.m_buffer == VK_NULL_HANDLE)
+        return false;
+
+    const u64 nativeIdentity = Object(buffer.m_buffer).integer;
+    ScopedLock lock(m_bufferNativeIdentityMutex);
+    const auto found = m_bufferNativeIdentities.find(nativeIdentity);
+    return found != m_bufferNativeIdentities.end() && found.value() == &buffer;
 }
 
 

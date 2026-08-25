@@ -100,7 +100,7 @@ Optional<Common::LoggerRegistrationGuard> BufferGpuReadinessTest::s_loggerGuard;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(BufferGpuReadinessTest, PredicateAcceptsOrdinaryNativeWrapperAndReadyHandoff){
+TEST_F(BufferGpuReadinessTest, PredicateAcceptsOrdinaryAndReadyHandoff){
     auto& device = BufferGpuReadinessTest::device();
     EXPECT_FALSE(device.isBufferReadyForGpuUse(nullptr));
 
@@ -112,26 +112,11 @@ TEST_F(BufferGpuReadinessTest, PredicateAcceptsOrdinaryNativeWrapperAndReadyHand
     ASSERT_TRUE(ordinary);
     ASSERT_TRUE(device.isBufferReadyForGpuUse(ordinary.get()));
 
-    const Object nativeBuffer = ordinary->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Buffer);
-    ASSERT_NE(nativeBuffer, nullptr);
-    const BufferDesc wrapperDesc = BufferDesc()
-        .setByteSize(256u)
-        .setIsVirtual(true)
-        .setInitialState(ResourceStates::Common)
-    ;
-    BufferHandle nativeWrapper = device.createHandleForNativeBuffer(
-        GraphicsBackend::ObjectTypes::VK_Buffer,
-        nativeBuffer,
-        wrapperDesc
-    );
-    ASSERT_TRUE(nativeWrapper);
-    ASSERT_TRUE(device.isBufferReadyForGpuUse(nativeWrapper.get()));
-
     CommandListResourceStateHandoff producerState(BufferGpuReadinessTest::arena());
     CommandListHandle producer = device.createCommandList();
     ASSERT_TRUE(producer);
     producer->open();
-    producer->beginTrackingBufferState(nativeWrapper.get(), ResourceStates::Common);
+    producer->beginTrackingBufferState(ordinary.get(), ResourceStates::Common);
     producer->close(&producerState);
     ASSERT_FALSE(producer->commandRecordingFailed());
     ASSERT_TRUE(producer->hasCommandBuffer());
@@ -140,7 +125,7 @@ TEST_F(BufferGpuReadinessTest, PredicateAcceptsOrdinaryNativeWrapperAndReadyHand
     CommandListHandle consumer = device.createCommandList();
     ASSERT_TRUE(consumer);
     consumer->open(&producerState);
-    consumer->setBufferState(nativeWrapper.get(), ResourceStates::CopySource);
+    consumer->setBufferState(ordinary.get(), ResourceStates::CopySource);
     consumer->close();
     EXPECT_FALSE(consumer->commandRecordingFailed());
     EXPECT_TRUE(consumer->hasCommandBuffer());
@@ -415,87 +400,58 @@ TEST_F(BufferGpuReadinessTest, DirectBufferOperationsRejectUnboundOperandsWithou
 }
 
 
-TEST_F(BufferGpuReadinessTest, DistinctNativeBufferWrappersAreRejectedBeforeCopyAndGraphicsPublication){
+TEST_F(BufferGpuReadinessTest, DuplicateNativeBufferWrapperIsRejectedWithoutDisturbingOriginal){
     auto& device = BufferGpuReadinessTest::device();
-    BufferHandle original = device.createBuffer(
-        BufferDesc()
-            .setByteSize(256u)
-            .setInitialState(ResourceStates::Common)
-            .setIsVertexBuffer(true)
-            .setIsIndexBuffer(true)
-    );
+    const BufferDesc desc = BufferDesc()
+        .setByteSize(256u)
+        .setInitialState(ResourceStates::Common)
+        .setIsVertexBuffer(true)
+        .setIsIndexBuffer(true)
+    ;
+    BufferHandle original = device.createBuffer(desc);
     ASSERT_TRUE(original);
+    ASSERT_TRUE(device.isBufferReadyForGpuUse(original.get()));
     const Object nativeBuffer = original->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Buffer);
     ASSERT_NE(nativeBuffer, nullptr);
-    BufferHandle alias = device.createHandleForNativeBuffer(
+    const u32 originalReferences = original->getReferenceCount();
+
+    BufferHandle duplicate = device.createHandleForNativeBuffer(
         GraphicsBackend::ObjectTypes::VK_Buffer,
         nativeBuffer,
-        BufferDesc()
-            .setByteSize(256u)
-            .setIsVirtual(true)
-            .setInitialState(ResourceStates::Common)
-            .setIsVertexBuffer(true)
-            .setIsIndexBuffer(true)
+        desc
     );
-    ASSERT_TRUE(alias);
+    EXPECT_FALSE(duplicate);
+    EXPECT_EQ(original->getReferenceCount(), originalReferences);
     ASSERT_TRUE(device.isBufferReadyForGpuUse(original.get()));
-    ASSERT_TRUE(device.isBufferReadyForGpuUse(alias.get()));
 
-    const auto expectAliasRejectedWithoutPublication = [&](auto&& operation){
-        const u32 originalReferences = original->getReferenceCount();
-        const u32 aliasReferences = alias->getReferenceCount();
-        CommandListHandle commandList = device.createCommandList();
-        ASSERT_TRUE(commandList);
-        commandList->open();
-        operation(*commandList);
-        EXPECT_TRUE(commandList->commandRecordingFailed());
-        EXPECT_FALSE(commandList->hasExplicitBufferState(original.get()));
-        EXPECT_FALSE(commandList->hasExplicitBufferState(alias.get()));
-        EXPECT_EQ(original->getReferenceCount(), originalReferences);
-        EXPECT_EQ(alias->getReferenceCount(), aliasReferences);
-        commandList->close();
-        EXPECT_FALSE(commandList->hasCommandBuffer());
-    };
+    BufferHandle retryDuplicate = device.createHandleForNativeBuffer(
+        GraphicsBackend::ObjectTypes::VK_Buffer,
+        nativeBuffer,
+        desc
+    );
+    EXPECT_FALSE(retryDuplicate);
+    EXPECT_EQ(original->getReferenceCount(), originalReferences);
+    ASSERT_TRUE(device.isBufferReadyForGpuUse(original.get()));
 
-    expectAliasRejectedWithoutPublication([&](CommandList& commandList){
-        commandList.copyBuffer(alias.get(), 128u, original.get(), 0u, 64u);
-    });
-    expectAliasRejectedWithoutPublication([&](CommandList& commandList){
-        EXPECT_FALSE(commandList.recordPreflightedCopyBufferDirectVulkan(
-            alias.get(),
-            128u,
-            original.get(),
-            0u,
-            64u
-        ));
-    });
-    expectAliasRejectedWithoutPublication([&](CommandList& commandList){
-        commandList.setGraphicsState(
+    {
+        CommandListHandle sameObjectList = device.createCommandList();
+        ASSERT_TRUE(sameObjectList);
+        sameObjectList->open();
+        sameObjectList->setGraphicsState(
             GraphicsState()
                 .addVertexBuffer(VertexBufferBinding().setBuffer(original.get()))
                 .setIndexBuffer(
                     IndexBufferBinding()
-                        .setBuffer(alias.get())
+                        .setBuffer(original.get())
                         .setFormat(Format::R16_UINT)
                 )
         );
-    });
-
-    CommandListHandle sameObjectList = device.createCommandList();
-    ASSERT_TRUE(sameObjectList);
-    sameObjectList->open();
-    sameObjectList->setGraphicsState(
-        GraphicsState()
-            .addVertexBuffer(VertexBufferBinding().setBuffer(original.get()))
-            .setIndexBuffer(
-                IndexBufferBinding()
-                    .setBuffer(original.get())
-                    .setFormat(Format::R16_UINT)
-            )
-    );
-    sameObjectList->close();
-    EXPECT_FALSE(sameObjectList->commandRecordingFailed());
-    EXPECT_TRUE(sameObjectList->hasCommandBuffer());
+        sameObjectList->copyBuffer(original.get(), 128u, original.get(), 0u, 64u);
+        sameObjectList->close();
+        EXPECT_FALSE(sameObjectList->commandRecordingFailed());
+        EXPECT_TRUE(sameObjectList->hasCommandBuffer());
+    }
+    EXPECT_EQ(original->getReferenceCount(), originalReferences);
 }
 
 

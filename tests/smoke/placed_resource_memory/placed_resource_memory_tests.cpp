@@ -518,17 +518,15 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBufferRejectionsAreAtomicAndRe
     ASSERT_TRUE(managedOwner);
     const Object managedNativeBuffer = managedOwner->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Buffer);
     ASSERT_NE(managedNativeBuffer, nullptr);
-    BufferHandle unmanagedWrapper = device.createHandleForNativeBuffer(
+    const u32 managedOwnerReferences = managedOwner->getReferenceCount();
+    BufferHandle duplicateWrapper = device.createHandleForNativeBuffer(
         GraphicsBackend::ObjectTypes::VK_Buffer,
         managedNativeBuffer,
         managedOwnerDesc
     );
-    ASSERT_TRUE(unmanagedWrapper);
-    expectDiagnosticRejection([&](){
-        return device.mapBuffer(unmanagedWrapper.get(), CpuAccessMode::Write) != nullptr;
-    });
-    expectDiagnosticVoidRejection([&](){ device.unmapBuffer(unmanagedWrapper.get()); });
-    unmanagedWrapper.reset();
+    EXPECT_FALSE(duplicateWrapper);
+    EXPECT_EQ(managedOwner->getReferenceCount(), managedOwnerReferences);
+    EXPECT_TRUE(device.isBufferReadyForGpuUse(managedOwner.get()));
     EXPECT_EQ(managedOwner->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Buffer), managedNativeBuffer);
     u32* const managedOwnerWords = static_cast<u32*>(
         device.mapBuffer(managedOwner.get(), CpuAccessMode::Write)

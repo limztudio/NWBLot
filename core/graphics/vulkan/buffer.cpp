@@ -55,6 +55,8 @@ Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator)
     , m_allocator(allocator)
 {}
 Buffer::~Buffer(){
+    const VkBuffer registeredNativeBuffer = m_buffer;
+
     for(auto& viewEntry : m_bufferViews){
         if(viewEntry.view != VK_NULL_HANDLE){
             vkDestroyBufferView(m_context.device, viewEntry.view, m_context.allocationCallbacks);
@@ -63,33 +65,37 @@ Buffer::~Buffer(){
     }
     m_bufferViews.clear();
 
-    ScopedLock bindingLock(m_memoryBindingMutex);
-    if(m_boundHeap){
-        Heap* const boundHeap = m_boundHeap.get();
-        {
-            ScopedLock heapLock(boundHeap->m_bindingMutex);
-            if(m_buffer != VK_NULL_HANDLE){
-                vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
-                m_buffer = VK_NULL_HANDLE;
+    {
+        ScopedLock bindingLock(m_memoryBindingMutex);
+        if(m_boundHeap){
+            Heap* const boundHeap = m_boundHeap.get();
+            {
+                ScopedLock heapLock(boundHeap->m_bindingMutex);
+                if(m_buffer != VK_NULL_HANDLE){
+                    vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
+                    m_buffer = VK_NULL_HANDLE;
+                }
+                boundHeap->eraseBindingReservationLocked(this);
             }
-            boundHeap->eraseBindingReservationLocked(this);
+            m_heapBindingRange = {};
+            m_mappedMemory = nullptr;
+            m_persistentlyMapped = false;
+            m_requiresInvalidate = false;
+            m_boundHeap.reset();
         }
-        m_heapBindingRange = {};
-        m_mappedMemory = nullptr;
-        m_persistentlyMapped = false;
-        m_requiresInvalidate = false;
-        m_boundHeap.reset();
-    }
-    else if(m_managed){
-        if(m_desc.isVirtual){
-            if(m_buffer != VK_NULL_HANDLE){
-                vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
-                m_buffer = VK_NULL_HANDLE;
+        else if(m_managed){
+            if(m_desc.isVirtual){
+                if(m_buffer != VK_NULL_HANDLE){
+                    vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
+                    m_buffer = VK_NULL_HANDLE;
+                }
             }
+            else
+                m_allocator.destroyBuffer(*this);
         }
-        else
-            m_allocator.destroyBuffer(*this);
     }
+
+    m_allocator.unregisterBufferNativeIdentity(registeredNativeBuffer, *this);
 }
 
 Object Buffer::getNativeHandle(ObjectType objectType){
@@ -279,6 +285,12 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         DestroyArenaObject(m_context.objectArena, buffer);
         return nullptr;
     }
+    if(!m_allocator.tryRegisterBufferNativeIdentity(*buffer)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: native buffer identity is already registered"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: A newly created buffer duplicated a live native buffer identity"));
+        DestroyArenaObject(m_context.objectArena, buffer);
+        return nullptr;
+    }
 
     if(!d.isVirtual){
         if(m_context.extensions.buffer_device_address){
@@ -312,6 +324,14 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object n
     buffer->m_desc = desc;
     buffer->m_buffer = nativeBuffer;
     buffer->m_managed = false;
+
+    if(!m_allocator.tryRegisterBufferNativeIdentity(*buffer)){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: a live wrapper already exists")
+        );
+        DestroyArenaObject(m_context.objectArena, buffer);
+        return nullptr;
+    }
 
     if(m_context.extensions.buffer_device_address){
         VkBufferDeviceAddressInfo addressInfo{};

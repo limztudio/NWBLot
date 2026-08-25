@@ -381,6 +381,8 @@ bool Device::isBufferReadyForGpuUse(Buffer* bufferResource)const noexcept{
         return false;
     if(buffer.m_buffer == VK_NULL_HANDLE)
         return false;
+    if(!m_allocator.isBufferNativeIdentityRegistered(buffer))
+        return false;
     if(!buffer.m_managed)
         return true;
 

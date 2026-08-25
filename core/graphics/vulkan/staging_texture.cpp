@@ -202,6 +202,12 @@ u64 ComputeStagingTextureOffset(
 
 
 StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess){
+    if(cpuAccess != CpuAccessMode::Read && cpuAccess != CpuAccessMode::Write){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: CPU access must be Read or Write"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid CPU access"));
+        return nullptr;
+    }
+
     if(!VulkanDetail::ValidateTextureShape(d, NWB_TEXT("create staging texture"))){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture shape"));
         return nullptr;
@@ -247,7 +253,10 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size = totalSize;
     bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    const QueueFamilySharingInfo sharingInfo = ResolveQueueFamilySharing(d.queueSharing, m_context);
+    bufferInfo.sharingMode = sharingInfo.mode;
+    bufferInfo.queueFamilyIndexCount = sharingInfo.familyIndexCount;
+    bufferInfo.pQueueFamilyIndices = sharingInfo.data();
 
     const VkResult res = m_allocator.createStagingTexture(*staging, bufferInfo, cpuAccess);
     if(res != VK_SUCCESS){
@@ -255,6 +264,9 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
         DestroyArenaObject(m_context.objectArena, staging);
         return nullptr;
     }
+#if !defined(NWB_FINAL)
+    staging->m_nativeQueueFamilySharingForTesting = sharingInfo;
+#endif
 
     return StagingTextureHandle(staging, StagingTextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }

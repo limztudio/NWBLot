@@ -1375,6 +1375,11 @@ public:
 
 public:
     [[nodiscard]] const TextureDesc& getDescription()const{ return m_desc; }
+#if !defined(NWB_FINAL)
+    [[nodiscard]] const QueueFamilySharingInfo& getNativeQueueFamilySharingForTesting()const{
+        return m_nativeQueueFamilySharingForTesting;
+    }
+#endif
 
 
 private:
@@ -1383,6 +1388,9 @@ private:
     VkImageAspectFlags m_aspectMask = 0;
     u64 m_arrayByteSize = 0;
     VulkanDetail::StagingTextureMipLayoutVector m_mipLayouts;
+#if !defined(NWB_FINAL)
+    QueueFamilySharingInfo m_nativeQueueFamilySharingForTesting;
+#endif
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;

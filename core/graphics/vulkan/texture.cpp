@@ -41,8 +41,22 @@ bool ValidateTextureShape(const TextureDesc& desc, const tchar* operationName){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: dimensions, mip count, and array size must be nonzero"), operationName);
         return false;
     }
-    if(desc.dimension == TextureDimension::Unknown){
+    switch(desc.dimension){
+    case TextureDimension::Unknown:
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: texture dimension is unknown"), operationName);
+        return false;
+    case TextureDimension::Texture1D:
+    case TextureDimension::Texture1DArray:
+    case TextureDimension::Texture2D:
+    case TextureDimension::Texture2DArray:
+    case TextureDimension::TextureCube:
+    case TextureDimension::TextureCubeArray:
+    case TextureDimension::Texture2DMS:
+    case TextureDimension::Texture2DMSArray:
+    case TextureDimension::Texture3D:
+        break;
+    default:
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: texture dimension is invalid"), operationName);
         return false;
     }
     if((desc.dimension == TextureDimension::Texture1D || desc.dimension == TextureDimension::Texture1DArray) && (desc.height != 1 || desc.depth != 1)){

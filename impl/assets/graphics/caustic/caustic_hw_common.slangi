@@ -6,6 +6,9 @@
 #define NWB_GRAPHICS_CAUSTIC_HW_COMMON_SLANGI
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "hw_binding_slots.h"
 #include "photon_push_constants.slangi"
 #include "photon_types.slangi"
@@ -14,6 +17,10 @@
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"
 #include "../bindless/bindless_heap_rt.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [[vk::push_constant]]
 ConstantBuffer<NwbCausticPhotonPushConstants> g_NwbCausticHwPushConstants;
@@ -88,6 +95,7 @@ StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbHeapCausticHwE
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> g_NwbHeapCausticHwViews[];
 #pragma warning(pop)
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

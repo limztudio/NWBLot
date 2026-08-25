@@ -11,6 +11,10 @@
 #include "sw_binding_slots.h"
 #include "sw_shadow_heap_resources.slangi"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // The append counter and indirect arguments are both heap-selected writable uint buffers.
 #define g_NwbSwShadowEdgeCounter NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeCounterStorageSlot)
 #define g_NwbSwShadowIndirectArgs NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.indirectArgsStorageSlot)

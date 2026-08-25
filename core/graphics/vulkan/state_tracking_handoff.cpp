@@ -77,6 +77,21 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
     }
     NWB_ASSERT(states.m_valid);
 
+    for(const CommandListResourceStateHandoff::BufferState& state : states.m_bufferStates){
+        if(
+            state.buffer
+            && !m_device.isBufferReadyForGpuUse(state.buffer)
+        )
+            return false;
+    }
+    for(const CommandListResourceStateHandoff::BufferState& state : states.m_permanentBufferStates){
+        if(
+            state.buffer
+            && !m_device.isBufferReadyForGpuUse(state.buffer)
+        )
+            return false;
+    }
+
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_StateHandoffArena);
     Vector<VkImageMemoryBarrier2, Alloc::ScratchArena> acquireImageBarriers{scratchArena};
     Vector<VkBufferMemoryBarrier2, Alloc::ScratchArena> acquireBufferBarriers{scratchArena};

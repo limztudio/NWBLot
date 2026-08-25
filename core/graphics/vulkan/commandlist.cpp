@@ -178,6 +178,11 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
         return;
     }
 
+    if(!validateTrackedBuffersReadyForClose()){
+        discardInvalidCommandBuffer();
+        return;
+    }
+
     endActiveRenderPass();
     collectHostReadbackBuffers();
     m_stateTracker.appendKeepInitialStateBarriers(*m_currentCmdBuf, m_pendingImageBarriers, m_pendingBufferBarriers);
@@ -242,6 +247,40 @@ void CommandList::clearState(){
     m_pendingBufferBarriers.clear();
     m_textureOwnershipReleaseDestinations.clear();
     m_bufferOwnershipReleaseDestinations.clear();
+}
+
+bool CommandList::validateTrackedBuffersReadyForClose()noexcept{
+    for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
+        Buffer* const buffer = it->first;
+        if(!m_device.isBufferReadyForGpuUse(buffer)){
+            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("tracked buffer is not ready for GPU access"));
+            return false;
+        }
+    }
+    for(
+        auto it = m_stateTracker.m_permanentBufferStates.begin();
+        it != m_stateTracker.m_permanentBufferStates.end();
+        ++it
+    ){
+        Buffer* const buffer = it->first;
+        if(!m_device.isBufferReadyForGpuUse(buffer)){
+            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("permanent buffer is not ready for GPU access"));
+            return false;
+        }
+    }
+    for(
+        auto it = m_bufferOwnershipReleaseDestinations.begin();
+        it != m_bufferOwnershipReleaseDestinations.end();
+        ++it
+    ){
+        Buffer* const buffer = it->first;
+        if(!m_device.isBufferReadyForGpuUse(buffer)){
+            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("released buffer is not ready for GPU access"));
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void CommandList::collectHostReadbackBuffers(){

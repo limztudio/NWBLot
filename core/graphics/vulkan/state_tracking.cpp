@@ -348,7 +348,30 @@ void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresource
 }
 
 void CommandList::beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits){
+    if(!buffer)
+        return;
+    if(!validateCommandRecordingScope(NWB_TEXT("begin tracking buffer state")))
+        return;
+    if(stateBits == ResourceStates::Unknown){
+        rejectCommandRecording(NWB_TEXT("begin tracking buffer state"), NWB_TEXT("initial state cannot be unknown"));
+        return;
+    }
+    if(!m_device.isBufferReadyForGpuUse(buffer)){
+        rejectCommandRecording(NWB_TEXT("begin tracking buffer state"), NWB_TEXT("buffer is not ready for GPU access"));
+        return;
+    }
+
+    const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(buffer);
+    if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
+        rejectCommandRecording(
+            NWB_TEXT("begin tracking buffer state"),
+            NWB_TEXT("initial state conflicts with the permanent buffer state")
+        );
+        return;
+    }
+
     m_stateTracker.beginTrackingBuffer(buffer, stateBits);
+    retainResource(buffer);
 }
 
 ResourceStates::Mask CommandList::getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel){

@@ -2506,6 +2506,7 @@ private:
         const tchar* operationName
     )noexcept;
     void setResourceStatesForGraphicsBuffers(const GraphicsState& state);
+    [[nodiscard]] bool validateTrackedBuffersReadyForClose()noexcept;
     [[nodiscard]] bool importResourceStateHandoff(const CommandListResourceStateHandoff& states);
     void exportResourceStateHandoff(CommandListResourceStateHandoff& states)const;
     void appendPendingOwnershipReleaseBarriers();
@@ -2726,6 +2727,10 @@ public:
     void unmapBuffer(Buffer* buffer);
     [[nodiscard]] MemoryRequirements getBufferMemoryRequirements(Buffer* buffer);
     bool bindBufferMemory(Buffer* buffer, Heap* heap, u64 offset);
+    // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
+    // Native wrappers trust caller-managed binding. Managed ordinary buffers require their VMA allocation, while
+    // managed virtual buffers require a retained, device-owned bound Heap allocation. CPU mapping is irrelevant.
+    [[nodiscard]] bool isBufferReadyForGpuUse(Buffer* buffer)const noexcept;
     [[nodiscard]] BufferHandle createHandleForNativeBuffer(ObjectType objectType, Object buffer, const BufferDesc& desc);
     [[nodiscard]] ShaderHandle createShader(const ShaderDesc& d, const void* binary, usize binarySize);
     [[nodiscard]] ShaderHandle createShaderSpecialization(Shader* baseShader, const ShaderSpecialization* constants, u32 numConstants);

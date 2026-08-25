@@ -370,6 +370,34 @@ bool Device::bindBufferMemory(Buffer* bufferResource, Heap* heap, u64 offset){
     return true;
 }
 
+bool Device::isBufferReadyForGpuUse(Buffer* bufferResource)const noexcept{
+    if(!bufferResource)
+        return false;
+
+    Buffer& buffer = *bufferResource;
+    ScopedLock resourceLock(buffer.m_memoryBindingMutex);
+
+    if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator)
+        return false;
+    if(buffer.m_buffer == VK_NULL_HANDLE)
+        return false;
+    if(!buffer.m_managed)
+        return true;
+
+    if(!buffer.m_desc.isVirtual)
+        return buffer.m_allocation != nullptr;
+    if(buffer.m_allocation || !buffer.m_boundHeap || buffer.m_heapBindingRange.size == 0u)
+        return false;
+
+    Heap& heap = *buffer.m_boundHeap.get();
+    ScopedLock heapLock(heap.m_bindingMutex);
+    return &heap.m_context == &m_context
+        && &heap.m_allocator == &m_allocator
+        && heap.m_allocation != nullptr
+        && heap.m_memory != VK_NULL_HANDLE
+    ;
+}
+
 bool Device::validateHeapMemoryBinding(
     const Heap& heap,
     const VkMemoryRequirements& memoryRequirements,

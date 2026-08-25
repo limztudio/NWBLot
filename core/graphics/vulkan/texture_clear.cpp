@@ -630,6 +630,81 @@ void CommandList::clearColorTextureBox(
         );
         return;
     }
+
+    struct MipClearPlan{
+        Box resolvedBox;
+        u64 uploadSize = 0ull;
+        usize clearByteCount = 0u;
+        bool mergeArrayLayerCopies = false;
+    };
+
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
+    Vector<MipClearPlan, Alloc::ScratchArena> mipClearPlans(resolvedSubresources.numMipLevels, scratchArena);
+    const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
+    const u64 blockWidth = static_cast<u64>(texture.m_formatLayout.blockWidth);
+    const u64 blockHeight = static_cast<u64>(texture.m_formatLayout.blockHeight);
+    const u64 arrayLayerCount = static_cast<u64>(resolvedSubresources.numArraySlices);
+    bool hasNonemptyMip = false;
+    u32 mipPlanIndex = 0u;
+    for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel, ++mipPlanIndex){
+        MipClearPlan& mipPlan = mipClearPlans[mipPlanIndex];
+        mipPlan.resolvedBox = VulkanTextureDetail::ResolveTextureClearBox(desc, mipLevel, box);
+        if(VulkanTextureDetail::TextureClearBoxEmpty(mipPlan.resolvedBox))
+            continue;
+        hasNonemptyMip = true;
+
+        const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
+        if(!VulkanTextureDetail::TextureClearBoxAlignedToBlocks(
+            mipPlan.resolvedBox,
+            mipExtent,
+            texture.m_formatLayout
+        )){
+            rejectCommandRecording(
+                NWB_TEXT("clear texture box"),
+                NWB_TEXT("bounded block-compressed clear edges must be block-aligned except at texture edges")
+            );
+            return;
+        }
+
+        const u64 clearWidth = static_cast<u64>(mipPlan.resolvedBox.width());
+        const u64 clearHeight = static_cast<u64>(mipPlan.resolvedBox.height());
+        const u64 clearDepth = static_cast<u64>(mipPlan.resolvedBox.depth());
+        const u64 clearBlockCountX = DivideUp(clearWidth, blockWidth);
+        const u64 clearBlockCountY = DivideUp(clearHeight, blockHeight);
+        if(clearBlockCountX > Limit<u64>::s_Max / clearBlockCountY){
+            rejectCommandRecording(NWB_TEXT("clear texture box"), NWB_TEXT("clear byte size overflows"));
+            return;
+        }
+        const u64 clearSliceBlockCount = clearBlockCountX * clearBlockCountY;
+        if(clearDepth > 1ull && clearSliceBlockCount > Limit<u64>::s_Max / clearDepth){
+            rejectCommandRecording(NWB_TEXT("clear texture box"), NWB_TEXT("clear byte size overflows"));
+            return;
+        }
+        const u64 clearBlockCount = clearSliceBlockCount * clearDepth;
+        if(clearBlockCount > Limit<u64>::s_Max / clearPatternSize){
+            rejectCommandRecording(NWB_TEXT("clear texture box"), NWB_TEXT("clear byte size overflows"));
+            return;
+        }
+        mipPlan.uploadSize = clearBlockCount * clearPatternSize;
+        if(mipPlan.uploadSize > static_cast<u64>(Limit<usize>::s_Max)){
+            rejectCommandRecording(
+                NWB_TEXT("clear texture box"),
+                NWB_TEXT("clear byte size exceeds addressable memory")
+            );
+            return;
+        }
+
+        mipPlan.mergeArrayLayerCopies =
+            desc.dimension != TextureDimension::Texture3D
+            && arrayLayerCount > 1ull
+            && mipPlan.uploadSize <= (VulkanTextureDetail::s_TextureClearMergedLayerUploadThreshold / arrayLayerCount)
+        ;
+        const u64 clearByteSize = mipPlan.mergeArrayLayerCopies ? mipPlan.uploadSize * arrayLayerCount : mipPlan.uploadSize;
+        mipPlan.clearByteCount = static_cast<usize>(clearByteSize);
+    }
+    if(!hasNonemptyMip)
+        return;
+
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("clear color texture box through staging")))
         return;
 
@@ -637,86 +712,48 @@ void CommandList::clearColorTextureBox(
     if(m_commandRecordingFailed)
         return;
 
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
-    const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
-    for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
-        const Box resolvedBox = VulkanTextureDetail::ResolveTextureClearBox(desc, mipLevel, box);
-        if(VulkanTextureDetail::TextureClearBoxEmpty(resolvedBox))
+    mipPlanIndex = 0u;
+    for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel, ++mipPlanIndex){
+        const MipClearPlan& mipPlan = mipClearPlans[mipPlanIndex];
+        if(VulkanTextureDetail::TextureClearBoxEmpty(mipPlan.resolvedBox))
             continue;
 
-        const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
-        const u64 clearWidth = static_cast<u64>(resolvedBox.width());
-        const u64 clearHeight = static_cast<u64>(resolvedBox.height());
-        const u64 clearDepth = static_cast<u64>(resolvedBox.depth());
-        if(!VulkanTextureDetail::TextureClearBoxAlignedToBlocks(resolvedBox, mipExtent, texture.m_formatLayout)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture box with {}: bounded block-compressed box clears require block-aligned box edges except at texture edges"), valueName);
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture box with {}: bounded block-compressed box clears require block-aligned box edges except at texture edges"), valueName);
-            return;
-        }
+        const u64 clearWidth = static_cast<u64>(mipPlan.resolvedBox.width());
+        const u64 clearHeight = static_cast<u64>(mipPlan.resolvedBox.height());
+        const u64 clearDepth = static_cast<u64>(mipPlan.resolvedBox.depth());
 
-        const u64 blockWidth = static_cast<u64>(texture.m_formatLayout.blockWidth);
-        const u64 blockHeight = static_cast<u64>(texture.m_formatLayout.blockHeight);
-        const u64 clearBlockCountX = DivideUp(clearWidth, blockWidth);
-        const u64 clearBlockCountY = DivideUp(clearHeight, blockHeight);
-        if(clearBlockCountX > Limit<u64>::s_Max / clearBlockCountY){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture box with {}: clear byte size overflows"), valueName);
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture box with {}: clear byte size overflows"), valueName);
-            return;
-        }
-        const u64 clearSliceBlockCount = clearBlockCountX * clearBlockCountY;
-        if(clearDepth > 1ull && clearSliceBlockCount > Limit<u64>::s_Max / clearDepth){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture box with {}: clear byte size overflows"), valueName);
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture box with {}: clear byte size overflows"), valueName);
-            return;
-        }
-        const u64 clearBlockCount = clearSliceBlockCount * clearDepth;
-        if(clearBlockCount > Limit<u64>::s_Max / clearPatternSize){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture box with {}: clear byte size overflows"), valueName);
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture box with {}: clear byte size overflows"), valueName);
-            return;
-        }
-        const u64 uploadSize64 = clearBlockCount * clearPatternSize;
-        if(uploadSize64 > static_cast<u64>(Limit<usize>::s_Max)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear texture box with {}: clear byte size exceeds addressable memory"), valueName);
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture box with {}: clear byte size exceeds addressable memory"), valueName);
-            return;
-        }
-
-        const u64 arrayLayerCount = static_cast<u64>(resolvedSubresources.numArraySlices);
-        const bool mergeArrayLayerCopies =
-            desc.dimension != TextureDimension::Texture3D
-            && arrayLayerCount > 1ull
-            && uploadSize64 <= (VulkanTextureDetail::s_TextureClearMergedLayerUploadThreshold / arrayLayerCount)
-        ;
-        const u64 clearByteSize64 = mergeArrayLayerCopies ? uploadSize64 * arrayLayerCount : uploadSize64;
-
-        const usize clearByteCount = static_cast<usize>(clearByteSize64);
         Buffer* stagingBuffer = nullptr;
         u64 stagingOffset = 0;
         void* stagingBytes = nullptr;
-        if(!prepareUploadStaging(clearByteCount, NWB_TEXT("clearTextureBox"), stagingBuffer, stagingOffset, stagingBytes)){
+        if(!prepareUploadStaging(
+            mipPlan.clearByteCount,
+            NWB_TEXT("clearTextureBox"),
+            stagingBuffer,
+            stagingOffset,
+            stagingBytes
+        )){
             rejectCommandRecording(NWB_TEXT("clear texture box"), NWB_TEXT("staging allocation failed"));
             return;
         }
-        VulkanTextureDetail::FillTextureClearBytes(stagingBytes, clearByteCount, clearPattern, clearPatternSize);
+        VulkanTextureDetail::FillTextureClearBytes(stagingBytes, mipPlan.clearByteCount, clearPattern, clearPatternSize);
 
         if(desc.dimension == TextureDimension::Texture3D){
             VkBufferImageCopy region{};
             region.bufferOffset = stagingOffset;
             region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, 0u, 1u);
-            region.imageOffset = { resolvedBox.minX, resolvedBox.minY, resolvedBox.minZ };
+            region.imageOffset = { mipPlan.resolvedBox.minX, mipPlan.resolvedBox.minY, mipPlan.resolvedBox.minZ };
             region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), static_cast<u32>(clearDepth) };
             vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1u, &region);
         }
-        else if(mergeArrayLayerCopies){
+        else if(mipPlan.mergeArrayLayerCopies){
             Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
             const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
             u32 regionIndex = 0u;
             for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
                 VkBufferImageCopy region{};
-                region.bufferOffset = stagingOffset + static_cast<u64>(regionIndex) * uploadSize64;
+                region.bufferOffset = stagingOffset + static_cast<u64>(regionIndex) * mipPlan.uploadSize;
                 region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, arraySlice, 1u);
-                region.imageOffset = { resolvedBox.minX, resolvedBox.minY, 0 };
+                region.imageOffset = { mipPlan.resolvedBox.minX, mipPlan.resolvedBox.minY, 0 };
                 region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
                 regions[regionIndex++] = region;
             }
@@ -732,7 +769,7 @@ void CommandList::clearColorTextureBox(
                 VkBufferImageCopy region{};
                 region.bufferOffset = stagingOffset;
                 region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(VK_IMAGE_ASPECT_COLOR_BIT, mipLevel, arraySlice, 1u);
-                region.imageOffset = { resolvedBox.minX, resolvedBox.minY, 0 };
+                region.imageOffset = { mipPlan.resolvedBox.minX, mipPlan.resolvedBox.minY, 0 };
                 region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
                 regions[regionIndex++] = region;
             }

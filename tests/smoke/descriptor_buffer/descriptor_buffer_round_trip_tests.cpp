@@ -6157,6 +6157,29 @@ TEST_F(DescriptorBufferRoundTripTest, BlockCompressedFullClearUsesStagingAndReje
     }
 
     const TextureSubresourceSet clearedSubresources(0u, s_MipCount, 0u, s_ArraySize);
+    // Fixed box coordinates clamp against monotonically shrinking mip extents, so an aligned first nonempty mip
+    // cannot become unaligned later. This multi-mip rejection still proves validation precedes all state publication.
+    const usize referencesBeforeAlignmentReject = texture->getReferenceCount();
+    commandList->open();
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+    ASSERT_FALSE(commandList->isRenderPassActive());
+    commandList->clearTextureBoxFloat(
+        texture.get(),
+        clearedSubresources,
+        Box(0, 6, 0, static_cast<i32>(s_Height), 0, 1),
+        Color(1.f, 0.f, 1.f, 1.f)
+    );
+    EXPECT_TRUE(commandList->commandRecordingFailed());
+    EXPECT_FALSE(commandList->isRenderPassActive());
+    EXPECT_EQ(texture->getReferenceCount(), referencesBeforeAlignmentReject);
+    for(u32 arraySlice = 0u; arraySlice < s_ArraySize; ++arraySlice){
+        for(u32 mipLevel = 0u; mipLevel < s_MipCount; ++mipLevel)
+            EXPECT_FALSE(commandList->hasExplicitTextureSubresourceState(texture.get(), arraySlice, mipLevel));
+    }
+    commandList->close();
+    EXPECT_FALSE(commandList->hasCommandBuffer());
+    EXPECT_FALSE(submit().valid());
+
     const usize referencesBeforeClear = texture->getReferenceCount();
     commandList->open();
     ASSERT_FALSE(commandList->commandRecordingFailed());

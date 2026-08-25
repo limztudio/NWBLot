@@ -385,12 +385,16 @@ namespace GpuCommandIrReplayError{
         UnsupportedDirectVulkanOpcode,
         DirectVulkanLoweringFailed,
         CommandListRecordingFailed,
+        BackendResourceNotReady,
+        PermanentResourceStateMismatch,
     };
 };
 
 static_assert(static_cast<u8>(GpuCommandIrReplayError::StreamChangedDuringReplay) == 24u);
 static_assert(static_cast<u8>(GpuCommandIrReplayError::DirectVulkanLoweringFailed) == 26u);
 static_assert(static_cast<u8>(GpuCommandIrReplayError::CommandListRecordingFailed) == 27u);
+static_assert(static_cast<u8>(GpuCommandIrReplayError::BackendResourceNotReady) == 28u);
+static_assert(static_cast<u8>(GpuCommandIrReplayError::PermanentResourceStateMismatch) == 29u);
 
 struct GpuCommandIrReplayResult{
     GpuCommandIrReplayError::Enum error = GpuCommandIrReplayError::None;
@@ -404,10 +408,10 @@ struct GpuCommandIrReplayResult{
     }
 };
 
-// Validates the commands selected by `packet` from a compiler-owned capture without touching a native command
-// list. The complete stream is syntax-validated first, then records for other packets are ignored so a normal
-// multi-packet capture can be replayed one packet at a time. Typed graph imports must still belong to the
-// compiled graph's device generation.
+// Performs graph-only validation for the commands selected by `packet` without touching a native command list.
+// The complete stream is syntax-validated first, then records for other packets are ignored so a normal
+// multi-packet capture can be replayed one packet at a time. Backend ownership, backing readiness, and permanent
+// state compatibility require a replay CommandList and are checked by the replay entry points before lowering.
 [[nodiscard]] GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
     BinaryByteView bytes,
     const GpuTaskGraph& graph,

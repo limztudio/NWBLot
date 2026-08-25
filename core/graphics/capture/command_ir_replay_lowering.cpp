@@ -63,6 +63,146 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         .recordIndex = recordIndex,
     };
 }
+
+[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBufferBackendOperand(
+    Buffer* const buffer,
+    const ResourceStates::Mask requiredState,
+    CommandList& commandList
+)noexcept{
+    if(!buffer)
+        return GpuCommandIrReplayError::StreamChangedDuringReplay;
+    if(!commandList.getDevice().isBufferReadyForGpuUse(buffer))
+        return GpuCommandIrReplayError::BackendResourceNotReady;
+
+    const ResourceStates::Mask permanentState = commandList.getPermanentBufferState(buffer);
+    if(permanentState != ResourceStates::Unknown && permanentState != requiredState)
+        return GpuCommandIrReplayError::PermanentResourceStateMismatch;
+    return GpuCommandIrReplayError::None;
+}
+
+[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureBackendOperand(
+    Texture* const texture,
+    const ResourceStates::Mask requiredState,
+    CommandList& commandList
+)noexcept{
+    if(!texture)
+        return GpuCommandIrReplayError::StreamChangedDuringReplay;
+    if(!commandList.getDevice().isTextureReadyForGpuUse(texture))
+        return GpuCommandIrReplayError::BackendResourceNotReady;
+
+    const ResourceStates::Mask permanentState = commandList.getPermanentTextureState(texture);
+    if(permanentState != ResourceStates::Unknown && permanentState != requiredState)
+        return GpuCommandIrReplayError::PermanentResourceStateMismatch;
+    return GpuCommandIrReplayError::None;
+}
+
+[[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBackendOperands(
+    const GpuCommandIrBuiltinTaskRecord& record,
+    const GpuTaskGraph& graph,
+    CommandList& commandList
+)noexcept{
+    switch(record.opcode){
+    case GpuCommandIrOpcode::CopyBuffer:{
+        Buffer* const source = graph.bufferForResource(record.source);
+        Buffer* const destination = graph.bufferForResource(record.destination);
+        if(source == destination){
+            return ValidateBufferBackendOperand(
+                source,
+                ResourceStates::CopySource | ResourceStates::CopyDest,
+                commandList
+            );
+        }
+
+        const GpuCommandIrReplayError::Enum sourceError = ValidateBufferBackendOperand(
+            source,
+            ResourceStates::CopySource,
+            commandList
+        );
+        if(sourceError != GpuCommandIrReplayError::None)
+            return sourceError;
+        return ValidateBufferBackendOperand(
+            destination,
+            ResourceStates::CopyDest,
+            commandList
+        );
+    }
+    case GpuCommandIrOpcode::CopyTexture:{
+        const GpuCommandIrReplayError::Enum sourceError = ValidateTextureBackendOperand(
+            graph.textureForResource(record.source),
+            ResourceStates::CopySource,
+            commandList
+        );
+        if(sourceError != GpuCommandIrReplayError::None)
+            return sourceError;
+        return ValidateTextureBackendOperand(
+            graph.textureForResource(record.destination),
+            ResourceStates::CopyDest,
+            commandList
+        );
+    }
+    case GpuCommandIrOpcode::ClearBuffer:
+        return ValidateBufferBackendOperand(
+            graph.bufferForResource(record.destination),
+            ResourceStates::CopyDest,
+            commandList
+        );
+    case GpuCommandIrOpcode::ClearTexture:
+    case GpuCommandIrOpcode::ClearTextureRectUInt:
+        return ValidateTextureBackendOperand(
+            graph.textureForResource(record.destination),
+            ResourceStates::CopyDest,
+            commandList
+        );
+    default:
+        return GpuCommandIrReplayError::StreamChangedDuringReplay;
+    }
+}
+
+// The graph-only preflight cannot validate native ownership, backing, or CommandList-local permanent states. Scan
+// the complete selected packet before taking the recording lease so a late backend failure cannot partially lower.
+[[nodiscard]] static GpuCommandIrReplayResult ValidateBackendOperandPacket(
+    const BinaryByteView bytes,
+    const GpuTaskGraph& graph,
+    const GpuSubmissionPacketId packet,
+    CommandList& commandList,
+    const GpuCommandIrStreamValidationResult& expectedStreamValidation
+)noexcept{
+    GpuCommandIrStreamReader reader(bytes);
+    if(reader.validation().failed()){
+        return ReplayFailure(
+            GpuCommandIrReplayError::StreamChangedDuringReplay,
+            reader.validation(),
+            reader.validation().recordIndex
+        );
+    }
+
+    u64 recordIndex = 0u;
+    GpuCommandIrBuiltinTaskRecord record;
+    for(;;){
+        const GpuCommandIrStreamReadStatus::Enum status = reader.next(record);
+        if(status == GpuCommandIrStreamReadStatus::End){
+            return GpuCommandIrReplayResult{
+                .streamValidation = reader.validation(),
+                .recordIndex = recordIndex,
+            };
+        }
+        if(status == GpuCommandIrStreamReadStatus::Error){
+            return ReplayFailure(
+                GpuCommandIrReplayError::StreamChangedDuringReplay,
+                reader.validation(),
+                reader.validation().recordIndex
+            );
+        }
+
+        if(record.packet == packet){
+            const GpuCommandIrReplayError::Enum operandError = ValidateBackendOperands(record, graph, commandList);
+            if(operandError != GpuCommandIrReplayError::None)
+                return ReplayFailure(operandError, expectedStreamValidation, recordIndex);
+        }
+        ++recordIndex;
+    }
+}
+
 static void LowerOperation(
     const GpuCommandIrBuiltinTaskRecord& record,
     const GpuTaskGraph& graph,
@@ -245,10 +385,20 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
             result.streamValidation
         );
     }
+    const GpuCommandIrReplayResult backendPreflight = __hidden_gpu_command_ir_replay_lowering::ValidateBackendOperandPacket(
+        bytes,
+        graph,
+        packet,
+        commandList,
+        result.streamValidation
+    );
+    if(!backendPreflight.valid())
+        return backendPreflight;
+
     const u64 recordingLeaseSerial = commandList.recordingLeaseSerial();
-    // Preflight above establishes all graph/resource legality before any void Core::CommandList operation can
-    // mutate its state tracker. The byte view and graph are caller-stable for this tooling call, so a second walk
-    // can lower without allocating a duplicate command list or per-command object graph.
+    // Preflight above establishes graph and backend legality before any void Core::CommandList operation can mutate
+    // its state tracker. The byte view and graph are caller-stable for this tooling call, so this final walk can
+    // lower without allocating a duplicate command list or per-command object graph.
     GpuCommandIrStreamReader reader(bytes);
     GpuCommandIrBuiltinTaskRecord record;
     u64 recordIndex = 0u;
@@ -355,6 +505,17 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
             result.streamValidation
         );
     }
+    const GpuCommandIrReplayResult backendPreflight =
+        __hidden_gpu_command_ir_replay_lowering::ValidateBackendOperandPacket(
+            bytes,
+            graph,
+            packet,
+            commandList,
+            result.streamValidation
+        );
+    if(!backendPreflight.valid())
+        return backendPreflight;
+
     const u64 recordingLeaseSerial = commandList.recordingLeaseSerial();
 
     // The caller has already lowered the graph-owned state seed and packet barriers into commandList. This second

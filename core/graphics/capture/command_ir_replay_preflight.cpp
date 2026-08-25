@@ -241,7 +241,6 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     if(
         !graph.validResource(record.source)
         || !graph.validResource(record.destination)
-        || record.source == record.destination
     )
         return GpuCommandIrReplayError::InvalidResource;
 
@@ -571,7 +570,10 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
             streamValidation
         );
     if(!compiledGraph.validPacket(packet))
-        return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(GpuCommandIrReplayError::InvalidPacket, streamValidation);
+        return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(
+            GpuCommandIrReplayError::InvalidPacket,
+            streamValidation
+        );
 
     const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
     const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packetPlan.queue);

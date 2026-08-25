@@ -240,7 +240,16 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
     return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if !defined(NWB_FINAL)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool Device::revokeUnmanagedNativeTextureForTesting(
     Texture* textureResource,
     const Object expectedNativeImageHandle
@@ -270,6 +279,11 @@ void Device::releaseRevokedNativeTextureIdentityForTesting(
     auto* expectedNativeImage = static_cast<VkImage_T*>(expectedNativeImageHandle);
     texture.releaseRevokedNativeImageIdentity(expectedNativeImage);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
 

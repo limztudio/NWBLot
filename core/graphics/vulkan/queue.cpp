@@ -31,6 +31,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(
     , m_ownsCmdPool(ownsCommandPool)
     , m_sharedCommandPoolMutex(sharedCommandPoolMutex)
     , m_referencedResources(context.objectArena)
+    , m_referencedTextures(context.objectArena)
     , m_referencedStagingBuffers(context.objectArena)
     , m_referencedDescriptorHeaps(context.objectArena)
     , m_retainedTextureStateCommits(context.objectArena)
@@ -106,6 +107,20 @@ void TrackedCommandBuffer::retainResource(GraphicsResource& resource){
     m_referencedResources.emplace_back(&resource, Handle<GraphicsResource>::deleter_type(&m_context.objectArena));
 }
 
+void TrackedCommandBuffer::retainTexture(Texture& texture){
+    retainResource(texture);
+    trackRetainedTexture(texture);
+}
+
+void TrackedCommandBuffer::trackRetainedTexture(Texture& texture){
+    for(Texture* const retainedTexture : m_referencedTextures){
+        if(retainedTexture == &texture)
+            return;
+    }
+
+    m_referencedTextures.push_back(&texture);
+}
+
 void TrackedCommandBuffer::appendRetainedTextureStateCommit(
     Texture& texture,
     const MipLevel mipLevel,
@@ -113,7 +128,7 @@ void TrackedCommandBuffer::appendRetainedTextureStateCommit(
 ){
     // The closing barrier and its deferred state publication outlive CommandList::clearState(). Keep the texture
     // alive with the command buffer until Queue::submit accepts or discards the command buffer.
-    retainResource(texture);
+    retainTexture(texture);
 
     m_retainedTextureStateCommits.push_back(RetainedTextureStateCommit{
         .texture = &texture,
@@ -143,6 +158,7 @@ void TrackedCommandBuffer::clearTrackedReferences(){
     }
     m_referencedDescriptorHeaps.clear();
 
+    m_referencedTextures.clear();
     m_referencedResources.clear();
     m_referencedStagingBuffers.clear();
 }
@@ -837,6 +853,8 @@ u64 Queue::submit(
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} replaced its validated native recording lease"), i);
                 return m_lastSubmittedID;
             }
+            if(!cmdList->validateTrackedTexturesReadyForSubmission())
+                return m_lastSubmittedID;
         }
     }
     for(usize i = 0u; i < localSignalCount; ++i){

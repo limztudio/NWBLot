@@ -178,7 +178,7 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
         return;
     }
 
-    if(!validateTrackedBuffersReadyForClose()){
+    if(!validateTrackedTexturesReadyForClose() || !validateTrackedBuffersReadyForClose()){
         discardInvalidCommandBuffer();
         return;
     }
@@ -249,6 +249,46 @@ void CommandList::clearState(){
     m_bufferOwnershipReleaseDestinations.clear();
 }
 
+bool CommandList::validateTrackedTexturesReadyForClose()noexcept{
+    for(Texture* const texture : m_currentCmdBuf->m_referencedTextures){
+        if(!m_device.isTextureReadyForGpuUse(texture)){
+            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("referenced texture is not ready for GPU access"));
+            return false;
+        }
+    }
+    for(auto it = m_stateTracker.m_textureStates.begin(); it != m_stateTracker.m_textureStates.end(); ++it){
+        Texture* const texture = it->first.texture;
+        if(!m_device.isTextureReadyForGpuUse(texture)){
+            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("tracked texture is not ready for GPU access"));
+            return false;
+        }
+    }
+    for(
+        auto it = m_stateTracker.m_permanentTextureStates.begin();
+        it != m_stateTracker.m_permanentTextureStates.end();
+        ++it
+    ){
+        Texture* const texture = it.value().texture.get();
+        if(!m_device.isTextureReadyForGpuUse(texture)){
+            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("permanent texture is not ready for GPU access"));
+            return false;
+        }
+    }
+    for(
+        auto it = m_textureOwnershipReleaseDestinations.begin();
+        it != m_textureOwnershipReleaseDestinations.end();
+        ++it
+    ){
+        Texture* const texture = it->first.texture;
+        if(!m_device.isTextureReadyForGpuUse(texture)){
+            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("released texture is not ready for GPU access"));
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool CommandList::validateTrackedBuffersReadyForClose()noexcept{
     for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
         Buffer* const buffer = it->first;
@@ -276,6 +316,38 @@ bool CommandList::validateTrackedBuffersReadyForClose()noexcept{
         Buffer* const buffer = it->first;
         if(!m_device.isBufferReadyForGpuUse(buffer)){
             rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("released buffer is not ready for GPU access"));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool CommandList::validateTrackedTexturesReadyForSubmission()const noexcept{
+    if(!m_currentCmdBuf){
+        NWB_LOGGER_CRITICAL_WARNING(
+            NWB_TEXT("Vulkan: Failed to submit command list: tracked Texture readiness ledger is unavailable")
+        );
+        return false;
+    }
+
+    for(Texture* const texture : m_currentCmdBuf->m_referencedTextures){
+        if(!m_device.isTextureReadyForGpuUse(texture)){
+            NWB_LOGGER_CRITICAL_WARNING(
+                NWB_TEXT("Vulkan: Failed to submit command list: referenced texture is not ready for GPU access")
+            );
+            return false;
+        }
+    }
+    for(
+        auto it = m_stateTracker.m_permanentTextureStates.begin();
+        it != m_stateTracker.m_permanentTextureStates.end();
+        ++it
+    ){
+        if(!m_device.isTextureReadyForGpuUse(it.value().texture.get())){
+            NWB_LOGGER_CRITICAL_WARNING(
+                NWB_TEXT("Vulkan: Failed to submit command list: permanent texture is not ready for GPU access")
+            );
             return false;
         }
     }
@@ -318,6 +390,22 @@ void CommandList::registerHostReadbackStagingTexture(StagingTexture& stagingText
         && m_hostReadbackBarrierTracker.registerBuffer(stagingTexture.m_buffer)
     )
         retainResource(&stagingTexture);
+}
+
+void CommandList::retainResource(Texture* resource){
+    if(resource)
+        m_currentCmdBuf->retainTexture(*resource);
+}
+
+void CommandList::retainResource(Framebuffer* resource){
+    if(!resource)
+        return;
+
+    m_currentCmdBuf->retainResource(*resource);
+    for(const TextureHandle& texture : resource->m_resources){
+        if(texture)
+            m_currentCmdBuf->trackRetainedTexture(*texture);
+    }
 }
 
 void CommandList::retainResource(GraphicsResource* resource){

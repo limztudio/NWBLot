@@ -76,8 +76,8 @@ bool CommandList::validateFramebufferForRendering(
         const Format::Enum expectedFormat
     ) -> bool{
         Texture* const texture = attachment.texture;
-        if(!texture || texture->m_image == VK_NULL_HANDLE){
-            rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment has no native image"));
+        if(!m_device.isTextureReadyForGpuUse(texture)){
+            rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment is not ready for GPU access"));
             return false;
         }
         if(requireRenderTargetUsage && !texture->m_desc.isRenderTarget){
@@ -304,6 +304,24 @@ bool CommandList::validateViewportState(
         && !VulkanDetail::IsImplicitScissorValid(viewportState.viewports[0u])
     ){
         rejectCommandRecording(operationName, NWB_TEXT("viewport cannot be converted to an implicit scissor"));
+        return false;
+    }
+    return true;
+}
+
+bool CommandList::validateTextureForGpuState(
+    Texture* const texture,
+    const ResourceStates::Mask requiredState,
+    const tchar* const operationName
+)noexcept{
+    if(!m_device.isTextureReadyForGpuUse(texture)){
+        rejectCommandRecording(operationName, NWB_TEXT("texture is not ready for GPU access"));
+        return false;
+    }
+
+    const ResourceStates::Mask permanentState = m_stateTracker.getPermanentTextureState(texture);
+    if(permanentState != ResourceStates::Unknown && permanentState != requiredState){
+        rejectCommandRecording(operationName, NWB_TEXT("state conflicts with the permanent texture state"));
         return false;
     }
     return true;

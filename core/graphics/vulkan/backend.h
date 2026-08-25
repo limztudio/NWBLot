@@ -794,6 +794,8 @@ public:
 
 private:
     void retainResource(GraphicsResource& resource);
+    void retainTexture(Texture& texture);
+    void trackRetainedTexture(Texture& texture);
     void appendRetainedTextureStateCommit(Texture& texture, MipLevel mipLevel, ArraySlice arraySlice);
     void commitRetainedTextureStateCommits();
     void discardRetainedTextureStateCommits();
@@ -807,6 +809,7 @@ private:
     Futex* m_sharedCommandPoolMutex = nullptr;
 
     Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_referencedResources;
+    Vector<Texture*, Alloc::GlobalArena> m_referencedTextures;
     Vector<BufferHandle, Alloc::GlobalArena> m_referencedStagingBuffers;
     Vector<GpuDescriptorHeap*, Alloc::GlobalArena> m_referencedDescriptorHeaps;
     Vector<RetainedTextureStateCommit, Alloc::GlobalArena> m_retainedTextureStateCommits;
@@ -2284,6 +2287,11 @@ private:
         BufferHandle buffer;
     };
 
+    struct TextureUavBarrierPolicyValue{
+        bool enableBarriers = true;
+        TextureHandle texture;
+    };
+
     using PermanentTextureStateMap = HashMap<
         Texture*,
         PermanentTextureStateValue,
@@ -2303,6 +2311,13 @@ private:
         BufferUavBarrierPolicyValue,
         Hasher<Buffer*>,
         EqualTo<Buffer*>,
+        Alloc::GlobalArena
+    >;
+    using TextureUavBarrierPolicyMap = HashMap<
+        Texture*,
+        TextureUavBarrierPolicyValue,
+        Hasher<Texture*>,
+        EqualTo<Texture*>,
         Alloc::GlobalArena
     >;
 
@@ -2362,7 +2377,7 @@ private:
     PermanentBufferStateMap m_attemptPermanentBufferStates;
     HashMap<TextureSubresourceStateKey, ResourceStates::Mask, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureStates;
     HashMap<Buffer*, ResourceStates::Mask, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferStates;
-    HashMap<Texture*, bool, Hasher<Texture*>, EqualTo<Texture*>, Alloc::GlobalArena> m_textureUavBarriers;
+    TextureUavBarrierPolicyMap m_textureUavBarriers;
     BufferUavBarrierPolicyMap m_bufferUavBarriers;
 
     const VulkanContext& m_context;
@@ -2562,6 +2577,11 @@ private:
         const ViewportState& viewport,
         const tchar* operationName
     )noexcept;
+    [[nodiscard]] bool validateTextureForGpuState(
+        Texture* texture,
+        ResourceStates::Mask requiredState,
+        const tchar* operationName
+    )noexcept;
     [[nodiscard]] bool validateBufferForGpuState(
         Buffer* buffer,
         ResourceStates::Mask requiredState,
@@ -2576,7 +2596,9 @@ private:
         const tchar* operationName
     )noexcept;
     void setResourceStatesForGraphicsBuffers(const GraphicsState& state);
+    [[nodiscard]] bool validateTrackedTexturesReadyForClose()noexcept;
     [[nodiscard]] bool validateTrackedBuffersReadyForClose()noexcept;
+    [[nodiscard]] bool validateTrackedTexturesReadyForSubmission()const noexcept;
     [[nodiscard]] bool importResourceStateHandoff(const CommandListResourceStateHandoff& states);
     void exportResourceStateHandoff(CommandListResourceStateHandoff& states)const;
     void appendPendingOwnershipReleaseBarriers();
@@ -2584,6 +2606,8 @@ private:
     void appendHostReadbackBarriers();
     void registerHostReadbackBuffer(Buffer& buffer);
     void registerHostReadbackStagingTexture(StagingTexture& stagingTexture);
+    void retainResource(Texture* resource);
+    void retainResource(Framebuffer* resource);
     void retainResource(GraphicsResource* resource);
     void retainStagingBuffer(Buffer& buffer);
     void ensureDescriptorBuffersBound();

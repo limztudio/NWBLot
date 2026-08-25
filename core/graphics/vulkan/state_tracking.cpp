@@ -302,7 +302,7 @@ void StateTracker::appendKeepInitialStateBarriers(
 
 bool StateTracker::isUavBarrierEnabledForTexture(Texture& texture)const{
     const auto found = m_textureUavBarriers.find(&texture);
-    return found == m_textureUavBarriers.end() || found.value();
+    return found == m_textureUavBarriers.end() || found.value().enableBarriers;
 }
 
 bool StateTracker::isUavBarrierEnabledForBuffer(Buffer& buffer)const{
@@ -335,7 +335,20 @@ void StateTracker::beginTrackingTransientBuffer(Buffer& buffer, ResourceStates::
 }
 
 void StateTracker::setEnableUavBarriersForTexture(Texture& texture, bool enableBarriers){
-    m_textureUavBarriers.insert_or_assign(&texture, enableBarriers);
+    auto found = m_textureUavBarriers.find(&texture);
+    if(found != m_textureUavBarriers.end()){
+        found.value().enableBarriers = enableBarriers;
+        return;
+    }
+
+    if(!m_textureUavBarriers.emplace(
+        &texture,
+        TextureUavBarrierPolicyValue{
+            enableBarriers,
+            TextureHandle(&texture, TextureHandle::deleter_type(&m_context.objectArena))
+        }
+    ).second)
+        NWB_ASSERT(false);
 }
 
 void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarriers){
@@ -363,6 +376,13 @@ void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarr
 void CommandList::setEnableUavBarriersForTexture(Texture* texture, bool enableBarriers){
     if(!texture)
         return;
+    constexpr const tchar* s_OperationName = NWB_TEXT("set texture UAV-barrier policy");
+    if(!validateCommandRecordingScope(s_OperationName))
+        return;
+    if(!m_device.isTextureReadyForGpuUse(texture)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for GPU access"));
+        return;
+    }
     m_stateTracker.setEnableUavBarriersForTexture(*texture, enableBarriers);
 }
 
@@ -380,7 +400,29 @@ void CommandList::setEnableUavBarriersForBuffer(Buffer* buffer, bool enableBarri
 }
 
 void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
-    m_stateTracker.beginTrackingTexture(texture, subresources, stateBits);
+    if(!texture)
+        return;
+    constexpr const tchar* s_OperationName = NWB_TEXT("begin tracking texture state");
+    if(!validateCommandRecordingScope(s_OperationName))
+        return;
+    if(stateBits == ResourceStates::Unknown){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("initial state cannot be unknown"));
+        return;
+    }
+    if(!validateTextureForGpuState(texture, stateBits, s_OperationName))
+        return;
+
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(
+        texture->m_desc,
+        TextureSubresourceMipResolve::Range
+    );
+    if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("subresource range is empty or outside the texture"));
+        return;
+    }
+
+    m_stateTracker.beginTrackingTexture(texture, resolvedSubresources, stateBits);
+    retainResource(texture);
 }
 
 void CommandList::beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits){

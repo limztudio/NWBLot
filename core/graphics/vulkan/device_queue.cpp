@@ -513,11 +513,6 @@ QueueSubmissionToken Device::executeCommandLists(
     if(isDeviceLost())
         return {};
 
-    if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: submission wait token array is null"));
-        return {};
-    }
-
     Queue* const queue = getQueue(executionQueue);
     if(!queue){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: requested queue is not available"));
@@ -560,6 +555,15 @@ QueueSubmissionToken Device::executeCommandLists(
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} physical queue does not match the execution queue"), i);
             return {};
         }
+    }
+    for(usize i = 0u; i < numCommandLists; ++i){
+        if(!pCommandLists[i]->validateTrackedTexturesReadyForSubmission())
+            return {};
+    }
+
+    if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: submission wait token array is null"));
+        return {};
     }
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CommandListExecuteArena);

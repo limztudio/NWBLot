@@ -633,21 +633,20 @@ void CommandList::commitBarriers(){
 void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
     if(!textureResource)
         return;
-    if(!validateCommandRecordingScope(NWB_TEXT("set texture state")))
+    constexpr const tchar* s_OperationName = NWB_TEXT("set texture state");
+    if(!validateCommandRecordingScope(s_OperationName))
+        return;
+    if(!validateTextureForGpuState(textureResource, stateBits, s_OperationName))
         return;
 
     Texture& texture = *textureResource;
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
-        rejectCommandRecording(NWB_TEXT("set texture state"), NWB_TEXT("subresource range is empty or outside the texture"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("subresource range is empty or outside the texture"));
         return;
     }
 
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentTextureState(&texture);
-    if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
-        rejectCommandRecording(NWB_TEXT("set texture state"), NWB_TEXT("state conflicts with the permanent texture state"));
-        return;
-    }
 
     ResourceStates::Mask oldState = ResourceStates::Unknown;
     bool firstSubresource = true;
@@ -720,9 +719,9 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
         }
     }
 
+    retainResource(&texture);
     if(!needsBarrier)
         return;
-    retainResource(&texture);
 
     if(!usePerSubresourceBarriers){
         const VkImageMemoryBarrier2 barrier = VulkanStateTrackingDetail::BuildTextureStateBarrier(
@@ -863,6 +862,10 @@ void CommandList::releaseTextureOwnership(
         return;
 
     Texture& texture = *textureResource;
+    if(!m_device.isTextureReadyForGpuUse(&texture)){
+        rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("texture is not ready for GPU access"));
+        return;
+    }
     if(m_stateTracker.isPermanentTexture(texture)){
         rejectCommandRecording(
             NWB_TEXT("release texture ownership"),
@@ -895,7 +898,8 @@ void CommandList::releaseTextureOwnership(
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
 
-    // Releases require explicit image layouts; never invent one for untouched images.
+    // Releases require explicit image layouts; never invent one for untouched images. Validate every affected
+    // subresource before publishing any tracked state or destination.
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
             const ResourceStates::Mask state = m_stateTracker.getTextureState(&texture, arraySlice, mipLevel);
@@ -903,12 +907,6 @@ void CommandList::releaseTextureOwnership(
                 rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("final resource state is unknown"));
                 return;
             }
-            m_stateTracker.beginTrackingTexture(&texture, TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u), state);
-        }
-    }
-
-    for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
-        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
             const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
             const auto existing = m_textureOwnershipReleaseDestinations.find(key);
             if(existing != m_textureOwnershipReleaseDestinations.end() && existing.value() != destinationQueue){
@@ -922,8 +920,15 @@ void CommandList::releaseTextureOwnership(
     }
 
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
-        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel)
+        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+            const ResourceStates::Mask state = m_stateTracker.getTextureState(&texture, arraySlice, mipLevel);
+            m_stateTracker.beginTrackingTexture(
+                &texture,
+                TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u),
+                state
+            );
             m_textureOwnershipReleaseDestinations.insert_or_assign(TextureSubresourceStateKey{ &texture, mipLevel, arraySlice }, destinationQueue);
+        }
     }
     retainResource(&texture);
 }
@@ -1006,6 +1011,10 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
         rejectCommandRecording(NWB_TEXT("set permanent texture state"), NWB_TEXT("permanent state cannot be unknown"));
         return;
     }
+    if(!m_device.isTextureReadyForGpuUse(texture)){
+        rejectCommandRecording(NWB_TEXT("set permanent texture state"), NWB_TEXT("texture is not ready for GPU access"));
+        return;
+    }
     if(texture->m_desc.keepInitialState && texture->m_desc.initialState != stateBits){
         rejectCommandRecording(
             NWB_TEXT("set permanent texture state"),
@@ -1035,6 +1044,7 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
     setTextureState(texture, s_AllSubresources, stateBits);
     if(m_commandRecordingFailed)
         return;
+    retainResource(texture);
     m_stateTracker.setPermanentTextureState(*texture, stateBits);
 }
 

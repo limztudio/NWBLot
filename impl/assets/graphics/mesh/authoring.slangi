@@ -23,6 +23,10 @@
 #define NWB_CSG_ENABLED 0
 #endif
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Raster mesh and compute-emulation stages share the global descriptor heap for their frame data. Trace and
 // standalone CSG shaders include narrower headers directly but remain heap-selected as well.
 // The mesh shader is engine-owned + generic (shared_ms.slang): it does not read typed material data, so it

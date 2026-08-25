@@ -13,6 +13,10 @@
 
 #include "sw_binding_slots.h"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // TRANSPARENT occluder class: the edge re-trace casts colored transmittance.
 #define NWB_SW_SHADOW_OCCLUDER NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
 
@@ -20,6 +24,10 @@
 #include "sw_shadow_edge_record.slangi"
 
 #include "sw_shadow_ray.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 // The clamped trace count ([1]) guarding the tail + the compacted edge-record list this pass consumes.
 #define g_NwbSwShadowEdgeCounter NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeCounterStorageSlot)
@@ -48,6 +56,10 @@ void nwbSwShadowIndirectTrace(const uint linearId){
     const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);
     g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * transmittance, 1.0);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [numthreads(NWB_SW_SHADOW_GROUP_SIZE, NWB_SW_SHADOW_GROUP_SIZE, 1)]
 void main(uint3 groupID : SV_GroupID, uint groupIndex : SV_GroupIndex){

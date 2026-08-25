@@ -46,6 +46,9 @@ ConstantBuffer<NwbShadowRqSoftPushConstants> g_NwbShadowRqSoftPushConstants;
 #include "shadow_rayquery.slangi"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [numthreads(NWB_SHADOW_RT_GROUP_SIZE, NWB_SHADOW_RT_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint2 halfPixel = dispatchThreadID.xy;

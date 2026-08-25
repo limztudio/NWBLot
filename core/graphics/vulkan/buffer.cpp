@@ -534,6 +534,7 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
     endActiveRenderPass();
     if(m_commandRecordingFailed)
         return false;
+    registerHostReadbackBuffer(dest);
 
     VkBufferCopy region{};
     region.srcOffset = srcOffsetBytes;

@@ -7,6 +7,7 @@
 
 #include "module.h"
 #include "heap_binding_contract.h"
+#include "host_readback_sync.h"
 
 #include <core/common/log.h>
 
@@ -2493,6 +2494,10 @@ private:
     [[nodiscard]] bool importResourceStateHandoff(const CommandListResourceStateHandoff& states);
     void exportResourceStateHandoff(CommandListResourceStateHandoff& states)const;
     void appendPendingOwnershipReleaseBarriers();
+    void collectHostReadbackBuffers();
+    void appendHostReadbackBarriers();
+    void registerHostReadbackBuffer(Buffer& buffer);
+    void registerHostReadbackStagingTexture(StagingTexture& stagingTexture);
     void retainResource(GraphicsResource* resource);
     void retainStagingBuffer(Buffer& buffer);
     void ensureDescriptorBuffersBound();
@@ -2531,6 +2536,13 @@ private:
     void clearColorTextureBox(Texture* textureResource, TextureSubresourceSet subresources, const Box& box, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
     bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, const tchar* valueName);
     bool clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
+    [[nodiscard]] bool validateStagingTextureCopyResources(
+        StagingTexture& stagingTexture,
+        Texture& texture,
+        CpuAccessMode::Enum requiredCpuAccess,
+        VkImageUsageFlags requiredImageUsage,
+        const tchar* operationName
+    )noexcept;
     bool prepareStagingTextureCopy(
         StagingTexture& stagingResource,
         const TextureSlice& stagingSlice,
@@ -2558,6 +2570,7 @@ private:
     CommandListParameters m_desc;
     TrackedCommandBufferPtr m_currentCmdBuf;
     StateTracker m_stateTracker;
+    VulkanDetail::HostReadbackBarrierTracker m_hostReadbackBarrierTracker;
     bool m_enableAutomaticBarriers = true;
     bool m_isRecording = false;
     bool m_commandRecordingFailed = false;

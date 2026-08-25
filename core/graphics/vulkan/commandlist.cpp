@@ -20,6 +20,7 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
     : RefCounter<GraphicsResource>(device.m_context.threadPool)
     , m_desc(params)
     , m_stateTracker(device.m_context)
+    , m_hostReadbackBarrierTracker(device.m_context.objectArena)
     , m_device(device)
     , m_context(device.m_context)
     , m_gpuCrashMarkerTracker(device.m_context.objectArena)
@@ -175,8 +176,14 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
     }
 
     endActiveRenderPass();
+    collectHostReadbackBuffers();
     m_stateTracker.appendKeepInitialStateBarriers(*m_currentCmdBuf, m_pendingImageBarriers, m_pendingBufferBarriers);
     commitBarriers();
+    if(m_commandRecordingFailed){
+        discardInvalidCommandBuffer();
+        return;
+    }
+    appendHostReadbackBarriers();
     if(m_commandRecordingFailed){
         discardInvalidCommandBuffer();
         return;
@@ -211,6 +218,7 @@ void CommandList::clearState(){
     resetMarkerState();
 
     m_stateTracker.reset();
+    m_hostReadbackBarrierTracker.clear();
 
     m_currentGraphicsState = {};
     m_currentComputeState = {};
@@ -229,6 +237,42 @@ void CommandList::clearState(){
     m_pendingBufferBarriers.clear();
     m_textureOwnershipReleaseDestinations.clear();
     m_bufferOwnershipReleaseDestinations.clear();
+}
+
+void CommandList::collectHostReadbackBuffers(){
+    for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
+        if(it->first && VulkanDetail::HasBufferDeviceWriteState(it.value()))
+            registerHostReadbackBuffer(*it->first);
+    }
+    for(
+        auto it = m_stateTracker.m_permanentBufferStates.begin();
+        it != m_stateTracker.m_permanentBufferStates.end();
+        ++it
+    ){
+        if(it->first && VulkanDetail::HasBufferDeviceWriteState(it.value()))
+            registerHostReadbackBuffer(*it->first);
+    }
+}
+
+void CommandList::appendHostReadbackBarriers(){
+    m_hostReadbackBarrierTracker.appendBarriers(m_pendingBufferBarriers);
+    commitBarriers();
+}
+
+void CommandList::registerHostReadbackBuffer(Buffer& buffer){
+    if(
+        buffer.m_desc.cpuAccess == CpuAccessMode::Read
+        && m_hostReadbackBarrierTracker.registerBuffer(buffer.m_buffer)
+    )
+        retainResource(&buffer);
+}
+
+void CommandList::registerHostReadbackStagingTexture(StagingTexture& stagingTexture){
+    if(
+        stagingTexture.m_cpuAccess == CpuAccessMode::Read
+        && m_hostReadbackBarrierTracker.registerBuffer(stagingTexture.m_buffer)
+    )
+        retainResource(&stagingTexture);
 }
 
 void CommandList::retainResource(GraphicsResource* resource){
@@ -376,6 +420,7 @@ void CommandList::rejectCommandRecording(const tchar* const operationName, const
 
 void CommandList::invalidateCommandRecording()noexcept{
     m_commandRecordingFailed = true;
+    m_hostReadbackBarrierTracker.clear();
 }
 
 void CommandList::discardInvalidCommandBuffer()noexcept{

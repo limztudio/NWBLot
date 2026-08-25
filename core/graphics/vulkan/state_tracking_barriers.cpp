@@ -787,6 +787,12 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
         return;
     }
 
+    if(
+        VulkanDetail::HasBufferDeviceWriteState(oldState)
+        || VulkanDetail::HasBufferDeviceWriteState(stateBits)
+    )
+        registerHostReadbackBuffer(buffer);
+
     const bool needsUavBarrier =
         oldState == stateBits
         && ResourceStates::HasUnorderedAccess(stateBits)

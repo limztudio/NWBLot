@@ -501,8 +501,33 @@ StagingTexture::StagingTexture(const VulkanContext& context, VulkanAllocator& al
     , m_allocator(allocator)
 {}
 StagingTexture::~StagingTexture(){
+    ScopedLock lock(m_mappingMutex);
+
     m_allocator.destroyStagingTexture(*this);
 }
+#if !defined(NWB_FINAL)
+bool StagingTexture::hasMappedMemoryForTesting(){
+    ScopedLock lock(m_mappingMutex);
+
+    return m_mappedMemory != nullptr;
+}
+
+bool StagingTexture::isPersistentlyMappedForTesting(){
+    ScopedLock lock(m_mappingMutex);
+
+    return m_persistentlyMapped;
+}
+
+void StagingTexture::rejectNextInvalidateForTesting(){
+    ScopedLock lock(m_mappingMutex);
+
+    if(m_persistentlyMapped && m_mappedMemory){
+        m_mappedMemory = nullptr;
+        m_persistentlyMapped = false;
+    }
+    m_rejectNextInvalidateForTesting = true;
+}
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

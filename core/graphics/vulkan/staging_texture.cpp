@@ -271,67 +271,151 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     return StagingTextureHandle(staging, StagingTextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-void* Device::mapStagingTexture(StagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch){
-    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("map staging texture"), NWB_TEXT("texture is null"), tex))
-        return nullptr;
-
-    auto* staging = tex;
-#if defined(NWB_DEBUG)
-    if(staging->m_cpuAccess == CpuAccessMode::None){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: texture was created without CPU access"));
+void* Device::mapStagingTexture(
+    StagingTexture* textureResource,
+    const TextureSlice& slice,
+    const CpuAccessMode::Enum requestedAccess,
+    usize* outRowPitch
+){
+    if(!textureResource){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: texture is null"));
         return nullptr;
     }
-#endif
-    TextureSlice resolvedSlice;
-    if(!VulkanDetail::DebugResolveTextureSlice(staging->m_desc, slice, staging->m_formatLayout, NWB_TEXT("map staging texture"), NWB_TEXT("slice is outside the texture"), resolvedSlice))
+    if(requestedAccess != CpuAccessMode::Read && requestedAccess != CpuAccessMode::Write){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: invalid CPU access mode"));
         return nullptr;
+    }
 
-    if(!staging->m_mappedMemory){
-        const VkResult res = m_allocator.mapStagingTextureMemory(*staging, &staging->m_mappedMemory);
-        if(res != VK_SUCCESS){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture for CPU access: {}"), ResultToString(res));
-            return nullptr;
-        }
+    StagingTexture& staging = *textureResource;
+    if(&staging.m_context != &m_context || &staging.m_allocator != &m_allocator){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: texture belongs to another device"));
+        return nullptr;
+    }
+    if(staging.m_buffer == VK_NULL_HANDLE || !staging.m_allocation){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: native buffer or allocation is null"));
+        return nullptr;
+    }
+    if(staging.m_cpuAccess != CpuAccessMode::Read && staging.m_cpuAccess != CpuAccessMode::Write){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: texture was created without valid CPU access"));
+        return nullptr;
+    }
+    if(requestedAccess != staging.m_cpuAccess){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to map staging texture: requested access does not match the texture CPU access")
+        );
+        return nullptr;
+    }
+
+    TextureSlice resolvedSlice;
+    if(!VulkanDetail::IsTextureSliceInBounds(staging.m_desc, slice, staging.m_formatLayout, &resolvedSlice)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: slice is outside the texture"));
+        return nullptr;
     }
 
     usize rowPitch = 0;
     u64 rangeSize = 0;
-    const bool needsInvalidate = staging->m_cpuAccess == CpuAccessMode::Read && staging->m_requiresInvalidate;
-    u64* outRangeSize = needsInvalidate ? &rangeSize : nullptr;
+    u64* const outRangeSize = requestedAccess == CpuAccessMode::Read ? &rangeSize : nullptr;
     const u64 offset = VulkanDetail::ComputeStagingTextureOffset(
         resolvedSlice,
-        staging->m_mipLayouts[resolvedSlice.mipLevel],
-        staging->m_formatLayout,
-        staging->m_arrayByteSize,
+        staging.m_mipLayouts[resolvedSlice.mipLevel],
+        staging.m_formatLayout,
+        staging.m_arrayByteSize,
         &rowPitch,
         nullptr,
         nullptr,
         outRangeSize
     );
 
-    if(needsInvalidate){
-        const VkResult res = m_allocator.invalidateStagingTextureMemory(*staging, offset, rangeSize);
+    ScopedLock lock(staging.m_mappingMutex);
+    if(staging.m_persistentlyMapped && !staging.m_mappedMemory){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: persistent mapping pointer is null"));
+        return nullptr;
+    }
+
+#if !defined(NWB_FINAL)
+    const bool rejectInvalidate = requestedAccess == CpuAccessMode::Read && staging.m_rejectNextInvalidateForTesting;
+    if(rejectInvalidate)
+        staging.m_rejectNextInvalidateForTesting = false;
+#else
+    constexpr bool rejectInvalidate = false;
+#endif
+
+    void* mappedMemory = staging.m_mappedMemory;
+    bool mappedThisCall = false;
+    if(!mappedMemory || rejectInvalidate){
+        void* newMappedMemory = nullptr;
+        const VkResult res = m_allocator.mapStagingTextureMemory(staging, &newMappedMemory);
         if(res != VK_SUCCESS){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to map staging texture for CPU access: {}"),
+                ResultToString(res)
+            );
+            return nullptr;
+        }
+        mappedThisCall = true;
+        if(!newMappedMemory){
+            m_allocator.unmapStagingTextureMemory(staging);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: mapped pointer is null"));
+            return nullptr;
+        }
+        if(!mappedMemory)
+            mappedMemory = newMappedMemory;
+    }
+
+    const bool needsInvalidate = requestedAccess == CpuAccessMode::Read && (staging.m_requiresInvalidate || rejectInvalidate);
+    if(needsInvalidate){
+        const VkResult res = rejectInvalidate
+            ? VK_ERROR_MEMORY_MAP_FAILED
+            : m_allocator.invalidateStagingTextureMemory(staging, offset, rangeSize)
+        ;
+        if(res != VK_SUCCESS){
+            if(mappedThisCall)
+                m_allocator.unmapStagingTextureMemory(staging);
+            if(rejectInvalidate)
+                return nullptr;
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to invalidate staging texture mapping: {}"), ResultToString(res));
             return nullptr;
         }
     }
 
+    if(mappedThisCall)
+        staging.m_mappedMemory = mappedMemory;
     if(outRowPitch)
         *outRowPitch = rowPitch;
 
-    return static_cast<u8*>(staging->m_mappedMemory) + offset;
+    return static_cast<u8*>(mappedMemory) + offset;
 }
 
-void Device::unmapStagingTexture(StagingTexture* tex){
-    if(!tex)
+void Device::unmapStagingTexture(StagingTexture* textureResource){
+    if(!textureResource){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unmap staging texture: texture is null"));
+        return;
+    }
+
+    StagingTexture& staging = *textureResource;
+    if(&staging.m_context != &m_context || &staging.m_allocator != &m_allocator){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unmap staging texture: texture belongs to another device"));
+        return;
+    }
+    if(staging.m_buffer == VK_NULL_HANDLE || !staging.m_allocation){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unmap staging texture: native buffer or allocation is null"));
+        return;
+    }
+    if(staging.m_cpuAccess != CpuAccessMode::Read && staging.m_cpuAccess != CpuAccessMode::Write){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unmap staging texture: texture has invalid CPU access"));
+        return;
+    }
+
+    ScopedLock lock(staging.m_mappingMutex);
+    if(!staging.m_mappedMemory){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unmap staging texture: texture is not mapped"));
+        return;
+    }
+    if(staging.m_persistentlyMapped)
         return;
 
-    auto* staging = tex;
-    if(staging->m_mappedMemory && !staging->m_persistentlyMapped){
-        staging->m_allocator.unmapStagingTextureMemory(*staging);
-        staging->m_mappedMemory = nullptr;
-    }
+    m_allocator.unmapStagingTextureMemory(staging);
+    staging.m_mappedMemory = nullptr;
 }
 
 

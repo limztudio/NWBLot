@@ -1379,6 +1379,9 @@ public:
     [[nodiscard]] const QueueFamilySharingInfo& getNativeQueueFamilySharingForTesting()const{
         return m_nativeQueueFamilySharingForTesting;
     }
+    [[nodiscard]] bool hasMappedMemoryForTesting();
+    [[nodiscard]] bool isPersistentlyMappedForTesting();
+    void rejectNextInvalidateForTesting();
 #endif
 
 
@@ -1394,9 +1397,13 @@ private:
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;
+    Futex m_mappingMutex;
     void* m_mappedMemory = nullptr;
     bool m_persistentlyMapped = false;
     bool m_requiresInvalidate = false;
+#if !defined(NWB_FINAL)
+    bool m_rejectNextInvalidateForTesting = false;
+#endif
     CpuAccessMode::Enum m_cpuAccess{};
 
     const VulkanContext& m_context;

@@ -201,6 +201,292 @@ TEST_F(StagingTextureContractTest, CreationRejectsInvalidInputsAndPreservesAllVa
 }
 
 
+TEST_F(StagingTextureContractTest, MappingRejectsInvalidInputsWithoutMutatingPitchAndRecovers){
+    auto& device = StagingTextureContractTest::device();
+    const auto expectDiagnosticRejection = [](auto&& operation){
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+        EXPECT_DEATH_IF_SUPPORTED({
+            EXPECT_FALSE(operation());
+        }, "");
+#else
+        EXPECT_FALSE(operation());
+#endif
+    };
+    const auto expectDiagnosticVoidRejection = [](auto&& operation){
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+        EXPECT_DEATH_IF_SUPPORTED({
+            operation();
+        }, "");
+#else
+        operation();
+#endif
+    };
+
+    TextureDesc desc = TextureDesc()
+        .setWidth(8u)
+        .setHeight(8u)
+        .setFormat(Format::RGBA8_UNORM)
+        .setDimension(TextureDimension::Texture2DArray)
+        .setInitialState(ResourceStates::Common)
+        .setKeepInitialState(true)
+    ;
+    desc.mipLevels = 2u;
+    desc.arraySize = 2u;
+    const StagingTextureHandle readback = device.createStagingTexture(desc, CpuAccessMode::Read);
+    const StagingTextureHandle upload = device.createStagingTexture(desc, CpuAccessMode::Write);
+    ASSERT_TRUE(readback);
+    ASSERT_TRUE(upload);
+
+    static constexpr usize s_UnchangedPitch = 0x5a5a5a5au;
+    const auto mapWasAcceptedOrChangedPitch = [&](
+        GraphicsBackend::Device& mapDevice,
+        StagingTexture* staging,
+        const TextureSlice& slice,
+        const CpuAccessMode::Enum access
+    ){
+        usize rowPitch = s_UnchangedPitch;
+        void* const mapped = mapDevice.mapStagingTexture(staging, slice, access, &rowPitch);
+        return mapped != nullptr || rowPitch != s_UnchangedPitch;
+    };
+
+    expectDiagnosticRejection([&](){
+        return mapWasAcceptedOrChangedPitch(device, nullptr, TextureSlice{}, CpuAccessMode::Read);
+    });
+    expectDiagnosticVoidRejection([&](){ device.unmapStagingTexture(nullptr); });
+    expectDiagnosticRejection([&](){
+        return mapWasAcceptedOrChangedPitch(device, readback.get(), TextureSlice{}, CpuAccessMode::None);
+    });
+    expectDiagnosticRejection([&](){
+        return mapWasAcceptedOrChangedPitch(
+            device,
+            readback.get(),
+            TextureSlice{},
+            static_cast<CpuAccessMode::Enum>(UINT8_MAX)
+        );
+    });
+    expectDiagnosticRejection([&](){
+        return mapWasAcceptedOrChangedPitch(device, readback.get(), TextureSlice{}, CpuAccessMode::Write);
+    });
+    expectDiagnosticRejection([&](){
+        return mapWasAcceptedOrChangedPitch(device, upload.get(), TextureSlice{}, CpuAccessMode::Read);
+    });
+
+    const TextureSlice invalidSlices[] = {
+        TextureSlice{}.setMipLevel(2u),
+        TextureSlice{}.setArraySlice(2u),
+        TextureSlice{}.setWidth(0u),
+        TextureSlice{}.setHeight(0u),
+        TextureSlice{}.setDepth(0u),
+        TextureSlice{}.setOrigin(8u, 0u, 0u),
+        TextureSlice{}.setOrigin(7u, 0u, 0u).setWidth(2u),
+        TextureSlice{}.setOrigin(UINT32_MAX, 0u, 0u).setWidth(UINT32_MAX),
+        TextureSlice{}.setOrigin(0u, 8u, 0u),
+        TextureSlice{}.setOrigin(0u, 7u, 0u).setHeight(2u),
+        TextureSlice{}.setOrigin(0u, UINT32_MAX, 0u).setHeight(UINT32_MAX),
+        TextureSlice{}.setOrigin(0u, 0u, 1u),
+        TextureSlice{}.setDepth(2u),
+        TextureSlice{}.setOrigin(0u, 0u, UINT32_MAX).setDepth(UINT32_MAX),
+    };
+    for(const TextureSlice& invalidSlice : invalidSlices){
+        expectDiagnosticRejection([&](){
+            return mapWasAcceptedOrChangedPitch(device, readback.get(), invalidSlice, CpuAccessMode::Read);
+        });
+    }
+
+    usize readbackPitch = s_UnchangedPitch;
+    void* const readbackMemory = device.mapStagingTexture(
+        readback.get(),
+        TextureSlice{}.setOrigin(2u, 2u, 0u).setSize(3u, 3u, 1u).setArraySlice(1u),
+        CpuAccessMode::Read,
+        &readbackPitch
+    );
+    ASSERT_NE(readbackMemory, nullptr);
+    EXPECT_NE(readbackPitch, s_UnchangedPitch);
+    device.unmapStagingTexture(readback.get());
+
+    const TextureDesc compressedDesc = TextureDesc()
+        .setWidth(8u)
+        .setHeight(8u)
+        .setFormat(Format::BC1_UNORM)
+        .setDimension(TextureDimension::Texture2D)
+        .setInitialState(ResourceStates::Common)
+        .setKeepInitialState(true)
+    ;
+    const StagingTextureHandle compressed = device.createStagingTexture(compressedDesc, CpuAccessMode::Read);
+    ASSERT_TRUE(compressed);
+    expectDiagnosticRejection([&](){
+        return mapWasAcceptedOrChangedPitch(
+            device,
+            compressed.get(),
+            TextureSlice{}.setOrigin(1u, 0u, 0u).setSize(4u, 4u, 1u),
+            CpuAccessMode::Read
+        );
+    });
+    expectDiagnosticRejection([&](){
+        return mapWasAcceptedOrChangedPitch(
+            device,
+            compressed.get(),
+            TextureSlice{}.setOrigin(0u, 1u, 0u).setSize(4u, 4u, 1u),
+            CpuAccessMode::Read
+        );
+    });
+    expectDiagnosticRejection([&](){
+        return mapWasAcceptedOrChangedPitch(
+            device,
+            compressed.get(),
+            TextureSlice{}.setSize(2u, 4u, 1u),
+            CpuAccessMode::Read
+        );
+    });
+    usize compressedPitch = s_UnchangedPitch;
+    ASSERT_NE(
+        device.mapStagingTexture(compressed.get(), TextureSlice{}, CpuAccessMode::Read, &compressedPitch),
+        nullptr
+    );
+    EXPECT_NE(compressedPitch, s_UnchangedPitch);
+    device.unmapStagingTexture(compressed.get());
+}
+
+
+TEST_F(StagingTextureContractTest, MappingRejectsForeignDeviceAndOwnerRecovers){
+    auto& device = StagingTextureContractTest::device();
+    const auto expectDiagnosticRejection = [](auto&& operation){
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+        EXPECT_DEATH_IF_SUPPORTED({
+            EXPECT_FALSE(operation());
+        }, "");
+#else
+        EXPECT_FALSE(operation());
+#endif
+    };
+    const auto expectDiagnosticVoidRejection = [](auto&& operation){
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+        EXPECT_DEATH_IF_SUPPORTED({
+            operation();
+        }, "");
+#else
+        operation();
+#endif
+    };
+
+    const TextureDesc desc = TextureDesc()
+        .setWidth(8u)
+        .setHeight(8u)
+        .setFormat(Format::RGBA8_UNORM)
+        .setDimension(TextureDimension::Texture2D)
+        .setInitialState(ResourceStates::Common)
+        .setKeepInitialState(true)
+    ;
+
+    HeadlessGraphicsScope foreignScope;
+    if(!foreignScope.initialize())
+        GTEST_SKIP() << "Staging texture mapping ownership: a second Vulkan device is unavailable.";
+    auto& foreignDevice = foreignScope.graphics().getDevice();
+    const StagingTextureHandle foreignReadback = foreignDevice.createStagingTexture(desc, CpuAccessMode::Read);
+    ASSERT_TRUE(foreignReadback);
+    expectDiagnosticRejection([&](){
+        usize rowPitch = 0x5a5a5a5au;
+        void* const mapped = device.mapStagingTexture(
+            foreignReadback.get(),
+            TextureSlice{},
+            CpuAccessMode::Read,
+            &rowPitch
+        );
+        return mapped != nullptr || rowPitch != 0x5a5a5a5au;
+    });
+    expectDiagnosticVoidRejection([&](){ device.unmapStagingTexture(foreignReadback.get()); });
+
+    usize foreignPitch = 0x5a5a5a5au;
+    ASSERT_NE(
+        foreignDevice.mapStagingTexture(
+            foreignReadback.get(),
+            TextureSlice{},
+            CpuAccessMode::Read,
+            &foreignPitch
+        ),
+        nullptr
+    );
+    EXPECT_NE(foreignPitch, 0x5a5a5a5au);
+    foreignDevice.unmapStagingTexture(foreignReadback.get());
+}
+
+
+TEST_F(StagingTextureContractTest, MappingLifecycleIsPersistentAndInvalidateFailureIsTransactional){
+    auto& device = StagingTextureContractTest::device();
+    const TextureDesc desc = TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Format::RGBA8_UNORM)
+        .setDimension(TextureDimension::Texture2D)
+        .setInitialState(ResourceStates::Common)
+        .setKeepInitialState(true)
+    ;
+    const StagingTextureHandle upload = device.createStagingTexture(desc, CpuAccessMode::Write);
+    const StagingTextureHandle readback = device.createStagingTexture(desc, CpuAccessMode::Read);
+    ASSERT_TRUE(upload);
+    ASSERT_TRUE(readback);
+
+    usize firstPitch = 0u;
+    usize secondPitch = 0u;
+    void* const firstMap = device.mapStagingTexture(upload.get(), TextureSlice{}, CpuAccessMode::Write, &firstPitch);
+    void* const secondMap = device.mapStagingTexture(upload.get(), TextureSlice{}, CpuAccessMode::Write, &secondPitch);
+    ASSERT_NE(firstMap, nullptr);
+    ASSERT_NE(secondMap, nullptr);
+    EXPECT_EQ(firstMap, secondMap);
+    EXPECT_EQ(firstPitch, secondPitch);
+    device.unmapStagingTexture(upload.get());
+    device.unmapStagingTexture(upload.get());
+
+    usize remapPitch = 0u;
+    void* const remap = device.mapStagingTexture(upload.get(), TextureSlice{}, CpuAccessMode::Write, &remapPitch);
+    ASSERT_EQ(remap, firstMap);
+    EXPECT_EQ(remapPitch, firstPitch);
+    device.unmapStagingTexture(upload.get());
+
+#if !defined(NWB_FINAL)
+    const auto expectDiagnosticVoidRejection = [](auto&& operation){
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+        EXPECT_DEATH_IF_SUPPORTED({
+            operation();
+        }, "");
+#else
+        operation();
+#endif
+    };
+    static constexpr usize s_UnchangedPitch = 0x5a5a5a5au;
+    EXPECT_TRUE(readback->hasMappedMemoryForTesting());
+    EXPECT_TRUE(readback->isPersistentlyMappedForTesting());
+    readback->rejectNextInvalidateForTesting();
+    EXPECT_FALSE(readback->hasMappedMemoryForTesting());
+    EXPECT_FALSE(readback->isPersistentlyMappedForTesting());
+    usize rejectedPitch = s_UnchangedPitch;
+    EXPECT_EQ(
+        device.mapStagingTexture(readback.get(), TextureSlice{}, CpuAccessMode::Read, &rejectedPitch),
+        nullptr
+    );
+    EXPECT_EQ(rejectedPitch, s_UnchangedPitch);
+    EXPECT_FALSE(readback->hasMappedMemoryForTesting());
+    EXPECT_FALSE(readback->isPersistentlyMappedForTesting());
+
+    usize retryPitch = s_UnchangedPitch;
+    void* const retryMap = device.mapStagingTexture(
+        readback.get(),
+        TextureSlice{},
+        CpuAccessMode::Read,
+        &retryPitch
+    );
+    ASSERT_NE(retryMap, nullptr);
+    EXPECT_NE(retryPitch, s_UnchangedPitch);
+    EXPECT_TRUE(readback->hasMappedMemoryForTesting());
+    EXPECT_FALSE(readback->isPersistentlyMappedForTesting());
+    device.unmapStagingTexture(readback.get());
+    EXPECT_FALSE(readback->hasMappedMemoryForTesting());
+    EXPECT_FALSE(readback->isPersistentlyMappedForTesting());
+    expectDiagnosticVoidRejection([&](){ device.unmapStagingTexture(readback.get()); });
+#endif
+}
+
+
 TEST_F(StagingTextureContractTest, GraphicsAndTransferStagingBufferIsUsedAcrossDistinctFamilies){
     auto& device = StagingTextureContractTest::device();
     if(!device.getQueue(CommandQueue::Transfer))

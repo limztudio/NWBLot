@@ -395,7 +395,7 @@ concept RayTracingShaderTableApi = requires(
     T& shaderTable,
     AStringView exportName
 ){
-    shaderTable.setRayGenerationShader(exportName);
+    { shaderTable.setRayGenerationShader(exportName) }->SameAs<bool>;
     { shaderTable.addMissShader(exportName) }->SameAs<u32>;
     { shaderTable.addHitGroup(exportName) }->SameAs<u32>;
     { shaderTable.addCallableShader(exportName) }->SameAs<u32>;

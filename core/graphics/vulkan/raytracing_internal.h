@@ -79,10 +79,23 @@ bool ComputeRayTracingHandleLayout(
 bool ComputeShaderTableByteSize(
     u32 recordCount,
     u32 handleSizeAligned,
-    u32 baseAlignment,
     u64& outByteSize,
     const tchar* operation
 );
+
+[[nodiscard]] bool ComputeShaderTableAllocationByteSize(
+    u64 recordByteSize,
+    u32 baseAlignment,
+    u64& outAllocationByteSize
+)noexcept;
+
+[[nodiscard]] bool ComputeShaderTableAlignedOffset(
+    u64 deviceAddress,
+    u64 allocationByteSize,
+    u64 recordByteSize,
+    u32 baseAlignment,
+    u64& outOffset
+)noexcept;
 
 bool FillBlasGeometryForSizeQuery(
     const VulkanContext& context,

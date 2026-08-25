@@ -487,6 +487,8 @@ struct RayTracingPipelineDesc{
 typedef GraphicsBackend::Handle<RayTracingShaderTable> RayTracingShaderTableHandle;
 typedef GraphicsBackend::Handle<RayTracingPipeline> RayTracingPipelineHandle;
 
+inline constexpr u32 s_InvalidRayTracingShaderTableRecordIndex = Limit<u32>::s_Max;
+
 struct RayTracingState{
     RayTracingShaderTable* shaderTable = nullptr;
 

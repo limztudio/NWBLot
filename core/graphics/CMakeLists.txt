@@ -83,6 +83,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_commands_dispatch.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_micromap.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_pipeline.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_shader_table.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/resource_bindings.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/resource_bindings_commands.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/resource_bindings_descriptor_buffer.cpp"

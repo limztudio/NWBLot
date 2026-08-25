@@ -2108,6 +2108,28 @@ private:
 // Ray Tracing Pipeline
 
 
+namespace ShaderTableRecordKind{
+    enum Enum : u8{
+        RayGeneration,
+        Miss,
+        HitGroup,
+        Callable,
+
+        Count,
+        Invalid = Count,
+    };
+};
+
+struct ShaderTableGroupMetadata{
+    GraphicsString exportName;
+    ShaderTableRecordKind::Enum kind = ShaderTableRecordKind::Invalid;
+    u32 groupIndex = 0u;
+
+    explicit ShaderTableGroupMetadata(GraphicsArena& arena)
+        : exportName(arena)
+    {}
+};
+
 class RayTracingPipeline final : public RefCounter<GraphicsResource>, public PipelineBindingState, NoCopy{
     friend class Device;
     friend class CommandList;
@@ -2122,7 +2144,7 @@ public:
 public:
     [[nodiscard]] const RayTracingPipelineDesc& getDescription()const{ return m_desc; }
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
-    RayTracingShaderTableHandle createShaderTable();
+    [[nodiscard]] RayTracingShaderTableHandle createShaderTable();
     Object getNativeHandle(ObjectType objectType);
 
 
@@ -2131,6 +2153,7 @@ private:
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     // vkGetRayTracingShaderGroupHandlesKHR returns tightly packed handles; SBT records add alignment later.
     Vector<u8, Alloc::GlobalArena> m_shaderGroupHandles;
+    GraphicsVector<ShaderTableGroupMetadata> m_shaderGroups;
 
     const VulkanContext& m_context;
     Device& m_device;
@@ -2146,27 +2169,65 @@ class ShaderTable final : public RefCounter<GraphicsResource>, NoCopy{
     friend class RayTracingPipeline;
 
 
+    struct ShaderRecordPreflight{
+        usize handleOffset = 0u;
+        u64 recordByteSize = 0u;
+        u64 allocationByteSize = 0u;
+        u32 groupIndex = 0u;
+        u32 handleSize = 0u;
+        u32 handleSizeAligned = 0u;
+        u32 baseAlignment = 0u;
+    };
+
+
 public:
     ShaderTable(const VulkanContext& context, Device& device);
     ~ShaderTable();
 
 
 public:
-    void setRayGenerationShader(AStringView exportName);
-    u32 addMissShader(AStringView exportName);
-    u32 addHitGroup(AStringView exportName);
-    u32 addCallableShader(AStringView exportName);
+    [[nodiscard]] bool setRayGenerationShader(AStringView exportName);
+    [[nodiscard]] u32 addMissShader(AStringView exportName);
+    [[nodiscard]] u32 addHitGroup(AStringView exportName);
+    [[nodiscard]] u32 addCallableShader(AStringView exportName);
     void clearMissShaders();
     void clearHitShaders();
     void clearCallableShaders();
-    RayTracingPipeline* getPipeline(){ return m_pipeline.get(); }
+    [[nodiscard]] RayTracingPipeline* getPipeline(){ return m_pipeline.get(); }
     Object getNativeHandle(ObjectType objectType);
+#if !defined(NWB_FINAL)
+    void rejectNextBufferAllocationForTesting();
+    void rejectNextNewBufferMapForTesting();
+#endif
 
 
 private:
-    void allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize);
-    u32 appendShaderRecord(
+    [[nodiscard]] bool findGroupIndex(
         AStringView exportName,
+        ShaderTableRecordKind::Enum expectedKind,
+        u32& outGroupIndex,
+        const tchar* operationName,
+        const tchar* exportKind
+    )const;
+    [[nodiscard]] bool preflightShaderRecord(
+        AStringView exportName,
+        ShaderTableRecordKind::Enum expectedKind,
+        u32 recordCount,
+        ShaderRecordPreflight& outPreflight,
+        const tchar* operationName,
+        const tchar* exportKind
+    )const;
+    [[nodiscard]] bool allocateSBTBuffer(
+        const ShaderRecordPreflight& preflight,
+        BufferHandle& outBuffer,
+        u64& outOffset,
+        const tchar* operationName,
+        const tchar* recordName
+    );
+    [[nodiscard]] u32 appendShaderRecord(
+        AStringView exportName,
+        ShaderTableRecordKind::Enum expectedKind,
+        GraphicsVector<u32>& groupIndices,
         BufferHandle& buffer,
         u64& offset,
         u32& count,
@@ -2174,7 +2235,6 @@ private:
         const tchar* recordName,
         const tchar* exportKind
     );
-    u32 findGroupIndex(AStringView exportName)const;
 
 
 private:
@@ -2185,10 +2245,16 @@ private:
     BufferHandle m_hitBuffer;
     BufferHandle m_callableBuffer;
 
+    GraphicsVector<u32> m_missGroupIndices;
+    GraphicsVector<u32> m_hitGroupIndices;
+    GraphicsVector<u32> m_callableGroupIndices;
+
     u64 m_raygenOffset = 0;
     u64 m_missOffset = 0;
     u64 m_hitOffset = 0;
     u64 m_callableOffset = 0;
+
+    mutable Futex m_mutex;
 
     const VulkanContext& m_context;
     Device& m_device;
@@ -2196,6 +2262,10 @@ private:
     u32 m_missCount = 0;
     u32 m_hitCount = 0;
     u32 m_callableCount = 0;
+#if !defined(NWB_FINAL)
+    bool m_rejectNextBufferAllocationForTesting = false;
+    bool m_rejectNextNewBufferMapForTesting = false;
+#endif
 };
 
 

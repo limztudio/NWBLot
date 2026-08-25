@@ -2254,8 +2254,15 @@ bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
 }
 
 bool RendererRayTracingSystem::ensureCausticRtPipeline(){
-    if(rayTracingState().m_hwCausticPipeline)
+    if(rayTracingState().m_hwCausticPipeline && rayTracingState().m_hwCausticShaderTable)
         return true;
+    if(rayTracingState().m_hwCausticPipeline || rayTracingState().m_hwCausticShaderTable){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: RT caustic pipeline and shader table cache is inconsistent"));
+        rayTracingState().m_hwCausticPipeline.reset();
+        rayTracingState().m_hwCausticShaderTable.reset();
+        rayTracingState().m_hwCausticPipelineFailed = true;
+        return false;
+    }
     if(rayTracingState().m_hwCausticPipelineFailed)
         return false;
     if(!graphics().queryFeatureSupport(Core::Feature::RayTracingPipeline)){
@@ -2318,22 +2325,30 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     hitGroupDesc.setClosestHitShader(closestHitShader).setExportName(__hidden_caustics::s_HwHitGroupExportName);
     pipelineDesc.addHitGroup(hitGroupDesc);
 
-    rayTracingState().m_hwCausticPipeline = device.createRayTracingPipeline(pipelineDesc);
-    if(!rayTracingState().m_hwCausticPipeline){
+    Core::RayTracingPipelineHandle pipeline = device.createRayTracingPipeline(pipelineDesc);
+    if(!pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RT caustic pipeline"));
         rayTracingState().m_hwCausticPipelineFailed = true;
         return false;
     }
 
-    Core::RayTracingShaderTableHandle shaderTable = rayTracingState().m_hwCausticPipeline->createShaderTable();
+    Core::RayTracingShaderTableHandle shaderTable = pipeline->createShaderTable();
     if(!shaderTable){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RT caustic shader table"));
         rayTracingState().m_hwCausticPipelineFailed = true;
         return false;
     }
-    shaderTable->setRayGenerationShader(__hidden_caustics::s_HwRaygenExportName);
-    shaderTable->addMissShader(__hidden_caustics::s_HwMissExportName);
-    shaderTable->addHitGroup(__hidden_caustics::s_HwHitGroupExportName);
+    if(
+        !shaderTable->setRayGenerationShader(__hidden_caustics::s_HwRaygenExportName)
+        || shaderTable->addMissShader(__hidden_caustics::s_HwMissExportName) != 0u
+        || shaderTable->addHitGroup(__hidden_caustics::s_HwHitGroupExportName) != 0u
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to populate RT caustic shader table"));
+        rayTracingState().m_hwCausticPipelineFailed = true;
+        return false;
+    }
+
+    rayTracingState().m_hwCausticPipeline = Move(pipeline);
     rayTracingState().m_hwCausticShaderTable = Move(shaderTable);
 
     NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created RT caustic pipeline + shader table"));

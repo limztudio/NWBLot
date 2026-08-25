@@ -5691,6 +5691,331 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsSemanticRejectionsDiscardPriorWork
 }
 
 
+TEST_F(DescriptorBufferRoundTripTest, ResolveTextureRejectionsDiscardRenderingAndPositiveResolveClosesItInAllBuilds){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    constexpr u32 s_Width = 8u;
+    constexpr u32 s_Height = 8u;
+    constexpr u32 s_SampleCount = 4u;
+    constexpr FormatSupport::Mask s_RequiredFormatSupport = FormatSupport::Texture | FormatSupport::RenderTarget;
+    if((device.queryFormatSupport(Format::RGBA8_UNORM) & s_RequiredFormatSupport) != s_RequiredFormatSupport)
+        GTEST_SKIP() << "Resolve texture smoke: RGBA8_UNORM lacks sampled/color-attachment support.";
+
+    TextureDesc sourceDesc;
+    sourceDesc
+        .setWidth(s_Width)
+        .setHeight(s_Height)
+        .setSampleCount(s_SampleCount)
+        .setFormat(Format::RGBA8_UNORM)
+        .setInRenderTarget(true)
+        .setInitialState(ResourceStates::Common)
+        .setKeepInitialState(true)
+    ;
+    TextureDesc destinationDesc;
+    destinationDesc
+        .setWidth(s_Width)
+        .setHeight(s_Height)
+        .setFormat(Format::RGBA8_UNORM)
+        .setInitialState(ResourceStates::Common)
+        .setKeepInitialState(true)
+    ;
+    TextureDesc seededSourceDesc = sourceDesc;
+    seededSourceDesc.setInitialState(ResourceStates::ResolveSource);
+    TextureDesc seededDestinationDesc = destinationDesc;
+    seededDestinationDesc.setInitialState(ResourceStates::ResolveDest);
+
+    TextureDesc mismatchedExtentDesc = destinationDesc;
+    mismatchedExtentDesc.setWidth(s_Width / 2u).setHeight(s_Height / 2u);
+
+    TextureDesc layerCountSourceDesc = sourceDesc;
+    layerCountSourceDesc.setArraySize(2u).setDimension(TextureDimension::Texture2DMSArray);
+
+    const TextureHandle source = device.createTexture(sourceDesc);
+    const TextureHandle destination = device.createTexture(destinationDesc);
+    const TextureHandle singleSampleSource = device.createTexture(destinationDesc);
+    const TextureHandle multisampledDestination = device.createTexture(sourceDesc);
+    const TextureHandle seededSource = device.createTexture(seededSourceDesc);
+    const TextureHandle seededDestination = device.createTexture(seededDestinationDesc);
+    const TextureHandle mismatchedExtentDestination = device.createTexture(mismatchedExtentDesc);
+
+    const TextureHandle layerCountSource = device.createTexture(layerCountSourceDesc);
+
+    TextureHandle mismatchedFormatDestination;
+    TextureDesc mismatchedFormatDesc = destinationDesc;
+    mismatchedFormatDesc.setFormat(Format::BGRA8_UNORM);
+    if(
+        (device.queryFormatSupport(Format::BGRA8_UNORM) & s_RequiredFormatSupport)
+        == s_RequiredFormatSupport
+    )
+        mismatchedFormatDestination = device.createTexture(mismatchedFormatDesc);
+
+    if(
+        !source
+        || !destination
+        || !singleSampleSource
+        || !multisampledDestination
+        || !mismatchedExtentDestination
+        || !layerCountSource
+        || !seededSource
+        || !seededDestination
+    )
+        GTEST_SKIP() << "Resolve texture smoke: the device does not support the required RGBA8 multisample shape.";
+
+    const FramebufferHandle framebuffer = device.createFramebuffer(
+        FramebufferDesc().addColorAttachment(source.get())
+    );
+    const FramebufferHandle seededFramebuffer = device.createFramebuffer(
+        FramebufferDesc().addColorAttachment(seededSource.get())
+    );
+    const StagingTextureHandle readback = device.createStagingTexture(destinationDesc, CpuAccessMode::Read);
+    ASSERT_TRUE(framebuffer);
+    ASSERT_TRUE(seededFramebuffer);
+    ASSERT_TRUE(readback);
+
+    auto commandList = device.createCommandList();
+    ASSERT_TRUE(commandList);
+    const auto submit = [&](){
+        CommandList* const commandLists[] = { commandList.get() };
+        return device.executeCommandLists(
+            commandLists,
+            LengthOf(commandLists),
+            commandList->getDescription().physicalQueue,
+            QueueSubmissionDesc{}
+        );
+    };
+
+    commandList->open();
+    commandList->close();
+    QueueSubmissionToken lastAcceptedToken = submit();
+    ASSERT_TRUE(lastAcceptedToken.valid());
+
+    enum class Operation : u8{
+        NullDestination,
+        NullSource,
+        EmptyDestinationRange,
+        EmptySourceRange,
+        SingleSampleSource,
+        MultisampledDestination,
+        MismatchedFormat,
+        MismatchedExtent,
+        MismatchedLayerCount,
+        SameNativeImage,
+        DestinationPermanentStateConflict,
+    };
+    struct Case{
+        Operation operation;
+        const char* label;
+    };
+    const Case cases[]{
+        { Operation::NullDestination, "null destination" },
+        { Operation::NullSource, "null source" },
+        { Operation::EmptyDestinationRange, "empty destination range" },
+        { Operation::EmptySourceRange, "empty source range" },
+        { Operation::SingleSampleSource, "single-sample source" },
+        { Operation::MultisampledDestination, "multisampled destination" },
+        { Operation::MismatchedFormat, "mismatched native format" },
+        { Operation::MismatchedExtent, "mismatched extent" },
+        { Operation::MismatchedLayerCount, "mismatched layer count" },
+        { Operation::SameNativeImage, "same native image" },
+        { Operation::DestinationPermanentStateConflict, "destination permanent-state conflict" },
+    };
+
+    for(const Case& testCase : cases){
+        if(testCase.operation == Operation::MismatchedFormat && !mismatchedFormatDestination)
+            continue;
+        if(testCase.operation == Operation::MismatchedLayerCount && !layerCountSource)
+            continue;
+
+        SCOPED_TRACE(testCase.label);
+        Texture* caseDestination = destination.get();
+        Texture* caseSource = source.get();
+        TextureSubresourceSet destinationSubresources = s_AllSubresources;
+        TextureSubresourceSet sourceSubresources = s_AllSubresources;
+        bool installDestinationPermanentConflict = false;
+        switch(testCase.operation){
+        case Operation::NullDestination:
+            caseDestination = nullptr;
+            break;
+        case Operation::NullSource:
+            caseSource = nullptr;
+            break;
+        case Operation::EmptyDestinationRange:
+            destinationSubresources.setMipLevels(1u, 1u);
+            break;
+        case Operation::EmptySourceRange:
+            sourceSubresources.setMipLevels(1u, 1u);
+            break;
+        case Operation::SingleSampleSource:
+            caseSource = singleSampleSource.get();
+            break;
+        case Operation::MultisampledDestination:
+            caseDestination = multisampledDestination.get();
+            break;
+        case Operation::MismatchedFormat:
+            caseDestination = mismatchedFormatDestination.get();
+            break;
+        case Operation::MismatchedExtent:
+            caseDestination = mismatchedExtentDestination.get();
+            break;
+        case Operation::MismatchedLayerCount:
+            caseSource = layerCountSource.get();
+            break;
+        case Operation::SameNativeImage:
+            caseDestination = source.get();
+            break;
+        case Operation::DestinationPermanentStateConflict:
+            installDestinationPermanentConflict = true;
+            break;
+        }
+
+        commandList->open();
+        ASSERT_TRUE(commandList->isRecording());
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+        if(installDestinationPermanentConflict)
+            commandList->setPermanentTextureState(destination.get(), ResourceStates::Common);
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+        commandList->setGraphicsState(GraphicsState().setFramebuffer(framebuffer.get()));
+        ASSERT_TRUE(commandList->isRenderPassActive());
+        ASSERT_FALSE(commandList->commandRecordingFailed());
+
+        const usize sourceReferencesBeforeResolve = caseSource ? caseSource->getReferenceCount() : 0u;
+        const usize destinationReferencesBeforeResolve = caseDestination ? caseDestination->getReferenceCount() : 0u;
+        commandList->resolveTexture(
+            caseDestination,
+            destinationSubresources,
+            caseSource,
+            sourceSubresources
+        );
+        EXPECT_TRUE(commandList->commandRecordingFailed());
+        EXPECT_TRUE(commandList->isRenderPassActive());
+        EXPECT_EQ(
+            commandList->getTextureSubresourceState(source.get(), 0u, 0u),
+            ResourceStates::RenderTarget
+        );
+        if(caseSource)
+            EXPECT_EQ(caseSource->getReferenceCount(), sourceReferencesBeforeResolve);
+        if(caseDestination)
+            EXPECT_EQ(caseDestination->getReferenceCount(), destinationReferencesBeforeResolve);
+
+        CommandListResourceStateHandoff invalidHandoff(DescriptorBufferRoundTripTest::arena());
+        commandList->close(&invalidHandoff);
+        EXPECT_FALSE(invalidHandoff.valid());
+        EXPECT_FALSE(commandList->hasCommandBuffer());
+        EXPECT_FALSE(submit().valid());
+
+        commandList->open();
+        ASSERT_TRUE(commandList->isRecording());
+        EXPECT_FALSE(commandList->commandRecordingFailed());
+        commandList->close();
+        const QueueSubmissionToken recoveredToken = submit();
+        ASSERT_TRUE(recoveredToken.valid());
+        EXPECT_EQ(recoveredToken.value, lastAcceptedToken.value + 1u);
+        lastAcceptedToken = recoveredToken;
+    }
+
+    commandList->open();
+    commandList->setGraphicsState(GraphicsState().setFramebuffer(framebuffer.get()));
+    ASSERT_TRUE(commandList->isRenderPassActive());
+    commandList->clearTextureFloat(source.get(), s_AllSubresources, Color(1.f, 0.f, 0.f, 1.f));
+    ASSERT_TRUE(commandList->isRenderPassActive());
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+
+    commandList->resolveTexture(destination.get(), s_AllSubresources, source.get(), s_AllSubresources);
+    EXPECT_FALSE(commandList->commandRecordingFailed());
+    EXPECT_FALSE(commandList->isRenderPassActive());
+    EXPECT_EQ(
+        commandList->getTextureSubresourceState(source.get(), 0u, 0u),
+        ResourceStates::ResolveSource
+    );
+    EXPECT_EQ(
+        commandList->getTextureSubresourceState(destination.get(), 0u, 0u),
+        ResourceStates::ResolveDest
+    );
+    commandList->copyTexture(readback.get(), TextureSlice{}, destination.get(), TextureSlice{});
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+    commandList->close();
+    const QueueSubmissionToken resolveToken = submit();
+    ASSERT_TRUE(resolveToken.valid());
+    EXPECT_EQ(resolveToken.value, lastAcceptedToken.value + 1u);
+    ASSERT_TRUE(device.waitForIdle());
+
+    usize rowPitch = 0u;
+    const auto* const readbackBytes = static_cast<const u8*>(device.mapStagingTexture(
+        readback.get(),
+        TextureSlice{},
+        CpuAccessMode::Read,
+        &rowPitch
+    ));
+    ASSERT_NE(readbackBytes, nullptr);
+    ASSERT_GE(rowPitch, static_cast<usize>(s_Width) * 4u);
+    for(u32 row = 0u; row < s_Height; ++row){
+        for(u32 column = 0u; column < s_Width; ++column){
+            const usize pixelOffset = static_cast<usize>(row) * rowPitch + static_cast<usize>(column) * 4u;
+            EXPECT_EQ(readbackBytes[pixelOffset + 0u], 255u);
+            EXPECT_EQ(readbackBytes[pixelOffset + 1u], 0u);
+            EXPECT_EQ(readbackBytes[pixelOffset + 2u], 0u);
+            EXPECT_EQ(readbackBytes[pixelOffset + 3u], 255u);
+        }
+    }
+    device.unmapStagingTexture(readback.get());
+
+    lastAcceptedToken = resolveToken;
+    commandList->open();
+    commandList->setGraphicsState(GraphicsState().setFramebuffer(seededFramebuffer.get()));
+    ASSERT_TRUE(commandList->isRenderPassActive());
+    commandList->clearTextureFloat(seededSource.get(), s_AllSubresources, Color(0.f, 1.f, 0.f, 1.f));
+    commandList->endRenderPass();
+    commandList->setTextureState(seededSource.get(), s_AllSubresources, ResourceStates::ResolveSource);
+    commandList->setTextureState(seededDestination.get(), s_AllSubresources, ResourceStates::ResolveDest);
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+    commandList->close();
+    const QueueSubmissionToken primeToken = submit();
+    ASSERT_TRUE(primeToken.valid());
+    EXPECT_EQ(primeToken.value, lastAcceptedToken.value + 1u);
+    ASSERT_TRUE(device.waitForIdle());
+
+    commandList->open();
+    ASSERT_EQ(
+        commandList->getTextureSubresourceState(seededSource.get(), 0u, 0u),
+        ResourceStates::ResolveSource
+    );
+    ASSERT_EQ(
+        commandList->getTextureSubresourceState(seededDestination.get(), 0u, 0u),
+        ResourceStates::ResolveDest
+    );
+    const usize seededSourceReferencesBeforeResolve = seededSource->getReferenceCount();
+    const usize seededDestinationReferencesBeforeResolve = seededDestination->getReferenceCount();
+    commandList->resolveTexture(
+        seededDestination.get(),
+        s_AllSubresources,
+        seededSource.get(),
+        s_AllSubresources
+    );
+    EXPECT_FALSE(commandList->commandRecordingFailed());
+    EXPECT_EQ(seededSource->getReferenceCount(), seededSourceReferencesBeforeResolve + 1u);
+    EXPECT_EQ(seededDestination->getReferenceCount(), seededDestinationReferencesBeforeResolve + 1u);
+    commandList->close();
+    const QueueSubmissionToken seededResolveToken = submit();
+    ASSERT_TRUE(seededResolveToken.valid());
+    EXPECT_EQ(seededResolveToken.value, primeToken.value + 1u);
+    ASSERT_TRUE(device.waitForIdle());
+
+    for(
+        u32 retry = 0u;
+        retry < 5000u
+            && (
+                seededSource->getReferenceCount() != seededSourceReferencesBeforeResolve
+                || seededDestination->getReferenceCount() != seededDestinationReferencesBeforeResolve
+            );
+        ++retry
+    ){
+        device.runGarbageCollection();
+        SleepMS(1u);
+    }
+    EXPECT_EQ(seededSource->getReferenceCount(), seededSourceReferencesBeforeResolve);
+    EXPECT_EQ(seededDestination->getReferenceCount(), seededDestinationReferencesBeforeResolve);
+}
+
+
 TEST_F(DescriptorBufferRoundTripTest, TransferCommandsEndRenderingAndAttachmentTransitionsDoNotResumeIt){
     auto& device = DescriptorBufferRoundTripTest::device();
     const TextureHandle renderTarget = device.createTexture(

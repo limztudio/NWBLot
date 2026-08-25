@@ -121,7 +121,6 @@ struct ResolveTextureTask{
         for(const Resolve& resolve : payload.resolves){
             if(!resolve.source || !resolve.destination)
                 return false;
-            commandList.endRenderPass();
             commandList.resolveTexture(
                 resolve.destination.get(),
                 resolve.destinationSubresources,

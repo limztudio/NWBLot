@@ -4,6 +4,7 @@
 
 #include "backend.h"
 #include "arena_names.h"
+#include "texture_resource_detail.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,6 +51,63 @@ inline VkBufferImageCopy BuildStagingTextureCopyRegion(
     region.imageOffset = { static_cast<i32>(imageSlice.x), static_cast<i32>(imageSlice.y), static_cast<i32>(imageSlice.z) };
     region.imageExtent = { imageSlice.width, imageSlice.height, imageSlice.depth };
     return region;
+}
+
+[[nodiscard]] inline bool IsResolveImageInfoConsistent(
+    const TextureDesc& desc,
+    const VkImageCreateInfo& imageInfo
+){
+    return
+        imageInfo.sType == VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO
+        && imageInfo.imageType == VulkanTextureDetail::TextureDimensionToImageType(desc.dimension)
+        && imageInfo.format == VulkanDetail::ConvertFormat(desc.format)
+        && imageInfo.extent.width == desc.width
+        && imageInfo.extent.height == desc.height
+        && imageInfo.extent.depth == desc.depth
+        && imageInfo.mipLevels == desc.mipLevels
+        && imageInfo.arrayLayers == desc.arraySize
+        && imageInfo.samples == VulkanDetail::GetSampleCountFlagBits(desc.sampleCount)
+        && imageInfo.tiling == VK_IMAGE_TILING_OPTIMAL
+    ;
+}
+
+[[nodiscard]] inline bool ResolveMipExtentsMatch(
+    const TextureDesc& destinationDesc,
+    const TextureSubresourceSet& destinationSubresources,
+    const TextureDesc& sourceDesc,
+    const TextureSubresourceSet& sourceSubresources
+){
+    for(MipLevel mipOffset = 0u; mipOffset < sourceSubresources.numMipLevels; ++mipOffset){
+        const VkExtent3D sourceExtent = VulkanDetail::GetTextureMipExtent(
+            sourceDesc,
+            sourceSubresources.baseMipLevel + mipOffset
+        );
+        const VkExtent3D destinationExtent = VulkanDetail::GetTextureMipExtent(
+            destinationDesc,
+            destinationSubresources.baseMipLevel + mipOffset
+        );
+        if(
+            sourceExtent.width != destinationExtent.width
+            || sourceExtent.height != destinationExtent.height
+            || sourceExtent.depth != destinationExtent.depth
+        )
+            return false;
+    }
+    return true;
+}
+
+[[nodiscard]] inline bool IsResolveImageWithinFormatLimits(
+    const VkImageCreateInfo& imageInfo,
+    const VkImageFormatProperties& formatProperties
+){
+    return
+        imageInfo.extent.width <= formatProperties.maxExtent.width
+        && imageInfo.extent.height <= formatProperties.maxExtent.height
+        && imageInfo.extent.depth <= formatProperties.maxExtent.depth
+        && imageInfo.mipLevels <= formatProperties.maxMipLevels
+        && imageInfo.arrayLayers <= formatProperties.maxArrayLayers
+        && (formatProperties.sampleCounts & imageInfo.samples) == imageInfo.samples
+    ;
 }
 
 
@@ -285,45 +343,150 @@ void CommandList::writeTexture(Texture* destResource, u32 arraySlice, u32 mipLev
 }
 
 void CommandList::resolveTexture(Texture* destResource, const TextureSubresourceSet& dstSubresources, Texture* srcResource, const TextureSubresourceSet& srcSubresources){
-    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("resolve texture"), NWB_TEXT("resource is invalid"), destResource, srcResource))
+    constexpr const tchar* s_OperationName = NWB_TEXT("resolve texture");
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
+    if(!destResource || !srcResource){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination textures must be non-null"));
+        return;
+    }
 
     Texture& dest = *destResource;
     Texture& src = *srcResource;
-#if defined(NWB_DEBUG)
-    if(src.m_desc.sampleCount <= 1 || dest.m_desc.sampleCount != 1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resolve texture: source must be multisampled and destination must be single-sampled"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to resolve texture: invalid sample counts"));
+    if(&src.m_context != &m_context || &dest.m_context != &m_context){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination textures must belong to this device"));
         return;
     }
-    if(src.m_imageInfo.format != dest.m_imageInfo.format){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resolve texture: source and destination formats do not match"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to resolve texture: source and destination formats do not match"));
+    if(src.m_image == VK_NULL_HANDLE || dest.m_image == VK_NULL_HANDLE){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination native image handles must be non-null"));
         return;
     }
-    if((src.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resolve texture: depth/stencil resolves are not supported by this path"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to resolve texture: depth/stencil resolves are not supported by this path"));
+    if(srcResource == destResource || src.m_image == dest.m_image){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination must be distinct native images"));
         return;
     }
-#endif
 
     const TextureSubresourceSet resolvedSrc = srcSubresources.resolve(src.m_desc, TextureSubresourceMipResolve::Range);
     const TextureSubresourceSet resolvedDst = dstSubresources.resolve(dest.m_desc, TextureSubresourceMipResolve::Range);
-    if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSrc, NWB_TEXT("resolve texture")))
-        return;
-    if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedDst, NWB_TEXT("resolve texture")))
-        return;
-#if defined(NWB_DEBUG)
-    if(resolvedSrc.numMipLevels != resolvedDst.numMipLevels || resolvedSrc.numArraySlices != resolvedDst.numArraySlices){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resolve texture: source and destination subresources do not match"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to resolve texture: source and destination subresources do not match"));
+    if(
+        !VulkanDetail::IsTextureSubresourceRangeValid(resolvedSrc)
+        || !VulkanDetail::IsTextureSubresourceRangeValid(resolvedDst)
+    ){
+        rejectCommandRecording(
+            s_OperationName,
+            NWB_TEXT("source and destination subresource ranges must resolve inside their textures")
+        );
         return;
     }
-#endif
-
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("resolve texture")))
+    if(
+        src.m_desc.sampleCount <= 1u
+        || dest.m_desc.sampleCount != 1u
+        || !VulkanDetail::IsSupportedSampleCount(src.m_desc.sampleCount)
+    ){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("source must be multisampled and destination must be single-sampled"));
         return;
+    }
+    if(
+        src.m_desc.format != dest.m_desc.format
+        || src.m_imageInfo.format == VK_FORMAT_UNDEFINED
+        || src.m_imageInfo.format != dest.m_imageInfo.format
+    ){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination native formats must match exactly"));
+        return;
+    }
+    if(src.m_aspectMask != VK_IMAGE_ASPECT_COLOR_BIT || dest.m_aspectMask != VK_IMAGE_ASPECT_COLOR_BIT){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination must have the color aspect only"));
+        return;
+    }
+    if(
+        resolvedSrc.numMipLevels != resolvedDst.numMipLevels
+        || resolvedSrc.numArraySlices != resolvedDst.numArraySlices
+        || !VulkanTextureDetail::ResolveMipExtentsMatch(dest.m_desc, resolvedDst, src.m_desc, resolvedSrc)
+    ){
+        rejectCommandRecording(
+            s_OperationName,
+            NWB_TEXT("source and destination subresource counts and mip extents must match")
+        );
+        return;
+    }
+    if(
+        (dest.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) == 0u
+        || (src.m_imageInfo.usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) == 0u
+    ){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination images require transfer usage"));
+        return;
+    }
+    if(
+        !VulkanTextureDetail::IsResolveImageInfoConsistent(src.m_desc, src.m_imageInfo)
+        || !VulkanTextureDetail::IsResolveImageInfoConsistent(dest.m_desc, dest.m_imageInfo)
+        || src.m_imageInfo.imageType != dest.m_imageInfo.imageType
+    ){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("texture descriptions and native image metadata must agree"));
+        return;
+    }
+
+    const ResourceStates::Mask sourcePermanentState = m_stateTracker.getPermanentTextureState(srcResource);
+    const ResourceStates::Mask destinationPermanentState = m_stateTracker.getPermanentTextureState(destResource);
+    if(
+        (sourcePermanentState != ResourceStates::Unknown && sourcePermanentState != ResourceStates::ResolveSource)
+        || (destinationPermanentState != ResourceStates::Unknown && destinationPermanentState != ResourceStates::ResolveDest)
+    ){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("resolve states conflict with a permanent texture state"));
+        return;
+    }
+
+    VkFormatProperties formatProperties{};
+    vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, src.m_imageInfo.format, &formatProperties);
+    constexpr VkFormatFeatureFlags s_RequiredFormatFeatures = VK_FORMAT_FEATURE_TRANSFER_SRC_BIT
+        | VK_FORMAT_FEATURE_TRANSFER_DST_BIT
+        | VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
+    ;
+    if((formatProperties.optimalTilingFeatures & s_RequiredFormatFeatures) != s_RequiredFormatFeatures){
+        rejectCommandRecording(
+            s_OperationName,
+            NWB_TEXT("native format lacks optimal-tiling transfer or color-attachment support")
+        );
+        return;
+    }
+
+    VkImageFormatProperties sourceFormatProperties{};
+    const VkResult sourceFormatResult = vkGetPhysicalDeviceImageFormatProperties(
+        m_context.physicalDevice,
+        src.m_imageInfo.format,
+        src.m_imageInfo.imageType,
+        src.m_imageInfo.tiling,
+        src.m_imageInfo.usage,
+        src.m_imageInfo.flags,
+        &sourceFormatProperties
+    );
+    VkImageFormatProperties destinationFormatProperties{};
+    const VkResult destinationFormatResult = vkGetPhysicalDeviceImageFormatProperties(
+        m_context.physicalDevice,
+        dest.m_imageInfo.format,
+        dest.m_imageInfo.imageType,
+        dest.m_imageInfo.tiling,
+        dest.m_imageInfo.usage,
+        dest.m_imageInfo.flags,
+        &destinationFormatProperties
+    );
+    if(
+        sourceFormatResult != VK_SUCCESS
+        || destinationFormatResult != VK_SUCCESS
+        || !VulkanTextureDetail::IsResolveImageWithinFormatLimits(
+            src.m_imageInfo,
+            sourceFormatProperties
+        )
+        || !VulkanTextureDetail::IsResolveImageWithinFormatLimits(
+            dest.m_imageInfo,
+            destinationFormatProperties
+        )
+    ){
+        rejectCommandRecording(
+            s_OperationName,
+            NWB_TEXT("native image formats do not support the requested shapes and sample counts")
+        );
+        return;
+    }
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureResolveArena);
     Vector<VkImageResolve, Alloc::ScratchArena> regions(resolvedSrc.numMipLevels, scratchArena);
@@ -332,14 +495,6 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
         const MipLevel srcMipLevel = resolvedSrc.baseMipLevel + mipOffset;
         const MipLevel dstMipLevel = resolvedDst.baseMipLevel + mipOffset;
         const VkExtent3D srcExtent = VulkanDetail::GetTextureMipExtent(src.m_desc, srcMipLevel);
-#if defined(NWB_DEBUG)
-        const VkExtent3D dstExtent = VulkanDetail::GetTextureMipExtent(dest.m_desc, dstMipLevel);
-        if(srcExtent.width != dstExtent.width || srcExtent.height != dstExtent.height || srcExtent.depth != dstExtent.depth){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to resolve texture: source and destination mip extents do not match"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to resolve texture: source and destination mip extents do not match"));
-            return;
-        }
-#endif
 
         VkImageResolve region{};
         region.srcSubresource = VulkanDetail::BuildImageSubresourceLayers(
@@ -360,17 +515,25 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
         regions[mipOffset] = region;
     }
 
-    if(!regions.empty()){
-        vkCmdResolveImage(
-            m_currentCmdBuf->m_cmdBuf,
-            src.m_image,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-            dest.m_image,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            static_cast<u32>(regions.size()),
-            regions.data()
-        );
-    }
+    endActiveRenderPass();
+    if(m_commandRecordingFailed)
+        return;
+    setTextureState(srcResource, resolvedSrc, ResourceStates::ResolveSource);
+    if(m_commandRecordingFailed)
+        return;
+    setTextureState(destResource, resolvedDst, ResourceStates::ResolveDest);
+    if(m_commandRecordingFailed)
+        return;
+
+    vkCmdResolveImage(
+        m_currentCmdBuf->m_cmdBuf,
+        src.m_image,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        dest.m_image,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        static_cast<u32>(regions.size()),
+        regions.data()
+    );
 
     retainResource(srcResource);
     retainResource(destResource);

@@ -75,7 +75,8 @@ GpuDescriptorHeap::GpuDescriptorHeap(Device& device)
     , m_context(device.m_context)
     , m_accelStructBufferBlocks(device.m_context.objectArena)
     , m_accelStructResources(device.m_context.objectArena)
-    , m_resourceDescriptorResources(device.m_context.objectArena)
+    , m_resourceDescriptorBuffers(device.m_context.objectArena)
+    , m_resourceDescriptorTextures(device.m_context.objectArena)
     , m_samplerDescriptorResources(device.m_context.objectArena)
     , m_resourceSlots(device.m_context.objectArena)
     , m_samplerSlots(device.m_context.objectArena)
@@ -125,8 +126,12 @@ DescriptorBufferSegment GpuDescriptorHeap::getAccelStructBufferBlock(const GpuDe
         || !handle.valid()
         || handle.descriptorClass() != GpuDescriptorClass::AccelStruct
         || handle.slot() >= m_accelStructBufferBlocks.size()
+        || handle.slot() >= m_accelStructResources.size()
         || handle.slot() >= m_accelStructSlots.liveSlots.size()
+        || handle.slot() >= m_accelStructSlots.allocatedClasses.size()
         || m_accelStructSlots.liveSlots[handle.slot()] == 0u
+        || m_accelStructSlots.allocatedClasses[handle.slot()] != static_cast<u8>(GpuDescriptorClass::AccelStruct)
+        || !m_accelStructResources[handle.slot()]
     )
         return {};
     return m_accelStructBufferBlocks[handle.slot()];
@@ -150,12 +155,16 @@ void GpuDescriptorHeap::releaseRetainedDescriptorResource(const GpuDescriptorHan
         return;
     }
 
-    auto& resources = handle.descriptorClass() == GpuDescriptorClass::Sampler
-        ? m_samplerDescriptorResources
-        : m_resourceDescriptorResources
-    ;
-    if(handle.slot() < resources.size())
-        resources[handle.slot()].reset();
+    if(handle.descriptorClass() == GpuDescriptorClass::Sampler){
+        if(handle.slot() < m_samplerDescriptorResources.size())
+            m_samplerDescriptorResources[handle.slot()].reset();
+        return;
+    }
+
+    if(handle.slot() < m_resourceDescriptorBuffers.size())
+        m_resourceDescriptorBuffers[handle.slot()].reset();
+    if(handle.slot() < m_resourceDescriptorTextures.size())
+        m_resourceDescriptorTextures[handle.slot()].reset();
 }
 
 void GpuDescriptorHeap::trackCommandBufferUse(TrackedCommandBuffer& commandBuffer){
@@ -273,10 +282,18 @@ void GpuDescriptorHeap::collectRetired(){
         }
 
         if(canRetire){
-            releaseRetainedDescriptorResource(retired.handle);
             SlotAllocator& allocator = allocatorForClass(retired.handle.descriptorClass());
-            if(retired.handle.slot() < allocator.liveSlots.size() && allocator.liveSlots[retired.handle.slot()] == 0u)
+            const u32 slot = retired.handle.slot();
+            if(
+                slot < allocator.liveSlots.size()
+                && slot < allocator.allocatedClasses.size()
+                && allocator.liveSlots[slot] == 0u
+                && allocator.allocatedClasses[slot] == static_cast<u8>(retired.handle.descriptorClass())
+            ){
+                releaseRetainedDescriptorResource(retired.handle);
+                allocator.allocatedClasses[slot] = static_cast<u8>(GpuDescriptorClass::kCount);
                 allocator.freeList.push_back(retired.handle.slot());
+            }
             else{
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::collectRetired found an invalid retired handle {}."), retired.handle.value);
             }
@@ -440,8 +457,11 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         m_accelStructSlots.capacity = s_AccelStructCapacity;
         m_accelStructSlots.nextFresh = 0u;
         m_accelStructSlots.liveSlots.reserve(s_AccelStructCapacity);
-        for(u32 slot = 0u; slot < s_AccelStructCapacity; ++slot)
+        m_accelStructSlots.allocatedClasses.reserve(s_AccelStructCapacity);
+        for(u32 slot = 0u; slot < s_AccelStructCapacity; ++slot){
             m_accelStructSlots.liveSlots.emplace_back(0u);
+            m_accelStructSlots.allocatedClasses.emplace_back(static_cast<u8>(GpuDescriptorClass::kCount));
+        }
         m_accelStructBufferBlocks.resize(s_AccelStructCapacity);
         m_accelStructResources.reserve(s_AccelStructCapacity);
         for(u32 slot = 0u; slot < s_AccelStructCapacity; ++slot){
@@ -460,25 +480,36 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     m_resourceSlots.capacity = resourceCapacity;
     m_resourceSlots.nextFresh = 0u;
     m_resourceSlots.liveSlots.reserve(resourceCapacity);
-    for(u32 slot = 0u; slot < resourceCapacity; ++slot)
+    m_resourceSlots.allocatedClasses.reserve(resourceCapacity);
+    for(u32 slot = 0u; slot < resourceCapacity; ++slot){
         m_resourceSlots.liveSlots.emplace_back(0u);
+        m_resourceSlots.allocatedClasses.emplace_back(static_cast<u8>(GpuDescriptorClass::kCount));
+    }
     m_samplerSlots.capacity = samplerCapacity;
     m_samplerSlots.nextFresh = 0u;
     m_samplerSlots.liveSlots.reserve(samplerCapacity);
-    for(u32 slot = 0u; slot < samplerCapacity; ++slot)
+    m_samplerSlots.allocatedClasses.reserve(samplerCapacity);
+    for(u32 slot = 0u; slot < samplerCapacity; ++slot){
         m_samplerSlots.liveSlots.emplace_back(0u);
-    m_resourceDescriptorResources.reserve(resourceCapacity);
+        m_samplerSlots.allocatedClasses.emplace_back(static_cast<u8>(GpuDescriptorClass::kCount));
+    }
+    m_resourceDescriptorBuffers.reserve(resourceCapacity);
+    m_resourceDescriptorTextures.reserve(resourceCapacity);
     for(u32 slot = 0u; slot < resourceCapacity; ++slot){
-        m_resourceDescriptorResources.emplace_back(
+        m_resourceDescriptorBuffers.emplace_back(
             nullptr,
-            Handle<GraphicsResource>::deleter_type(&m_context.objectArena)
+            BufferHandle::deleter_type(&m_context.objectArena)
+        );
+        m_resourceDescriptorTextures.emplace_back(
+            nullptr,
+            TextureHandle::deleter_type(&m_context.objectArena)
         );
     }
     m_samplerDescriptorResources.reserve(samplerCapacity);
     for(u32 slot = 0u; slot < samplerCapacity; ++slot){
         m_samplerDescriptorResources.emplace_back(
             nullptr,
-            Handle<GraphicsResource>::deleter_type(&m_context.objectArena)
+            SamplerHandle::deleter_type(&m_context.objectArena)
         );
     }
     m_lastHeapUseID = 0u;
@@ -525,7 +556,8 @@ void GpuDescriptorHeap::shutdown(){
     m_samplerBufferBlock = {};
     m_accelStructBufferBlocks.clear();
     m_accelStructResources.clear();
-    m_resourceDescriptorResources.clear();
+    m_resourceDescriptorBuffers.clear();
+    m_resourceDescriptorTextures.clear();
     m_samplerDescriptorResources.clear();
     m_accelStructBufferBindingOffset = 0u;
     for(u32 i = 0; i < GpuDescriptorClass::kCount; ++i)
@@ -537,14 +569,17 @@ void GpuDescriptorHeap::shutdown(){
 
     m_resourceSlots.freeList.clear();
     m_resourceSlots.liveSlots.clear();
+    m_resourceSlots.allocatedClasses.clear();
     m_resourceSlots.capacity = 0u;
     m_resourceSlots.nextFresh = 0u;
     m_samplerSlots.freeList.clear();
     m_samplerSlots.liveSlots.clear();
+    m_samplerSlots.allocatedClasses.clear();
     m_samplerSlots.capacity = 0u;
     m_samplerSlots.nextFresh = 0u;
     m_accelStructSlots.freeList.clear();
     m_accelStructSlots.liveSlots.clear();
+    m_accelStructSlots.allocatedClasses.clear();
     m_accelStructSlots.capacity = 0u;
     m_accelStructSlots.nextFresh = 0u;
     m_retired.clear();
@@ -615,13 +650,13 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
 
     SlotAllocator& allocator = allocatorForClass(descriptorClass);
     u32 slot = Limit<u32>::s_Max;
+    bool recycled = false;
     if(!allocator.freeList.empty()){
         slot = allocator.freeList.back();
-        allocator.freeList.pop_back();
+        recycled = true;
     }
-    else if(allocator.nextFresh < allocator.capacity){
-        slot = allocator.nextFresh++;
-    }
+    else if(allocator.nextFresh < allocator.capacity)
+        slot = allocator.nextFresh;
     else{
         const tchar* const namespaceName = descriptorClass == GpuDescriptorClass::Sampler
             ? NWB_TEXT("sampler")
@@ -633,14 +668,24 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
         return GpuDescriptorHandle::invalid();
     }
 
-    if(slot >= allocator.liveSlots.size() || allocator.liveSlots[slot] != 0u){
+    if(
+        slot >= allocator.liveSlots.size()
+        || slot >= allocator.allocatedClasses.size()
+        || allocator.liveSlots[slot] != 0u
+        || allocator.allocatedClasses[slot] != static_cast<u8>(GpuDescriptorClass::kCount)
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate: slot allocator state is invalid for class {} slot {}.")
             , static_cast<u32>(descriptorClass)
             , slot
         );
         return GpuDescriptorHandle::invalid();
     }
+    if(recycled)
+        allocator.freeList.pop_back();
+    else
+        ++allocator.nextFresh;
     allocator.liveSlots[slot] = 1u;
+    allocator.allocatedClasses[slot] = static_cast<u8>(descriptorClass);
 
     return GpuDescriptorHandle::make(descriptorClass, slot);
 }
@@ -658,8 +703,15 @@ void GpuDescriptorHeap::free(const GpuDescriptorHandle handle){
     {
         ScopedLock lock(m_mutex);
         SlotAllocator& allocator = allocatorForClass(handle.descriptorClass());
-        if(handle.slot() >= allocator.liveSlots.size() || allocator.liveSlots[handle.slot()] == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::free rejected stale or already-retired handle {}."), handle.value);
+        if(
+            handle.slot() >= allocator.liveSlots.size()
+            || handle.slot() >= allocator.allocatedClasses.size()
+            || allocator.liveSlots[handle.slot()] == 0u
+            || allocator.allocatedClasses[handle.slot()] != static_cast<u8>(handle.descriptorClass())
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::free rejected stale, retagged, or already-retired handle {}.")
+                , handle.value
+            );
             return;
         }
         allocator.liveSlots[handle.slot()] = 0u;

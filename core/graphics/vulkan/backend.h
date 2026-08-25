@@ -1438,6 +1438,7 @@ private:
 class Sampler final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Device;
     friend class DescriptorBufferManager;
+    friend class GpuDescriptorHeap;
 
 
 public:
@@ -1809,10 +1810,13 @@ private:
         Vector<u32, Alloc::GlobalArena> freeList;
         // Rejects double frees and retired-handle writes.
         Vector<u8, Alloc::GlobalArena> liveSlots;
+        // Keeps the allocated class authoritative while a slot is live or quarantined.
+        Vector<u8, Alloc::GlobalArena> allocatedClasses;
 
         explicit SlotAllocator(Alloc::GlobalArena& arena)
             : freeList(arena)
             , liveSlots(arena)
+            , allocatedClasses(arena)
         {}
     };
     struct RetiredSlot{
@@ -1918,8 +1922,9 @@ private:
     Vector<DescriptorBufferSegment, Alloc::GlobalArena> m_accelStructBufferBlocks;
     Vector<RayTracingAccelStructHandle, Alloc::GlobalArena> m_accelStructResources;
     // Resource keep-alives protect descriptors used by in-flight work.
-    Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_resourceDescriptorResources;
-    Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_samplerDescriptorResources;
+    Vector<BufferHandle, Alloc::GlobalArena> m_resourceDescriptorBuffers;
+    Vector<TextureHandle, Alloc::GlobalArena> m_resourceDescriptorTextures;
+    Vector<SamplerHandle, Alloc::GlobalArena> m_samplerDescriptorResources;
     u32 m_accelStructBufferBindingOffset = 0u;
     // Binding byte offsets within a set block.
     u32 m_classBufferOffset[GpuDescriptorClass::kCount] = {};

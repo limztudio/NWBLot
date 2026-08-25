@@ -407,7 +407,10 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 
     const TextureDesc& description = destination->getDescription();
     if(
-        description.sampleCount != 1u
+        (
+            description.sampleCount != 1u
+            && Format::IsBlockCompressedFormat(description.format)
+        )
         || !TextureSubresourcesAreCanonical(description, record.destinationSubresources)
         || !TextureSubresourcesContain(
             destinationUse->range.textureSubresources,

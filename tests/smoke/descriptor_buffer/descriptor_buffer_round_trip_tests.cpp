@@ -42162,6 +42162,269 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
 }
 
 
+// Full Vulkan image clears are legal for multisampled images outside rendering. The graph must retain that direct
+// route, publish its accepted packet token, and leave exact color data that survives a later resolve and readback.
+TEST_F(DescriptorBufferRoundTripTest, GraphFullMultisampleTextureClearSubmitsAndResolves){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    constexpr u32 s_Width = 4u;
+    constexpr u32 s_Height = 4u;
+    constexpr Color s_ClearColor(0.25f, 0.5f, 0.75f, 1.0f);
+    const TextureDesc multisampleColorDesc = TextureDesc()
+        .setWidth(s_Width)
+        .setHeight(s_Height)
+        .setDimension(TextureDimension::Texture2DMS)
+        .setFormat(Format::RGBA8_UNORM)
+        .setSampleCount(2u)
+        .setInRenderTarget(true)
+        .setInitialState(ResourceStates::Common)
+        .setKeepInitialState(true)
+    ;
+    const TextureDesc resolvedColorDesc = TextureDesc()
+        .setWidth(s_Width)
+        .setHeight(s_Height)
+        .setFormat(Format::RGBA8_UNORM)
+        .setInitialState(ResourceStates::Common)
+    ;
+    const TextureHandle multisampleColor = device.createTexture(multisampleColorDesc);
+    if(!multisampleColor)
+        GTEST_SKIP() << "Full multisample graph clear: sample-2 RGBA8_UNORM is unavailable.";
+    const TextureHandle resolvedColor = device.createTexture(resolvedColorDesc);
+    const StagingTextureHandle readback = device.createStagingTexture(resolvedColorDesc, CpuAccessMode::Read);
+    ASSERT_TRUE(resolvedColor);
+    ASSERT_TRUE(readback);
+
+    TextureHandle multisampleDepth;
+    if((device.queryFormatSupport(Format::D32) & FormatSupport::DepthStencil) == FormatSupport::DepthStencil){
+        multisampleDepth = device.createTexture(
+            TextureDesc()
+                .setWidth(s_Width)
+                .setHeight(s_Height)
+                .setDimension(TextureDimension::Texture2DMS)
+                .setFormat(Format::D32)
+                .setSampleCount(2u)
+                .setInRenderTarget(true)
+                .setInitialState(ResourceStates::Common)
+                .setKeepInitialState(true)
+        );
+    }
+
+    Texture* initialTextures[3u] = {
+        multisampleColor.get(),
+        resolvedColor.get(),
+        multisampleDepth.get(),
+    };
+    const usize initialTextureCount = multisampleDepth ? LengthOf(initialTextures) : 2u;
+    ASSERT_TRUE(PrimeTextureStatesForGraph(
+        device,
+        initialTextures,
+        initialTextureCount,
+        ResourceStates::Common
+    ));
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId colorResource = graph.importTexture(
+        multisampleColor,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/full_multisample_color_clear"))
+            .setMarkerLabel("Full Multisample Color Clear")
+            .setType(GpuGraphResourceType::Texture)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(colorResource.valid());
+    GpuGraphResourceId depthResource;
+    if(multisampleDepth){
+        depthResource = graph.importTexture(
+            multisampleDepth,
+            GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/descriptor_buffer/full_multisample_depth_clear"))
+                .setMarkerLabel("Full Multisample Depth Clear")
+                .setType(GpuGraphResourceType::Texture)
+                .setInitialState(ResourceStates::Common)
+        );
+        ASSERT_TRUE(depthResource.valid());
+    }
+
+    const GpuQueueRequest transferQueue{
+        GpuQueueCapability::Transfer,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskDesc colorTaskDesc;
+    colorTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/full_multisample_color_clear_task"))
+        .setMarkerLabel("Full Multisample Color Clear Task")
+        .setQueue(transferQueue)
+    ;
+    QueueSubmissionToken colorAcceptedToken{
+        .queue = CommandQueue::Graphics,
+        .value = 1u,
+        .physicalQueueIndex = 0u,
+        .deviceGeneration = 1u,
+    };
+    GpuClearTextureTaskDesc colorClear;
+    colorClear.acceptedToken = &colorAcceptedToken;
+    colorClear.destination = colorResource;
+    colorClear.valueType = GpuClearTextureTaskValueType::Float;
+    colorClear.floatValue = s_ClearColor;
+    const GpuTaskId colorTask = graph.addClearTextureTask(colorTaskDesc, colorClear);
+    ASSERT_TRUE(colorTask.valid());
+    EXPECT_FALSE(colorAcceptedToken.valid());
+
+    QueueSubmissionToken depthAcceptedToken;
+    GpuTaskId depthTask;
+    if(multisampleDepth){
+        GpuTaskDesc depthTaskDesc;
+        depthTaskDesc
+            .setIdentity(Name("tests/descriptor_buffer/full_multisample_depth_clear_task"))
+            .setMarkerLabel("Full Multisample Depth Clear Task")
+            .setQueue(transferQueue)
+            .setDependencies(&colorTask, 1u)
+        ;
+        GpuClearTextureTaskDesc depthClear;
+        depthClear.acceptedToken = &depthAcceptedToken;
+        depthClear.destination = depthResource;
+        depthClear.depthValue = 0.375f;
+        depthClear.valueType = GpuClearTextureTaskValueType::DepthStencil;
+        depthClear.clearDepth = true;
+        depthTask = graph.addClearTextureTask(depthTaskDesc, depthClear);
+        ASSERT_TRUE(depthTask.valid());
+        EXPECT_FALSE(depthAcceptedToken.valid());
+    }
+
+    const GpuQueueCapability::Mask colorCapabilities = static_cast<GpuQueueCapability::Mask>(
+        static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Compute)
+    );
+    EXPECT_EQ(graph.taskAt(colorTask.index).queue.requiredCapabilities, colorCapabilities);
+    EXPECT_EQ(graph.taskAt(colorTask.index).resourceUses[0u].requiredState, ResourceStates::CopyDest);
+    if(depthTask.valid()){
+        const GpuQueueCapability::Mask depthCapabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Transfer) | static_cast<u8>(GpuQueueCapability::Graphics)
+        );
+        EXPECT_EQ(graph.taskAt(depthTask.index).queue.requiredCapabilities, depthCapabilities);
+        EXPECT_EQ(graph.taskAt(depthTask.index).resourceUses[0u].requiredState, ResourceStates::CopyDest);
+    }
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/full_multisample_clear_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuTaskQueueAssignment* const colorAssignment = assignments.find(colorTask);
+    ASSERT_NE(colorAssignment, nullptr);
+    EXPECT_EQ(colorAssignment->queueClass, CommandQueue::Graphics);
+    if(depthTask.valid()){
+        const GpuTaskQueueAssignment* const depthAssignment = assignments.find(depthTask);
+        ASSERT_NE(depthAssignment, nullptr);
+        EXPECT_EQ(depthAssignment->queueClass, CommandQueue::Graphics);
+    }
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuCommandIrCapture capture(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket,
+        &capture
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_EQ(capture.recordCount(), depthTask.valid() ? 2u : 1u);
+    const GpuCommandIrBuiltinTaskRecord* const colorRecord = capture.recordAt(0u);
+    ASSERT_NE(colorRecord, nullptr);
+    EXPECT_EQ(colorRecord->opcode, GpuCommandIrOpcode::ClearTexture);
+    EXPECT_EQ(colorRecord->destination, colorResource);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const GpuSubmissionPacketId colorPacket = compiledGraph.packetForTask(colorTask);
+    ASSERT_TRUE(colorPacket.valid());
+    EXPECT_TRUE(colorAcceptedToken.valid());
+    EXPECT_EQ(colorAcceptedToken.value, transaction.packetToken(colorPacket).value);
+    if(depthTask.valid()){
+        const GpuSubmissionPacketId depthPacket = compiledGraph.packetForTask(depthTask);
+        ASSERT_TRUE(depthPacket.valid());
+        EXPECT_TRUE(depthAcceptedToken.valid());
+        EXPECT_EQ(depthAcceptedToken.value, transaction.packetToken(depthPacket).value);
+    }
+    ASSERT_TRUE(device.waitForIdle());
+
+    const CommandListHandle resolveList = device.createCommandList();
+    ASSERT_TRUE(resolveList);
+    resolveList->open();
+    resolveList->resolveTexture(
+        resolvedColor.get(),
+        s_AllSubresources,
+        multisampleColor.get(),
+        s_AllSubresources
+    );
+    resolveList->copyTexture(readback.get(), TextureSlice{}, resolvedColor.get(), TextureSlice{});
+    ASSERT_FALSE(resolveList->commandRecordingFailed());
+    resolveList->close();
+    CommandList* const resolveLists[] = { resolveList.get() };
+    ASSERT_TRUE(device.executeCommandLists(
+        resolveLists,
+        LengthOf(resolveLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
+    ASSERT_TRUE(device.waitForIdle());
+
+    usize rowPitch = 0u;
+    const u8* const readbackBytes = static_cast<const u8*>(device.mapStagingTexture(
+        readback.get(),
+        TextureSlice{},
+        CpuAccessMode::Read,
+        &rowPitch
+    ));
+    ASSERT_NE(readbackBytes, nullptr);
+    ASSERT_GE(rowPitch, static_cast<usize>(s_Width * 4u));
+    constexpr u8 s_ExpectedColor[] = { 64u, 128u, 191u, 255u };
+    for(u32 y = 0u; y < s_Height; ++y){
+        for(u32 x = 0u; x < s_Width; ++x){
+            const u8* const pixel = readbackBytes + static_cast<usize>(y) * rowPitch + x * 4u;
+            for(u32 channel = 0u; channel < LengthOf(s_ExpectedColor); ++channel)
+                EXPECT_EQ(pixel[channel], s_ExpectedColor[channel]);
+        }
+    }
+    device.unmapStagingTexture(readback.get());
+}
+
+
 // Merged graph tasks share one native command list but do not share ownership of dynamic rendering. Exercise one
 // primitive from every built-in transfer source and prove both the task boundary and clear-hook boundary are closed.
 TEST_F(DescriptorBufferRoundTripTest, MergedGraphBuiltInsEndInheritedAndHookOpenedDynamicRendering){

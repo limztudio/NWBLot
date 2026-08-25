@@ -396,9 +396,12 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
     if(
         destinationResource.type != GpuGraphResourceType::Texture
         || !destinationResource.texture
-        // vkCmdClear*Image cannot operate on multisampled images outside a render pass. This primitive helper has no
-        // framebuffer/render-pass lowering, so preserve its transfer-only contract by rejecting MSAA up front.
-        || destinationResource.texture->getDescription().sampleCount != 1u
+        // Compressed Vulkan images cannot be multisampled. Imported metadata can still be malformed, so keep this
+        // defensive rejection even though full uncompressed image clears support every legal sample count.
+        || (
+            destinationResource.texture->getDescription().sampleCount != 1u
+            && Format::IsBlockCompressedFormat(destinationResource.texture->getDescription().format)
+        )
         || !__hidden_gpu_task_graph_builtin_clears::CopyOrClearTextureDestinationCanMaterializeRetainedState(
             destinationResource.texture->getDescription(),
             destinationResource.initialState,
@@ -486,8 +489,8 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
     if(
         destinationResource.type != GpuGraphResourceType::Texture
         || !destinationResource.texture
-        // vkCmdClear*Image cannot operate on multisampled images outside a render pass. This primitive helper has no
-        // framebuffer/render-pass lowering, so preserve its transfer-only contract by rejecting MSAA up front.
+        // Bounded multisample clears require an active attachment. Graph recording ends rendering before this
+        // primitive and has no framebuffer lowering, so every multisample rectangle remains unsupported.
         || destinationResource.texture->getDescription().sampleCount != 1u
         || !__hidden_gpu_task_graph_builtin_clears::BuiltInTaskCanMaterializeRetainedState(
             destinationResource.texture->getDescription(),

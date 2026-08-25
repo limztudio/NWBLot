@@ -4614,12 +4614,42 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         .setFormat(Graphics::Format::D24S8)
         .setInitialState(Graphics::ResourceStates::CopyDest)
     ;
+    const Graphics::TextureDesc multisampleColorDescription = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setDimension(Graphics::TextureDimension::Texture2DMS)
+        .setFormat(Graphics::Format::RGBA8_UINT)
+        .setSampleCount(4u)
+        .setInitialState(Graphics::ResourceStates::CopyDest)
+    ;
+    const Graphics::TextureDesc multisampleDepthDescription = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setDimension(Graphics::TextureDimension::Texture2DMS)
+        .setFormat(Graphics::Format::D24S8)
+        .setSampleCount(4u)
+        .setInitialState(Graphics::ResourceStates::CopyDest)
+    ;
+    const Graphics::TextureDesc multisampleCompressedDescription = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setDimension(Graphics::TextureDimension::Texture2DMS)
+        .setFormat(Graphics::Format::BC1_UNORM)
+        .setSampleCount(4u)
+        .setInitialState(Graphics::ResourceStates::CopyDest)
+    ;
     Graphics::TextureHandle colorTexture = createTexture(colorDescription);
     Graphics::TextureHandle compressedTexture = createTexture(compressedDescription);
     Graphics::TextureHandle depthTexture = createTexture(depthDescription);
+    Graphics::TextureHandle multisampleColorTexture = createTexture(multisampleColorDescription);
+    Graphics::TextureHandle multisampleDepthTexture = createTexture(multisampleDepthDescription);
+    Graphics::TextureHandle multisampleCompressedTexture = createTexture(multisampleCompressedDescription);
     ASSERT_NE(colorTexture.get(), nullptr);
     ASSERT_NE(compressedTexture.get(), nullptr);
     ASSERT_NE(depthTexture.get(), nullptr);
+    ASSERT_NE(multisampleColorTexture.get(), nullptr);
+    ASSERT_NE(multisampleDepthTexture.get(), nullptr);
+    ASSERT_NE(multisampleCompressedTexture.get(), nullptr);
 
     Graphics::GpuTaskDesc transferDesc;
     transferDesc
@@ -4741,6 +4771,104 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
     );
 
+    Graphics::GpuTaskGraph multisampleColorGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId multisampleColorResource = multisampleColorGraph.importTexture(
+        multisampleColorTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/full_clear_multisample_color"))
+            .setMarkerLabel("Full Clear Multisample Color")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    ASSERT_TRUE(multisampleColorResource.valid());
+    Graphics::GpuClearTextureTaskDesc multisampleColorClear = colorClear;
+    multisampleColorClear.destination = multisampleColorResource;
+    const Graphics::GpuTaskId multisampleColorTask = multisampleColorGraph.addClearTextureTask(
+        transferDesc,
+        multisampleColorClear
+    );
+    ASSERT_TRUE(multisampleColorTask.valid());
+    EXPECT_EQ(
+        multisampleColorGraph.taskAt(multisampleColorTask.index).queue.requiredCapabilities,
+        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+    );
+
+    Graphics::GpuTaskGraph multisampleDepthGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId multisampleDepthResource = multisampleDepthGraph.importTexture(
+        multisampleDepthTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/full_clear_multisample_depth"))
+            .setMarkerLabel("Full Clear Multisample Depth")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    ASSERT_TRUE(multisampleDepthResource.valid());
+    Graphics::GpuClearTextureTaskDesc multisampleDepthClear = depthClear;
+    multisampleDepthClear.destination = multisampleDepthResource;
+    const Graphics::GpuTaskId multisampleDepthTask = multisampleDepthGraph.addClearTextureTask(
+        transferDesc,
+        multisampleDepthClear
+    );
+    ASSERT_TRUE(multisampleDepthTask.valid());
+    EXPECT_EQ(
+        multisampleDepthGraph.taskAt(multisampleDepthTask.index).queue.requiredCapabilities,
+        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+    );
+
+    Graphics::GpuTaskGraph multisampleCompressedGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId multisampleCompressedResource = multisampleCompressedGraph.importTexture(
+        multisampleCompressedTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/full_clear_multisample_compressed"))
+            .setMarkerLabel("Full Clear Multisample Compressed")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    ASSERT_TRUE(multisampleCompressedResource.valid());
+    Graphics::QueueSubmissionToken compressedRejectedToken{
+        .queue = Graphics::CommandQueue::Graphics,
+        .value = 1u,
+        .physicalQueueIndex = 0u,
+        .deviceGeneration = 1u,
+    };
+    Graphics::GpuClearTextureTaskDesc multisampleCompressedClear;
+    multisampleCompressedClear.acceptedToken = &compressedRejectedToken;
+    multisampleCompressedClear.destination = multisampleCompressedResource;
+    multisampleCompressedClear.valueType = Graphics::GpuClearTextureTaskValueType::Float;
+    EXPECT_FALSE(multisampleCompressedGraph.addClearTextureTask(
+        transferDesc,
+        multisampleCompressedClear
+    ).valid());
+    EXPECT_FALSE(compressedRejectedToken.valid());
+    EXPECT_EQ(multisampleCompressedGraph.taskCount(), 0u);
+
+    Graphics::GpuTaskGraph multisampleRectGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId multisampleRectResource = multisampleRectGraph.importTexture(
+        multisampleColorTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/rect_clear_multisample_color"))
+            .setMarkerLabel("Rect Clear Multisample Color")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    ASSERT_TRUE(multisampleRectResource.valid());
+    Graphics::QueueSubmissionToken rectRejectedToken{
+        .queue = Graphics::CommandQueue::Graphics,
+        .value = 1u,
+        .physicalQueueIndex = 0u,
+        .deviceGeneration = 1u,
+    };
+    Graphics::GpuClearTextureRectUIntTaskDesc multisampleRectClear;
+    multisampleRectClear.destination = multisampleRectResource;
+    multisampleRectClear.rect = Graphics::Rect(4, 4);
+    multisampleRectClear.acceptedToken = &rectRejectedToken;
+    EXPECT_FALSE(multisampleRectGraph.addClearTextureRectUIntTask(
+        rectTransferDesc,
+        multisampleRectClear
+    ).valid());
+    EXPECT_FALSE(rectRejectedToken.valid());
+    EXPECT_EQ(multisampleRectGraph.taskCount(), 0u);
+
     const auto expectCompileRejected = [&](const Graphics::GpuTaskGraph& graph, const Graphics::GpuPhysicalQueueInfo& queue){
         const Graphics::GpuPhysicalQueueInfo queues[] = { queue };
         const Graphics::GpuTaskGraphQueueTopology topology{
@@ -4782,6 +4910,134 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
     expectCompileRejected(depthGraph, DedicatedTransferQueue());
     expectCompileRejected(depthGraph, DedicatedComputeQueue());
     expectCompiledOn(depthGraph, depthTask, GraphicsQueue(), Graphics::CommandQueue::Graphics);
+    expectCompileRejected(multisampleColorGraph, DedicatedTransferQueue());
+    expectCompiledOn(
+        multisampleColorGraph,
+        multisampleColorTask,
+        DedicatedComputeQueue(),
+        Graphics::CommandQueue::Compute
+    );
+    expectCompiledOn(
+        multisampleColorGraph,
+        multisampleColorTask,
+        GraphicsQueue(),
+        Graphics::CommandQueue::Graphics
+    );
+    expectCompileRejected(multisampleDepthGraph, DedicatedTransferQueue());
+    expectCompileRejected(multisampleDepthGraph, DedicatedComputeQueue());
+    expectCompiledOn(
+        multisampleDepthGraph,
+        multisampleDepthTask,
+        GraphicsQueue(),
+        Graphics::CommandQueue::Graphics
+    );
+}
+
+TEST(GpuCommandIrReplay, AcceptsOnlyFullUncompressedMultisampleTextureClears){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+    Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+        testArena.arena,
+        context,
+        allocator
+    );
+    ASSERT_NE(textureObject, nullptr);
+    Graphics::TextureHandle texture(
+        textureObject,
+        Graphics::TextureHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    Graphics::TextureDesc& textureDescription = const_cast<Graphics::TextureDesc&>(texture->getDescription());
+    textureDescription
+        .setWidth(4u)
+        .setHeight(4u)
+        .setDimension(Graphics::TextureDimension::Texture2DMS)
+        .setFormat(Graphics::Format::RGBA8_UINT)
+        .setSampleCount(4u)
+        .setInitialState(Graphics::ResourceStates::CopyDest)
+    ;
+
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId resource = graph.importTexture(
+        texture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/command_ir_replay/full_multisample_clear"))
+            .setMarkerLabel("Replay Full Multisample Clear")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    ASSERT_TRUE(resource.valid());
+    Graphics::GpuTaskDesc taskDesc;
+    taskDesc
+        .setIdentity(Name("tests/command_ir_replay/full_multisample_clear_task"))
+        .setMarkerLabel("Replay Full Multisample Clear Task")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+    Graphics::GpuClearTextureTaskDesc clearDesc;
+    clearDesc.destination = resource;
+    clearDesc.subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
+    clearDesc.valueType = Graphics::GpuClearTextureTaskValueType::UInt;
+    const Graphics::GpuTaskId task = graph.addClearTextureTask(taskDesc, clearDesc);
+    ASSERT_TRUE(task.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+    const Graphics::GpuPhysicalQueueId queueId = compiledGraph.packet(packet).queue;
+
+    Graphics::GpuCommandIrCapture fullCapture(testArena.arena);
+    ASSERT_TRUE(fullCapture.captureClearTexture(task, packet, queueId, resource, clearDesc));
+    const Graphics::GpuCommandIrReplayResult fullResult = Graphics::PreflightGpuCommandIrPacket(
+        fullCapture.commandBytes(),
+        graph,
+        compiledGraph,
+        packet
+    );
+    EXPECT_EQ(fullResult.error, Graphics::GpuCommandIrReplayError::None);
+
+    Graphics::GpuClearTextureRectUIntTaskDesc rectDesc;
+    rectDesc.destination = resource;
+    rectDesc.subresources = clearDesc.subresources;
+    rectDesc.rect = Graphics::Rect(4, 4);
+    Graphics::GpuCommandIrCapture rectCapture(testArena.arena);
+    ASSERT_TRUE(rectCapture.captureClearTextureRectUInt(task, packet, queueId, resource, rectDesc));
+    const Graphics::GpuCommandIrReplayResult rectResult = Graphics::PreflightGpuCommandIrPacket(
+        rectCapture.commandBytes(),
+        graph,
+        compiledGraph,
+        packet
+    );
+    EXPECT_EQ(rectResult.error, Graphics::GpuCommandIrReplayError::InvalidTextureClear);
+
+    textureDescription.setFormat(Graphics::Format::BC1_UNORM);
+    Graphics::GpuClearTextureTaskDesc compressedDesc = clearDesc;
+    compressedDesc.valueType = Graphics::GpuClearTextureTaskValueType::Float;
+    Graphics::GpuCommandIrCapture compressedCapture(testArena.arena);
+    ASSERT_TRUE(compressedCapture.captureClearTexture(task, packet, queueId, resource, compressedDesc));
+    const Graphics::GpuCommandIrReplayResult compressedResult = Graphics::PreflightGpuCommandIrPacket(
+        compressedCapture.commandBytes(),
+        graph,
+        compiledGraph,
+        packet
+    );
+    EXPECT_EQ(compressedResult.error, Graphics::GpuCommandIrReplayError::InvalidTextureClear);
+    textureDescription.setFormat(Graphics::Format::RGBA8_UINT);
 }
 
 TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapabilities){

@@ -2169,6 +2169,21 @@ class ShaderTable final : public RefCounter<GraphicsResource>, NoCopy{
     friend class RayTracingPipeline;
 
 
+    struct DispatchRegionSnapshot{
+        BufferHandle buffer;
+        u64 offset = 0u;
+        u32 recordCount = 0u;
+        usize selectedGroupCount = 0u;
+    };
+
+    struct DispatchSnapshot{
+        Handle<RayTracingPipeline> pipeline;
+        DispatchRegionSnapshot rayGeneration;
+        DispatchRegionSnapshot miss;
+        DispatchRegionSnapshot hit;
+        DispatchRegionSnapshot callable;
+    };
+
     struct ShaderRecordPreflight{
         usize handleOffset = 0u;
         u64 recordByteSize = 0u;
@@ -2198,10 +2213,12 @@ public:
 #if !defined(NWB_FINAL)
     void rejectNextBufferAllocationForTesting();
     void rejectNextNewBufferMapForTesting();
+    void captureDispatchBuffersForTesting(Array<BufferHandle, 4u>& outBuffers)const;
 #endif
 
 
 private:
+    void captureDispatchSnapshot(DispatchSnapshot& outSnapshot)const;
     [[nodiscard]] bool findGroupIndex(
         AStringView exportName,
         ShaderTableRecordKind::Enum expectedKind,

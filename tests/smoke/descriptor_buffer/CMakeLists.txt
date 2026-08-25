@@ -14,6 +14,7 @@ target_sources(nwb_descriptor_buffer_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/descriptor_heap_bind_liveness_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/descriptor_buffer_manager_ingress_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/descriptor_buffer_round_trip_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/ray_tracing_dispatch_ingress_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ray_tracing_shader_table_ingress_tests.cpp"
 )
 target_link_libraries(nwb_descriptor_buffer_tests PRIVATE

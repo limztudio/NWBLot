@@ -235,6 +235,35 @@ Object ShaderTable::getNativeHandle(const ObjectType objectType){
     return Object(nullptr);
 }
 
+void ShaderTable::captureDispatchSnapshot(DispatchSnapshot& outSnapshot)const{
+    DispatchSnapshot snapshot;
+
+    ScopedLock lock(m_mutex);
+    snapshot.pipeline = m_pipeline;
+
+    snapshot.rayGeneration.buffer = m_raygenBuffer;
+    snapshot.rayGeneration.offset = m_raygenOffset;
+    snapshot.rayGeneration.recordCount = m_raygenBuffer ? 1u : 0u;
+    snapshot.rayGeneration.selectedGroupCount = m_raygenBuffer ? 1u : 0u;
+
+    snapshot.miss.buffer = m_missBuffer;
+    snapshot.miss.offset = m_missOffset;
+    snapshot.miss.recordCount = m_missCount;
+    snapshot.miss.selectedGroupCount = m_missGroupIndices.size();
+
+    snapshot.hit.buffer = m_hitBuffer;
+    snapshot.hit.offset = m_hitOffset;
+    snapshot.hit.recordCount = m_hitCount;
+    snapshot.hit.selectedGroupCount = m_hitGroupIndices.size();
+
+    snapshot.callable.buffer = m_callableBuffer;
+    snapshot.callable.offset = m_callableOffset;
+    snapshot.callable.recordCount = m_callableCount;
+    snapshot.callable.selectedGroupCount = m_callableGroupIndices.size();
+
+    outSnapshot = Move(snapshot);
+}
+
 #if !defined(NWB_FINAL)
 void ShaderTable::rejectNextBufferAllocationForTesting(){
     ScopedLock lock(m_mutex);
@@ -244,6 +273,16 @@ void ShaderTable::rejectNextBufferAllocationForTesting(){
 void ShaderTable::rejectNextNewBufferMapForTesting(){
     ScopedLock lock(m_mutex);
     m_rejectNextNewBufferMapForTesting = true;
+}
+
+void ShaderTable::captureDispatchBuffersForTesting(Array<BufferHandle, 4u>& outBuffers)const{
+    DispatchSnapshot snapshot;
+    captureDispatchSnapshot(snapshot);
+
+    outBuffers[0u] = Move(snapshot.rayGeneration.buffer);
+    outBuffers[1u] = Move(snapshot.miss.buffer);
+    outBuffers[2u] = Move(snapshot.hit.buffer);
+    outBuffers[3u] = Move(snapshot.callable.buffer);
 }
 #endif
 
@@ -387,6 +426,7 @@ bool ShaderTable::allocateSBTBuffer(
     bufferDesc.debugName = "SBT_Buffer";
     bufferDesc.isShaderBindingTable = true;
     bufferDesc.cpuAccess = CpuAccessMode::Write;
+    bufferDesc.queueSharing = ResourceQueueSharing::GraphicsAndAsyncCompute;
 
     BufferHandle newBuffer = m_device.createBuffer(bufferDesc);
     if(!newBuffer){

@@ -68,6 +68,17 @@ struct BlasGeometryScratch{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct RayDispatchLimits{
+    u64 maxInvocationCount = 0u;
+    Array<u32, 3u> maxAxisCounts = {};
+    Array<u32, 3u> maxAxisSizes = {};
+};
+
+[[nodiscard]] bool ValidateRayDispatchDimensions(
+    const RayTracingDispatchRaysArguments& arguments,
+    const RayDispatchLimits& limits
+)noexcept;
+
 bool ComputeRayTracingHandleLayout(
     const VulkanContext& context,
     u32& outHandleSize,

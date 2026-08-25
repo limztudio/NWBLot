@@ -281,11 +281,50 @@ bool Device::createSubmissionSignalForTesting(QueueSubmissionNativeSignal& outSi
     return true;
 }
 
+bool Device::createSubmissionTimelineForTesting(Queue::SubmissionWait& outWait){
+    outWait = {};
+    auto timelineInfo = VulkanDetail::MakeVkStruct<VkSemaphoreTypeCreateInfo>(
+        VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO
+    );
+    timelineInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+    timelineInfo.initialValue = 0u;
+    auto semaphoreInfo = VulkanDetail::MakeVkStruct<VkSemaphoreCreateInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO);
+    semaphoreInfo.pNext = &timelineInfo;
+    VkSemaphore semaphore = VK_NULL_HANDLE;
+    const VkResult res = vkCreateSemaphore(m_context.device, &semaphoreInfo, m_context.allocationCallbacks, &semaphore);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create test submission timeline: {}"), ResultToString(res));
+        return false;
+    }
+
+    outWait.semaphore = semaphore;
+    outWait.value = 1u;
+    return true;
+}
+
 void Device::destroySubmissionSignalForTesting(QueueSubmissionNativeSignal& signal){
     const VkSemaphore semaphore = __hidden_vulkan_device_queue::DecodeSubmissionNativeSemaphore(signal.semaphore);
     if(semaphore != VK_NULL_HANDLE)
         vkDestroySemaphore(m_context.device, semaphore, m_context.allocationCallbacks);
     signal = {};
+}
+
+bool Device::signalSubmissionTimelineForTesting(const Queue::SubmissionWait& wait){
+    auto signalInfo = VulkanDetail::MakeVkStruct<VkSemaphoreSignalInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO);
+    signalInfo.semaphore = wait.semaphore;
+    signalInfo.value = wait.value;
+    const VkResult res = vkSignalSemaphore(m_context.device, &signalInfo);
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to signal test submission timeline: {}"), ResultToString(res));
+        return false;
+    }
+    return true;
+}
+
+void Device::destroySubmissionTimelineForTesting(Queue::SubmissionWait& wait){
+    if(wait.semaphore != VK_NULL_HANDLE)
+        vkDestroySemaphore(m_context.device, wait.semaphore, m_context.allocationCallbacks);
+    wait = {};
 }
 
 void Device::rejectNextSubmissionForTesting(const CommandQueue::Enum queue){

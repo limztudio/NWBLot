@@ -157,6 +157,8 @@ void TrackedCommandBuffer::clearTrackedReferences(){
             heap->discardCommandBufferUse(*this);
     }
     m_referencedDescriptorHeaps.clear();
+    m_descriptorBufferManager = nullptr;
+    m_descriptorBufferGeneration = 0u;
 
     m_referencedTextures.clear();
     m_referencedResources.clear();
@@ -765,6 +767,10 @@ u64 Queue::submit(
     const usize localSignalCount
 ){
     ScopedLock lock(m_mutex);
+    DescriptorBufferManager* const descriptorBufferManager = m_context.descriptorBufferManager;
+    UniqueLock<Futex> descriptorBufferLifecycleLock;
+    if(descriptorBufferManager)
+        descriptorBufferLifecycleLock = UniqueLock<Futex>(descriptorBufferManager->m_lifecycleMutex);
     if(outSubmissionAccepted)
         *outSubmissionAccepted = false;
 
@@ -855,6 +861,28 @@ u64 Queue::submit(
             }
             if(!cmdList->validateTrackedTexturesReadyForSubmission())
                 return m_lastSubmittedID;
+            TrackedCommandBuffer* const tracked = cmdList->m_currentCmdBuf.get();
+            if(
+                (cmdList->m_descriptorBuffersBound && !tracked->m_descriptorBufferManager)
+                || (!tracked->m_descriptorBufferManager && tracked->m_descriptorBufferGeneration != 0u)
+                || (tracked->m_descriptorBufferManager && tracked->m_descriptorBufferGeneration == 0u)
+                || (
+                    tracked->m_descriptorBufferManager
+                    && (
+                        tracked->m_descriptorBufferManager != descriptorBufferManager
+                        || descriptorBufferManager != &m_device.m_descriptorBufferManager
+                        || !descriptorBufferManager->m_enabled
+                        || descriptorBufferManager->m_lifecycleTransitioning
+                        || descriptorBufferManager->m_bindingGeneration == 0u
+                        || tracked->m_descriptorBufferGeneration != descriptorBufferManager->m_bindingGeneration
+                    )
+                )
+            ){
+                NWB_LOGGER_CRITICAL_WARNING(
+                    NWB_TEXT("Vulkan: Failed to submit command lists: descriptor-buffer binding generation is stale")
+                );
+                return m_lastSubmittedID;
+            }
         }
     }
     for(usize i = 0u; i < localSignalCount; ++i){
@@ -901,6 +929,8 @@ u64 Queue::submit(
     if(m_trackingSemaphore == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Queue submission skipped because timeline semaphore is unavailable."));
 
+        if(descriptorBufferLifecycleLock.owns_lock())
+            descriptorBufferLifecycleLock.unlock();
         finalizeDetachedRecordingAttempts(false);
         for(auto& tracked : trackedBuffers)
             recycleCommandBuffer(Move(tracked));
@@ -920,6 +950,8 @@ u64 Queue::submit(
         if(localWaits[i].semaphore == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait semaphore is null"));
             m_lastSubmittedID = submissionID - 1;
+            if(descriptorBufferLifecycleLock.owns_lock())
+                descriptorBufferLifecycleLock.unlock();
             finalizeDetachedRecordingAttempts(false);
             for(auto& tracked : trackedBuffers)
                 recycleCommandBuffer(Move(tracked));
@@ -973,6 +1005,8 @@ u64 Queue::submit(
         // Reject before the driver sees this submission. Global synchronization remains owned by the queue for a
         // retry, while detached command buffers and their tentative timeline value are rolled back.
         m_lastSubmittedID = submissionID - 1;
+        if(descriptorBufferLifecycleLock.owns_lock())
+            descriptorBufferLifecycleLock.unlock();
         finalizeDetachedRecordingAttempts(false);
         for(auto& tracked : trackedBuffers)
             recycleCommandBuffer(Move(tracked));
@@ -984,6 +1018,9 @@ u64 Queue::submit(
 
     if(res != VK_SUCCESS){
         m_lastSubmittedID = submissionID - 1;
+
+        if(descriptorBufferLifecycleLock.owns_lock())
+            descriptorBufferLifecycleLock.unlock();
 
         if(res == VK_ERROR_DEVICE_LOST){
             clearPendingSemaphores();
@@ -1002,6 +1039,8 @@ u64 Queue::submit(
         return m_lastSubmittedID;
     }
 
+    if(descriptorBufferLifecycleLock.owns_lock())
+        descriptorBufferLifecycleLock.unlock();
     clearPendingSemaphores();
     finalizeDetachedRecordingAttempts(true);
 

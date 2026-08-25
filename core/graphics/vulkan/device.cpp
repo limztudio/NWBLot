@@ -631,7 +631,7 @@ Device::~Device(){
     m_uploadManager.clear();
     m_scratchManager.clear();
 
-    m_gpuDescriptorHeap.shutdown();
+    m_gpuDescriptorHeap.shutdownForDeviceTeardown();
     m_descriptorBufferManager.shutdown();
 
     for(Queue* queue : m_physicalQueues){

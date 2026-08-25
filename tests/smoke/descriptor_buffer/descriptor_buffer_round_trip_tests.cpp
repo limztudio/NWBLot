@@ -55541,19 +55541,13 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
 #else
     auto& device = DescriptorBufferRoundTripTest::device();
 
-    GraphicsBackend::GpuDescriptorHeap heap(device);
-    GpuDescriptorHeapDesc heapDesc;
-    heapDesc
-        .setResourceCapacity(2u)
-        .setSamplerCapacity(1u)
-        .setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
-    ;
-    ASSERT_TRUE(heap.initialize(heapDesc));
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
 
     const GpuDescriptorHeapLifecycleStatistics initialStatistics = heap.lifecycleStatistics();
     EXPECT_TRUE(initialStatistics.initialized);
-    EXPECT_EQ(initialStatistics.resourceCapacity, 2u);
-    EXPECT_EQ(initialStatistics.samplerCapacity, 1u);
+    EXPECT_GT(initialStatistics.resourceCapacity, 1u);
+    EXPECT_GT(initialStatistics.samplerCapacity, 0u);
     if(heap.hasAccelStructLayout())
         EXPECT_GT(initialStatistics.accelStructCapacity, 0u);
     else
@@ -55609,6 +55603,9 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     auto unsubmittedCommandList = device.createCommandList();
     ASSERT_TRUE(unsubmittedCommandList);
     unsubmittedCommandList->open();
+    ComputeState unsubmittedComputeState;
+    unsubmittedComputeState.setPipeline(pipeline.get());
+    unsubmittedCommandList->setComputeState(unsubmittedComputeState);
     heap.bindCompute(*unsubmittedCommandList, *pipeline);
     unsubmittedCommandList->close();
     ASSERT_TRUE(unsubmittedCommandList->hasCommandBuffer());
@@ -55702,6 +55699,9 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     auto acceptedCommandList = device.createCommandList();
     ASSERT_TRUE(acceptedCommandList);
     acceptedCommandList->open();
+    ComputeState acceptedComputeState;
+    acceptedComputeState.setPipeline(pipeline.get());
+    acceptedCommandList->setComputeState(acceptedComputeState);
     heap.bindCompute(*acceptedCommandList, *pipeline);
     acceptedCommandList->close();
     ASSERT_TRUE(acceptedCommandList->hasCommandBuffer());
@@ -55752,32 +55752,6 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     EXPECT_EQ(storageBuffer->getReferenceCount(), 1u)
         << "a completed queue submission did not release its descriptor heap use";
 
-    heap.shutdown();
-    const GpuDescriptorHeapLifecycleStatistics shutdownStatistics = heap.lifecycleStatistics();
-    EXPECT_FALSE(shutdownStatistics.initialized);
-    EXPECT_EQ(shutdownStatistics.resourceCapacity, 0u);
-    EXPECT_EQ(shutdownStatistics.samplerCapacity, 0u);
-    EXPECT_EQ(shutdownStatistics.accelStructCapacity, 0u);
-    EXPECT_EQ(shutdownStatistics.resourceLiveSlotCount, 0u);
-    EXPECT_EQ(shutdownStatistics.samplerLiveSlotCount, 0u);
-    EXPECT_EQ(shutdownStatistics.accelStructLiveSlotCount, 0u);
-    EXPECT_EQ(shutdownStatistics.pendingRetiredSlotCount, 0u);
-    EXPECT_EQ(shutdownStatistics.acceptedHeapUseCount, 0u);
-    EXPECT_EQ(shutdownStatistics.unsubmittedHeapUseCount, 0u);
-    EXPECT_EQ(shutdownStatistics.abandonedHeapUseCount, 0u);
-
-    ASSERT_TRUE(heap.initialize(heapDesc));
-    const GpuDescriptorHeapLifecycleStatistics reinitializedStatistics = heap.lifecycleStatistics();
-    EXPECT_TRUE(reinitializedStatistics.initialized);
-    EXPECT_EQ(reinitializedStatistics.resourceCapacity, 2u);
-    EXPECT_EQ(reinitializedStatistics.samplerCapacity, 1u);
-    EXPECT_EQ(reinitializedStatistics.resourceLiveSlotCount, 0u);
-    EXPECT_EQ(reinitializedStatistics.samplerLiveSlotCount, 0u);
-    EXPECT_EQ(reinitializedStatistics.accelStructLiveSlotCount, 0u);
-    EXPECT_EQ(reinitializedStatistics.pendingRetiredSlotCount, 0u);
-    EXPECT_EQ(reinitializedStatistics.acceptedHeapUseCount, 0u);
-    EXPECT_EQ(reinitializedStatistics.unsubmittedHeapUseCount, 0u);
-    EXPECT_EQ(reinitializedStatistics.abandonedHeapUseCount, 0u);
 #endif
 }
 
@@ -55813,19 +55787,13 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksAuxiliaryGra
     if(!auxiliaryGraphicsQueue)
         GTEST_SKIP() << "Descriptor-heap auxiliary Graphics retirement: adapter exposes no same-family Graphics queue.";
 
-    GraphicsBackend::GpuDescriptorHeap heap(device);
-    GpuDescriptorHeapDesc heapDesc;
-    heapDesc
-        .setResourceCapacity(2u)
-        .setSamplerCapacity(1u)
-        .setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
-    ;
-    ASSERT_TRUE(heap.initialize(heapDesc));
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
 
     const GpuDescriptorHeapLifecycleStatistics initialStatistics = heap.lifecycleStatistics();
     EXPECT_TRUE(initialStatistics.initialized);
-    EXPECT_EQ(initialStatistics.resourceCapacity, 2u);
-    EXPECT_EQ(initialStatistics.samplerCapacity, 1u);
+    EXPECT_GT(initialStatistics.resourceCapacity, 1u);
+    EXPECT_GT(initialStatistics.samplerCapacity, 0u);
     if(heap.hasAccelStructLayout())
         EXPECT_GT(initialStatistics.accelStructCapacity, 0u);
     else
@@ -55889,6 +55857,9 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksAuxiliaryGra
     auto commandList = device.createCommandList(parameters);
     ASSERT_TRUE(commandList);
     commandList->open();
+    ComputeState computeState;
+    computeState.setPipeline(pipeline.get());
+    commandList->setComputeState(computeState);
     heap.bindCompute(*commandList, *pipeline);
     commandList->close();
     ASSERT_TRUE(commandList->hasCommandBuffer());
@@ -55958,6 +55929,8 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksAuxiliaryGra
     const GpuDescriptorHandle recycled = heap.allocate(GpuDescriptorClass::StorageBuffer);
     ASSERT_TRUE(recycled.valid());
     EXPECT_EQ(recycled.slot(), handle.slot());
+    heap.free(recycled);
+    heap.collectRetired();
 }
 
 

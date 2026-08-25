@@ -50,6 +50,33 @@ static u64 s_NextDescriptorBufferStorageIdentity = 1u;
     }
 }
 
+[[nodiscard]] static u32 GetDescriptorSize(
+    const VulkanContext& context,
+    const bool enabled,
+    const VkDescriptorType descriptorType
+){
+    if(!enabled)
+        return 0u;
+
+    const auto& props = context.descriptorBufferProperties;
+    VkDeviceSize size = 0u;
+    switch(descriptorType){
+    case VK_DESCRIPTOR_TYPE_SAMPLER:                    size = props.samplerDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:     size = props.combinedImageSamplerDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:              size = props.sampledImageDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:              size = props.storageImageDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:       size = props.uniformTexelBufferDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:       size = props.storageTexelBufferDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:             size = props.uniformBufferDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:             size = props.storageBufferDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:           size = props.inputAttachmentDescriptorSize; break;
+    case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR: size = props.accelerationStructureDescriptorSize; break;
+    default:                                            return 0u;
+    }
+
+    return size > UINT32_MAX ? 0u : static_cast<u32>(size);
+}
+
 [[nodiscard]] static bool ResolveDescriptorBufferRange(
     const DescriptorWriteItem& item,
     const BufferDesc& bufferDesc,
@@ -80,14 +107,70 @@ DescriptorBufferManager::~DescriptorBufferManager(){
     shutdown();
 }
 
+void DescriptorBufferManager::shutdownForLifecycleOperation(){
+    {
+        ScopedLock lifecycleLock(m_lifecycleMutex);
+        if(m_lifecycleTransitioning){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer shutdown rejected during another lifecycle transition."));
+            return;
+        }
+        if(
+            m_resourceSegment.buffer == VK_NULL_HANDLE
+            && m_samplerSegment.buffer == VK_NULL_HANDLE
+            && !m_resourceSegment.allocation
+            && !m_samplerSegment.allocation
+        ){
+            m_bindingGeneration = 0u;
+            m_enabled = false;
+            return;
+        }
+
+        m_lifecycleTransitioning = true;
+        m_bindingGeneration = 0u;
+        m_enabled = false;
+    }
+
+    if(!m_device.waitForIdle())
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Descriptor-buffer shutdown is continuing after device-idle wait failed."));
+
+    ScopedLock lifecycleLock(m_lifecycleMutex);
+    ScopedLock resourceLock(m_resourceSegment.mutex);
+    ScopedLock samplerLock(m_samplerSegment.mutex);
+
+    shutdownSegment(m_resourceSegment);
+    shutdownSegment(m_samplerSegment);
+    m_lifecycleTransitioning = false;
+}
+
 bool DescriptorBufferManager::initialize(){
-    shutdown();
+    ScopedLock operationLock(m_lifecycleOperationMutex);
+
+    shutdownForLifecycleOperation();
+
+    ScopedLock lifecycleLock(m_lifecycleMutex);
+    if(m_lifecycleTransitioning){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer initialization rejected during another lifecycle transition."));
+        return false;
+    }
+    m_lifecycleTransitioning = true;
+    const auto failInitialization = [this](){
+        shutdownSegment(m_resourceSegment);
+        shutdownSegment(m_samplerSegment);
+        m_bindingGeneration = 0u;
+        m_enabled = false;
+        m_lifecycleTransitioning = false;
+        return false;
+    };
 
     if(!m_context.extensions.EXT_descriptor_buffer)
-        return false;
+        return failInitialization();
     if(m_resourceSegment.storageIdentity == 0u || m_samplerSegment.storageIdentity == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer storage identity space is exhausted."));
-        return false;
+        return failInitialization();
+    }
+    if(m_nextBindingGeneration == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer binding generation space is exhausted."));
+        return failInitialization();
     }
 
     const auto& props = m_context.descriptorBufferProperties;
@@ -98,7 +181,7 @@ bool DescriptorBufferManager::initialize(){
 
     if(props.descriptorBufferOffsetAlignment == 0 || props.descriptorBufferOffsetAlignment > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer offset alignment is outside the supported 32-bit range."));
-        return false;
+        return failInitialization();
     }
 
     const u32 offsetAlignment = static_cast<u32>(props.descriptorBufferOffsetAlignment);
@@ -108,7 +191,7 @@ bool DescriptorBufferManager::initialize(){
         || props.maxSamplerDescriptorBufferBindings == 0u
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer limits cannot bind the required resource and sampler segments."));
-        return false;
+        return failInitialization();
     }
 
     const VkDeviceSize resourceMaxBytes = Min<VkDeviceSize>(props.resourceDescriptorBufferAddressSpaceSize, props.maxResourceDescriptorBufferRange);
@@ -130,7 +213,7 @@ bool DescriptorBufferManager::initialize(){
         || !makeCapacity(samplerMaxBytes, s_TargetSamplerSegmentBytes, samplerCapacityBytes)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer properties do not allow aligned global segments."));
-        return false;
+        return failInitialization();
     }
 
     const VkDeviceSize totalCapacityBytes = static_cast<VkDeviceSize>(resourceCapacityBytes) + samplerCapacityBytes;
@@ -139,50 +222,38 @@ bool DescriptorBufferManager::initialize(){
             , props.descriptorBufferAddressSpaceSize
             , totalCapacityBytes
         );
-        return false;
+        return failInitialization();
     }
 
-    if(!initializeSegment(m_resourceSegment, "vk_resource_descriptor_buffer", resourceCapacityBytes)){
-        shutdown();
-        return false;
-    }
+    if(!initializeSegment(m_resourceSegment, "vk_resource_descriptor_buffer", resourceCapacityBytes))
+        return failInitialization();
 
-    if(!initializeSegment(m_samplerSegment, "vk_sampler_descriptor_buffer", samplerCapacityBytes)){
-        shutdown();
-        return false;
-    }
+    if(!initializeSegment(m_samplerSegment, "vk_sampler_descriptor_buffer", samplerCapacityBytes))
+        return failInitialization();
 
+    m_bindingGeneration = m_nextBindingGeneration;
+    m_nextBindingGeneration = m_bindingGeneration == UINT64_MAX ? 0u : m_bindingGeneration + 1u;
     m_enabled = true;
+    m_lifecycleTransitioning = false;
     return true;
 }
 
 void DescriptorBufferManager::shutdown(){
-    shutdownSegment(m_resourceSegment);
-    shutdownSegment(m_samplerSegment);
-    m_enabled = false;
+    ScopedLock operationLock(m_lifecycleOperationMutex);
+
+    shutdownForLifecycleOperation();
+}
+
+bool DescriptorBufferManager::isEnabled()const{
+    ScopedLock lifecycleLock(m_lifecycleMutex);
+
+    return m_enabled && !m_lifecycleTransitioning && m_bindingGeneration != 0u;
 }
 
 u32 DescriptorBufferManager::getDescriptorSize(const VkDescriptorType descriptorType)const{
-    if(!m_enabled)
-        return 0;
+    ScopedLock lifecycleLock(m_lifecycleMutex);
 
-    const auto& props = m_context.descriptorBufferProperties;
-    VkDeviceSize size = 0;
-    switch(descriptorType){
-    case VK_DESCRIPTOR_TYPE_SAMPLER:                               size = props.samplerDescriptorSize; break;
-    case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:                size = props.combinedImageSamplerDescriptorSize; break;
-    case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:                         size = props.sampledImageDescriptorSize; break;
-    case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:                         size = props.storageImageDescriptorSize; break;
-    case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:                  size = props.uniformTexelBufferDescriptorSize; break;
-    case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:                  size = props.storageTexelBufferDescriptorSize; break;
-    case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:                        size = props.uniformBufferDescriptorSize; break;
-    case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:                        size = props.storageBufferDescriptorSize; break;
-    case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:                      size = props.inputAttachmentDescriptorSize; break;
-    case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:            size = props.accelerationStructureDescriptorSize; break;
-    default:                                                       return 0;
-    }
-
-    return size > UINT32_MAX ? 0u : static_cast<u32>(size);
+    return VulkanDetail::GetDescriptorSize(m_context, m_enabled, descriptorType);
 }
 
 u32 DescriptorBufferManager::getOffsetAlignmentBytes()const{
@@ -205,8 +276,33 @@ u32 DescriptorBufferManager::getMaxTexelBufferElements()const{
     return m_context.physicalDeviceProperties.limits.maxTexelBufferElements;
 }
 
+VkDescriptorBufferBindingInfoEXT DescriptorBufferManager::getResourceBindingInfo()const{
+    ScopedLock lifecycleLock(m_lifecycleMutex);
+
+    return m_enabled ? m_resourceSegment.bindingInfo : VkDescriptorBufferBindingInfoEXT{};
+}
+
+VkDescriptorBufferBindingInfoEXT DescriptorBufferManager::getSamplerBindingInfo()const{
+    ScopedLock lifecycleLock(m_lifecycleMutex);
+
+    return m_enabled ? m_samplerSegment.bindingInfo : VkDescriptorBufferBindingInfoEXT{};
+}
+
 DescriptorBufferSegment DescriptorBufferManager::allocate(const DescriptorBufferSegmentKind::Enum kind, const u32 sizeBytes, const u32 alignmentBytes){
+    return allocateForBindingGeneration(kind, sizeBytes, alignmentBytes, 0u);
+}
+
+DescriptorBufferSegment DescriptorBufferManager::allocateForBindingGeneration(
+    const DescriptorBufferSegmentKind::Enum kind,
+    const u32 sizeBytes,
+    const u32 alignmentBytes,
+    const u64 requiredGeneration
+){
     DescriptorBufferSegment result{};
+    ScopedLock lifecycleLock(m_lifecycleMutex);
+
+    if(requiredGeneration != 0u && requiredGeneration != m_bindingGeneration)
+        return result;
     if(!m_enabled || sizeBytes == 0)
         return result;
     if(kind != DescriptorBufferSegmentKind::Resource && kind != DescriptorBufferSegmentKind::Sampler){
@@ -307,6 +403,17 @@ DescriptorBufferSegment DescriptorBufferManager::allocate(const DescriptorBuffer
 }
 
 void DescriptorBufferManager::free(const DescriptorBufferSegment& segment){
+    freeForBindingGeneration(segment, 0u);
+}
+
+void DescriptorBufferManager::freeForBindingGeneration(
+    const DescriptorBufferSegment& segment,
+    const u64 requiredGeneration
+){
+    ScopedLock lifecycleLock(m_lifecycleMutex);
+
+    if(requiredGeneration != 0u && requiredGeneration != m_bindingGeneration)
+        return;
     if(!m_enabled || segment.sizeBytes == 0u)
         return;
     if(segment.kind != DescriptorBufferSegmentKind::Resource && segment.kind != DescriptorBufferSegmentKind::Sampler){
@@ -412,6 +519,8 @@ bool DescriptorBufferManager::writeDescriptor(
     const u32 dstOffsetBytes,
     const VkDescriptorType descriptorType
 ){
+    ScopedLock lifecycleLock(m_lifecycleMutex);
+
     if(!m_enabled)
         return false;
     if(!allocation.valid()){
@@ -448,7 +557,7 @@ bool DescriptorBufferManager::writeDescriptor(
         return false;
     }
 
-    const u32 descriptorSize = getDescriptorSize(descriptorType);
+    const u32 descriptorSize = VulkanDetail::GetDescriptorSize(m_context, m_enabled, descriptorType);
     if(descriptorSize == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: unknown size for descriptor type {}."), static_cast<u32>(descriptorType));
         return false;
@@ -717,6 +826,84 @@ bool DescriptorBufferManager::writeDescriptor(
 
     vkGetDescriptorEXT(m_context.device, &getInfo, descriptorSize, dstBytes + dstOffsetBytes);
     return true;
+}
+
+bool DescriptorBufferManager::captureBindingSnapshotLocked(BindingSnapshot& outSnapshot)const{
+    outSnapshot = {};
+    const u32 offsetAlignmentBytes = VulkanDetail::GetDescriptorBufferOffsetAlignmentBytes(m_context);
+    if(
+        !m_enabled
+        || m_lifecycleTransitioning
+        || m_bindingGeneration == 0u
+        || offsetAlignmentBytes == 0u
+        || m_resourceSegment.storageIdentity == 0u
+        || m_samplerSegment.storageIdentity == 0u
+        || m_resourceSegment.storageIdentity == m_samplerSegment.storageIdentity
+        || m_resourceSegment.buffer == VK_NULL_HANDLE
+        || m_samplerSegment.buffer == VK_NULL_HANDLE
+        || !m_resourceSegment.allocation
+        || !m_samplerSegment.allocation
+        || !m_resourceSegment.mappedMemory
+        || !m_samplerSegment.mappedMemory
+        || m_resourceSegment.deviceAddress == 0u
+        || m_samplerSegment.deviceAddress == 0u
+        || (m_resourceSegment.deviceAddress % offsetAlignmentBytes) != 0u
+        || (m_samplerSegment.deviceAddress % offsetAlignmentBytes) != 0u
+        || m_resourceSegment.capacityBytes == 0u
+        || m_samplerSegment.capacityBytes == 0u
+        || m_resourceSegment.bindingInfo.sType != VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT
+        || m_samplerSegment.bindingInfo.sType != VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT
+        || m_resourceSegment.bindingInfo.address != m_resourceSegment.deviceAddress
+        || m_samplerSegment.bindingInfo.address != m_samplerSegment.deviceAddress
+        || m_resourceSegment.bindingInfo.usage != VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT
+        || m_samplerSegment.bindingInfo.usage != VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT
+    )
+        return false;
+
+    outSnapshot.bindingInfos[s_ResourceDescriptorBufferIndex] = m_resourceSegment.bindingInfo;
+    outSnapshot.bindingInfos[s_SamplerDescriptorBufferIndex] = m_samplerSegment.bindingInfo;
+    outSnapshot.generation = m_bindingGeneration;
+    outSnapshot.resourceStorageIdentity = m_resourceSegment.storageIdentity;
+    outSnapshot.samplerStorageIdentity = m_samplerSegment.storageIdentity;
+    outSnapshot.offsetAlignmentBytes = offsetAlignmentBytes;
+    return true;
+}
+
+bool DescriptorBufferManager::isLiveSegmentLocked(
+    const SegmentStorage& storage,
+    const DescriptorBufferSegment& segment,
+    const DescriptorBufferSegmentKind::Enum expectedKind
+)const{
+    if(
+        !segment.valid()
+        || segment.kind != expectedKind
+        || segment.storageIdentity != storage.storageIdentity
+        || segment.offsetBytes > storage.capacityBytes
+        || segment.sizeBytes > storage.capacityBytes - segment.offsetBytes
+        || segment.offsetBytes > storage.writableOffsetBytes
+        || segment.sizeBytes > storage.writableOffsetBytes - segment.offsetBytes
+    )
+        return false;
+
+    usize first = 0u;
+    usize last = storage.liveAllocations.size();
+    while(first < last){
+        const usize middle = first + (last - first) / 2u;
+        if(storage.liveAllocations[middle].offsetBytes < segment.offsetBytes)
+            first = middle + 1u;
+        else
+            last = middle;
+    }
+    if(first == storage.liveAllocations.size())
+        return false;
+
+    const DescriptorBufferSegment& liveSegment = storage.liveAllocations[first];
+    return liveSegment.kind == segment.kind
+        && liveSegment.offsetBytes == segment.offsetBytes
+        && liveSegment.sizeBytes == segment.sizeBytes
+        && liveSegment.storageIdentity == segment.storageIdentity
+        && liveSegment.allocationSerial == segment.allocationSerial
+    ;
 }
 
 bool DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const ACompactString& debugName, const u32 capacityBytes){

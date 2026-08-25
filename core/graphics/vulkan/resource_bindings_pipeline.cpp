@@ -152,6 +152,16 @@ bool Device::createPipelineLayoutForBindingLayouts(
             maxSetIndex = Max<u32>(maxSetIndex, base + static_cast<u32>(setCount) - 1u);
         }
 
+        if(maxSetIndex >= m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create {}: descriptor set {} exceeds maxBoundDescriptorSets {}")
+                , operationName
+                , maxSetIndex
+                , m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets
+            );
+            return false;
+        }
+
         const u32 totalSets = maxSetIndex + 1u;
         descriptorSetLayouts.reserve(totalSets);
         for(u32 s = 0; s < totalSets; ++s)
@@ -196,20 +206,35 @@ bool Device::configurePipelineBindings(
     outBindings.m_pipelineLayout = VK_NULL_HANDLE;
     outBindings.m_ownsPipelineLayout = false;
     outBindings.m_pushConstantByteSize = 0;
+    outBindings.m_bindingLayoutsAtCreation.clear();
+    outBindings.m_bindingLayoutSetIndicesAtCreation = {};
 
     if(!VulkanDetail::IsDescriptorBufferBackendReady(m_context)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: required descriptor-buffer backend is unavailable."), operationName);
         return false;
     }
 
-    return createPipelineLayoutForBindingLayouts(
+    if(!createPipelineLayoutForBindingLayouts(
         bindingLayouts,
         operationName,
         outBindings.m_pipelineLayout,
         outBindings.m_pushConstantByteSize,
         outBindings.m_ownsPipelineLayout,
         scratchArena
-    );
+    ))
+        return false;
+
+    outBindings.m_bindingLayoutsAtCreation = bindingLayouts;
+    for(u32 layoutIndex = 0u; layoutIndex < static_cast<u32>(bindingLayouts.size()); ++layoutIndex){
+        const BindingLayout* const layout = bindingLayouts[layoutIndex].get();
+        NWB_ASSERT(layout != nullptr);
+        const BindlessLayoutDesc* const bindlessDesc = layout->getBindlessDesc();
+        outBindings.m_bindingLayoutSetIndicesAtCreation[layoutIndex] = bindlessDesc
+            ? bindlessDesc->descriptorSetIndex
+            : layoutIndex
+        ;
+    }
+    return true;
 }
 
 

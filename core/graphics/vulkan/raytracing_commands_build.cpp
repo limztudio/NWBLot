@@ -21,26 +21,43 @@ void CommandList::setRayTracingState(const RayTracingState& state){
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("set ray-tracing state")))
         return;
 
+    ShaderTable* const shaderTable = state.shaderTable;
+    RayTracingPipeline* const pipeline = shaderTable ? shaderTable->m_pipeline.get() : nullptr;
+    if(
+        shaderTable
+        && (
+            &shaderTable->m_context != &m_context
+            || &shaderTable->m_device != &m_device
+            || !pipeline
+            || &pipeline->m_context != &m_context
+            || &pipeline->m_device != &m_device
+            || pipeline->m_pipeline == VK_NULL_HANDLE
+            || pipeline->m_pipelineLayout == VK_NULL_HANDLE
+            || !m_context.extensions.KHR_ray_tracing_pipeline
+            || !m_context.rayTracingPipelineFeatureEnabled
+            || !vkCmdTraceRaysKHR
+        )
+    ){
+        rejectCommandRecording(
+            NWB_TEXT("set ray-tracing state"),
+            NWB_TEXT("shader table or retained pipeline is foreign, unavailable, or not ready")
+        );
+        return;
+    }
+
     endActiveRenderPass();
     commitBarriers();
+    if(m_commandRecordingFailed)
+        return;
     m_currentGraphicsState = {};
     m_currentComputeState = {};
     m_currentMeshletState = {};
     m_currentRayTracingState = state;
 
-    if(!state.shaderTable)
+    if(!shaderTable)
         return;
 
-    auto* sbt = state.shaderTable;
-    if(!sbt)
-        return;
-
-    retainResource(state.shaderTable);
-
-    RayTracingPipeline* pipeline = sbt->m_pipeline.get();
-
-    if(!pipeline)
-        return;
+    retainResource(shaderTable);
 
     vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipeline);
 

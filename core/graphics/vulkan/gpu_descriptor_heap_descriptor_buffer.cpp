@@ -103,6 +103,7 @@ TextureDimension::Enum GetSampledImageDimension(const GpuDescriptorClass::Enum d
 
 bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWriteItem& item){
     using namespace __hidden_vulkan_descriptor_heap;
+    ScopedLock lock(m_mutex);
 
     if(!m_initialized){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write called before initialize."));
@@ -122,8 +123,24 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: AccelStruct requires the descriptor-buffer TLAS layout."));
         return false;
     }
+    DescriptorBufferManager* const manager = m_context.descriptorBufferManager;
+    if(!manager || manager != &m_device.m_descriptorBufferManager){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected an unavailable manager."));
+        return false;
+    }
+    {
+        ScopedLock lifecycleLock(manager->m_lifecycleMutex);
+        if(
+            !manager->m_enabled
+            || manager->m_lifecycleTransitioning
+            || m_descriptorBufferGeneration == 0u
+            || manager->m_bindingGeneration != m_descriptorBufferGeneration
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a stale descriptor generation."));
+            return false;
+        }
+    }
 
-    ScopedLock lock(m_mutex);
     SlotAllocator& allocator = allocatorForClass(descriptorClass);
     if(
         handle.slot() >= allocator.liveSlots.size()
@@ -368,15 +385,15 @@ void GpuDescriptorHeap::bindCompute(
     const GpuDescriptorHandle accelStructHandle
 ){
     // Bind persistent resource/sampler blocks at 8/9 and optional TLAS at 10.
-    commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.m_pipelineLayout, accelStructHandle);
+    commandList.bindDescriptorBufferHeap(*this, pipeline, accelStructHandle);
 }
 
 void GpuDescriptorHeap::bindGraphics(CommandList& commandList, const GraphicsPipeline& pipeline){
-    commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipelineLayout);
+    commandList.bindDescriptorBufferHeap(*this, pipeline);
 }
 
 void GpuDescriptorHeap::bindGraphics(CommandList& commandList, const MeshletPipeline& pipeline){
-    commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipelineLayout);
+    commandList.bindDescriptorBufferHeap(*this, pipeline);
 }
 
 void GpuDescriptorHeap::bindRayTracing(
@@ -384,7 +401,7 @@ void GpuDescriptorHeap::bindRayTracing(
     const RayTracingPipeline& pipeline,
     const GpuDescriptorHandle accelStructHandle
 ){
-    commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline.m_pipelineLayout, accelStructHandle);
+    commandList.bindDescriptorBufferHeap(*this, pipeline, accelStructHandle);
 }
 
 
@@ -412,10 +429,11 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: bindless layout has no descriptor capacity."));
             return false;
         }
-        const DescriptorBufferSegment block = m_context.descriptorBufferManager->allocate(
+        const DescriptorBufferSegment block = m_context.descriptorBufferManager->allocateForBindingGeneration(
             bindingLayout->getDescriptorBufferSegmentKind(),
             setSizeBytes,
-            offsetAlignmentBytes
+            offsetAlignmentBytes,
+            m_descriptorBufferGeneration
         );
         if(!block.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: failed to carve {}-byte descriptor-buffer heap block."), setSizeBytes);
@@ -496,10 +514,11 @@ bool GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeIt
         const bool allocateBlock = !retainedBlock.valid();
         DescriptorBufferSegment* block = &retainedBlock;
         if(allocateBlock){
-            candidateBlock = m_context.descriptorBufferManager->allocate(
+            candidateBlock = m_context.descriptorBufferManager->allocateForBindingGeneration(
                 m_accelStructLayout->getDescriptorBufferSegmentKind(),
                 setSizeBytes,
-                m_context.descriptorBufferManager->getOffsetAlignmentBytes()
+                m_context.descriptorBufferManager->getOffsetAlignmentBytes(),
+                m_descriptorBufferGeneration
             );
             if(!candidateBlock.valid()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: failed to carve {}-byte TLAS block."), setSizeBytes);
@@ -516,7 +535,10 @@ bool GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeIt
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::writeDescriptorBuffer: TLAS descriptor block is invalid."));
             if(allocateBlock)
-                m_context.descriptorBufferManager->free(candidateBlock);
+                m_context.descriptorBufferManager->freeForBindingGeneration(
+                    candidateBlock,
+                    m_descriptorBufferGeneration
+                );
             return false;
         }
 
@@ -527,7 +549,10 @@ bool GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeIt
             VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR
         )){
             if(allocateBlock)
-                m_context.descriptorBufferManager->free(candidateBlock);
+                m_context.descriptorBufferManager->freeForBindingGeneration(
+                    candidateBlock,
+                    m_descriptorBufferGeneration
+                );
             return false;
         }
         if(allocateBlock)

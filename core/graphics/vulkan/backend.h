@@ -775,6 +775,7 @@ namespace TrackedCommandBufferArenaState{
 
 class TrackedCommandBuffer final : public RefCounter<GraphicsResource>, NoCopy{
     friend class CommandList;
+    friend class DescriptorBufferManager;
     friend class Queue;
     friend class StateTracker;
     friend class GpuDescriptorHeap;
@@ -813,6 +814,8 @@ private:
     Vector<BufferHandle, Alloc::GlobalArena> m_referencedStagingBuffers;
     Vector<GpuDescriptorHeap*, Alloc::GlobalArena> m_referencedDescriptorHeaps;
     Vector<RetainedTextureStateCommit, Alloc::GlobalArena> m_retainedTextureStateCommits;
+    DescriptorBufferManager* m_descriptorBufferManager = nullptr;
+    u64 m_descriptorBufferGeneration = 0u;
 
     u64 m_recordingID = 0;
     u64 m_submissionID = 0;
@@ -1443,6 +1446,7 @@ private:
 
 
 class Sampler final : public RefCounter<GraphicsResource>, NoCopy{
+    friend class CommandList;
     friend class Device;
     friend class DescriptorBufferManager;
     friend class GpuDescriptorHeap;
@@ -1631,6 +1635,8 @@ using PipelineShaderStageVector = Vector<VkPipelineShaderStageCreateInfo, Alloc:
 using PipelineSpecializationInfoVector = Vector<VkSpecializationInfo, Alloc::ScratchArena>;
 
 struct PipelineBindingState{
+    BindingLayoutVector m_bindingLayoutsAtCreation;
+    Array<u32, s_MaxBindingLayouts> m_bindingLayoutSetIndicesAtCreation{};
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     bool m_ownsPipelineLayout = false;
     u32 m_pushConstantByteSize = 0;
@@ -1719,6 +1725,20 @@ struct DescriptorBufferSegment{
 };
 
 class DescriptorBufferManager final : NoCopy{
+    friend class CommandList;
+    friend class GpuDescriptorHeap;
+    friend class Queue;
+
+
+public:
+    // Resource and sampler descriptor buffers are always bound in this order. A TLAS set reuses the resource
+    // descriptor buffer, so the optional third offset extends this fixed topology.
+    static constexpr u32 s_ResourceDescriptorBufferIndex = 0u;
+    static constexpr u32 s_SamplerDescriptorBufferIndex = 1u;
+    static constexpr u32 s_PersistentDescriptorBufferCount = 2u;
+    static constexpr u32 s_DescriptorBufferCountWithAccelStruct = 3u;
+
+
 private:
     // Mergeable free byte range.
     struct FreeRange{
@@ -1749,25 +1769,29 @@ private:
             , liveAllocations(arena)
         {}
     };
+    struct BindingSnapshot{
+        Array<VkDescriptorBufferBindingInfoEXT, s_PersistentDescriptorBufferCount> bindingInfos{};
+        u64 generation = 0u;
+        u64 resourceStorageIdentity = 0u;
+        u64 samplerStorageIdentity = 0u;
+        u32 offsetAlignmentBytes = 0u;
+    };
 
 
 public:
-    // Resource and sampler descriptor buffers are always bound in this order. A TLAS set reuses the resource
-    // descriptor buffer, so the optional third offset extends this fixed topology.
-    static constexpr u32 s_ResourceDescriptorBufferIndex = 0u;
-    static constexpr u32 s_SamplerDescriptorBufferIndex = 1u;
-    static constexpr u32 s_PersistentDescriptorBufferCount = 2u;
-    static constexpr u32 s_DescriptorBufferCountWithAccelStruct = 3u;
-
     DescriptorBufferManager(Device& device, const VulkanContext& context, VulkanAllocator& allocator);
     ~DescriptorBufferManager();
+
+
+private:
+    void shutdownForLifecycleOperation();
 
 
 public:
     bool initialize();
     void shutdown();
 
-    [[nodiscard]] bool isEnabled()const{ return m_enabled; }
+    [[nodiscard]] bool isEnabled()const;
 
     // Exact driver descriptor size; 0 when descriptor buffers are disabled.
     [[nodiscard]] u32 getDescriptorSize(VkDescriptorType descriptorType)const;
@@ -1777,22 +1801,47 @@ public:
     [[nodiscard]] u64 getTexelBufferAddressAlignmentBytes()const;
     [[nodiscard]] u32 getMaxTexelBufferElements()const;
 
-    // Stable after initialize().
-    [[nodiscard]] const VkDescriptorBufferBindingInfoEXT& getResourceBindingInfo()const{ return m_resourceSegment.bindingInfo; }
-    [[nodiscard]] const VkDescriptorBufferBindingInfoEXT& getSamplerBindingInfo()const{ return m_samplerSegment.bindingInfo; }
+    // Coherent copies from the current binding generation; zeroed while unavailable.
+    [[nodiscard]] VkDescriptorBufferBindingInfoEXT getResourceBindingInfo()const;
+    [[nodiscard]] VkDescriptorBufferBindingInfoEXT getSamplerBindingInfo()const;
+
     // Resource and sampler buffer indices in bind order.
     [[nodiscard]] u32 getResourceBufferIndex()const{ return s_ResourceDescriptorBufferIndex; }
     [[nodiscard]] u32 getSamplerBufferIndex()const{ return s_SamplerDescriptorBufferIndex; }
 
     // Allocates aligned, zeroed descriptor bytes from free ranges or the bump pointer.
     [[nodiscard]] DescriptorBufferSegment allocate(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes);
+
+
+private:
+    [[nodiscard]] DescriptorBufferSegment allocateForBindingGeneration(
+        DescriptorBufferSegmentKind::Enum kind,
+        u32 sizeBytes,
+        u32 alignmentBytes,
+        u64 requiredGeneration
+    );
+
+
+public:
     void free(const DescriptorBufferSegment& segment);
 
+
+private:
+    void freeForBindingGeneration(const DescriptorBufferSegment& segment, u64 requiredGeneration);
+
+
+public:
     // Validates allocation identity, then encodes one descriptor.
     bool writeDescriptor(const DescriptorWriteItem& item, const DescriptorBufferSegment& allocation, u32 dstOffsetBytes, VkDescriptorType descriptorType);
 
 
 private:
+    [[nodiscard]] bool captureBindingSnapshotLocked(BindingSnapshot& outSnapshot)const;
+    [[nodiscard]] bool isLiveSegmentLocked(
+        const SegmentStorage& storage,
+        const DescriptorBufferSegment& segment,
+        DescriptorBufferSegmentKind::Enum expectedKind
+    )const;
     bool initializeSegment(SegmentStorage& segment, const ACompactString& debugName, u32 capacityBytes);
     void shutdownSegment(SegmentStorage& segment);
 
@@ -1801,7 +1850,12 @@ private:
     Device& m_device;
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
+    Futex m_lifecycleOperationMutex;
+    mutable Futex m_lifecycleMutex;
+    u64 m_bindingGeneration = 0u;
+    u64 m_nextBindingGeneration = 1u;
     bool m_enabled = false;
+    bool m_lifecycleTransitioning = false;
     SegmentStorage m_resourceSegment;
     SegmentStorage m_samplerSegment;
 };
@@ -1913,9 +1967,11 @@ private:
     [[nodiscard]] SlotAllocator& allocatorForClass(GpuDescriptorClass::Enum descriptorClass);
     void releaseAccelStructDescriptorBlock(u32 slot);
     void releaseRetainedDescriptorResource(GpuDescriptorHandle handle);
-    void trackCommandBufferUse(TrackedCommandBuffer& commandBuffer);
+    [[nodiscard]] bool trackCommandBufferUseLocked(TrackedCommandBuffer& commandBuffer);
     void submitCommandBufferUse(TrackedCommandBuffer& commandBuffer, QueueSubmissionToken submissionToken);
     void discardCommandBufferUse(TrackedCommandBuffer& commandBuffer);
+    void shutdownForDeviceTeardown();
+    void shutdownLocked();
 
     // Allocates persistent resource/sampler blocks; TLAS blocks are per handle.
     bool initializeDescriptorBufferBlocks(u32 offsetAlignmentBytes);
@@ -1953,6 +2009,7 @@ private:
     Vector<RetiredSlot, Alloc::GlobalArena> m_retired;
     Vector<HeapUse, Alloc::GlobalArena> m_heapUses;
     u64 m_lastHeapUseID = 0u;
+    u64 m_descriptorBufferGeneration = 0u;
 
     mutable Futex m_mutex;
     bool m_initialized = false;
@@ -2421,6 +2478,7 @@ struct RenderPassParameters{
 
 class CommandList final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Device;
+    friend class GpuDescriptorHeap;
     friend class Queue;
 
 
@@ -2537,14 +2595,6 @@ public:
     void dispatch(u32 groupsX, u32 groupsY = 1, u32 groupsZ = 1);
     void dispatchIndirect(u32 offsetBytes);
 
-    // Binds heap blocks at sets 8/9 and optional TLAS at set 10; pipeline must be descriptor-buffer compatible.
-    void bindDescriptorBufferHeap(
-        GpuDescriptorHeap& heap,
-        VkPipelineBindPoint bindPoint,
-        VkPipelineLayout pipelineLayout,
-        GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::invalid()
-    );
-
     void setMeshletState(const MeshletState& state);
     void dispatchMesh(u32 groupsX, u32 groupsY = 1, u32 groupsZ = 1);
 
@@ -2627,7 +2677,29 @@ private:
     void retainResource(Framebuffer* resource);
     void retainResource(GraphicsResource* resource);
     void retainStagingBuffer(Buffer& buffer);
-    void ensureDescriptorBuffersBound();
+    void bindDescriptorBufferHeap(
+        GpuDescriptorHeap& heap,
+        const ComputePipeline& pipeline,
+        GpuDescriptorHandle accelStructHandle
+    );
+    void bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const GraphicsPipeline& pipeline);
+    void bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const MeshletPipeline& pipeline);
+    void bindDescriptorBufferHeap(
+        GpuDescriptorHeap& heap,
+        const RayTracingPipeline& pipeline,
+        GpuDescriptorHandle accelStructHandle
+    );
+    void bindDescriptorBufferHeapNative(
+        GpuDescriptorHeap& heap,
+        VkPipelineBindPoint bindPoint,
+        const PipelineBindingState& pipelineBindings,
+        GpuDescriptorHandle accelStructHandle,
+        const tchar* operationName
+    );
+    void ensureDescriptorBuffersBound(
+        DescriptorBufferManager& manager,
+        const DescriptorBufferManager::BindingSnapshot& snapshot
+    );
     // Bind empty set 0 before global heap sets; no local descriptor transport.
     void bindDescriptorBufferEmptySet(VkPipelineBindPoint bindPoint, VkPipelineLayout pipelineLayout);
     void setViewportState(const ViewportState& viewport);
@@ -2989,10 +3061,13 @@ public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType);
     [[nodiscard]] Queue* getQueue(const GpuPhysicalQueueId& queue);
 #if !defined(NWB_FINAL)
-    // Test-only validated-submit seams exercise production cleanup and retain the exact submission-local waits
-    // received by Device after graph/runtime assembly.
+    // Test-only validated-submit seams exercise production cleanup and submission-local wait capture.
     [[nodiscard]] bool createSubmissionSignalForTesting(QueueSubmissionNativeSignal& outSignal);
+    // The queue-global timeline seam deterministically holds accepted work in flight until the host releases it.
+    [[nodiscard]] bool createSubmissionTimelineForTesting(Queue::SubmissionWait& outWait);
     void destroySubmissionSignalForTesting(QueueSubmissionNativeSignal& signal);
+    [[nodiscard]] bool signalSubmissionTimelineForTesting(const Queue::SubmissionWait& wait);
+    void destroySubmissionTimelineForTesting(Queue::SubmissionWait& wait);
     void rejectNextSubmissionForTesting(CommandQueue::Enum queue);
     void clearSubmissionRejectionsForTesting();
     void clearSubmissionWaitTokensForTesting();

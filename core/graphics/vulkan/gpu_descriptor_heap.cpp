@@ -37,9 +37,9 @@ namespace __hidden_vulkan_descriptor_heap{
             abi.resourceSetIndex < s_MaxBindingLayouts
             || abi.samplerSetIndex < s_MaxBindingLayouts
             || abi.accelStructSetIndex < s_MaxBindingLayouts
-            || abi.resourceSetIndex == abi.samplerSetIndex
-            || abi.resourceSetIndex == abi.accelStructSetIndex
-            || abi.samplerSetIndex == abi.accelStructSetIndex
+            || abi.resourceSetIndex > UINT32_MAX - 2u
+            || abi.samplerSetIndex != abi.resourceSetIndex + 1u
+            || abi.accelStructSetIndex != abi.samplerSetIndex + 1u
         )
             return false;
 
@@ -86,6 +86,18 @@ GpuDescriptorHeap::GpuDescriptorHeap(Device& device)
 {}
 GpuDescriptorHeap::~GpuDescriptorHeap(){
     shutdown();
+    {
+        ScopedLock lock(m_mutex);
+        if(!m_initialized)
+            return;
+    }
+
+    NWB_LOGGER_WARNING(
+        NWB_TEXT("Vulkan: GpuDescriptorHeap destruction is forcing cleanup after public shutdown rejected live uses.")
+    );
+    if(!m_device.waitForIdle())
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: GpuDescriptorHeap destruction is continuing after device-idle wait failed."));
+    shutdownForDeviceTeardown();
 }
 
 
@@ -143,7 +155,7 @@ void GpuDescriptorHeap::releaseAccelStructDescriptorBlock(const u32 slot){
 
     DescriptorBufferSegment& block = m_accelStructBufferBlocks[slot];
     if(block.valid() && m_context.descriptorBufferManager)
-        m_context.descriptorBufferManager->free(block);
+        m_context.descriptorBufferManager->freeForBindingGeneration(block, m_descriptorBufferGeneration);
     block = {};
     if(slot < m_accelStructResources.size())
         m_accelStructResources[slot] = nullptr;
@@ -167,18 +179,20 @@ void GpuDescriptorHeap::releaseRetainedDescriptorResource(const GpuDescriptorHan
         m_resourceDescriptorTextures[handle.slot()].reset();
 }
 
-void GpuDescriptorHeap::trackCommandBufferUse(TrackedCommandBuffer& commandBuffer){
-    ScopedLock lock(m_mutex);
+bool GpuDescriptorHeap::trackCommandBufferUseLocked(TrackedCommandBuffer& commandBuffer){
     if(!m_initialized)
-        return;
+        return false;
 
     for(GpuDescriptorHeap* trackedHeap : commandBuffer.m_referencedDescriptorHeaps){
         if(trackedHeap == this)
-            return;
+            return true;
     }
+    if(m_lastHeapUseID == UINT64_MAX)
+        return false;
 
     commandBuffer.m_referencedDescriptorHeaps.push_back(this);
     m_heapUses.push_back(HeapUse{ &commandBuffer, {}, ++m_lastHeapUseID });
+    return true;
 }
 
 void GpuDescriptorHeap::submitCommandBufferUse(
@@ -323,15 +337,43 @@ void GpuDescriptorHeap::collectRetired(){
 
 bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     using namespace __hidden_vulkan_descriptor_heap;
+    ScopedLock lock(m_mutex);
 
-    if(m_initialized)
-        return true;
+    if(m_initialized){
+        DescriptorBufferManager* const manager = m_context.descriptorBufferManager;
+        if(!manager || manager != &m_device.m_descriptorBufferManager){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap reinitialization rejected an unavailable manager."));
+            return false;
+        }
+        {
+            ScopedLock lifecycleLock(manager->m_lifecycleMutex);
+            if(manager->m_lifecycleTransitioning){
+                NWB_LOGGER_WARNING(
+                    NWB_TEXT("Vulkan: GpuDescriptorHeap reinitialization rejected during manager shutdown.")
+                );
+                return false;
+            }
+            if(
+                manager->m_enabled
+                && manager->m_bindingGeneration != 0u
+                && manager->m_bindingGeneration == m_descriptorBufferGeneration
+            )
+                return true;
+            if(
+                (manager->m_enabled && manager->m_bindingGeneration == 0u)
+                || (!manager->m_enabled && manager->m_bindingGeneration != 0u)
+            ){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap reinitialization rejected inconsistent manager state."));
+                return false;
+            }
+        }
+    }
 
     // Idempotent shutdown recovers partially initialized descriptor blocks.
-    shutdown();
+    shutdownLocked();
     m_desc = desc;
     const auto failInitialization = [this](){
-        shutdown();
+        shutdownLocked();
         return false;
     };
     if(!IsBindlessHeapAbiValid(m_desc.bindlessHeapAbi)){
@@ -347,10 +389,31 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: GpuDescriptorHeap requires VK_EXT_descriptor_buffer and an initialized DescriptorBufferManager."));
         return failInitialization();
     }
+    bool managerGenerationCaptured = false;
+    {
+        DescriptorBufferManager& manager = *m_context.descriptorBufferManager;
+        ScopedLock lifecycleLock(manager.m_lifecycleMutex);
+        managerGenerationCaptured = manager.m_enabled
+            && !manager.m_lifecycleTransitioning
+            && manager.m_bindingGeneration != 0u
+        ;
+        if(managerGenerationCaptured)
+            m_descriptorBufferGeneration = manager.m_bindingGeneration;
+    }
+    if(!managerGenerationCaptured)
+        return failInitialization();
     u32 resourceCapacity = desc.resourceCapacity > 0 ? desc.resourceCapacity : s_DefaultResourceCapacity;
     u32 samplerCapacity = desc.samplerCapacity > 0 ? desc.samplerCapacity : s_DefaultSamplerCapacity;
 
     const VkPhysicalDeviceLimits& limits = m_context.physicalDeviceProperties.limits;
+    if(m_desc.bindlessHeapAbi.accelStructSetIndex >= limits.maxBoundDescriptorSets){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: GpuDescriptorHeap set ABI ends at {}, exceeding maxBoundDescriptorSets {}.")
+            , m_desc.bindlessHeapAbi.accelStructSetIndex
+            , limits.maxBoundDescriptorSets
+        );
+        return failInitialization();
+    }
     u32 resourceLimit = limits.maxDescriptorSetSampledImages / s_SampledImageOrTexelClassCount;
     resourceLimit = Min(resourceLimit, limits.maxDescriptorSetStorageImages);
     resourceLimit = Min(resourceLimit, limits.maxDescriptorSetStorageBuffers);
@@ -512,6 +575,17 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
             SamplerHandle::deleter_type(&m_context.objectArena)
         );
     }
+    DescriptorBufferManager* const manager = m_context.descriptorBufferManager;
+    bool managerGenerationReady = false;
+    {
+        ScopedLock lifecycleLock(manager->m_lifecycleMutex);
+        managerGenerationReady = manager->m_enabled
+            && !manager->m_lifecycleTransitioning
+            && manager->m_bindingGeneration == m_descriptorBufferGeneration
+        ;
+    }
+    if(!managerGenerationReady)
+        return failInitialization();
     m_lastHeapUseID = 0u;
     m_initialized = true;
 
@@ -525,7 +599,31 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
 }
 
 void GpuDescriptorHeap::shutdown(){
+    collectRetired();
+
     ScopedLock lock(m_mutex);
+    if(!m_heapUses.empty()){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("Vulkan: GpuDescriptorHeap shutdown rejected while command buffers still reference the heap.")
+        );
+        return;
+    }
+
+    shutdownLocked();
+}
+
+void GpuDescriptorHeap::shutdownForDeviceTeardown(){
+    ScopedLock lock(m_mutex);
+
+    if(!m_heapUses.empty()){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("Vulkan: Device teardown is discarding command buffers that still reference GpuDescriptorHeap.")
+        );
+    }
+    shutdownLocked();
+}
+
+void GpuDescriptorHeap::shutdownLocked(){
 
     for(HeapUse& heapUse : m_heapUses){
         if(!heapUse.commandBuffer)
@@ -544,12 +642,18 @@ void GpuDescriptorHeap::shutdown(){
 
     if(m_context.descriptorBufferManager){
         if(m_resourceBufferBlock.valid())
-            m_context.descriptorBufferManager->free(m_resourceBufferBlock);
+            m_context.descriptorBufferManager->freeForBindingGeneration(
+                m_resourceBufferBlock,
+                m_descriptorBufferGeneration
+            );
         if(m_samplerBufferBlock.valid())
-            m_context.descriptorBufferManager->free(m_samplerBufferBlock);
+            m_context.descriptorBufferManager->freeForBindingGeneration(
+                m_samplerBufferBlock,
+                m_descriptorBufferGeneration
+            );
         for(const DescriptorBufferSegment& block : m_accelStructBufferBlocks){
             if(block.valid())
-                m_context.descriptorBufferManager->free(block);
+                m_context.descriptorBufferManager->freeForBindingGeneration(block, m_descriptorBufferGeneration);
         }
     }
     m_resourceBufferBlock = {};
@@ -585,6 +689,7 @@ void GpuDescriptorHeap::shutdown(){
     m_retired.clear();
     m_heapUses.clear();
     m_lastHeapUseID = 0u;
+    m_descriptorBufferGeneration = 0u;
     m_desc = {};
 
     m_initialized = false;
@@ -633,6 +738,8 @@ GpuDescriptorHeapLifecycleStatistics GpuDescriptorHeap::lifecycleStatistics()con
 
 
 GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum descriptorClass){
+    ScopedLock lock(m_mutex);
+
     if(!m_initialized){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate called before initialize."));
         return GpuDescriptorHandle::invalid();
@@ -646,7 +753,21 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
         return GpuDescriptorHandle::invalid();
     }
 
-    ScopedLock lock(m_mutex);
+    DescriptorBufferManager* const manager = m_context.descriptorBufferManager;
+    if(!manager || manager != &m_device.m_descriptorBufferManager){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate rejected an unavailable manager."));
+        return GpuDescriptorHandle::invalid();
+    }
+    ScopedLock lifecycleLock(manager->m_lifecycleMutex);
+    if(
+        !manager->m_enabled
+        || manager->m_lifecycleTransitioning
+        || m_descriptorBufferGeneration == 0u
+        || manager->m_bindingGeneration != m_descriptorBufferGeneration
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate rejected a stale descriptor generation."));
+        return GpuDescriptorHandle::invalid();
+    }
 
     SlotAllocator& allocator = allocatorForClass(descriptorClass);
     u32 slot = Limit<u32>::s_Max;
@@ -691,17 +812,17 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
 }
 
 void GpuDescriptorHeap::free(const GpuDescriptorHandle handle){
-    if(!m_initialized)
-        return;
-    if(!handle.valid())
-        return;
-    if(handle.descriptorClass() >= GpuDescriptorClass::kCount)
-        return;
-    if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct && !m_accelStructLayout)
-        return;
-
     {
         ScopedLock lock(m_mutex);
+        if(!m_initialized)
+            return;
+        if(!handle.valid())
+            return;
+        if(handle.descriptorClass() >= GpuDescriptorClass::kCount)
+            return;
+        if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct && !m_accelStructLayout)
+            return;
+
         SlotAllocator& allocator = allocatorForClass(handle.descriptorClass());
         if(
             handle.slot() >= allocator.liveSlots.size()

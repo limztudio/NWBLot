@@ -217,6 +217,47 @@ inline bool TextureClearBoxAlignedToBlocks(const Box& box, const VkExtent3D& mip
 
 inline constexpr u64 s_TextureClearMergedLayerUploadThreshold = 64ull * 1024ull;
 
+struct TextureClearUploadLayout{
+    u64 layerPitch = 0ull;
+    usize clearByteCount = 0u;
+    bool mergeArrayLayerCopies = false;
+};
+
+inline bool BuildTextureClearUploadLayout(
+    const u64 elementCount,
+    const u32 elementSize,
+    const u64 arrayLayerCount,
+    TextureClearUploadLayout& outLayout
+){
+    if(
+        elementCount == 0ull
+        || elementSize == 0u
+        || arrayLayerCount == 0ull
+        || elementCount > Limit<u64>::s_Max / elementSize
+    )
+        return false;
+
+    const u64 uploadSize = elementCount * elementSize;
+    u64 layerPitch = uploadSize;
+    if(!AlignUpU64Checked(layerPitch, s_TextureClearUploadAlignment, layerPitch))
+        return false;
+    const bool mergeArrayLayerCopies =
+        arrayLayerCount > 1ull
+        && layerPitch <= s_TextureClearMergedLayerUploadThreshold / arrayLayerCount
+    ;
+    if(mergeArrayLayerCopies && arrayLayerCount - 1ull > (Limit<u64>::s_Max - uploadSize) / layerPitch)
+        return false;
+
+    const u64 clearByteCount = mergeArrayLayerCopies ? layerPitch * (arrayLayerCount - 1ull) + uploadSize : uploadSize;
+    if(clearByteCount > static_cast<u64>(Limit<usize>::s_Max))
+        return false;
+
+    outLayout.layerPitch = layerPitch;
+    outLayout.clearByteCount = static_cast<usize>(clearByteCount);
+    outLayout.mergeArrayLayerCopies = mergeArrayLayerCopies;
+    return true;
+}
+
 inline void WriteClearPatternValue(u8* outBytes, const usize outByteCount, const void* value, const usize valueByteCount){
     NWB_MEMCPY(outBytes, outByteCount, value, valueByteCount);
 }

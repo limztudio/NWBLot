@@ -136,29 +136,26 @@ bool CommandList::clearActiveRenderPassDepthStencilTextureRect(
     const bool clearStencil,
     const u8 stencil
 ){
+    constexpr const tchar* s_OperationName = NWB_TEXT("clear depth/stencil attachment");
     if(!m_renderPassActive || !m_renderPassFramebuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: active-render-pass bounded rect clears require the texture to be an active depth/stencil attachment"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: active-render-pass bounded rect clears require the texture to be an active depth/stencil attachment"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("active rendering with a depth/stencil attachment is required"));
         return false;
     }
 
     const FramebufferDesc& fbDesc = m_renderPassFramebuffer->getDescription();
     const FramebufferAttachment& attachment = fbDesc.depthAttachment;
     if(attachment.texture != &texture){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: active-render-pass bounded rect clears require the requested subresources to be active depth/stencil attachments"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: active-render-pass bounded rect clears require the requested subresources to be active depth/stencil attachments"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not the active depth/stencil attachment"));
         return false;
     }
     if(attachment.isReadOnly){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: active depth/stencil attachment is read-only"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: active depth/stencil attachment is read-only"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("active depth/stencil attachment is read-only"));
         return false;
     }
 
     TextureSubresourceSet resolvedAttachmentSubresources;
     if(!VulkanTextureDetail::ResolveTextureAttachmentClearSubresources(texture, attachment, resolvedSubresources, resolvedAttachmentSubresources)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: active-render-pass bounded rect clears require the requested subresources to be active depth/stencil attachments"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: active-render-pass bounded rect clears require the requested subresources to be active depth/stencil attachments"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("requested subresources are not active depth/stencil attachments"));
         return false;
     }
 
@@ -176,8 +173,7 @@ bool CommandList::clearActiveRenderPassDepthStencilTextureRect(
 
     const VkClearRect clearRect = VulkanTextureDetail::BuildTextureAttachmentClearRect(resolvedSubresources, resolvedAttachmentSubresources, resolvedRect);
     if(!VulkanTextureDetail::TextureAttachmentClearRectContainedByFramebuffer(clearRect, m_renderPassFramebuffer->getFramebufferInfo())){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear rect is outside the active render area"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture rect: clear rect is outside the active render area"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("clear rect is outside the active render area"));
         return false;
     }
 
@@ -212,69 +208,104 @@ void CommandList::clearDepthStencilTextureBox(
         return;
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("clear depth/stencil texture box"), NWB_TEXT("texture is null"), textureResource))
         return;
+    constexpr const tchar* s_OperationName = NWB_TEXT("clear depth/stencil texture box");
     Texture& texture = *textureResource;
     const TextureDesc& desc = texture.m_desc;
-    if(!VulkanTextureDetail::ValidateTextureDepthStencilClearAspects(
-        texture.m_aspectMask,
-        clearDepth,
-        clearStencil,
-        NWB_TEXT("clear depth/stencil texture box")
-    ))
+    if(
+        (clearDepth && (texture.m_aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) == 0u)
+        || (clearStencil && (texture.m_aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) == 0u)
+    ){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("requested aspect is not present in the texture format"));
         return;
+    }
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, TextureSubresourceMipResolve::Range);
-    if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSubresources, NWB_TEXT("clear depth/stencil texture box")))
+    if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("subresource range is empty or invalid"));
         return;
+    }
 
     if(VulkanTextureDetail::TextureClearBoxCoversSubresources(desc, resolvedSubresources, box)){
         clearDepthStencilTexture(textureResource, resolvedSubresources, clearDepth, depth, clearStencil, stencil);
         return;
     }
 
-    if(m_renderPassActive || desc.sampleCount != 1u){
-        const Box resolvedBox = VulkanTextureDetail::ResolveTextureClearBox(desc, resolvedSubresources.baseMipLevel, box);
-        if(VulkanTextureDetail::TextureClearBoxEmpty(resolvedBox))
-            return;
-
+    const Box baseResolvedBox = VulkanTextureDetail::ResolveTextureClearBox(desc, resolvedSubresources.baseMipLevel, box);
+    if(VulkanTextureDetail::TextureClearBoxEmpty(baseResolvedBox))
+        return;
+    if(!m_renderPassActive && desc.sampleCount != 1u){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("bounded multisampled clears require active rendering"));
+        return;
+    }
+    if(m_renderPassActive){
         const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, resolvedSubresources.baseMipLevel);
-        if(resolvedBox.minZ != 0 || resolvedBox.maxZ != static_cast<i32>(mipExtent.depth)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: attachment bounded clears require the box to cover the full attachment depth"));
-            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: attachment bounded clears require the box to cover the full attachment depth"));
+        if(baseResolvedBox.minZ != 0 || baseResolvedBox.maxZ != static_cast<i32>(mipExtent.depth)){
+            rejectCommandRecording(s_OperationName, NWB_TEXT("attachment bounded clears require full attachment depth"));
             return;
         }
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("clear depth/stencil texture box as attachment")))
             return;
 
-        const Rect rect(resolvedBox.minX, resolvedBox.maxX, resolvedBox.minY, resolvedBox.maxY);
+        const Rect rect(baseResolvedBox.minX, baseResolvedBox.maxX, baseResolvedBox.minY, baseResolvedBox.maxY);
         if(clearActiveRenderPassDepthStencilTextureRect(texture, resolvedSubresources, rect, clearDepth, depth, clearStencil, stencil))
             retainResource(textureResource);
         return;
     }
-#if defined(NWB_DEBUG)
     if(desc.dimension == TextureDimension::Texture3D){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded texture box clears do not support 3D depth/stencil textures"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded texture box clears do not support 3D depth/stencil textures"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("bounded clears do not support 3D depth/stencil textures"));
         return;
     }
-#endif
-    if(desc.dimension == TextureDimension::Texture3D)
-        return;
 
     u8 depthPattern[VulkanTextureDetail::s_TextureClearDepthPatternBytes] = {};
     u32 depthPatternSize = 0u;
     if(clearDepth && !VulkanTextureDetail::BuildTextureDepthClearPattern(desc.format, depth, depthPattern, depthPatternSize)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded depth box clears do not support texture format {}"), StringConvert(GetFormatInfo(desc.format).name));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded depth box clears do not support texture format"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("depth clear pattern is unsupported for the texture format"));
         return;
     }
 
     u8 stencilPattern[VulkanTextureDetail::s_TextureClearStencilPatternBytes] = {};
     u32 stencilPatternSize = 0u;
     if(clearStencil && !VulkanTextureDetail::BuildTextureStencilClearPattern(desc.format, stencil, stencilPattern, stencilPatternSize)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded stencil box clears do not support texture format {}"), StringConvert(GetFormatInfo(desc.format).name));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded stencil box clears do not support texture format"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("stencil clear pattern is unsupported for the texture format"));
         return;
     }
+
+    struct MipClearPlan{
+        Box resolvedBox;
+        VulkanTextureDetail::TextureClearUploadLayout depthLayout;
+        VulkanTextureDetail::TextureClearUploadLayout stencilLayout;
+    };
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
+    Vector<MipClearPlan, Alloc::ScratchArena> mipClearPlans(resolvedSubresources.numMipLevels, scratchArena);
+    const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
+    const u64 arrayLayerCount = static_cast<u64>(resolvedSubresources.numArraySlices);
+    u32 mipPlanIndex = 0u;
+    for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel, ++mipPlanIndex){
+        MipClearPlan& mipPlan = mipClearPlans[mipPlanIndex];
+        mipPlan.resolvedBox = VulkanTextureDetail::ResolveTextureClearBox(desc, mipLevel, box);
+        if(VulkanTextureDetail::TextureClearBoxEmpty(mipPlan.resolvedBox))
+            continue;
+
+        const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
+        if(mipPlan.resolvedBox.minZ != 0 || mipPlan.resolvedBox.maxZ != static_cast<i32>(mipExtent.depth)){
+            rejectCommandRecording(s_OperationName, NWB_TEXT("bounded clears require full attachment depth"));
+            return;
+        }
+
+        const u64 texelCount = static_cast<u64>(mipPlan.resolvedBox.width()) * mipPlan.resolvedBox.height();
+        if(
+            (clearDepth && !VulkanTextureDetail::BuildTextureClearUploadLayout(
+                texelCount, depthPatternSize, arrayLayerCount, mipPlan.depthLayout
+            ))
+            || (clearStencil && !VulkanTextureDetail::BuildTextureClearUploadLayout(
+                texelCount, stencilPatternSize, arrayLayerCount, mipPlan.stencilLayout
+            ))
+        ){
+            rejectCommandRecording(s_OperationName, NWB_TEXT("clear upload layout is not addressable"));
+            return;
+        }
+    }
+
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("clear depth/stencil texture box through staging")))
         return;
 
@@ -282,74 +313,51 @@ void CommandList::clearDepthStencilTextureBox(
     if(m_commandRecordingFailed)
         return;
 
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
-    const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const auto copyAspect = [&](const VkImageAspectFlagBits aspect, const u8* clearPattern, const u32 clearPatternSize) -> bool {
-        const u64 arrayLayerCount = static_cast<u64>(resolvedSubresources.numArraySlices);
-        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
-            const Box resolvedBox = VulkanTextureDetail::ResolveTextureClearBox(desc, mipLevel, box);
-            if(VulkanTextureDetail::TextureClearBoxEmpty(resolvedBox))
+        u32 planIndex = 0u;
+        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel, ++planIndex){
+            const MipClearPlan& mipPlan = mipClearPlans[planIndex];
+            if(VulkanTextureDetail::TextureClearBoxEmpty(mipPlan.resolvedBox))
                 continue;
 
-            const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
-            if(resolvedBox.minZ != 0 || resolvedBox.maxZ != static_cast<i32>(mipExtent.depth)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded depth/stencil clears require the box to cover the full attachment depth"));
-                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: bounded depth/stencil clears require the box to cover the full attachment depth"));
-                return false;
-            }
-
-            const u64 clearWidth = static_cast<u64>(resolvedBox.width());
-            const u64 clearHeight = static_cast<u64>(resolvedBox.height());
-            const u64 texelCount = clearWidth * clearHeight;
-            if(texelCount > Limit<u64>::s_Max / clearPatternSize){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size overflows"));
-                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size overflows"));
-                return false;
-            }
-
-            const u64 uploadSize64 = texelCount * clearPatternSize;
-            u64 layerPitch64 = uploadSize64;
-            if(!AlignUpU64Checked(layerPitch64, VulkanTextureDetail::s_TextureClearUploadAlignment, layerPitch64)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size overflows"));
-                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size overflows"));
-                return false;
-            }
-
-            const bool mergeArrayLayerCopies =
-                arrayLayerCount > 1ull
-                && layerPitch64 <= (VulkanTextureDetail::s_TextureClearMergedLayerUploadThreshold / arrayLayerCount)
+            const VulkanTextureDetail::TextureClearUploadLayout& uploadLayout = aspect == VK_IMAGE_ASPECT_DEPTH_BIT
+                ? mipPlan.depthLayout
+                : mipPlan.stencilLayout
             ;
-            if(mergeArrayLayerCopies && arrayLayerCount - 1ull > (Limit<u64>::s_Max - uploadSize64) / layerPitch64){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size overflows"));
-                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size overflows"));
-                return false;
-            }
-
-            const u64 clearByteSize64 = mergeArrayLayerCopies ? layerPitch64 * (arrayLayerCount - 1ull) + uploadSize64 : uploadSize64;
-            if(clearByteSize64 > static_cast<u64>(Limit<usize>::s_Max)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size exceeds addressable memory"));
-                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear depth/stencil texture box: clear byte size exceeds addressable memory"));
-                return false;
-            }
-
-            const usize clearByteCount = static_cast<usize>(clearByteSize64);
             Buffer* stagingBuffer = nullptr;
             u64 stagingOffset = 0;
             void* stagingBytes = nullptr;
-            if(!prepareUploadStaging(clearByteCount, NWB_TEXT("clearDepthStencilTextureBox"), stagingBuffer, stagingOffset, stagingBytes))
+            if(!prepareUploadStaging(
+                uploadLayout.clearByteCount,
+                NWB_TEXT("clearDepthStencilTextureBox"),
+                stagingBuffer,
+                stagingOffset,
+                stagingBytes
+            )){
+                rejectCommandRecording(s_OperationName, NWB_TEXT("staging allocation failed"));
                 return false;
-            VulkanTextureDetail::FillTextureClearBytes(stagingBytes, clearByteCount, clearPattern, clearPatternSize);
+            }
+            VulkanTextureDetail::FillTextureClearBytes(
+                stagingBytes,
+                uploadLayout.clearByteCount,
+                clearPattern,
+                clearPatternSize
+            );
 
-            if(mergeArrayLayerCopies){
+            if(uploadLayout.mergeArrayLayerCopies){
                 Vector<VkBufferImageCopy, Alloc::ScratchArena> regions(resolvedSubresources.numArraySlices, scratchArena);
                 const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
                 u32 regionIndex = 0u;
                 for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
                     VkBufferImageCopy region{};
-                    region.bufferOffset = stagingOffset + static_cast<u64>(regionIndex) * layerPitch64;
+                    region.bufferOffset = stagingOffset + static_cast<u64>(regionIndex) * uploadLayout.layerPitch;
                     region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(aspect, mipLevel, arraySlice, 1u);
-                    region.imageOffset = { resolvedBox.minX, resolvedBox.minY, 0 };
-                    region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
+                    region.imageOffset = { mipPlan.resolvedBox.minX, mipPlan.resolvedBox.minY, 0 };
+                    region.imageExtent = {
+                        static_cast<u32>(mipPlan.resolvedBox.width()),
+                        static_cast<u32>(mipPlan.resolvedBox.height()),
+                        1u
+                    };
                     regions[regionIndex++] = region;
                 }
 
@@ -364,8 +372,12 @@ void CommandList::clearDepthStencilTextureBox(
                     VkBufferImageCopy region{};
                     region.bufferOffset = stagingOffset;
                     region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(aspect, mipLevel, arraySlice, 1u);
-                    region.imageOffset = { resolvedBox.minX, resolvedBox.minY, 0 };
-                    region.imageExtent = { static_cast<u32>(clearWidth), static_cast<u32>(clearHeight), 1u };
+                    region.imageOffset = { mipPlan.resolvedBox.minX, mipPlan.resolvedBox.minY, 0 };
+                    region.imageExtent = {
+                        static_cast<u32>(mipPlan.resolvedBox.width()),
+                        static_cast<u32>(mipPlan.resolvedBox.height()),
+                        1u
+                    };
                     regions[regionIndex++] = region;
                 }
 

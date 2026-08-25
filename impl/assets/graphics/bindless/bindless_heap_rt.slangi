@@ -2,15 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_GRAPHICS_BINDLESS_HEAP_RT_SLANGI
+#define NWB_GRAPHICS_BINDLESS_HEAP_RT_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Global descriptor heap -- typed view of the shared ray-tracing per-instance material table.
 //
 // The storage-buffer descriptor table is deliberately reinterpreted here as NwbRtInstanceMaterial records. Every
 // trace backend shares the same CPU-built table, while each pass selects its current descriptor through its local
 // NwbRayTraceMaterialContextSlots cbuffer.
-
-
-#ifndef NWB_GRAPHICS_BINDLESS_HEAP_RT_SLANGI
-#define NWB_GRAPHICS_BINDLESS_HEAP_RT_SLANGI
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

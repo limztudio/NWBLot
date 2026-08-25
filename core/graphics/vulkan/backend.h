@@ -1315,6 +1315,7 @@ private:
     VkImageCreateInfo m_imageInfo{};
 
     HashMap<TextureViewKey, VkImageView, TextureViewKeyHasher, EqualTo<TextureViewKey>, Alloc::GlobalArena> m_views;
+    Futex m_viewsMutex;
     Vector<u8, Alloc::GlobalArena> m_retainedSubresourceStates;
     mutable Futex m_retainedSubresourceStatesMutex;
 

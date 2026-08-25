@@ -325,6 +325,7 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
         format
     };
 
+    ScopedLock lock(m_viewsMutex);
     auto it = m_views.find(key);
     if(it != m_views.end())
         return it.value();

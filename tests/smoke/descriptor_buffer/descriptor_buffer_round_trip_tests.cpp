@@ -55036,6 +55036,110 @@ TEST_F(DescriptorBufferRoundTripTest, ImguiHeapTextureAndSamplerLayoutBuildsAsDe
 }
 
 
+[[nodiscard]] static u64 DecodeNativeImageViewBits(const Object& view)noexcept{
+#if VK_USE_64_BIT_PTR_DEFINES
+    const VkImageView imageView = static_cast<VkImageView>(view.pointer);
+    return static_cast<u64>(reinterpret_cast<usize>(imageView));
+#else
+    const VkImageView imageView = static_cast<VkImageView>(view.integer);
+    return static_cast<u64>(imageView);
+#endif
+}
+
+
+// Parallel packet recording can request one texture's lazy native views from multiple workers. Keep the owning handle
+// alive through every join, then prove same-key reuse and disjoint-key insertion both converge on one native handle.
+TEST_F(DescriptorBufferRoundTripTest, TextureNativeViewCacheIsStableAcrossConcurrentRequests){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    static constexpr u32 s_WorkerCount = 8u;
+    static constexpr u32 s_MipCount = 4u;
+    static constexpr u32 s_ArraySize = 4u;
+    static constexpr u32 s_ViewCount = s_MipCount * s_ArraySize;
+    static constexpr u32 s_RepetitionCount = 64u;
+
+    TextureHandle texture = device.createTexture(
+        TextureDesc()
+            .setWidth(16u)
+            .setHeight(16u)
+            .setMipLevels(s_MipCount)
+            .setArraySize(s_ArraySize)
+            .setDimension(TextureDimension::Texture2DArray)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInitialState(ResourceStates::ShaderResource)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(texture);
+    Texture* const textureResource = texture.get();
+
+    u64 observedViews[s_WorkerCount][s_ViewCount] = {};
+    bool workerViewsStable[s_WorkerCount];
+    for(u32 workerIndex = 0u; workerIndex < s_WorkerCount; ++workerIndex)
+        workerViewsStable[workerIndex] = true;
+
+    Latch workersReady(s_WorkerCount);
+    Thread workers[s_WorkerCount];
+    for(u32 workerIndex = 0u; workerIndex < s_WorkerCount; ++workerIndex){
+        workers[workerIndex] = Thread([&, workerIndex](){
+            workersReady.count_down();
+            workersReady.wait();
+
+            const Object sharedView = textureResource->getNativeView(
+                GraphicsBackend::ObjectTypes::VK_ImageView,
+                Format::RGBA8_UNORM,
+                TextureSubresourceSet(0u, 1u, 0u, 1u),
+                TextureDimension::Texture2DArray,
+                false
+            );
+            const u64 sharedViewBits = DecodeNativeImageViewBits(sharedView);
+            observedViews[workerIndex][0u] = sharedViewBits;
+
+            for(u32 repetition = 0u; repetition < s_RepetitionCount; ++repetition){
+                for(u32 viewOffset = 0u; viewOffset < s_ViewCount; ++viewOffset){
+                    const u32 viewIndex = (workerIndex + viewOffset + repetition) % s_ViewCount;
+                    const u32 mipLevel = viewIndex % s_MipCount;
+                    const u32 arraySlice = viewIndex / s_MipCount;
+                    const Object view = textureResource->getNativeView(
+                        GraphicsBackend::ObjectTypes::VK_ImageView,
+                        Format::RGBA8_UNORM,
+                        TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u),
+                        TextureDimension::Texture2DArray,
+                        false
+                    );
+                    const u64 viewBits = DecodeNativeImageViewBits(view);
+                    u64& observedView = observedViews[workerIndex][viewIndex];
+                    if(observedView == 0u)
+                        observedView = viewBits;
+                    else if(observedView != viewBits)
+                        workerViewsStable[workerIndex] = false;
+                }
+            }
+        });
+    }
+
+    for(Thread& worker : workers)
+        worker.join();
+
+    for(u32 workerIndex = 0u; workerIndex < s_WorkerCount; ++workerIndex)
+        EXPECT_TRUE(workerViewsStable[workerIndex]) << "worker observed a changing native view for one cache key";
+
+    for(u32 viewIndex = 0u; viewIndex < s_ViewCount; ++viewIndex){
+        const u32 mipLevel = viewIndex % s_MipCount;
+        const u32 arraySlice = viewIndex / s_MipCount;
+        const Object cachedView = textureResource->getNativeView(
+            GraphicsBackend::ObjectTypes::VK_ImageView,
+            Format::RGBA8_UNORM,
+            TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u),
+            TextureDimension::Texture2DArray,
+            false
+        );
+        const u64 cachedViewBits = DecodeNativeImageViewBits(cachedView);
+        ASSERT_NE(cachedViewBits, 0u);
+        for(u32 workerIndex = 0u; workerIndex < s_WorkerCount; ++workerIndex)
+            EXPECT_EQ(observedViews[workerIndex][viewIndex], cachedViewBits);
+    }
+}
+
+
 // The global heap is the only resource-bearing descriptor transport. A pipeline-local BindingLayout may carry push
 // constants, but creating a local CBV/SRV leaf must fail instead of recreating a local resource descriptor path.
 TEST_F(DescriptorBufferRoundTripTest, PipelineLocalResourceLayoutsAreRejected){

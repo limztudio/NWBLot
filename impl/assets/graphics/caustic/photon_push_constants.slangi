@@ -12,6 +12,9 @@
 #include "photon_push_constants.h"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // The C++ producer materializes the same field list as u32 members. Slang needs the exact same 15 scalar words in its
 // push block, but the default values are CPU-side construction details and intentionally do not participate here.
 struct NwbCausticPhotonPushConstants{

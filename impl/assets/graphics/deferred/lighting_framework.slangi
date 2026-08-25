@@ -22,6 +22,10 @@
 #include "bindless_resources.slangi"
 #include "../scene/binding_slots.h"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // The scene-shading cbuffer + light list are now global-heap entries (like the G-buffer/shadow/caustic/GI inputs
 // below): fetch them from the heap through this pass's per-frame resource-slot cbuffer instead of a local set
 // binding. scene/buffer.slangi (pulled in via scene/lighting.slangi) reads these two slot expressions -- the two
@@ -114,6 +118,10 @@ NwbBxdfSurface nwbBxdfLoadSurface(const int2 pixel){
     surface.indirectIrradiance = nwbBxdfResolvedIndirect(pixel, surface.normal);
     return surface;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #endif
 

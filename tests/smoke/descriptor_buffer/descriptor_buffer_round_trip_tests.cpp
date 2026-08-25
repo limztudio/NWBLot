@@ -64,6 +64,7 @@ namespace Tests{
 
 
 using namespace Core;
+namespace HostSync = Core::GraphicsBackend::VulkanDetail;
 
 inline constexpr GpuTimingScopeDefinition s_FrameTransactionScope("tests/timing_frame_transaction");
 inline constexpr GpuTimingScopeDefinition s_TimerQueryFailureScope("tests/timing_query_failure");
@@ -54416,17 +54417,40 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListMarkerStateBalancesBeforeReuseA
 
     commandList->open();
     ASSERT_TRUE(commandList->isRecording());
+#if !defined(NWB_FINAL)
+    HostSync::ResetHostReadbackBarrierAppendCountForTesting();
+#endif
     commandList->beginMarker("tests/marker_recovery/close");
     commandList->close();
     ASSERT_TRUE(commandList->hasCommandBuffer());
     EXPECT_FALSE(commandList->isRecording());
+#if !defined(NWB_FINAL)
+    EXPECT_EQ(
+        HostSync::GetHostReadbackBarrierAppendCountForTesting(),
+        device.isAmdBreadcrumbEnabled() ? 1u : 0u
+    );
+#endif
 
     commandList->open();
     ASSERT_TRUE(commandList->isRecording());
+#if !defined(NWB_FINAL)
+    HostSync::ResetHostReadbackBarrierAppendCountForTesting();
+#endif
     commandList->beginMarker("tests/marker_recovery/clear");
     commandList->endMarker();
     commandList->clearState();
     EXPECT_TRUE(commandList->isRecording());
+    commandList->close();
+    ASSERT_TRUE(commandList->hasCommandBuffer());
+#if !defined(NWB_FINAL)
+    EXPECT_EQ(
+        HostSync::GetHostReadbackBarrierAppendCountForTesting(),
+        device.isAmdBreadcrumbEnabled() ? 1u : 0u
+    );
+#endif
+
+    commandList->open();
+    ASSERT_TRUE(commandList->isRecording());
     commandList->beginMarker("tests/marker_recovery/reused");
     commandList->endMarker();
     commandList->close();
@@ -54436,6 +54460,21 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListMarkerStateBalancesBeforeReuseA
     EXPECT_GT(device.executeCommandLists(commandLists, LengthOf(commandLists), CommandQueue::Graphics, &submitted), 0u);
     EXPECT_TRUE(submitted);
     EXPECT_TRUE(device.waitForIdle());
+
+    CommandListHandle abandonedRecording = device.createCommandList();
+    ASSERT_NE(abandonedRecording.get(), nullptr);
+    abandonedRecording->open();
+    abandonedRecording->beginMarker("tests/marker_recovery/abandoned");
+    abandonedRecording->endMarker();
+#if !defined(NWB_FINAL)
+    HostSync::ResetHostReadbackBarrierAppendCountForTesting();
+#endif
+    abandonedRecording->open();
+    ASSERT_TRUE(abandonedRecording->isRecording());
+    abandonedRecording->close();
+#if !defined(NWB_FINAL)
+    EXPECT_EQ(HostSync::GetHostReadbackBarrierAppendCountForTesting(), 0u);
+#endif
 
 #if defined(NWB_DEBUG)
     CommandListHandle clearInvariant = device.createCommandList();

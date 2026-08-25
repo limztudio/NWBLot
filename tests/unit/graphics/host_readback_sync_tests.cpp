@@ -97,6 +97,45 @@ TEST(HostReadbackSync, BuildsExactWholeBufferHostDependency){
     EXPECT_EQ(barrier.size, VK_WHOLE_SIZE);
 }
 
+TEST(HostReadbackSync, CollectsEveryExactQueueFamilyWithoutLegacyLaneGatesOrFixedCapacity){
+    constexpr GpuPhysicalQueueInfo s_Queues[] = {
+        { .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics,
+            .familyIndex = 2u },
+        { .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics,
+            .familyIndex = 4u },
+        { .id = {}, .queueClass = CommandQueue::Compute, .capabilities = GpuQueueCapability::Compute,
+            .familyIndex = 2u },
+        { .id = {}, .queueClass = CommandQueue::Compute, .capabilities = GpuQueueCapability::Compute,
+            .familyIndex = 6u },
+        { .id = {}, .queueClass = CommandQueue::Transfer, .capabilities = GpuQueueCapability::Transfer,
+            .familyIndex = 8u },
+        { .id = {}, .queueClass = CommandQueue::Transfer, .capabilities = GpuQueueCapability::Transfer,
+            .familyIndex = 10u },
+        { .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics,
+            .familyIndex = 12u },
+        { .id = {}, .queueClass = CommandQueue::Compute, .capabilities = GpuQueueCapability::Compute,
+            .familyIndex = 14u },
+        { .id = {}, .queueClass = CommandQueue::Transfer, .capabilities = GpuQueueCapability::Transfer,
+            .familyIndex = 16u },
+        { .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics,
+            .familyIndex = 18u },
+        { .id = {}, .familyIndex = VK_QUEUE_FAMILY_IGNORED },
+    };
+    constexpr u32 s_ExpectedFamilies[] = { 2u, 4u, 6u, 8u, 10u, 12u, 14u, 16u, 18u };
+    Alloc::ScratchArena scratchArena(s_HostReadbackTestArena);
+    Vector<u32, Alloc::ScratchArena> familyIndices(scratchArena);
+
+    HostSync::CollectUniquePhysicalQueueFamilyIndices(GpuPhysicalQueueTopology{}, familyIndices);
+    EXPECT_TRUE(familyIndices.empty());
+    HostSync::CollectUniquePhysicalQueueFamilyIndices(
+        GpuPhysicalQueueTopology{ s_Queues, LengthOf(s_Queues) },
+        familyIndices
+    );
+    ASSERT_EQ(familyIndices.size(), LengthOf(s_ExpectedFamilies));
+    for(usize familyIndex = 0u; familyIndex < familyIndices.size(); ++familyIndex)
+        EXPECT_EQ(familyIndices[familyIndex], s_ExpectedFamilies[familyIndex]);
+}
+
 TEST(HostReadbackSync, DeduplicatesNativeBuffersAndAppendsOneBarrierEach){
     Alloc::GlobalArena arena(s_HostReadbackTestArena);
     HostSync::HostReadbackBarrierTracker tracker(arena);
@@ -122,7 +161,9 @@ TEST(HostReadbackSync, DeduplicatesNativeBuffersAndAppendsOneBarrierEach){
 
     tracker.clear();
     EXPECT_EQ(tracker.size(), 0u);
-    EXPECT_TRUE(tracker.registerBuffer(first));
+    tracker.registerDeviceOwnedBuffer(first);
+    tracker.registerDeviceOwnedBuffer(first);
+    EXPECT_EQ(tracker.size(), 1u);
 }
 
 TEST(HostReadbackSync, UniversalHostScopesSurviveEveryExactQueueClass){

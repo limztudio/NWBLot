@@ -522,7 +522,18 @@ Device::Device(const DeviceDesc& desc)
         auto breadcrumbInfo = VulkanDetail::MakeVkStruct<VkBufferCreateInfo>(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO);
         breadcrumbInfo.size = static_cast<VkDeviceSize>(s_MaxAmdBreadcrumbSlots) * sizeof(u32);
         breadcrumbInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        Alloc::ScratchArena breadcrumbQueueArena(VulkanArenaScope::s_QueueFamilyQueryArena);
+        Vector<u32, Alloc::ScratchArena> breadcrumbQueueFamilies(breadcrumbQueueArena);
+        VulkanDetail::CollectUniquePhysicalQueueFamilyIndices(
+            getPhysicalQueueTopology(),
+            breadcrumbQueueFamilies
+        );
         breadcrumbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        if(breadcrumbQueueFamilies.size() > 1u){
+            breadcrumbInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+            breadcrumbInfo.queueFamilyIndexCount = static_cast<u32>(breadcrumbQueueFamilies.size());
+            breadcrumbInfo.pQueueFamilyIndices = breadcrumbQueueFamilies.data();
+        }
         const VkResult breadcrumbRes = m_allocator.createHostMappedBuffer(m_amdBreadcrumb.buffer, m_amdBreadcrumb.allocation, m_amdBreadcrumb.mappedMemory, breadcrumbInfo);
         if(breadcrumbRes == VK_SUCCESS && m_amdBreadcrumb.mappedMemory){
             NWB_MEMSET(m_amdBreadcrumb.mappedMemory, 0, static_cast<usize>(breadcrumbInfo.size));

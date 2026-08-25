@@ -105,7 +105,7 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
         if(hasBufferMarker && remainingEntries > 0u){
             const u32* breadcrumbSlots = static_cast<const u32*>(m_amdBreadcrumb.mappedMemory);
             if(breadcrumbSlots){
-                // Largest sequence marks the last GPU-reached breadcrumb.
+                // Largest CPU sequence is best-effort: physical queues may execute unordered, and ring wrap reorders slots.
                 u32 furthestSequence = 0u;
                 u32 furthestSlot = 0u;
                 for(u32 slot = 0u; slot < s_MaxAmdBreadcrumbSlots; ++slot){
@@ -124,13 +124,28 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
                     }
                     if(record.sequence == furthestSequence){
                         const auto resolved = m_gpuCrashTracker.resolveMarker(record.markerHash);
-                        if(resolved.first())
-                            report.details.append(StringFormat(m_gpuCrashReportArena, "last reached breadcrumb (seq {}): {}\n", furthestSequence, __hidden_vulkan_device_diagnostics::TrimGpuCrashText(resolved.second())));
-                        else
-                            report.details.append(StringFormat(m_gpuCrashReportArena, "last reached breadcrumb (seq {}): <unresolved marker>\n", furthestSequence));
+                        if(resolved.first()){
+                            report.details.append(StringFormat(
+                                m_gpuCrashReportArena,
+                                "best-effort last-observed breadcrumb (seq {}): {}\n",
+                                furthestSequence,
+                                __hidden_vulkan_device_diagnostics::TrimGpuCrashText(resolved.second())
+                            ));
+                        }
+                        else{
+                            report.details.append(StringFormat(
+                                m_gpuCrashReportArena,
+                                "best-effort last-observed breadcrumb (seq {}): <unresolved marker>\n",
+                                furthestSequence
+                            ));
+                        }
                     }
                     else{
-                        report.details.append(StringFormat(m_gpuCrashReportArena, "last reached breadcrumb (seq {}): <label overwritten>\n", furthestSequence));
+                        report.details.append(StringFormat(
+                            m_gpuCrashReportArena,
+                            "best-effort last-observed breadcrumb (seq {}): <label overwritten>\n",
+                            furthestSequence
+                        ));
                     }
                     --remainingEntries;
                 }
@@ -250,7 +265,7 @@ Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const usize markerHash){
     if(m_amdBreadcrumb.buffer == VK_NULL_HANDLE)
         return write;
 
-    // Monotonic sequence maps GPU progress to breadcrumb markers.
+    // CPU sequence labels best-effort observations; physical-queue execution and ring-wrap ordering remain approximate.
     const u32 sequence = m_amdBreadcrumb.nextSequence.fetch_add(1u) + 1u;
     const u32 slot = sequence % s_MaxAmdBreadcrumbSlots;
     {

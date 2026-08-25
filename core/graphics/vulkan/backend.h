@@ -2659,7 +2659,7 @@ class Device final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 private:
-    // AMD breadcrumb ring maps the last GPU marker after device loss.
+    // AMD breadcrumb ring provides a best-effort last-observed marker; physical queues may execute out of sequence.
     struct AmdBreadcrumbSlotRecord{
         u32 sequence = 0u;
         usize markerHash = 0u;

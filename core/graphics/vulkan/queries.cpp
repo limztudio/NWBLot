@@ -396,8 +396,10 @@ void CommandList::beginMarker(const AStringView name){
             vkCmdSetCheckpointNV(m_currentCmdBuf->m_cmdBuf, reinterpret_cast<const void*>(gpuCrashMarker));
         if(useAmdBreadcrumb){
             const Device::AmdBreadcrumbWrite breadcrumb = m_device.reserveAmdBreadcrumb(gpuCrashMarker);
-            if(breadcrumb.valid)
+            if(breadcrumb.valid){
+                m_hostReadbackBarrierTracker.registerDeviceOwnedBuffer(breadcrumb.buffer);
                 vkCmdWriteBufferMarkerAMD(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, breadcrumb.buffer, breadcrumb.offset, breadcrumb.marker);
+            }
         }
     }
 }

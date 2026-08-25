@@ -274,6 +274,7 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
     ASSERT_TRUE(closeScanCommandList);
     closeScanCommandList->open();
     closeScanCommandList->beginTrackingBufferState(firstReadback.get(), ResourceStates::CopyDest);
+    closeScanCommandList->clearState();
 #if !defined(NWB_FINAL)
     HostSync::ResetHostReadbackBarrierAppendCountForTesting();
 #endif

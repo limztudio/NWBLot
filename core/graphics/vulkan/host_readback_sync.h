@@ -25,6 +25,10 @@ namespace VulkanDetail{
 
 [[nodiscard]] bool HasBufferDeviceWriteState(ResourceStates::Mask states)noexcept;
 [[nodiscard]] VkBufferMemoryBarrier2 BuildHostReadBufferBarrier(VkBuffer buffer)noexcept;
+void CollectUniquePhysicalQueueFamilyIndices(
+    const GpuPhysicalQueueTopology& topology,
+    Vector<u32, Alloc::ScratchArena>& familyIndices
+);
 
 #if !defined(NWB_FINAL)
 void ResetHostReadbackBarrierAppendCountForTesting()noexcept;
@@ -40,6 +44,7 @@ public:
 
 public:
     [[nodiscard]] bool registerBuffer(VkBuffer buffer);
+    void registerDeviceOwnedBuffer(VkBuffer buffer);
     void appendBarriers(Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena>& barriers)const;
     void clear();
     [[nodiscard]] usize size()const{ return m_buffers.size(); }

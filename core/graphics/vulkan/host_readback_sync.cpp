@@ -68,6 +68,32 @@ VkBufferMemoryBarrier2 BuildHostReadBufferBarrier(const VkBuffer buffer)noexcept
     return barrier;
 }
 
+void CollectUniquePhysicalQueueFamilyIndices(
+    const GpuPhysicalQueueTopology& topology,
+    Vector<u32, Alloc::ScratchArena>& familyIndices
+){
+    familyIndices.clear();
+    if(!topology.queues)
+        return;
+
+    familyIndices.reserve(topology.queueCount);
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const u32 familyIndex = topology.queues[queueIndex].familyIndex;
+        if(familyIndex == VK_QUEUE_FAMILY_IGNORED)
+            continue;
+
+        bool duplicate = false;
+        for(const u32 existingFamilyIndex : familyIndices){
+            if(existingFamilyIndex == familyIndex){
+                duplicate = true;
+                break;
+            }
+        }
+        if(!duplicate)
+            familyIndices.push_back(familyIndex);
+    }
+}
+
 #if !defined(NWB_FINAL)
 void ResetHostReadbackBarrierAppendCountForTesting()noexcept{
     __hidden_host_readback_sync::s_AppendedBarrierCount = 0u;
@@ -97,6 +123,11 @@ bool HostReadbackBarrierTracker::registerBuffer(const VkBuffer buffer){
 
     m_buffers.push_back(buffer);
     return true;
+}
+
+void HostReadbackBarrierTracker::registerDeviceOwnedBuffer(const VkBuffer buffer){
+    if(!registerBuffer(buffer))
+        return;
 }
 
 void HostReadbackBarrierTracker::appendBarriers(

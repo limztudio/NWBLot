@@ -80,6 +80,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     NWB_ASSERT_MSG(m_markerDepth == 0u, NWB_TEXT("Vulkan: Command list reopened with unterminated marker scopes"));
     m_stateTracker.rollbackRecordingAttempt();
     clearState();
+    m_hostReadbackBarrierTracker.clear();
     if(m_currentCmdBuf)
         m_currentCmdBuf->discardRetainedTextureStateCommits();
     discardUnsubmittedUploadChunks();
@@ -146,6 +147,7 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
     if(!m_currentCmdBuf){
         m_stateTracker.rollbackRecordingAttempt();
         m_isRecording = false;
+        m_hostReadbackBarrierTracker.clear();
         clearState();
         return;
     }
@@ -156,6 +158,7 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
     }
 
     if(!m_isRecording){
+        m_hostReadbackBarrierTracker.clear();
         clearState();
         return;
     }
@@ -208,6 +211,7 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
     if(finalStates)
         exportResourceStateHandoff(*finalStates);
 
+    m_hostReadbackBarrierTracker.clear();
     clearState();
 }
 
@@ -217,8 +221,9 @@ void CommandList::clearState(){
         endActiveRenderPass();
     resetMarkerState();
 
+    if(!m_commandRecordingFailed && isRecording())
+        collectHostReadbackBuffers();
     m_stateTracker.reset();
-    m_hostReadbackBarrierTracker.clear();
 
     m_currentGraphicsState = {};
     m_currentComputeState = {};
@@ -446,6 +451,7 @@ void CommandList::discardInvalidCommandBuffer()noexcept{
     m_currentCmdBuf->discardRetainedTextureStateCommits();
     discardUnsubmittedUploadChunks();
     m_currentCmdBuf.reset();
+    m_hostReadbackBarrierTracker.clear();
     clearState();
 }
 

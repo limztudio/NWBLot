@@ -305,6 +305,24 @@ bool CommandList::validateViewportState(
     return true;
 }
 
+bool CommandList::validateBufferForGpuState(
+    Buffer* const buffer,
+    const ResourceStates::Mask requiredState,
+    const tchar* const operationName
+)noexcept{
+    if(!m_device.isBufferReadyForGpuUse(buffer)){
+        rejectCommandRecording(operationName, NWB_TEXT("buffer is not ready for GPU access"));
+        return false;
+    }
+
+    const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(buffer);
+    if(permanentState != ResourceStates::Unknown && permanentState != requiredState){
+        rejectCommandRecording(operationName, NWB_TEXT("state conflicts with the permanent buffer state"));
+        return false;
+    }
+    return true;
+}
+
 bool CommandList::validateGraphicsState(const GraphicsState& state)noexcept{
     constexpr const tchar* s_OperationName = NWB_TEXT("set graphics state");
     if(state.shadingRateState.enabled){
@@ -400,50 +418,53 @@ bool CommandList::validateGraphicsState(const GraphicsState& state)noexcept{
         return false;
     }
 
-    {
-        const auto requiredBufferState = [&state](Buffer* const buffer)noexcept{
-            ResourceStates::Mask requiredState = ResourceStates::Unknown;
-            for(const VertexBufferBinding& binding : state.vertexBuffers){
-                if(binding.buffer == buffer)
-                    requiredState |= ResourceStates::VertexBuffer;
-            }
-            if(state.indexBuffer.buffer == buffer)
-                requiredState |= ResourceStates::IndexBuffer;
-            if(state.indirectParams == buffer)
-                requiredState |= ResourceStates::IndirectArgument;
-            return requiredState;
-        };
+    struct BufferStateEntry{
+        Buffer* buffer = nullptr;
+        ResourceStates::Mask state = ResourceStates::Unknown;
+    };
+    BufferStateEntry requiredBufferStates[s_MaxVertexAttributes + 2u]{};
+    u32 requiredBufferStateCount = 0u;
 
-        for(const VertexBufferBinding& binding : state.vertexBuffers){
-            const ResourceStates::Mask permanentState = getPermanentBufferState(binding.buffer);
-            if(
-                permanentState != ResourceStates::Unknown
-                && permanentState != requiredBufferState(binding.buffer)
-            ){
-                rejectCommandRecording(s_OperationName, NWB_TEXT("graphics buffer permanent state is incompatible"));
+    const auto addRequiredBufferState = [&requiredBufferStates, &requiredBufferStateCount](
+        Buffer* const buffer,
+        const ResourceStates::Mask requiredState
+    )noexcept -> bool{
+        if(!buffer)
+            return true;
+        for(u32 stateIndex = 0u; stateIndex < requiredBufferStateCount; ++stateIndex){
+            if(requiredBufferStates[stateIndex].buffer == buffer){
+                requiredBufferStates[stateIndex].state |= requiredState;
+                return true;
+            }
+            if(requiredBufferStates[stateIndex].buffer->m_buffer == buffer->m_buffer){
                 return false;
             }
         }
-        if(state.indexBuffer.buffer){
-            const ResourceStates::Mask permanentState = getPermanentBufferState(state.indexBuffer.buffer);
-            if(
-                permanentState != ResourceStates::Unknown
-                && permanentState != requiredBufferState(state.indexBuffer.buffer)
-            ){
-                rejectCommandRecording(s_OperationName, NWB_TEXT("graphics buffer permanent state is incompatible"));
-                return false;
-            }
+        NWB_ASSERT(requiredBufferStateCount < LengthOf(requiredBufferStates));
+        requiredBufferStates[requiredBufferStateCount].buffer = buffer;
+        requiredBufferStates[requiredBufferStateCount].state = requiredState;
+        ++requiredBufferStateCount;
+        return true;
+    };
+
+    for(const VertexBufferBinding& binding : state.vertexBuffers){
+        if(!addRequiredBufferState(binding.buffer, ResourceStates::VertexBuffer)){
+            rejectCommandRecording(s_OperationName, NWB_TEXT("distinct buffer objects alias the same native buffer"));
+            return false;
         }
-        if(state.indirectParams){
-            const ResourceStates::Mask permanentState = getPermanentBufferState(state.indirectParams);
-            if(
-                permanentState != ResourceStates::Unknown
-                && permanentState != requiredBufferState(state.indirectParams)
-            ){
-                rejectCommandRecording(s_OperationName, NWB_TEXT("graphics buffer permanent state is incompatible"));
-                return false;
-            }
-        }
+    }
+    if(
+        !addRequiredBufferState(state.indexBuffer.buffer, ResourceStates::IndexBuffer)
+        || !addRequiredBufferState(state.indirectParams, ResourceStates::IndirectArgument)
+    ){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("distinct buffer objects alias the same native buffer"));
+        return false;
+    }
+
+    for(u32 stateIndex = 0u; stateIndex < requiredBufferStateCount; ++stateIndex){
+        const BufferStateEntry& requiredBufferState = requiredBufferStates[stateIndex];
+        if(!validateBufferForGpuState(requiredBufferState.buffer, requiredBufferState.state, s_OperationName))
+            return false;
     }
     return true;
 }
@@ -508,13 +529,15 @@ bool CommandList::validateMeshletState(const MeshletState& state)noexcept{
         rejectCommandRecording(s_OperationName, NWB_TEXT("mesh indirect-argument buffer is invalid"));
         return false;
     }
-    if(state.indirectParams){
-        const ResourceStates::Mask permanentState = getPermanentBufferState(state.indirectParams);
-        if(permanentState != ResourceStates::Unknown && permanentState != ResourceStates::IndirectArgument){
-            rejectCommandRecording(s_OperationName, NWB_TEXT("mesh indirect-buffer permanent state is incompatible"));
-            return false;
-        }
-    }
+    if(
+        state.indirectParams
+        && !validateBufferForGpuState(
+            state.indirectParams,
+            ResourceStates::IndirectArgument,
+            s_OperationName
+        )
+    )
+        return false;
     return true;
 }
 

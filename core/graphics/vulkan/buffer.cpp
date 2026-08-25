@@ -382,6 +382,8 @@ bool CommandList::tryWriteBuffer(Buffer* bufferResource, const void* data, usize
         rejectCommandRecording(NWB_TEXT("write buffer"), NWB_TEXT("copy offset and size must be 4-byte aligned"));
         return false;
     }
+    if(!validateBufferForGpuState(bufferResource, ResourceStates::CopyDest, NWB_TEXT("write buffer")))
+        return false;
 
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
@@ -425,6 +427,8 @@ void CommandList::clearBufferUInt(Buffer* bufferResource, u32 clearValue){
         rejectCommandRecording(NWB_TEXT("clear buffer"), NWB_TEXT("buffer size is not 4-byte aligned"));
         return;
     }
+    if(!validateBufferForGpuState(bufferResource, ResourceStates::CopyDest, NWB_TEXT("clear buffer")))
+        return;
 
     endActiveRenderPass();
     setBufferState(bufferResource, ResourceStates::CopyDest);
@@ -466,14 +470,42 @@ void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* 
         rejectCommandRecording(NWB_TEXT("copy buffer"), NWB_TEXT("source and destination ranges overlap in the same buffer"));
         return;
     }
+    if(
+        destResource != srcResource
+        && dest.m_buffer != VK_NULL_HANDLE
+        && dest.m_buffer == src.m_buffer
+    ){
+        rejectCommandRecording(
+            NWB_TEXT("copy buffer"),
+            NWB_TEXT("distinct buffer objects alias the same native buffer")
+        );
+        return;
+    }
+
+    const bool sameNativeBuffer = dest.m_buffer == src.m_buffer;
+    const ResourceStates::Mask sourceState = sameNativeBuffer
+        ? ResourceStates::CopySource | ResourceStates::CopyDest
+        : ResourceStates::CopySource
+    ;
+    const ResourceStates::Mask destinationState = sameNativeBuffer
+        ? ResourceStates::CopySource | ResourceStates::CopyDest
+        : ResourceStates::CopyDest
+    ;
+    if(!validateBufferForGpuState(srcResource, sourceState, NWB_TEXT("copy buffer")))
+        return;
+    if(
+        destResource != srcResource
+        && !validateBufferForGpuState(destResource, destinationState, NWB_TEXT("copy buffer"))
+    )
+        return;
 
     endActiveRenderPass();
-    if(dest.m_buffer == src.m_buffer)
-        setBufferState(srcResource, ResourceStates::CopySource | ResourceStates::CopyDest);
+    if(sameNativeBuffer)
+        setBufferState(srcResource, sourceState);
     else{
-        setBufferState(srcResource, ResourceStates::CopySource);
+        setBufferState(srcResource, sourceState);
         if(!m_commandRecordingFailed)
-            setBufferState(destResource, ResourceStates::CopyDest);
+            setBufferState(destResource, destinationState);
     }
     if(m_commandRecordingFailed)
         return;
@@ -530,6 +562,44 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
         );
         return false;
     }
+    if(
+        destResource != srcResource
+        && dest.m_buffer != VK_NULL_HANDLE
+        && dest.m_buffer == src.m_buffer
+    ){
+        rejectCommandRecording(
+            NWB_TEXT("direct command-IR copy buffer"),
+            NWB_TEXT("distinct buffer objects alias the same native buffer")
+        );
+        return false;
+    }
+
+    const bool sameNativeBuffer = dest.m_buffer == src.m_buffer;
+    const ResourceStates::Mask sourceState = sameNativeBuffer
+        ? ResourceStates::CopySource | ResourceStates::CopyDest
+        : ResourceStates::CopySource
+    ;
+    const ResourceStates::Mask destinationState = sameNativeBuffer
+        ? ResourceStates::CopySource | ResourceStates::CopyDest
+        : ResourceStates::CopyDest
+    ;
+    if(
+        !validateBufferForGpuState(
+            srcResource,
+            sourceState,
+            NWB_TEXT("direct command-IR copy buffer")
+        )
+    )
+        return false;
+    if(
+        destResource != srcResource
+        && !validateBufferForGpuState(
+            destResource,
+            destinationState,
+            NWB_TEXT("direct command-IR copy buffer")
+        )
+    )
+        return false;
 
     endActiveRenderPass();
     if(m_commandRecordingFailed)

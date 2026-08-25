@@ -773,17 +773,11 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
         return;
     if(!validateCommandRecordingScope(NWB_TEXT("set buffer state")))
         return;
+    if(!validateBufferForGpuState(bufferResource, stateBits, NWB_TEXT("set buffer state")))
+        return;
 
     Buffer& buffer = *bufferResource;
-    if(!m_device.isBufferReadyForGpuUse(&buffer)){
-        rejectCommandRecording(NWB_TEXT("set buffer state"), NWB_TEXT("buffer is not ready for GPU access"));
-        return;
-    }
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(&buffer);
-    if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
-        rejectCommandRecording(NWB_TEXT("set buffer state"), NWB_TEXT("state conflicts with the permanent buffer state"));
-        return;
-    }
 
     ResourceStates::Mask oldState = permanentState;
     if(permanentState == ResourceStates::Unknown && !m_stateTracker.getTransientBufferState(buffer, oldState)){

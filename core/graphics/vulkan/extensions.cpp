@@ -233,10 +233,11 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
 
 
 void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs){
+    constexpr const tchar* s_OperationName = NWB_TEXT("convert cooperative-vector matrices");
     constexpr GpuQueueCapability::Mask s_ConvertCapabilities = static_cast<GpuQueueCapability::Mask>(
         static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute)
     );
-    if(!recordAndValidateAnyCommandCapability(s_ConvertCapabilities, NWB_TEXT("convert cooperative-vector matrices")))
+    if(!recordAndValidateAnyCommandCapability(s_ConvertCapabilities, s_OperationName))
         return;
     if(!m_context.extensions.NV_cooperative_vector || !m_context.coopVecFeatures.cooperativeVector)
         return;
@@ -256,6 +257,29 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
 
     Vector<CooperativeVectorConvertMatrixLayoutDesc const*, Alloc::ScratchArena> validDescs{scratchArena};
     validDescs.reserve(numDescs);
+
+    struct BufferStateEntry{
+        Buffer* buffer = nullptr;
+        ResourceStates::Mask state = ResourceStates::Unknown;
+    };
+    Vector<BufferStateEntry, Alloc::ScratchArena> requiredBufferStates{scratchArena};
+    requiredBufferStates.reserve(numDescs * 2u);
+
+    const auto addRequiredBufferState = [&requiredBufferStates](
+        Buffer* const buffer,
+        const ResourceStates::Mask requiredState
+    ) -> bool{
+        for(BufferStateEntry& state : requiredBufferStates){
+            if(state.buffer == buffer){
+                state.state |= requiredState;
+                return true;
+            }
+            if(buffer->m_buffer != VK_NULL_HANDLE && state.buffer->m_buffer == buffer->m_buffer)
+                return false;
+        }
+        requiredBufferStates.push_back(BufferStateEntry{ buffer, requiredState });
+        return true;
+    };
 
     for(usize i = 0; i < numDescs; ++i){
         const CooperativeVectorConvertMatrixLayoutDesc& convertDesc = convertDescs[i];
@@ -277,15 +301,28 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
             continue;
         }
 
-        if(m_enableAutomaticBarriers){
-            setBufferState(convertDesc.src.buffer, ResourceStates::ConvertCoopVecMatrixInput);
-            setBufferState(convertDesc.dst.buffer, ResourceStates::ConvertCoopVecMatrixOutput);
+        if(
+            !addRequiredBufferState(convertDesc.src.buffer, ResourceStates::ConvertCoopVecMatrixInput)
+            || !addRequiredBufferState(convertDesc.dst.buffer, ResourceStates::ConvertCoopVecMatrixOutput)
+        ){
+            rejectCommandRecording(s_OperationName, NWB_TEXT("distinct buffer objects alias the same native buffer"));
+            return;
         }
-
         validDescs.push_back(&convertDesc);
     }
-    if(m_commandRecordingFailed)
-        return;
+
+    for(const BufferStateEntry& state : requiredBufferStates){
+        if(!validateBufferForGpuState(state.buffer, state.state, s_OperationName))
+            return;
+    }
+
+    if(m_enableAutomaticBarriers){
+        for(const BufferStateEntry& state : requiredBufferStates){
+            setBufferState(state.buffer, state.state);
+            if(m_commandRecordingFailed)
+                return;
+        }
+    }
 
     Vector<VkConvertCooperativeVectorMatrixInfoNV, Alloc::ScratchArena> vkConvertDescs(validDescs.size(), scratchArena);
     Vector<usize, Alloc::ScratchArena> dstSizes(validDescs.size(), scratchArena);

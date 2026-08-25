@@ -307,7 +307,7 @@ bool StateTracker::isUavBarrierEnabledForTexture(Texture& texture)const{
 
 bool StateTracker::isUavBarrierEnabledForBuffer(Buffer& buffer)const{
     const auto found = m_bufferUavBarriers.find(&buffer);
-    return found == m_bufferUavBarriers.end() || found.value();
+    return found == m_bufferUavBarriers.end() || found.value().enableBarriers;
 }
 
 void StateTracker::beginTrackingTransientTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
@@ -339,7 +339,20 @@ void StateTracker::setEnableUavBarriersForTexture(Texture& texture, bool enableB
 }
 
 void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarriers){
-    m_bufferUavBarriers.insert_or_assign(&buffer, enableBarriers);
+    auto found = m_bufferUavBarriers.find(&buffer);
+    if(found != m_bufferUavBarriers.end()){
+        found.value().enableBarriers = enableBarriers;
+        return;
+    }
+
+    if(!m_bufferUavBarriers.emplace(
+        &buffer,
+        BufferUavBarrierPolicyValue{
+            enableBarriers,
+            BufferHandle(&buffer, BufferHandle::deleter_type(&m_context.objectArena))
+        }
+    ).second)
+        NWB_ASSERT(false);
 }
 
 
@@ -356,6 +369,13 @@ void CommandList::setEnableUavBarriersForTexture(Texture* texture, bool enableBa
 void CommandList::setEnableUavBarriersForBuffer(Buffer* buffer, bool enableBarriers){
     if(!buffer)
         return;
+    constexpr const tchar* s_OperationName = NWB_TEXT("set buffer UAV-barrier policy");
+    if(!validateCommandRecordingScope(s_OperationName))
+        return;
+    if(!m_device.isBufferReadyForGpuUse(buffer)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("buffer is not ready for GPU access"));
+        return;
+    }
     m_stateTracker.setEnableUavBarriersForBuffer(*buffer, enableBarriers);
 }
 

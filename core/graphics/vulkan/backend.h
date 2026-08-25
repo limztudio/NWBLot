@@ -2253,6 +2253,11 @@ private:
         BufferHandle buffer;
     };
 
+    struct BufferUavBarrierPolicyValue{
+        bool enableBarriers = true;
+        BufferHandle buffer;
+    };
+
     using PermanentTextureStateMap = HashMap<
         Texture*,
         PermanentTextureStateValue,
@@ -2263,6 +2268,13 @@ private:
     using PermanentBufferStateMap = HashMap<
         Buffer*,
         PermanentBufferStateValue,
+        Hasher<Buffer*>,
+        EqualTo<Buffer*>,
+        Alloc::GlobalArena
+    >;
+    using BufferUavBarrierPolicyMap = HashMap<
+        Buffer*,
+        BufferUavBarrierPolicyValue,
         Hasher<Buffer*>,
         EqualTo<Buffer*>,
         Alloc::GlobalArena
@@ -2325,7 +2337,7 @@ private:
     HashMap<TextureSubresourceStateKey, ResourceStates::Mask, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureStates;
     HashMap<Buffer*, ResourceStates::Mask, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferStates;
     HashMap<Texture*, bool, Hasher<Texture*>, EqualTo<Texture*>, Alloc::GlobalArena> m_textureUavBarriers;
-    HashMap<Buffer*, bool, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferUavBarriers;
+    BufferUavBarrierPolicyMap m_bufferUavBarriers;
 
     const VulkanContext& m_context;
     bool m_recordingAttemptActive = false;
@@ -2522,6 +2534,11 @@ private:
     [[nodiscard]] bool prepareFramebufferForRendering(Framebuffer* framebuffer, const tchar* operationName)noexcept;
     [[nodiscard]] bool validateViewportState(
         const ViewportState& viewport,
+        const tchar* operationName
+    )noexcept;
+    [[nodiscard]] bool validateBufferForGpuState(
+        Buffer* buffer,
+        ResourceStates::Mask requiredState,
         const tchar* operationName
     )noexcept;
     [[nodiscard]] bool validateGraphicsState(const GraphicsState& state)noexcept;

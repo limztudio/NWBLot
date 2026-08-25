@@ -110,6 +110,15 @@ void CommandList::setComputeState(const ComputeState& state){
         );
         return;
     }
+    if(
+        state.indirectParams
+        && !validateBufferForGpuState(
+            state.indirectParams,
+            ResourceStates::IndirectArgument,
+            NWB_TEXT("set compute state")
+        )
+    )
+        return;
 
     endActiveRenderPass();
     if(state.indirectParams)

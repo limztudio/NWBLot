@@ -17,6 +17,10 @@
 
 #include "surfel_heap_resources.slangi"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Resolve reads the immutable live field through its dispatch-uniform heap slots.
 #define g_NwbSceneSurfelParams g_NwbHeapSurfelConstantBuffers[g_NwbSurfelHeapPushConstants.constantsHeapSlot]
 #define NWB_SURFEL_GATHER_FIELD_POOL g_NwbHeapSurfelReadOnlyPools[g_NwbSurfelHeapPushConstants.poolHeapSlot]
@@ -30,6 +34,9 @@
 #undef NWB_SURFEL_GATHER_FIELD_CONSTANTS
 #undef NWB_SURFEL_GATHER_FIELD_CELL_HEAD
 #undef NWB_SURFEL_GATHER_FIELD_POOL
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Gathers the surfel irradiance at a shaded point. Returns false if no surfel covers it (caller -> hemiAmbient).

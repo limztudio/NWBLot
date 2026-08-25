@@ -313,35 +313,41 @@ Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator)
     , m_allocator(allocator)
 {}
 Texture::~Texture(){
+    const VkImage registeredNativeImage = m_image;
+
     for(const auto& [_, view] : m_views)
         vkDestroyImageView(m_context.device, view, m_context.allocationCallbacks);
     m_views.clear();
 
-    ScopedLock bindingLock(m_memoryBindingMutex);
-    if(m_boundHeap){
-        Heap* const boundHeap = m_boundHeap.get();
-        {
-            ScopedLock heapLock(boundHeap->m_bindingMutex);
-            if(m_image != VK_NULL_HANDLE){
-                vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
-                m_image = VK_NULL_HANDLE;
+    {
+        ScopedLock bindingLock(m_memoryBindingMutex);
+        if(m_boundHeap){
+            Heap* const boundHeap = m_boundHeap.get();
+            {
+                ScopedLock heapLock(boundHeap->m_bindingMutex);
+                if(m_image != VK_NULL_HANDLE){
+                    vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
+                    m_image = VK_NULL_HANDLE;
+                }
+                boundHeap->eraseBindingReservationLocked(this);
             }
-            boundHeap->eraseBindingReservationLocked(this);
+            m_heapBindingRange = {};
+            m_boundHeap.reset();
         }
-        m_heapBindingRange = {};
-        m_boundHeap.reset();
-    }
-    else if(m_managed){
-        if(m_desc.isVirtual){
-            if(m_image != VK_NULL_HANDLE){
-                vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
-                m_image = VK_NULL_HANDLE;
+        else if(m_managed){
+            if(m_desc.isVirtual){
+                if(m_image != VK_NULL_HANDLE){
+                    vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
+                    m_image = VK_NULL_HANDLE;
+                }
+            }
+            else{
+                m_allocator.destroyTexture(*this);
             }
         }
-        else{
-            m_allocator.destroyTexture(*this);
-        }
     }
+
+    m_allocator.unregisterTextureNativeIdentity(registeredNativeImage, *this);
 }
 
 VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format){
@@ -365,6 +371,8 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
     };
 
     ScopedLock lock(m_viewsMutex);
+    if(m_image == VK_NULL_HANDLE)
+        return VK_NULL_HANDLE;
     auto it = m_views.find(key);
     if(it != m_views.end())
         return it.value();
@@ -391,6 +399,37 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
 
     m_views.emplace(key, view);
     return view;
+}
+
+bool Texture::revokeUnmanagedNativeImage(const VkImage expectedNativeImage)noexcept{
+    if(expectedNativeImage == VK_NULL_HANDLE)
+        return false;
+
+    ScopedLock bindingLock(m_memoryBindingMutex);
+    if(m_managed || m_image != expectedNativeImage)
+        return false;
+
+    ScopedLock viewsLock(m_viewsMutex);
+    const bool identityRegistered = m_allocator.isTextureNativeIdentityRegistered(expectedNativeImage, *this);
+    for(const auto& [_, view] : m_views)
+        vkDestroyImageView(m_context.device, view, m_context.allocationCallbacks);
+    m_views.clear();
+    m_image = VK_NULL_HANDLE;
+    return identityRegistered;
+}
+
+void Texture::releaseRevokedNativeImageIdentity(const VkImage expectedNativeImage)noexcept{
+    if(expectedNativeImage == VK_NULL_HANDLE)
+        return;
+
+    {
+        ScopedLock bindingLock(m_memoryBindingMutex);
+        if(m_managed || m_image != VK_NULL_HANDLE){
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Only a revoked unmanaged Texture can release a native identity"));
+            return;
+        }
+    }
+    m_allocator.unregisterTextureNativeIdentity(expectedNativeImage, *this);
 }
 
 bool Texture::hasPartiallyKnownRetainedSubresourceState()const{
@@ -477,8 +516,10 @@ void VulkanDetail::MarkRetainedTextureSubresourceStateKnownForTesting(
 #endif
 
 Object Texture::getNativeHandle(ObjectType objectType){
-    if(objectType == ObjectTypes::VK_Image)
+    if(objectType == ObjectTypes::VK_Image){
+        ScopedLock bindingLock(m_memoryBindingMutex);
         return Object(m_image);
+    }
     return Object(nullptr);
 }
 

@@ -97,11 +97,27 @@ void BackendContext::destroySwapChain(){
     resetFramePresentationSignal();
     m_frameAcquired = false;
 
+    for(SwapChainImage& swapChainImage : m_swapChainImages){
+        if(
+            swapChainImage.rhiHandle
+            && !swapChainImage.rhiHandle->revokeUnmanagedNativeImage(swapChainImage.image)
+        ){
+            NWB_LOGGER_CRITICAL_WARNING(
+                NWB_TEXT("Vulkan: Failed to revoke a swapchain Texture wrapper before native destruction")
+            );
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Swapchain Texture wrapper revocation must succeed"));
+        }
+    }
+
     if(m_swapChain){
         vkDestroySwapchainKHR(m_vulkanDevice, m_swapChain, nullptr);
         m_swapChain = VK_NULL_HANDLE;
     }
 
+    for(SwapChainImage& swapChainImage : m_swapChainImages){
+        if(swapChainImage.rhiHandle)
+            swapChainImage.rhiHandle->releaseRevokedNativeImageIdentity(swapChainImage.image);
+    }
     m_swapChainImages.clear();
 }
 
@@ -308,17 +324,13 @@ bool BackendContext::createVulkanSwapChain(){
     res = vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, nullptr);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query swap chain image count. {}"), ResultToString(res));
-        vkDestroySwapchainKHR(m_vulkanDevice, m_swapChain, nullptr);
-        m_swapChain = VK_NULL_HANDLE;
-        m_swapChainImages.clear();
+        destroySwapChain();
         return false;
     }
 
     if(imageCount == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Swap chain reported zero images."));
-        vkDestroySwapchainKHR(m_vulkanDevice, m_swapChain, nullptr);
-        m_swapChain = VK_NULL_HANDLE;
-        m_swapChainImages.clear();
+        destroySwapChain();
         return false;
     }
 
@@ -326,9 +338,7 @@ bool BackendContext::createVulkanSwapChain(){
     res = vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, images.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to retrieve swap chain images. {}"), ResultToString(res));
-        vkDestroySwapchainKHR(m_vulkanDevice, m_swapChain, nullptr);
-        m_swapChain = VK_NULL_HANDLE;
-        m_swapChainImages.clear();
+        destroySwapChain();
         return false;
     }
 
@@ -349,9 +359,7 @@ bool BackendContext::createVulkanSwapChain(){
         sci.rhiHandle = m_rhiDevice->createHandleForNativeTexture(ObjectTypes::VK_Image, Object(sci.image), textureDesc);
         if(!sci.rhiHandle){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create RHI handle for a swap chain image."));
-            m_swapChainImages.clear();
-            vkDestroySwapchainKHR(m_vulkanDevice, m_swapChain, nullptr);
-            m_swapChain = VK_NULL_HANDLE;
+            destroySwapChain();
             return false;
         }
         sci.rhiHandle->m_imageInfo.usage = desc.imageUsage;

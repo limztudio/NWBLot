@@ -5956,12 +5956,13 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
 
     const Object sourceNativeImage = source->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Image);
     ASSERT_NE(sourceNativeImage.integer, 0u);
-    const TextureHandle sourceAlias = device.createHandleForNativeTexture(
+    const TextureHandle duplicateSourceWrapper = device.createHandleForNativeTexture(
         GraphicsBackend::ObjectTypes::VK_Image,
         sourceNativeImage,
         textureDesc
     );
-    ASSERT_TRUE(sourceAlias);
+    EXPECT_FALSE(duplicateSourceWrapper);
+    EXPECT_TRUE(device.isTextureReadyForGpuUse(source.get()));
 
     TextureDesc invalidNativeDescs[3u] = { textureDesc, textureDesc, textureDesc };
     invalidNativeDescs[0u].sampleQuality = 1u;
@@ -6032,7 +6033,6 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
         NullDestination,
         NullSource,
         SameResource,
-        SameNativeImage,
         ForeignDestination,
         ForeignSource,
         DestinationSliceOutOfBounds,
@@ -6055,7 +6055,6 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
         { Operation::NullDestination, "null destination" },
         { Operation::NullSource, "null source" },
         { Operation::SameResource, "same resource" },
-        { Operation::SameNativeImage, "distinct wrappers of one native image" },
         { Operation::ForeignDestination, "foreign destination" },
         { Operation::ForeignSource, "foreign source" },
         { Operation::DestinationSliceOutOfBounds, "destination slice out of bounds" },
@@ -6092,10 +6091,6 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
             break;
         case Operation::SameResource:
             caseDestination = source.get();
-            break;
-        case Operation::SameNativeImage:
-            caseDestination = source.get();
-            caseSource = sourceAlias.get();
             break;
         case Operation::ForeignDestination:
             caseDestination = foreignDestination.get();
@@ -21364,9 +21359,8 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
 }
 
 
-// Graph declaration sees distinct resources, but native recording must still reject two wrappers of one VkImage.
-// A prior valid region may have emitted a copy and capture record, so the entire packet must roll both back.
-TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRollsBackNativeAliasPacket){
+// A late unbound virtual destination must fail packet-wide preflight before a prior valid region emits native work.
+TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRejectsUnboundTailAtomically){
     auto& device = DescriptorBufferRoundTripTest::device();
     const TextureDesc commonDesc = TextureDesc()
         .setWidth(4u)
@@ -21378,10 +21372,13 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRollsBackNativeAlias
     ;
     const TextureHandle validSource = device.createTexture(commonDesc);
     const TextureHandle validDestination = device.createTexture(commonDesc);
-    const TextureHandle aliasOwner = device.createTexture(commonDesc);
+    TextureDesc unboundDesc = commonDesc;
+    unboundDesc.isVirtual = true;
+    const TextureHandle unboundDestination = device.createTexture(unboundDesc);
     ASSERT_TRUE(validSource);
     ASSERT_TRUE(validDestination);
-    ASSERT_TRUE(aliasOwner);
+    ASSERT_TRUE(unboundDestination);
+    ASSERT_FALSE(device.isTextureReadyForGpuUse(unboundDestination.get()));
     Texture* const primedTextures[] = { validSource.get(), validDestination.get() };
     ASSERT_TRUE(PrimeTextureStatesForGraph(
         device,
@@ -21389,25 +21386,6 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRollsBackNativeAlias
         LengthOf(primedTextures),
         ResourceStates::Common
     ));
-
-    const Object aliasImage = aliasOwner->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Image);
-    ASSERT_NE(aliasImage.integer, 0u);
-    TextureDesc aliasSourceDesc = commonDesc;
-    aliasSourceDesc.setInitialState(ResourceStates::CopySource);
-    TextureDesc aliasDestinationDesc = commonDesc;
-    aliasDestinationDesc.setInitialState(ResourceStates::CopyDest);
-    const TextureHandle aliasSource = device.createHandleForNativeTexture(
-        GraphicsBackend::ObjectTypes::VK_Image,
-        aliasImage,
-        aliasSourceDesc
-    );
-    const TextureHandle aliasDestination = device.createHandleForNativeTexture(
-        GraphicsBackend::ObjectTypes::VK_Image,
-        aliasImage,
-        aliasDestinationDesc
-    );
-    ASSERT_TRUE(aliasSource);
-    ASSERT_TRUE(aliasDestination);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const auto importTexture = [&](
@@ -21428,32 +21406,25 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRollsBackNativeAlias
     };
     const GpuGraphResourceId validSourceResource = importTexture(
         validSource,
-        Name("tests/descriptor_buffer/copy_alias_valid_source"),
-        "Copy Alias Valid Source",
+        Name("tests/descriptor_buffer/copy_unbound_valid_source"),
+        "Copy Unbound Valid Source",
         ResourceStates::Common
     );
     const GpuGraphResourceId validDestinationResource = importTexture(
         validDestination,
-        Name("tests/descriptor_buffer/copy_alias_valid_destination"),
-        "Copy Alias Valid Destination",
+        Name("tests/descriptor_buffer/copy_unbound_valid_destination"),
+        "Copy Unbound Valid Destination",
         ResourceStates::Common
     );
-    const GpuGraphResourceId aliasSourceResource = importTexture(
-        aliasSource,
-        Name("tests/descriptor_buffer/copy_alias_source"),
-        "Copy Alias Source",
-        ResourceStates::CopySource
-    );
-    const GpuGraphResourceId aliasDestinationResource = importTexture(
-        aliasDestination,
-        Name("tests/descriptor_buffer/copy_alias_destination"),
-        "Copy Alias Destination",
-        ResourceStates::CopyDest
+    const GpuGraphResourceId unboundDestinationResource = importTexture(
+        unboundDestination,
+        Name("tests/descriptor_buffer/copy_unbound_destination"),
+        "Copy Unbound Destination",
+        ResourceStates::Common
     );
     ASSERT_TRUE(validSourceResource.valid());
     ASSERT_TRUE(validDestinationResource.valid());
-    ASSERT_TRUE(aliasSourceResource.valid());
-    ASSERT_TRUE(aliasDestinationResource.valid());
+    ASSERT_TRUE(unboundDestinationResource.valid());
 
     const GpuCopyTextureTaskRegion regions[] = {
         GpuCopyTextureTaskRegion{
@@ -21463,16 +21434,16 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRollsBackNativeAlias
             .destinationSlice = {},
         },
         GpuCopyTextureTaskRegion{
-            .source = aliasSourceResource,
+            .source = validSourceResource,
             .sourceSlice = {},
-            .destination = aliasDestinationResource,
+            .destination = unboundDestinationResource,
             .destinationSlice = {},
         },
     };
     GpuTaskDesc taskDesc;
     taskDesc
-        .setIdentity(Name("tests/descriptor_buffer/copy_alias_task"))
-        .setMarkerLabel("Copy Alias Task")
+        .setIdentity(Name("tests/descriptor_buffer/copy_unbound_task"))
+        .setMarkerLabel("Copy Unbound Task")
         .setQueue(GpuQueueRequest{
             GpuQueueCapability::Transfer,
             GpuQueuePreference::Graphics,
@@ -21515,7 +21486,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRollsBackNativeAlias
     GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
     GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
     GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
-    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/copy_alias_scratch"));
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/copy_unbound_scratch"));
     const GpuTaskGraphCompiler compiler;
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
     const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
@@ -21523,8 +21494,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRollsBackNativeAlias
 
     const usize validSourceReferences = validSource->getReferenceCount();
     const usize validDestinationReferences = validDestination->getReferenceCount();
-    const usize aliasSourceReferences = aliasSource->getReferenceCount();
-    const usize aliasDestinationReferences = aliasDestination->getReferenceCount();
+    const usize unboundDestinationReferences = unboundDestination->getReferenceCount();
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
@@ -21548,8 +21518,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRollsBackNativeAlias
     EXPECT_EQ(recordedGraph.packetFinalStateSeed(packet), nullptr);
     EXPECT_EQ(validSource->getReferenceCount(), validSourceReferences);
     EXPECT_EQ(validDestination->getReferenceCount(), validDestinationReferences);
-    EXPECT_EQ(aliasSource->getReferenceCount(), aliasSourceReferences);
-    EXPECT_EQ(aliasDestination->getReferenceCount(), aliasDestinationReferences);
+    EXPECT_EQ(unboundDestination->getReferenceCount(), unboundDestinationReferences);
     EXPECT_TRUE(transaction.discardUnaccepted(
         graph,
         compiledGraph,
@@ -57562,9 +57531,10 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedResourceBindingInputsAreRejectedWith
     const TextureDesc nativeTextureDesc = ordinaryTexture->getDescription();
     TextureDesc virtualNativeTextureDesc = nativeTextureDesc;
     virtualNativeTextureDesc.isVirtual = true;
+    const Object unmanagedNativeImage(static_cast<u64>(0x22d00001u));
     TextureHandle nativeTexture = device.createHandleForNativeTexture(
         GraphicsBackend::ObjectTypes::VK_Image,
-        ordinaryTexture->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Image),
+        unmanagedNativeImage,
         virtualNativeTextureDesc
     );
     ASSERT_TRUE(nativeTexture);

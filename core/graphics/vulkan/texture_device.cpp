@@ -43,6 +43,12 @@ TextureHandle Device::createTexture(const TextureDesc& d){
         DestroyArenaObject(m_context.objectArena, texture);
         return nullptr;
     }
+    if(!m_allocator.tryRegisterTextureNativeIdentity(*texture)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture: native image identity is already registered"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: A newly created texture duplicated a live native image identity"));
+        DestroyArenaObject(m_context.objectArena, texture);
+        return nullptr;
+    }
 
     // Vulkan consumed the queue-family pointer during creation. Clear the transient pointer so the retained
     // image metadata cannot dangle into this stack frame.
@@ -179,6 +185,8 @@ bool Device::isTextureReadyForGpuUse(Texture* textureResource)const noexcept{
         return false;
     if(texture.m_image == VK_NULL_HANDLE)
         return false;
+    if(!m_allocator.isTextureNativeIdentityRegistered(texture.m_image, texture))
+        return false;
     if(!texture.m_managed)
         return true;
 
@@ -221,8 +229,48 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
 
     texture->m_imageInfo = VulkanTextureDetail::BuildTextureImageCreateInfo(desc, metadata);
 
+    if(!m_allocator.tryRegisterTextureNativeIdentity(*texture)){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("Vulkan: Failed to create texture handle for native texture: a live wrapper already exists")
+        );
+        DestroyArenaObject(m_context.objectArena, texture);
+        return nullptr;
+    }
+
     return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
+
+#if !defined(NWB_FINAL)
+bool Device::revokeUnmanagedNativeTextureForTesting(
+    Texture* textureResource,
+    const Object expectedNativeImageHandle
+)noexcept{
+    if(!textureResource)
+        return false;
+
+    Texture& texture = *textureResource;
+    if(&texture.m_context != &m_context || &texture.m_allocator != &m_allocator)
+        return false;
+
+    auto* expectedNativeImage = static_cast<VkImage_T*>(expectedNativeImageHandle);
+    return texture.revokeUnmanagedNativeImage(expectedNativeImage);
+}
+
+void Device::releaseRevokedNativeTextureIdentityForTesting(
+    Texture* textureResource,
+    const Object expectedNativeImageHandle
+)noexcept{
+    if(!textureResource)
+        return;
+
+    Texture& texture = *textureResource;
+    if(&texture.m_context != &m_context || &texture.m_allocator != &m_allocator)
+        return;
+
+    auto* expectedNativeImage = static_cast<VkImage_T*>(expectedNativeImageHandle);
+    texture.releaseRevokedNativeImageIdentity(expectedNativeImage);
+}
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

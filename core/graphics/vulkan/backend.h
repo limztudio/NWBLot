@@ -987,6 +987,7 @@ private:
 class VulkanAllocator final : NoCopy{
     friend class Buffer;
     friend class Device;
+    friend class Texture;
 
 
 public:
@@ -1029,6 +1030,9 @@ private:
     [[nodiscard]] bool tryRegisterBufferNativeIdentity(Buffer& buffer);
     void unregisterBufferNativeIdentity(VkBuffer nativeBuffer, Buffer& buffer)noexcept;
     [[nodiscard]] bool isBufferNativeIdentityRegistered(const Buffer& buffer)const noexcept;
+    [[nodiscard]] bool tryRegisterTextureNativeIdentity(Texture& texture);
+    void unregisterTextureNativeIdentity(VkImage nativeImage, Texture& texture)noexcept;
+    [[nodiscard]] bool isTextureNativeIdentityRegistered(VkImage nativeImage, const Texture& texture)const noexcept;
 
 
 private:
@@ -1036,6 +1040,8 @@ private:
     VulkanAllocatorHandle m_allocator = nullptr;
     mutable Futex m_bufferNativeIdentityMutex;
     HashMap<u64, Buffer*, Hasher<u64>, EqualTo<u64>, Alloc::GlobalArena> m_bufferNativeIdentities;
+    mutable Futex m_textureNativeIdentityMutex;
+    HashMap<VkImage, Texture*, Hasher<VkImage>, EqualTo<VkImage>, Alloc::GlobalArena> m_textureNativeIdentities;
 };
 
 
@@ -1341,6 +1347,8 @@ public:
 
 
 private:
+    [[nodiscard]] bool revokeUnmanagedNativeImage(VkImage expectedNativeImage)noexcept;
+    void releaseRevokedNativeImageIdentity(VkImage expectedNativeImage)noexcept;
     void initializeRetainedSubresourceStates(bool known);
     [[nodiscard]] bool isRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel);
     void setRetainedSubresourceStateKnown(ArraySlice arraySlice, MipLevel mipLevel, bool known);
@@ -2777,7 +2785,12 @@ public:
     bool bindTextureMemory(Texture* texture, Heap* heap, u64 offset);
     // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
     [[nodiscard]] bool isTextureReadyForGpuUse(Texture* texture)const noexcept;
+    // The caller owns native binding and lifetime. Only one live Texture wrapper may name a VkImage per Device.
     [[nodiscard]] TextureHandle createHandleForNativeTexture(ObjectType objectType, Object texture, const TextureDesc& desc);
+#if !defined(NWB_FINAL)
+    [[nodiscard]] bool revokeUnmanagedNativeTextureForTesting(Texture* texture, Object expectedNativeImage)noexcept;
+    void releaseRevokedNativeTextureIdentityForTesting(Texture* texture, Object expectedNativeImage)noexcept;
+#endif
     [[nodiscard]] StagingTextureHandle createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess);
     void* mapStagingTexture(StagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch);
     void unmapStagingTexture(StagingTexture* tex);

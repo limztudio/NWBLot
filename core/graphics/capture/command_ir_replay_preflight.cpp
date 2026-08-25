@@ -7,6 +7,7 @@
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/task_graph/compiled_graph.h>
 #include <core/graphics/task_graph/task_graph.h>
+#include <core/graphics/vulkan/texture_copy_contract.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -128,6 +129,27 @@ namespace __hidden_gpu_command_ir_replay_preflight{
         1u
     );
     return TextureSubresourcesContain(declaration, description, requested);
+}
+
+[[nodiscard]] static bool TaskDeclaresTextureSlice(
+    const GpuTaskGraphTaskView& task,
+    const GpuGraphResourceId resource,
+    const ResourceStates::Mask state,
+    const GpuTaskResourceAccess::Enum access,
+    const TextureDesc& description,
+    const TextureSlice& resolvedSlice
+)noexcept{
+    for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
+        const GpuTaskResourceUse& use = task.resourceUses[useIndex];
+        if(
+            use.resource == resource
+            && use.requiredState == state
+            && use.access == access
+            && TextureSliceIsDeclared(use.range.textureSubresources, description, resolvedSlice)
+        )
+            return true;
+    }
+    return false;
 }
 
 [[nodiscard]] static bool ClearTextureValueMatchesFormat(
@@ -276,7 +298,8 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureCopyRecord(
     const GpuCommandIrBuiltinTaskRecord& record,
     const GpuTaskGraph& graph,
-    const GpuTaskGraphTaskView& task
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& queue
 )noexcept{
     if(
         !graph.validResource(record.source)
@@ -297,49 +320,76 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     if(source == destination)
         return GpuCommandIrReplayError::InvalidTextureCopy;
 
-    const GpuTaskResourceUse* const sourceUse = FindTaskResourceUse(
-        task,
-        record.source,
-        ResourceStates::CopySource,
-        GpuTaskResourceAccess::Read
-    );
-    const GpuTaskResourceUse* const destinationUse = FindTaskResourceUse(
-        task,
-        record.destination,
-        ResourceStates::CopyDest,
-        GpuTaskResourceAccess::Write
-    );
-    if(!sourceUse || !destinationUse)
+    if(
+        !FindTaskResourceUse(
+            task,
+            record.source,
+            ResourceStates::CopySource,
+            GpuTaskResourceAccess::Read
+        )
+        || !FindTaskResourceUse(
+            task,
+            record.destination,
+            ResourceStates::CopyDest,
+            GpuTaskResourceAccess::Write
+        )
+    )
         return GpuCommandIrReplayError::ResourceUseMismatch;
 
     const TextureDesc& sourceDescription = source->getDescription();
     const TextureDesc& destinationDescription = destination->getDescription();
-    GraphicsBackend::VulkanDetail::TextureFormatBlockLayout sourceLayout;
-    GraphicsBackend::VulkanDetail::TextureFormatBlockLayout destinationLayout;
-    TextureSlice resolvedSource;
-    TextureSlice resolvedDestination;
+    GraphicsBackend::VulkanTextureDetail::TextureCopyContract contract;
+    if(!GraphicsBackend::VulkanTextureDetail::ResolveTextureCopyContract(
+        sourceDescription,
+        record.sourceSlice,
+        destinationDescription,
+        record.destinationSlice,
+        contract
+    ))
+        return GpuCommandIrReplayError::InvalidTextureCopy;
     if(
-        sourceDescription.format != destinationDescription.format
-        || sourceDescription.sampleCount != destinationDescription.sampleCount
-        || !GraphicsBackend::VulkanDetail::GetTextureFormatBlockLayout(GetFormatInfo(sourceDescription.format), sourceLayout)
-        || !GraphicsBackend::VulkanDetail::GetTextureFormatBlockLayout(GetFormatInfo(destinationDescription.format), destinationLayout)
-        || !GraphicsBackend::VulkanDetail::IsTextureSliceInBounds(
+        !TaskDeclaresTextureSlice(
+            task,
+            record.source,
+            ResourceStates::CopySource,
+            GpuTaskResourceAccess::Read,
             sourceDescription,
-            record.sourceSlice,
-            sourceLayout,
-            &resolvedSource
+            contract.sourceSlice
         )
-        || !GraphicsBackend::VulkanDetail::IsTextureSliceInBounds(
+        || !TaskDeclaresTextureSlice(
+            task,
+            record.destination,
+            ResourceStates::CopyDest,
+            GpuTaskResourceAccess::Write,
             destinationDescription,
-            record.destinationSlice,
-            destinationLayout,
-            &resolvedDestination
+            contract.destinationSlice
         )
-        || resolvedSource.width != resolvedDestination.width
-        || resolvedSource.height != resolvedDestination.height
-        || resolvedSource.depth != resolvedDestination.depth
-        || !TextureSliceIsDeclared(sourceUse->range.textureSubresources, sourceDescription, resolvedSource)
-        || !TextureSliceIsDeclared(destinationUse->range.textureSubresources, destinationDescription, resolvedDestination)
+    )
+        return GpuCommandIrReplayError::InvalidTextureCopy;
+
+    const u8 taskCapabilities = static_cast<u8>(task.queue.requiredCapabilities);
+    const u8 physicalQueueCapabilities = static_cast<u8>(queue.capabilities);
+    const bool taskAndQueueShareComputeOrGraphics = (
+        taskCapabilities
+        & physicalQueueCapabilities
+        & static_cast<u8>(GpuQueueCapability::Compute | GpuQueueCapability::Graphics)
+    ) != 0u;
+    const bool taskHasGraphics = (taskCapabilities & static_cast<u8>(GpuQueueCapability::Graphics)) != 0u;
+    const bool queueHasGraphics = (
+        physicalQueueCapabilities
+        & static_cast<u8>(GpuQueueCapability::Graphics)
+    ) != 0u;
+    if(
+        (
+            contract.queueRequirement
+            == GraphicsBackend::VulkanTextureDetail::TextureCopyQueueRequirement::ComputeOrGraphics
+            && !taskAndQueueShareComputeOrGraphics
+        )
+        || (
+            contract.queueRequirement
+            == GraphicsBackend::VulkanTextureDetail::TextureCopyQueueRequirement::Graphics
+            && (!taskHasGraphics || !queueHasGraphics)
+        )
     )
         return GpuCommandIrReplayError::InvalidTextureCopy;
     return GpuCommandIrReplayError::None;
@@ -468,13 +518,14 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateOperation(
     const GpuCommandIrBuiltinTaskRecord& record,
     const GpuTaskGraph& graph,
-    const GpuTaskGraphTaskView& task
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& queue
 )noexcept{
     switch(record.opcode){
     case GpuCommandIrOpcode::CopyBuffer:
         return ValidateBufferCopyRecord(record, graph, task);
     case GpuCommandIrOpcode::CopyTexture:
-        return ValidateTextureCopyRecord(record, graph, task);
+        return ValidateTextureCopyRecord(record, graph, task, queue);
     case GpuCommandIrOpcode::ClearBuffer:
         return ValidateBufferClearRecord(record, graph, task);
     case GpuCommandIrOpcode::ClearTexture:
@@ -598,7 +649,8 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
         const GpuCommandIrReplayError::Enum operationError = __hidden_gpu_command_ir_replay_preflight::ValidateOperation(
             record,
             graph,
-            task
+            task,
+            *queue
         );
         if(operationError != GpuCommandIrReplayError::None)
             return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(operationError, streamValidation, recordIndex);

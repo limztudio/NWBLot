@@ -3025,10 +3025,83 @@ TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
         .acceptedToken = &acceptedToken,
     };
     const auto expectRejected = [&]{
+        acceptedToken = Graphics::QueueSubmissionToken{
+            .queue = Graphics::CommandQueue::Graphics,
+            .value = 1u,
+            .physicalQueueIndex = 0u,
+            .deviceGeneration = 1u,
+        };
         EXPECT_FALSE(graph.addCopyTextureTask(desc, copyDesc).valid());
         EXPECT_FALSE(acceptedToken.valid());
         EXPECT_EQ(graph.taskCount(), 0u);
     };
+    const auto expectShapeRejected = [&](const Graphics::TextureDesc& description){
+        sourceDescription = description;
+        destinationDescription = description;
+        region.sourceSlice = {};
+        region.destinationSlice = {};
+        expectRejected();
+    };
+
+    Graphics::TextureDesc malformedShape = validDescription;
+    malformedShape.setWidth(0u);
+    expectShapeRejected(malformedShape);
+
+    malformedShape = validDescription;
+    malformedShape
+        .setDimension(Graphics::TextureDimension::Texture1D)
+        .setHeight(2u)
+        .setDepth(1u)
+        .setArraySize(1u)
+    ;
+    expectShapeRejected(malformedShape);
+
+    malformedShape = validDescription;
+    malformedShape
+        .setDimension(Graphics::TextureDimension::Texture2D)
+        .setDepth(2u)
+        .setArraySize(1u)
+    ;
+    expectShapeRejected(malformedShape);
+
+    malformedShape = validDescription;
+    malformedShape
+        .setDimension(Graphics::TextureDimension::Texture3D)
+        .setDepth(4u)
+        .setArraySize(2u)
+    ;
+    expectShapeRejected(malformedShape);
+
+    malformedShape = validDescription;
+    malformedShape
+        .setDimension(Graphics::TextureDimension::TextureCube)
+        .setHeight(4u)
+        .setDepth(1u)
+        .setArraySize(6u)
+    ;
+    expectShapeRejected(malformedShape);
+
+    malformedShape = validDescription;
+    malformedShape
+        .setDimension(Graphics::TextureDimension::TextureCubeArray)
+        .setDepth(1u)
+        .setArraySize(7u)
+    ;
+    expectShapeRejected(malformedShape);
+
+    malformedShape = validDescription;
+    malformedShape
+        .setDimension(Graphics::TextureDimension::Texture2D)
+        .setWidth(4u)
+        .setHeight(4u)
+        .setDepth(1u)
+        .setArraySize(1u)
+        .setMipLevels(4u)
+    ;
+    expectShapeRejected(malformedShape);
+
+    sourceDescription = validDescription;
+    destinationDescription = validDescription;
 
     region.sourceSlice.setMipLevel(2u);
     expectRejected();
@@ -3053,6 +3126,54 @@ TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
     destinationDescription.setFormat(Graphics::Format::RGBA8_UINT);
     expectRejected();
 
+    destinationDescription = validDescription;
+    destinationDescription.sampleQuality = 1u;
+    expectRejected();
+
+    sourceDescription = validDescription;
+    destinationDescription = validDescription;
+    sourceDescription
+        .setMipLevels(1u)
+        .setSampleCount(4u)
+        .setFormat(Graphics::Format::BC1_UNORM)
+        .setDimension(Graphics::TextureDimension::Texture2DMSArray)
+    ;
+    destinationDescription = sourceDescription;
+    expectRejected();
+
+    sourceDescription = validDescription;
+    sourceDescription
+        .setDimension(Graphics::TextureDimension::Texture1D)
+        .setHeight(1u)
+        .setDepth(1u)
+        .setArraySize(1u)
+        .setMipLevels(1u)
+        .setSampleCount(2u)
+    ;
+    destinationDescription = sourceDescription;
+    expectRejected();
+
+    sourceDescription = validDescription;
+    sourceDescription
+        .setDimension(Graphics::TextureDimension::TextureCube)
+        .setDepth(1u)
+        .setArraySize(6u)
+        .setMipLevels(1u)
+        .setSampleCount(2u)
+    ;
+    destinationDescription = sourceDescription;
+    expectRejected();
+
+    sourceDescription = validDescription;
+    destinationDescription = validDescription;
+    sourceDescription.setWidth(Limit<u32>::s_Max);
+    destinationDescription.setWidth(Limit<u32>::s_Max);
+    region.sourceSlice.setOrigin(static_cast<u32>(Limit<i32>::s_Max) + 1u, 0u, 0u).setSize(1u, 1u, 1u);
+    region.destinationSlice = region.sourceSlice;
+    expectRejected();
+
+    region.sourceSlice = {};
+    region.destinationSlice = {};
     sourceDescription.setFormat(Graphics::Format::UNKNOWN);
     destinationDescription.setFormat(Graphics::Format::UNKNOWN);
     expectRejected();
@@ -3073,8 +3194,32 @@ TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
     ;
     expectRejected();
 
+    sourceDescription = Graphics::TextureDesc()
+        .setWidth(8u)
+        .setHeight(8u)
+        .setFormat(Graphics::Format::BC1_UNORM)
+        .setInitialState(Graphics::ResourceStates::Common)
+    ;
+    destinationDescription = sourceDescription;
+    region.sourceSlice.setOrigin(1u, 0u, 0u).setSize(4u, 4u, 1u);
+    region.destinationSlice = region.sourceSlice;
+    expectRejected();
+
+    sourceDescription.setWidth(6u).setHeight(6u);
+    destinationDescription = sourceDescription;
+    region.sourceSlice.setOrigin(4u, 4u, 0u).setSize(2u, 2u, 1u);
+    region.destinationSlice = region.sourceSlice;
+    const Graphics::GpuTaskId compressedEdgeTask = graph.addCopyTextureTask(desc, copyDesc);
+    ASSERT_TRUE(compressedEdgeTask.valid());
+    EXPECT_EQ(
+        graph.taskAt(compressedEdgeTask.index).queue.requiredCapabilities,
+        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+    );
+
     sourceDescription = validDescription;
     destinationDescription = validDescription;
+    region.sourceSlice = {};
+    region.destinationSlice = {};
     Graphics::TextureSlice mipOneSlice;
     mipOneSlice.setMipLevel(1u).setArraySlice(1u);
     const Graphics::GpuCopyTextureTaskRegion validRegions[]{
@@ -3106,6 +3251,10 @@ TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
         }
     );
     ASSERT_TRUE(task.valid());
+    EXPECT_EQ(
+        graph.taskAt(task.index).queue.requiredCapabilities,
+        Graphics::GpuQueueCapability::Transfer
+    );
     ASSERT_EQ(graph.taskAt(task.index).resourceUseCount, 6u);
     const Graphics::GpuTaskResourceUse* const uses = graph.taskAt(task.index).resourceUses;
     ASSERT_NE(uses, nullptr);
@@ -5121,6 +5270,7 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
     Graphics::TextureDesc multisampleDescription = Graphics::TextureDesc()
         .setWidth(4u)
         .setHeight(4u)
+        .setDimension(Graphics::TextureDimension::Texture2DMS)
         .setSampleCount(4u)
         .setFormat(Graphics::Format::D32)
         .setInitialState(Graphics::ResourceStates::CopySource)
@@ -5177,6 +5327,7 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
         const Graphics::GpuTaskGraph& graph,
         const Graphics::GpuTaskId task,
         const Graphics::GpuPhysicalQueueInfo& queue,
+        const Graphics::CommandQueue::Enum expectedQueueClass,
         const bool expected
     ){
         const Graphics::GpuPhysicalQueueInfo queues[] = { queue };
@@ -5191,13 +5342,373 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
         if(expected){
             const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
             ASSERT_NE(assignment, nullptr);
-            EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
+            EXPECT_EQ(assignment->queueClass, expectedQueueClass);
         }
     };
-    expectCompiledOn(uploadGraph, uploadTask, DedicatedTransferQueue(), false);
-    expectCompiledOn(uploadGraph, uploadTask, GraphicsQueue(), true);
-    expectCompiledOn(copyGraph, copyTask, DedicatedTransferQueue(), false);
-    expectCompiledOn(copyGraph, copyTask, GraphicsQueue(), true);
+    expectCompiledOn(uploadGraph, uploadTask, DedicatedTransferQueue(), Graphics::CommandQueue::Transfer, false);
+    expectCompiledOn(uploadGraph, uploadTask, GraphicsQueue(), Graphics::CommandQueue::Graphics, true);
+    expectCompiledOn(copyGraph, copyTask, DedicatedTransferQueue(), Graphics::CommandQueue::Transfer, false);
+    expectCompiledOn(copyGraph, copyTask, GraphicsQueue(), Graphics::CommandQueue::Graphics, true);
+
+    Graphics::TextureDesc partialDescription = Graphics::TextureDesc()
+        .setWidth(8u)
+        .setHeight(8u)
+        .setFormat(Graphics::Format::RGBA8_UNORM)
+        .setInitialState(Graphics::ResourceStates::Common)
+    ;
+    Graphics::TextureHandle partialSourceTexture = createTexture(partialDescription);
+    Graphics::TextureHandle partialDestinationTexture = createTexture(partialDescription);
+    ASSERT_TRUE(partialSourceTexture);
+    ASSERT_TRUE(partialDestinationTexture);
+    Graphics::GpuTaskGraph partialGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId partialSource = partialGraph.importTexture(
+        partialSourceTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/partial_copy_source"))
+            .setMarkerLabel("Partial Copy Source")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::Common)
+    );
+    const Graphics::GpuGraphResourceId partialDestination = partialGraph.importTexture(
+        partialDestinationTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/partial_copy_destination"))
+            .setMarkerLabel("Partial Copy Destination")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::Common)
+    );
+    ASSERT_TRUE(partialSource.valid());
+    ASSERT_TRUE(partialDestination.valid());
+    Graphics::TextureSlice partialSlice;
+    partialSlice.setSize(4u, 4u, 1u);
+    const Graphics::GpuCopyTextureTaskRegion partialRegion{
+        .source = partialSource,
+        .sourceSlice = partialSlice,
+        .destination = partialDestination,
+        .destinationSlice = partialSlice,
+    };
+    Graphics::GpuTaskDesc partialTaskDesc = transferDesc;
+    partialTaskDesc
+        .setIdentity(Name("tests/task_graph/partial_copy_exact_queue"))
+        .setMarkerLabel("Partial Copy Exact Queue")
+    ;
+    const Graphics::GpuTaskId partialTask = partialGraph.addCopyTextureTask(
+        partialTaskDesc,
+        Graphics::GpuCopyTextureTaskDesc{
+            .regions = &partialRegion,
+            .regionCount = 1u,
+        }
+    );
+    ASSERT_TRUE(partialTask.valid());
+    EXPECT_EQ(
+        partialGraph.taskAt(partialTask.index).queue.requiredCapabilities,
+        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+    );
+    expectCompiledOn(partialGraph, partialTask, DedicatedTransferQueue(), Graphics::CommandQueue::Transfer, false);
+    expectCompiledOn(partialGraph, partialTask, DedicatedComputeQueue(), Graphics::CommandQueue::Compute, true);
+    expectCompiledOn(partialGraph, partialTask, GraphicsQueue(), Graphics::CommandQueue::Graphics, true);
+
+    Graphics::GpuTaskGraph partialGraphicsGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId partialGraphicsSource = partialGraphicsGraph.importTexture(
+        partialSourceTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/partial_graphics_copy_source"))
+            .setMarkerLabel("Partial Graphics Copy Source")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::Common)
+    );
+    const Graphics::GpuGraphResourceId partialGraphicsDestination = partialGraphicsGraph.importTexture(
+        partialDestinationTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/partial_graphics_copy_destination"))
+            .setMarkerLabel("Partial Graphics Copy Destination")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::Common)
+    );
+    ASSERT_TRUE(partialGraphicsSource.valid());
+    ASSERT_TRUE(partialGraphicsDestination.valid());
+    Graphics::GpuCopyTextureTaskRegion partialGraphicsRegion = partialRegion;
+    partialGraphicsRegion.source = partialGraphicsSource;
+    partialGraphicsRegion.destination = partialGraphicsDestination;
+    Graphics::GpuTaskDesc partialGraphicsTaskDesc = partialTaskDesc;
+    partialGraphicsTaskDesc.queue.requiredCapabilities = QueueCapabilities(
+        Graphics::GpuQueueCapability::Transfer,
+        Graphics::GpuQueueCapability::Graphics
+    );
+    const Graphics::GpuTaskId partialGraphicsTask = partialGraphicsGraph.addCopyTextureTask(
+        partialGraphicsTaskDesc,
+        Graphics::GpuCopyTextureTaskDesc{
+            .regions = &partialGraphicsRegion,
+            .regionCount = 1u,
+        }
+    );
+    ASSERT_TRUE(partialGraphicsTask.valid());
+    EXPECT_EQ(
+        partialGraphicsGraph.taskAt(partialGraphicsTask.index).queue.requiredCapabilities,
+        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+    );
+    expectCompiledOn(
+        partialGraphicsGraph,
+        partialGraphicsTask,
+        GraphicsQueue(
+            0u,
+            QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Graphics)
+        ),
+        Graphics::CommandQueue::Graphics,
+        true
+    );
+}
+
+TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapabilities){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+    const auto createTexture = [&](const Graphics::TextureDesc& sourceDescription){
+        Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+            testArena.arena,
+            context,
+            allocator
+        );
+        if(!textureObject)
+            return Graphics::TextureHandle{};
+        Graphics::TextureHandle texture(
+            textureObject,
+            Graphics::TextureHandle::deleter_type(&testArena.arena),
+            AdoptRef
+        );
+        Graphics::TextureDesc& destinationDescription = const_cast<Graphics::TextureDesc&>(
+            texture->getDescription()
+        );
+        destinationDescription = sourceDescription;
+        return texture;
+    };
+
+    const Graphics::TextureDesc validDescription = Graphics::TextureDesc()
+        .setWidth(8u)
+        .setHeight(8u)
+        .setMipLevels(2u)
+        .setFormat(Graphics::Format::RGBA8_UNORM)
+        .setInitialState(Graphics::ResourceStates::Common)
+    ;
+    Graphics::TextureHandle sourceTexture = createTexture(validDescription);
+    Graphics::TextureHandle destinationTexture = createTexture(validDescription);
+    ASSERT_TRUE(sourceTexture);
+    ASSERT_TRUE(destinationTexture);
+    Graphics::TextureDesc& sourceDescription = const_cast<Graphics::TextureDesc&>(
+        sourceTexture->getDescription()
+    );
+    Graphics::TextureDesc& destinationDescription = const_cast<Graphics::TextureDesc&>(
+        destinationTexture->getDescription()
+    );
+
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId source = graph.importTexture(
+        sourceTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/command_ir_replay/texture_copy_source"))
+            .setMarkerLabel("Replay Texture Copy Source")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::Common)
+    );
+    const Graphics::GpuGraphResourceId destination = graph.importTexture(
+        destinationTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/command_ir_replay/texture_copy_destination"))
+            .setMarkerLabel("Replay Texture Copy Destination")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::Common)
+    );
+    ASSERT_TRUE(source.valid());
+    ASSERT_TRUE(destination.valid());
+    Graphics::TextureSlice mipOneSlice;
+    mipOneSlice.setMipLevel(1u);
+    const Graphics::GpuCopyTextureTaskRegion regions[]{
+        Graphics::GpuCopyTextureTaskRegion{
+            .source = source,
+            .sourceSlice = {},
+            .destination = destination,
+            .destinationSlice = {},
+        },
+        Graphics::GpuCopyTextureTaskRegion{
+            .source = source,
+            .sourceSlice = mipOneSlice,
+            .destination = destination,
+            .destinationSlice = mipOneSlice,
+        },
+    };
+    Graphics::GpuTaskDesc taskDesc;
+    taskDesc
+        .setIdentity(Name("tests/command_ir_replay/texture_copy"))
+        .setMarkerLabel("Replay Texture Copy")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+    const Graphics::GpuTaskId task = graph.addCopyTextureTask(
+        taskDesc,
+        Graphics::GpuCopyTextureTaskDesc{
+            .regions = regions,
+            .regionCount = LengthOf(regions),
+        }
+    );
+    ASSERT_TRUE(task.valid());
+    ASSERT_EQ(graph.taskAt(task.index).queue.requiredCapabilities, Graphics::GpuQueueCapability::Transfer);
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+    const Graphics::GpuPhysicalQueueId queueId = compiledGraph.packet(packet).queue;
+
+    const auto expectPreflight = [&](
+        const Graphics::TextureSlice& sourceSlice,
+        const Graphics::TextureSlice& destinationSlice,
+        const Graphics::GpuCommandIrReplayError::Enum expectedError
+    ){
+        Graphics::GpuCommandIrCapture capture(testArena.arena);
+        EXPECT_TRUE(capture.captureCopyTexture(
+            task,
+            packet,
+            queueId,
+            source,
+            sourceSlice,
+            destination,
+            destinationSlice
+        ));
+        const Graphics::GpuCommandIrReplayResult result = Graphics::PreflightGpuCommandIrPacket(
+            capture.commandBytes(),
+            graph,
+            compiledGraph,
+            packet
+        );
+        EXPECT_EQ(result.error, expectedError);
+    };
+
+    expectPreflight({}, {}, Graphics::GpuCommandIrReplayError::None);
+    expectPreflight(mipOneSlice, mipOneSlice, Graphics::GpuCommandIrReplayError::None);
+    Graphics::TextureSlice partialSlice;
+    partialSlice.setSize(4u, 4u, 1u);
+    expectPreflight(partialSlice, partialSlice, Graphics::GpuCommandIrReplayError::InvalidTextureCopy);
+
+    sourceDescription.sampleQuality = 1u;
+    destinationDescription.sampleQuality = 1u;
+    expectPreflight({}, {}, Graphics::GpuCommandIrReplayError::InvalidTextureCopy);
+
+    sourceDescription = validDescription;
+    destinationDescription = validDescription;
+    sourceDescription
+        .setDimension(Graphics::TextureDimension::Texture2DMS)
+        .setFormat(Graphics::Format::D32)
+        .setMipLevels(1u)
+        .setSampleCount(2u)
+    ;
+    destinationDescription = sourceDescription;
+    expectPreflight({}, {}, Graphics::GpuCommandIrReplayError::InvalidTextureCopy);
+
+    sourceDescription
+        .setFormat(Graphics::Format::BC1_UNORM)
+        .setSampleCount(2u)
+    ;
+    destinationDescription = sourceDescription;
+    expectPreflight({}, {}, Graphics::GpuCommandIrReplayError::InvalidTextureCopy);
+
+    sourceDescription = validDescription;
+    destinationDescription = validDescription;
+    Graphics::GpuTaskGraph partialGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId partialSource = partialGraph.importTexture(
+        sourceTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/command_ir_replay/partial_texture_copy_source"))
+            .setMarkerLabel("Replay Partial Texture Copy Source")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::Common)
+    );
+    const Graphics::GpuGraphResourceId partialDestination = partialGraph.importTexture(
+        destinationTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/command_ir_replay/partial_texture_copy_destination"))
+            .setMarkerLabel("Replay Partial Texture Copy Destination")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::Common)
+    );
+    ASSERT_TRUE(partialSource.valid());
+    ASSERT_TRUE(partialDestination.valid());
+    const Graphics::GpuCopyTextureTaskRegion partialRegion{
+        .source = partialSource,
+        .sourceSlice = partialSlice,
+        .destination = partialDestination,
+        .destinationSlice = partialSlice,
+    };
+    const Graphics::GpuTaskId partialTask = partialGraph.addCopyTextureTask(
+        taskDesc,
+        Graphics::GpuCopyTextureTaskDesc{
+            .regions = &partialRegion,
+            .regionCount = 1u,
+        }
+    );
+    ASSERT_TRUE(partialTask.valid());
+    EXPECT_EQ(
+        partialGraph.taskAt(partialTask.index).queue.requiredCapabilities,
+        QueueCapabilities(Graphics::GpuQueueCapability::Transfer, Graphics::GpuQueueCapability::Compute)
+    );
+    Graphics::GpuTaskGraphAnalysis partialAnalysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments partialAssignments(testArena.arena);
+    Graphics::GpuCompiledGraph partialCompiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(partialGraph, partialAnalysis, topology, partialAssignments, partialCompiledGraph));
+    const Graphics::GpuSubmissionPacketId partialPacket = partialCompiledGraph.packetForTask(partialTask);
+    ASSERT_TRUE(partialPacket.valid());
+    const Graphics::GpuPhysicalQueueId partialQueueId = partialCompiledGraph.packet(partialPacket).queue;
+    Graphics::GpuCommandIrCapture partialCapture(testArena.arena);
+    ASSERT_TRUE(partialCapture.captureCopyTexture(
+        partialTask,
+        partialPacket,
+        partialQueueId,
+        partialSource,
+        partialSlice,
+        partialDestination,
+        partialSlice
+    ));
+    EXPECT_EQ(
+        Graphics::PreflightGpuCommandIrPacket(
+            partialCapture.commandBytes(),
+            partialGraph,
+            partialCompiledGraph,
+            partialPacket
+        ).error,
+        Graphics::GpuCommandIrReplayError::None
+    );
+    const Graphics::GpuPhysicalQueueInfo* const partialQueue = partialCompiledGraph.queueInfo(partialQueueId);
+    ASSERT_NE(partialQueue, nullptr);
+    Graphics::GpuPhysicalQueueInfo* const corruptedQueue = const_cast<Graphics::GpuPhysicalQueueInfo*>(
+        partialQueue
+    );
+    const Graphics::GpuQueueCapability::Mask originalCapabilities = corruptedQueue->capabilities;
+    corruptedQueue->capabilities = QueueCapabilities(
+        Graphics::GpuQueueCapability::Transfer,
+        Graphics::GpuQueueCapability::Graphics
+    );
+    EXPECT_EQ(
+        Graphics::PreflightGpuCommandIrPacket(
+            partialCapture.commandBytes(),
+            partialGraph,
+            partialCompiledGraph,
+            partialPacket
+        ).error,
+        Graphics::GpuCommandIrReplayError::InvalidTextureCopy
+    );
+    corruptedQueue->capabilities = originalCapabilities;
 }
 
 TEST(GpuTaskGraph, CopyBufferTaskRequiresTypedBufferImports){

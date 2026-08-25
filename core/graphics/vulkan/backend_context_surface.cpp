@@ -354,6 +354,12 @@ bool BackendContext::createVulkanSwapChain(){
             m_swapChain = VK_NULL_HANDLE;
             return false;
         }
+        sci.rhiHandle->m_imageInfo.usage = desc.imageUsage;
+        sci.rhiHandle->m_imageInfo.sharingMode = desc.imageSharingMode;
+        sci.rhiHandle->m_imageInfo.flags = (desc.flags & VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR) != 0u
+            ? VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT
+            : 0u
+        ;
         sci.rhiHandle->initializeRetainedSubresourceStates(false);
         m_swapChainImages.push_back(Move(sci));
     }

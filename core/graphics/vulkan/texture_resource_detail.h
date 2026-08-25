@@ -49,23 +49,82 @@ inline u32 GetMaxMipLevels(const TextureDesc& desc){
     return levels;
 }
 
-inline VkImageType TextureDimensionToImageType(TextureDimension::Enum dimension){
+[[nodiscard]] inline bool IsTextureDescShapeValid(const TextureDesc& desc)noexcept{
+    if(
+        desc.width == 0u
+        || desc.height == 0u
+        || desc.depth == 0u
+        || desc.mipLevels == 0u
+        || desc.arraySize == 0u
+    )
+        return false;
+
+    bool dimensionValid = false;
+    switch(desc.dimension){
+    case TextureDimension::Texture1D:
+    case TextureDimension::Texture1DArray:
+        dimensionValid = desc.height == 1u && desc.depth == 1u;
+        break;
+    case TextureDimension::Texture2D:
+    case TextureDimension::Texture2DArray:
+    case TextureDimension::Texture2DMS:
+    case TextureDimension::Texture2DMSArray:
+        dimensionValid = desc.depth == 1u;
+        break;
+    case TextureDimension::TextureCube:
+        dimensionValid = desc.depth == 1u
+            && desc.width == desc.height
+            && desc.arraySize == s_TextureCubeLayerCount
+        ;
+        break;
+    case TextureDimension::TextureCubeArray:
+        dimensionValid = desc.depth == 1u
+            && desc.width == desc.height
+            && desc.arraySize >= s_TextureCubeLayerCount
+            && (desc.arraySize % s_TextureCubeLayerCount) == 0u
+        ;
+        break;
+    case TextureDimension::Texture3D:
+        dimensionValid = desc.arraySize == 1u;
+        break;
+    default:
+        return false;
+    }
+
+    return dimensionValid && desc.mipLevels <= GetMaxMipLevels(desc);
+}
+
+[[nodiscard]] inline bool TryTextureDimensionToImageType(
+    const TextureDimension::Enum dimension,
+    VkImageType& outImageType
+)noexcept{
     switch(dimension){
     case TextureDimension::Texture1D:
     case TextureDimension::Texture1DArray:
-        return VK_IMAGE_TYPE_1D;
+        outImageType = VK_IMAGE_TYPE_1D;
+        return true;
     case TextureDimension::Texture2D:
     case TextureDimension::Texture2DArray:
     case TextureDimension::TextureCube:
     case TextureDimension::TextureCubeArray:
     case TextureDimension::Texture2DMS:
     case TextureDimension::Texture2DMSArray:
-        return VK_IMAGE_TYPE_2D;
+        outImageType = VK_IMAGE_TYPE_2D;
+        return true;
     case TextureDimension::Texture3D:
-        return VK_IMAGE_TYPE_3D;
+        outImageType = VK_IMAGE_TYPE_3D;
+        return true;
     default:
-        return VK_IMAGE_TYPE_2D;
+        outImageType = VK_IMAGE_TYPE_MAX_ENUM;
+        return false;
     }
+}
+
+inline VkImageType TextureDimensionToImageType(const TextureDimension::Enum dimension){
+    VkImageType imageType = VK_IMAGE_TYPE_MAX_ENUM;
+    if(TryTextureDimensionToImageType(dimension, imageType))
+        return imageType;
+    return VK_IMAGE_TYPE_2D;
 }
 
 inline VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension){
@@ -136,6 +195,58 @@ inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, co
     return imageInfo;
 }
 
+[[nodiscard]] inline bool IsTextureImageInfoConsistent(
+    const TextureDesc& desc,
+    const VkImageCreateInfo& imageInfo
+)noexcept{
+    VkImageType expectedImageType = VK_IMAGE_TYPE_MAX_ENUM;
+    if(
+        !TryTextureDimensionToImageType(desc.dimension, expectedImageType)
+        || !VulkanDetail::IsSupportedSampleCount(desc.sampleCount)
+        || desc.sampleQuality != 0u
+    )
+        return false;
+
+    const VkFormat expectedFormat = VulkanDetail::ConvertFormat(desc.format);
+    if(expectedFormat == VK_FORMAT_UNDEFINED)
+        return false;
+    const VkImageAspectFlags expectedAspectMask = VulkanDetail::GetImageAspectMask(GetFormatInfo(desc.format));
+    const VkImageUsageFlags requiredUsage = PickImageUsage(desc, expectedAspectMask)
+        & ~(VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
+    ;
+    const VkImageCreateFlags requiredFlags = PickImageFlags(desc);
+    return
+        imageInfo.sType == VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO
+        && imageInfo.imageType == expectedImageType
+        && imageInfo.format == expectedFormat
+        && imageInfo.extent.width == desc.width
+        && imageInfo.extent.height == desc.height
+        && imageInfo.extent.depth == desc.depth
+        && imageInfo.mipLevels == desc.mipLevels
+        && imageInfo.arrayLayers == desc.arraySize
+        && imageInfo.samples == VulkanDetail::GetSampleCountFlagBits(desc.sampleCount)
+        && imageInfo.tiling == VK_IMAGE_TILING_OPTIMAL
+        && (imageInfo.usage & requiredUsage) == requiredUsage
+        && (imageInfo.flags & requiredFlags) == requiredFlags
+        && (imageInfo.flags & VK_IMAGE_CREATE_SUBSAMPLED_BIT_EXT) == 0u
+        && imageInfo.initialLayout == VK_IMAGE_LAYOUT_UNDEFINED
+    ;
+}
+
+[[nodiscard]] inline bool IsTextureImageWithinFormatLimits(
+    const VkImageCreateInfo& imageInfo,
+    const VkImageFormatProperties& formatProperties
+)noexcept{
+    return
+        imageInfo.extent.width <= formatProperties.maxExtent.width
+        && imageInfo.extent.height <= formatProperties.maxExtent.height
+        && imageInfo.extent.depth <= formatProperties.maxExtent.depth
+        && imageInfo.mipLevels <= formatProperties.maxMipLevels
+        && imageInfo.arrayLayers <= formatProperties.maxArrayLayers
+        && (formatProperties.sampleCounts & imageInfo.samples) == imageInfo.samples
+    ;
+}
+
 inline bool ValidateTextureViewShape(const TextureDimension::Enum dimension, const TextureSubresourceSet& subresources){
     if(dimension == TextureDimension::TextureCube && subresources.numArraySlices != s_TextureCubeLayerCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: cube views must include exactly 6 array layers"));
@@ -180,12 +291,25 @@ inline bool ValidateTextureCreateDesc(
     outMetadata.aspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
     if(!VulkanDetail::IsSupportedSampleCount(desc.sampleCount))
         return ReportTextureCreateDescError(operationName, NWB_TEXT("sample count is unsupported"), assertFailure);
-    if(desc.dimension == TextureDimension::Texture3D && desc.sampleCount != 1)
-        return ReportTextureCreateDescError(operationName, NWB_TEXT("3D texture sample count must be 1"), assertFailure);
+    if(desc.sampleQuality != 0u)
+        return ReportTextureCreateDescError(operationName, NWB_TEXT("sample quality must be zero"), assertFailure);
+    if(!TryTextureDimensionToImageType(desc.dimension, outMetadata.imageType))
+        return ReportTextureCreateDescError(operationName, NWB_TEXT("texture dimension is unsupported"), assertFailure);
+    if(
+        desc.sampleCount != 1u
+        && (
+            outMetadata.imageType != VK_IMAGE_TYPE_2D
+            || (PickImageFlags(desc) & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0u
+        )
+    )
+        return ReportTextureCreateDescError(
+            operationName,
+            NWB_TEXT("multisampled textures must be 2D and not cube-compatible"),
+            assertFailure
+        );
     if(desc.sampleCount != 1 && desc.mipLevels != 1)
         return ReportTextureCreateDescError(operationName, NWB_TEXT("multisampled texture mip levels must be 1"), assertFailure);
 
-    outMetadata.imageType = TextureDimensionToImageType(desc.dimension);
     outMetadata.usage = PickImageUsage(desc, outMetadata.aspectMask);
     outMetadata.flags = PickImageFlags(desc);
     outMetadata.sampleCount = VulkanDetail::GetSampleCountFlagBits(desc.sampleCount);

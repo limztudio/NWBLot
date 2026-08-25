@@ -8,6 +8,7 @@
 #include <core/graphics/capture/command_ir.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/rhi/command.h>
+#include <core/graphics/vulkan/texture_copy_contract.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -69,13 +70,14 @@ struct CopyTextureTask{
                 )
             )
                 return false;
-            commandList.endRenderPass();
             commandList.copyTexture(
                 copy.destination.get(),
                 copy.destinationSlice,
                 copy.source.get(),
                 copy.sourceSlice
             );
+            if(commandList.commandRecordingFailed())
+                return false;
         }
         return true;
     }
@@ -188,69 +190,6 @@ template<typename ResourceDesc>
     return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
 }
 
-[[nodiscard]] static TextureDimension::Enum CopyTextureImageType(const TextureDimension::Enum dimension)noexcept{
-    switch(dimension){
-    case TextureDimension::Texture1D:
-    case TextureDimension::Texture1DArray:
-        return TextureDimension::Texture1D;
-    case TextureDimension::Texture2D:
-    case TextureDimension::Texture2DArray:
-    case TextureDimension::TextureCube:
-    case TextureDimension::TextureCubeArray:
-    case TextureDimension::Texture2DMS:
-    case TextureDimension::Texture2DMSArray:
-        return TextureDimension::Texture2D;
-    case TextureDimension::Texture3D:
-        return TextureDimension::Texture3D;
-    default:
-        return TextureDimension::Unknown;
-    }
-}
-
-[[nodiscard]] static bool CopyTextureContractValid(
-    const TextureDesc& sourceDesc,
-    const TextureSlice& sourceSlice,
-    const TextureDesc& destinationDesc,
-    const TextureSlice& destinationSlice,
-    TextureSlice& outResolvedSourceSlice,
-    TextureSlice& outResolvedDestinationSlice
-)noexcept{
-    const TextureDimension::Enum sourceImageType = CopyTextureImageType(sourceDesc.dimension);
-    const TextureDimension::Enum destinationImageType = CopyTextureImageType(destinationDesc.dimension);
-    GraphicsBackend::VulkanDetail::TextureFormatBlockLayout sourceLayout;
-    GraphicsBackend::VulkanDetail::TextureFormatBlockLayout destinationLayout;
-    if(
-        sourceImageType == TextureDimension::Unknown
-        || destinationImageType == TextureDimension::Unknown
-        || sourceImageType != destinationImageType
-        || sourceDesc.format != destinationDesc.format
-        || sourceDesc.sampleCount != destinationDesc.sampleCount
-        || !GraphicsBackend::VulkanDetail::GetTextureFormatBlockLayout(GetFormatInfo(sourceDesc.format), sourceLayout)
-        || !GraphicsBackend::VulkanDetail::GetTextureFormatBlockLayout(
-            GetFormatInfo(destinationDesc.format),
-            destinationLayout
-        )
-        || !GraphicsBackend::VulkanDetail::IsTextureSliceInBounds(
-            sourceDesc,
-            sourceSlice,
-            sourceLayout,
-            &outResolvedSourceSlice
-        )
-        || !GraphicsBackend::VulkanDetail::IsTextureSliceInBounds(
-            destinationDesc,
-            destinationSlice,
-            destinationLayout,
-            &outResolvedDestinationSlice
-        )
-    )
-        return false;
-
-    return outResolvedSourceSlice.width == outResolvedDestinationSlice.width
-        && outResolvedSourceSlice.height == outResolvedDestinationSlice.height
-        && outResolvedSourceSlice.depth == outResolvedDestinationSlice.depth
-    ;
-}
-
 [[nodiscard]] static bool ResolveTextureContractValid(
     const TextureDesc& sourceDesc,
     const TextureSubresourceSet& sourceSubresources,
@@ -259,11 +198,17 @@ template<typename ResourceDesc>
     TextureSubresourceSet& outResolvedSourceSubresources,
     TextureSubresourceSet& outResolvedDestinationSubresources
 )noexcept{
-    const TextureDimension::Enum sourceImageType = CopyTextureImageType(sourceDesc.dimension);
-    const TextureDimension::Enum destinationImageType = CopyTextureImageType(destinationDesc.dimension);
+    VkImageType sourceImageType = VK_IMAGE_TYPE_MAX_ENUM;
+    VkImageType destinationImageType = VK_IMAGE_TYPE_MAX_ENUM;
     if(
-        sourceImageType == TextureDimension::Unknown
-        || destinationImageType == TextureDimension::Unknown
+        !GraphicsBackend::VulkanTextureDetail::TryTextureDimensionToImageType(
+            sourceDesc.dimension,
+            sourceImageType
+        )
+        || !GraphicsBackend::VulkanTextureDetail::TryTextureDimensionToImageType(
+            destinationDesc.dimension,
+            destinationImageType
+        )
         || sourceImageType != destinationImageType
         || sourceDesc.sampleCount <= 1u
         || destinationDesc.sampleCount != 1u
@@ -379,6 +324,7 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
 
     bool valid = true;
     bool requiresGraphicsQueue = false;
+    bool requiresComputeQueue = false;
     for(usize regionIndex = 0u; regionIndex < copyDesc.regionCount && valid; ++regionIndex){
         const GpuCopyTextureTaskRegion& region = copyDesc.regions[regionIndex];
         if(!validResource(region.source) || !validResource(region.destination)){
@@ -387,8 +333,7 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
         }
         const GpuGraphResourceNode& sourceResource = m_resources[region.source.index];
         const GpuGraphResourceNode& destinationResource = m_resources[region.destination.index];
-        TextureSlice resolvedSourceSlice;
-        TextureSlice resolvedDestinationSlice;
+        GraphicsBackend::VulkanTextureDetail::TextureCopyContract contract;
         valid = region.source != region.destination
             && sourceResource.type == GpuGraphResourceType::Texture
             && destinationResource.type == GpuGraphResourceType::Texture
@@ -404,41 +349,46 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
                 destinationResource.initialState,
                 destinationResource.externalFinalState
             )
-            && __hidden_gpu_task_graph_builtin_texture_transfers::CopyTextureContractValid(
+            && GraphicsBackend::VulkanTextureDetail::ResolveTextureCopyContract(
                 sourceResource.texture->getDescription(),
                 region.sourceSlice,
                 destinationResource.texture->getDescription(),
                 region.destinationSlice,
-                resolvedSourceSlice,
-                resolvedDestinationSlice
+                contract
             )
             && appendResourceUse(
                 region.source,
-                TextureSubresourceSet(resolvedSourceSlice.mipLevel, 1u, resolvedSourceSlice.arraySlice, 1u),
+                TextureSubresourceSet(contract.sourceSlice.mipLevel, 1u, contract.sourceSlice.arraySlice, 1u),
                 ResourceStates::CopySource,
                 GpuTaskResourceAccess::Read
             )
             && appendResourceUse(
                 region.destination,
-                TextureSubresourceSet(resolvedDestinationSlice.mipLevel, 1u, resolvedDestinationSlice.arraySlice, 1u),
+                TextureSubresourceSet(
+                    contract.destinationSlice.mipLevel,
+                    1u,
+                    contract.destinationSlice.arraySlice,
+                    1u
+                ),
                 ResourceStates::CopyDest,
                 GpuTaskResourceAccess::Write
             )
         ;
         if(valid){
-            const TextureDesc& sourceDesc = sourceResource.texture->getDescription();
-            const FormatInfo& formatInfo = GetFormatInfo(sourceDesc.format);
-            requiresGraphicsQueue = requiresGraphicsQueue || (
-                sourceDesc.sampleCount > 1u
-                && (formatInfo.hasDepth || formatInfo.hasStencil)
-            );
+            requiresGraphicsQueue = requiresGraphicsQueue
+                || contract.queueRequirement == GraphicsBackend::VulkanTextureDetail::TextureCopyQueueRequirement::Graphics
+            ;
+            requiresComputeQueue = requiresComputeQueue
+                || contract.queueRequirement
+                    == GraphicsBackend::VulkanTextureDetail::TextureCopyQueueRequirement::ComputeOrGraphics
+            ;
             payload->copies.push_back(CopyTask::Copy{
                 .sourceResource = region.source,
                 .source = sourceResource.texture,
-                .sourceSlice = resolvedSourceSlice,
+                .sourceSlice = contract.sourceSlice,
                 .destinationResource = region.destination,
                 .destination = destinationResource.texture,
-                .destinationSlice = resolvedDestinationSlice,
+                .destinationSlice = contract.destinationSlice,
             });
         }
     }
@@ -454,6 +404,14 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
     GpuTaskDesc resolvedDesc = desc;
     if(requiresGraphicsQueue)
         resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Graphics;
+    else if(
+        requiresComputeQueue
+        && (
+            static_cast<u8>(resolvedDesc.queue.requiredCapabilities)
+            & static_cast<u8>(GpuQueueCapability::Graphics)
+        ) == 0u
+    )
+        resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Compute;
     resolvedDesc.setResourceUses(resourceUses.data(), resourceUses.size());
     const GpuTaskId task = appendTask(
         resolvedDesc,

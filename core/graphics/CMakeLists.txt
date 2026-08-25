@@ -141,6 +141,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/state_tracking_detail.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/swapchain_presentation.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/texture_clear_detail.h"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/texture_copy_contract.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/texture_resource_detail.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/aftermath.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vma.h"

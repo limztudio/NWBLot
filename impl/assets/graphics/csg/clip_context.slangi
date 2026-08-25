@@ -12,6 +12,9 @@
 #include "../bindless/bindless_heap.slangi"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Persistent CSG inputs live in the global StorageBuffer heap. This local uint4 is deliberately only slot
 // indirection: x/y select receiver ranges and cutters, while z/w select the cap-fill typed-material and
 // mesh-instance buffers. It is shared by the clip and cap-fill paths, so clip SRVs b0/b1 and cap-fill material SRVs

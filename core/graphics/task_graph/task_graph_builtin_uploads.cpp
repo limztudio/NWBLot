@@ -368,14 +368,23 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
     payload->finalState = uploadDesc.finalState;
     payload->acceptedToken = uploadDesc.acceptedToken;
 
-    const GpuTaskResourceUse resourceUse{
-        .resource = uploadDesc.destination,
-        .range = {},
-        .requiredState = uploadDesc.finalState,
-        .access = GpuTaskResourceAccess::Write,
+    const GpuTaskResourceUse resourceUses[] = {
+        GpuTaskResourceUse{
+            .resource = uploadDesc.destination,
+            .range = {},
+            .requiredState = ResourceStates::CopyDest,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = uploadDesc.destination,
+            .range = {},
+            .requiredState = uploadDesc.finalState,
+            .access = GpuTaskResourceAccess::Write,
+        },
     };
+    const usize resourceUseCount = uploadDesc.finalState == ResourceStates::CopyDest ? 1u : LengthOf(resourceUses);
     GpuTaskDesc resolvedDesc = desc;
-    resolvedDesc.setResourceUses(&resourceUse, 1u);
+    resolvedDesc.setResourceUses(resourceUses, resourceUseCount);
     const GpuTaskId task = appendTask(
         resolvedDesc,
         payload,
@@ -458,19 +467,29 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
     payload->finalState = uploadDesc.finalState;
     payload->acceptedToken = uploadDesc.acceptedToken;
 
-    const GpuTaskResourceUse resourceUse{
-        .resource = uploadDesc.destination,
-        .range = GpuTaskResourceRange{
-            .textureSubresources = TextureSubresourceSet(uploadDesc.mipLevel, 1u, uploadDesc.arraySlice, 1u),
-        },
-        .requiredState = uploadDesc.finalState,
-        .access = GpuTaskResourceAccess::Write,
+    const GpuTaskResourceRange uploadRange{
+        .textureSubresources = TextureSubresourceSet(uploadDesc.mipLevel, 1u, uploadDesc.arraySlice, 1u),
     };
+    const GpuTaskResourceUse resourceUses[] = {
+        GpuTaskResourceUse{
+            .resource = uploadDesc.destination,
+            .range = uploadRange,
+            .requiredState = ResourceStates::CopyDest,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = uploadDesc.destination,
+            .range = uploadRange,
+            .requiredState = uploadDesc.finalState,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    const usize resourceUseCount = uploadDesc.finalState == ResourceStates::CopyDest ? 1u : LengthOf(resourceUses);
     GpuTaskDesc resolvedDesc = desc;
     const FormatInfo& destinationFormatInfo = GetFormatInfo(destinationDesc.format);
     if(destinationFormatInfo.hasDepth || destinationFormatInfo.hasStencil)
         resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Graphics;
-    resolvedDesc.setResourceUses(&resourceUse, 1u);
+    resolvedDesc.setResourceUses(resourceUses, resourceUseCount);
     const GpuTaskId task = appendTask(
         resolvedDesc,
         payload,

@@ -2187,6 +2187,7 @@ private:
     VkAccelerationStructureKHR m_accelStruct = VK_NULL_HANDLE;
     BufferHandle m_buffer;
     u64 m_deviceAddress = 0;
+    mutable Futex m_memoryBindingMutex;
 
     const VulkanContext& m_context;
     bool m_built = false;
@@ -2774,6 +2775,8 @@ public:
     [[nodiscard]] TextureHandle createTexture(const TextureDesc& d);
     [[nodiscard]] MemoryRequirements getTextureMemoryRequirements(Texture* texture);
     bool bindTextureMemory(Texture* texture, Heap* heap, u64 offset);
+    // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
+    [[nodiscard]] bool isTextureReadyForGpuUse(Texture* texture)const noexcept;
     [[nodiscard]] TextureHandle createHandleForNativeTexture(ObjectType objectType, Object texture, const TextureDesc& desc);
     [[nodiscard]] StagingTextureHandle createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess);
     void* mapStagingTexture(StagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch);
@@ -2815,6 +2818,8 @@ public:
     [[nodiscard]] MemoryRequirements getAccelStructMemoryRequirements(RayTracingAccelStruct* as);
     [[nodiscard]] RayTracingClusterOperationSizeInfo getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params);
     bool bindAccelStructMemory(RayTracingAccelStruct* as, Heap* heap, u64 offset);
+    // Structural readiness deliberately allows an unbuilt acceleration structure to remain a legal build target.
+    [[nodiscard]] bool isAccelStructReadyForGpuUse(RayTracingAccelStruct* as)const noexcept;
     [[nodiscard]] CommandListHandle createCommandList(const CommandListParameters& params = CommandListParameters());
     // outCommandListsSubmitted is true only for a new command-buffer submission.
     u64 executeCommandLists(

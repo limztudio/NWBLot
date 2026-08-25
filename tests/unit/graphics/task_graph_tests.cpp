@@ -1479,6 +1479,32 @@ TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
         EXPECT_TRUE(assignments.valid());
         EXPECT_TRUE(compiledGraph.validFor(graph));
         EXPECT_EQ(recordCount, 0u);
+
+        const Graphics::GpuTaskResourceUse invalidTypedUse{
+            .resource = unusedTexture,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Unknown,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        };
+        Graphics::GpuTaskDesc invalidTypedDesc;
+        invalidTypedDesc
+            .setIdentity(Name("tests/task_graph/native_unknown_typed_state_task"))
+            .setMarkerLabel("Native Unknown Typed State Task")
+            .setResourceUses(&invalidTypedUse, 1u)
+        ;
+        const Graphics::GpuTaskId invalidTypedTask = graph.addTask<NativeRecordProbeTask>(
+            invalidTypedDesc,
+            NativeRecordProbeTask::Payload{ .recordCount = &recordCount }
+        );
+        ASSERT_TRUE(invalidTypedTask.valid());
+
+        Graphics::GpuTaskGraphCompileOptions metadataOptions;
+        metadataOptions.allowMetadataOnlyTasks = true;
+        EXPECT_FALSE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions));
+        EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceUse);
+        EXPECT_EQ(analysis.diagnostic().task, invalidTypedTask);
+        EXPECT_EQ(analysis.diagnostic().resource, unusedTexture);
+        EXPECT_EQ(recordCount, 0u);
     }
 }
 
@@ -3598,7 +3624,7 @@ TEST(GpuTaskGraph, UploadBufferTaskPreflightsNativeAlignmentContract){
     ).valid());
     EXPECT_EQ(graph.taskCount(), 0u);
 
-    EXPECT_TRUE(graph.addUploadBufferTask(
+    const Graphics::GpuTaskId copyDestTask = graph.addUploadBufferTask(
         desc,
         Graphics::GpuUploadBufferTaskDesc{
             .source = alignedBlob,
@@ -3606,8 +3632,38 @@ TEST(GpuTaskGraph, UploadBufferTaskPreflightsNativeAlignmentContract){
             .destinationOffsetBytes = 4u,
             .finalState = Graphics::ResourceStates::CopyDest,
         }
-    ).valid());
+    );
+    ASSERT_TRUE(copyDestTask.valid());
     EXPECT_EQ(graph.taskCount(), 1u);
+    const Graphics::GpuTaskGraphTaskView copyDestView = graph.taskAt(copyDestTask.index);
+    ASSERT_EQ(copyDestView.resourceUseCount, 1u);
+    ASSERT_NE(copyDestView.resourceUses, nullptr);
+    EXPECT_EQ(copyDestView.resourceUses[0u].requiredState, Graphics::ResourceStates::CopyDest);
+
+    Graphics::GpuTaskDesc finalStateDesc = desc;
+    finalStateDesc
+        .setIdentity(Name("tests/task_graph/upload_buffer_final_state"))
+        .setMarkerLabel("Upload Buffer Final State")
+    ;
+    const Graphics::GpuTaskId finalStateTask = graph.addUploadBufferTask(
+        finalStateDesc,
+        Graphics::GpuUploadBufferTaskDesc{
+            .source = alignedBlob,
+            .destination = destinationResource,
+            .destinationOffsetBytes = 0u,
+            .finalState = Graphics::ResourceStates::ShaderResource,
+        }
+    );
+    ASSERT_TRUE(finalStateTask.valid());
+    const Graphics::GpuTaskGraphTaskView finalStateView = graph.taskAt(finalStateTask.index);
+    ASSERT_EQ(finalStateView.resourceUseCount, 2u);
+    ASSERT_NE(finalStateView.resourceUses, nullptr);
+    EXPECT_EQ(finalStateView.resourceUses[0u].resource, destinationResource);
+    EXPECT_EQ(finalStateView.resourceUses[0u].requiredState, Graphics::ResourceStates::CopyDest);
+    EXPECT_EQ(finalStateView.resourceUses[0u].access, Graphics::GpuTaskResourceAccess::Write);
+    EXPECT_EQ(finalStateView.resourceUses[1u].resource, destinationResource);
+    EXPECT_EQ(finalStateView.resourceUses[1u].requiredState, Graphics::ResourceStates::ShaderResource);
+    EXPECT_EQ(finalStateView.resourceUses[1u].access, Graphics::GpuTaskResourceAccess::Write);
 }
 
 TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){
@@ -4338,7 +4394,17 @@ TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPubli
         .mipLevel = 0u,
         .finalState = Graphics::ResourceStates::ShaderResource,
     };
-    EXPECT_TRUE(graph.addUploadTextureTask(uploadTaskDesc, validUploadDesc).valid());
+    const Graphics::GpuTaskId uploadTask = graph.addUploadTextureTask(uploadTaskDesc, validUploadDesc);
+    ASSERT_TRUE(uploadTask.valid());
+    const Graphics::GpuTaskGraphTaskView uploadTaskView = graph.taskAt(uploadTask.index);
+    ASSERT_EQ(uploadTaskView.resourceUseCount, 2u);
+    ASSERT_NE(uploadTaskView.resourceUses, nullptr);
+    EXPECT_EQ(uploadTaskView.resourceUses[0u].resource, destination);
+    EXPECT_EQ(uploadTaskView.resourceUses[0u].requiredState, Graphics::ResourceStates::CopyDest);
+    EXPECT_EQ(uploadTaskView.resourceUses[0u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
+    EXPECT_EQ(uploadTaskView.resourceUses[1u].resource, destination);
+    EXPECT_EQ(uploadTaskView.resourceUses[1u].requiredState, Graphics::ResourceStates::ShaderResource);
+    EXPECT_EQ(uploadTaskView.resourceUses[1u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
     EXPECT_FALSE(graph.addUploadTextureTask(
         uploadTaskDesc,
         Graphics::GpuUploadTextureTaskDesc{

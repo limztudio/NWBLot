@@ -17,6 +17,9 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class GpuNativePacketRecorder;
+
+
 // Command lists and state handoffs need this queue identity without pulling in device.h (which itself includes
 // command.h through the public graphics API).
 namespace CommandQueue{
@@ -179,6 +182,7 @@ struct TimerQueryResult{
 // this handoff is the only valid cross-list source for that restored native state.
 class CommandListResourceStateHandoff final : NoCopy{
     friend class GraphicsBackend::CommandList;
+    friend class GpuNativePacketRecorder;
 
 private:
     struct TextureState{

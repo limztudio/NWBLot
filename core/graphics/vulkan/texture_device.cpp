@@ -168,6 +168,34 @@ bool Device::bindTextureMemory(Texture* textureResource, Heap* heap, u64 offset)
     return true;
 }
 
+bool Device::isTextureReadyForGpuUse(Texture* textureResource)const noexcept{
+    if(!textureResource)
+        return false;
+
+    Texture& texture = *textureResource;
+    ScopedLock resourceLock(texture.m_memoryBindingMutex);
+
+    if(&texture.m_context != &m_context || &texture.m_allocator != &m_allocator)
+        return false;
+    if(texture.m_image == VK_NULL_HANDLE)
+        return false;
+    if(!texture.m_managed)
+        return true;
+
+    if(!texture.m_desc.isVirtual)
+        return texture.m_allocation != nullptr;
+    if(texture.m_allocation || !texture.m_boundHeap || texture.m_heapBindingRange.size == 0u)
+        return false;
+
+    Heap& heap = *texture.m_boundHeap.get();
+    ScopedLock heapLock(heap.m_bindingMutex);
+    return &heap.m_context == &m_context
+        && &heap.m_allocator == &m_allocator
+        && heap.m_allocation != nullptr
+        && heap.m_memory != VK_NULL_HANDLE
+    ;
+}
+
 TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object nativeTextureHandle, const TextureDesc& desc){
     if(objectType != ObjectTypes::VK_Image){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: object type is not VK_Image"));

@@ -35,6 +35,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_execution.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_recorded_graph.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_recording.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_preflight.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_recording_frontier.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_state_seed.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_submission.cpp"

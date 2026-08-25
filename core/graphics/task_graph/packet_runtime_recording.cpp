@@ -224,7 +224,9 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         return false;
     if(
         commandIrCapture
-        && !commandIrCapture->beginRecordingAttempt(outRecordedGraph.recordingAttemptGeneration())
+        && commandIrCapture->recordCount() != 0u
+        && commandIrCapture->recordingAttemptGeneration()
+            != outRecordedGraph.recordingAttemptGeneration()
     )
         return false;
     if(outRecordedGraph.find(desc.packet))
@@ -232,6 +234,16 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
 
     const GpuSubmissionPacket& packet = compiledGraph.packet(desc.packet);
     const GpuTaskId* const tasks = compiledGraph.packetTasks(desc.packet);
+    const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packet.queue);
+    if(
+        !tasks
+        || packet.taskCount == 0u
+        || !queue
+        || queue->queueClass >= CommandQueue::kCount
+        || !m_device.matchesPhysicalQueueIdentity(packet.queue)
+    )
+        return false;
+    const CommandListResourceStateHandoff* initialStates = nullptr;
     GpuTaskPacketRecordingLease recordingLease;
     const auto abortPacketRecording = [&]{
         graph.abortPacketRecording(
@@ -241,7 +253,6 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
             recordingLease
         );
     };
-
     if(!graph.beginPacketRecording(
         compiledGraph,
         tasks,
@@ -252,7 +263,6 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         return false;
     const Timer recordingBegin = TimerNow();
 
-    const CommandListResourceStateHandoff* initialStates = nullptr;
     if(!outRecordedGraph.buildPacketInitialStateSeed(
         scratch,
         graph,
@@ -263,8 +273,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
         taskStateBindings,
         taskStateBindingCount,
         initialStates
-    ))
-    {
+    )){
         abortPacketRecording();
         return false;
     }
@@ -276,18 +285,21 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     }
     packetStateSeed->reset();
 
-    const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packet.queue);
-    if(
-        !queue
-        || queue->queueClass >= CommandQueue::kCount
-        || !m_device.matchesPhysicalQueueIdentity(packet.queue)
-    )
-    {
+    if(!preflightPacketResources(graph, compiledGraph, desc.packet, initialStates)){
+        packetStateSeed->reset();
         abortPacketRecording();
         return false;
     }
 
     const usize captureRecordCount = commandIrCapture ? commandIrCapture->recordCount() : 0u;
+    if(
+        commandIrCapture
+        && !commandIrCapture->beginRecordingAttempt(outRecordedGraph.recordingAttemptGeneration())
+    ){
+        packetStateSeed->reset();
+        abortPacketRecording();
+        return false;
+    }
 
     CommandListParameters parameters;
     parameters.setPhysicalQueue(packet.queue);
@@ -295,7 +307,10 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     const Timer commandListAcquisitionBegin = TimerNow();
     CommandListHandle commandList = m_device.createCommandList(parameters);
     if(!commandList){
+        packetStateSeed->reset();
         abortPacketRecording();
+        if(commandIrCapture)
+            commandIrCapture->rollback(captureRecordCount);
         return false;
     }
 
@@ -305,8 +320,6 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     u32 barrierCount = 0u;
     f64 graphBarrierRecordingSeconds = 0.0;
     f64 taskRecordSeconds = 0.0;
-    if(!tasks || packet.taskCount == 0u)
-        recorded = false;
     for(u32 taskIndex = 0u; recorded && taskIndex < packet.taskCount; ++taskIndex){
         const GpuTaskId task = tasks[taskIndex];
         const GpuTaskGraphTaskView taskView = graph.taskAt(task.index);

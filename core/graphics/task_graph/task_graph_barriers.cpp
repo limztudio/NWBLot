@@ -245,10 +245,14 @@ bool GpuTaskGraph::seedTaskRetainedResourceStates(
         return false;
     for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
         const GpuTaskResourceUse& use = resourceUses[useIndex];
-        if(!validResource(use.resource) || use.requiredState == ResourceStates::Unknown)
+        if(!validResource(use.resource))
             return false;
 
         const GpuGraphResourceNode& resource = m_resources[use.resource.index];
+        if(resource.type == GpuGraphResourceType::HazardDomain)
+            continue;
+        if(use.requiredState == ResourceStates::Unknown)
+            return false;
         switch(resource.type){
         case GpuGraphResourceType::Texture:{
             if(!resource.texture)

@@ -355,8 +355,8 @@ public:
         usize alignment = alignof(u8)
     );
 
-    // Adds graph-owned buffer/texture uploads. Their single resource use describes the state visible after the
-    // task's internal CopyDest write and optional final transition, so later graph packets see exact final state.
+    // Adds graph-owned buffer/texture uploads. Ordered uses expose the native CopyDest write and optional local
+    // final transition, so packet preflight and later graph packets observe the complete state contract.
     [[nodiscard]] GpuTaskId addUploadBufferTask(const GpuTaskDesc& desc, const GpuUploadBufferTaskDesc& uploadDesc);
     [[nodiscard]] GpuTaskId addUploadTextureTask(const GpuTaskDesc& desc, const GpuUploadTextureTaskDesc& uploadDesc);
 

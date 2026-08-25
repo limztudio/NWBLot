@@ -21718,7 +21718,15 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlo
     // Declaration clears a stale caller token. It is populated only once the packet reaches queue submission.
     EXPECT_FALSE(acceptedToken.valid());
     ASSERT_TRUE(graph.taskAt(uploadTask.index).hasPayload);
-    ASSERT_EQ(graph.taskAt(uploadTask.index).resourceUseCount, 1u);
+    const GpuTaskGraphTaskView uploadTaskView = graph.taskAt(uploadTask.index);
+    ASSERT_EQ(uploadTaskView.resourceUseCount, 2u);
+    ASSERT_NE(uploadTaskView.resourceUses, nullptr);
+    EXPECT_EQ(uploadTaskView.resourceUses[0u].resource, destinationResource);
+    EXPECT_EQ(uploadTaskView.resourceUses[0u].requiredState, ResourceStates::CopyDest);
+    EXPECT_EQ(uploadTaskView.resourceUses[0u].access, GpuTaskResourceAccess::Write);
+    EXPECT_EQ(uploadTaskView.resourceUses[1u].resource, destinationResource);
+    EXPECT_EQ(uploadTaskView.resourceUses[1u].requiredState, ResourceStates::ShaderResource);
+    EXPECT_EQ(uploadTaskView.resourceUses[1u].access, GpuTaskResourceAccess::Write);
     EXPECT_FALSE(graph.addUploadBufferTask(
         uploadTaskDesc,
         GpuUploadBufferTaskDesc{
@@ -22922,7 +22930,16 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadTextureTaskRecordsGraphOwnedB
         }
     );
     ASSERT_TRUE(uploadTask.valid());
-    ASSERT_EQ(graph.taskAt(uploadTask.index).resourceUseCount, 1u);
+    const GpuTaskGraphTaskView uploadTaskView = graph.taskAt(uploadTask.index);
+    ASSERT_EQ(uploadTaskView.resourceUseCount, 2u);
+    ASSERT_NE(uploadTaskView.resourceUses, nullptr);
+    const TextureSubresourceSet uploadRange(0u, 1u, 0u, 1u);
+    EXPECT_EQ(uploadTaskView.resourceUses[0u].resource, destinationResource);
+    EXPECT_EQ(uploadTaskView.resourceUses[0u].range.textureSubresources, uploadRange);
+    EXPECT_EQ(uploadTaskView.resourceUses[0u].requiredState, ResourceStates::CopyDest);
+    EXPECT_EQ(uploadTaskView.resourceUses[1u].resource, destinationResource);
+    EXPECT_EQ(uploadTaskView.resourceUses[1u].range.textureSubresources, uploadRange);
+    EXPECT_EQ(uploadTaskView.resourceUses[1u].requiredState, ResourceStates::ShaderResource);
     EXPECT_FALSE(graph.addUploadTextureTask(
         uploadTaskDesc,
         GpuUploadTextureTaskDesc{
@@ -50260,10 +50277,21 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferStateValidatesMatchingUavAn
         .setExternalStateSources(stateSources, LengthOf(stateSources))
         .setResourceUses(&exportMismatchUse, 1u)
     ;
+    GpuTaskDesc exportPrefixDesc;
+    exportPrefixDesc
+        .setIdentity(Name("tests/descriptor_buffer/permanent_export_prefix_task"))
+        .setMarkerLabel("Permanent Export Prefix Task")
+        .setQueue(graphicsRequest)
+        .setExternalStateSources(stateSources, LengthOf(stateSources))
+        .setResourceUses(&exportMismatchUse, 1u)
+    ;
 
     bool matchingRecorded = false;
     bool transitionMismatchAttempted = false;
+    bool exportPrefixRecorded = false;
     bool exportMismatchRecorded = false;
+    u32 exportPrefixDiscardedCount = 0u;
+    u32 exportMismatchDiscardedCount = 0u;
     const bool shouldRecord = true;
     const GpuTaskId matchingTask = graph.addTask<NativePacketPrefixTask>(
         matchingDesc,
@@ -50280,16 +50308,34 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferStateValidatesMatchingUavAn
             .attempted = &transitionMismatchAttempted,
         }
     );
+    const GpuTaskId exportPrefixTask = graph.addTask<NativePacketPrefixTask>(
+        exportPrefixDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = exportMismatchBuffer.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .recorded = &exportPrefixRecorded,
+            .discardedCount = &exportPrefixDiscardedCount,
+        }
+    );
+    const GpuTaskId exportDependencies[] = { exportPrefixTask };
+    GpuTaskSchedulingHint exportScheduling;
+    exportScheduling.mergeWithPrevious = true;
+    exportMismatchDesc
+        .setDependencies(exportDependencies, LengthOf(exportDependencies))
+        .setScheduling(exportScheduling)
+    ;
     const GpuTaskId exportMismatchTask = graph.addTask<NativePacketPrefixTask>(
         exportMismatchDesc,
         NativePacketPrefixTask::Payload{
             .buffer = exportMismatchBuffer.get(),
             .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &exportMismatchRecorded,
+            .discardedCount = &exportMismatchDiscardedCount,
         }
     );
     ASSERT_TRUE(matchingTask.valid());
     ASSERT_TRUE(transitionMismatchTask.valid());
+    ASSERT_TRUE(exportPrefixTask.valid());
     ASSERT_TRUE(exportMismatchTask.valid());
 
     const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
@@ -50302,13 +50348,17 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferStateValidatesMatchingUavAn
 
     const GpuSubmissionPacketId matchingPacket = compiledGraph.packetForTask(matchingTask);
     const GpuSubmissionPacketId transitionMismatchPacket = compiledGraph.packetForTask(transitionMismatchTask);
+    const GpuSubmissionPacketId exportPrefixPacket = compiledGraph.packetForTask(exportPrefixTask);
     const GpuSubmissionPacketId exportMismatchPacket = compiledGraph.packetForTask(exportMismatchTask);
     ASSERT_TRUE(matchingPacket.valid());
     ASSERT_TRUE(transitionMismatchPacket.valid());
+    ASSERT_TRUE(exportPrefixPacket.valid());
     ASSERT_TRUE(exportMismatchPacket.valid());
     ASSERT_NE(matchingPacket, transitionMismatchPacket);
     ASSERT_NE(matchingPacket, exportMismatchPacket);
     ASSERT_NE(transitionMismatchPacket, exportMismatchPacket);
+    ASSERT_EQ(exportPrefixPacket, exportMismatchPacket);
+    ASSERT_TRUE(compiledGraph.taskPrecedesInSamePacket(exportPrefixTask, exportMismatchTask));
 
     const GpuCompiledTask* const compiledMatching = compiledGraph.findTask(matchingTask);
     const GpuCompiledTask* const compiledTransitionMismatch = compiledGraph.findTask(transitionMismatchTask);
@@ -50349,7 +50399,10 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferStateValidatesMatchingUavAn
         GpuNativePacketRecordDesc{ .packet = exportMismatchPacket },
         recordedGraph
     ));
-    EXPECT_TRUE(exportMismatchRecorded);
+    EXPECT_FALSE(exportPrefixRecorded);
+    EXPECT_FALSE(exportMismatchRecorded);
+    EXPECT_EQ(exportPrefixDiscardedCount, 1u);
+    EXPECT_EQ(exportMismatchDiscardedCount, 1u);
     ASSERT_TRUE(recorder.recordPacket(
         graph,
         compiledGraph,
@@ -50376,8 +50429,7 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferStateValidatesMatchingUavAn
 
 
 // A permanent resource cannot participate in a Vulkan queue-family ownership handoff. The graph recorder must
-// reject the compiler-planned release after recording the producer thunk instead of silently publishing a packet
-// whose native ownership never changed.
+// reject the compiler-planned release before recording the producer thunk or publishing any native packet work.
 TEST_F(DescriptorBufferRoundTripTest, PermanentBufferOwnershipReleaseFailsClosedAcrossDedicatedQueues){
     HeadlessGraphicsScope asyncScope;
     ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
@@ -50460,12 +50512,14 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferOwnershipReleaseFailsClosed
         .setResourceUses(&producerUse, 1u)
     ;
     bool producerRecorded = false;
+    u32 producerDiscardedCount = 0u;
     const GpuTaskId producerTask = graph.addTask<NativePacketPrefixTask>(
         producerDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
             .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &producerRecorded,
+            .discardedCount = &producerDiscardedCount,
         }
     );
     ASSERT_TRUE(producerTask.valid());
@@ -50529,7 +50583,8 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferOwnershipReleaseFailsClosed
         GpuNativePacketRecordDesc{ .packet = producerPacket },
         recordedGraph
     ));
-    EXPECT_TRUE(producerRecorded);
+    EXPECT_FALSE(producerRecorded);
+    EXPECT_EQ(producerDiscardedCount, 1u);
     EXPECT_FALSE(consumerRecorded);
     EXPECT_EQ(recordedGraph.find(producerPacket), nullptr);
 }

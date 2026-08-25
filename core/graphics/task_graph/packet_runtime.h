@@ -319,6 +319,12 @@ public:
         usize taskStateBindingCount = 0u
     )const;
 private:
+    [[nodiscard]] bool preflightPacketResources(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        const CommandListResourceStateHandoff* initialStates
+    )const noexcept;
     [[nodiscard]] bool prepareRecordingAttempt(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

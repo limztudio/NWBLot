@@ -77,6 +77,14 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
     }
     NWB_ASSERT(states.m_valid);
 
+    for(const CommandListResourceStateHandoff::TextureState& state : states.m_textureStates){
+        if(state.texture && !m_device.isTextureReadyForGpuUse(state.texture))
+            return false;
+    }
+    for(const CommandListResourceStateHandoff::PermanentTextureState& state : states.m_permanentTextureStates){
+        if(state.texture && !m_device.isTextureReadyForGpuUse(state.texture))
+            return false;
+    }
     for(const CommandListResourceStateHandoff::BufferState& state : states.m_bufferStates){
         if(
             state.buffer

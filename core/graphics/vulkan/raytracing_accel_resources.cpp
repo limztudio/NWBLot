@@ -345,6 +345,7 @@ bool Device::bindAccelStructMemory(RayTracingAccelStruct* accelStructResource, H
     }
 
     auto* as = accelStructResource;
+    ScopedLock resourceLock(as->m_memoryBindingMutex);
     if(as->m_buffer){
         if(!bindBufferMemory(as->m_buffer.get(), heap, offset))
             return false;
@@ -357,6 +358,22 @@ bool Device::bindAccelStructMemory(RayTracingAccelStruct* accelStructResource, H
 
     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: storage buffer is null"));
     return false;
+}
+
+bool Device::isAccelStructReadyForGpuUse(RayTracingAccelStruct* accelStructResource)const noexcept{
+    if(!accelStructResource)
+        return false;
+
+    const AccelStruct& accelerationStructure = *accelStructResource;
+    ScopedLock resourceLock(accelerationStructure.m_memoryBindingMutex);
+    Buffer* const backingBuffer = accelerationStructure.m_buffer.get();
+    return &accelerationStructure.m_context == &m_context
+        && accelerationStructure.m_accelStruct != VK_NULL_HANDLE
+        && accelerationStructure.m_deviceAddress != 0u
+        && backingBuffer
+        && backingBuffer->getDeviceGeneration() == m_context.deviceGeneration
+        && isBufferReadyForGpuUse(backingBuffer)
+    ;
 }
 
 

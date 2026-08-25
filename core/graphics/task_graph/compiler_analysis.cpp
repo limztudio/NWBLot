@@ -262,7 +262,6 @@ bool GpuTaskGraphCompiler::analyze(
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
             if(
                 !graph.validResource(use.resource)
-                || use.requiredState == ResourceStates::Unknown
                 || use.access >= GpuTaskResourceAccess::kCount
             )
                 return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, task.id, {}, use.resource);
@@ -270,6 +269,13 @@ bool GpuTaskGraphCompiler::analyze(
             const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
             if(
                 (
+                    resource.type == GpuGraphResourceType::HazardDomain
+                    && resource.hasBackendResource
+                )
+                || (
+                    resource.type != GpuGraphResourceType::HazardDomain
+                    && use.requiredState == ResourceStates::Unknown
+                ) || (
                     resource.type == GpuGraphResourceType::Texture
                     && !IsValidTextureRange(use.range.textureSubresources)
                 )

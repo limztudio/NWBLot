@@ -131,6 +131,7 @@ private:
         CommandListResourceStateHandoff externalMergedStateSeed;
     };
 
+
 public:
     explicit GpuRecordedGraph(GraphicsArena& arena)
         : m_arena(arena)

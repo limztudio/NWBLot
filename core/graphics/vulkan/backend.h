@@ -1131,6 +1131,8 @@ private:
         const void* predicateContext
     );
 
+
+private:
     Device& m_device;
     u64 m_defaultChunkSize;
     u64 m_memoryLimit;
@@ -1615,7 +1617,6 @@ inline void AttachPipelineBindingState(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 // Descriptor-buffer manager: host-mapped resource/sampler segments bind by byte offset.
 
 namespace DescriptorBufferSegmentKind{
@@ -1735,6 +1736,31 @@ class GpuDescriptorHeap final : NoCopy{
     friend class TrackedCommandBuffer;
 
 
+private:
+    // Fresh indices plus a recycled free list per namespace.
+    struct SlotAllocator{
+        u32 capacity = 0;
+        u32 nextFresh = 0;
+        Vector<u32, Alloc::GlobalArena> freeList;
+        // Rejects double frees and retired-handle writes.
+        Vector<u8, Alloc::GlobalArena> liveSlots;
+
+        explicit SlotAllocator(Alloc::GlobalArena& arena)
+            : freeList(arena)
+            , liveSlots(arena)
+        {}
+    };
+    struct RetiredSlot{
+        GpuDescriptorHandle handle;
+        u64 lastRequiredHeapUseID = 0u;
+    };
+    struct HeapUse{
+        TrackedCommandBuffer* commandBuffer = nullptr;
+        QueueSubmissionToken submissionToken;
+        u64 id = 0u;
+    };
+
+
 public:
     explicit GpuDescriptorHeap(Device& device);
     ~GpuDescriptorHeap();
@@ -1798,29 +1824,6 @@ public:
 
 
 private:
-    // Fresh indices plus a recycled free list per namespace.
-    struct SlotAllocator{
-        u32 capacity = 0;
-        u32 nextFresh = 0;
-        Vector<u32, Alloc::GlobalArena> freeList;
-        // Rejects double frees and retired-handle writes.
-        Vector<u8, Alloc::GlobalArena> liveSlots;
-
-        explicit SlotAllocator(Alloc::GlobalArena& arena)
-            : freeList(arena)
-            , liveSlots(arena)
-        {}
-    };
-    struct RetiredSlot{
-        GpuDescriptorHandle handle;
-        u64 lastRequiredHeapUseID = 0u;
-    };
-    struct HeapUse{
-        TrackedCommandBuffer* commandBuffer = nullptr;
-        QueueSubmissionToken submissionToken;
-        u64 id = 0u;
-    };
-
     [[nodiscard]] SlotAllocator& allocatorForClass(GpuDescriptorClass::Enum descriptorClass);
     void releaseAccelStructDescriptorBlock(u32 slot);
     void releaseRetainedDescriptorResource(GpuDescriptorHandle handle);

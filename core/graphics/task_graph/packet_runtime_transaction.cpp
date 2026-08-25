@@ -16,8 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-thread_local const GpuGraphSubmissionTransaction::SubmissionOperation*
-    GpuGraphSubmissionTransaction::SubmissionOperation::s_activeOperation = nullptr;
+thread_local const GpuGraphSubmissionTransaction::SubmissionOperation* GpuGraphSubmissionTransaction::SubmissionOperation::s_activeOperation = nullptr;
 
 
 GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(

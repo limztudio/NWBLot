@@ -635,10 +635,53 @@ private:
         const SubmissionOperation* m_previousOperation = nullptr;
     };
 
+private:
+    struct NativeSubmissionInfo{
+        usize commandListCount = 0u;
+        usize plannedWaitTokenCount = 0u;
+        usize sameQueueWaitElisionCount = 0u;
+        usize timelineWaitCount = 0u;
+        usize mergedTimelineWaitCount = 0u;
+        f64 submissionSeconds = 0.0;
+    };
 
 private:
-    [[nodiscard]] bool validForLocked(const GpuCompiledGraph& compiledGraph)const noexcept;
-    [[nodiscard]] bool waitForSubmissionPublicationAndHasAcceptedPackets()const noexcept;
+    // Each compiled external release receives stable transaction-owned query storage.  The merged state is rebuilt
+    // only when its resource is queried, while the outer vector is fully allocated at reset so a handoff for one
+    // resource remains valid when another resource is queried.
+    struct ExternalResourceHandoffScratch final : NoCopy{
+        GraphicsArena& m_arena;
+        GpuGraphResourceId resource;
+        CommandListResourceStateHandoff stateSource;
+        CommandListResourceStateHandoff stateMerge;
+        GraphicsVector<CommandListResourceStateHandoff> stateBranches;
+        GraphicsVector<const CommandListResourceStateHandoff*> stateBranchPointers;
+        GraphicsVector<GpuTaskGraphExternalResourceHandoffProducer> producers;
+        GraphicsVector<GpuTaskGraphExternalResourceHandoffRange> terminalRanges;
+        GraphicsVector<QueueSubmissionToken> waitTokens;
+
+
+        explicit ExternalResourceHandoffScratch(GraphicsArena& arena)
+            : m_arena(arena)
+            , stateSource(arena)
+            , stateMerge(arena)
+            , stateBranches(arena)
+            , stateBranchPointers(arena)
+            , producers(arena)
+            , terminalRanges(arena)
+            , waitTokens(arena)
+        {}
+
+        void reset(){
+            stateSource.reset();
+            stateMerge.reset();
+            stateBranches.clear();
+            stateBranchPointers.clear();
+            producers.clear();
+            terminalRanges.clear();
+            waitTokens.clear();
+        }
+    };
 
 
 public:
@@ -757,15 +800,11 @@ public:
 
 
 private:
-    struct NativeSubmissionInfo{
-        usize commandListCount = 0u;
-        usize plannedWaitTokenCount = 0u;
-        usize sameQueueWaitElisionCount = 0u;
-        usize timelineWaitCount = 0u;
-        usize mergedTimelineWaitCount = 0u;
-        f64 submissionSeconds = 0.0;
-    };
+    [[nodiscard]] bool validForLocked(const GpuCompiledGraph& compiledGraph)const noexcept;
+    [[nodiscard]] bool waitForSubmissionPublicationAndHasAcceptedPackets()const noexcept;
 
+
+private:
     // Reserves native submission before Device::executeCommandLists() begins. While a packet is Submitting,
     // transaction cancellation cannot run its discarded callback or claim the graph for a retry.
     [[nodiscard]] bool beginPacketSubmission(
@@ -807,42 +846,8 @@ private:
         QueueSubmissionToken token;
     };
 
-    // Each compiled external release receives stable transaction-owned query storage.  The merged state is rebuilt
-    // only when its resource is queried, while the outer vector is fully allocated at reset so a handoff for one
-    // resource remains valid when another resource is queried.
-    struct ExternalResourceHandoffScratch final : NoCopy{
-        explicit ExternalResourceHandoffScratch(GraphicsArena& arena)
-            : m_arena(arena)
-            , stateSource(arena)
-            , stateMerge(arena)
-            , stateBranches(arena)
-            , stateBranchPointers(arena)
-            , producers(arena)
-            , terminalRanges(arena)
-            , waitTokens(arena)
-        {}
 
-        void reset(){
-            stateSource.reset();
-            stateMerge.reset();
-            stateBranches.clear();
-            stateBranchPointers.clear();
-            producers.clear();
-            terminalRanges.clear();
-            waitTokens.clear();
-        }
-
-        GraphicsArena& m_arena;
-        GpuGraphResourceId resource;
-        CommandListResourceStateHandoff stateSource;
-        CommandListResourceStateHandoff stateMerge;
-        GraphicsVector<CommandListResourceStateHandoff> stateBranches;
-        GraphicsVector<const CommandListResourceStateHandoff*> stateBranchPointers;
-        GraphicsVector<GpuTaskGraphExternalResourceHandoffProducer> producers;
-        GraphicsVector<GpuTaskGraphExternalResourceHandoffRange> terminalRanges;
-        GraphicsVector<QueueSubmissionToken> waitTokens;
-    };
-
+private:
     GraphicsArena& m_arena;
     GraphicsVector<GpuPacketRuntime> m_packets;
     GraphicsVector<LatestAcceptedQueueToken> m_latestAcceptedQueueTokens;

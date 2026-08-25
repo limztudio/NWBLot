@@ -11,6 +11,10 @@
 #include "../raytrace/material_context_slots.slangi"
 #include "../bindless/bindless_heap_rt.slangi"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[vk::push_constant]]
 ConstantBuffer<NwbCausticPhotonPushConstants> g_NwbCausticSwPushConstants;
 
@@ -33,6 +37,11 @@ uint nwbMeshFrameInstanceHeapSlot(){
 uint nwbMeshFrameViewHeapSlot(){
     return 0u; // The caustic surface path does not consume the mesh-view alias.
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "../bindless/bindless_heap_mesh.slangi"
 
 #include "../scene/buffer.slangi"

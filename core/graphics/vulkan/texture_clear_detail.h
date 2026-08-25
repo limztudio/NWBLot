@@ -8,7 +8,6 @@
 #include "backend.h"
 #include "arena_names.h"
 
-#include <core/common/log.h>
 #include <global/math/convert.h>
 
 
@@ -143,6 +142,7 @@ inline VkClearRect BuildTextureAttachmentClearRect(const TextureSubresourceSet& 
 struct TextureAttachmentClearTarget{
     TextureSubresourceSet resolvedSubresources;
     u32 colorAttachmentIndex = 0u;
+    bool isReadOnly = false;
 };
 
 inline bool ResolveTextureAttachmentClearSubresources(
@@ -181,6 +181,7 @@ inline bool FindTextureColorAttachmentClearTarget(
 
         outTarget.resolvedSubresources = resolvedAttachmentSubresources;
         outTarget.colorAttachmentIndex = activeColorAttachmentIndex;
+        outTarget.isReadOnly = attachment.isReadOnly;
         return true;
     }
 
@@ -296,62 +297,20 @@ inline bool TextureColorClearValueTypeMatchesFormat(const FormatInfo& formatInfo
     return !integerValue;
 }
 
-inline bool ValidateTextureColorClear(
-    const TextureDesc& desc,
-    const VkImageAspectFlags aspectMask,
-    const tchar* operationName,
-    const tchar* valueName,
-    const bool integerValue,
-    const bool signedIntegerValue
-){
-#if defined(NWB_DEBUG)
-    if((aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {} with {}: texture format is depth/stencil"), operationName, valueName);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {} with {}: texture format is depth/stencil"), operationName, valueName);
-        return false;
-    }
-#else
-    static_cast<void>(aspectMask);
-#endif
-
-    const FormatInfo& formatInfo = GetFormatInfo(desc.format);
-    if(!TextureColorClearValueTypeMatchesFormat(formatInfo, integerValue, signedIntegerValue)){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to {} with {}: clear value type does not match texture format {}"),
-            operationName,
-            valueName,
-            StringConvert(formatInfo.name)
-        );
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {} with {}: clear value type does not match texture format"), operationName, valueName);
-        return false;
-    }
-
-    return true;
+inline bool TextureColorClearAspectIsValid(const VkImageAspectFlags aspectMask){
+    return aspectMask == VK_IMAGE_ASPECT_COLOR_BIT;
 }
 
-inline bool ValidateTextureDepthStencilClearAspects(
+inline bool TextureDepthStencilClearAspectsAreValid(
     const VkImageAspectFlags aspectMask,
     const bool clearDepth,
-    const bool clearStencil,
-    const tchar* operationName
+    const bool clearStencil
 ){
-#if defined(NWB_DEBUG)
-    if(
-        (clearDepth && (aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) == 0)
-        || (clearStencil && (aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) == 0)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: requested aspect is not present in the texture format"), operationName);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: requested aspect is not present in the texture format"), operationName);
-        return false;
-    }
-#else
-    static_cast<void>(aspectMask);
-    static_cast<void>(clearDepth);
-    static_cast<void>(clearStencil);
-    static_cast<void>(operationName);
-#endif
-
-    return true;
+    return
+        (aspectMask & VK_IMAGE_ASPECT_COLOR_BIT) == 0u
+        && (!clearDepth || (aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) != 0u)
+        && (!clearStencil || (aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) != 0u)
+    ;
 }
 
 inline f32 ClampClearFloat(const f32 value, const f32 minValue, const f32 maxValue){

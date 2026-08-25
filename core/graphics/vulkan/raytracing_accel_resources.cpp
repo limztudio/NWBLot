@@ -172,6 +172,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 
     auto* as = NewArenaObject<AccelStruct>(m_context.objectArena, m_context);
     as->m_desc = desc;
+    as->m_isTopLevelAtCreation = desc.isTopLevel;
 
     VkAccelerationStructureTypeKHR asType = desc.isTopLevel ? VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR : VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
 

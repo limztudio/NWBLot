@@ -55045,6 +55045,7 @@ TEST_F(DescriptorBufferRoundTripTest, RoundTripsStorageBufferDescriptor){
             .setByteSize(4096u)
             .setStructStride(16u)
             .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
             .setInitialState(ResourceStates::Common)
             .setKeepInitialState(true)
     );
@@ -55229,6 +55230,7 @@ TEST_F(DescriptorBufferRoundTripTest, ManagerRejectsMismatchedWritesAndInvalidBl
             .setByteSize(4096u)
             .setStructStride(16u)
             .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
             .setInitialState(ResourceStates::Common)
             .setKeepInitialState(true)
     );
@@ -55372,6 +55374,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetiredAndDoubleFreed
             .setByteSize(4096u)
             .setStructStride(16u)
             .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
             .setInitialState(ResourceStates::Common)
             .setKeepInitialState(true)
     );
@@ -55585,6 +55588,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
             .setByteSize(4096u)
             .setStructStride(16u)
             .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
             .setInitialState(ResourceStates::Common)
             .setKeepInitialState(true)
     );
@@ -55860,6 +55864,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksAuxiliaryGra
             .setByteSize(4096u)
             .setStructStride(16u)
             .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
             .setInitialState(ResourceStates::Common)
             .setKeepInitialState(true)
     );
@@ -57473,8 +57478,9 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsForeignResourcesAndDo
         tlasDesc.setTopLevelMaxInstances(1u);
         RayTracingAccelStructHandle localTlas = device.createAccelStruct(tlasDesc);
         RayTracingAccelStructHandle foreignTlas = foreignDevice.createAccelStruct(tlasDesc);
-        ASSERT_TRUE(localTlas);
-        ASSERT_TRUE(foreignTlas);
+        RayTracingAccelStructDesc blasDesc(DescriptorBufferRoundTripTest::arena());
+        RayTracingAccelStructHandle localBlas = device.createAccelStruct(blasDesc);
+        ASSERT_TRUE(localTlas && foreignTlas && localBlas);
 
         const GpuDescriptorHandle tlasHandle = heap.allocate(GpuDescriptorClass::AccelStruct);
         ASSERT_TRUE(tlasHandle.valid());
@@ -57494,6 +57500,16 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsForeignResourcesAndDo
             );
         });
         EXPECT_EQ(foreignTlas->getReferenceCount(), foreignTlasReferences);
+        EXPECT_FALSE(heap.getAccelStructBufferBlock(tlasHandle).valid());
+
+        const usize localBlasReferences = localBlas->getReferenceCount();
+        ExpectDescriptorHeapWriteRejection([&](){
+            return heap.write(
+                tlasHandle,
+                DescriptorWriteItem::RayTracingAccelStruct(0u, localBlas.get())
+            );
+        });
+        EXPECT_EQ(localBlas->getReferenceCount(), localBlasReferences);
         EXPECT_FALSE(heap.getAccelStructBufferBlock(tlasHandle).valid());
 
         const usize localTlasReferences = localTlas->getReferenceCount();

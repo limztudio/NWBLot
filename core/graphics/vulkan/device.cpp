@@ -132,7 +132,7 @@ Device::Device(const DeviceDesc& desc)
         m_deviceGeneration
     )
     , m_allocator(m_context)
-    , m_descriptorBufferManager(m_context, m_allocator)
+    , m_descriptorBufferManager(*this, m_context, m_allocator)
     , m_gpuDescriptorHeap(*this)
     , m_pipelineCacheDirectory(m_context.objectArena, desc.pipelineCacheDirectory)
     , m_pipelineCacheVolumeName(m_context.objectArena)

@@ -37,6 +37,36 @@ bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOff
     return firstOffsetBytes < secondEnd && secondOffsetBytes < firstEnd;
 }
 
+[[nodiscard]] static VkBufferUsageFlags PickBufferUsage(const VulkanContext& context, const BufferDesc& desc){
+    VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    usage |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
+    if(desc.isVertexBuffer)
+        usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    if(desc.isIndexBuffer)
+        usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    if(desc.isConstantBuffer)
+        usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    if(desc.structStride != 0u || desc.canHaveUAVs || desc.canHaveRawViews)
+        usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    if(desc.isDrawIndirectArgs)
+        usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+    if(desc.isAccelStructBuildInput)
+        usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+    if(desc.isAccelStructStorage)
+        usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+    if(context.extensions.EXT_opacity_micromap){
+        if(desc.isAccelStructBuildInput)
+            usage |= VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT;
+        if(desc.isAccelStructStorage)
+            usage |= VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT;
+    }
+    if(desc.isShaderBindingTable)
+        usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    if(context.extensions.buffer_device_address)
+        usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    return usage;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -205,34 +235,9 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
 
     auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator);
     buffer->m_desc = d;
+    buffer->m_creationDesc = d;
 
-    VkBufferUsageFlags usageFlags =
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT
-        | VK_BUFFER_USAGE_TRANSFER_DST_BIT
-        | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT
-        | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT
-    ;
-
-    if(d.isVertexBuffer)
-        usageFlags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    if(d.isIndexBuffer)
-        usageFlags |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-    if(d.isConstantBuffer)
-        usageFlags |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-    if(d.structStride != 0 || d.canHaveUAVs || d.canHaveRawViews)
-        usageFlags |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    if(d.isDrawIndirectArgs)
-        usageFlags |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-    if(d.isAccelStructBuildInput)
-        usageFlags |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-    if(d.isAccelStructStorage)
-        usageFlags |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
-    if(m_context.extensions.EXT_opacity_micromap){
-        if(d.isAccelStructBuildInput)
-            usageFlags |= VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT;
-        if(d.isAccelStructStorage)
-            usageFlags |= VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT;
-    }
+    const VkBufferUsageFlags usageFlags = VulkanDetail::PickBufferUsage(m_context, d);
     if(d.isShaderBindingTable){
         if(!m_context.extensions.KHR_ray_tracing_pipeline || !m_context.extensions.buffer_device_address){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
@@ -241,10 +246,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
             return nullptr;
         }
 
-        usageFlags |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     }
-    if(m_context.extensions.buffer_device_address)
-        usageFlags |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
     u64 size = d.byteSize;
 
@@ -270,6 +272,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size = size;
     bufferInfo.usage = usageFlags;
+    buffer->m_usage = usageFlags;
     const QueueFamilySharingInfo sharingInfo = ResolveQueueFamilySharing(d.queueSharing, m_context);
     bufferInfo.sharingMode = sharingInfo.mode;
     bufferInfo.queueFamilyIndexCount = sharingInfo.familyIndexCount;
@@ -322,7 +325,9 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object n
 
     auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator);
     buffer->m_desc = desc;
+    buffer->m_creationDesc = desc;
     buffer->m_buffer = nativeBuffer;
+    buffer->m_usage = VulkanDetail::PickBufferUsage(m_context, desc);
     buffer->m_managed = false;
 
     if(!m_allocator.tryRegisterBufferNativeIdentity(*buffer)){

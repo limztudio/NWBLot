@@ -1196,6 +1196,7 @@ private:
 class Buffer final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Device;
     friend class CommandList;
+    friend class DescriptorBufferManager;
     friend class StateTracker;
     friend class VulkanAllocator;
     friend class UploadManager;
@@ -1239,9 +1240,11 @@ private:
 
 private:
     BufferDesc m_desc;
+    BufferDesc m_creationDesc;
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;
+    VkBufferUsageFlags m_usage = 0u;
     u64 m_deviceAddress = 0;
     void* m_mappedMemory = nullptr;
     HeapHandle m_boundHeap;
@@ -1324,6 +1327,7 @@ class Texture final : public RefCounter<GraphicsResource>, NoCopy{
     friend class BackendContext;
     friend class Device;
     friend class CommandList;
+    friend class DescriptorBufferManager;
     friend class StateTracker;
     friend class VulkanAllocator;
     friend class Queue;
@@ -1700,12 +1704,15 @@ struct DescriptorBufferSegment{
     DescriptorBufferSegmentKind::Enum kind = DescriptorBufferSegmentKind::None;
     u32 offsetBytes = 0;
     u32 sizeBytes = 0;
+    // Process-unique identity of the exact resource or sampler storage.
+    u64 storageIdentity = 0;
     // Prevents stale handles from writing a recycled byte range.
     u64 allocationSerial = 0;
 
     [[nodiscard]] bool valid()const{
         return (kind == DescriptorBufferSegmentKind::Resource || kind == DescriptorBufferSegmentKind::Sampler)
             && sizeBytes > 0
+            && storageIdentity != 0u
             && allocationSerial != 0u
         ;
     }
@@ -1721,6 +1728,7 @@ private:
 
     // Host-mapped descriptor segment with synchronized free ranges and live-allocation tracking.
     struct SegmentStorage{
+        const u64 storageIdentity;
         VkBuffer buffer = VK_NULL_HANDLE;
         VulkanAllocationHandle allocation = nullptr;
         void* mappedMemory = nullptr;
@@ -1735,8 +1743,9 @@ private:
         Vector<DescriptorBufferSegment, Alloc::GlobalArena> liveAllocations;
 
 
-        explicit SegmentStorage(Alloc::GlobalArena& arena)
-            : freeRanges(arena)
+        SegmentStorage(Alloc::GlobalArena& arena, const u64 storageIdentityValue)
+            : storageIdentity(storageIdentityValue)
+            , freeRanges(arena)
             , liveAllocations(arena)
         {}
     };
@@ -1750,7 +1759,7 @@ public:
     static constexpr u32 s_PersistentDescriptorBufferCount = 2u;
     static constexpr u32 s_DescriptorBufferCountWithAccelStruct = 3u;
 
-    DescriptorBufferManager(const VulkanContext& context, VulkanAllocator& allocator);
+    DescriptorBufferManager(Device& device, const VulkanContext& context, VulkanAllocator& allocator);
     ~DescriptorBufferManager();
 
 
@@ -1763,6 +1772,10 @@ public:
     // Exact driver descriptor size; 0 when descriptor buffers are disabled.
     [[nodiscard]] u32 getDescriptorSize(VkDescriptorType descriptorType)const;
     [[nodiscard]] u32 getOffsetAlignmentBytes()const;
+    [[nodiscard]] u64 getUniformBufferAddressAlignmentBytes()const;
+    [[nodiscard]] u64 getStorageBufferAddressAlignmentBytes()const;
+    [[nodiscard]] u64 getTexelBufferAddressAlignmentBytes()const;
+    [[nodiscard]] u32 getMaxTexelBufferElements()const;
 
     // Stable after initialize().
     [[nodiscard]] const VkDescriptorBufferBindingInfoEXT& getResourceBindingInfo()const{ return m_resourceSegment.bindingInfo; }
@@ -1785,6 +1798,7 @@ private:
 
 
 private:
+    Device& m_device;
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
     bool m_enabled = false;
@@ -2180,6 +2194,8 @@ private:
 class AccelStruct final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Device;
     friend class CommandList;
+    friend class DescriptorBufferManager;
+    friend class GpuDescriptorHeap;
 
 
 public:
@@ -2207,6 +2223,7 @@ private:
 
     const VulkanContext& m_context;
     bool m_built = false;
+    bool m_isTopLevelAtCreation = false;
 };
 
 

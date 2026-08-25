@@ -162,7 +162,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         return;
 
     auto* as = accelStructResource;
-    if(!as || as->m_desc.isTopLevel){
+    if(!as || as->m_isTopLevelAtCreation){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is not bottom-level"));
         return;
     }
@@ -418,7 +418,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(
         return;
 
     auto* as = accelStructResource;
-    if(!as || !as->m_desc.isTopLevel){
+    if(!as || !as->m_isTopLevelAtCreation){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is not top-level"));
         return;
     }
@@ -468,13 +468,13 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
         return;
 
     auto* as = accelStructResource;
-    if(!as || !as->m_desc.isTopLevel){
+    if(!as || !as->m_isTopLevelAtCreation){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure is not top-level"));
         return;
     }
     for(usize i = 0; i < numInstances; ++i){
         auto* blas = pInstances[i].bottomLevelAS;
-        if(!blas || blas->m_desc.isTopLevel || blas->m_deviceAddress == 0){
+        if(!blas || blas->m_isTopLevelAtCreation || blas->m_deviceAddress == 0){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: instance {} references an invalid bottom-level acceleration structure"), i);
             return;
         }

@@ -160,6 +160,10 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a foreign or unready AccelStruct."));
             return false;
         }
+        if(!accelStruct->m_isTopLevelAtCreation){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a bottom-level AccelStruct."));
+            return false;
+        }
         RayTracingAccelStructHandle& retained = m_accelStructResources[handle.slot()];
         if(retained && retained.get() != accelStruct){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: cannot replace a live AccelStruct descriptor slot; allocate a fresh handle."));

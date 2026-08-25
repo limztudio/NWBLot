@@ -34,9 +34,16 @@ struct NwbShadowRqPushConstants{
 [[vk::push_constant]]
 ConstantBuffer<NwbShadowRqPushConstants> g_NwbShadowRqPushConstants;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #define NWB_SHADOW_RQ_DEFERRED_RESOURCES_HEAP_SLOT g_NwbShadowRqPushConstants.deferredResourcesHeapSlot
 #define NWB_SHADOW_RQ_VISIBILITY_STORAGE_SLOT g_NwbShadowRqPushConstants.visibilityStorageSlot
 #include "shadow_rayquery.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [numthreads(NWB_SHADOW_RT_GROUP_SIZE, NWB_SHADOW_RT_GROUP_SIZE, 1)]

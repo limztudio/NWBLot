@@ -11,6 +11,10 @@
 
 #include "sw_binding_slots.h"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // TRANSPARENT occluder class: the edge re-trace casts colored transmittance.
 #define NWB_SW_SHADOW_OCCLUDER NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
 

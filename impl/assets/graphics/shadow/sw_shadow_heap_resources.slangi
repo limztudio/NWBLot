@@ -12,6 +12,9 @@
 #include "shadow_heap_resources.slangi"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // One 84-byte push ABI serves every software-shadow kernel. It carries shared G-buffer/context selectors and each
 // pass's width/trace-control fields, keeping sources independent of a set-0 resource block.
 struct NwbSwShadowHeapPushConstants{

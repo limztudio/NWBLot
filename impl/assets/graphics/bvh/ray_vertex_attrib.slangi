@@ -13,6 +13,9 @@
 #include "../common/math.slangi"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Per-triangle-corner attribute ABI shared by software and hardware ray traces: packed Half4 normal at byte
 // NWB_RAYTRACE_VERTEX_ATTRIBUTE_NORMAL_BYTE_OFFSET and Float2 uv0 at byte
 // NWB_RAYTRACE_VERTEX_ATTRIBUTE_UV0_BYTE_OFFSET. Callers keep their own heap-load strategy, then decode the identical

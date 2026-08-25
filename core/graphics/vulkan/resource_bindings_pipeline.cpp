@@ -57,6 +57,14 @@ bool Device::createPipelineLayoutForBindingLayouts(
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: binding layout {} is invalid"), operationName, i);
             return false;
         }
+        if(&layout->m_context != &m_context){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create {}: binding layout {} belongs to another device"),
+                operationName,
+                i
+            );
+            return false;
+        }
 
         pushConstantByteSize = Max<u32>(
             pushConstantByteSize,

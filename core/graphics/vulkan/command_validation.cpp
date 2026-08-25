@@ -21,6 +21,10 @@ bool CommandList::validateFramebufferForRendering(
 )noexcept{
     if(!framebuffer)
         return true;
+    if(&framebuffer->m_context != &m_context){
+        rejectCommandRecording(operationName, NWB_TEXT("framebuffer belongs to another device"));
+        return false;
+    }
 
     const FramebufferDesc& framebufferDesc = framebuffer->m_desc;
     const FramebufferInfoEx& framebufferInfo = framebuffer->m_framebufferInfo;
@@ -325,6 +329,10 @@ bool CommandList::validateBufferForGpuState(
 
 bool CommandList::validateGraphicsState(const GraphicsState& state)noexcept{
     constexpr const tchar* s_OperationName = NWB_TEXT("set graphics state");
+    if(state.pipeline && &state.pipeline->m_context != &m_context){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("graphics pipeline belongs to another device"));
+        return false;
+    }
     if(state.shadingRateState.enabled){
         rejectCommandRecording(s_OperationName, NWB_TEXT("variable-rate shading state is not implemented"));
         return false;
@@ -471,6 +479,10 @@ bool CommandList::validateGraphicsState(const GraphicsState& state)noexcept{
 
 bool CommandList::validateMeshletState(const MeshletState& state)noexcept{
     constexpr const tchar* s_OperationName = NWB_TEXT("set meshlet state");
+    if(state.pipeline && &state.pipeline->m_context != &m_context){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("meshlet pipeline belongs to another device"));
+        return false;
+    }
     if(state.pipeline && !state.framebuffer){
         rejectCommandRecording(s_OperationName, NWB_TEXT("a meshlet pipeline requires an explicit framebuffer"));
         return false;

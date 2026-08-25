@@ -65,6 +65,19 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         return nullptr;
     }
 
+    const auto validateShaderOwner = [this](Shader* const shader, const tchar* const stageName){
+        if(!shader || &shader->m_context == &m_context)
+            return true;
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Meshlet pipeline {} shader belongs to another device."), stageName);
+        return false;
+    };
+    if(
+        !validateShaderOwner(desc.AS.get(), NWB_TEXT("task"))
+        || !validateShaderOwner(desc.MS.get(), NWB_TEXT("mesh"))
+        || !validateShaderOwner(desc.PS.get(), NWB_TEXT("fragment"))
+    )
+        return nullptr;
+
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_MeshletPipelineArena);
 
     auto* pso = NewArenaObject<MeshletPipeline>(m_context.objectArena, m_context);

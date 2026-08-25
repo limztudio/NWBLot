@@ -120,6 +120,27 @@ void CommandList::setViewportState(const ViewportState& viewportState){
 
 
 FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
+    for(u32 i = 0u; i < static_cast<u32>(desc.colorAttachments.size()); ++i){
+        Texture* const texture = desc.colorAttachments[i].texture;
+        if(texture && &texture->m_context != &m_context){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Failed to create framebuffer: color attachment {} belongs to another device."),
+                i
+            );
+            return nullptr;
+        }
+    }
+    if(desc.depthAttachment.texture && &desc.depthAttachment.texture->m_context != &m_context){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create framebuffer: depth attachment belongs to another device."));
+        return nullptr;
+    }
+    if(desc.shadingRateAttachment.texture && &desc.shadingRateAttachment.texture->m_context != &m_context){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to create framebuffer: shading-rate attachment belongs to another device.")
+        );
+        return nullptr;
+    }
+
     auto* fb = NewArenaObject<Framebuffer>(m_context.objectArena, m_context);
     fb->m_desc = desc;
     fb->m_framebufferInfo = FramebufferInfoEx(desc);
@@ -181,24 +202,25 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         return nullptr;
     }
 
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_GraphicsPipelineArena, s_GraphicsPipelineScratchArenaBytes);
-
-    auto* pso = NewArenaObject<GraphicsPipeline>(m_context.objectArena, m_context);
-    pso->m_desc = desc;
-    pso->m_framebufferInfo = fbinfo;
-
-    const auto validateShader = [this, pso](
+    const auto validateShader = [this](
         Shader* const shader,
         const ShaderType::Mask expectedType,
         const tchar* const stageName
     ){
         if(!shader)
             return true;
-        if(shader->m_shaderModule != VK_NULL_HANDLE && shader->m_desc.shaderType == expectedType)
-            return true;
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Graphics pipeline {} shader has an invalid module or stage."), stageName);
-        DestroyArenaObject(m_context.objectArena, pso);
-        return false;
+        if(&shader->m_context != &m_context){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Graphics pipeline {} shader belongs to another device."), stageName);
+            return false;
+        }
+        if(shader->m_shaderModule == VK_NULL_HANDLE || shader->m_desc.shaderType != expectedType){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Vulkan: Graphics pipeline {} shader has an invalid module or stage."),
+                stageName
+            );
+            return false;
+        }
+        return true;
     };
     if(
         !validateShader(desc.VS.get(), ShaderType::Vertex, NWB_TEXT("vertex"))
@@ -208,6 +230,16 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         || !validateShader(desc.PS.get(), ShaderType::Pixel, NWB_TEXT("pixel"))
     )
         return nullptr;
+    if(desc.inputLayout && &desc.inputLayout->m_context != &m_context){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Graphics pipeline input layout belongs to another device."));
+        return nullptr;
+    }
+
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_GraphicsPipelineArena, s_GraphicsPipelineScratchArenaBytes);
+
+    auto* pso = NewArenaObject<GraphicsPipeline>(m_context.objectArena, m_context);
+    pso->m_desc = desc;
+    pso->m_framebufferInfo = fbinfo;
 
     const bool hasTessellationControlShader = static_cast<bool>(desc.HS);
     const bool hasTessellationEvaluationShader = static_cast<bool>(desc.DS);

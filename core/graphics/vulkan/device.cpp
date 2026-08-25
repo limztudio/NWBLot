@@ -121,6 +121,7 @@ Device::Device(const DeviceDesc& desc)
     , m_gpuCrashTracker(desc.allocator.getObjectArena())
     , m_gpuCrashReportArena(VulkanArenaScope::s_GpuCrashReportArena, Alloc::PersistentArena::StructureAlignedSize(s_GpuCrashReportArenaSize))
     , m_gpuCrashVendorBinaryArena(VulkanArenaScope::s_GpuCrashVendorBinaryArena, Alloc::PersistentArena::StructureAlignedSize(s_MaxDeviceFaultVendorBinaryBytes))
+    , m_amdBreadcrumb(desc.allocator.getObjectArena())
     , m_context(
         desc.allocator,
         desc.threadPool,
@@ -519,31 +520,59 @@ Device::Device(const DeviceDesc& desc)
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to initialize VMA allocator"));
 
     if(m_gpuCrashDiagnosticsEnabled && m_context.extensions.AMD_buffer_marker){
-        auto breadcrumbInfo = VulkanDetail::MakeVkStruct<VkBufferCreateInfo>(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO);
-        breadcrumbInfo.size = static_cast<VkDeviceSize>(s_MaxAmdBreadcrumbSlots) * sizeof(u32);
-        breadcrumbInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-        Alloc::ScratchArena breadcrumbQueueArena(VulkanArenaScope::s_QueueFamilyQueryArena);
-        Vector<u32, Alloc::ScratchArena> breadcrumbQueueFamilies(breadcrumbQueueArena);
-        VulkanDetail::CollectUniquePhysicalQueueFamilyIndices(
+        VulkanDetail::AmdBreadcrumbRingLayout breadcrumbLayout;
+        if(!VulkanDetail::TryBuildAmdBreadcrumbRingLayout(
             getPhysicalQueueTopology(),
-            breadcrumbQueueFamilies
-        );
-        breadcrumbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        if(breadcrumbQueueFamilies.size() > 1u){
-            breadcrumbInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
-            breadcrumbInfo.queueFamilyIndexCount = static_cast<u32>(breadcrumbQueueFamilies.size());
-            breadcrumbInfo.pQueueFamilyIndices = breadcrumbQueueFamilies.data();
-        }
-        const VkResult breadcrumbRes = m_allocator.createHostMappedBuffer(m_amdBreadcrumb.buffer, m_amdBreadcrumb.allocation, m_amdBreadcrumb.mappedMemory, breadcrumbInfo);
-        if(breadcrumbRes == VK_SUCCESS && m_amdBreadcrumb.mappedMemory){
-            NWB_MEMSET(m_amdBreadcrumb.mappedMemory, 0, static_cast<usize>(breadcrumbInfo.size));
+            s_MaxAmdBreadcrumbSlots,
+            breadcrumbLayout
+        )){
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Invalid AMD breadcrumb ring layout; AMD GPU breadcrumbs disabled."));
+            m_context.extensions.AMD_buffer_marker = false;
         }
         else{
-            // Release an unusable allocation before disabling breadcrumbs.
-            if(breadcrumbRes == VK_SUCCESS)
-                m_allocator.destroyHostMappedBuffer(m_amdBreadcrumb.buffer, m_amdBreadcrumb.allocation, m_amdBreadcrumb.mappedMemory);
-            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to allocate AMD breadcrumb buffer ({}); AMD GPU breadcrumbs disabled."), ResultToString(breadcrumbRes));
-            m_context.extensions.AMD_buffer_marker = false;
+            m_amdBreadcrumb.layout = breadcrumbLayout;
+            m_amdBreadcrumb.slotRecords.resize(breadcrumbLayout.totalSlotCount, AmdBreadcrumbSlotRecord{});
+            m_amdBreadcrumb.nextSerials.resize(breadcrumbLayout.physicalQueueCount, 0u);
+
+            auto breadcrumbInfo = VulkanDetail::MakeVkStruct<VkBufferCreateInfo>(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO);
+            breadcrumbInfo.size = breadcrumbLayout.totalByteSize;
+            breadcrumbInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+            Alloc::ScratchArena breadcrumbQueueArena(VulkanArenaScope::s_QueueFamilyQueryArena);
+            Vector<u32, Alloc::ScratchArena> breadcrumbQueueFamilies(breadcrumbQueueArena);
+            VulkanDetail::CollectUniquePhysicalQueueFamilyIndices(
+                getPhysicalQueueTopology(),
+                breadcrumbQueueFamilies
+            );
+            breadcrumbInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+            if(breadcrumbQueueFamilies.size() > 1u){
+                breadcrumbInfo.sharingMode = VK_SHARING_MODE_CONCURRENT;
+                breadcrumbInfo.queueFamilyIndexCount = static_cast<u32>(breadcrumbQueueFamilies.size());
+                breadcrumbInfo.pQueueFamilyIndices = breadcrumbQueueFamilies.data();
+            }
+            const VkResult breadcrumbRes = m_allocator.createHostMappedBuffer(
+                m_amdBreadcrumb.buffer,
+                m_amdBreadcrumb.allocation,
+                m_amdBreadcrumb.mappedMemory,
+                breadcrumbInfo
+            );
+            if(breadcrumbRes == VK_SUCCESS && m_amdBreadcrumb.mappedMemory){
+                NWB_MEMSET(m_amdBreadcrumb.mappedMemory, 0, static_cast<usize>(breadcrumbInfo.size));
+            }
+            else{
+                // Release an unusable allocation before disabling breadcrumbs.
+                if(breadcrumbRes == VK_SUCCESS){
+                    m_allocator.destroyHostMappedBuffer(
+                        m_amdBreadcrumb.buffer,
+                        m_amdBreadcrumb.allocation,
+                        m_amdBreadcrumb.mappedMemory
+                    );
+                }
+                NWB_LOGGER_WARNING(
+                    NWB_TEXT("Vulkan: Failed to allocate AMD breadcrumb buffer ({}); breadcrumbs disabled."),
+                    ResultToString(breadcrumbRes)
+                );
+                m_context.extensions.AMD_buffer_marker = false;
+            }
         }
     }
 

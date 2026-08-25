@@ -2659,19 +2659,26 @@ class Device final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 private:
-    // AMD breadcrumb ring provides a best-effort last-observed marker; physical queues may execute out of sequence.
+    // AMD breadcrumb ring provides best-effort per-queue observations; physical queues may execute out of sequence.
     struct AmdBreadcrumbSlotRecord{
-        u32 sequence = 0u;
+        u64 serial = 0u;
         usize markerHash = 0u;
+        u32 marker = 0u;
     };
     struct AmdBreadcrumbBuffer{
         VkBuffer buffer = VK_NULL_HANDLE;
         VulkanAllocationHandle allocation = {};
         void* mappedMemory = nullptr;
-        Atomic<u32> nextSequence = 0u;
-        // Prevents concurrent recording from tearing a marker record.
+        VulkanDetail::AmdBreadcrumbRingLayout layout;
+        // Prevents concurrent recording from tearing marker records or per-queue reservation serials.
         Futex slotMutex;
-        Array<AmdBreadcrumbSlotRecord, s_MaxAmdBreadcrumbSlots> slotRecords = {};
+        GraphicsVector<AmdBreadcrumbSlotRecord> slotRecords;
+        GraphicsVector<u64> nextSerials;
+
+        explicit AmdBreadcrumbBuffer(Alloc::GlobalArena& arena)
+            : slotRecords(arena)
+            , nextSerials(arena)
+        {}
     };
 
 
@@ -2827,7 +2834,10 @@ public:
     void debugTriggerGpuFault(u64 faultDeviceAddress);
 #endif
 
-    [[nodiscard]] AmdBreadcrumbWrite reserveAmdBreadcrumb(usize markerHash);
+    [[nodiscard]] AmdBreadcrumbWrite reserveAmdBreadcrumb(
+        const GpuPhysicalQueueId& queue,
+        usize markerHash
+    );
 
     void queueWaitForSemaphore(CommandQueue::Enum waitQueue, VkSemaphore semaphore, u64 value);
     void queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore semaphore, u64 value);

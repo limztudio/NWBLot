@@ -94,6 +94,119 @@ void CollectUniquePhysicalQueueFamilyIndices(
     }
 }
 
+bool TryBuildAmdBreadcrumbRingLayout(
+    const GpuPhysicalQueueTopology& topology,
+    const usize slotsPerQueue,
+    AmdBreadcrumbRingLayout& layout
+)noexcept{
+    layout = {};
+    if(
+        !topology.queues
+        || topology.queueCount == 0u
+        || topology.queueCount > static_cast<usize>(Limit<u16>::s_Max)
+        || slotsPerQueue == 0u
+    )
+        return false;
+
+    usize totalSlotCount = 0u;
+    usize totalByteSize = 0u;
+    if(
+        !TryMultiply<usize>(topology.queueCount, slotsPerQueue, totalSlotCount)
+        || !TryMultiply<usize>(totalSlotCount, sizeof(u32), totalByteSize)
+        || slotsPerQueue > static_cast<usize>(Limit<u32>::s_Max)
+        || totalByteSize > static_cast<usize>(Limit<VkDeviceSize>::s_Max)
+    )
+        return false;
+
+    const u16 deviceGeneration = topology.queues[0u].id.deviceGeneration;
+    if(deviceGeneration == 0u)
+        return false;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueId& queue = topology.queues[queueIndex].id;
+        if(
+            !queue.valid()
+            || queue.deviceGeneration != deviceGeneration
+            || queue.index != queueIndex
+        )
+            return false;
+    }
+
+    layout.deviceGeneration = deviceGeneration;
+    layout.physicalQueueCount = topology.queueCount;
+    layout.slotsPerQueue = slotsPerQueue;
+    layout.totalSlotCount = totalSlotCount;
+    layout.totalByteSize = static_cast<VkDeviceSize>(totalByteSize);
+    return true;
+}
+
+bool TryResolveAmdBreadcrumbRingSlot(
+    const AmdBreadcrumbRingLayout& layout,
+    const GpuPhysicalQueueId& queue,
+    const usize localSlot,
+    usize& flatSlot,
+    VkDeviceSize& byteOffset
+)noexcept{
+    flatSlot = 0u;
+    byteOffset = 0u;
+    if(
+        layout.deviceGeneration == 0u
+        || layout.physicalQueueCount == 0u
+        || layout.slotsPerQueue == 0u
+        || layout.totalSlotCount == 0u
+        || localSlot >= layout.slotsPerQueue
+        || !queue.valid()
+        || queue.deviceGeneration != layout.deviceGeneration
+        || static_cast<usize>(queue.index) >= layout.physicalQueueCount
+    )
+        return false;
+
+    usize queueFirstSlot = 0u;
+    if(!TryMultiply<usize>(static_cast<usize>(queue.index), layout.slotsPerQueue, queueFirstSlot))
+        return false;
+    if(AddOverflows<usize>(queueFirstSlot, localSlot))
+        return false;
+
+    const usize resolvedFlatSlot = queueFirstSlot + localSlot;
+    usize resolvedByteOffset = 0u;
+    if(
+        resolvedFlatSlot >= layout.totalSlotCount
+        || !TryMultiply<usize>(resolvedFlatSlot, sizeof(u32), resolvedByteOffset)
+        || resolvedByteOffset > static_cast<usize>(Limit<VkDeviceSize>::s_Max)
+    )
+        return false;
+
+    flatSlot = resolvedFlatSlot;
+    byteOffset = static_cast<VkDeviceSize>(resolvedByteOffset);
+    return true;
+}
+
+bool TryBuildNextAmdBreadcrumbReservation(
+    const u64 currentSerial,
+    const usize slotsPerQueue,
+    AmdBreadcrumbReservation& reservation
+)noexcept{
+    reservation = {};
+    if(slotsPerQueue == 0u || slotsPerQueue > static_cast<usize>(Limit<u32>::s_Max))
+        return false;
+
+    u64 maximumSerial = 0u;
+    if(!TryMultiply<u64>(static_cast<u64>(slotsPerQueue), Limit<u32>::s_Max, maximumSerial))
+        return false;
+    if(currentSerial >= maximumSerial)
+        return false;
+
+    const u64 serial = currentSerial + 1u;
+    const u64 zeroBasedSerial = serial - 1u;
+    reservation.serial = serial;
+    reservation.marker = static_cast<u32>(zeroBasedSerial / static_cast<u64>(slotsPerQueue)) + 1u;
+    reservation.localSlot = static_cast<usize>(zeroBasedSerial % static_cast<u64>(slotsPerQueue));
+    return true;
+}
+
+bool MatchesAmdBreadcrumbObservation(const u32 observedMarker, const u32 reservedMarker)noexcept{
+    return observedMarker != 0u && reservedMarker != 0u && observedMarker == reservedMarker;
+}
+
 #if !defined(NWB_FINAL)
 void ResetHostReadbackBarrierAppendCountForTesting()noexcept{
     __hidden_host_readback_sync::s_AppendedBarrierCount = 0u;

@@ -4602,6 +4602,12 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         .setFormat(Graphics::Format::RGBA8_UINT)
         .setInitialState(Graphics::ResourceStates::CopyDest)
     ;
+    const Graphics::TextureDesc compressedDescription = Graphics::TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Graphics::Format::BC1_UNORM)
+        .setInitialState(Graphics::ResourceStates::CopyDest)
+    ;
     const Graphics::TextureDesc depthDescription = Graphics::TextureDesc()
         .setWidth(4u)
         .setHeight(4u)
@@ -4609,8 +4615,10 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         .setInitialState(Graphics::ResourceStates::CopyDest)
     ;
     Graphics::TextureHandle colorTexture = createTexture(colorDescription);
+    Graphics::TextureHandle compressedTexture = createTexture(compressedDescription);
     Graphics::TextureHandle depthTexture = createTexture(depthDescription);
     ASSERT_NE(colorTexture.get(), nullptr);
+    ASSERT_NE(compressedTexture.get(), nullptr);
     ASSERT_NE(depthTexture.get(), nullptr);
 
     Graphics::GpuTaskDesc transferDesc;
@@ -4687,6 +4695,30 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         Graphics::GpuQueueCapability::Transfer
     );
 
+    Graphics::GpuTaskGraph compressedGraph(testArena.arena);
+    const Graphics::GpuGraphResourceId compressedResource = compressedGraph.importTexture(
+        compressedTexture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/task_graph/full_clear_compressed"))
+            .setMarkerLabel("Full Clear Compressed")
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(Graphics::ResourceStates::CopyDest)
+    );
+    ASSERT_TRUE(compressedResource.valid());
+    Graphics::GpuClearTextureTaskDesc compressedClear;
+    compressedClear.destination = compressedResource;
+    compressedClear.subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
+    compressedClear.valueType = Graphics::GpuClearTextureTaskValueType::Float;
+    const Graphics::GpuTaskId compressedTask = compressedGraph.addClearTextureTask(
+        transferDesc,
+        compressedClear
+    );
+    ASSERT_TRUE(compressedTask.valid());
+    EXPECT_EQ(
+        compressedGraph.taskAt(compressedTask.index).queue.requiredCapabilities,
+        Graphics::GpuQueueCapability::Transfer
+    );
+
     Graphics::GpuTaskGraph depthGraph(testArena.arena);
     const Graphics::GpuGraphResourceId depthResource = depthGraph.importTexture(
         depthTexture,
@@ -4746,6 +4778,7 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
     expectCompiledOn(colorGraph, colorTask, GraphicsQueue(), Graphics::CommandQueue::Graphics);
     expectCompiledOn(colorGraph, colorRectTask, GraphicsQueue(), Graphics::CommandQueue::Graphics);
     expectCompiledOn(rectGraph, isolatedRectTask, DedicatedTransferQueue(), Graphics::CommandQueue::Transfer);
+    expectCompiledOn(compressedGraph, compressedTask, DedicatedTransferQueue(), Graphics::CommandQueue::Transfer);
     expectCompileRejected(depthGraph, DedicatedTransferQueue());
     expectCompileRejected(depthGraph, DedicatedComputeQueue());
     expectCompiledOn(depthGraph, depthTask, GraphicsQueue(), Graphics::CommandQueue::Graphics);

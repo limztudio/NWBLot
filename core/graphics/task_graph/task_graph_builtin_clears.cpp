@@ -438,13 +438,12 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         .access = GpuTaskResourceAccess::Write,
     };
     GpuTaskDesc resolvedDesc = desc;
-    // The recorder ends rendering before this primitive. Full color clears then use the deterministic Compute
-    // route, while depth/stencil clears require Graphics. The caller's Transfer requirement remains part of the
-    // primitive API contract.
-    resolvedDesc.queue.requiredCapabilities |= clearDesc.valueType == GpuClearTextureTaskValueType::DepthStencil
-        ? GpuQueueCapability::Graphics
-        : GpuQueueCapability::Compute
-    ;
+    // The recorder ends rendering before this primitive. Ordinary color clears require Compute, depth/stencil
+    // requires Graphics, and block-compressed color uses the Transfer-only staging route.
+    if(clearDesc.valueType == GpuClearTextureTaskValueType::DepthStencil)
+        resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Graphics;
+    else if(!Format::IsBlockCompressedFormat(destinationResource.texture->getDescription().format))
+        resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Compute;
     resolvedDesc.setResourceUses(&resourceUse, 1u);
     const GpuTaskId task = appendTask(
         resolvedDesc,

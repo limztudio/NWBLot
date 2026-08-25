@@ -476,12 +476,42 @@ void CommandList::clearColorTexture(
     ))
         return;
 
+    const bool blockCompressed = Format::IsBlockCompressedFormat(texture.m_desc.format);
+    if(blockCompressed && texture.m_desc.sampleCount != 1u){
+        rejectCommandRecording(
+            NWB_TEXT("clear texture"),
+            NWB_TEXT("block-compressed texture clears require a single-sampled texture")
+        );
+        return;
+    }
+    if(blockCompressed && m_renderPassActive){
+        rejectCommandRecording(
+            NWB_TEXT("clear texture"),
+            NWB_TEXT("block-compressed texture clears cannot execute during active rendering")
+        );
+        return;
+    }
+
     if(m_renderPassActive){
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("clear color attachment")))
             return;
         const Rect fullRect(0, Limit<i32>::s_Max, 0, Limit<i32>::s_Max);
         if(clearActiveRenderPassColorTextureRect(texture, resolvedSubresources, fullRect, clearValue, valueName))
             retainResource(textureResource);
+        return;
+    }
+
+    if(blockCompressed){
+        constexpr Box s_FullTextureBox(Limit<i32>::s_Max, Limit<i32>::s_Max, Limit<i32>::s_Max);
+        clearColorTextureBox(
+            textureResource,
+            resolvedSubresources,
+            s_FullTextureBox,
+            valueName,
+            clearValue,
+            integerValue,
+            signedIntegerValue
+        );
         return;
     }
 
@@ -540,6 +570,22 @@ void CommandList::clearColorTextureBox(
     ))
         return;
 
+    const bool blockCompressed = Format::IsBlockCompressedFormat(desc.format);
+    if(blockCompressed && desc.sampleCount != 1u){
+        rejectCommandRecording(
+            NWB_TEXT("clear texture box"),
+            NWB_TEXT("block-compressed texture clears require a single-sampled texture")
+        );
+        return;
+    }
+    if(blockCompressed && m_renderPassActive){
+        rejectCommandRecording(
+            NWB_TEXT("clear texture box"),
+            NWB_TEXT("block-compressed texture clears cannot execute during active rendering")
+        );
+        return;
+    }
+
     if(
         (m_renderPassActive || desc.sampleCount != 1u)
         && VulkanTextureDetail::TextureClearBoxCoversSubresources(desc, resolvedSubresources, box)
@@ -578,12 +624,10 @@ void CommandList::clearColorTextureBox(
         )
     ;
     if(!patternReady || clearPatternSize != texture.m_formatLayout.bytesPerBlock){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to clear texture box with {}: bounded texture box clears do not support texture format {}"),
-            valueName,
-            StringConvert(GetFormatInfo(desc.format).name)
+        rejectCommandRecording(
+            NWB_TEXT("clear texture box"),
+            NWB_TEXT("bounded texture box clears do not support the texture format")
         );
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to clear texture box with {}: bounded texture box clears do not support texture format"), valueName);
         return;
     }
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("clear color texture box through staging")))
@@ -650,8 +694,10 @@ void CommandList::clearColorTextureBox(
         Buffer* stagingBuffer = nullptr;
         u64 stagingOffset = 0;
         void* stagingBytes = nullptr;
-        if(!prepareUploadStaging(clearByteCount, NWB_TEXT("clearTextureBox"), stagingBuffer, stagingOffset, stagingBytes))
+        if(!prepareUploadStaging(clearByteCount, NWB_TEXT("clearTextureBox"), stagingBuffer, stagingOffset, stagingBytes)){
+            rejectCommandRecording(NWB_TEXT("clear texture box"), NWB_TEXT("staging allocation failed"));
             return;
+        }
         VulkanTextureDetail::FillTextureClearBytes(stagingBytes, clearByteCount, clearPattern, clearPatternSize);
 
         if(desc.dimension == TextureDimension::Texture3D){

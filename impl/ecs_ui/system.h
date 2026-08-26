@@ -22,6 +22,24 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct GpuTaskRecordContext;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ASSETS_BEGIN
 
 
@@ -76,11 +94,11 @@ public:
 
     // The renderer asks this optional contributor to turn the finished ImGui draw list and its upload payloads into
     // terminal graph work. Direct IRenderPass rendering remains available for worlds without a graph-owning renderer.
-    virtual bool prepareTaskGraphPresentation(Core::Framebuffer* framebuffer)override;
+    virtual bool prepareTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame)override;
     [[nodiscard]] virtual bool hasTaskGraphPresentationWork()const override;
     [[nodiscard]] virtual Core::GpuTaskId declareTaskGraphPresentation(
         Core::GpuTaskGraph& graph,
-        Core::Framebuffer* framebuffer,
+        const Core::AcquiredPresentationFrame& frame,
         Core::GpuGraphResourceId backbuffer,
         Core::GpuTaskId previousTask
     )override;
@@ -165,21 +183,28 @@ private:
     void setCurrentContext()const;
     void beginFrame(f32 delta);
     void finishFrame();
-    [[nodiscard]] bool prepareFrameResources(Core::Framebuffer* framebuffer, bool graphOwnsUploads);
-    [[nodiscard]] bool submitStandaloneTaskGraphPresentation(Core::Framebuffer* framebuffer);
-    [[nodiscard]] bool submitStandaloneLegacyTaskGraphPresentation(Core::Framebuffer* framebuffer);
+    [[nodiscard]] bool prepareFrameResources(const Core::AcquiredPresentationFrame& frame, bool graphOwnsUploads);
+    [[nodiscard]] bool submitStandaloneTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame);
+    [[nodiscard]] bool submitStandaloneLegacyTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame);
     [[nodiscard]] Core::GpuTaskId declareStandaloneLegacyTaskGraphPresentation(
         Core::GpuTaskGraph& graph,
-        Core::Framebuffer* framebuffer,
+        const Core::AcquiredPresentationFrame& frame,
         ImDrawData* drawData,
         u64 frameGeneration
     );
-    [[nodiscard]] bool recordTaskGraphPresentation(Core::CommandList& commandList, Core::Framebuffer* framebuffer);
+    [[nodiscard]] bool recordTaskGraphPresentation(
+        Core::CommandList& commandList,
+        const Core::AcquiredPresentationFrame& frame,
+        Core::GpuGraphResourceId backbuffer,
+        const Core::GpuTaskRecordContext& context
+    );
     [[nodiscard]] bool recordStandaloneLegacyTaskGraphPresentation(
         Core::CommandList& commandList,
-        Core::Framebuffer* framebuffer,
+        const Core::AcquiredPresentationFrame& frame,
+        Core::GpuGraphResourceId backbuffer,
         ImDrawData* drawData,
-        u64 frameGeneration
+        u64 frameGeneration,
+        const Core::GpuTaskRecordContext& context
     );
     [[nodiscard]] bool recordTaskGraphUploadCompletion()const;
     void confirmTaskGraphPresentationSubmission()noexcept;
@@ -192,7 +217,12 @@ private:
     [[nodiscard]] bool ensureBuffers(usize vertexCount, usize indexCount);
     [[nodiscard]] bool drawBuffersReady(usize vertexCount, usize indexCount)const;
     [[nodiscard]] bool prepareTaskGraphDrawUploads(ImDrawData& drawData);
-    [[nodiscard]] bool recordTaskGraphDrawSnapshot(Core::CommandList& commandList, Core::Framebuffer* framebuffer);
+    [[nodiscard]] bool recordTaskGraphDrawSnapshot(
+        Core::CommandList& commandList,
+        const Core::AcquiredPresentationFrame& frame,
+        Core::GpuGraphResourceId backbuffer,
+        const Core::GpuTaskRecordContext& context
+    );
     [[nodiscard]] bool declareTaskGraphDrawUploads(
         Core::GpuTaskGraph& graph,
         const Core::GpuGraphResourceId& vertexBuffer,
@@ -256,6 +286,7 @@ private:
     UiTextureUploadVector m_taskGraphIndexUpload;
     TaskGraphDrawCommandVector m_taskGraphDrawCommands;
     TaskGraphDrawSnapshot m_taskGraphDrawSnapshot;
+    Core::AcquiredPresentationFrame m_taskGraphPresentationFrame;
     usize m_vertexBufferCapacity = 0;
     usize m_indexBufferCapacity = 0;
     f32 m_deltaSeconds = 0.0f;

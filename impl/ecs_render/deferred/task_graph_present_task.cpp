@@ -39,10 +39,19 @@ namespace RendererTaskGraphDetail{
         !payload.deferredSystem
         || !payload.graphics
         || !payload.targets
-        || !payload.presentationFramebuffer
+        || !payload.presentationFrame.valid()
+        || !payload.backBuffer.valid()
         || !payload.timingTicket
         || !shadowVisibilityQueue
         || (shadowVisibilityRunsOnCompute && !payload.asyncFinalTiming)
+    )
+        return false;
+    const Core::Framebuffer& presentationFramebuffer = *payload.presentationFrame.framebuffer;
+    const Core::FramebufferDesc& presentationFramebufferDesc = presentationFramebuffer.getDescription();
+    if(
+        presentationFramebufferDesc.colorAttachments.size() != 1u
+        || presentationFramebufferDesc.colorAttachments[0].texture != payload.presentationFrame.backBuffer.texture.get()
+        || context.taskGraph.textureForResource(payload.backBuffer) != payload.presentationFrame.backBuffer.texture.get()
     )
         return false;
 
@@ -60,7 +69,7 @@ namespace RendererTaskGraphDetail{
     const bool presentRecorded = payload.deferredSystem->renderDeferredPresent(
         commandList,
         *payload.targets,
-        payload.presentationFramebuffer
+        payload.presentationFrame
     );
     if(shadowVisibilityRunsOnCompute && presentRecorded && payload.asyncFinalTiming->has_value()){
         payload.asyncFinalTiming->value().finishTiming(commandList);

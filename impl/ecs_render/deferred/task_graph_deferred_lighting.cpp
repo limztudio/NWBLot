@@ -70,7 +70,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     const bool hasTransparentRenderers,
     const bool hasOpaqueCsgFrameWork,
     const f32 meshViewAspectRatio,
-    Core::Framebuffer* const presentationFramebuffer,
+    const Core::AcquiredPresentationFrame& presentationFrame,
     Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
     Optional<Core::GpuTimingMeasure>& deferredClearTiming,
@@ -250,13 +250,18 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ? &deferredTargets.laggedLightingHistory
         : nullptr
     ;
+    if(!presentationFrame.valid())
+        return;
+    const Core::Framebuffer& presentationFramebuffer = *presentationFrame.framebuffer;
+    const Core::FramebufferDesc& presentationFramebufferDesc = presentationFramebuffer.getDescription();
     if(
         !deferredTargets.valid()
         || !deferredTargets.bindless.valid()
         || !m_drawState.m_meshViewBuffer
         || !m_deferredState.m_sceneShadingBuffer
         || !m_deferredState.m_lightBuffer
-        || !presentationFramebuffer
+        || presentationFramebufferDesc.colorAttachments.size() != 1u
+        || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()
         || hasTransparentRenderers != features.hasTransparentRenderers
         || (useLaggedLightingHistory && (!history || !history->valid()))
         || (capturesLaggedLightingHistory && (!captureHistory || !captureHistory->valid()))
@@ -5868,8 +5873,17 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         return;
     }
 
-    const Core::GpuGraphResourceId backbuffer = m_deferredLightingTaskGraph.importHazardDomain(
-        HazardDomainDesc(Name("render.deferred_present.backbuffer"), "Presentation Back Buffer")
+    Core::GpuGraphResourceDesc backBufferDesc = TextureResourceDesc(
+        Name("render.deferred_present.backbuffer"),
+        "Presentation Back Buffer"
+    );
+    backBufferDesc
+        .setInitialState(presentationFrame.backBuffer.nativeInitialState)
+        .setExternalFinalState(Core::ResourceStates::Present)
+    ;
+    const Core::GpuGraphResourceId backbuffer = m_deferredLightingTaskGraph.importTexture(
+        presentationFrame.backBuffer.texture,
+        backBufferDesc
     );
     if(!backbuffer.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-present graph resources"));
@@ -5879,7 +5893,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     const Core::GpuTaskResourceUse presentResourceUses[] = {
         ReadUse(compositeColor),
         ReadUse(compositeBindlessSlots, Core::ResourceStates::ConstantBuffer),
-        WriteUse(backbuffer, Core::ResourceStates::Present),
+        WriteTextureUse(
+            backbuffer,
+            presentationFramebufferDesc.colorAttachments[0].subresources,
+            Core::ResourceStates::RenderTarget
+        ),
     };
     Core::GpuTaskSchedulingHint presentScheduling;
     presentScheduling.cost = Core::GpuTaskCostHint::Medium;
@@ -5906,7 +5924,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .deferredSystem = &m_deferredSystem,
             .graphics = &m_graphics,
             .targets = &deferredTargets,
-            .presentationFramebuffer = presentationFramebuffer,
+            .presentationFrame = presentationFrame,
+            .backBuffer = backbuffer,
             .asyncFinalTiming = &asyncFinalTiming,
             .timingTicket = &presentTimingTicket,
             .shadowVisibilityTask = &m_deferredShadowVisibilityTask,
@@ -5927,7 +5946,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     if(m_deferredPresentationOverlayRequired){
         m_deferredPresentationOverlayTask = m_preparedTaskGraphPresentationContributor->declareTaskGraphPresentation(
             m_deferredLightingTaskGraph,
-            presentationFramebuffer,
+            presentationFrame,
             backbuffer,
             m_deferredPresentTask
         );

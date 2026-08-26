@@ -39,7 +39,8 @@ struct DeferredPresentGraphTask{
         RendererDeferredSystem* deferredSystem = nullptr;
         Core::Graphics* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
-        Core::Framebuffer* presentationFramebuffer = nullptr;
+        Core::AcquiredPresentationFrame presentationFrame;
+        Core::GpuGraphResourceId backBuffer;
         Optional<Core::GpuTimingMeasure>* asyncFinalTiming = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const Core::GpuTaskId* shadowVisibilityTask = nullptr;

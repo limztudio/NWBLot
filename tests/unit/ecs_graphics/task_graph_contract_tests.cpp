@@ -1102,6 +1102,295 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
 }
 
 
+// Renderer presentation must import the exact acquired swap-chain texture, preserve its captured native origin,
+// and own the RenderTarget-to-Present state closure. The late record callback revalidates both graph identity and
+// framebuffer attachment identity before touching the image.
+TEST(EcsGraphics, RendererPresentationGraphBindsExactAcquiredTexture){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString contributorHeaderSource;
+    AString rendererHeaderSource;
+    AString rendererResourcesSource;
+    AString rendererSource;
+    AString presentationBuildSource;
+    AString presentationTaskHeaderSource;
+    AString presentationTaskSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "task_graph" / "presentation_contributor.h",
+        contributorHeaderSource
+    ));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", rendererHeaderSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "kernel" / "system_resources.cpp",
+        rendererResourcesSource
+    ));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system_render.cpp", rendererSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_deferred_lighting.cpp",
+        presentationBuildSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_present_task.h",
+        presentationTaskHeaderSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_present_task.cpp",
+        presentationTaskSource
+    ));
+    const AStringView contributorHeader(contributorHeaderSource.data(), contributorHeaderSource.size());
+    const AStringView rendererHeader(rendererHeaderSource.data(), rendererHeaderSource.size());
+    const AStringView rendererResources(rendererResourcesSource.data(), rendererResourcesSource.size());
+    const AStringView renderer(rendererSource.data(), rendererSource.size());
+    const AStringView presentationBuild(presentationBuildSource.data(), presentationBuildSource.size());
+    const AStringView presentationTaskHeader(presentationTaskHeaderSource.data(), presentationTaskHeaderSource.size());
+    const AStringView presentationTask(presentationTaskSource.data(), presentationTaskSource.size());
+
+    EXPECT_TRUE(ContainsText(
+        contributorHeader,
+        "prepareTaskGraphPresentation(const AcquiredPresentationFrame& frame)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        contributorHeader,
+        "const AcquiredPresentationFrame& frame,\n"
+        "        GpuGraphResourceId backbuffer,"
+    ));
+    EXPECT_TRUE(ContainsText(contributorHeader, "exact typed acquired texture imported by"));
+    EXPECT_FALSE(ContainsText(contributorHeader, "presentation hazard domain"));
+    EXPECT_TRUE(ContainsText(rendererHeader, "const Core::AcquiredPresentationFrame& presentationFrame,"));
+    EXPECT_TRUE(ContainsText(
+        rendererResources,
+        "else if(m_graphics.isDeviceRecreationRequested()){\n"
+        "            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT(\"RendererSystem: presentation contributor requested recreation during preparation\"));\n"
+        "            return false;"
+    ));
+
+    EXPECT_FALSE(ContainsText(
+        presentationBuild,
+        "HazardDomainDesc(Name(\"render.deferred_present.backbuffer\")"
+    ));
+    EXPECT_TRUE(ContainsText(
+        presentationBuild,
+        ".setInitialState(presentationFrame.backBuffer.nativeInitialState)\n"
+        "        .setExternalFinalState(Core::ResourceStates::Present)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        presentationBuild,
+        "const Core::GpuGraphResourceId backbuffer = m_deferredLightingTaskGraph.importTexture(\n"
+        "        presentationFrame.backBuffer.texture,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        presentationBuild,
+        "WriteTextureUse(\n"
+        "            backbuffer,\n"
+        "            presentationFramebufferDesc.colorAttachments[0].subresources,\n"
+        "            Core::ResourceStates::RenderTarget"
+    ));
+    EXPECT_TRUE(ContainsText(presentationBuild, ".presentationFrame = presentationFrame,"));
+    EXPECT_TRUE(ContainsText(presentationBuild, ".backBuffer = backbuffer,"));
+    EXPECT_TRUE(ContainsText(
+        presentationBuild,
+        "declarePresentEndpoint(Core::GpuPresentEndpoint{\n"
+        "        .producer = m_deferredFrameTimingEndTask,\n"
+        "        .backBuffer = backbuffer,"
+    ));
+
+    EXPECT_TRUE(ContainsText(presentationTaskHeader, "Core::AcquiredPresentationFrame presentationFrame;"));
+    EXPECT_TRUE(ContainsText(presentationTaskHeader, "Core::GpuGraphResourceId backBuffer;"));
+    EXPECT_TRUE(ContainsText(presentationTask, "!payload.presentationFrame.valid()"));
+    EXPECT_TRUE(ContainsText(
+        presentationTask,
+        "presentationFramebufferDesc.colorAttachments[0].texture != payload.presentationFrame.backBuffer.texture.get()"
+    ));
+    EXPECT_TRUE(ContainsText(
+        presentationTask,
+        "context.taskGraph.textureForResource(payload.backBuffer) != payload.presentationFrame.backBuffer.texture.get()"
+    ));
+    EXPECT_TRUE(ContainsText(
+        presentationTask,
+        "payload.deferredSystem->renderDeferredPresent(\n"
+        "        commandList,\n"
+        "        *payload.targets,\n"
+        "        payload.presentationFrame"
+    ));
+
+    EXPECT_TRUE(ContainsText(
+        renderer,
+        "const Core::AcquiredPresentationFrame presentationFrame = m_graphics.acquiredPresentationFrame();"
+    ));
+    EXPECT_TRUE(ContainsText(renderer, "presentationFrame.framebuffer.get() != framebuffer"));
+    EXPECT_TRUE(ContainsText(
+        renderer,
+        "presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()"
+    ));
+
+    // Once the exact back-buffer writer accepted, generic suffix recovery cannot make the acquired image reusable.
+    // The renderer must escalate that partial-acceptance edge to Graphics' recreation/abandonment path.
+    const usize partialAcceptanceOffset = renderer.find(
+        "const bool presentationBackBufferWriteAccepted = m_deferredLightingSubmissionTransaction.taskToken("
+    );
+    const usize acceptedWriterOffset = renderer.find("m_deferredPresentTask", partialAcceptanceOffset);
+    const usize recreationOffset = renderer.find("if(presentationBackBufferWriteAccepted){", acceptedWriterOffset);
+    const usize recoveryFailureOffset = renderer.find("failFrameRenderRecovery();", recreationOffset);
+    ASSERT_NE(partialAcceptanceOffset, AStringView::npos);
+    ASSERT_NE(acceptedWriterOffset, AStringView::npos);
+    ASSERT_NE(recreationOffset, AStringView::npos);
+    ASSERT_NE(recoveryFailureOffset, AStringView::npos);
+    EXPECT_LT(partialAcceptanceOffset, acceptedWriterOffset);
+    EXPECT_LT(acceptedWriterOffset, recreationOffset);
+    EXPECT_LT(recreationOffset, recoveryFailureOffset);
+    EXPECT_TRUE(ContainsText(
+        renderer.substr(recreationOffset, recoveryFailureOffset - recreationOffset),
+        "acquired back buffer was written before presentation suffix rejection; requesting recreation"
+    ));
+}
+
+
+// Every UI presentation route consumes the same acquired-frame identity. Normal overlay work reuses the renderer's
+// typed resource, standalone raster paths import that exact TextureHandle, and upload-only standalone work skips the
+// external-final texture import entirely so it cannot manufacture an unwritten presentation endpoint.
+TEST(EcsGraphics, UiPresentationGraphsBindExactAcquiredTexture){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString uiHeaderSource;
+    AString uiSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.h", uiHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
+    const AStringView uiHeader(uiHeaderSource.data(), uiHeaderSource.size());
+    const AStringView ui(uiSource.data(), uiSource.size());
+
+    EXPECT_TRUE(ContainsText(
+        uiHeader,
+        "virtual bool prepareTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame)override;"
+    ));
+    EXPECT_TRUE(ContainsText(
+        uiHeader,
+        "const Core::AcquiredPresentationFrame& frame,\n"
+        "        Core::GpuGraphResourceId backbuffer,"
+    ));
+    EXPECT_TRUE(ContainsText(uiHeader, "Core::AcquiredPresentationFrame m_taskGraphPresentationFrame;"));
+    EXPECT_TRUE(ContainsText(
+        ui,
+        "framebufferDesc.colorAttachments[0].texture == frame.backBuffer.texture.get()"
+    ));
+    EXPECT_TRUE(ContainsText(
+        ui,
+        "graph.textureForResource(backbuffer) == frame.backBuffer.texture.get()"
+    ));
+    EXPECT_TRUE(ContainsText(ui, "PresentationBackBufferResourceDesc("));
+    EXPECT_TRUE(ContainsText(ui, ".setType(Core::GpuGraphResourceType::Texture)"));
+    EXPECT_TRUE(ContainsText(ui, ".setInitialState(frame.backBuffer.nativeInitialState)"));
+    EXPECT_TRUE(ContainsText(ui, ".setExternalFinalState(Core::ResourceStates::Present)"));
+
+    const usize renderTaskOffset = ui.find("struct UiSystem::TaskGraphRenderTask{");
+    const usize uploadCompletionOffset = ui.find("struct UiSystem::TaskGraphUploadCompletionTask{", renderTaskOffset);
+    const usize legacyTaskOffset = ui.find("struct UiSystem::StandaloneLegacyPresentationTask{");
+    const usize nextTaskOffset = ui.find("UiSystem::UiSystem(", legacyTaskOffset);
+    ASSERT_NE(renderTaskOffset, AStringView::npos);
+    ASSERT_NE(uploadCompletionOffset, AStringView::npos);
+    ASSERT_NE(legacyTaskOffset, AStringView::npos);
+    ASSERT_NE(nextTaskOffset, AStringView::npos);
+    const AStringView renderTask = ui.substr(renderTaskOffset, uploadCompletionOffset - renderTaskOffset);
+    const AStringView legacyTask = ui.substr(legacyTaskOffset, nextTaskOffset - legacyTaskOffset);
+    for(const AStringView task : { renderTask, legacyTask }){
+        EXPECT_TRUE(ContainsText(task, "Core::AcquiredPresentationFrame frame;"));
+        EXPECT_TRUE(ContainsText(task, "Core::GpuGraphResourceId backbuffer;"));
+    }
+    EXPECT_TRUE(ContainsText(renderTask, "payload.backbuffer,\n            context"));
+    EXPECT_TRUE(ContainsText(legacyTask, "payload.backbuffer,"));
+    EXPECT_TRUE(ContainsText(legacyTask, "context"));
+
+    const usize declarationOffset = ui.find("Core::GpuTaskId UiSystem::declareTaskGraphPresentation");
+    const usize standaloneOffset = ui.find("bool UiSystem::submitStandaloneTaskGraphPresentation", declarationOffset);
+    const usize legacyDeclarationOffset = ui.find(
+        "Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation",
+        standaloneOffset
+    );
+    const usize legacySubmitOffset = ui.find(
+        "bool UiSystem::submitStandaloneLegacyTaskGraphPresentation",
+        legacyDeclarationOffset
+    );
+    const usize uploadGraphOffset = ui.find(
+        "Core::GpuTaskId UiSystem::declareStandaloneTextureUploadGraph",
+        legacySubmitOffset
+    );
+    ASSERT_NE(declarationOffset, AStringView::npos);
+    ASSERT_NE(standaloneOffset, AStringView::npos);
+    ASSERT_NE(legacyDeclarationOffset, AStringView::npos);
+    ASSERT_NE(legacySubmitOffset, AStringView::npos);
+    ASSERT_NE(uploadGraphOffset, AStringView::npos);
+    const AStringView declaration = ui.substr(declarationOffset, standaloneOffset - declarationOffset);
+    const AStringView standalone = ui.substr(standaloneOffset, legacyDeclarationOffset - standaloneOffset);
+    const AStringView legacyDeclaration = ui.substr(
+        legacyDeclarationOffset,
+        legacySubmitOffset - legacyDeclarationOffset
+    );
+    const AStringView legacySubmit = ui.substr(legacySubmitOffset, uploadGraphOffset - legacySubmitOffset);
+
+    EXPECT_TRUE(ContainsText(
+        declaration,
+        "GraphBindsAcquiredPresentationTexture(graph, frame, backbuffer)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        declaration,
+        ".resource = backbuffer,\n"
+        "            .range = {},\n"
+        "            // Rasterization writes the exact renderer-owned presentation texture."
+    ));
+    EXPECT_TRUE(ContainsText(declaration, ".requiredState = Core::ResourceStates::RenderTarget,"));
+    EXPECT_TRUE(ContainsText(declaration, ".frame = frame,"));
+    EXPECT_TRUE(ContainsText(declaration, ".backbuffer = backbuffer,"));
+
+    const usize drawBranchOffset = standalone.find("context->ui->m_taskGraphDrawUploadsPrepared");
+    const usize standaloneImportOffset = standalone.find("backbuffer = graph.importTexture(", drawBranchOffset);
+    const usize standaloneDeclareOffset = standalone.find(
+        "return context->ui->declareTaskGraphPresentation(",
+        standaloneImportOffset
+    );
+    ASSERT_NE(drawBranchOffset, AStringView::npos);
+    ASSERT_NE(standaloneImportOffset, AStringView::npos);
+    ASSERT_NE(standaloneDeclareOffset, AStringView::npos);
+    EXPECT_LT(drawBranchOffset, standaloneImportOffset);
+    EXPECT_LT(standaloneImportOffset, standaloneDeclareOffset);
+    EXPECT_TRUE(ContainsText(standalone, "Core::GpuGraphResourceId backbuffer;"));
+    EXPECT_TRUE(ContainsText(standalone, "context->frame.backBuffer.texture,"));
+    EXPECT_TRUE(ContainsText(standalone, "PresentationBackBufferResourceDesc("));
+    EXPECT_FALSE(ContainsText(standalone, "importHazardDomain"));
+
+    EXPECT_TRUE(ContainsText(
+        legacyDeclaration,
+        "const Core::GpuGraphResourceId backbuffer = graph.importTexture(\n"
+        "        frame.backBuffer.texture,"
+    ));
+    EXPECT_TRUE(ContainsText(legacyDeclaration, "PresentationBackBufferResourceDesc("));
+    EXPECT_TRUE(ContainsText(legacyDeclaration, ".requiredState = Core::ResourceStates::RenderTarget,"));
+    EXPECT_TRUE(ContainsText(
+        legacyDeclaration,
+        "GraphBindsAcquiredPresentationTexture(graph, frame, backbuffer)"
+    ));
+    EXPECT_EQ(CountText(legacyDeclaration, "importHazardDomain("), 1u);
+    EXPECT_TRUE(ContainsText(legacyDeclaration, "ui.imgui_standalone_legacy_presentation.callback"));
+    EXPECT_EQ(CountText(ui, ".setType(Core::GpuGraphResourceType::HazardDomain)"), 1u);
+
+    EXPECT_TRUE(ContainsText(
+        ui,
+        "GraphBindsAcquiredPresentationTexture(context.taskGraph, frame, backbuffer)"
+    ));
+    EXPECT_EQ(
+        CountText(ui, "failed after its terminal packet was accepted; requesting recreation"),
+        2u
+    );
+    for(const AStringView submit : { standalone, legacySubmit }){
+        const usize acceptedFailureOffset = submit.find("if(!m_frameFinished){");
+        const usize recreationRequestOffset = submit.find("m_graphics.requestDeviceRecreation();", acceptedFailureOffset);
+        ASSERT_NE(acceptedFailureOffset, AStringView::npos);
+        ASSERT_NE(recreationRequestOffset, AStringView::npos);
+        EXPECT_LT(acceptedFailureOffset, recreationRequestOffset);
+    }
+}
+
+
 // Late recovery, readback, and history tasks own their record/submit/reject sequencing in the generic runtime.
 // Keep the renderer limited to payload validation, timing arming, and device-recreation policy rather than
 // reconstructing compiler packet ranges around every late tail.
@@ -1191,9 +1480,9 @@ TEST(EcsGraphics, UiPresentationSnapshotsLateRecordInputs){
     ASSERT_NE(opaqueRecordOffset, AStringView::npos);
     ASSERT_LT(recordOffset, opaqueRecordOffset);
     const AStringView recordBody = ui.substr(recordOffset, opaqueRecordOffset - recordOffset);
-    EXPECT_TRUE(ContainsText(recordBody, "recordTaskGraphDrawSnapshot(commandList, framebuffer)"));
+    EXPECT_TRUE(ContainsText(recordBody, "recordTaskGraphDrawSnapshot(commandList, frame, backbuffer, context)"));
     EXPECT_FALSE(ContainsText(recordBody, "ImGui::GetDrawData()"));
-    EXPECT_FALSE(ContainsText(recordBody, "renderDrawData(commandList, framebuffer"));
+    EXPECT_FALSE(ContainsText(recordBody, "renderDrawData(commandList, frame.framebuffer.get()"));
 
     // The separately named opaque fallback is intentionally the sole graph task allowed to touch live callback
     // storage, and it must guard that synchronous boundary against a changed ImGui frame.
@@ -1202,7 +1491,7 @@ TEST(EcsGraphics, UiPresentationSnapshotsLateRecordInputs){
     const AStringView opaqueRecord = ui.substr(opaqueRecordOffset, completionOffset - opaqueRecordOffset);
     EXPECT_TRUE(ContainsText(opaqueRecord, "ImGui::GetDrawData() != drawData"));
     EXPECT_TRUE(ContainsText(opaqueRecord, "frameGeneration != m_frameGeneration"));
-    EXPECT_TRUE(ContainsText(opaqueRecord, "renderDrawData(commandList, framebuffer, *drawData)"));
+    EXPECT_TRUE(ContainsText(opaqueRecord, "renderDrawData(commandList, frame.framebuffer.get(), *drawData)"));
 }
 
 
@@ -1332,7 +1621,7 @@ TEST(EcsGraphics, UiLegacyFallbackUsesStandaloneGraphs){
     EXPECT_TRUE(ContainsText(ui, "OpaquePresentationQueueRequest"));
     EXPECT_TRUE(ContainsText(ui, "Standalone ImGui Presentation Back Buffer"));
     EXPECT_TRUE(ContainsText(ui, "ImGui Opaque Callback Domain"));
-    EXPECT_TRUE(ContainsText(ui, "if(prepareTaskGraphPresentation(framebuffer))"));
+    EXPECT_TRUE(ContainsText(ui, "if(prepareTaskGraphPresentation(frame))"));
 
     const usize opaquePresentationOffset = ui.find("Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation");
     const usize legacySubmitOffset = ui.find("bool UiSystem::submitPreparedLegacyTextureUploads");
@@ -1373,8 +1662,8 @@ TEST(EcsGraphics, UiLegacyFallbackUsesStandaloneGraphs){
     EXPECT_TRUE(ContainsText(presentationDeclare, "if(previousTask.valid())"));
 
     const AStringView presentationRenderBody = ui.substr(renderOffset);
-    const usize standalonePresentationOffset = presentationRenderBody.find("submitStandaloneTaskGraphPresentation(framebuffer)");
-    const usize opaquePresentationFallbackOffset = presentationRenderBody.find("submitStandaloneLegacyTaskGraphPresentation(framebuffer)");
+    const usize standalonePresentationOffset = presentationRenderBody.find("submitStandaloneTaskGraphPresentation(frame)");
+    const usize opaquePresentationFallbackOffset = presentationRenderBody.find("submitStandaloneLegacyTaskGraphPresentation(frame)");
     const usize directTextureFallbackOffset = presentationRenderBody.find("submitPreparedLegacyTextureUploads(*drawData)");
     ASSERT_NE(standalonePresentationOffset, AStringView::npos);
     ASSERT_NE(opaquePresentationFallbackOffset, AStringView::npos);

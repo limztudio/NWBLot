@@ -240,27 +240,36 @@ bool RendererDeferredSystem::renderDeferredComposite(
 bool RendererDeferredSystem::renderDeferredPresent(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    Core::Framebuffer* presentationFramebuffer
+    const Core::AcquiredPresentationFrame& presentationFrame
 ){
-    NWB_ASSERT(presentationFramebuffer);
+    NWB_ASSERT(presentationFrame.valid());
     NWB_ASSERT(deferredState().m_presentPipeline);
+    if(!presentationFrame.valid() || !deferredState().m_presentPipeline)
+        return false;
+    Core::Framebuffer& presentationFramebuffer = *presentationFrame.framebuffer;
+    const Core::FramebufferDesc& presentationFramebufferDesc = presentationFramebuffer.getDescription();
     NWB_ASSERT(
-        presentationFramebuffer
-        && deferredState().m_presentPipeline
-        && deferredState().m_presentPipeline->getFramebufferInfo() == presentationFramebuffer->getFramebufferInfo()
+        presentationFramebufferDesc.colorAttachments.size() == 1u
+        && presentationFramebufferDesc.colorAttachments[0].texture == presentationFrame.backBuffer.texture.get()
+        && deferredState().m_presentPipeline->getFramebufferInfo() == presentationFramebuffer.getFramebufferInfo()
     );
+    if(
+        presentationFramebufferDesc.colorAttachments.size() != 1u
+        || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()
+        || deferredState().m_presentPipeline->getFramebufferInfo() != presentationFramebuffer.getFramebufferInfo()
+    )
+        return false;
 
-    // The graph transitions the sampled composite image before this task.  The framebuffer stays a hazard domain:
-    // its acquire, render-pass, and presentation ownership remain intrinsic to the Graphics command-list path.
+    // The graph owns both the sampled composite transition and this exact acquired texture's render-target state.
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredPresent, graphics().getDevice(), commandList);
 
     Core::ViewportState viewportState;
-    viewportState.addViewportAndScissorRect(presentationFramebuffer->getFramebufferInfo().getViewport());
+    viewportState.addViewportAndScissorRect(presentationFramebuffer.getFramebufferInfo().getViewport());
 
     Core::GraphicsState graphicsState;
     graphicsState.setPipeline(deferredState().m_presentPipeline.get());
-    graphicsState.setFramebuffer(presentationFramebuffer);
+    graphicsState.setFramebuffer(&presentationFramebuffer);
     graphicsState.setViewport(viewportState);
 
     commandList.setGraphicsState(graphicsState);

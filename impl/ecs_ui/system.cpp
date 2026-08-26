@@ -7,6 +7,7 @@
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/module.h>
+#include <core/graphics/task_graph/compiled_graph.h>
 #include <core/graphics/task_graph/task_graph.h>
 #include <impl/assets/graphics/imgui/binding_slots.h>
 #include <core/common/log.h>
@@ -218,6 +219,61 @@ static bool HasPendingTextureUploads(const ImDrawData& drawData){
     return desc;
 }
 
+[[nodiscard]] static bool ValidAcquiredPresentationFrame(const Core::AcquiredPresentationFrame& frame){
+    if(!frame.valid())
+        return false;
+
+    const Core::FramebufferDesc& framebufferDesc = frame.framebuffer->getDescription();
+    return framebufferDesc.colorAttachments.size() == 1u
+        && framebufferDesc.colorAttachments[0].texture == frame.backBuffer.texture.get()
+        && !framebufferDesc.depthAttachment.valid()
+        && !framebufferDesc.shadingRateAttachment.valid()
+    ;
+}
+
+[[nodiscard]] static bool SameAcquiredPresentationFrame(
+    const Core::AcquiredPresentationFrame& lhs,
+    const Core::AcquiredPresentationFrame& rhs
+){
+    return lhs.framebuffer.get() == rhs.framebuffer.get()
+        && lhs.backBuffer.texture.get() == rhs.backBuffer.texture.get()
+        && lhs.backBuffer.nativeInitialState == rhs.backBuffer.nativeInitialState
+        && lhs.backBuffer.index == rhs.backBuffer.index
+    ;
+}
+
+[[nodiscard]] static bool MatchesAcquiredPresentationFramebuffer(
+    const Core::AcquiredPresentationFrame& frame,
+    const Core::Framebuffer* const framebuffer
+){
+    return ValidAcquiredPresentationFrame(frame) && frame.framebuffer.get() == framebuffer;
+}
+
+[[nodiscard]] static bool GraphBindsAcquiredPresentationTexture(
+    const Core::GpuTaskGraph& graph,
+    const Core::AcquiredPresentationFrame& frame,
+    const Core::GpuGraphResourceId backbuffer
+){
+    return backbuffer.valid() && graph.textureForResource(backbuffer) == frame.backBuffer.texture.get();
+}
+
+[[nodiscard]] static Core::GpuGraphResourceDesc PresentationBackBufferResourceDesc(
+    const Core::AcquiredPresentationFrame& frame,
+    const Name& identity,
+    const AStringView label
+){
+    Core::GpuGraphResourceDesc desc;
+    desc
+        .setIdentity(identity)
+        .setMarkerLabel(label)
+        .setType(Core::GpuGraphResourceType::Texture)
+        .setInitialState(frame.backBuffer.nativeInitialState)
+        .setExternalFinalState(Core::ResourceStates::Present)
+        .setQueueSharing(frame.backBuffer.texture->getCreationDescription().queueSharing)
+    ;
+    return desc;
+}
+
 [[nodiscard]] static bool IsTaskGraphResetCallback(const ImDrawCmd& drawCommand){
     if(!drawCommand.UserCallback)
         return false;
@@ -241,7 +297,8 @@ static bool HasPendingTextureUploads(const ImDrawData& drawData){
 struct UiSystem::TaskGraphRenderTask{
     struct Payload{
         UiSystem* ui = nullptr;
-        Core::Framebuffer* framebuffer = nullptr;
+        Core::AcquiredPresentationFrame frame;
+        Core::GpuGraphResourceId backbuffer;
     };
 
     [[nodiscard]] static bool record(
@@ -249,13 +306,16 @@ struct UiSystem::TaskGraphRenderTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        static_cast<void>(context);
-        return payload.ui && payload.ui->recordTaskGraphPresentation(commandList, payload.framebuffer);
+        return payload.ui && payload.ui->recordTaskGraphPresentation(
+            commandList,
+            payload.frame,
+            payload.backbuffer,
+            context
+        );
     }
 
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        static_cast<void>(token);
-        if(payload.ui)
+        if(payload.ui && token.valid())
             payload.ui->confirmTaskGraphPresentationSubmission();
     }
 };
@@ -277,8 +337,7 @@ struct UiSystem::TaskGraphUploadCompletionTask{
     }
 
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        static_cast<void>(token);
-        if(payload.ui)
+        if(payload.ui && token.valid())
             payload.ui->confirmTaskGraphPresentationSubmission();
     }
 };
@@ -318,7 +377,8 @@ struct UiSystem::StandaloneTextureUploadCompletionTask{
 struct UiSystem::StandaloneLegacyPresentationTask{
     struct Payload{
         UiSystem* ui = nullptr;
-        Core::Framebuffer* framebuffer = nullptr;
+        Core::AcquiredPresentationFrame frame;
+        Core::GpuGraphResourceId backbuffer;
         ImDrawData* drawData = nullptr;
         u64 frameGeneration = 0u;
     };
@@ -328,12 +388,13 @@ struct UiSystem::StandaloneLegacyPresentationTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        static_cast<void>(context);
         return payload.ui && payload.ui->recordStandaloneLegacyTaskGraphPresentation(
             commandList,
-            payload.framebuffer,
+            payload.frame,
+            payload.backbuffer,
             payload.drawData,
-            payload.frameGeneration
+            payload.frameGeneration,
+            context
         );
     }
 
@@ -454,6 +515,7 @@ void UiSystem::beginFrame(const f32 delta){
     m_taskGraphLegacyPresentationClaimed = false;
     m_taskGraphDrawUploadsPrepared = false;
     m_taskGraphPresentationGraphGeneration = 0u;
+    m_taskGraphPresentationFrame = {};
     m_taskGraphVertexUpload.clear();
     m_taskGraphIndexUpload.clear();
     clearTaskGraphDrawSnapshot();
@@ -553,6 +615,7 @@ void UiSystem::invalidateResources(){
     m_taskGraphLegacyPresentationClaimed = false;
     m_taskGraphDrawUploadsPrepared = false;
     m_taskGraphPresentationGraphGeneration = 0u;
+    m_taskGraphPresentationFrame = {};
 }
 
 bool UiSystem::ensureRenderCommandList(){
@@ -570,20 +633,26 @@ bool UiSystem::ensureRenderCommandList(){
 }
 
 bool UiSystem::prepareResources(Core::Framebuffer* framebuffer){
-    if(m_taskGraphPresentationPrepared)
-        return true;
+    const Core::AcquiredPresentationFrame frame = m_graphics.acquiredPresentationFrame();
+    if(!__hidden_ui::MatchesAcquiredPresentationFramebuffer(frame, framebuffer)){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("UiSystem: render-pass framebuffer does not match the acquired presentation frame; requesting recreation"));
+        m_graphics.requestDeviceRecreation();
+        return false;
+    }
 
     // A world without RendererSystem still has a complete immutable overlay snapshot, so prefer the standalone
     // graph path. An arbitrary ImGui callback cannot be retained safely; only that exceptional case falls through
     // to the direct raster compatibility preparation below.
-    if(prepareTaskGraphPresentation(framebuffer))
+    if(prepareTaskGraphPresentation(frame))
         return true;
-    return prepareFrameResources(framebuffer, false);
+    return prepareFrameResources(frame, false);
 }
 
-bool UiSystem::prepareFrameResources(Core::Framebuffer* framebuffer, const bool graphOwnsUploads){
-    if(!framebuffer)
+bool UiSystem::prepareFrameResources(const Core::AcquiredPresentationFrame& frame, const bool graphOwnsUploads){
+    if(!__hidden_ui::ValidAcquiredPresentationFrame(frame))
         return false;
+
+    Core::Framebuffer* const framebuffer = frame.framebuffer.get();
 
     setCurrentContext();
     if(m_frameStarted && !m_frameFinished)
@@ -971,10 +1040,21 @@ bool UiSystem::declareTaskGraphDrawUploads(
     return true;
 }
 
-bool UiSystem::prepareTaskGraphPresentation(Core::Framebuffer* framebuffer){
-    if(m_taskGraphPresentationPrepared)
-        return true;
-    if(!prepareFrameResources(framebuffer, true))
+bool UiSystem::prepareTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame){
+    if(!__hidden_ui::ValidAcquiredPresentationFrame(frame)){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("UiSystem: presentation preparation received an invalid acquired frame; requesting recreation"));
+        m_graphics.requestDeviceRecreation();
+        return false;
+    }
+    if(m_taskGraphPresentationPrepared){
+        if(__hidden_ui::SameAcquiredPresentationFrame(frame, m_taskGraphPresentationFrame))
+            return true;
+
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("UiSystem: presentation preparation changed acquired-frame identity; requesting recreation"));
+        m_graphics.requestDeviceRecreation();
+        return false;
+    }
+    if(!prepareFrameResources(frame, true))
         return false;
 
     setCurrentContext();
@@ -993,6 +1073,7 @@ bool UiSystem::prepareTaskGraphPresentation(Core::Framebuffer* framebuffer){
     m_taskGraphPresentationHasWork = m_frameFinished && drawData && (
         hasDrawWork || __hidden_ui::HasPendingTextureUploads(*drawData)
     );
+    m_taskGraphPresentationFrame = frame;
     m_taskGraphPresentationPrepared = true;
     return true;
 }
@@ -1003,7 +1084,7 @@ bool UiSystem::hasTaskGraphPresentationWork()const{
 
 Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
     Core::GpuTaskGraph& graph,
-    Core::Framebuffer* const framebuffer,
+    const Core::AcquiredPresentationFrame& frame,
     const Core::GpuGraphResourceId backbuffer,
     const Core::GpuTaskId previousTask
 ){
@@ -1021,10 +1102,16 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         !m_taskGraphPresentationPrepared
         || !m_taskGraphPresentationHasWork
         || m_taskGraphPresentationClaimed
-        || !framebuffer
-        || !backbuffer.valid()
     )
         return {};
+    if(
+        !__hidden_ui::ValidAcquiredPresentationFrame(frame)
+        || !__hidden_ui::SameAcquiredPresentationFrame(frame, m_taskGraphPresentationFrame)
+    ){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("UiSystem: presentation declaration no longer matches its prepared acquired frame; requesting recreation"));
+        m_graphics.requestDeviceRecreation();
+        return {};
+    }
 
     ImDrawData* const drawData = ImGui::GetDrawData();
     if(!drawData)
@@ -1114,6 +1201,12 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         return task;
     }
 
+    if(!__hidden_ui::GraphBindsAcquiredPresentationTexture(graph, frame, backbuffer)){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("UiSystem: presentation graph does not bind the acquired back-buffer texture; requesting recreation"));
+        m_graphics.requestDeviceRecreation();
+        return {};
+    }
+
     if(
         !m_taskGraphDrawSnapshot.vertexBuffer
         || !m_taskGraphDrawSnapshot.indexBuffer
@@ -1166,9 +1259,9 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
     resourceUses.push_back(Core::GpuTaskResourceUse{
             .resource = backbuffer,
             .range = {},
-            // The swap-chain texture restores its keep-initial-state Present layout when this command list closes.
-            // The graph hazard domain carries the authoritative ordering with the deferred scene-output packet.
-            .requiredState = Core::ResourceStates::Present,
+            // Rasterization writes the exact renderer-owned presentation texture. Its typed import owns the
+            // terminal Present transition after this final overlay use.
+            .requiredState = Core::ResourceStates::RenderTarget,
             .access = Core::GpuTaskResourceAccess::Write,
     });
     resourceUses.push_back(__hidden_ui::ReadBufferUse(vertexBuffer, Core::ResourceStates::VertexBuffer));
@@ -1241,7 +1334,8 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         desc,
         TaskGraphRenderTask::Payload{
             .ui = this,
-            .framebuffer = framebuffer,
+            .frame = frame,
+            .backbuffer = backbuffer,
         }
     );
     if(task.valid()){
@@ -1253,9 +1347,10 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
     return task;
 }
 
-bool UiSystem::submitStandaloneTaskGraphPresentation(Core::Framebuffer* const framebuffer){
+bool UiSystem::submitStandaloneTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame){
     if(
-        !framebuffer
+        !__hidden_ui::ValidAcquiredPresentationFrame(frame)
+        || !__hidden_ui::SameAcquiredPresentationFrame(frame, m_taskGraphPresentationFrame)
         || !m_frameFinished
         || !m_taskGraphPresentationPrepared
         || !m_taskGraphPresentationHasWork
@@ -1275,11 +1370,11 @@ bool UiSystem::submitStandaloneTaskGraphPresentation(Core::Framebuffer* const fr
     m_taskGraphPresentationGraphGeneration = 0u;
     struct StandalonePresentationContext{
         UiSystem* ui = nullptr;
-        Core::Framebuffer* framebuffer = nullptr;
+        Core::AcquiredPresentationFrame frame;
     };
     StandalonePresentationContext context{
         .ui = this,
-        .framebuffer = framebuffer,
+        .frame = frame,
     };
     Core::QueueSubmissionToken submissionToken;
     const bool submitted = m_graphics.submitStandaloneTaskGraph(
@@ -1288,20 +1383,33 @@ bool UiSystem::submitStandaloneTaskGraphPresentation(Core::Framebuffer* const fr
             StandalonePresentationContext* const context =
                 static_cast<StandalonePresentationContext*>(rawContext)
             ;
-            if(!context || !context->ui || !context->framebuffer)
+            if(
+                !context
+                || !context->ui
+                || !__hidden_ui::ValidAcquiredPresentationFrame(context->frame)
+            )
                 return Core::GpuTaskId{};
 
-            const Core::GpuGraphResourceId backbuffer = graph.importHazardDomain(
-                Core::GpuGraphResourceDesc{}
-                    .setIdentity(Name("ui.imgui_standalone_presentation.backbuffer"))
-                    .setMarkerLabel("Standalone ImGui Presentation Back Buffer")
-                    .setType(Core::GpuGraphResourceType::HazardDomain)
-            );
-            if(!backbuffer.valid())
-                return Core::GpuTaskId{};
+            Core::GpuGraphResourceId backbuffer;
+            if(
+                context->ui->m_taskGraphDrawUploadsPrepared
+                && context->ui->m_taskGraphDrawSnapshot.valid
+                && !context->ui->m_taskGraphDrawCommands.empty()
+            ){
+                backbuffer = graph.importTexture(
+                    context->frame.backBuffer.texture,
+                    __hidden_ui::PresentationBackBufferResourceDesc(
+                        context->frame,
+                        Name("ui.imgui_standalone_presentation.backbuffer"),
+                        "Standalone ImGui Presentation Back Buffer"
+                    )
+                );
+                if(!__hidden_ui::GraphBindsAcquiredPresentationTexture(graph, context->frame, backbuffer))
+                    return Core::GpuTaskId{};
+            }
             return context->ui->declareTaskGraphPresentation(
                 graph,
-                context->framebuffer,
+                context->frame,
                 backbuffer,
                 {}
             );
@@ -1312,6 +1420,12 @@ bool UiSystem::submitStandaloneTaskGraphPresentation(Core::Framebuffer* const fr
     if(submitted && submissionToken.valid())
         return true;
 
+    if(!m_frameFinished){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("UiSystem: standalone presentation failed after its terminal packet was accepted; requesting recreation"));
+        m_graphics.requestDeviceRecreation();
+        return false;
+    }
+
     // A failed standalone attempt must leave the direct compatibility path able to consume the live ImGui list.
     // The task graph itself discards incomplete immutable upload work; clearing this claim only releases graph IDs.
     m_taskGraphPresentationClaimed = false;
@@ -1321,12 +1435,12 @@ bool UiSystem::submitStandaloneTaskGraphPresentation(Core::Framebuffer* const fr
 
 Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
     Core::GpuTaskGraph& graph,
-    Core::Framebuffer* const framebuffer,
+    const Core::AcquiredPresentationFrame& frame,
     ImDrawData* const drawData,
     const u64 frameGeneration
 ){
     if(
-        !framebuffer
+        !__hidden_ui::ValidAcquiredPresentationFrame(frame)
         || !drawData
         || !m_frameFinished
         || m_taskGraphLegacyPresentationClaimed
@@ -1345,11 +1459,13 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
     )
         return {};
 
-    const Core::GpuGraphResourceId backbuffer = graph.importHazardDomain(
-        Core::GpuGraphResourceDesc{}
-            .setIdentity(Name("ui.imgui_standalone_legacy_presentation.backbuffer"))
-            .setMarkerLabel("Standalone ImGui Legacy Presentation Back Buffer")
-            .setType(Core::GpuGraphResourceType::HazardDomain)
+    const Core::GpuGraphResourceId backbuffer = graph.importTexture(
+        frame.backBuffer.texture,
+        __hidden_ui::PresentationBackBufferResourceDesc(
+            frame,
+            Name("ui.imgui_standalone_legacy_presentation.backbuffer"),
+            "Standalone ImGui Legacy Presentation Back Buffer"
+        )
     );
     const Core::GpuGraphResourceId opaqueCallbackDomain = graph.importHazardDomain(
         Core::GpuGraphResourceDesc{}
@@ -1374,7 +1490,7 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
         )
     );
     if(
-        !backbuffer.valid()
+        !__hidden_ui::GraphBindsAcquiredPresentationTexture(graph, frame, backbuffer)
         || !opaqueCallbackDomain.valid()
         || !vertexBuffer.valid()
         || !indexBuffer.valid()
@@ -1396,7 +1512,7 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
     resourceUses.push_back(Core::GpuTaskResourceUse{
         .resource = backbuffer,
         .range = {},
-        .requiredState = Core::ResourceStates::Present,
+        .requiredState = Core::ResourceStates::RenderTarget,
         .access = Core::GpuTaskResourceAccess::Write,
     });
     // The opaque task writes its live ImGui bytes before binding the same buffers for rasterization.  The callback
@@ -1485,7 +1601,8 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
         desc,
         StandaloneLegacyPresentationTask::Payload{
             .ui = this,
-            .framebuffer = framebuffer,
+            .frame = frame,
+            .backbuffer = backbuffer,
             .drawData = drawData,
             .frameGeneration = frameGeneration,
         }
@@ -1497,8 +1614,12 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
     return task;
 }
 
-bool UiSystem::submitStandaloneLegacyTaskGraphPresentation(Core::Framebuffer* const framebuffer){
-    if(!framebuffer || !m_frameFinished || m_taskGraphLegacyPresentationClaimed)
+bool UiSystem::submitStandaloneLegacyTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame){
+    if(
+        !__hidden_ui::ValidAcquiredPresentationFrame(frame)
+        || !m_frameFinished
+        || m_taskGraphLegacyPresentationClaimed
+    )
         return false;
 
     setCurrentContext();
@@ -1514,13 +1635,13 @@ bool UiSystem::submitStandaloneLegacyTaskGraphPresentation(Core::Framebuffer* co
 
     struct StandaloneLegacyPresentationContext{
         UiSystem* ui = nullptr;
-        Core::Framebuffer* framebuffer = nullptr;
+        Core::AcquiredPresentationFrame frame;
         ImDrawData* drawData = nullptr;
         u64 frameGeneration = 0u;
     };
     StandaloneLegacyPresentationContext context{
         .ui = this,
-        .framebuffer = framebuffer,
+        .frame = frame,
         .drawData = drawData,
         .frameGeneration = m_frameGeneration,
     };
@@ -1535,7 +1656,7 @@ bool UiSystem::submitStandaloneLegacyTaskGraphPresentation(Core::Framebuffer* co
                 return Core::GpuTaskId{};
             return context->ui->declareStandaloneLegacyTaskGraphPresentation(
                 graph,
-                context->framebuffer,
+                context->frame,
                 context->drawData,
                 context->frameGeneration
             );
@@ -1545,6 +1666,12 @@ bool UiSystem::submitStandaloneLegacyTaskGraphPresentation(Core::Framebuffer* co
     );
     if(submitted && submissionToken.valid())
         return true;
+
+    if(!m_frameFinished){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("UiSystem: standalone legacy presentation failed after its terminal packet was accepted; requesting recreation"));
+        m_graphics.requestDeviceRecreation();
+        return false;
+    }
 
     // This is the final availability fallback: graph compilation/recording failure must not drop an editor overlay.
     // The rejected graph leaves every texture request pending for the existing direct path below.
@@ -1628,10 +1755,16 @@ Core::GpuTaskId UiSystem::declareStandaloneTextureUploadGraph(Core::GpuTaskGraph
     return completionTask;
 }
 
-bool UiSystem::recordTaskGraphDrawSnapshot(Core::CommandList& commandList, Core::Framebuffer* const framebuffer){
+bool UiSystem::recordTaskGraphDrawSnapshot(
+    Core::CommandList& commandList,
+    const Core::AcquiredPresentationFrame& frame,
+    const Core::GpuGraphResourceId backbuffer,
+    const Core::GpuTaskRecordContext& context
+){
     const TaskGraphDrawSnapshot& snapshot = m_taskGraphDrawSnapshot;
     if(
-        !framebuffer
+        !__hidden_ui::ValidAcquiredPresentationFrame(frame)
+        || !__hidden_ui::GraphBindsAcquiredPresentationTexture(context.taskGraph, frame, backbuffer)
         || !snapshot.valid
         || !snapshot.vertexBuffer
         || !snapshot.indexBuffer
@@ -1644,6 +1777,7 @@ bool UiSystem::recordTaskGraphDrawSnapshot(Core::CommandList& commandList, Core:
     )
         return false;
 
+    Core::Framebuffer* const framebuffer = frame.framebuffer.get();
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
@@ -1718,10 +1852,14 @@ bool UiSystem::recordTaskGraphDrawSnapshot(Core::CommandList& commandList, Core:
     return true;
 }
 
-bool UiSystem::recordTaskGraphPresentation(Core::CommandList& commandList, Core::Framebuffer* const framebuffer){
+bool UiSystem::recordTaskGraphPresentation(
+    Core::CommandList& commandList,
+    const Core::AcquiredPresentationFrame& frame,
+    const Core::GpuGraphResourceId backbuffer,
+    const Core::GpuTaskRecordContext& context
+){
     if(
-        !framebuffer
-        || !m_taskGraphPresentationClaimed
+        !m_taskGraphPresentationClaimed
         || !m_taskGraphDrawUploadsPrepared
         || !m_taskGraphDrawSnapshot.valid
     )
@@ -1732,7 +1870,7 @@ bool UiSystem::recordTaskGraphPresentation(Core::CommandList& commandList, Core:
 
     // Vertex/index bytes and the command stream reached immutable graph-owned storage before declaration. This
     // terminal task only consumes the declared VertexBuffer/IndexBuffer and sampled-texture states.
-    if(!recordTaskGraphDrawSnapshot(commandList, framebuffer))
+    if(!recordTaskGraphDrawSnapshot(commandList, frame, backbuffer, context))
         return false;
     commandList.endRenderPass();
     return true;
@@ -1740,12 +1878,15 @@ bool UiSystem::recordTaskGraphPresentation(Core::CommandList& commandList, Core:
 
 bool UiSystem::recordStandaloneLegacyTaskGraphPresentation(
     Core::CommandList& commandList,
-    Core::Framebuffer* const framebuffer,
+    const Core::AcquiredPresentationFrame& frame,
+    const Core::GpuGraphResourceId backbuffer,
     ImDrawData* const drawData,
-    const u64 frameGeneration
+    const u64 frameGeneration,
+    const Core::GpuTaskRecordContext& context
 ){
     if(
-        !framebuffer
+        !__hidden_ui::ValidAcquiredPresentationFrame(frame)
+        || !__hidden_ui::GraphBindsAcquiredPresentationTexture(context.taskGraph, frame, backbuffer)
         || !drawData
         || !m_taskGraphLegacyPresentationClaimed
         || !m_frameFinished
@@ -1762,7 +1903,7 @@ bool UiSystem::recordStandaloneLegacyTaskGraphPresentation(
 
     if(!uploadDrawBuffers(commandList, *drawData))
         return false;
-    renderDrawData(commandList, framebuffer, *drawData);
+    renderDrawData(commandList, frame.framebuffer.get(), *drawData);
     commandList.endRenderPass();
     return true;
 }
@@ -1829,8 +1970,12 @@ bool UiSystem::submitPreparedLegacyTextureUploads(ImDrawData& drawData){
 }
 
 void UiSystem::render(Core::Framebuffer* framebuffer){
-    if(!framebuffer)
+    const Core::AcquiredPresentationFrame frame = m_graphics.acquiredPresentationFrame();
+    if(!__hidden_ui::MatchesAcquiredPresentationFramebuffer(frame, framebuffer)){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("UiSystem: raster framebuffer does not match the acquired presentation frame; requesting recreation"));
+        m_graphics.requestDeviceRecreation();
         return;
+    }
 
     setCurrentContext();
     if(m_frameStarted && !m_frameFinished)
@@ -1855,7 +2000,9 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
     // has no RendererSystem at all, rebuild the immutable overlay as one standalone graph before considering the
     // direct compatibility raster path.
     if(m_taskGraphPresentationPrepared && m_taskGraphPresentationHasWork){
-        if(submitStandaloneTaskGraphPresentation(framebuffer))
+        if(submitStandaloneTaskGraphPresentation(frame))
+            return;
+        if(!m_frameFinished)
             return;
         NWB_LOGGER_WARNING(NWB_TEXT("UiSystem: standalone graph presentation failed; retaining direct raster fallback"));
     }
@@ -1864,7 +2011,9 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
         // Custom callbacks remain opaque, but the standalone graph records them synchronously against the live
         // ImGui arrays. That preserves callback ABI while moving command-list ownership, texture uploads, and the
         // submit transaction into the graph. Only a rejected opaque graph reaches the direct availability fallback.
-        if(submitStandaloneLegacyTaskGraphPresentation(framebuffer))
+        if(submitStandaloneLegacyTaskGraphPresentation(frame))
+            return;
+        if(!m_frameFinished)
             return;
         NWB_LOGGER_WARNING(NWB_TEXT("UiSystem: standalone legacy ImGui graph presentation failed; retaining direct raster fallback"));
     }
@@ -1893,7 +2042,7 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
     commandList->open();
     const bool success = uploadDrawBuffers(*commandList, *drawData);
     if(success)
-        renderDrawData(*commandList, framebuffer, *drawData);
+        renderDrawData(*commandList, frame.framebuffer.get(), *drawData);
 
     commandList->endRenderPass();
     commandList->close();
@@ -1915,6 +2064,7 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
         m_taskGraphLegacyPresentationClaimed = false;
         m_taskGraphDrawUploadsPrepared = false;
         m_taskGraphPresentationGraphGeneration = 0u;
+        m_taskGraphPresentationFrame = {};
         m_taskGraphVertexUpload.clear();
         m_taskGraphIndexUpload.clear();
         clearTaskGraphDrawSnapshot();
@@ -1930,6 +2080,7 @@ void UiSystem::backBufferResizing(){
     m_taskGraphLegacyPresentationClaimed = false;
     m_taskGraphDrawUploadsPrepared = false;
     m_taskGraphPresentationGraphGeneration = 0u;
+    m_taskGraphPresentationFrame = {};
     m_taskGraphVertexUpload.clear();
     m_taskGraphIndexUpload.clear();
     clearTaskGraphDrawSnapshot();

@@ -86,7 +86,7 @@ public:
     [[nodiscard]] bool renderDeferredPresent(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        Core::Framebuffer* presentationFramebuffer
+        const Core::AcquiredPresentationFrame& presentationFrame
     );
 
 

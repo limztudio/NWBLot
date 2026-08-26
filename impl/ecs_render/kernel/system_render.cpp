@@ -147,6 +147,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!framebuffer)
         return;
 
+    const Core::AcquiredPresentationFrame presentationFrame = m_graphics.acquiredPresentationFrame();
+    const Core::FramebufferDesc& presentationFramebufferDesc = framebuffer->getDescription();
+    if(
+        !presentationFrame.valid()
+        || presentationFrame.framebuffer.get() != framebuffer
+        || presentationFramebufferDesc.colorAttachments.size() != 1u
+        || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()
+    ){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: render target did not match the acquired presentation frame; requesting recreation"));
+        m_graphics.requestDeviceRecreation();
+        return;
+    }
+
     if(!m_deferredState.m_targets.valid())
         return;
     DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
@@ -511,7 +524,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         hasTransparentRenderers,
         hasOpaqueCsgFrameWork,
         meshViewAspectRatio,
-        framebuffer,
+        presentationFrame,
         frameTimingTransaction,
         asyncPrefixTiming,
         deferredClearTiming,
@@ -566,7 +579,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             hasTransparentRenderers,
             hasOpaqueCsgFrameWork,
             meshViewAspectRatio,
-            framebuffer,
+            presentationFrame,
             frameTimingTransaction,
             asyncPrefixTiming,
             deferredClearTiming,
@@ -2693,11 +2706,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             : Core::QueueSubmissionToken{}
         ;
         if(!finalPresentationSubmissionToken.valid()){
+            const bool presentationBackBufferWriteAccepted = m_deferredLightingSubmissionTransaction.taskToken(
+                m_deferredLightingCompiledGraph,
+                m_deferredPresentTask
+            ).valid();
             if(framePresentationSignal.valid())
                 m_graphics.cancelFramePresentationSignal();
             const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred presentation submission was rejected"));
+            if(presentationBackBufferWriteAccepted){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: acquired back buffer was written before presentation suffix rejection; requesting recreation"));
+                m_graphics.requestDeviceRecreation();
+            }
             if(!recovered)
                 failFrameRenderRecovery();
             return false;

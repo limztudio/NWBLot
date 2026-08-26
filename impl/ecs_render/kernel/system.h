@@ -394,7 +394,7 @@ private:
         bool hasTransparentRenderers,
         bool hasOpaqueCsgFrameWork,
         f32 meshViewAspectRatio,
-        Core::Framebuffer* presentationFramebuffer,
+        const Core::AcquiredPresentationFrame& presentationFrame,
         Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
         Optional<Core::GpuTimingMeasure>& deferredClearTiming,
@@ -718,3 +718,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

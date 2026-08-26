@@ -283,6 +283,19 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     if(!framebuffer)
         return false;
 
+    const Core::AcquiredPresentationFrame& presentationFrame = m_graphics.acquiredPresentationFrame();
+    const Core::FramebufferDesc& presentationFramebufferDesc = framebuffer->getDescription();
+    if(
+        !presentationFrame.valid()
+        || presentationFrame.framebuffer.get() != framebuffer
+        || presentationFramebufferDesc.colorAttachments.size() != 1u
+        || presentationFramebufferDesc.colorAttachments[0].texture != presentationFrame.backBuffer.texture.get()
+    ){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation preparation did not match the acquired frame; requesting recreation"));
+        m_graphics.requestDeviceRecreation();
+        return false;
+    }
+
     m_meshSystem.pruneRuntimeMeshResources();
     m_preparedHasTransparentRenderers = m_materialSystem.prepareVisibleMaterialSurfaceInfos();
     m_materialSystem.prepareVisibleMaterialInstanceMutableCache();
@@ -362,8 +375,12 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     m_preparedShadowVisibilityResourcesValid = true;
 
     if(Core::IGpuTaskGraphPresentationContributor* const contributor = m_graphics.taskGraphPresentationContributor()){
-        if(contributor->prepareTaskGraphPresentation(framebuffer))
+        if(contributor->prepareTaskGraphPresentation(presentationFrame))
             m_preparedTaskGraphPresentationContributor = contributor;
+        else if(m_graphics.isDeviceRecreationRequested()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation contributor requested recreation during preparation"));
+            return false;
+        }
         else
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: presentation contributor preparation failed; rendering scene output without its overlay"));
     }

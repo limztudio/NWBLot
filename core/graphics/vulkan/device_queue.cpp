@@ -669,7 +669,7 @@ QueueSubmissionToken Device::executeCommandLists(
         }
     }
     for(usize i = 0u; i < numCommandLists; ++i){
-        if(!pCommandLists[i]->validateTrackedTexturesReadyForSubmission())
+        if(!pCommandLists[i]->validateTrackedResourcesReadyForSubmission())
             return {};
     }
 

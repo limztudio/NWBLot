@@ -10308,6 +10308,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
         BufferDesc()
             .setByteSize(256u)
             .setCanHaveRawViews(true)
+            .setIsConstantBuffer(true)
             .setInitialState(ResourceStates::Common)
     );
     ASSERT_NE(buffer.get(), nullptr);
@@ -13495,6 +13496,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPostGbufferTraceGeometryStatesRe
                 .setByteSize(256u)
                 .setCanHaveRawViews(true)
                 .setCanHaveUAVs(canHaveUavs)
+                .setIsVertexBuffer(!canHaveUavs)
                 .setInitialState(ResourceStates::Common)
         );
     };
@@ -17550,12 +17552,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     constexpr u32 uavBufferCount = NativePacketSurfelGiResolveProbeTask::s_UavBufferCount;
     constexpr u32 uavTextureCount = NativePacketSurfelGiResolveProbeTask::s_UavTextureCount;
     constexpr u32 traceGeometryBufferIndex = 5u;
-    const auto makeStorageBuffer = [&device](){
+    const auto makeStorageBuffer = [&device](const bool isDrawIndirectArgs = false){
         return device.createBuffer(
             BufferDesc()
                 .setByteSize(256u)
                 .setCanHaveRawViews(true)
                 .setCanHaveUAVs(true)
+                .setIsDrawIndirectArgs(isDrawIndirectArgs)
                 .setCpuAccess(CpuAccessMode::Read)
                 .setInitialState(ResourceStates::Common)
         );
@@ -17591,7 +17594,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
         ASSERT_NE(constantBuffers[bufferIndex].get(), nullptr);
     }
     for(u32 bufferIndex = 0u; bufferIndex < uavBufferCount; ++bufferIndex){
-        uavBuffers[bufferIndex] = makeStorageBuffer();
+        uavBuffers[bufferIndex] = makeStorageBuffer(
+            bufferIndex == NativePacketSurfelGiResolveProbeTask::s_TraceArgsBufferIndex
+        );
         ASSERT_NE(uavBuffers[bufferIndex].get(), nullptr);
     }
     TextureHandle shaderTextures[shaderTextureCount];
@@ -20819,6 +20824,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
         BufferDesc()
             .setByteSize(256u)
             .setCanHaveRawViews(true)
+            .setIsConstantBuffer(true)
             .setInitialState(ResourceStates::Common)
     );
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -25262,6 +25268,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverComputeHandoffM
             .setDebugName(Name("tests/descriptor_buffer/csg_clip_context"))
             .setByteSize(256u)
             .setCanHaveRawViews(true)
+            .setIsConstantBuffer(true)
             .setInitialState(ResourceStates::Common)
             .setQueueSharing(ResourceQueueSharing::Exclusive)
     );
@@ -25542,6 +25549,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeOpaqueCsgIntervalSample
             .setDebugName(Name("tests/descriptor_buffer/csg_interval_sample_clip_context"))
             .setByteSize(256u)
             .setCanHaveRawViews(true)
+            .setIsConstantBuffer(true)
             .setInitialState(ResourceStates::Common)
             .setQueueSharing(ResourceQueueSharing::Exclusive)
     );
@@ -26479,7 +26487,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationAliasFr
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
+    const auto createWorkBuffer = [&device](
+        const Name& debugName,
+        const bool isVertexBuffer = false,
+        const bool isConstantBuffer = false
+    ){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -26492,9 +26504,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationAliasFr
         ;
         if(isVertexBuffer)
             description.setIsVertexBuffer(true);
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
-    auto stateProbe = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_avboit_accumulation_state_probe"));
+    auto stateProbe = createWorkBuffer(
+        Name("tests/descriptor_buffer/unsplit_avboit_accumulation_state_probe"),
+        false,
+        true
+    );
     auto materialStream = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_avboit_accumulation_material_stream"));
     auto generatedVertexA = createWorkBuffer(
         Name("tests/descriptor_buffer/unsplit_avboit_accumulation_generated_vertex_a"),
@@ -27169,7 +27187,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
+    const auto createWorkBuffer = [&device](
+        const Name& debugName,
+        const bool isVertexBuffer = false,
+        const bool isConstantBuffer = false
+    ){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -27182,10 +27204,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
         ;
         if(isVertexBuffer)
             description.setIsVertexBuffer(true);
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
     auto stateProbe = createWorkBuffer(
-        Name("tests/descriptor_buffer/unsplit_avboit_accumulation_shared_output_state_probe")
+        Name("tests/descriptor_buffer/unsplit_avboit_accumulation_shared_output_state_probe"),
+        false,
+        true
     );
     auto materialStream = createWorkBuffer(
         Name("tests/descriptor_buffer/unsplit_avboit_accumulation_shared_output_material_stream")
@@ -27850,7 +27876,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
+    const auto createWorkBuffer = [&device](
+        const Name& debugName,
+        const bool isVertexBuffer = false,
+        const bool isConstantBuffer = false
+    ){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -27863,10 +27893,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
         ;
         if(isVertexBuffer)
             description.setIsVertexBuffer(true);
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
     auto stateProbe = createWorkBuffer(
-        Name("tests/descriptor_buffer/unsplit_avboit_accumulation_shared_output_triple_state_probe")
+        Name("tests/descriptor_buffer/unsplit_avboit_accumulation_shared_output_triple_state_probe"),
+        false,
+        true
     );
     auto materialStream = createWorkBuffer(
         Name("tests/descriptor_buffer/unsplit_avboit_accumulation_shared_output_triple_material_stream")
@@ -28557,7 +28591,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
+    const auto createWorkBuffer = [&device](
+        const Name& debugName,
+        const bool isVertexBuffer = false,
+        const bool isConstantBuffer = false
+    ){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -28570,10 +28608,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
         ;
         if(isVertexBuffer)
             description.setIsVertexBuffer(true);
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
     auto stateProbe = createWorkBuffer(
-        Name("tests/descriptor_buffer/unsplit_avboit_accumulation_shared_output_quad_state_probe")
+        Name("tests/descriptor_buffer/unsplit_avboit_accumulation_shared_output_quad_state_probe"),
+        false,
+        true
     );
     auto materialStream = createWorkBuffer(
         Name("tests/descriptor_buffer/unsplit_avboit_accumulation_shared_output_quad_material_stream")
@@ -29291,7 +29333,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
+    const auto createWorkBuffer = [&device](
+        const Name& debugName,
+        const bool isVertexBuffer = false,
+        const bool isConstantBuffer = false
+    ){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -29304,10 +29350,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
         ;
         if(isVertexBuffer)
             description.setIsVertexBuffer(true);
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
     auto stateProbe = createWorkBuffer(
-        Name("tests/descriptor_buffer/unsplit_avboit_occupancy_shared_output_state_probe")
+        Name("tests/descriptor_buffer/unsplit_avboit_occupancy_shared_output_state_probe"),
+        false,
+        true
     );
     auto materialStream = createWorkBuffer(
         Name("tests/descriptor_buffer/unsplit_avboit_occupancy_shared_output_material_stream")
@@ -29906,7 +29956,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
+    const auto createWorkBuffer = [&device](
+        const Name& debugName,
+        const bool isVertexBuffer = false,
+        const bool isConstantBuffer = false
+    ){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -29919,10 +29973,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
         ;
         if(isVertexBuffer)
             description.setIsVertexBuffer(true);
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
     auto stateProbe = createWorkBuffer(
-        Name("tests/descriptor_buffer/unsplit_avboit_occupancy_shared_output_triple_state_probe")
+        Name("tests/descriptor_buffer/unsplit_avboit_occupancy_shared_output_triple_state_probe"),
+        false,
+        true
     );
     auto materialStream = createWorkBuffer(
         Name("tests/descriptor_buffer/unsplit_avboit_occupancy_shared_output_triple_material_stream")
@@ -30547,7 +30605,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
+    const auto createWorkBuffer = [&device](
+        const Name& debugName,
+        const bool isVertexBuffer = false,
+        const bool isConstantBuffer = false
+    ){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -30560,10 +30622,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
         ;
         if(isVertexBuffer)
             description.setIsVertexBuffer(true);
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
     auto stateProbe = createWorkBuffer(
-        Name("tests/descriptor_buffer/unsplit_avboit_occupancy_shared_output_quad_state_probe")
+        Name("tests/descriptor_buffer/unsplit_avboit_occupancy_shared_output_quad_state_probe"),
+        false,
+        true
     );
     auto materialStream = createWorkBuffer(
         Name("tests/descriptor_buffer/unsplit_avboit_occupancy_shared_output_quad_material_stream")
@@ -31225,7 +31291,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyAliasFreeC
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
+    const auto createWorkBuffer = [&device](
+        const Name& debugName,
+        const bool isVertexBuffer = false,
+        const bool isConstantBuffer = false
+    ){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -31238,9 +31308,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyAliasFreeC
         ;
         if(isVertexBuffer)
             description.setIsVertexBuffer(true);
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
-    auto stateProbe = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_avboit_occupancy_state_probe"));
+    auto stateProbe = createWorkBuffer(
+        Name("tests/descriptor_buffer/unsplit_avboit_occupancy_state_probe"),
+        false,
+        true
+    );
     auto materialStream = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_avboit_occupancy_material_stream"));
     auto coverage = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_avboit_occupancy_coverage"));
     auto generatedVertexA = createWorkBuffer(
@@ -31780,7 +31856,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyCsgAliasFr
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
+    const auto createWorkBuffer = [&device](
+        const Name& debugName,
+        const bool isVertexBuffer = false,
+        const bool isConstantBuffer = false
+    ){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -31793,6 +31873,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyCsgAliasFr
         ;
         if(isVertexBuffer)
             description.setIsVertexBuffer(true);
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
     const auto createStorageArray = [&device](const u32 arraySize){
@@ -31809,17 +31891,25 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyCsgAliasFr
         );
     };
 
-    auto preState = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_avboit_occupancy_csg_pre_state"));
+    auto preState = createWorkBuffer(
+        Name("tests/descriptor_buffer/unsplit_avboit_occupancy_csg_pre_state"),
+        false,
+        true
+    );
     auto coverage = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_avboit_occupancy_csg_coverage"));
     auto receiverRanges = createWorkBuffer(
         Name("tests/descriptor_buffer/unsplit_avboit_occupancy_csg_receiver_ranges")
     );
     auto cutters = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_avboit_occupancy_csg_cutters"));
     auto clipContextSlots = createWorkBuffer(
-        Name("tests/descriptor_buffer/unsplit_avboit_occupancy_csg_clip_context_slots")
+        Name("tests/descriptor_buffer/unsplit_avboit_occupancy_csg_clip_context_slots"),
+        false,
+        true
     );
     auto intervalSampleState = createWorkBuffer(
-        Name("tests/descriptor_buffer/unsplit_avboit_occupancy_csg_interval_sample_state")
+        Name("tests/descriptor_buffer/unsplit_avboit_occupancy_csg_interval_sample_state"),
+        false,
+        true
     );
     auto generatedVertexA = createWorkBuffer(
         Name("tests/descriptor_buffer/unsplit_avboit_occupancy_csg_generated_vertex_a"),
@@ -32772,7 +32862,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionAliasFree
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
+    const auto createWorkBuffer = [&device](
+        const Name& debugName,
+        const bool isVertexBuffer = false,
+        const bool isConstantBuffer = false
+    ){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -32785,9 +32879,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionAliasFree
         ;
         if(isVertexBuffer)
             description.setIsVertexBuffer(true);
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
-    auto stateProbe = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_avboit_extinction_state_probe"));
+    auto stateProbe = createWorkBuffer(
+        Name("tests/descriptor_buffer/unsplit_avboit_extinction_state_probe"),
+        false,
+        true
+    );
     auto materialStream = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_avboit_extinction_material_stream"));
     auto coverage = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_avboit_extinction_coverage"));
     auto depthWarp = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_avboit_extinction_depth_warp"));
@@ -33553,7 +33653,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitTypedAvboitIntegrationTai
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName){
+    const auto createWorkBuffer = [&device](const Name& debugName, const bool isConstantBuffer = false){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -33564,9 +33664,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitTypedAvboitIntegrationTai
             .setInitialState(ResourceStates::Common)
             .setQueueSharing(ResourceQueueSharing::Exclusive)
         ;
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
-    auto stateProbe = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_typed_avboit_integration_state_probe"));
+    auto stateProbe = createWorkBuffer(
+        Name("tests/descriptor_buffer/unsplit_typed_avboit_integration_state_probe"),
+        true
+    );
     auto depthWarp = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_typed_avboit_integration_depth_warp"));
     auto control = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_typed_avboit_integration_control"));
     auto extinction = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_typed_avboit_integration_extinction"));
@@ -34053,7 +34158,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
+    const auto createWorkBuffer = [&device](
+        const Name& debugName,
+        const bool isVertexBuffer = false,
+        const bool isConstantBuffer = false
+    ){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -34066,10 +34175,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
         ;
         if(isVertexBuffer)
             description.setIsVertexBuffer(true);
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
     auto stateProbe = createWorkBuffer(
-        Name("tests/descriptor_buffer/unsplit_avboit_extinction_shared_output_state_probe")
+        Name("tests/descriptor_buffer/unsplit_avboit_extinction_shared_output_state_probe"),
+        false,
+        true
     );
     auto coverage = createWorkBuffer(
         Name("tests/descriptor_buffer/unsplit_avboit_extinction_shared_output_coverage")
@@ -34975,7 +35088,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
+    const auto createWorkBuffer = [&device](
+        const Name& debugName,
+        const bool isVertexBuffer = false,
+        const bool isConstantBuffer = false
+    ){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -34988,10 +35105,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
         ;
         if(isVertexBuffer)
             description.setIsVertexBuffer(true);
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
     auto stateProbe = createWorkBuffer(
-        Name("tests/descriptor_buffer/unsplit_avboit_extinction_shared_output_triple_state_probe")
+        Name("tests/descriptor_buffer/unsplit_avboit_extinction_shared_output_triple_state_probe"),
+        false,
+        true
     );
     auto coverage = createWorkBuffer(
         Name("tests/descriptor_buffer/unsplit_avboit_extinction_shared_output_triple_coverage")
@@ -35922,7 +36043,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
+    const auto createWorkBuffer = [&device](
+        const Name& debugName,
+        const bool isVertexBuffer = false,
+        const bool isConstantBuffer = false
+    ){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -35935,10 +36060,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
         ;
         if(isVertexBuffer)
             description.setIsVertexBuffer(true);
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
     auto stateProbe = createWorkBuffer(
-        Name("tests/descriptor_buffer/unsplit_avboit_extinction_shared_output_quad_state_probe")
+        Name("tests/descriptor_buffer/unsplit_avboit_extinction_shared_output_quad_state_probe"),
+        false,
+        true
     );
     auto coverage = createWorkBuffer(
         Name("tests/descriptor_buffer/unsplit_avboit_extinction_shared_output_quad_coverage")
@@ -36899,7 +37028,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionCsgAliasF
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
+    const auto createWorkBuffer = [&device](
+        const Name& debugName,
+        const bool isVertexBuffer = false,
+        const bool isConstantBuffer = false
+    ){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -36912,6 +37045,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionCsgAliasF
         ;
         if(isVertexBuffer)
             description.setIsVertexBuffer(true);
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
     const auto createStorageArray = [&device](const u32 arraySize){
@@ -36928,16 +37063,24 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionCsgAliasF
         );
     };
 
-    auto preState = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_avboit_extinction_csg_pre_state"));
+    auto preState = createWorkBuffer(
+        Name("tests/descriptor_buffer/unsplit_avboit_extinction_csg_pre_state"),
+        false,
+        true
+    );
     auto receiverRanges = createWorkBuffer(
         Name("tests/descriptor_buffer/unsplit_avboit_extinction_csg_receiver_ranges")
     );
     auto cutters = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_avboit_extinction_csg_cutters"));
     auto clipContextSlots = createWorkBuffer(
-        Name("tests/descriptor_buffer/unsplit_avboit_extinction_csg_clip_context_slots")
+        Name("tests/descriptor_buffer/unsplit_avboit_extinction_csg_clip_context_slots"),
+        false,
+        true
     );
     auto intervalSampleState = createWorkBuffer(
-        Name("tests/descriptor_buffer/unsplit_avboit_extinction_csg_interval_sample_state")
+        Name("tests/descriptor_buffer/unsplit_avboit_extinction_csg_interval_sample_state"),
+        false,
+        true
     );
     auto generatedVertexA = createWorkBuffer(
         Name("tests/descriptor_buffer/unsplit_avboit_extinction_csg_generated_vertex_a"),
@@ -37771,7 +37914,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationCsgAlia
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
+    const auto createWorkBuffer = [&device](
+        const Name& debugName,
+        const bool isVertexBuffer = false,
+        const bool isConstantBuffer = false
+    ){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -37784,6 +37931,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationCsgAlia
         ;
         if(isVertexBuffer)
             description.setIsVertexBuffer(true);
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
     const auto createStorageArray = [&device](const u32 arraySize){
@@ -37800,16 +37949,24 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationCsgAlia
         );
     };
 
-    auto preState = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_avboit_accumulation_csg_pre_state"));
+    auto preState = createWorkBuffer(
+        Name("tests/descriptor_buffer/unsplit_avboit_accumulation_csg_pre_state"),
+        false,
+        true
+    );
     auto receiverRanges = createWorkBuffer(
         Name("tests/descriptor_buffer/unsplit_avboit_accumulation_csg_receiver_ranges")
     );
     auto cutters = createWorkBuffer(Name("tests/descriptor_buffer/unsplit_avboit_accumulation_csg_cutters"));
     auto clipContextSlots = createWorkBuffer(
-        Name("tests/descriptor_buffer/unsplit_avboit_accumulation_csg_clip_context_slots")
+        Name("tests/descriptor_buffer/unsplit_avboit_accumulation_csg_clip_context_slots"),
+        false,
+        true
     );
     auto intervalSampleState = createWorkBuffer(
-        Name("tests/descriptor_buffer/unsplit_avboit_accumulation_csg_interval_sample_state")
+        Name("tests/descriptor_buffer/unsplit_avboit_accumulation_csg_interval_sample_state"),
+        false,
+        true
     );
     auto generatedVertexA = createWorkBuffer(
         Name("tests/descriptor_buffer/unsplit_avboit_accumulation_csg_generated_vertex_a"),
@@ -39998,7 +40155,11 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
     ASSERT_TRUE(timingResetSubmitted);
     timing.confirmFrameReset();
 
-    const auto createWorkBuffer = [&device](const Name& debugName, const bool isVertexBuffer = false){
+    const auto createWorkBuffer = [&device](
+        const Name& debugName,
+        const bool isVertexBuffer = false,
+        const bool isConstantBuffer = false
+    ){
         BufferDesc description;
         description
             .setDebugName(debugName)
@@ -40011,9 +40172,15 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
         ;
         if(isVertexBuffer)
             description.setIsVertexBuffer(true);
+        if(isConstantBuffer)
+            description.setIsConstantBuffer(true);
         return device.createBuffer(description);
     };
-    auto stateProbe = createWorkBuffer(Name("tests/descriptor_buffer/async_avboit_accumulation_state_probe"));
+    auto stateProbe = createWorkBuffer(
+        Name("tests/descriptor_buffer/async_avboit_accumulation_state_probe"),
+        false,
+        true
+    );
     auto integrationOutput = createWorkBuffer(Name("tests/descriptor_buffer/async_avboit_accumulation_integration_output"));
     auto materialStream = createWorkBuffer(Name("tests/descriptor_buffer/async_avboit_accumulation_material_stream"));
     auto generatedVertexA = createWorkBuffer(
@@ -44850,6 +45017,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
         BufferDesc()
             .setByteSize(256u)
             .setCanHaveRawViews(true)
+            .setIsConstantBuffer(true)
             .setInitialState(ResourceStates::Common)
     );
     ASSERT_NE(avboitPrefixBuffer.get(), nullptr);
@@ -52519,6 +52687,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCo
         BufferDesc()
             .setByteSize(256u)
             .setCanHaveRawViews(true)
+            .setIsConstantBuffer(true)
             .setInitialState(ResourceStates::Common)
             .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
     );
@@ -53702,6 +53871,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
             BufferDesc()
                 .setByteSize(256u)
                 .setCanHaveRawViews(true)
+                .setIsConstantBuffer(true)
                 .setInitialState(ResourceStates::Common)
         );
     };

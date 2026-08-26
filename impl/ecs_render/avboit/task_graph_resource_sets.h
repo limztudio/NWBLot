@@ -42,7 +42,7 @@ namespace RendererTaskGraphDetail{
             return false;
         Core::GpuGraphResourceId resource = graph.findImportedBuffer(buffer);
         if(!resource.valid()){
-            const Name bufferIdentity = buffer->getDescription().debugName;
+            const Name bufferIdentity = buffer->getCreationDescription().debugName;
             if(!bufferIdentity)
                 return false;
             resource = graph.importBuffer(buffer, BufferResourceDesc(bufferIdentity, label));

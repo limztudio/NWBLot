@@ -367,7 +367,11 @@ u32 GetPushConstantByteSize(const BindingLayoutDesc& desc);
 bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, const tchar* operationName);
 bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, const tchar* operationName);
 void DestroyPipelineAndOwnedLayout(VkDevice device, const VkAllocationCallbacks* allocationCallbacks, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
-VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags);
+[[nodiscard]] bool ConvertAccelStructBuildFlags(
+    RayTracingAccelStructBuildFlags::Mask buildFlags,
+    VkBuildAccelerationStructureFlagsKHR& outBuildFlags,
+    const tchar* operationName
+);
 bool BuildGraphicsPipelineFixedState(
     const FramebufferInfo& fbinfo,
     const RenderState& renderState,
@@ -599,6 +603,8 @@ class DescriptorBufferManager;
 
 class Buffer;
 class Texture;
+class AccelStruct;
+class OpacityMicromap;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -789,6 +795,35 @@ struct RetainedTextureStateCommit{
     ArraySlice arraySlice = 0;
 };
 
+struct AccelStructGeometryBuildSignature{
+    VkGeometryTypeKHR geometryType = VK_GEOMETRY_TYPE_MAX_ENUM_KHR;
+    VkGeometryFlagsKHR geometryFlags = 0u;
+    u32 primitiveCount = 0u;
+
+    VkFormat vertexFormat = VK_FORMAT_UNDEFINED;
+    VkFormat radiusFormat = VK_FORMAT_UNDEFINED;
+    VkIndexType indexType = VK_INDEX_TYPE_NONE_KHR;
+    VkDeviceSize vertexStride = 0u;
+    VkDeviceSize radiusStride = 0u;
+    VkDeviceSize indexStride = 0u;
+    u32 maxVertex = 0u;
+    VkRayTracingLssIndexingModeNV lssIndexingMode = VK_RAY_TRACING_LSS_INDEXING_MODE_MAX_ENUM_NV;
+    VkRayTracingLssPrimitiveEndCapsModeNV lssEndCapsMode = VK_RAY_TRACING_LSS_PRIMITIVE_END_CAPS_MODE_MAX_ENUM_NV;
+    bool transformDataPresent = false;
+};
+
+struct PendingAccelStructBuildCommit{
+    AccelStruct* accelStruct = nullptr;
+    VkAccelerationStructureTypeKHR accelStructType = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
+    VkBuildAccelerationStructureFlagsKHR buildFlags = 0u;
+    usize geometrySignatureOffset = 0u;
+    u32 geometrySignatureCount = 0u;
+};
+
+struct PendingOpacityMicromapBuildCommit{
+    OpacityMicromap* opacityMicromap = nullptr;
+};
+
 namespace TrackedCommandBufferArenaState{
     enum Enum : u8{
         Untracked = 0u,
@@ -820,11 +855,33 @@ public:
 
 private:
     void retainResource(GraphicsResource& resource);
+    void retainBuffer(Buffer& buffer);
+    void trackRetainedBuffer(Buffer& buffer);
     void retainTexture(Texture& texture);
     void trackRetainedTexture(Texture& texture);
     void appendRetainedTextureStateCommit(Texture& texture, MipLevel mipLevel, ArraySlice arraySlice);
     void commitRetainedTextureStateCommits();
     void discardRetainedTextureStateCommits();
+    void appendPendingAccelStructBuildCommit(
+        AccelStruct& accelStruct,
+        VkAccelerationStructureTypeKHR accelStructType,
+        VkBuildAccelerationStructureFlagsKHR buildFlags,
+        const AccelStructGeometryBuildSignature* geometrySignatures,
+        usize geometrySignatureCount
+    );
+    [[nodiscard]] bool getPendingAccelStructBuildSignature(
+        const AccelStruct& accelStruct,
+        VkAccelerationStructureTypeKHR& outAccelStructType,
+        VkBuildAccelerationStructureFlagsKHR& outBuildFlags,
+        const AccelStructGeometryBuildSignature*& outGeometrySignatures,
+        usize& outGeometrySignatureCount
+    )const;
+    void commitPendingAccelStructBuildCommits();
+    void discardPendingAccelStructBuildCommits();
+    void appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap);
+    [[nodiscard]] bool hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const;
+    void commitPendingOpacityMicromapBuildCommits();
+    void discardPendingOpacityMicromapBuildCommits();
     void clearTrackedReferences();
 
 
@@ -835,10 +892,14 @@ private:
     Futex* m_sharedCommandPoolMutex = nullptr;
 
     Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_referencedResources;
+    Vector<Buffer*, Alloc::GlobalArena> m_referencedBuffers;
     Vector<Texture*, Alloc::GlobalArena> m_referencedTextures;
     Vector<BufferHandle, Alloc::GlobalArena> m_referencedStagingBuffers;
     Vector<GpuDescriptorHeap*, Alloc::GlobalArena> m_referencedDescriptorHeaps;
     Vector<RetainedTextureStateCommit, Alloc::GlobalArena> m_retainedTextureStateCommits;
+    Vector<PendingAccelStructBuildCommit, Alloc::GlobalArena> m_pendingAccelStructBuildCommits;
+    Vector<AccelStructGeometryBuildSignature, Alloc::GlobalArena> m_pendingAccelStructBuildSignatures;
+    Vector<PendingOpacityMicromapBuildCommit, Alloc::GlobalArena> m_pendingOpacityMicromapBuildCommits;
     DescriptorBufferManager* m_descriptorBufferManager = nullptr;
     u64 m_descriptorBufferGeneration = 0u;
 
@@ -1265,12 +1326,19 @@ public:
 
 
 public:
-    Buffer(const VulkanContext& context, VulkanAllocator& allocator);
+    Buffer(
+        const VulkanContext& context,
+        VulkanAllocator& allocator,
+        const BufferDesc& creationDesc,
+        VkBufferUsageFlags usage = 0u
+    );
     ~Buffer();
 
 
 public:
     [[nodiscard]] const BufferDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] const BufferDesc& getCreationDescription()const noexcept{ return m_creationDesc; }
+    [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
     [[nodiscard]] GpuVirtualAddress getGpuVirtualAddress()const{ return m_deviceAddress; }
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     virtual Object getNativeHandle(ObjectType objectType) override;
@@ -1281,11 +1349,11 @@ private:
 
 private:
     BufferDesc m_desc;
-    BufferDesc m_creationDesc;
+    const BufferDesc m_creationDesc;
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;
-    VkBufferUsageFlags m_usage = 0u;
+    const VkBufferUsageFlags m_usage;
     u64 m_deviceAddress = 0;
     void* m_mappedMemory = nullptr;
     HeapHandle m_boundHeap;
@@ -2399,7 +2467,7 @@ class AccelStruct final : public RefCounter<GraphicsResource>, NoCopy{
     friend class CommandList;
     friend class DescriptorBufferManager;
     friend class GpuDescriptorHeap;
-
+    friend class TrackedCommandBuffer;
 
 public:
     AccelStruct(const VulkanContext& context);
@@ -2423,9 +2491,13 @@ private:
     BufferHandle m_buffer;
     u64 m_deviceAddress = 0;
     mutable Futex m_memoryBindingMutex;
+    mutable Futex m_acceptedBuildSignatureMutex;
+    Vector<AccelStructGeometryBuildSignature, Alloc::GlobalArena> m_acceptedBuildGeometrySignatures;
+    VkAccelerationStructureTypeKHR m_acceptedBuildType = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
+    VkBuildAccelerationStructureFlagsKHR m_acceptedBuildFlags = 0u;
+    bool m_hasAcceptedBuild = false;
 
     const VulkanContext& m_context;
-    bool m_built = false;
     bool m_isTopLevelAtCreation = false;
 };
 
@@ -2437,6 +2509,7 @@ private:
 class OpacityMicromap final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Device;
     friend class CommandList;
+    friend class TrackedCommandBuffer;
 
 
 public:
@@ -2455,9 +2528,12 @@ private:
     BufferHandle m_dataBuffer;
     VkMicromapEXT m_micromap = VK_NULL_HANDLE;
     u64 m_deviceAddress = 0;
+    u32 m_maxOpacity2StateSubdivisionLevel = 0u;
+    u32 m_maxOpacity4StateSubdivisionLevel = 0u;
     bool m_compacted = false;
 
     const VulkanContext& m_context;
+    Atomic<bool> m_acceptedConstructed{ false };
 };
 
 
@@ -2806,7 +2882,8 @@ private:
     [[nodiscard]] bool validateBufferForGpuState(
         Buffer* buffer,
         ResourceStates::Mask requiredState,
-        const tchar* operationName
+        const tchar* operationName,
+        VkBufferUsageFlags explicitRequiredUsage = 0u
     )noexcept;
     [[nodiscard]] bool validateGraphicsState(const GraphicsState& state)noexcept;
     [[nodiscard]] bool validateMeshletState(const MeshletState& state)noexcept;
@@ -2819,7 +2896,7 @@ private:
     void setResourceStatesForGraphicsBuffers(const GraphicsState& state);
     [[nodiscard]] bool validateTrackedTexturesReadyForClose()noexcept;
     [[nodiscard]] bool validateTrackedBuffersReadyForClose()noexcept;
-    [[nodiscard]] bool validateTrackedTexturesReadyForSubmission()const noexcept;
+    [[nodiscard]] bool validateTrackedResourcesReadyForSubmission()const noexcept;
     [[nodiscard]] bool importResourceStateHandoff(const CommandListResourceStateHandoff& states);
     void exportResourceStateHandoff(CommandListResourceStateHandoff& states)const;
     void appendPendingOwnershipReleaseBarriers();
@@ -2827,6 +2904,7 @@ private:
     void appendHostReadbackBarriers();
     void registerHostReadbackBuffer(Buffer& buffer);
     void registerHostReadbackStagingTexture(StagingTexture& stagingTexture);
+    void retainResource(Buffer* resource);
     void retainResource(Texture* resource);
     void retainResource(Framebuffer* resource);
     void retainResource(GraphicsResource* resource);
@@ -2919,14 +2997,25 @@ private:
         u64& outStagingOffset,
         u32 alignment = s_DefaultUploadSuballocationAlignment
     );
+    [[nodiscard]] bool attachAccelStructBuildScratchBuffer(VkAccelerationStructureBuildGeometryInfoKHR& buildInfo, u64 buildScratchSize, const char* debugName, const tchar* operationName);
+    [[nodiscard]] bool validateAccelStructBuildSignature(
+        AccelStruct& accelStruct,
+        VkAccelerationStructureTypeKHR accelStructType,
+        VkBuildAccelerationStructureFlagsKHR buildFlags,
+        const AccelStructGeometryBuildSignature* geometrySignatures,
+        usize geometrySignatureCount,
+        bool performUpdate,
+        const tchar* operationName,
+        bool& outHasPriorBuild
+    );
     bool buildTopLevelAccelStructFromInstanceData(
         RayTracingAccelStruct& as,
         VkDeviceAddress instanceDataAddress,
         usize numInstances,
         RayTracingAccelStructBuildFlags::Mask buildFlags,
+        VkBuildAccelerationStructureFlagsKHR vkBuildFlags,
         const tchar* operationName
     );
-    [[nodiscard]] bool attachAccelStructBuildScratchBuffer(VkAccelerationStructureBuildGeometryInfoKHR& buildInfo, u64 buildScratchSize, const char* debugName, const tchar* operationName);
     void resetMarkerState();
     void discardUnsubmittedUploadChunks();
 
@@ -3091,9 +3180,19 @@ public:
     // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
     // Native wrappers trust caller-managed binding. Managed ordinary buffers require their VMA allocation, while
     // managed virtual buffers require a retained, device-owned bound Heap allocation. CPU mapping is irrelevant.
-    [[nodiscard]] bool isBufferReadyForGpuUse(Buffer* buffer)const noexcept;
-    // The caller owns native binding and lifetime. Only one live Buffer wrapper may name a VkBuffer per Device.
-    [[nodiscard]] BufferHandle createHandleForNativeBuffer(ObjectType objectType, Object buffer, const BufferDesc& desc);
+    [[nodiscard]] bool isBufferReadyForGpuUse(Buffer* buffer, VkBufferUsageFlags requiredUsage = 0u)const noexcept;
+    // The caller owns native binding and lifetime and must provide the exact immutable VkBufferCreateInfo::usage.
+    // Only one live Buffer wrapper may name a VkBuffer per Device.
+    [[nodiscard]] BufferHandle createHandleForNativeBuffer(
+        ObjectType objectType,
+        Object buffer,
+        const BufferDesc& desc,
+        VkBufferUsageFlags nativeUsage
+    );
+#if !defined(NWB_FINAL)
+    [[nodiscard]] bool revokeBufferNativeIdentityForTesting(Buffer* buffer, Object expectedNativeBuffer)noexcept;
+    [[nodiscard]] bool restoreBufferNativeIdentityForTesting(Buffer* buffer, Object expectedNativeBuffer)noexcept;
+#endif
     [[nodiscard]] ShaderHandle createShader(const ShaderDesc& d, const void* binary, usize binarySize);
     [[nodiscard]] ShaderHandle createShaderSpecialization(Shader* baseShader, const ShaderSpecialization* constants, u32 numConstants);
     [[nodiscard]] ShaderLibraryHandle createShaderLibrary(const void* binary, usize binarySize);

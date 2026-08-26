@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "buffer_resource_detail.h"
 
 #include <core/common/log.h>
 
@@ -42,8 +43,8 @@ void* Device::mapBuffer(Buffer* bufferResource, const CpuAccessMode::Enum reques
     CpuAccessMode::Enum effectiveAccess = CpuAccessMode::None;
     if(
         !VulkanDetail::TryResolveBufferCpuAccess(
-            buffer.m_desc.cpuAccess,
-            buffer.m_desc.isVolatile,
+            buffer.m_creationDesc.cpuAccess,
+            buffer.m_creationDesc.isVolatile,
             effectiveAccess
         )
         || effectiveAccess == CpuAccessMode::None
@@ -57,7 +58,7 @@ void* Device::mapBuffer(Buffer* bufferResource, const CpuAccessMode::Enum reques
     }
 
     ScopedLock resourceLock(buffer.m_memoryBindingMutex);
-    if(buffer.m_desc.isVirtual){
+    if(buffer.m_creationDesc.isVirtual){
         if(!buffer.m_boundHeap || buffer.m_heapBindingRange.size == 0u || !buffer.m_mappedMemory){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: virtual buffer has no mapped heap binding"));
             return nullptr;
@@ -71,8 +72,8 @@ void* Device::mapBuffer(Buffer* bufferResource, const CpuAccessMode::Enum reques
             || !heap.m_allocation
             || !heap.m_mappedMemory
             || !VulkanDetail::IsBufferHeapTypeCompatible(
-                buffer.m_desc.cpuAccess,
-                buffer.m_desc.isVolatile,
+                buffer.m_creationDesc.cpuAccess,
+                buffer.m_creationDesc.isVolatile,
                 heap.m_desc.type
             )
         ){
@@ -155,8 +156,8 @@ void Device::unmapBuffer(Buffer* bufferResource){
     CpuAccessMode::Enum effectiveAccess = CpuAccessMode::None;
     if(
         !VulkanDetail::TryResolveBufferCpuAccess(
-            buffer.m_desc.cpuAccess,
-            buffer.m_desc.isVolatile,
+            buffer.m_creationDesc.cpuAccess,
+            buffer.m_creationDesc.isVolatile,
             effectiveAccess
         )
         || effectiveAccess == CpuAccessMode::None
@@ -166,7 +167,7 @@ void Device::unmapBuffer(Buffer* bufferResource){
     }
 
     ScopedLock resourceLock(buffer.m_memoryBindingMutex);
-    if(buffer.m_desc.isVirtual){
+    if(buffer.m_creationDesc.isVirtual){
         if(!buffer.m_boundHeap || buffer.m_heapBindingRange.size == 0u || !buffer.m_mappedMemory){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unmap buffer: virtual buffer has no mapped heap binding"));
             return;
@@ -180,8 +181,8 @@ void Device::unmapBuffer(Buffer* bufferResource){
             || !heap.m_allocation
             || !heap.m_mappedMemory
             || !VulkanDetail::IsBufferHeapTypeCompatible(
-                buffer.m_desc.cpuAccess,
-                buffer.m_desc.isVolatile,
+                buffer.m_creationDesc.cpuAccess,
+                buffer.m_creationDesc.isVolatile,
                 heap.m_desc.type
             )
         ){
@@ -213,7 +214,7 @@ MemoryRequirements Device::getBufferMemoryRequirements(Buffer* bufferResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get buffer memory requirements: buffer belongs to another device"));
         return {};
     }
-    if(!buffer.m_managed || !buffer.m_desc.isVirtual || buffer.m_allocation != nullptr){
+    if(!buffer.m_managed || !buffer.m_creationDesc.isVirtual || buffer.m_allocation != nullptr){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get buffer memory requirements: buffer is not a managed virtual buffer"));
         return {};
     }
@@ -238,8 +239,8 @@ MemoryRequirements Device::getBufferMemoryRequirements(Buffer* bufferResource){
     MemoryRequirements result;
     if(!VulkanDetail::TryBuildBufferHeapRequirements(
         nativeRequirements,
-        buffer.m_desc.cpuAccess,
-        buffer.m_desc.isVolatile,
+        buffer.m_creationDesc.cpuAccess,
+        buffer.m_creationDesc.isVolatile,
         m_context.physicalDeviceProperties.limits.nonCoherentAtomSize,
         result
     )){
@@ -263,7 +264,7 @@ bool Device::bindBufferMemory(Buffer* bufferResource, Heap* heap, u64 offset){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer belongs to another device"));
         return false;
     }
-    if(!buffer.m_managed || !buffer.m_desc.isVirtual || buffer.m_allocation != nullptr){
+    if(!buffer.m_managed || !buffer.m_creationDesc.isVirtual || buffer.m_allocation != nullptr){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer is not a managed virtual buffer"));
         return false;
     }
@@ -288,8 +289,8 @@ bool Device::bindBufferMemory(Buffer* bufferResource, Heap* heap, u64 offset){
         return false;
     }
     if(!VulkanDetail::IsBufferHeapTypeCompatible(
-        buffer.m_desc.cpuAccess,
-        buffer.m_desc.isVolatile,
+        buffer.m_creationDesc.cpuAccess,
+        buffer.m_creationDesc.isVolatile,
         memoryHeap.m_desc.type
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: CPU access is incompatible with heap type"));
@@ -313,8 +314,8 @@ bool Device::bindBufferMemory(Buffer* bufferResource, Heap* heap, u64 offset){
     MemoryRequirements bindingRequirements;
     if(!VulkanDetail::TryBuildBufferHeapRequirements(
         nativeRequirements,
-        buffer.m_desc.cpuAccess,
-        buffer.m_desc.isVolatile,
+        buffer.m_creationDesc.cpuAccess,
+        buffer.m_creationDesc.isVolatile,
         m_context.physicalDeviceProperties.limits.nonCoherentAtomSize,
         bindingRequirements
     )){
@@ -370,7 +371,10 @@ bool Device::bindBufferMemory(Buffer* bufferResource, Heap* heap, u64 offset){
     return true;
 }
 
-bool Device::isBufferReadyForGpuUse(Buffer* bufferResource)const noexcept{
+bool Device::isBufferReadyForGpuUse(
+    Buffer* bufferResource,
+    const VkBufferUsageFlags requiredUsage
+)const noexcept{
     if(!bufferResource)
         return false;
 
@@ -379,6 +383,18 @@ bool Device::isBufferReadyForGpuUse(Buffer* bufferResource)const noexcept{
 
     if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator)
         return false;
+    if(!buffer.descriptionMatchesCreation())
+        return false;
+    if(!VulkanBufferDetail::IsBufferUsageConsistent(
+        m_context,
+        buffer.m_creationDesc,
+        buffer.m_managed,
+        buffer.m_usage,
+        requiredUsage
+    ))
+        return false;
+    if((requiredUsage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) && buffer.m_deviceAddress == 0u)
+        return false;
     if(buffer.m_buffer == VK_NULL_HANDLE)
         return false;
     if(!m_allocator.isBufferNativeIdentityRegistered(buffer))
@@ -386,7 +402,7 @@ bool Device::isBufferReadyForGpuUse(Buffer* bufferResource)const noexcept{
     if(!buffer.m_managed)
         return true;
 
-    if(!buffer.m_desc.isVirtual)
+    if(!buffer.m_creationDesc.isVirtual)
         return buffer.m_allocation != nullptr;
     if(buffer.m_allocation || !buffer.m_boundHeap || buffer.m_heapBindingRange.size == 0u)
         return false;

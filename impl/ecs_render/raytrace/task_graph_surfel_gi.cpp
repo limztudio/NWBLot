@@ -519,12 +519,12 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             Core::GpuCopyBufferTaskRegion{
                 .source = surfelPool,
                 .destination = surfelPoolSnapshot,
-                .dataSizeBytes = m_rayTracingState.m_surfelPoolBuffer->getDescription().byteSize,
+                .dataSizeBytes = m_rayTracingState.m_surfelPoolBuffer->getCreationDescription().byteSize,
             },
             Core::GpuCopyBufferTaskRegion{
                 .source = surfelCellHead,
                 .destination = surfelCellHeadSnapshot,
-                .dataSizeBytes = m_rayTracingState.m_surfelCellHeadBuffer->getDescription().byteSize,
+                .dataSizeBytes = m_rayTracingState.m_surfelCellHeadBuffer->getCreationDescription().byteSize,
             },
         };
         Core::GpuTaskDesc snapshotDesc;

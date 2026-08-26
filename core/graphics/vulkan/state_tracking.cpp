@@ -213,7 +213,7 @@ bool StateTracker::getTransientBufferState(Buffer& buffer, ResourceStates::Mask&
         return true;
     }
 
-    const BufferDesc& desc = buffer.getDescription();
+    const BufferDesc& desc = buffer.getCreationDescription();
     if(desc.keepInitialState)
         outState = desc.initialState;
 
@@ -278,7 +278,7 @@ void StateTracker::appendKeepInitialStateBarriers(
         if(!bufferResource)
             continue;
 
-        const BufferDesc& desc = bufferResource->getDescription();
+        const BufferDesc& desc = bufferResource->getCreationDescription();
         const ResourceStates::Mask currentState = it.value();
         if(!desc.keepInitialState || currentState == desc.initialState)
             continue;
@@ -295,7 +295,7 @@ void StateTracker::appendKeepInitialStateBarriers(
         barrier.offset = 0;
         barrier.size = VK_WHOLE_SIZE;
         bufferBarriers.push_back(barrier);
-        commandBuffer.retainResource(*buffer);
+        commandBuffer.retainBuffer(*buffer);
         it.value() = desc.initialState;
     }
 }
@@ -431,21 +431,20 @@ void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresource
 void CommandList::beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits){
     if(!buffer)
         return;
-    if(!validateCommandRecordingScope(NWB_TEXT("begin tracking buffer state")))
+    constexpr const tchar* s_OperationName = NWB_TEXT("begin tracking buffer state");
+    if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(NWB_TEXT("begin tracking buffer state"), NWB_TEXT("initial state cannot be unknown"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("initial state cannot be unknown"));
         return;
     }
-    if(!m_device.isBufferReadyForGpuUse(buffer)){
-        rejectCommandRecording(NWB_TEXT("begin tracking buffer state"), NWB_TEXT("buffer is not ready for GPU access"));
+    if(!validateBufferForGpuState(buffer, stateBits, s_OperationName))
         return;
-    }
 
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(buffer);
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
         rejectCommandRecording(
-            NWB_TEXT("begin tracking buffer state"),
+            s_OperationName,
             NWB_TEXT("initial state conflicts with the permanent buffer state")
         );
         return;

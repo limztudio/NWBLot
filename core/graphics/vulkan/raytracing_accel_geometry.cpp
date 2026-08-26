@@ -33,8 +33,11 @@ VkDeviceAddress GetBufferDeviceAddress(Buffer* bufferResource, u64 offset){
     if(!bufferResource)
         return 0;
 
-    auto* buffer = bufferResource;
-    return buffer->m_deviceAddress + offset;
+    const VkDeviceAddress baseAddress = bufferResource->getGpuVirtualAddress();
+    if(baseAddress == 0u || baseAddress > Limit<u64>::s_Max - offset)
+        return 0u;
+
+    return baseAddress + offset;
 }
 
 bool GetRayTracingIndexType(Format::Enum format, VkIndexType& indexType){
@@ -93,20 +96,54 @@ bool ComputeStridedRangeByteSize(u32 elementCount, u64 stride, u64 elementSize, 
     outByteSize = spanCount * stride + elementSize;
     return true;
 }
-bool ValidateAccelStructBuildInputRange(Buffer* bufferResource, u64 offset, u64 byteSize, const tchar* operation, const tchar* resourceName){
+u64 GetRayTracingVertexComponentAlignment(const FormatInfo& formatInfo){
+    const u32 componentCount = static_cast<u32>(formatInfo.hasRed)
+        + static_cast<u32>(formatInfo.hasGreen)
+        + static_cast<u32>(formatInfo.hasBlue)
+        + static_cast<u32>(formatInfo.hasAlpha)
+    ;
+    if(componentCount == 0u || formatInfo.bytesPerBlock == 0u)
+        return 0u;
+
+    return Max<u64>(static_cast<u64>(formatInfo.bytesPerBlock) / componentCount, 1u);
+}
+bool ValidateAccelStructBuildInputRange(
+    Buffer* bufferResource,
+    u64 offset,
+    u64 byteSize,
+    u64 requiredAddressAlignment,
+    const tchar* operation,
+    const tchar* resourceName
+){
     auto* buffer = bufferResource;
     if(!buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer is invalid"), operation, resourceName);
         return false;
     }
 
-    const BufferDesc& desc = buffer->getDescription();
+    const BufferDesc& desc = buffer->getCreationDescription();
     if(!desc.isAccelStructBuildInput){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer was not created with acceleration-structure build input usage"), operation, resourceName);
         return false;
     }
-    if(!IsBufferRangeInBounds(desc, offset, byteSize)){
+    const u64 validatedByteSize = byteSize != 0u ? byteSize : 1u;
+    if(!IsBufferRangeInBounds(desc, offset, validatedByteSize)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer range is outside the buffer"), operation, resourceName);
+        return false;
+    }
+
+    const VkDeviceAddress address = GetBufferDeviceAddress(buffer, offset);
+    if(address == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} buffer device address is null or overflows"), operation, resourceName);
+        return false;
+    }
+    if(requiredAddressAlignment > 1u && (address % requiredAddressAlignment) != 0u){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to {}: {} buffer device address is not {}-byte aligned")
+            , operation
+            , resourceName
+            , requiredAddressAlignment
+        );
         return false;
     }
 
@@ -128,7 +165,7 @@ bool ValidateStridedBuildInputRange(
         return false;
     }
 
-    return ValidateAccelStructBuildInputRange(buffer, offset, byteSize, operation, resourceName);
+    return ValidateAccelStructBuildInputRange(buffer, offset, byteSize, 1u, operation, resourceName);
 }
 
 bool FillBlasGeometryForSizeQuery(
@@ -166,8 +203,21 @@ bool FillBlasGeometryForSizeQuery(
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex format size is invalid"), operation);
             return false;
         }
+        const u64 vertexComponentAlignment = GetRayTracingVertexComponentAlignment(vertexFormatInfo);
+        if(vertexComponentAlignment == 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex component alignment is invalid"), operation);
+            return false;
+        }
         if(triangles.vertexCount > 0 && triangles.vertexStride < vertexFormatInfo.bytesPerBlock){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex stride is smaller than the vertex format size"), operation);
+            return false;
+        }
+        if(triangles.vertexStride > Limit<u32>::s_Max){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex stride exceeds the Vulkan limit"), operation);
+            return false;
+        }
+        if(triangles.vertexCount > 0u && (triangles.vertexStride % vertexComponentAlignment) != 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex stride is not a multiple of the vertex component size"), operation);
             return false;
         }
         if(requireBuffers){
@@ -176,7 +226,14 @@ bool FillBlasGeometryForSizeQuery(
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: triangle vertex buffer range overflows"), operation);
                 return false;
             }
-            if(!ValidateAccelStructBuildInputRange(triangles.vertexBuffer, triangles.vertexOffset, vertexByteSize, operation, NWB_TEXT("triangle vertex")))
+            if(!ValidateAccelStructBuildInputRange(
+                triangles.vertexBuffer,
+                triangles.vertexOffset,
+                vertexByteSize,
+                vertexComponentAlignment,
+                operation,
+                NWB_TEXT("triangle vertex")
+            ))
                 return false;
         }
 
@@ -194,7 +251,14 @@ bool FillBlasGeometryForSizeQuery(
             if(requireBuffers){
                 const u64 indexElementSize = triangles.indexFormat == Format::R16_UINT ? sizeof(u16) : sizeof(u32);
                 const u64 indexByteSize = static_cast<u64>(triangles.indexCount) * indexElementSize;
-                if(!ValidateAccelStructBuildInputRange(triangles.indexBuffer, triangles.indexOffset, indexByteSize, operation, NWB_TEXT("triangle index")))
+                if(!ValidateAccelStructBuildInputRange(
+                    triangles.indexBuffer,
+                    triangles.indexOffset,
+                    indexByteSize,
+                    indexElementSize,
+                    operation,
+                    NWB_TEXT("triangle index")
+                ))
                     return false;
             }
             primitiveCount = triangles.indexCount / s_TrianglesPerPrimitive;
@@ -214,13 +278,17 @@ bool FillBlasGeometryForSizeQuery(
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB stride is zero"), operation);
             return false;
         }
+        if(aabbs.count > 0u && (aabbs.stride % 8u) != 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB stride is not a multiple of 8 bytes"), operation);
+            return false;
+        }
         if(requireBuffers){
             u64 aabbByteSize = 0;
             if(!ComputeStridedRangeByteSize(aabbs.count, aabbs.stride, sizeof(RayTracingGeometryAABB), aabbByteSize)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB buffer range overflows"), operation);
                 return false;
             }
-            if(!ValidateAccelStructBuildInputRange(aabbs.buffer, aabbs.offset, aabbByteSize, operation, NWB_TEXT("AABB")))
+            if(!ValidateAccelStructBuildInputRange(aabbs.buffer, aabbs.offset, aabbByteSize, 8u, operation, NWB_TEXT("AABB")))
                 return false;
         }
 
@@ -508,17 +576,44 @@ bool FillBlasGeometryForSizeQuery(
     return true;
 }
 
-VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags){
-    VkBuildAccelerationStructureFlagsKHR flags = 0;
+bool ConvertAccelStructBuildFlags(
+    const RayTracingAccelStructBuildFlags::Mask buildFlags,
+    VkBuildAccelerationStructureFlagsKHR& outBuildFlags,
+    const tchar* const operationName
+){
+    constexpr u8 s_KnownFlags =
+        static_cast<u8>(RayTracingAccelStructBuildFlags::AllowUpdate)
+        | static_cast<u8>(RayTracingAccelStructBuildFlags::PreferFastTrace)
+        | static_cast<u8>(RayTracingAccelStructBuildFlags::PreferFastBuild)
+        | static_cast<u8>(RayTracingAccelStructBuildFlags::MinimizeMemory)
+        | static_cast<u8>(RayTracingAccelStructBuildFlags::PerformUpdate)
+        | static_cast<u8>(RayTracingAccelStructBuildFlags::AllowEmptyInstances)
+    ;
+    const u8 flagBits = static_cast<u8>(buildFlags);
+    if((flagBits & static_cast<u8>(~s_KnownFlags)) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: acceleration-structure build flags contain unknown bits"), operationName);
+        return false;
+    }
+    if(
+        (buildFlags & RayTracingAccelStructBuildFlags::PreferFastTrace)
+        && (buildFlags & RayTracingAccelStructBuildFlags::PreferFastBuild)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: fast-trace and fast-build flags are mutually exclusive"), operationName);
+        return false;
+    }
+
+    outBuildFlags = 0u;
 
     if(buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)
-        flags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+        outBuildFlags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
     if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastTrace)
-        flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+        outBuildFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
     if(buildFlags & RayTracingAccelStructBuildFlags::PreferFastBuild)
-        flags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+        outBuildFlags |= VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+    if(buildFlags & RayTracingAccelStructBuildFlags::MinimizeMemory)
+        outBuildFlags |= VK_BUILD_ACCELERATION_STRUCTURE_LOW_MEMORY_BIT_KHR;
 
-    return flags;
+    return true;
 }
 
 

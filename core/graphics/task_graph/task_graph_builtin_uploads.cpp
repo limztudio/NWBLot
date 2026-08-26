@@ -339,7 +339,7 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
     )
         return {};
 
-    const BufferDesc& destinationDesc = destinationResource.buffer->getDescription();
+    const BufferDesc& destinationDesc = destinationResource.buffer->getCreationDescription();
     if(
         uploadDesc.destinationOffsetBytes > destinationDesc.byteSize
         || source->bytes.size() > destinationDesc.byteSize - uploadDesc.destinationOffsetBytes

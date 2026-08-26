@@ -4,6 +4,7 @@
 
 #include "command_validation.h"
 #include "backend.h"
+#include "buffer_resource_detail.h"
 #include "texture_resource_detail.h"
 
 
@@ -345,9 +346,29 @@ bool CommandList::validateTextureForGpuState(
 bool CommandList::validateBufferForGpuState(
     Buffer* const buffer,
     const ResourceStates::Mask requiredState,
-    const tchar* const operationName
+    const tchar* const operationName,
+    const VkBufferUsageFlags explicitRequiredUsage
 )noexcept{
-    if(!m_device.isBufferReadyForGpuUse(buffer)){
+    if(!VulkanBufferDetail::IsBufferResourceStateMaskValid(requiredState)){
+        rejectCommandRecording(operationName, NWB_TEXT("state is invalid for a buffer"));
+        return false;
+    }
+    if(
+        buffer
+        && !VulkanBufferDetail::IsBufferDescriptionCompatibleWithResourceStates(
+            buffer->m_creationDesc,
+            requiredState
+        )
+    ){
+        rejectCommandRecording(operationName, NWB_TEXT("state requires an undeclared buffer capability"));
+        return false;
+    }
+    const VkBufferUsageFlags requiredUsage = explicitRequiredUsage
+        | (buffer
+            ? VulkanBufferDetail::RequiredBufferUsageForResourceStates(buffer->m_creationDesc, requiredState)
+            : 0u)
+    ;
+    if(!m_device.isBufferReadyForGpuUse(buffer, requiredUsage)){
         rejectCommandRecording(operationName, NWB_TEXT("buffer is not ready for GPU access"));
         return false;
     }
@@ -410,8 +431,8 @@ bool CommandList::validateGraphicsState(const GraphicsState& state)noexcept{
         if(
             !binding.buffer
             || binding.buffer->m_buffer == VK_NULL_HANDLE
-            || !binding.buffer->m_desc.isVertexBuffer
-            || binding.offset >= binding.buffer->m_desc.byteSize
+            || !binding.buffer->m_creationDesc.isVertexBuffer
+            || binding.offset >= binding.buffer->m_creationDesc.byteSize
             || binding.slot >= m_context.physicalDeviceProperties.limits.maxVertexInputBindings
         ){
             rejectCommandRecording(s_OperationName, NWB_TEXT("vertex-buffer binding is invalid"));
@@ -430,13 +451,13 @@ bool CommandList::validateGraphicsState(const GraphicsState& state)noexcept{
         const u32 indexBytes = VulkanDetail::GetIndexElementByteSize(indexBinding.format);
         if(
             indexBinding.buffer->m_buffer == VK_NULL_HANDLE
-            || !indexBinding.buffer->m_desc.isIndexBuffer
+            || !indexBinding.buffer->m_creationDesc.isIndexBuffer
             || !VulkanDetail::IsIndexFormatSupported(
                 indexBinding.format,
                 m_context.fullDrawIndexUint32FeatureEnabled
             )
             || (indexBinding.offset % indexBytes) != 0u
-            || indexBinding.offset >= indexBinding.buffer->m_desc.byteSize
+            || indexBinding.offset >= indexBinding.buffer->m_creationDesc.byteSize
         ){
             rejectCommandRecording(s_OperationName, NWB_TEXT("index-buffer binding is invalid"));
             return false;
@@ -451,8 +472,8 @@ bool CommandList::validateGraphicsState(const GraphicsState& state)noexcept{
         state.indirectParams
         && (
             state.indirectParams->m_buffer == VK_NULL_HANDLE
-            || !state.indirectParams->m_desc.isDrawIndirectArgs
-            || state.indirectParams->m_desc.byteSize == 0u
+            || !state.indirectParams->m_creationDesc.isDrawIndirectArgs
+            || state.indirectParams->m_creationDesc.byteSize == 0u
         )
     ){
         rejectCommandRecording(s_OperationName, NWB_TEXT("indirect-argument buffer is invalid"));
@@ -567,8 +588,8 @@ bool CommandList::validateMeshletState(const MeshletState& state)noexcept{
         state.indirectParams
         && (
             state.indirectParams->m_buffer == VK_NULL_HANDLE
-            || !state.indirectParams->m_desc.isDrawIndirectArgs
-            || state.indirectParams->m_desc.byteSize == 0u
+            || !state.indirectParams->m_creationDesc.isDrawIndirectArgs
+            || state.indirectParams->m_creationDesc.byteSize == 0u
         )
     ){
         rejectCommandRecording(s_OperationName, NWB_TEXT("mesh indirect-argument buffer is invalid"));
@@ -648,7 +669,7 @@ bool CommandList::validateGraphicsDrawArguments(
         const IndexBufferBinding& indexBinding = m_currentGraphicsState.indexBuffer;
         const u32 indexBytes = VulkanDetail::GetIndexElementByteSize(indexBinding.format);
         if(!VulkanDetail::IsIndexDrawRangeValid(
-            indexBinding.buffer->m_desc,
+            indexBinding.buffer->m_creationDesc,
             indexBinding.offset,
             arguments.startIndexLocation,
             arguments.vertexCount,
@@ -690,7 +711,7 @@ bool CommandList::validateGraphicsDrawArguments(
         const u32 firstElement = instanceRate ? arguments.startInstanceLocation : arguments.startVertexLocation;
         const u32 elementCount = instanceRate ? arguments.instanceCount : arguments.vertexCount;
         if(!VulkanDetail::IsStridedBufferRangeValid(
-            boundBuffer->buffer->m_desc,
+            boundBuffer->buffer->m_creationDesc,
             boundBuffer->offset,
             firstElement,
             elementCount,
@@ -719,12 +740,12 @@ bool CommandList::validateIndirectBuffer(
         rejectCommandRecording(commandName, NWB_TEXT("indirect-argument buffer has no native buffer"));
         return false;
     }
-    if(!buffer->m_desc.isDrawIndirectArgs){
+    if(!buffer->m_creationDesc.isDrawIndirectArgs){
         rejectCommandRecording(commandName, NWB_TEXT("buffer lacks indirect-argument usage"));
         return false;
     }
     if(!VulkanDetail::IsIndirectCommandRangeValid(
-        buffer->m_desc,
+        buffer->m_creationDesc,
         offsetBytes,
         commandSizeBytes,
         commandCount

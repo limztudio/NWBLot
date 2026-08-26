@@ -819,10 +819,10 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(const bool rest
             && attributeCache.value().handle == prepared.attributeHeapHandle
             && topologyReady
             && mesh.meshletPrimitiveIndexCount == prepared.primitiveCount * s_RayTracingTriangleIndexCount
-            && mesh.swBvhNodeBuffer->getDescription().byteSize == prepared.nodeByteSize
-            && mesh.positionBuffer->getDescription().byteSize == prepared.positionByteSize
-            && mesh.triangleIndexBuffer->getDescription().byteSize == prepared.triangleIndexByteSize
-            && mesh.attributeBuffer->getDescription().byteSize == prepared.attributeByteSize
+            && mesh.swBvhNodeBuffer->getCreationDescription().byteSize == prepared.nodeByteSize
+            && mesh.positionBuffer->getCreationDescription().byteSize == prepared.positionByteSize
+            && mesh.triangleIndexBuffer->getCreationDescription().byteSize == prepared.triangleIndexByteSize
+            && mesh.attributeBuffer->getCreationDescription().byteSize == prepared.attributeByteSize
             && validStorageHandle(prepared.nodeHeapHandle)
             && validStorageHandle(prepared.positionHeapHandle)
             && validStorageHandle(prepared.triangleIndexHeapHandle)
@@ -1211,7 +1211,7 @@ bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(){
             // accepted preparation/prefix tail explicitly normalized may enter the next graph as ShaderResource.
             .initialState = wasNormalizedByAcceptedPacket(buffer.get())
                 ? Core::ResourceStates::ShaderResource
-                : buffer->getDescription().initialState,
+                : buffer->getCreationDescription().initialState,
             .roles = role,
         });
         return true;

@@ -337,10 +337,10 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
     if(
         destinationResource.type != GpuGraphResourceType::Buffer
         || !destinationResource.buffer
-        || destinationResource.buffer->getDescription().byteSize == 0u
-        || (destinationResource.buffer->getDescription().byteSize & (sizeof(u32) - 1u)) != 0u
+        || destinationResource.buffer->getCreationDescription().byteSize == 0u
+        || (destinationResource.buffer->getCreationDescription().byteSize & (sizeof(u32) - 1u)) != 0u
         || !__hidden_gpu_task_graph_builtin_clears::BuiltInTaskCanMaterializeRetainedState(
-            destinationResource.buffer->getDescription(),
+            destinationResource.buffer->getCreationDescription(),
             destinationResource.initialState,
             destinationResource.externalFinalState
         )

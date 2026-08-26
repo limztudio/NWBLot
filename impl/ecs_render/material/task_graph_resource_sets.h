@@ -75,7 +75,7 @@ namespace RendererTaskGraphDetail{
     for(const Core::BufferHandle& buffer : sourceBuffers){
         Core::GpuGraphResourceId resource = graph.findImportedBuffer(buffer);
         if(!resource.valid()){
-            const Name identity = buffer->getDescription().debugName;
+            const Name identity = buffer->getCreationDescription().debugName;
             if(!identity){
                 outResourceUses.clear();
                 return false;
@@ -150,7 +150,7 @@ namespace RendererTaskGraphDetail{
             return false;
         Core::GpuGraphResourceId resource = graph.findImportedBuffer(buffer);
         if(!resource.valid()){
-            const Name bufferIdentity = buffer->getDescription().debugName;
+            const Name bufferIdentity = buffer->getCreationDescription().debugName;
             if(!bufferIdentity)
                 return false;
             resource = graph.importBuffer(buffer, BufferResourceDesc(bufferIdentity, label));
@@ -181,7 +181,7 @@ namespace RendererTaskGraphDetail{
 
     outResource = graph.findImportedBuffer(plan.outputBuffer);
     if(!outResource.valid()){
-        const Name identity = plan.outputBuffer->getDescription().debugName;
+        const Name identity = plan.outputBuffer->getCreationDescription().debugName;
         if(!identity)
             return false;
         outResource = graph.importBuffer(plan.outputBuffer, BufferResourceDesc(identity, label));

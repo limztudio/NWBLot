@@ -1125,7 +1125,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         __hidden_ui::BufferResourceDesc(
             Name("ui.imgui_vertices"),
             "ImGui Vertices",
-            m_taskGraphDrawSnapshot.vertexBuffer->getDescription()
+            m_taskGraphDrawSnapshot.vertexBuffer->getCreationDescription()
         )
     );
     const Core::GpuGraphResourceId indexBuffer = graph.importBuffer(
@@ -1133,7 +1133,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         __hidden_ui::BufferResourceDesc(
             Name("ui.imgui_indices"),
             "ImGui Indices",
-            m_taskGraphDrawSnapshot.indexBuffer->getDescription()
+            m_taskGraphDrawSnapshot.indexBuffer->getCreationDescription()
         )
     );
     if(!vertexBuffer.valid() || !indexBuffer.valid())
@@ -1361,7 +1361,7 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
         __hidden_ui::BufferResourceDesc(
             Name("ui.imgui_standalone_legacy_vertices"),
             "Standalone ImGui Legacy Vertices",
-            m_vertexBuffer->getDescription()
+            m_vertexBuffer->getCreationDescription()
         )
     );
     const Core::GpuGraphResourceId indexBuffer = graph.importBuffer(
@@ -1369,7 +1369,7 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
         __hidden_ui::BufferResourceDesc(
             Name("ui.imgui_standalone_legacy_indices"),
             "Standalone ImGui Legacy Indices",
-            m_indexBuffer->getDescription()
+            m_indexBuffer->getCreationDescription()
         )
     );
     if(

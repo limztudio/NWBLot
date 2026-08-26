@@ -622,7 +622,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             const auto importBuffer = [&](const Core::BufferHandle& buffer, const AStringView label){
                 if(!buffer)
                     return Core::GpuGraphResourceId{};
-                const Core::BufferDesc& description = buffer->getDescription();
+                const Core::BufferDesc& description = buffer->getCreationDescription();
                 if(!description.debugName)
                     return Core::GpuGraphResourceId{};
                 return graph.importBuffer(

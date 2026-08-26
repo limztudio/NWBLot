@@ -292,7 +292,7 @@ template<typename RayTracingState>
     )
         return false;
 
-    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getDescription();
+    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getCreationDescription();
     if(positionDesc.structStride == 0u || meshResources.meshletPrimitiveIndexCount == 0u)
         return false;
 
@@ -342,7 +342,7 @@ template<typename RayTracingState>
     )
         return false;
 
-    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getDescription();
+    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getCreationDescription();
     return
         positionDesc.structStride == build.vertexStride
         && positionDesc.byteSize == build.positionByteSize
@@ -723,13 +723,13 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
             && !firstBuild
             && mesh.swBvhRefitsSinceRebuild < adaptiveRefitsBeforeRebuild(primitiveCount)
         ;
-        const Core::BufferDesc& positionDesc = mesh.positionBuffer->getDescription();
-        const Core::BufferDesc& indexDesc = mesh.triangleIndexBuffer->getDescription();
-        const Core::BufferDesc& nodeDesc = mesh.swBvhNodeBuffer->getDescription();
-        const Core::BufferDesc& parentDesc = mesh.swBvhParentBuffer->getDescription();
-        const Core::BufferDesc& keysDesc = state.m_bvhSortKeysBuffer->getDescription();
-        const Core::BufferDesc& payloadDesc = state.m_bvhSortPayloadBuffer->getDescription();
-        const Core::BufferDesc& counterDesc = state.m_bvhVisitCounterBuffer->getDescription();
+        const Core::BufferDesc& positionDesc = mesh.positionBuffer->getCreationDescription();
+        const Core::BufferDesc& indexDesc = mesh.triangleIndexBuffer->getCreationDescription();
+        const Core::BufferDesc& nodeDesc = mesh.swBvhNodeBuffer->getCreationDescription();
+        const Core::BufferDesc& parentDesc = mesh.swBvhParentBuffer->getCreationDescription();
+        const Core::BufferDesc& keysDesc = state.m_bvhSortKeysBuffer->getCreationDescription();
+        const Core::BufferDesc& payloadDesc = state.m_bvhSortPayloadBuffer->getCreationDescription();
+        const Core::BufferDesc& counterDesc = state.m_bvhVisitCounterBuffer->getCreationDescription();
         m_preparedMeshSwBvhBuilds.push_back(PreparedMeshSwBvhBuild{
             .meshName = mesh.meshName,
             .positionBuffer = mesh.positionBuffer,
@@ -809,13 +809,13 @@ bool RendererRayTracingSystem::preparedMeshSwBvhBuildMatchesCurrent(const Prepar
     )
         return false;
     return
-        mesh.positionBuffer->getDescription().byteSize == build.positionByteSize
-        && mesh.triangleIndexBuffer->getDescription().byteSize == build.indexByteSize
-        && mesh.swBvhNodeBuffer->getDescription().byteSize == build.nodeByteSize
-        && mesh.swBvhParentBuffer->getDescription().byteSize == build.parentByteSize
-        && state.m_bvhSortKeysBuffer->getDescription().byteSize == build.sortKeysByteSize
-        && state.m_bvhSortPayloadBuffer->getDescription().byteSize == build.sortPayloadByteSize
-        && state.m_bvhVisitCounterBuffer->getDescription().byteSize == build.visitCounterByteSize
+        mesh.positionBuffer->getCreationDescription().byteSize == build.positionByteSize
+        && mesh.triangleIndexBuffer->getCreationDescription().byteSize == build.indexByteSize
+        && mesh.swBvhNodeBuffer->getCreationDescription().byteSize == build.nodeByteSize
+        && mesh.swBvhParentBuffer->getCreationDescription().byteSize == build.parentByteSize
+        && state.m_bvhSortKeysBuffer->getCreationDescription().byteSize == build.sortKeysByteSize
+        && state.m_bvhSortPayloadBuffer->getCreationDescription().byteSize == build.sortPayloadByteSize
+        && state.m_bvhVisitCounterBuffer->getCreationDescription().byteSize == build.visitCounterByteSize
     ;
 }
 
@@ -1746,10 +1746,10 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             }
 
             if(!commandList){
-                const Core::BufferDesc& nodeDesc = mesh->swBvhNodeBuffer->getDescription();
-                const Core::BufferDesc& positionDesc = mesh->positionBuffer->getDescription();
-                const Core::BufferDesc& indexDesc = mesh->triangleIndexBuffer->getDescription();
-                const Core::BufferDesc& attributeDesc = mesh->attributeBuffer->getDescription();
+                const Core::BufferDesc& nodeDesc = mesh->swBvhNodeBuffer->getCreationDescription();
+                const Core::BufferDesc& positionDesc = mesh->positionBuffer->getCreationDescription();
+                const Core::BufferDesc& indexDesc = mesh->triangleIndexBuffer->getCreationDescription();
+                const Core::BufferDesc& attributeDesc = mesh->attributeBuffer->getCreationDescription();
                 preparedMeshes.push_back(PreparedSceneSwBvhMesh{
                     .meshName = mesh->meshName,
                     .nodeBuffer = mesh->swBvhNodeBuffer,
@@ -2146,7 +2146,7 @@ bool RendererRayTracingSystem::prepareMeshBlasResources(MeshResources& meshResou
     if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer)
         return false;
 
-    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getDescription();
+    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getCreationDescription();
     if(positionDesc.structStride == 0u || meshResources.meshletPrimitiveIndexCount == 0u)
         return false;
 

@@ -112,7 +112,7 @@ void CommandList::setComputeState(const ComputeState& state){
         state.indirectParams
         && (
             state.indirectParams->m_buffer == VK_NULL_HANDLE
-            || !state.indirectParams->m_desc.isDrawIndirectArgs
+            || !state.indirectParams->m_creationDesc.isDrawIndirectArgs
         )
     ){
         rejectCommandRecording(
@@ -126,7 +126,8 @@ void CommandList::setComputeState(const ComputeState& state){
         && !validateBufferForGpuState(
             state.indirectParams,
             ResourceStates::IndirectArgument,
-            NWB_TEXT("set compute state")
+            NWB_TEXT("set compute state"),
+            VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
         )
     )
         return;
@@ -185,7 +186,7 @@ void CommandList::dispatchIndirect(u32 offsetBytes){
     }
 
     auto* buffer = m_currentComputeState.indirectParams;
-    if(!buffer->m_desc.isDrawIndirectArgs){
+    if(!buffer->m_creationDesc.isDrawIndirectArgs){
         rejectCommandRecording(NWB_TEXT("dispatch indirect"), NWB_TEXT("buffer was not created with indirect-argument usage"));
         return;
     }
@@ -193,7 +194,7 @@ void CommandList::dispatchIndirect(u32 offsetBytes){
         rejectCommandRecording(NWB_TEXT("dispatch indirect"), NWB_TEXT("indirect argument offset is not 4-byte aligned"));
         return;
     }
-    if(!VulkanDetail::IsBufferRangeInBounds(buffer->m_desc, offsetBytes, sizeof(DispatchIndirectArguments))){
+    if(!VulkanDetail::IsBufferRangeInBounds(buffer->m_creationDesc, offsetBytes, sizeof(DispatchIndirectArguments))){
         rejectCommandRecording(NWB_TEXT("dispatch indirect"), NWB_TEXT("indirect argument range is outside the buffer"));
         return;
     }

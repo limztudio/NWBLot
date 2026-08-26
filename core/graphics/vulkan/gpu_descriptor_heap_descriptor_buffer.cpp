@@ -341,12 +341,23 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
     }
 
     auto* const buffer = static_cast<Buffer*>(writeItem.resourceHandle);
-    if(!m_device.isBufferReadyForGpuUse(buffer)){
+    VkBufferUsageFlags requiredUsage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    if(descriptorClass == GpuDescriptorClass::SampledBuffer)
+        requiredUsage |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
+    else if(descriptorClass == GpuDescriptorClass::StorageBuffer)
+        requiredUsage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    else if(descriptorClass == GpuDescriptorClass::UniformBuffer)
+        requiredUsage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    else{
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected an invalid Buffer descriptor class."));
+        return false;
+    }
+    if(!m_device.isBufferReadyForGpuUse(buffer, requiredUsage)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a foreign or unready Buffer."));
         return false;
     }
     if(descriptorClass == GpuDescriptorClass::SampledBuffer){
-        const BufferDesc& bufferDesc = buffer->getDescription();
+        const BufferDesc& bufferDesc = buffer->getCreationDescription();
         const Format::Enum format = writeItem.format != Format::UNKNOWN ? writeItem.format : bufferDesc.format;
         if(format == Format::UNKNOWN || format >= Format::kCount){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected an invalid sampled-buffer format."));

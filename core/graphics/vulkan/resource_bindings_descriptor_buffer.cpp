@@ -626,17 +626,17 @@ bool DescriptorBufferManager::writeDescriptor(
 
     if(VulkanDetail::UsesDescriptorBufferInfo(item.type)){
         auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
-        if(!m_device.isBufferReadyForGpuUse(buffer)){
+        const bool isUniform = item.type == ResourceType::ConstantBuffer;
+        const VkBufferUsageFlags requiredUsage = isUniform
+            ? VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+            : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+        ;
+        if(!m_device.isBufferReadyForGpuUse(buffer, requiredUsage)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected a foreign or unready Buffer."));
             return false;
         }
-        const BufferDesc& bufferDesc = buffer->m_creationDesc;
-        const bool isUniform = item.type == ResourceType::ConstantBuffer;
-        const VkBufferUsageFlags requiredUsage = isUniform
-            ? VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT
-            : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
-        ;
-        if((buffer->m_usage & requiredUsage) == 0u){
+        const BufferDesc& bufferDesc = buffer->getCreationDescription();
+        if((buffer->m_usage & requiredUsage) != requiredUsage){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: Buffer lacks native descriptor usage."));
             return false;
         }
@@ -698,19 +698,19 @@ bool DescriptorBufferManager::writeDescriptor(
         case ResourceType::TypedBuffer_SRV:
         case ResourceType::TypedBuffer_UAV:{
             auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
-            if(!m_device.isBufferReadyForGpuUse(buffer)){
+            const VkBufferUsageFlags requiredUsage = item.type == ResourceType::TypedBuffer_UAV
+                ? VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                : VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+            ;
+            if(!m_device.isBufferReadyForGpuUse(buffer, requiredUsage)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected a foreign or unready typed Buffer."));
                 return false;
             }
-            const BufferDesc& bufferDesc = buffer->m_creationDesc;
-            const VkBufferUsageFlags requiredUsage = item.type == ResourceType::TypedBuffer_UAV
-                ? VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT
-                : VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT
-            ;
+            const BufferDesc& bufferDesc = buffer->getCreationDescription();
             if(
                 !bufferDesc.canHaveTypedViews
                 || (item.type == ResourceType::TypedBuffer_UAV && !bufferDesc.canHaveUAVs)
-                || (buffer->m_usage & requiredUsage) == 0u
+                || (buffer->m_usage & requiredUsage) != requiredUsage
             ){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: Buffer lacks typed-view capability."));
                 return false;

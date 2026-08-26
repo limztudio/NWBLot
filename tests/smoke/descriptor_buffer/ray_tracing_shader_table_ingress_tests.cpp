@@ -52,6 +52,61 @@ void ExpectShaderTableRecordRejection(Operation&& operation){
 #endif
 }
 
+template<typename Operation>
+void ExpectRayTracingPipelineRejection(Operation&& operation){
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({ EXPECT_FALSE(operation()); }, "");
+#else
+    EXPECT_FALSE(operation());
+#endif
+}
+
+template<typename Function>
+class ScopedVolkFunctionNull final{
+public:
+    explicit ScopedVolkFunctionNull(Function& function)
+        : m_function(function)
+        , m_original(function)
+    {
+        m_function = nullptr;
+    }
+    ~ScopedVolkFunctionNull(){ m_function = m_original; }
+
+    ScopedVolkFunctionNull(const ScopedVolkFunctionNull&) = delete;
+    ScopedVolkFunctionNull& operator=(const ScopedVolkFunctionNull&) = delete;
+
+
+private:
+    Function& m_function;
+    Function m_original;
+};
+
+[[nodiscard]] GraphicsBackend::VulkanDetail::RayTracingCapabilityInputs MakeSupportedRayTracingCapabilityInputs(){
+    GraphicsBackend::VulkanDetail::RayTracingCapabilityInputs inputs;
+    inputs.accelerationStructureExtensionEnabled = true;
+    inputs.accelerationStructureFeatureEnabled = true;
+    inputs.createAccelerationStructureEntryPointAvailable = true;
+    inputs.destroyAccelerationStructureEntryPointAvailable = true;
+    inputs.getAccelerationStructureBuildSizesEntryPointAvailable = true;
+    inputs.getAccelerationStructureDeviceAddressEntryPointAvailable = true;
+    inputs.cmdBuildAccelerationStructuresEntryPointAvailable = true;
+
+    inputs.rayTracingPipelineExtensionEnabled = true;
+    inputs.rayTracingPipelineFeatureEnabled = true;
+    inputs.createRayTracingPipelinesEntryPointAvailable = true;
+    inputs.getRayTracingShaderGroupHandlesEntryPointAvailable = true;
+    inputs.cmdTraceRaysEntryPointAvailable = true;
+
+    inputs.opacityMicromapExtensionEnabled = true;
+    inputs.opacityMicromapFeatureEnabled = true;
+    inputs.synchronization2ExtensionEnabled = true;
+    inputs.createMicromapEntryPointAvailable = true;
+    inputs.destroyMicromapEntryPointAvailable = true;
+    inputs.getMicromapBuildSizesEntryPointAvailable = true;
+    inputs.cmdBuildMicromapsEntryPointAvailable = true;
+    return inputs;
+}
+
 // Minimal source for every module: `#version 460`, `#extension GL_EXT_ray_tracing : require`, then `void main(){}`.
 // Exact Vulkan SDK 1.4.341.1 generation and validation commands:
 // glslangValidator.exe --target-env vulkan1.2 -V -S rgen -e main shader_table_minimal.glsl -o shader_table_ray_generation.spv
@@ -134,7 +189,8 @@ template<usize WordCount>
 [[nodiscard]] RayTracingPipelineHandle CreateShaderTablePipeline(
     GraphicsBackend::Device& device,
     Alloc::GlobalArena& arena,
-    const ShaderTablePipelineShape::Enum shape
+    const ShaderTablePipelineShape::Enum shape,
+    const bool allowOpacityMicromaps = false
 ){
     const ShaderHandle rayGenerationShader = CreateShaderTableShader(
         device,
@@ -168,7 +224,10 @@ template<usize WordCount>
         return nullptr;
 
     RayTracingPipelineDesc pipelineDesc(arena);
-    pipelineDesc.addBindingLayout(device.getDescriptorHeap().getResourceLayout());
+    pipelineDesc
+        .addBindingLayout(device.getDescriptorHeap().getResourceLayout())
+        .setAllowOpacityMicromaps(allowOpacityMicromaps)
+    ;
     switch(shape){
     case ShaderTablePipelineShape::RayGenerationAndMiss:{
         RayTracingPipelineShaderDesc sharedRayGeneration(arena);
@@ -367,6 +426,216 @@ TEST(RayTracingShaderTableContractTest, NamedFailureAndAlignmentHelpersAreDeterm
         256u,
         offset
     ));
+}
+
+TEST(RayTracingShaderTableContractTest, PipelineCreateFlagsPreserveDescriptorBufferAndRequestedRayTracingCapabilities){
+    Alloc::GlobalArena arena(Name("tests/ray_tracing_pipeline_flags"));
+    RayTracingPipelineDesc desc(arena);
+
+    EXPECT_EQ(
+        GraphicsBackend::VulkanDetail::ComputeRayTracingPipelineCreateFlags(desc),
+        VK_PIPELINE_CREATE_2_DESCRIPTOR_BUFFER_BIT_EXT
+    );
+
+    desc.setAllowOpacityMicromaps(true);
+    EXPECT_EQ(
+        GraphicsBackend::VulkanDetail::ComputeRayTracingPipelineCreateFlags(desc),
+        VK_PIPELINE_CREATE_2_DESCRIPTOR_BUFFER_BIT_EXT
+            | VK_PIPELINE_CREATE_2_RAY_TRACING_OPACITY_MICROMAP_BIT_EXT
+    );
+
+    desc.setAllowSpheres(true).setAllowLinearSweptSpheres(true);
+    EXPECT_EQ(
+        GraphicsBackend::VulkanDetail::ComputeRayTracingPipelineCreateFlags(desc),
+        VK_PIPELINE_CREATE_2_DESCRIPTOR_BUFFER_BIT_EXT
+            | VK_PIPELINE_CREATE_2_RAY_TRACING_OPACITY_MICROMAP_BIT_EXT
+            | VK_PIPELINE_CREATE_2_RAY_TRACING_ALLOW_SPHERES_AND_LINEAR_SWEPT_SPHERES_BIT_NV
+    );
+}
+
+TEST(RayTracingShaderTableContractTest, AccelerationStructureCapabilityRequiresEnabledContractAndEntrypoints){
+    using CapabilityInputs = GraphicsBackend::VulkanDetail::RayTracingCapabilityInputs;
+    EXPECT_TRUE(GraphicsBackend::VulkanDetail::SupportsRayTracingAccelStruct(MakeSupportedRayTracingCapabilityInputs()));
+
+    const auto expectUnsupported = [](bool CapabilityInputs::* missingInput){
+        CapabilityInputs inputs = MakeSupportedRayTracingCapabilityInputs();
+        inputs.*missingInput = false;
+        EXPECT_FALSE(GraphicsBackend::VulkanDetail::SupportsRayTracingAccelStruct(inputs));
+    };
+    expectUnsupported(&CapabilityInputs::accelerationStructureExtensionEnabled);
+    expectUnsupported(&CapabilityInputs::accelerationStructureFeatureEnabled);
+    expectUnsupported(&CapabilityInputs::createAccelerationStructureEntryPointAvailable);
+    expectUnsupported(&CapabilityInputs::destroyAccelerationStructureEntryPointAvailable);
+    expectUnsupported(&CapabilityInputs::getAccelerationStructureBuildSizesEntryPointAvailable);
+    expectUnsupported(&CapabilityInputs::getAccelerationStructureDeviceAddressEntryPointAvailable);
+    expectUnsupported(&CapabilityInputs::cmdBuildAccelerationStructuresEntryPointAvailable);
+}
+
+TEST(RayTracingShaderTableContractTest, RayTracingPipelineCapabilityRequiresEnabledContractDependenciesAndEntrypoints){
+    using CapabilityInputs = GraphicsBackend::VulkanDetail::RayTracingCapabilityInputs;
+    EXPECT_TRUE(GraphicsBackend::VulkanDetail::SupportsRayTracingPipeline(MakeSupportedRayTracingCapabilityInputs()));
+
+    const auto expectUnsupported = [](bool CapabilityInputs::* missingInput){
+        CapabilityInputs inputs = MakeSupportedRayTracingCapabilityInputs();
+        inputs.*missingInput = false;
+        EXPECT_FALSE(GraphicsBackend::VulkanDetail::SupportsRayTracingPipeline(inputs));
+    };
+    expectUnsupported(&CapabilityInputs::rayTracingPipelineExtensionEnabled);
+    expectUnsupported(&CapabilityInputs::rayTracingPipelineFeatureEnabled);
+    expectUnsupported(&CapabilityInputs::createRayTracingPipelinesEntryPointAvailable);
+    expectUnsupported(&CapabilityInputs::getRayTracingShaderGroupHandlesEntryPointAvailable);
+    expectUnsupported(&CapabilityInputs::cmdTraceRaysEntryPointAvailable);
+    expectUnsupported(&CapabilityInputs::accelerationStructureFeatureEnabled);
+}
+
+TEST(RayTracingShaderTableContractTest, OpacityMicromapCapabilityRequiresEnabledContractDependenciesAndEntrypoints){
+    using CapabilityInputs = GraphicsBackend::VulkanDetail::RayTracingCapabilityInputs;
+    EXPECT_TRUE(GraphicsBackend::VulkanDetail::SupportsRayTracingOpacityMicromap(MakeSupportedRayTracingCapabilityInputs()));
+
+    const auto expectUnsupported = [](bool CapabilityInputs::* missingInput){
+        CapabilityInputs inputs = MakeSupportedRayTracingCapabilityInputs();
+        inputs.*missingInput = false;
+        EXPECT_FALSE(GraphicsBackend::VulkanDetail::SupportsRayTracingOpacityMicromap(inputs));
+    };
+    expectUnsupported(&CapabilityInputs::opacityMicromapExtensionEnabled);
+    expectUnsupported(&CapabilityInputs::opacityMicromapFeatureEnabled);
+    expectUnsupported(&CapabilityInputs::synchronization2ExtensionEnabled);
+    expectUnsupported(&CapabilityInputs::createMicromapEntryPointAvailable);
+    expectUnsupported(&CapabilityInputs::destroyMicromapEntryPointAvailable);
+    expectUnsupported(&CapabilityInputs::getMicromapBuildSizesEntryPointAvailable);
+    expectUnsupported(&CapabilityInputs::cmdBuildMicromapsEntryPointAvailable);
+    expectUnsupported(&CapabilityInputs::accelerationStructureFeatureEnabled);
+}
+
+TEST(RayTracingShaderTableContractTest, RayTracingShaderTypeContractRejectsMissingCombinedAndUnexpectedStages){
+    constexpr ShaderType::Mask s_GeneralShaderTypes = static_cast<ShaderType::Mask>(
+        ShaderType::RayGeneration | ShaderType::Miss | ShaderType::Callable
+    );
+    EXPECT_TRUE(GraphicsBackend::VulkanDetail::IsRayTracingShaderTypeAllowed(ShaderType::RayGeneration, s_GeneralShaderTypes));
+    EXPECT_TRUE(GraphicsBackend::VulkanDetail::IsRayTracingShaderTypeAllowed(ShaderType::Miss, s_GeneralShaderTypes));
+    EXPECT_TRUE(GraphicsBackend::VulkanDetail::IsRayTracingShaderTypeAllowed(ShaderType::Callable, s_GeneralShaderTypes));
+    EXPECT_FALSE(GraphicsBackend::VulkanDetail::IsRayTracingShaderTypeAllowed(ShaderType::None, s_GeneralShaderTypes));
+    EXPECT_FALSE(GraphicsBackend::VulkanDetail::IsRayTracingShaderTypeAllowed(ShaderType::Compute, s_GeneralShaderTypes));
+    EXPECT_FALSE(GraphicsBackend::VulkanDetail::IsRayTracingShaderTypeAllowed(
+        static_cast<ShaderType::Mask>(ShaderType::RayGeneration | ShaderType::Miss),
+        s_GeneralShaderTypes
+    ));
+}
+
+TEST_F(RayTracingShaderTableIngressTest, OpacityMicromapPipelineRequestMatchesEnabledFeatureSupport){
+    const bool opacityMicromapSupported = device().queryFeatureSupport(Feature::RayTracingOpacityMicromap);
+    if(opacityMicromapSupported){
+        EXPECT_TRUE(CreateShaderTablePipeline(
+            device(),
+            arena(),
+            ShaderTablePipelineShape::RayGenerationAndMiss,
+            true
+        ));
+        return;
+    }
+
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        EXPECT_FALSE(CreateShaderTablePipeline(
+            device(),
+            arena(),
+            ShaderTablePipelineShape::RayGenerationAndMiss,
+            true
+        ));
+    }, "");
+#else
+    CapturingLogger logger;
+    Common::LoggerRegistrationGuard loggerGuard(logger);
+    EXPECT_FALSE(CreateShaderTablePipeline(
+        device(),
+        arena(),
+        ShaderTablePipelineShape::RayGenerationAndMiss,
+        true
+    ));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("opacity micromap support is unavailable")));
+#endif
+}
+
+TEST_F(RayTracingShaderTableIngressTest, PipelineFeatureAndCreationFailClosedWhenRequiredEntrypointIsMissing){
+    ASSERT_NE(vkCreateRayTracingPipelinesKHR, nullptr);
+    ScopedVolkFunctionNull<PFN_vkCreateRayTracingPipelinesKHR> missingCreatePipeline(vkCreateRayTracingPipelinesKHR);
+
+    EXPECT_FALSE(device().queryFeatureSupport(Feature::RayTracingPipeline));
+    ExpectRayTracingPipelineRejection([&](){
+        return CreateShaderTablePipeline(device(), arena(), ShaderTablePipelineShape::RayGenerationAndMiss);
+    });
+}
+
+TEST_F(RayTracingShaderTableIngressTest, PipelineCreationRejectsInvalidShaderAndHitGroupIngress){
+    const ShaderHandle rayGenerationShader = CreateShaderTableShader(
+        device(),
+        arena(),
+        ShaderType::RayGeneration,
+        Name("tests/shader_table/ingress_ray_generation"),
+        s_ShaderTableRayGenerationSpirv
+    );
+    const ShaderHandle closestHitShader = CreateShaderTableShader(
+        device(),
+        arena(),
+        ShaderType::ClosestHit,
+        Name("tests/shader_table/ingress_closest_hit"),
+        s_ShaderTableClosestHitSpirv
+    );
+    ASSERT_TRUE(rayGenerationShader);
+    ASSERT_TRUE(closestHitShader);
+
+    HeadlessGraphicsScope foreignScope;
+    ASSERT_TRUE(foreignScope.initialize());
+    GraphicsBackend::Device& foreignDevice = foreignScope.graphics().getDevice();
+    const ShaderHandle foreignRayGenerationShader = CreateShaderTableShader(
+        foreignDevice,
+        foreignScope.arena(),
+        ShaderType::RayGeneration,
+        Name("tests/shader_table/foreign_ray_generation"),
+        s_ShaderTableRayGenerationSpirv
+    );
+    ASSERT_TRUE(foreignRayGenerationShader);
+
+    RayTracingPipelineDesc nullShaderPipeline(arena());
+    RayTracingPipelineShaderDesc nullShader(arena());
+    nullShaderPipeline.addShader(nullShader);
+    ExpectRayTracingPipelineRejection([&](){ return device().createRayTracingPipeline(nullShaderPipeline); });
+
+    RayTracingPipelineDesc wrongGeneralStagePipeline(arena());
+    RayTracingPipelineShaderDesc wrongGeneralStage(arena());
+    wrongGeneralStage.setShader(closestHitShader);
+    wrongGeneralStagePipeline.addShader(wrongGeneralStage);
+    ExpectRayTracingPipelineRejection([&](){ return device().createRayTracingPipeline(wrongGeneralStagePipeline); });
+
+    RayTracingPipelineDesc foreignShaderPipeline(arena());
+    RayTracingPipelineShaderDesc foreignShader(arena());
+    foreignShader.setShader(foreignRayGenerationShader);
+    foreignShaderPipeline.addShader(foreignShader);
+    ExpectRayTracingPipelineRejection([&](){ return device().createRayTracingPipeline(foreignShaderPipeline); });
+
+    RayTracingPipelineShaderDesc validGeneralShader(arena());
+    validGeneralShader.setShader(rayGenerationShader);
+
+    RayTracingPipelineDesc wrongHitStagePipeline(arena());
+    wrongHitStagePipeline.addShader(validGeneralShader);
+    RayTracingPipelineHitGroupDesc wrongHitStage(arena());
+    wrongHitStage.setClosestHitShader(rayGenerationShader);
+    wrongHitStagePipeline.addHitGroup(wrongHitStage);
+    ExpectRayTracingPipelineRejection([&](){ return device().createRayTracingPipeline(wrongHitStagePipeline); });
+
+    RayTracingPipelineDesc proceduralWithoutIntersectionPipeline(arena());
+    proceduralWithoutIntersectionPipeline.addShader(validGeneralShader);
+    RayTracingPipelineHitGroupDesc proceduralWithoutIntersection(arena());
+    proceduralWithoutIntersection.setClosestHitShader(closestHitShader).setIsProceduralPrimitive(true);
+    proceduralWithoutIntersectionPipeline.addHitGroup(proceduralWithoutIntersection);
+    ExpectRayTracingPipelineRejection([&](){ return device().createRayTracingPipeline(proceduralWithoutIntersectionPipeline); });
+
+    RayTracingPipelineDesc triangleWithIntersectionPipeline(arena());
+    triangleWithIntersectionPipeline.addShader(validGeneralShader);
+    RayTracingPipelineHitGroupDesc triangleWithIntersection(arena());
+    triangleWithIntersection.setIntersectionShader(closestHitShader);
+    triangleWithIntersectionPipeline.addHitGroup(triangleWithIntersection);
+    ExpectRayTracingPipelineRejection([&](){ return device().createRayTracingPipeline(triangleWithIntersectionPipeline); });
 }
 
 TEST_F(RayTracingShaderTableIngressTest, TypedLookupRejectsEmptyWrongKindAndSameKindAmbiguity){

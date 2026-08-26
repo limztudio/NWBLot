@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "buffer_resource_detail.h"
 
 #include <core/common/log.h>
 
@@ -37,36 +38,6 @@ bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOff
     return firstOffsetBytes < secondEnd && secondOffsetBytes < firstEnd;
 }
 
-[[nodiscard]] static VkBufferUsageFlags PickBufferUsage(const VulkanContext& context, const BufferDesc& desc){
-    VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    usage |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
-    if(desc.isVertexBuffer)
-        usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-    if(desc.isIndexBuffer)
-        usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-    if(desc.isConstantBuffer)
-        usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
-    if(desc.structStride != 0u || desc.canHaveUAVs || desc.canHaveRawViews)
-        usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    if(desc.isDrawIndirectArgs)
-        usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-    if(desc.isAccelStructBuildInput)
-        usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-    if(desc.isAccelStructStorage)
-        usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
-    if(context.extensions.EXT_opacity_micromap){
-        if(desc.isAccelStructBuildInput)
-            usage |= VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT;
-        if(desc.isAccelStructStorage)
-            usage |= VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT;
-    }
-    if(desc.isShaderBindingTable)
-        usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    if(context.extensions.buffer_device_address)
-        usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    return usage;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -77,8 +48,16 @@ bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOff
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Buffer::Buffer(const VulkanContext& context, VulkanAllocator& allocator)
+Buffer::Buffer(
+    const VulkanContext& context,
+    VulkanAllocator& allocator,
+    const BufferDesc& creationDesc,
+    const VkBufferUsageFlags usage
+)
     : RefCounter<GraphicsResource>(context.threadPool)
+    , m_desc(creationDesc)
+    , m_creationDesc(creationDesc)
+    , m_usage(usage)
     , m_versionTracking(context.objectArena)
     , m_bufferViews(context.objectArena)
     , m_context(context)
@@ -114,7 +93,7 @@ Buffer::~Buffer(){
             m_boundHeap.reset();
         }
         else if(m_managed){
-            if(m_desc.isVirtual){
+            if(m_creationDesc.isVirtual){
                 if(m_buffer != VK_NULL_HANDLE){
                     vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
                     m_buffer = VK_NULL_HANDLE;
@@ -126,6 +105,10 @@ Buffer::~Buffer(){
     }
 
     m_allocator.unregisterBufferNativeIdentity(registeredNativeBuffer, *this);
+}
+
+bool Buffer::descriptionMatchesCreation()const noexcept{
+    return VulkanBufferDetail::BufferDescriptionsEqual(m_desc, m_creationDesc);
 }
 
 Object Buffer::getNativeHandle(ObjectType objectType){
@@ -152,10 +135,10 @@ VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
     if(formatInfo.bytesPerBlock == 0)
         return VK_NULL_HANDLE;
 
-    if(byteOffset >= m_desc.byteSize)
+    if(byteOffset >= m_creationDesc.byteSize)
         return VK_NULL_HANDLE;
 
-    const u64 maxRange = m_desc.byteSize - byteOffset;
+    const u64 maxRange = m_creationDesc.byteSize - byteOffset;
     const u64 offsetAlignment = Max<u64>(m_context.physicalDeviceProperties.limits.minTexelBufferOffsetAlignment, 1u);
     if((byteOffset % offsetAlignment) != 0)
         return VK_NULL_HANDLE;
@@ -220,6 +203,11 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create volatile buffer: maxVersions is zero"));
         return nullptr;
     }
+    if(!VulkanBufferDetail::IsBufferCreationStateMaskValid(d.initialState)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: initial state is invalid for a buffer"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: invalid initial state"));
+        return nullptr;
+    }
     CpuAccessMode::Enum effectiveCpuAccess = CpuAccessMode::None;
     if(!VulkanDetail::TryResolveBufferCpuAccess(d.cpuAccess, d.isVolatile, effectiveCpuAccess)){
         if(d.isVolatile && d.cpuAccess == CpuAccessMode::Read){
@@ -233,20 +221,27 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         return nullptr;
     }
 
-    auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator);
-    buffer->m_desc = d;
-    buffer->m_creationDesc = d;
-
-    const VkBufferUsageFlags usageFlags = VulkanDetail::PickBufferUsage(m_context, d);
+    const VkBufferUsageFlags usageFlags = VulkanBufferDetail::PickManagedBufferUsage(m_context, d);
+    if(!VulkanBufferDetail::IsBufferUsageCompatibleWithResourceStates(d, usageFlags, d.initialState)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: initial state requires an undeclared buffer usage"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: initial state is incompatible with its description"));
+        return nullptr;
+    }
+    if(!VulkanBufferDetail::IsBufferUsageSupportedByDevice(m_context, usageFlags)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: required usage is unsupported by the device"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: required usage is unsupported by the device"));
+        return nullptr;
+    }
     if(d.isShaderBindingTable){
         if(!m_context.extensions.KHR_ray_tracing_pipeline || !m_context.extensions.buffer_device_address){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
-            DestroyArenaObject(m_context.objectArena, buffer);
             return nullptr;
         }
 
     }
+
+    auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator, d, usageFlags);
 
     u64 size = d.byteSize;
 
@@ -272,7 +267,6 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size = size;
     bufferInfo.usage = usageFlags;
-    buffer->m_usage = usageFlags;
     const QueueFamilySharingInfo sharingInfo = ResolveQueueFamilySharing(d.queueSharing, m_context);
     bufferInfo.sharingMode = sharingInfo.mode;
     bufferInfo.queueFamilyIndexCount = sharingInfo.familyIndexCount;
@@ -296,7 +290,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     }
 
     if(!d.isVirtual){
-        if(m_context.extensions.buffer_device_address){
+        if(usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT){
             VkBufferDeviceAddressInfo addressInfo{};
             addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
             addressInfo.buffer = buffer->m_buffer;
@@ -307,7 +301,12 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object nativeBufferHandle, const BufferDesc& desc){
+BufferHandle Device::createHandleForNativeBuffer(
+    const ObjectType objectType,
+    const Object nativeBufferHandle,
+    const BufferDesc& desc,
+    const VkBufferUsageFlags nativeUsage
+){
     if(objectType != ObjectTypes::VK_Buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: object type is not VK_Buffer"));
         return nullptr;
@@ -322,12 +321,39 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object n
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: byte size is zero"));
         return nullptr;
     }
+    if(!VulkanBufferDetail::IsBufferCreationStateMaskValid(desc.initialState)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: initial state is invalid for a buffer"));
+        return nullptr;
+    }
 
-    auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator);
-    buffer->m_desc = desc;
-    buffer->m_creationDesc = desc;
+    if(!VulkanBufferDetail::IsBufferUsageCompatibleWithDescription(desc, nativeUsage)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: native usage contradicts the logical description"));
+        return nullptr;
+    }
+    if(!VulkanBufferDetail::IsBufferUsageCompatibleWithResourceStates(desc, nativeUsage, desc.initialState)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: native usage contradicts the declared initial state"));
+        return nullptr;
+    }
+    if(!VulkanBufferDetail::IsBufferUsageSupportedByDevice(m_context, nativeUsage)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: native usage is unsupported by the device"));
+        return nullptr;
+    }
+
+    u64 deviceAddress = 0u;
+    if(nativeUsage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT){
+        VkBufferDeviceAddressInfo addressInfo{};
+        addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        addressInfo.buffer = nativeBuffer;
+        deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
+        if(deviceAddress == 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: device address is zero"));
+            return nullptr;
+        }
+    }
+
+    auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator, desc, nativeUsage);
     buffer->m_buffer = nativeBuffer;
-    buffer->m_usage = VulkanDetail::PickBufferUsage(m_context, desc);
+    buffer->m_deviceAddress = deviceAddress;
     buffer->m_managed = false;
 
     if(!m_allocator.tryRegisterBufferNativeIdentity(*buffer)){
@@ -338,15 +364,62 @@ BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object n
         return nullptr;
     }
 
-    if(m_context.extensions.buffer_device_address){
-        VkBufferDeviceAddressInfo addressInfo{};
-        addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        addressInfo.buffer = nativeBuffer;
-        buffer->m_deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
-    }
-
     return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if !defined(NWB_FINAL)
+
+
+bool Device::revokeBufferNativeIdentityForTesting(
+    Buffer* bufferResource,
+    const Object expectedNativeBufferHandle
+)noexcept{
+    if(!bufferResource)
+        return false;
+
+    Buffer& buffer = *bufferResource;
+    ScopedLock resourceLock(buffer.m_memoryBindingMutex);
+    auto* expectedNativeBuffer = static_cast<VkBuffer_T*>(expectedNativeBufferHandle);
+    if(
+        &buffer.m_context != &m_context
+        || &buffer.m_allocator != &m_allocator
+        || !buffer.m_managed
+        || buffer.m_buffer != expectedNativeBuffer
+        || !m_allocator.isBufferNativeIdentityRegistered(buffer)
+    )
+        return false;
+
+    m_allocator.unregisterBufferNativeIdentity(expectedNativeBuffer, buffer);
+    return !m_allocator.isBufferNativeIdentityRegistered(buffer);
+}
+
+bool Device::restoreBufferNativeIdentityForTesting(
+    Buffer* bufferResource,
+    const Object expectedNativeBufferHandle
+)noexcept{
+    if(!bufferResource)
+        return false;
+
+    Buffer& buffer = *bufferResource;
+    ScopedLock resourceLock(buffer.m_memoryBindingMutex);
+    auto* expectedNativeBuffer = static_cast<VkBuffer_T*>(expectedNativeBufferHandle);
+    if(
+        &buffer.m_context != &m_context
+        || &buffer.m_allocator != &m_allocator
+        || !buffer.m_managed
+        || buffer.m_buffer != expectedNativeBuffer
+        || m_allocator.isBufferNativeIdentityRegistered(buffer)
+    )
+        return false;
+    return m_allocator.tryRegisterBufferNativeIdentity(buffer);
+}
+
+
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -414,7 +487,7 @@ bool CommandList::tryWriteBuffer(Buffer* bufferResource, const void* data, usize
     }
 
     Buffer& buffer = *bufferResource;
-    const BufferDesc& desc = buffer.getDescription();
+    const BufferDesc& desc = buffer.m_creationDesc;
     if(!VulkanDetail::IsBufferRangeInBounds(desc, destOffsetBytes, static_cast<u64>(dataSize))){
         rejectCommandRecording(NWB_TEXT("write buffer"), NWB_TEXT("destination range is outside the buffer"));
         return false;
@@ -423,7 +496,12 @@ bool CommandList::tryWriteBuffer(Buffer* bufferResource, const void* data, usize
         rejectCommandRecording(NWB_TEXT("write buffer"), NWB_TEXT("copy offset and size must be 4-byte aligned"));
         return false;
     }
-    if(!validateBufferForGpuState(bufferResource, ResourceStates::CopyDest, NWB_TEXT("write buffer")))
+    if(!validateBufferForGpuState(
+        bufferResource,
+        ResourceStates::CopyDest,
+        NWB_TEXT("write buffer"),
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT
+    ))
         return false;
 
     Buffer* stagingBuffer = nullptr;
@@ -464,11 +542,16 @@ void CommandList::clearBufferUInt(Buffer* bufferResource, u32 clearValue){
     }
 
     Buffer& buffer = *bufferResource;
-    if((buffer.m_desc.byteSize & s_BufferAlignmentMask) != 0u){
+    if((buffer.m_creationDesc.byteSize & s_BufferAlignmentMask) != 0u){
         rejectCommandRecording(NWB_TEXT("clear buffer"), NWB_TEXT("buffer size is not 4-byte aligned"));
         return;
     }
-    if(!validateBufferForGpuState(bufferResource, ResourceStates::CopyDest, NWB_TEXT("clear buffer")))
+    if(!validateBufferForGpuState(
+        bufferResource,
+        ResourceStates::CopyDest,
+        NWB_TEXT("clear buffer"),
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT
+    ))
         return;
 
     endActiveRenderPass();
@@ -494,8 +577,8 @@ void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* 
     Buffer& dest = *destResource;
     Buffer& src = *srcResource;
 
-    const BufferDesc& destDesc = dest.getDescription();
-    const BufferDesc& srcDesc = src.getDescription();
+    const BufferDesc& destDesc = dest.m_creationDesc;
+    const BufferDesc& srcDesc = src.m_creationDesc;
 
     if(!VulkanDetail::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)){
         rejectCommandRecording(NWB_TEXT("copy buffer"), NWB_TEXT("destination range is outside the buffer"));
@@ -532,11 +615,20 @@ void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* 
         ? ResourceStates::CopySource | ResourceStates::CopyDest
         : ResourceStates::CopyDest
     ;
-    if(!validateBufferForGpuState(srcResource, sourceState, NWB_TEXT("copy buffer")))
+    const VkBufferUsageFlags sourceUsage = sameNativeBuffer
+        ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        : VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+    ;
+    if(!validateBufferForGpuState(srcResource, sourceState, NWB_TEXT("copy buffer"), sourceUsage))
         return;
     if(
         destResource != srcResource
-        && !validateBufferForGpuState(destResource, destinationState, NWB_TEXT("copy buffer"))
+        && !validateBufferForGpuState(
+            destResource,
+            destinationState,
+            NWB_TEXT("copy buffer"),
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        )
     )
         return;
 
@@ -583,8 +675,8 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
 
     Buffer& dest = *destResource;
     Buffer& src = *srcResource;
-    const BufferDesc& destDesc = dest.getDescription();
-    const BufferDesc& srcDesc = src.getDescription();
+    const BufferDesc& destDesc = dest.m_creationDesc;
+    const BufferDesc& srcDesc = src.m_creationDesc;
     if(!VulkanDetail::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)){
         rejectCommandRecording(NWB_TEXT("direct command-IR copy buffer"), NWB_TEXT("destination range is outside the buffer"));
         return false;
@@ -628,7 +720,10 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
         !validateBufferForGpuState(
             srcResource,
             sourceState,
-            NWB_TEXT("direct command-IR copy buffer")
+            NWB_TEXT("direct command-IR copy buffer"),
+            sameNativeBuffer
+                ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+                : VK_BUFFER_USAGE_TRANSFER_SRC_BIT
         )
     )
         return false;
@@ -637,7 +732,8 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
         && !validateBufferForGpuState(
             destResource,
             destinationState,
-            NWB_TEXT("direct command-IR copy buffer")
+            NWB_TEXT("direct command-IR copy buffer"),
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT
         )
     )
         return false;

@@ -348,7 +348,7 @@ BufferRange BufferRange::resolve(const BufferDesc& desc)const{
 }
 
 DescriptorWriteItem DescriptorWriteItem::ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range){
-    const bool isVolatile = buffer && buffer->getDescription().isVolatile;
+    const bool isVolatile = buffer && buffer->getCreationDescription().isVolatile;
 
     DescriptorWriteItem result = Base(
         slot,
@@ -490,18 +490,31 @@ usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type){
 }
 
 usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, u32 rows, u32 columns){
-    const usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
+    if(type > CooperativeVectorDataType::Float64 || rows == 0u || columns == 0u)
+        return 0;
 
+    usize minorElementCount = 0u;
     switch(layout){
     case CooperativeVectorMatrixLayout::RowMajor:
-        return dataTypeSize * columns;
+        minorElementCount = static_cast<usize>(columns);
+        break;
     case CooperativeVectorMatrixLayout::ColumnMajor:
-        return dataTypeSize * rows;
+        minorElementCount = static_cast<usize>(rows);
+        break;
     case CooperativeVectorMatrixLayout::InferencingOptimal:
     case CooperativeVectorMatrixLayout::TrainingOptimal:
         return 0;
+    default:
+        return 0;
     }
-    return 0;
+
+    const usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
+    usize minorByteSize = 0u;
+    if(!TryMultiply<usize>(minorElementCount, dataTypeSize, minorByteSize))
+        return 0;
+    if(AddOverflows<usize>(minorByteSize, dataTypeSize))
+        return 0;
+    return minorByteSize + dataTypeSize;
 }
 
 

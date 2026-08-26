@@ -23,6 +23,15 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+VkPipelineCreateFlags2 ComputeRayTracingPipelineCreateFlags(const RayTracingPipelineDesc& desc)noexcept{
+    VkPipelineCreateFlags2 flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_BUFFER_BIT_EXT;
+    if(desc.allowOpacityMicromaps)
+        flags |= VK_PIPELINE_CREATE_2_RAY_TRACING_OPACITY_MICROMAP_BIT_EXT;
+    if(desc.allowSpheres || desc.allowLinearSweptSpheres)
+        flags |= VK_PIPELINE_CREATE_2_RAY_TRACING_ALLOW_SPHERES_AND_LINEAR_SWEPT_SPHERES_BIT_NV;
+    return flags;
+}
+
 bool ComputeRayTracingHandleLayout(const VulkanContext& context, u32& outHandleSize, u32& outHandleSizeAligned, u32& outBaseAlignment, const tchar* operation){
     const u32 handleSize = context.rayTracingPipelineProperties.shaderGroupHandleSize;
     const u32 handleAlignment = context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
@@ -52,6 +61,7 @@ bool ComputeRayTracingHandleLayout(const VulkanContext& context, u32& outHandleS
     return true;
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -80,8 +90,16 @@ Object RayTracingPipeline::getNativeHandle(ObjectType objectType){
 RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipelineDesc& desc){
     VkResult res = VK_SUCCESS;
 
-    if(!m_context.extensions.KHR_ray_tracing_pipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Ray tracing pipeline extension is required to create ray tracing pipelines."));
+    if(!queryFeatureSupport(Feature::RayTracingPipeline)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: ray tracing pipeline support is unavailable"));
+        return nullptr;
+    }
+    if(desc.allowOpacityMicromaps && !queryFeatureSupport(Feature::RayTracingOpacityMicromap)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: opacity micromap support is unavailable"));
+        return nullptr;
+    }
+    if(desc.allowClusterAccelerationStructures && !queryFeatureSupport(Feature::RayTracingClusters)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: cluster acceleration structures are unavailable"));
         return nullptr;
     }
     if(desc.maxRecursionDepth > m_context.rayTracingPipelineProperties.maxRayRecursionDepth){
@@ -91,26 +109,57 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         );
         return nullptr;
     }
-    if(
-        desc.allowSpheres
-        && (
-            !m_context.extensions.NV_ray_tracing_linear_swept_spheres
-            || m_context.rayTracingLinearSweptSpheresFeatures.spheres != VK_TRUE
-        )
-    ){
+    if(desc.allowSpheres && !queryFeatureSupport(Feature::Spheres)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: sphere geometry pipeline support is unavailable"));
         return nullptr;
     }
-    if(
-        desc.allowLinearSweptSpheres
-        && (
-            !m_context.extensions.NV_ray_tracing_linear_swept_spheres
-            || m_context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres != VK_TRUE
-        )
-    ){
+    if(desc.allowLinearSweptSpheres && !queryFeatureSupport(Feature::LinearSweptSpheres)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: linear swept sphere geometry pipeline support is unavailable"));
         return nullptr;
     }
+
+    constexpr ShaderType::Mask s_GeneralShaderTypes = static_cast<ShaderType::Mask>(
+        ShaderType::RayGeneration | ShaderType::Miss | ShaderType::Callable
+    );
+    const auto validateShader = [this](
+        Shader* const shader,
+        const ShaderType::Mask allowedShaderTypes,
+        const tchar* const stageName
+    ){
+        if(!shader){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: {} shader is null"), stageName);
+            return false;
+        }
+        if(&shader->m_context != &m_context){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: {} shader belongs to another device"), stageName);
+            return false;
+        }
+        if(
+            shader->m_shaderModule == VK_NULL_HANDLE
+            || !VulkanDetail::IsRayTracingShaderTypeAllowed(shader->m_desc.shaderType, allowedShaderTypes)
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: {} shader has an invalid module or stage"), stageName);
+            return false;
+        }
+        return true;
+    };
+    for(const auto& shaderDesc : desc.shaders){
+        if(!validateShader(shaderDesc.shader.get(), s_GeneralShaderTypes, NWB_TEXT("general")))
+            return nullptr;
+    }
+    for(const auto& hitGroup : desc.hitGroups){
+        if(hitGroup.isProceduralPrimitive != static_cast<bool>(hitGroup.intersectionShader)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: hit-group topology does not match its intersection shader"));
+            return nullptr;
+        }
+        if(
+            (hitGroup.closestHitShader && !validateShader(hitGroup.closestHitShader.get(), ShaderType::ClosestHit, NWB_TEXT("closest-hit")))
+            || (hitGroup.anyHitShader && !validateShader(hitGroup.anyHitShader.get(), ShaderType::AnyHit, NWB_TEXT("any-hit")))
+            || (hitGroup.intersectionShader && !validateShader(hitGroup.intersectionShader.get(), ShaderType::Intersection, NWB_TEXT("intersection")))
+        )
+            return nullptr;
+    }
+
     if(desc.hitGroups.size() > (static_cast<usize>(-1) - desc.shaders.size()) / s_RayTracingHitGroupShaderStageCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader stage count overflows"));
         return nullptr;
@@ -148,9 +197,6 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     };
 
     for(const auto& shaderDesc : desc.shaders){
-        if(!shaderDesc.shader)
-            continue;
-
         auto* s = shaderDesc.shader.get();
 
         auto stageInfo = VulkanDetail::MakeVkStruct<VkPipelineShaderStageCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO);
@@ -271,15 +317,29 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     ))
         return nullptr;
 
-    const bool enableSpherePipelineFlags = desc.allowSpheres || desc.allowLinearSweptSpheres;
+    const bool enablePipelineFlags2 = desc.allowSpheres || desc.allowLinearSweptSpheres;
     auto pipelineFlags2 = VulkanDetail::MakeVkStruct<VkPipelineCreateFlags2CreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO);
-    if(enableSpherePipelineFlags)
-        pipelineFlags2.flags |= VK_PIPELINE_CREATE_2_RAY_TRACING_ALLOW_SPHERES_AND_LINEAR_SWEPT_SPHERES_BIT_NV;
+    pipelineFlags2.flags = VulkanDetail::ComputeRayTracingPipelineCreateFlags(desc);
+
+    auto clusterCreateInfo = VulkanDetail::MakeVkStruct<VkRayTracingPipelineClusterAccelerationStructureCreateInfoNV>(
+        VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CLUSTER_ACCELERATION_STRUCTURE_CREATE_INFO_NV
+    );
+    clusterCreateInfo.allowClusterAccelerationStructure = desc.allowClusterAccelerationStructures ? VK_TRUE : VK_FALSE;
+
+    void* createInfoPNext = nullptr;
+    if(desc.allowClusterAccelerationStructures){
+        clusterCreateInfo.pNext = createInfoPNext;
+        createInfoPNext = &clusterCreateInfo;
+    }
+    if(enablePipelineFlags2){
+        pipelineFlags2.pNext = createInfoPNext;
+        createInfoPNext = &pipelineFlags2;
+    }
 
     auto createInfo = VulkanDetail::MakeVkStruct<VkRayTracingPipelineCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR);
-    if(pipelineFlags2.flags != 0)
-        createInfo.pNext = &pipelineFlags2;
-    createInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    createInfo.pNext = createInfoPNext;
+    if(!enablePipelineFlags2)
+        createInfo.flags = static_cast<VkPipelineCreateFlags>(pipelineFlags2.flags);
     createInfo.stageCount = static_cast<u32>(stages.size());
     createInfo.pStages = stages.data();
     createInfo.groupCount = static_cast<u32>(groups.size());

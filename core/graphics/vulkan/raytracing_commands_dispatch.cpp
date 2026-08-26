@@ -170,13 +170,16 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
             || (required && regionSnapshot.recordCount != 1u)
             || &buffer->m_context != &m_context
             || buffer->getDeviceGeneration() != m_context.deviceGeneration
-            || !m_device.isBufferReadyForGpuUse(buffer)
+            || !m_device.isBufferReadyForGpuUse(
+                buffer,
+                VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+            )
             || buffer->m_buffer == VK_NULL_HANDLE
             || buffer->m_deviceAddress == 0u
         )
             return false;
 
-        const BufferDesc& creationDesc = buffer->m_creationDesc;
+        const BufferDesc& creationDesc = buffer->getCreationDescription();
         constexpr u8 s_RequiredQueueSharing = static_cast<u8>(ResourceQueueSharing::GraphicsAndAsyncCompute);
         if(
             !creationDesc.isShaderBindingTable

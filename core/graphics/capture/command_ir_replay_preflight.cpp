@@ -258,8 +258,8 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     if(!sourceUse || !destinationUse)
         return GpuCommandIrReplayError::ResourceUseMismatch;
 
-    const BufferDesc& sourceDescription = source->getDescription();
-    const BufferDesc& destinationDescription = destination->getDescription();
+    const BufferDesc& sourceDescription = source->getCreationDescription();
+    const BufferDesc& destinationDescription = destination->getCreationDescription();
     if(
         record.dataSizeBytes == 0u
         || !BufferRangeContains(sourceDescription, sourceUse->range.bufferRange, record.sourceOffsetBytes, record.dataSizeBytes)
@@ -408,7 +408,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     if(!destinationUse)
         return GpuCommandIrReplayError::ResourceUseMismatch;
 
-    const BufferDesc& description = destination->getDescription();
+    const BufferDesc& description = destination->getCreationDescription();
     if(
         description.byteSize == 0u
         || (description.byteSize & (sizeof(u32) - 1u)) != 0u

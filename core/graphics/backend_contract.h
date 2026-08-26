@@ -115,7 +115,7 @@ concept DeviceApi = requires(
     device.unmapBuffer(buffer);
     { device.getBufferMemoryRequirements(buffer) }->SameAs<MemoryRequirements>;
     { device.bindBufferMemory(buffer, heap, u64{}) }->SameAs<bool>;
-    { device.createHandleForNativeBuffer(ObjectType{}, nativeObject, bufferDesc) }->SameAs<BufferHandle>;
+    { device.createHandleForNativeBuffer(ObjectType{}, nativeObject, bufferDesc, u32{}) }->SameAs<BufferHandle>;
 
     { device.createShader(shaderDesc, binary, usize{}) }->SameAs<ShaderHandle>;
     { device.createShaderSpecialization(shader, specializationConstants, u32{}) }->SameAs<ShaderHandle>;
@@ -314,6 +314,8 @@ concept DescribedResourceApi = requires(const T& resource){
 
 template<typename T>
 concept BufferApi = DescribedResourceApi<T, BufferDesc> && requires(const T& buffer){
+    { buffer.getCreationDescription() }->SameAs<const BufferDesc&>;
+    { buffer.descriptionMatchesCreation() }->SameAs<bool>;
     { buffer.getGpuVirtualAddress() }->SameAs<GpuVirtualAddress>;
 };
 

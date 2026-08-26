@@ -65,6 +65,79 @@ struct BlasGeometryScratch{
 };
 
 
+struct RayTracingCapabilityInputs{
+    bool accelerationStructureExtensionEnabled = false;
+    bool accelerationStructureFeatureEnabled = false;
+    bool createAccelerationStructureEntryPointAvailable = false;
+    bool destroyAccelerationStructureEntryPointAvailable = false;
+    bool getAccelerationStructureBuildSizesEntryPointAvailable = false;
+    bool getAccelerationStructureDeviceAddressEntryPointAvailable = false;
+    bool cmdBuildAccelerationStructuresEntryPointAvailable = false;
+
+    bool rayTracingPipelineExtensionEnabled = false;
+    bool rayTracingPipelineFeatureEnabled = false;
+    bool createRayTracingPipelinesEntryPointAvailable = false;
+    bool getRayTracingShaderGroupHandlesEntryPointAvailable = false;
+    bool cmdTraceRaysEntryPointAvailable = false;
+
+    bool opacityMicromapExtensionEnabled = false;
+    bool opacityMicromapFeatureEnabled = false;
+    bool synchronization2ExtensionEnabled = false;
+    bool createMicromapEntryPointAvailable = false;
+    bool destroyMicromapEntryPointAvailable = false;
+    bool getMicromapBuildSizesEntryPointAvailable = false;
+    bool cmdBuildMicromapsEntryPointAvailable = false;
+};
+
+[[nodiscard]] inline constexpr bool SupportsRayTracingAccelStruct(const RayTracingCapabilityInputs& inputs)noexcept{
+    return
+        inputs.accelerationStructureExtensionEnabled
+        && inputs.accelerationStructureFeatureEnabled
+        && inputs.createAccelerationStructureEntryPointAvailable
+        && inputs.destroyAccelerationStructureEntryPointAvailable
+        && inputs.getAccelerationStructureBuildSizesEntryPointAvailable
+        && inputs.getAccelerationStructureDeviceAddressEntryPointAvailable
+        && inputs.cmdBuildAccelerationStructuresEntryPointAvailable
+    ;
+}
+
+[[nodiscard]] inline constexpr bool SupportsRayTracingPipeline(const RayTracingCapabilityInputs& inputs)noexcept{
+    return
+        inputs.rayTracingPipelineExtensionEnabled
+        && inputs.rayTracingPipelineFeatureEnabled
+        && inputs.createRayTracingPipelinesEntryPointAvailable
+        && inputs.getRayTracingShaderGroupHandlesEntryPointAvailable
+        && inputs.cmdTraceRaysEntryPointAvailable
+        && SupportsRayTracingAccelStruct(inputs)
+    ;
+}
+
+[[nodiscard]] inline constexpr bool SupportsRayTracingOpacityMicromap(const RayTracingCapabilityInputs& inputs)noexcept{
+    return
+        inputs.opacityMicromapExtensionEnabled
+        && inputs.opacityMicromapFeatureEnabled
+        && inputs.synchronization2ExtensionEnabled
+        && inputs.createMicromapEntryPointAvailable
+        && inputs.destroyMicromapEntryPointAvailable
+        && inputs.getMicromapBuildSizesEntryPointAvailable
+        && inputs.cmdBuildMicromapsEntryPointAvailable
+        && SupportsRayTracingAccelStruct(inputs)
+    ;
+}
+
+[[nodiscard]] inline constexpr bool IsRayTracingShaderTypeAllowed(
+    const ShaderType::Mask shaderType,
+    const ShaderType::Mask allowedShaderTypes
+)noexcept{
+    const u16 shaderTypeBits = static_cast<u16>(shaderType);
+    return
+        shaderTypeBits != 0u
+        && (shaderTypeBits & (shaderTypeBits - 1u)) == 0u
+        && (shaderTypeBits & static_cast<u16>(allowedShaderTypes)) == shaderTypeBits
+    ;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -73,6 +146,8 @@ struct RayDispatchLimits{
     Array<u32, 3u> maxAxisCounts = {};
     Array<u32, 3u> maxAxisSizes = {};
 };
+
+[[nodiscard]] VkPipelineCreateFlags2 ComputeRayTracingPipelineCreateFlags(const RayTracingPipelineDesc& desc)noexcept;
 
 [[nodiscard]] bool ValidateRayDispatchDimensions(
     const RayTracingDispatchRaysArguments& arguments,
@@ -118,6 +193,8 @@ bool FillBlasGeometryForSizeQuery(
     const tchar* operation,
     bool requireBuffers
 );
+
+[[nodiscard]] VkMemoryBarrier2 BuildOpacityMicromapWriteAfterWriteBarrier()noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

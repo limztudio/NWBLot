@@ -306,7 +306,7 @@ bool GpuTaskGraph::seedTaskRetainedResourceStates(
 
             if(!resource.buffer)
                 return false;
-            const BufferDesc& description = resource.buffer->getDescription();
+            const BufferDesc& description = resource.buffer->getCreationDescription();
             if(!description.keepInitialState || description.initialState != use.requiredState)
                 continue;
             if(commandList.getBufferState(resource.buffer.get()) != use.requiredState)
@@ -330,7 +330,7 @@ bool GpuTaskGraph::seedTaskRetainedResourceStates(
             Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
             if(!backingBuffer)
                 return false;
-            const BufferDesc& description = backingBuffer->getDescription();
+            const BufferDesc& description = backingBuffer->getCreationDescription();
             if(!description.keepInitialState || description.initialState != use.requiredState)
                 continue;
             if(commandList.getBufferState(backingBuffer) != use.requiredState)

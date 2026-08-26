@@ -957,38 +957,39 @@ void CommandList::releaseBufferOwnership(
 ){
     if(!bufferResource)
         return;
-    if(!validateCommandRecordingScope(NWB_TEXT("release buffer ownership")))
+    constexpr const tchar* s_OperationName = NWB_TEXT("release buffer ownership");
+    if(!validateCommandRecordingScope(s_OperationName))
         return;
 
     Buffer& buffer = *bufferResource;
     if(!m_device.isBufferReadyForGpuUse(&buffer)){
-        rejectCommandRecording(NWB_TEXT("release buffer ownership"), NWB_TEXT("buffer is not ready for GPU access"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("buffer is not ready for GPU access"));
         return;
     }
     if(m_stateTracker.isPermanentBuffer(buffer)){
         rejectCommandRecording(
-            NWB_TEXT("release buffer ownership"),
+            s_OperationName,
             NWB_TEXT("permanently tracked buffers cannot transfer ownership")
         );
         return;
     }
-    if(m_device.usesConcurrentQueueSharing(buffer.m_desc.queueSharing)){
+    if(m_device.usesConcurrentQueueSharing(buffer.m_creationDesc.queueSharing)){
         rejectCommandRecording(
-            NWB_TEXT("release buffer ownership"),
+            s_OperationName,
             NWB_TEXT("concurrently shared buffers do not have exclusive ownership")
         );
         return;
     }
 
     if(!m_device.getQueue(destinationQueue)){
-        rejectCommandRecording(NWB_TEXT("release buffer ownership"), NWB_TEXT("destination queue is unavailable"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("destination queue is unavailable"));
         return;
     }
 
     const auto existing = m_bufferOwnershipReleaseDestinations.find(&buffer);
     if(existing != m_bufferOwnershipReleaseDestinations.end() && existing.value() != destinationQueue){
         rejectCommandRecording(
-            NWB_TEXT("release buffer ownership"),
+            s_OperationName,
             NWB_TEXT("buffer already targets a conflicting destination queue")
         );
         return;
@@ -997,11 +998,13 @@ void CommandList::releaseBufferOwnership(
     // Exports need concrete buffer state; tracked state takes precedence over descriptor initial state.
     ResourceStates::Mask state = m_stateTracker.getBufferState(&buffer);
     if(state == ResourceStates::Unknown)
-        state = buffer.m_desc.initialState;
+        state = buffer.m_creationDesc.initialState;
     if(state == ResourceStates::Unknown){
-        rejectCommandRecording(NWB_TEXT("release buffer ownership"), NWB_TEXT("final resource state is unknown"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("final resource state is unknown"));
         return;
     }
+    if(!validateBufferForGpuState(&buffer, state, s_OperationName))
+        return;
     m_stateTracker.beginTrackingBuffer(&buffer, state);
 
     m_bufferOwnershipReleaseDestinations.insert_or_assign(&buffer, destinationQueue);
@@ -1057,19 +1060,18 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
 void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask stateBits){
     if(!buffer)
         return;
-    if(!validateCommandRecordingScope(NWB_TEXT("set permanent buffer state")))
+    constexpr const tchar* s_OperationName = NWB_TEXT("set permanent buffer state");
+    if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(NWB_TEXT("set permanent buffer state"), NWB_TEXT("permanent state cannot be unknown"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("permanent state cannot be unknown"));
         return;
     }
-    if(!m_device.isBufferReadyForGpuUse(buffer)){
-        rejectCommandRecording(NWB_TEXT("set permanent buffer state"), NWB_TEXT("buffer is not ready for GPU access"));
+    if(!validateBufferForGpuState(buffer, stateBits, s_OperationName))
         return;
-    }
-    if(buffer->m_desc.keepInitialState && buffer->m_desc.initialState != stateBits){
+    if(buffer->m_creationDesc.keepInitialState && buffer->m_creationDesc.initialState != stateBits){
         rejectCommandRecording(
-            NWB_TEXT("set permanent buffer state"),
+            s_OperationName,
             NWB_TEXT("permanent state conflicts with the retained initial state")
         );
         return;
@@ -1078,14 +1080,14 @@ void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask s
     const ResourceStates::Mask permanentState = m_stateTracker.getPermanentBufferState(buffer);
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
         rejectCommandRecording(
-            NWB_TEXT("set permanent buffer state"),
+            s_OperationName,
             NWB_TEXT("a different permanent state is already tracked")
         );
         return;
     }
     if(m_bufferOwnershipReleaseDestinations.find(buffer) != m_bufferOwnershipReleaseDestinations.end()){
         rejectCommandRecording(
-            NWB_TEXT("set permanent buffer state"),
+            s_OperationName,
             NWB_TEXT("buffer already has a pending ownership release")
         );
         return;

@@ -140,6 +140,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context_detail.h"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/buffer_resource_detail.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/command_validation.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/device_detail.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/heap_binding_contract.h"
@@ -175,3 +176,4 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_compile_definitions(nwb_graphics PRIVATE NWB_WITH_WAYLAND=1)
     endif()
 endif()
+

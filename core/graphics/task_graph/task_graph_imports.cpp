@@ -173,10 +173,16 @@ GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, con
 }
 
 GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const GpuGraphResourceDesc& desc){
-    if(!buffer || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphResourceType::Buffer)
+    if(
+        !buffer
+        || !buffer->descriptionMatchesCreation()
+        || !desc.identity
+        || desc.markerLabel.empty()
+        || desc.type != GpuGraphResourceType::Buffer
+    )
         return {};
 
-    const BufferDesc& bufferDesc = buffer->getDescription();
+    const BufferDesc& bufferDesc = buffer->getCreationDescription();
     if(!__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(
         bufferDesc.keepInitialState,
         bufferDesc.initialState,
@@ -248,12 +254,15 @@ GpuGraphResourceId GpuTaskGraph::importAccelStruct(
 
     const RayTracingAccelStructDesc& accelStructDesc = accelStruct->getDescription();
     if(const Buffer* const backingBuffer = accelStruct->getBackingBuffer()){
-        const BufferDesc& backingBufferDesc = backingBuffer->getDescription();
-        if(!__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(
-            backingBufferDesc.keepInitialState,
-            backingBufferDesc.initialState,
-            desc.externalFinalState
-        ))
+        const BufferDesc& backingBufferDesc = backingBuffer->getCreationDescription();
+        if(
+            !backingBuffer->descriptionMatchesCreation()
+            || !__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(
+                backingBufferDesc.keepInitialState,
+                backingBufferDesc.initialState,
+                desc.externalFinalState
+            )
+        )
             return {};
     }
 

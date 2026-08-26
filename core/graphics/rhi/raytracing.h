@@ -54,13 +54,12 @@ struct RayTracingOpacityMicromapDesc{
     // OMM counts for each subdivision level and format combination in the inputs.
     GraphicsVector<RayTracingOpacityMicromapUsageCount> counts;
 
-    // Base pointer for raw OMM input data.
-    // Individual OMMs must be 1B aligned, though natural alignment is recommended.
+    // Base pointer for raw OMM input data. The device address at inputBufferOffset must be 256-byte aligned.
     // It's also recommended to try to organize OMMs together that are expected to be used spatially close together.
     Buffer* inputBuffer = nullptr;
     u64 inputBufferOffset = 0;
 
-    // One entry per OMM matching the VkMicromapTriangleEXT layout.
+    // One entry per OMM matching the VkMicromapTriangleEXT layout. The device address must be 256-byte aligned.
     Buffer* perOmmDescs = nullptr;
     u64 perOmmDescsOffset = 0;
 
@@ -406,10 +405,24 @@ namespace RayTracingClusterOperationMoveType{
 
 namespace RayTracingClusterOperationMode{
     enum Enum : u8{
-        ImplicitDestinations,       // Provide total buffer space, driver places results within, returns VAs and actual sizes
-        ExplicitDestinations,       // Provide individual target VAs, driver places them there, returns actual sizes
-        GetSizes,                   // Get minimum size per element
+        ImplicitDestinations,       // Require destination storage; address and size result arrays are independently optional
+        ExplicitDestinations,       // Require address and size arrays; implicit destination storage is forbidden
+        GetSizes,                   // Require only the size result array
     };
+
+    [[nodiscard]] constexpr bool IsDestinationTopologyValid(
+        const Enum mode,
+        const bool hasAddresses,
+        const bool hasSizes,
+        const bool hasImplicitDestination
+    ){
+        switch(mode){
+        case ImplicitDestinations: return hasImplicitDestination;
+        case ExplicitDestinations: return hasAddresses && hasSizes && !hasImplicitDestination;
+        case GetSizes:             return !hasAddresses && hasSizes && !hasImplicitDestination;
+        default:                   return false;
+        }
+    }
 };
 
 namespace RayTracingClusterOperationFlags{
@@ -498,18 +511,21 @@ struct RayTracingClusterOperationDesc{
     // Input Resources
     Buffer* inIndirectArgCountBuffer = nullptr;            // Buffer containing the number of AS to build, instantiate, or move
     u64 inIndirectArgCountOffsetInBytes = 0;               // Offset (in bytes) to where the count is in the inIndirectArgCountBuffer
-    Buffer* inIndirectArgsBuffer = nullptr;                // Buffer of descriptor array of format IndirectTriangleClasArgs, IndirectTriangleTemplateArgs, IndirectInstantiateTemplateArgs
+    Buffer* inIndirectArgsBuffer = nullptr;                // Source-record array for the selected operation; cluster BLAS builds use IndirectArgs.
     u64 inIndirectArgsOffsetInBytes = 0;                   // Offset (in bytes) to where the descriptor array starts inIndirectArgsBuffer
 
     // In/Out Resources
-    Buffer* inOutAddressesBuffer = nullptr;                // Array of addresseses of CLAS, CLAS Templates, or BLAS
-    u64 inOutAddressesOffsetInBytes = 0;                   // Offset (in bytes) to where the addresses array starts in inOutAddressesBuffer
+    // Required by ExplicitDestinations; independently optional as a result array for ImplicitDestinations; null for GetSizes.
+    Buffer* inOutAddressesBuffer = nullptr;
+    u64 inOutAddressesOffsetInBytes = 0;                   // Used only when inOutAddressesBuffer is provided
 
     // Output Resources
-    Buffer* outSizesBuffer = nullptr;                      // Sizes (in bytes) of CLAS, CLAS Templates, or BLAS
-    u64 outSizesOffsetInBytes = 0;                         // Offset (in bytes) to where the output sizes array starts in outSizesBuffer
-    Buffer* outAccelerationStructuresBuffer = nullptr;     // Destination buffer for CLAS, CLAS Template, or BLAS data. Size must be calculated with getOperationSizeInfo or with the outSizesBuffer result of OperationMode::GetSizes
-    u64 outAccelerationStructuresOffsetInBytes = 0;        // Offset (in bytes) to where the output acceleration structures starts in outAccelerationStructuresBuffer
+    // Required by ExplicitDestinations and GetSizes; independently optional as a result array for ImplicitDestinations.
+    Buffer* outSizesBuffer = nullptr;
+    u64 outSizesOffsetInBytes = 0;                         // Used only when outSizesBuffer is provided
+    // Required only by ImplicitDestinations. Size with getClusterOperationSizeInfo() or a prior GetSizes operation.
+    Buffer* outAccelerationStructuresBuffer = nullptr;
+    u64 outAccelerationStructuresOffsetInBytes = 0;        // Used only when outAccelerationStructuresBuffer is provided
 };
 
 

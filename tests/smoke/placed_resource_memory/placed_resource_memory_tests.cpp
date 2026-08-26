@@ -519,10 +519,19 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBufferRejectionsAreAtomicAndRe
     const Object managedNativeBuffer = managedOwner->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Buffer);
     ASSERT_NE(managedNativeBuffer, nullptr);
     const u32 managedOwnerReferences = managedOwner->getReferenceCount();
+    VkBufferUsageFlags managedNativeUsage =
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT
+        | VK_BUFFER_USAGE_TRANSFER_DST_BIT
+        | VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT
+        | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT
+    ;
+    if(device.isBufferReadyForGpuUse(managedOwner.get(), VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT))
+        managedNativeUsage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     BufferHandle duplicateWrapper = device.createHandleForNativeBuffer(
         GraphicsBackend::ObjectTypes::VK_Buffer,
         managedNativeBuffer,
-        managedOwnerDesc
+        managedOwnerDesc,
+        managedNativeUsage
     );
     EXPECT_FALSE(duplicateWrapper);
     EXPECT_EQ(managedOwner->getReferenceCount(), managedOwnerReferences);

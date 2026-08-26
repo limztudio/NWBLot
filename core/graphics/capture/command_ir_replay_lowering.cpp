@@ -67,11 +67,12 @@ namespace __hidden_gpu_command_ir_replay_lowering{
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateBufferBackendOperand(
     Buffer* const buffer,
     const ResourceStates::Mask requiredState,
+    const VkBufferUsageFlags requiredUsage,
     CommandList& commandList
 )noexcept{
     if(!buffer)
         return GpuCommandIrReplayError::StreamChangedDuringReplay;
-    if(!commandList.getDevice().isBufferReadyForGpuUse(buffer))
+    if(!commandList.getDevice().isBufferReadyForGpuUse(buffer, requiredUsage))
         return GpuCommandIrReplayError::BackendResourceNotReady;
 
     const ResourceStates::Mask permanentState = commandList.getPermanentBufferState(buffer);
@@ -110,6 +111,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
             return ValidateBufferBackendOperand(
                 source,
                 ResourceStates::CopySource | ResourceStates::CopyDest,
+                VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                 commandList
             );
         }
@@ -117,6 +119,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         const GpuCommandIrReplayError::Enum sourceError = ValidateBufferBackendOperand(
             source,
             ResourceStates::CopySource,
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
             commandList
         );
         if(sourceError != GpuCommandIrReplayError::None)
@@ -124,6 +127,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         return ValidateBufferBackendOperand(
             destination,
             ResourceStates::CopyDest,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT,
             commandList
         );
     }
@@ -147,6 +151,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         return ValidateBufferBackendOperand(
             graph.bufferForResource(record.destination),
             ResourceStates::CopyDest,
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT,
             commandList
         );
     case GpuCommandIrOpcode::ClearTexture:

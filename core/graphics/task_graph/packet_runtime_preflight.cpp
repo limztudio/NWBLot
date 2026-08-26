@@ -7,6 +7,7 @@
 #include "task_graph.h"
 
 #include <core/graphics/backend_selection.h>
+#include <core/graphics/vulkan/buffer_resource_detail.h>
 #include <core/graphics/vulkan/texture_resource_detail.h>
 
 
@@ -159,6 +160,23 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         }
         return true;
     };
+    const auto validateBufferForState = [&](Buffer* const buffer, const ResourceStates::Mask state){
+        if(!buffer)
+            return false;
+        const BufferDesc& description = buffer->getCreationDescription();
+        if(
+            !GraphicsBackend::VulkanBufferDetail::IsBufferResourceStateMaskValid(state)
+            || !GraphicsBackend::VulkanBufferDetail::IsBufferDescriptionCompatibleWithResourceStates(
+                description,
+                state
+            )
+        )
+            return false;
+        return m_device.isBufferReadyForGpuUse(
+            buffer,
+            GraphicsBackend::VulkanBufferDetail::RequiredBufferUsageForResourceStates(description, state)
+        );
+    };
 
     if(initialStates){
         for(usize stateIndex = 0u; stateIndex < initialStates->m_textureStates.size(); ++stateIndex){
@@ -228,12 +246,12 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             const CommandListResourceStateHandoff::BufferState& state = initialStates->m_bufferStates[stateIndex];
             if(!state.buffer)
                 continue;
+            const BufferDesc& description = state.buffer->getCreationDescription();
             if(
-                state.state == ResourceStates::Unknown
-                || !m_device.isBufferReadyForGpuUse(state.buffer)
+                !validateBufferForState(state.buffer, state.state)
                 || !validateOwnership(
                     state.queueSharing,
-                    state.buffer->getDescription().queueSharing,
+                    description.queueSharing,
                     state.ownerQueue,
                     state.releaseDestinationQueue
                 )
@@ -258,11 +276,10 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             if(
                 state.buffer
                 && (
-                    state.state == ResourceStates::Unknown
-                    || !m_device.isBufferReadyForGpuUse(state.buffer)
+                    !validateBufferForState(state.buffer, state.state)
                     || !validateOwnership(
                         state.queueSharing,
-                        state.buffer->getDescription().queueSharing,
+                        state.buffer->getCreationDescription().queueSharing,
                         state.ownerQueue,
                         state.releaseDestinationQueue
                     )
@@ -289,7 +306,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
     const auto validateBufferRange = [](Buffer* const buffer, const BufferRange& range){
         if(!buffer || range.byteSize == 0u)
             return false;
-        const u64 bufferSize = buffer->getDescription().byteSize;
+        const u64 bufferSize = buffer->getCreationDescription().byteSize;
         return range.byteOffset < bufferSize
             && (
                 range.byteSize == BufferRange::AllBytes
@@ -332,8 +349,12 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             Buffer* const buffer = graph.bufferForResource(resourceID);
             return buffer
                 && buffer->getDeviceGeneration() == compiledGraph.deviceGeneration()
-                && buffer->getDescription().queueSharing == resource.queueSharing
-                && m_device.isBufferReadyForGpuUse(buffer)
+                && buffer->getCreationDescription().queueSharing == resource.queueSharing
+                && (
+                    requiredState == ResourceStates::Unknown
+                    ? m_device.isBufferReadyForGpuUse(buffer)
+                    : validateBufferForState(buffer, requiredState)
+                )
                 && permanentBufferState(buffer, outPermanentState)
             ;
         }
@@ -345,6 +366,11 @@ bool GpuNativePacketRecorder::preflightPacketResources(
                 && accelStruct->getDeviceGeneration() == compiledGraph.deviceGeneration()
                 && accelStruct->getDescription().queueSharing == resource.queueSharing
                 && m_device.isAccelStructReadyForGpuUse(accelStruct)
+                && (
+                    requiredState == ResourceStates::Unknown
+                    ? m_device.isBufferReadyForGpuUse(backingBuffer)
+                    : validateBufferForState(backingBuffer, requiredState)
+                )
                 && permanentBufferState(backingBuffer, outPermanentState)
             ;
         }

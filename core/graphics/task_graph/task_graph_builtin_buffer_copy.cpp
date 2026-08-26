@@ -191,17 +191,17 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
             && sourceResource.buffer
             && destinationResource.buffer
             && __hidden_gpu_task_graph_builtin_buffer_copy::BuiltInTaskCanMaterializeRetainedState(
-                sourceResource.buffer->getDescription(),
+                sourceResource.buffer->getCreationDescription(),
                 sourceResource.initialState,
                 sourceResource.externalFinalState
             )
             && __hidden_gpu_task_graph_builtin_buffer_copy::BuiltInTaskCanMaterializeRetainedState(
-                destinationResource.buffer->getDescription(),
+                destinationResource.buffer->getCreationDescription(),
                 destinationResource.initialState,
                 destinationResource.externalFinalState
             )
-            && validCopyRange(sourceResource.buffer->getDescription(), region.sourceOffsetBytes, region.dataSizeBytes)
-            && validCopyRange(destinationResource.buffer->getDescription(), region.destinationOffsetBytes, region.dataSizeBytes)
+            && validCopyRange(sourceResource.buffer->getCreationDescription(), region.sourceOffsetBytes, region.dataSizeBytes)
+            && validCopyRange(destinationResource.buffer->getCreationDescription(), region.destinationOffsetBytes, region.dataSizeBytes)
             && appendResourceUse(region.source, ResourceStates::CopySource, GpuTaskResourceAccess::Read)
             && appendResourceUse(region.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write)
         ;

@@ -184,7 +184,7 @@ template<typename PayloadVector>
         return false;
     }
 
-    const Core::BufferDesc& desc = buffer->getDescription();
+    const Core::BufferDesc& desc = buffer->getCreationDescription();
     if(
         desc.structStride != sizeof(u8)
         || desc.byteSize < static_cast<u64>(logicalByteCount)

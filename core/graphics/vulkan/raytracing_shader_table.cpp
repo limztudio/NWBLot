@@ -433,14 +433,17 @@ bool ShaderTable::allocateSBTBuffer(
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: failed to allocate {} SBT buffer"), operationName, recordName);
         return false;
     }
-    if(!m_device.isBufferReadyForGpuUse(newBuffer.get())){
+    if(!m_device.isBufferReadyForGpuUse(
+        newBuffer.get(),
+        VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+    )){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: new {} SBT buffer is not ready for GPU use")
             , operationName
             , recordName
         );
         return false;
     }
-    const BufferDesc& createdDesc = newBuffer->getDescription();
+    const BufferDesc& createdDesc = newBuffer->getCreationDescription();
     if(
         !createdDesc.isShaderBindingTable
         || createdDesc.cpuAccess != CpuAccessMode::Write
@@ -582,7 +585,6 @@ u32 ShaderTable::appendShaderRecord(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 
 NWB_VULKAN_END

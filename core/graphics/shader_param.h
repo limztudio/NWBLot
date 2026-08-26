@@ -118,10 +118,24 @@ struct IndirectInstantiateTemplateArgs{
 };
 
 struct IndirectArgs{
-    u32                       clusterCount;     // Number of cluster addresses.
-    u32                       reserved;         // Reserved, must be 0
-    GpuVirtualAddress         clusterAddresses; // GPU address array of constructed CLAS objects.
+    u32               clusterCount; // Number of cluster references.
+#if defined(__cplusplus)
+    u32               clusterReferencesStride = sizeof(GpuVirtualAddress); // Byte stride between references; must be at least 8.
+#else
+    u32               clusterReferencesStride; // Byte stride between references; must be at least 8.
+#endif
+    GpuVirtualAddress clusterAddresses; // GPU address of the first constructed CLAS reference.
 };
+#if defined(__cplusplus)
+static_assert(IsStandardLayout_V<IndirectArgs>, "IndirectArgs must stay GPU-uploadable");
+static_assert(IsTriviallyCopyable_V<IndirectArgs>, "IndirectArgs must stay GPU-uploadable");
+static_assert(sizeof(IndirectArgs) == 16u, "IndirectArgs GPU layout drifted");
+static_assert(alignof(IndirectArgs) == alignof(GpuVirtualAddress), "IndirectArgs GPU alignment drifted");
+static_assert(offsetof(IndirectArgs, clusterCount) == 0u, "IndirectArgs::clusterCount layout drifted");
+static_assert(offsetof(IndirectArgs, clusterReferencesStride) == 4u, "IndirectArgs::clusterReferencesStride layout drifted");
+static_assert(offsetof(IndirectArgs, clusterAddresses) == 8u, "IndirectArgs::clusterAddresses layout drifted");
+static_assert(IndirectArgs{}.clusterReferencesStride >= sizeof(GpuVirtualAddress), "IndirectArgs default cluster-reference stride is invalid");
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

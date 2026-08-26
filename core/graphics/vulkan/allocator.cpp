@@ -310,7 +310,7 @@ VkResult VulkanAllocator::createBuffer(Buffer& buffer, const VkBufferCreateInfo&
     if(!m_allocator)
         return VK_ERROR_INITIALIZATION_FAILED;
 
-    VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildBufferAllocationInfo(buffer.m_desc, bufferInfo.size);
+    VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildBufferAllocationInfo(buffer.m_creationDesc, bufferInfo.size);
     const VkResult res = __hidden_vulkan_allocator::CreateBufferAllocation(
         m_allocator,
         m_context.memoryProperties,
@@ -324,8 +324,8 @@ VkResult VulkanAllocator::createBuffer(Buffer& buffer, const VkBufferCreateInfo&
     if(res == VK_SUCCESS){
         buffer.m_persistentlyMapped = buffer.m_mappedMemory != nullptr;
 #if defined(NWB_DEBUG)
-        if(buffer.m_desc.debugName)
-            vmaSetAllocationName(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), __hidden_vulkan_allocator::ToVmaAllocation(buffer.m_allocation), buffer.m_desc.debugName.logText());
+        if(buffer.m_creationDesc.debugName)
+            vmaSetAllocationName(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), __hidden_vulkan_allocator::ToVmaAllocation(buffer.m_allocation), buffer.m_creationDesc.debugName.logText());
 #endif
     }
     return res;

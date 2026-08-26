@@ -4,6 +4,7 @@
 
 #include "backend.h"
 #include "arena_names.h"
+#include "raytracing_internal.h"
 
 #include <core/common/log.h>
 
@@ -17,25 +18,58 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_device_query{
+
+
+[[nodiscard]] VulkanDetail::RayTracingCapabilityInputs CollectRayTracingCapabilityInputs(const VulkanContext& context)noexcept{
+    VulkanDetail::RayTracingCapabilityInputs inputs;
+    inputs.accelerationStructureExtensionEnabled = context.extensions.KHR_acceleration_structure;
+    inputs.accelerationStructureFeatureEnabled = context.accelerationStructureFeatureEnabled;
+    inputs.createAccelerationStructureEntryPointAvailable = vkCreateAccelerationStructureKHR != nullptr;
+    inputs.destroyAccelerationStructureEntryPointAvailable = vkDestroyAccelerationStructureKHR != nullptr;
+    inputs.getAccelerationStructureBuildSizesEntryPointAvailable = vkGetAccelerationStructureBuildSizesKHR != nullptr;
+    inputs.getAccelerationStructureDeviceAddressEntryPointAvailable = vkGetAccelerationStructureDeviceAddressKHR != nullptr;
+    inputs.cmdBuildAccelerationStructuresEntryPointAvailable = vkCmdBuildAccelerationStructuresKHR != nullptr;
+
+    inputs.rayTracingPipelineExtensionEnabled = context.extensions.KHR_ray_tracing_pipeline;
+    inputs.rayTracingPipelineFeatureEnabled = context.rayTracingPipelineFeatureEnabled;
+    inputs.createRayTracingPipelinesEntryPointAvailable = vkCreateRayTracingPipelinesKHR != nullptr;
+    inputs.getRayTracingShaderGroupHandlesEntryPointAvailable = vkGetRayTracingShaderGroupHandlesKHR != nullptr;
+    inputs.cmdTraceRaysEntryPointAvailable = vkCmdTraceRaysKHR != nullptr;
+
+    inputs.opacityMicromapExtensionEnabled = context.extensions.EXT_opacity_micromap;
+    inputs.opacityMicromapFeatureEnabled = context.opacityMicromapFeatureEnabled;
+    inputs.synchronization2ExtensionEnabled = context.extensions.KHR_synchronization2;
+    inputs.createMicromapEntryPointAvailable = vkCreateMicromapEXT != nullptr;
+    inputs.destroyMicromapEntryPointAvailable = vkDestroyMicromapEXT != nullptr;
+    inputs.getMicromapBuildSizesEntryPointAvailable = vkGetMicromapBuildSizesEXT != nullptr;
+    inputs.cmdBuildMicromapsEntryPointAvailable = vkCmdBuildMicromapsEXT != nullptr;
+    return inputs;
+}
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize featureInfoSize){
+    const VulkanDetail::RayTracingCapabilityInputs rayTracingCapabilities =
+        __hidden_device_query::CollectRayTracingCapabilityInputs(m_context);
+
     switch(feature){
     case Feature::DeferredCommandLists:
         return true;
     case Feature::RayTracingAccelStruct:
-        return m_context.extensions.KHR_acceleration_structure && m_context.accelerationStructureFeatureEnabled;
+        return VulkanDetail::SupportsRayTracingAccelStruct(rayTracingCapabilities);
     case Feature::RayTracingPipeline:
-        return
-            m_context.extensions.KHR_ray_tracing_pipeline
-            && m_context.rayTracingPipelineFeatureEnabled
-            && m_context.extensions.KHR_acceleration_structure
-            && m_context.accelerationStructureFeatureEnabled
-        ;
+        return VulkanDetail::SupportsRayTracingPipeline(rayTracingCapabilities);
     case Feature::RayQuery:
         return
             m_context.extensions.KHR_ray_query
             && m_context.rayQueryFeatureEnabled
-            && m_context.extensions.KHR_acceleration_structure
-            && m_context.accelerationStructureFeatureEnabled
+            && VulkanDetail::SupportsRayTracingAccelStruct(rayTracingCapabilities)
         ;
     case Feature::ShaderExecutionReordering:
         return
@@ -55,19 +89,14 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
             && queryFeatureSupport(Feature::RayTracingPipeline)
         ;
     case Feature::RayTracingOpacityMicromap:
-        return
-            m_context.extensions.EXT_opacity_micromap
-            && m_context.opacityMicromapFeatureEnabled
-            && m_context.extensions.KHR_synchronization2
-            && m_context.extensions.KHR_acceleration_structure
-            && m_context.accelerationStructureFeatureEnabled
-        ;
+        return VulkanDetail::SupportsRayTracingOpacityMicromap(rayTracingCapabilities);
     case Feature::RayTracingClusters:
         return
             m_context.extensions.NV_cluster_acceleration_structure
             && m_context.clusterAccelerationStructureFeatureEnabled
-            && m_context.extensions.KHR_acceleration_structure
-            && m_context.accelerationStructureFeatureEnabled
+            && VulkanDetail::SupportsRayTracingPipeline(rayTracingCapabilities)
+            && vkGetClusterAccelerationStructureBuildSizesNV
+            && vkCmdBuildClusterAccelerationStructureIndirectNV
         ;
     case Feature::SamplerFeedback:
     case Feature::VirtualResources:
@@ -384,35 +413,106 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
 usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns){
     VkResult res = VK_SUCCESS;
 
-    if(!m_context.extensions.NV_cooperative_vector || !m_context.coopVecFeatures.cooperativeVector)
+    if(
+        type > CooperativeVectorDataType::Float64
+        || layout > CooperativeVectorMatrixLayout::TrainingOptimal
+        || type == CooperativeVectorDataType::UInt8Packed
+        || type == CooperativeVectorDataType::SInt8Packed
+        || rows <= 0
+        || columns <= 0
+    )
         return 0;
-    if(rows <= 0 || columns <= 0)
+    if(
+        (type == CooperativeVectorDataType::FloatE4M3 || type == CooperativeVectorDataType::FloatE5M2)
+        && (layout == CooperativeVectorMatrixLayout::RowMajor || layout == CooperativeVectorMatrixLayout::ColumnMajor)
+    )
         return 0;
+    if(
+        !m_context.extensions.NV_cooperative_vector
+        || m_context.coopVecFeatures.cooperativeVector != VK_TRUE
+        || !vkGetPhysicalDeviceCooperativeVectorPropertiesNV
+        || !vkConvertCooperativeVectorMatrixNV
+    )
+        return 0;
+
+    const VkComponentTypeKHR componentType = VulkanDetail::ConvertCoopVecDataType(type);
+    if(componentType != VK_COMPONENT_TYPE_FLOAT32_KHR){
+        uint32_t propertyCount = 0u;
+        res = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, nullptr);
+        if(res != VK_SUCCESS || propertyCount == 0u)
+            return 0;
+
+        Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CooperativeVectorQueryArena);
+        Vector<VkCooperativeVectorPropertiesNV, Alloc::ScratchArena> properties(propertyCount, scratchArena);
+        for(VkCooperativeVectorPropertiesNV& property : properties){
+            property.sType = VK_STRUCTURE_TYPE_COOPERATIVE_VECTOR_PROPERTIES_NV;
+            property.pNext = nullptr;
+        }
+
+        res = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, properties.data());
+        if(res != VK_SUCCESS)
+            return 0;
+
+        bool matrixInterpretationSupported = false;
+        for(u32 i = 0u; i < propertyCount; ++i){
+            if(properties[i].matrixInterpretation == componentType){
+                matrixInterpretationSupported = true;
+                break;
+            }
+        }
+        if(!matrixInterpretationSupported)
+            return 0;
+    }
 
     usize dstSize = 0;
-    usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
+    const usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
     const usize rowCount = static_cast<usize>(rows);
     const usize columnCount = static_cast<usize>(columns);
-    if(rowCount > (Limit<usize>::s_Max / columnCount))
+    usize rowByteSize = 0u;
+    if(!TryMultiply<usize>(columnCount, dataTypeSize, rowByteSize))
         return 0;
 
-    const usize elementCount = rowCount * columnCount;
-    if(dataTypeSize > (Limit<usize>::s_Max / elementCount))
+    const usize srcStride = GetCooperativeVectorOptimalMatrixStride(
+        type,
+        CooperativeVectorMatrixLayout::RowMajor,
+        static_cast<u32>(rows),
+        static_cast<u32>(columns)
+    );
+    if(srcStride == 0u)
+        return 0;
+
+    usize precedingRowsByteSize = 0u;
+    if(!TryMultiply<usize>(rowCount - 1u, srcStride, precedingRowsByteSize))
+        return 0;
+    if(AddOverflows<usize>(precedingRowsByteSize, rowByteSize))
+        return 0;
+    const usize srcSize = precedingRowsByteSize + rowByteSize;
+
+    const usize dstStride = GetCooperativeVectorOptimalMatrixStride(
+        type,
+        layout,
+        static_cast<u32>(rows),
+        static_cast<u32>(columns)
+    );
+    if(
+        (layout == CooperativeVectorMatrixLayout::RowMajor || layout == CooperativeVectorMatrixLayout::ColumnMajor)
+        && dstStride == 0u
+    )
         return 0;
 
     auto convertInfo = VulkanDetail::MakeVkStruct<VkConvertCooperativeVectorMatrixInfoNV>(VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV);
-    convertInfo.srcSize = dataTypeSize * elementCount;
+    convertInfo.srcSize = srcSize;
     convertInfo.srcData.hostAddress = nullptr;
     convertInfo.pDstSize = &dstSize;
     convertInfo.dstData.hostAddress = nullptr;
-    convertInfo.srcComponentType = VulkanDetail::ConvertCoopVecDataType(type);
+    convertInfo.srcComponentType = componentType;
     convertInfo.dstComponentType = convertInfo.srcComponentType;
     convertInfo.numRows = static_cast<u32>(rows);
     convertInfo.numColumns = static_cast<u32>(columns);
     convertInfo.srcLayout = VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_ROW_MAJOR_NV;
-    convertInfo.srcStride = dataTypeSize * columns;
+    convertInfo.srcStride = srcStride;
     convertInfo.dstLayout = VulkanDetail::ConvertCoopVecMatrixLayout(layout);
-    convertInfo.dstStride = GetCooperativeVectorOptimalMatrixStride(type, layout, rows, columns);
+    convertInfo.dstStride = dstStride;
 
     res = vkConvertCooperativeVectorMatrixNV(m_context.device, &convertInfo);
     if(res == VK_SUCCESS)

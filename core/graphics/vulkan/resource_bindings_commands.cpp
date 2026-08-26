@@ -441,6 +441,10 @@ void CommandList::bindDescriptorBufferHeapNative(
         rejectCommandRecording(operationName, NWB_TEXT("descriptor-heap command-buffer use identity is exhausted"));
         return;
     }
+    for(const BufferHandle& retainedBuffer : heap.m_resourceDescriptorBuffers){
+        if(retainedBuffer)
+            trackedCommandBuffer.trackRetainedBuffer(*retainedBuffer);
+    }
 
     ensureDescriptorBuffersBound(*manager, managerSnapshot);
 

@@ -36,8 +36,11 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
 CommandList::~CommandList(){
     m_stateTracker.rollbackRecordingAttempt();
     resetMarkerState();
-    if(m_currentCmdBuf)
+    if(m_currentCmdBuf){
         m_currentCmdBuf->discardRetainedTextureStateCommits();
+        m_currentCmdBuf->discardPendingAccelStructBuildCommits();
+        m_currentCmdBuf->discardPendingOpacityMicromapBuildCommits();
+    }
     discardUnsubmittedUploadChunks();
 
     if(m_device.isAnyGpuMarkerEnabled())
@@ -84,8 +87,11 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     m_stateTracker.rollbackRecordingAttempt();
     clearStateInternal();
     m_hostReadbackBarrierTracker.clear();
-    if(m_currentCmdBuf)
+    if(m_currentCmdBuf){
         m_currentCmdBuf->discardRetainedTextureStateCommits();
+        m_currentCmdBuf->discardPendingAccelStructBuildCommits();
+        m_currentCmdBuf->discardPendingOpacityMicromapBuildCommits();
+    }
     discardUnsubmittedUploadChunks();
     m_currentCmdBuf.reset();
     m_nativeRecordingID = 0u;
@@ -380,6 +386,12 @@ bool CommandList::validateTrackedTexturesReadyForClose()noexcept{
 }
 
 bool CommandList::validateTrackedBuffersReadyForClose()noexcept{
+    for(Buffer* const buffer : m_currentCmdBuf->m_referencedBuffers){
+        if(!m_device.isBufferReadyForGpuUse(buffer)){
+            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("referenced buffer is not ready for GPU access"));
+            return false;
+        }
+    }
     for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
         Buffer* const buffer = it->first;
         if(!m_device.isBufferReadyForGpuUse(buffer)){
@@ -413,10 +425,10 @@ bool CommandList::validateTrackedBuffersReadyForClose()noexcept{
     return true;
 }
 
-bool CommandList::validateTrackedTexturesReadyForSubmission()const noexcept{
+bool CommandList::validateTrackedResourcesReadyForSubmission()const noexcept{
     if(!m_currentCmdBuf){
         NWB_LOGGER_CRITICAL_WARNING(
-            NWB_TEXT("Vulkan: Failed to submit command list: tracked Texture readiness ledger is unavailable")
+            NWB_TEXT("Vulkan: Failed to submit command list: tracked resource readiness ledger is unavailable")
         );
         return false;
     }
@@ -437,6 +449,26 @@ bool CommandList::validateTrackedTexturesReadyForSubmission()const noexcept{
         if(!m_device.isTextureReadyForGpuUse(it.value().texture.get())){
             NWB_LOGGER_CRITICAL_WARNING(
                 NWB_TEXT("Vulkan: Failed to submit command list: permanent texture is not ready for GPU access")
+            );
+            return false;
+        }
+    }
+    for(Buffer* const buffer : m_currentCmdBuf->m_referencedBuffers){
+        if(!m_device.isBufferReadyForGpuUse(buffer)){
+            NWB_LOGGER_CRITICAL_WARNING(
+                NWB_TEXT("Vulkan: Failed to submit command list: referenced buffer is not ready for GPU access")
+            );
+            return false;
+        }
+    }
+    for(
+        auto it = m_stateTracker.m_permanentBufferStates.begin();
+        it != m_stateTracker.m_permanentBufferStates.end();
+        ++it
+    ){
+        if(!m_device.isBufferReadyForGpuUse(it.value().buffer.get())){
+            NWB_LOGGER_CRITICAL_WARNING(
+                NWB_TEXT("Vulkan: Failed to submit command list: permanent buffer is not ready for GPU access")
             );
             return false;
         }
@@ -468,7 +500,7 @@ void CommandList::appendHostReadbackBarriers(){
 
 void CommandList::registerHostReadbackBuffer(Buffer& buffer){
     if(
-        buffer.m_desc.cpuAccess == CpuAccessMode::Read
+        buffer.m_creationDesc.cpuAccess == CpuAccessMode::Read
         && m_hostReadbackBarrierTracker.registerBuffer(buffer.m_buffer)
     )
         retainResource(&buffer);
@@ -480,6 +512,11 @@ void CommandList::registerHostReadbackStagingTexture(StagingTexture& stagingText
         && m_hostReadbackBarrierTracker.registerBuffer(stagingTexture.m_buffer)
     )
         retainResource(&stagingTexture);
+}
+
+void CommandList::retainResource(Buffer* resource){
+    if(resource)
+        m_currentCmdBuf->retainBuffer(*resource);
 }
 
 void CommandList::retainResource(Texture* resource){
@@ -505,6 +542,7 @@ void CommandList::retainResource(GraphicsResource* resource){
 
 void CommandList::retainStagingBuffer(Buffer& buffer){
     m_currentCmdBuf->m_referencedStagingBuffers.emplace_back(&buffer, BufferHandle::deleter_type(&m_context.objectArena));
+    m_currentCmdBuf->trackRetainedBuffer(buffer);
 }
 
 bool CommandList::validateCommandRecordingScope(const tchar* const operationName)noexcept{
@@ -664,6 +702,8 @@ void CommandList::discardInvalidCommandBuffer()noexcept{
     }
 
     m_currentCmdBuf->discardRetainedTextureStateCommits();
+    m_currentCmdBuf->discardPendingAccelStructBuildCommits();
+    m_currentCmdBuf->discardPendingOpacityMicromapBuildCommits();
     discardUnsubmittedUploadChunks();
     m_currentCmdBuf.reset();
     m_nativeRecordingID = 0u;

@@ -367,7 +367,7 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsInvalidGraphInitialTextur
 TEST_F(GpuResourceReadinessTest, OrderedUploadCopyDestConflictRejectsMergedPacketBeforePrefixAndStaging){
     auto& device = GpuResourceReadinessTest::device();
     BufferHandle buffer = device.createBuffer(
-        BufferDesc().setByteSize(256u).setInitialState(ResourceStates::ShaderResource)
+        BufferDesc().setByteSize(256u).setCanHaveRawViews(true).setInitialState(ResourceStates::ShaderResource)
     );
     ASSERT_TRUE(buffer);
 

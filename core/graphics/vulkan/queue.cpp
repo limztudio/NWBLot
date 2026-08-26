@@ -31,10 +31,14 @@ TrackedCommandBuffer::TrackedCommandBuffer(
     , m_ownsCmdPool(ownsCommandPool)
     , m_sharedCommandPoolMutex(sharedCommandPoolMutex)
     , m_referencedResources(context.objectArena)
+    , m_referencedBuffers(context.objectArena)
     , m_referencedTextures(context.objectArena)
     , m_referencedStagingBuffers(context.objectArena)
     , m_referencedDescriptorHeaps(context.objectArena)
     , m_retainedTextureStateCommits(context.objectArena)
+    , m_pendingAccelStructBuildCommits(context.objectArena)
+    , m_pendingAccelStructBuildSignatures(context.objectArena)
+    , m_pendingOpacityMicromapBuildCommits(context.objectArena)
     , m_context(context)
     , m_queue(queue)
 {
@@ -107,6 +111,20 @@ void TrackedCommandBuffer::retainResource(GraphicsResource& resource){
     m_referencedResources.emplace_back(&resource, Handle<GraphicsResource>::deleter_type(&m_context.objectArena));
 }
 
+void TrackedCommandBuffer::retainBuffer(Buffer& buffer){
+    retainResource(buffer);
+    trackRetainedBuffer(buffer);
+}
+
+void TrackedCommandBuffer::trackRetainedBuffer(Buffer& buffer){
+    for(Buffer* const retainedBuffer : m_referencedBuffers){
+        if(retainedBuffer == &buffer)
+            return;
+    }
+
+    m_referencedBuffers.push_back(&buffer);
+}
+
 void TrackedCommandBuffer::retainTexture(Texture& texture){
     retainResource(texture);
     trackRetainedTexture(texture);
@@ -149,8 +167,134 @@ void TrackedCommandBuffer::discardRetainedTextureStateCommits(){
     m_retainedTextureStateCommits.clear();
 }
 
+void TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
+    AccelStruct& accelStruct,
+    const VkAccelerationStructureTypeKHR accelStructType,
+    const VkBuildAccelerationStructureFlagsKHR buildFlags,
+    const AccelStructGeometryBuildSignature* const geometrySignatures,
+    const usize geometrySignatureCount
+){
+    NWB_ASSERT(geometrySignatureCount <= UINT32_MAX);
+    NWB_ASSERT(geometrySignatureCount == 0u || geometrySignatures);
+    if(geometrySignatureCount > UINT32_MAX || (geometrySignatureCount != 0u && !geometrySignatures))
+        return;
+
+    retainResource(accelStruct);
+
+    const usize geometrySignatureOffset = m_pendingAccelStructBuildSignatures.size();
+    for(usize geometryIndex = 0u; geometryIndex < geometrySignatureCount; ++geometryIndex)
+        m_pendingAccelStructBuildSignatures.push_back(geometrySignatures[geometryIndex]);
+
+    m_pendingAccelStructBuildCommits.push_back(PendingAccelStructBuildCommit{
+        .accelStruct = &accelStruct,
+        .accelStructType = accelStructType,
+        .buildFlags = buildFlags,
+        .geometrySignatureOffset = geometrySignatureOffset,
+        .geometrySignatureCount = static_cast<u32>(geometrySignatureCount),
+    });
+}
+
+bool TrackedCommandBuffer::getPendingAccelStructBuildSignature(
+    const AccelStruct& accelStruct,
+    VkAccelerationStructureTypeKHR& outAccelStructType,
+    VkBuildAccelerationStructureFlagsKHR& outBuildFlags,
+    const AccelStructGeometryBuildSignature*& outGeometrySignatures,
+    usize& outGeometrySignatureCount
+)const{
+    for(usize commitIndex = m_pendingAccelStructBuildCommits.size(); commitIndex > 0u; --commitIndex){
+        const PendingAccelStructBuildCommit& commit = m_pendingAccelStructBuildCommits[commitIndex - 1u];
+        if(commit.accelStruct == &accelStruct){
+            NWB_ASSERT(
+                commit.geometrySignatureOffset <= m_pendingAccelStructBuildSignatures.size()
+                && commit.geometrySignatureCount <= m_pendingAccelStructBuildSignatures.size() - commit.geometrySignatureOffset
+            );
+            if(
+                commit.geometrySignatureOffset > m_pendingAccelStructBuildSignatures.size()
+                || commit.geometrySignatureCount > m_pendingAccelStructBuildSignatures.size() - commit.geometrySignatureOffset
+            )
+                return false;
+
+            outAccelStructType = commit.accelStructType;
+            outBuildFlags = commit.buildFlags;
+            outGeometrySignatures = commit.geometrySignatureCount != 0u
+                ? m_pendingAccelStructBuildSignatures.data() + commit.geometrySignatureOffset
+                : nullptr
+            ;
+            outGeometrySignatureCount = commit.geometrySignatureCount;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void TrackedCommandBuffer::commitPendingAccelStructBuildCommits(){
+    for(const PendingAccelStructBuildCommit& commit : m_pendingAccelStructBuildCommits){
+        if(!commit.accelStruct)
+            continue;
+        if(
+            commit.geometrySignatureOffset > m_pendingAccelStructBuildSignatures.size()
+            || commit.geometrySignatureCount > m_pendingAccelStructBuildSignatures.size() - commit.geometrySignatureOffset
+        ){
+            NWB_ASSERT(false);
+            continue;
+        }
+
+        AccelStruct& accelStruct = *commit.accelStruct;
+        ScopedLock lock(accelStruct.m_acceptedBuildSignatureMutex);
+        if(commit.geometrySignatureCount != 0u){
+            const AccelStructGeometryBuildSignature* const signatures =
+                m_pendingAccelStructBuildSignatures.data() + commit.geometrySignatureOffset
+            ;
+            accelStruct.m_acceptedBuildGeometrySignatures.assign(signatures, signatures + commit.geometrySignatureCount);
+        }
+        else
+            accelStruct.m_acceptedBuildGeometrySignatures.clear();
+        accelStruct.m_acceptedBuildType = commit.accelStructType;
+        accelStruct.m_acceptedBuildFlags = commit.buildFlags;
+        accelStruct.m_hasAcceptedBuild = true;
+    }
+    m_pendingAccelStructBuildCommits.clear();
+    m_pendingAccelStructBuildSignatures.clear();
+}
+
+void TrackedCommandBuffer::discardPendingAccelStructBuildCommits(){
+    m_pendingAccelStructBuildCommits.clear();
+    m_pendingAccelStructBuildSignatures.clear();
+}
+
+void TrackedCommandBuffer::appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap){
+    retainResource(opacityMicromap);
+    m_pendingOpacityMicromapBuildCommits.push_back(PendingOpacityMicromapBuildCommit{
+        .opacityMicromap = &opacityMicromap,
+    });
+}
+
+bool TrackedCommandBuffer::hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const{
+    for(usize commitIndex = m_pendingOpacityMicromapBuildCommits.size(); commitIndex > 0u; --commitIndex){
+        if(m_pendingOpacityMicromapBuildCommits[commitIndex - 1u].opacityMicromap == &opacityMicromap)
+            return true;
+    }
+
+    return false;
+}
+
+void TrackedCommandBuffer::commitPendingOpacityMicromapBuildCommits(){
+    for(const PendingOpacityMicromapBuildCommit& commit : m_pendingOpacityMicromapBuildCommits){
+        if(commit.opacityMicromap)
+            commit.opacityMicromap->m_acceptedConstructed.store(true, MemoryOrder::release);
+    }
+    m_pendingOpacityMicromapBuildCommits.clear();
+}
+
+void TrackedCommandBuffer::discardPendingOpacityMicromapBuildCommits(){
+    m_pendingOpacityMicromapBuildCommits.clear();
+}
+
 void TrackedCommandBuffer::clearTrackedReferences(){
     discardRetainedTextureStateCommits();
+    discardPendingAccelStructBuildCommits();
+    discardPendingOpacityMicromapBuildCommits();
 
     for(GpuDescriptorHeap* heap : m_referencedDescriptorHeaps){
         if(heap)
@@ -160,6 +304,7 @@ void TrackedCommandBuffer::clearTrackedReferences(){
     m_descriptorBufferManager = nullptr;
     m_descriptorBufferGeneration = 0u;
 
+    m_referencedBuffers.clear();
     m_referencedTextures.clear();
     m_referencedResources.clear();
     m_referencedStagingBuffers.clear();
@@ -885,7 +1030,7 @@ u64 Queue::submit(
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} replaced its validated native recording lease"), i);
                 return m_lastSubmittedID;
             }
-            if(!cmdList->validateTrackedTexturesReadyForSubmission())
+            if(!cmdList->validateTrackedResourcesReadyForSubmission())
                 return m_lastSubmittedID;
             TrackedCommandBuffer* const tracked = cmdList->m_currentCmdBuf.get();
             if(
@@ -1079,6 +1224,8 @@ u64 Queue::submit(
     };
     for(auto& tracked : trackedBuffers){
         tracked->commitRetainedTextureStateCommits();
+        tracked->commitPendingAccelStructBuildCommits();
+        tracked->commitPendingOpacityMicromapBuildCommits();
         transitionCommandBufferState(*tracked, TrackedCommandBufferArenaState::Pending);
         for(GpuDescriptorHeap* heap : tracked->m_referencedDescriptorHeaps){
             if(heap)

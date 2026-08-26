@@ -260,8 +260,8 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     case RayTracingClusterOperationType::ClasBuild:                sourceInfoSize = sizeof(VkClusterAccelerationStructureBuildTriangleClusterInfoNV); break;
     case RayTracingClusterOperationType::ClasBuildTemplates:       sourceInfoSize = sizeof(VkClusterAccelerationStructureBuildTriangleClusterTemplateInfoNV); break;
     case RayTracingClusterOperationType::ClasInstantiateTemplates: sourceInfoSize = sizeof(VkClusterAccelerationStructureInstantiateClusterInfoNV); break;
-    case RayTracingClusterOperationType::BlasBuild:                 sourceInfoSize = sizeof(VkClusterAccelerationStructureBuildClustersBottomLevelInfoNV); break;
-    default:                                                        return;
+    case RayTracingClusterOperationType::BlasBuild:                sourceInfoSize = sizeof(VkClusterAccelerationStructureBuildClustersBottomLevelInfoNV); break;
+    default:                                                       return;
     }
 
     const auto computeStridedRangeSize = [s_OperationName](
@@ -508,8 +508,8 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         case RayTracingClusterOperationType::ClasBuild:                destinationAlignment = properties.clusterByteAlignment; break;
         case RayTracingClusterOperationType::ClasBuildTemplates:       destinationAlignment = properties.clusterTemplateByteAlignment; break;
         case RayTracingClusterOperationType::ClasInstantiateTemplates: destinationAlignment = properties.clusterByteAlignment; break;
-        case RayTracingClusterOperationType::BlasBuild:                 destinationAlignment = properties.clusterBottomLevelByteAlignment; break;
-        default:                                                        return;
+        case RayTracingClusterOperationType::BlasBuild:                destinationAlignment = properties.clusterBottomLevelByteAlignment; break;
+        default:                                                       return;
         }
         if(!getCheckedAddress(
             *outAccelerationStructuresBuffer,

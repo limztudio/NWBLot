@@ -21,6 +21,9 @@ NWB_VULKAN_BEGIN
 namespace __hidden_device_query{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] VulkanDetail::RayTracingCapabilityInputs CollectRayTracingCapabilityInputs(const VulkanContext& context)noexcept{
     VulkanDetail::RayTracingCapabilityInputs inputs;
     inputs.accelerationStructureExtensionEnabled = context.extensions.KHR_acceleration_structure;
@@ -46,6 +49,9 @@ namespace __hidden_device_query{
     inputs.cmdBuildMicromapsEntryPointAvailable = vkCmdBuildMicromapsEXT != nullptr;
     return inputs;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };
@@ -277,7 +283,9 @@ Object Device::getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& q
     return Object(nullptr);
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 Heap::Heap(const VulkanContext& context, VulkanAllocator& allocator)
     : RefCounter<GraphicsResource>(context.threadPool)
@@ -353,7 +361,9 @@ HeapHandle Device::createHeap(const HeapDesc& d){
     return HeapHandle(heap, HeapHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
     VkResult res = VK_SUCCESS;

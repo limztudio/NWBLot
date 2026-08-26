@@ -861,6 +861,7 @@ typedef Handle<TrackedCommandBuffer> TrackedCommandBufferPtr;
 
 
 class Queue final : NoCopy{
+    friend class CommandList;
     friend class Device;
     friend class TrackedCommandBuffer;
 
@@ -895,6 +896,9 @@ public:
     struct SubmissionCommandListIdentity{
         TrackedCommandBufferPtr owner;
         u64 recordingLeaseSerial = 0u;
+        u64 nativeRecordingID = 0u;
+        u64 recordingWorkerDomain = 0u;
+        u32 recordingWorkerIndex = 0u;
     };
 
     u64 submit(
@@ -937,6 +941,7 @@ private:
     };
 
     static void updateCommandBufferHighWater(Atomic<u64>& highWaterCount, u64 currentCount)noexcept;
+    [[nodiscard]] u64 nextRecordingID()noexcept;
     void registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
     void transitionCommandBufferState(
         TrackedCommandBuffer& commandBuffer,
@@ -1136,6 +1141,7 @@ private:
     struct BufferChunk final : public RefCounter<GraphicsResource>{
         BufferHandle buffer;
         TrackedCommandBuffer* owner;
+        u64 nativeRecordingID;
         GpuPhysicalQueueId physicalQueue;
         u64 size;
         u64 allocated;
@@ -1146,6 +1152,7 @@ private:
             Alloc::ThreadPool& pool,
             BufferHandle buf,
             TrackedCommandBuffer* chunkOwner,
+            u64 chunkNativeRecordingID,
             GpuPhysicalQueueId queue,
             u64 sz
         );
@@ -1153,7 +1160,7 @@ private:
     };
     using BufferChunkPtr = RefCountPtr<BufferChunk>;
     using BufferChunkList = List<BufferChunkPtr, Alloc::GlobalArena>;
-    using ChunkRecyclePredicate = bool (*)(TrackedCommandBuffer* owner, const void* context);
+    using ChunkRecyclePredicate = bool (*)(TrackedCommandBuffer* owner, u64 nativeRecordingID, const void* context);
     struct ActiveQueueChunks{
         GpuPhysicalQueueId queue;
         BufferChunkList chunks;
@@ -1178,6 +1185,7 @@ public:
         u64* pOffset,
         void** pCpuVA,
         TrackedCommandBuffer* owner,
+        u64 nativeRecordingID,
         GpuPhysicalQueueId queue,
         u64 completedVersion,
         u32 alignment = s_DefaultUploadSuballocationAlignment
@@ -1185,10 +1193,15 @@ public:
     void submitChunks(
         GpuPhysicalQueueId queue,
         u64 submittedVersion,
-        TrackedCommandBuffer* const* submittedOwners,
-        usize submittedOwnerCount
+        const Queue::SubmissionCommandListIdentity* submittedCommandLists,
+        usize submittedCommandListCount
     );
-    void discardChunks(GpuPhysicalQueueId queue, TrackedCommandBuffer* owner, u64 reusableVersion);
+    void discardChunks(
+        GpuPhysicalQueueId queue,
+        TrackedCommandBuffer* owner,
+        u64 nativeRecordingID,
+        u64 reusableVersion
+    );
 
 
 private:
@@ -1297,12 +1310,14 @@ inline UploadManager::BufferChunk::BufferChunk(
     Alloc::ThreadPool& pool,
     BufferHandle buf,
     TrackedCommandBuffer* chunkOwner,
+    u64 chunkNativeRecordingID,
     GpuPhysicalQueueId queue,
     u64 sz
 )
     : RefCounter<GraphicsResource>(pool)
     , buffer(Move(buf))
     , owner(chunkOwner)
+    , nativeRecordingID(chunkNativeRecordingID)
     , physicalQueue(queue)
     , size(sz)
     , allocated(0)
@@ -2199,6 +2214,7 @@ class ShaderTable final : public RefCounter<GraphicsResource>, NoCopy{
     friend class RayTracingPipeline;
 
 
+private:
     struct DispatchRegionSnapshot{
         BufferHandle buffer;
         u64 offset = 0u;
@@ -2610,10 +2626,10 @@ public:
     // Final state snapshot follows keepInitialState restoration.
     void close(CommandListResourceStateHandoff* finalStates = nullptr);
     // False when no submit-ready command buffer is owned.
-    [[nodiscard]] bool hasCommandBuffer()const{ return m_currentCmdBuf && m_currentCmdBuf->m_cmdBuf != VK_NULL_HANDLE; }
+    [[nodiscard]] bool hasCommandBuffer()const{ return matchesNativeLeaseIdentity(); }
     // `hasCommandBuffer` remains true after close so queues can submit it. Tooling that emits commands must use
     // this predicate instead of treating ownership as an active recording scope.
-    [[nodiscard]] bool isRecording()const noexcept{ return m_isRecording; }
+    [[nodiscard]] bool isRecording()const noexcept{ return m_isRecording && matchesNativeLeaseIdentity(); }
     // Sticky for the current open/close attempt. A failed native capability or command semantic check invalidates
     // the complete list; close discards its native buffer and open is the only operation that starts a fresh attempt.
     [[nodiscard]] bool commandRecordingFailed()const noexcept{ return m_commandRecordingFailed; }
@@ -2624,9 +2640,7 @@ public:
     [[nodiscard]] bool matchesRecordingLease(u64 serial)const noexcept{
         return serial != 0u
             && serial == m_recordingLeaseSerial
-            && m_isRecording
-            && m_currentCmdBuf
-            && m_currentCmdBuf->m_cmdBuf != VK_NULL_HANDLE
+            && matchesActiveNativeLeaseIdentity()
         ;
     }
     [[nodiscard]] bool isRenderPassActive()const noexcept{ return m_renderPassActive; }
@@ -2753,8 +2767,17 @@ public:
 
     Device& getDevice(){ return m_device; }
     const CommandListParameters& getDescription(){ return m_desc; }
+    [[nodiscard]] CommandListParameters getResolvedDescription()const noexcept{ return m_creationDesc; }
 
 private:
+    void clearStateInternal();
+    [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
+    [[nodiscard]] bool matchesNativeLeaseIdentity()const noexcept;
+    [[nodiscard]] bool matchesActiveNativeLeaseIdentity()const noexcept;
+    [[nodiscard]] bool matchesSubmissionLease(
+        GpuPhysicalQueueId executionQueue,
+        CommandQueue::Enum executionQueueClass
+    )const noexcept;
     [[nodiscard]] bool validateFramebufferForRendering(Framebuffer* framebuffer, const tchar* operationName)noexcept;
     [[nodiscard]] bool prepareFramebufferForRendering(Framebuffer* framebuffer, const tchar* operationName)noexcept;
     [[nodiscard]] bool validateViewportState(
@@ -2895,6 +2918,7 @@ private:
 
 
 private:
+    const CommandListParameters m_creationDesc;
     CommandListParameters m_desc;
     TrackedCommandBufferPtr m_currentCmdBuf;
     StateTracker m_stateTracker;
@@ -2903,6 +2927,7 @@ private:
     bool m_isRecording = false;
     bool m_commandRecordingFailed = false;
     u64 m_recordingLeaseSerial = 0u;
+    u64 m_nativeRecordingID = 0u;
     bool m_renderPassActive = false;
     bool m_descriptorBuffersBound = false;
     u32 m_markerDepth = 0u;
@@ -3197,6 +3222,9 @@ public:
     void destroySubmissionSignalForTesting(QueueSubmissionNativeSignal& signal);
     [[nodiscard]] bool signalSubmissionTimelineForTesting(const Queue::SubmissionWait& wait);
     void destroySubmissionTimelineForTesting(Queue::SubmissionWait& wait);
+    [[nodiscard]] bool armSubmissionLedgerFinalizeHookForTesting(void* context, void (*invoke)(void*));
+    void clearSubmissionLedgerFinalizeHookForTesting();
+    [[nodiscard]] bool armRecordingIDWrapForTesting(const GpuPhysicalQueueId& queue);
     void rejectNextSubmissionForTesting(CommandQueue::Enum queue);
     void clearSubmissionRejectionsForTesting();
     void clearSubmissionWaitTokensForTesting();
@@ -3217,6 +3245,7 @@ private:
     void configureLegacyQueueContext();
 #if !defined(NWB_FINAL)
     [[nodiscard]] bool consumeSubmissionRejectionForTesting(CommandQueue::Enum queue);
+    void invokeSubmissionLedgerFinalizeHookForTesting();
     void captureSubmissionWaitTokensForTesting(
         const GpuPhysicalQueueId& executionQueue,
         const QueueSubmissionToken* waitTokens,
@@ -3358,6 +3387,9 @@ private:
 
 #if !defined(NWB_FINAL)
     Array<Atomic<u32>, static_cast<u32>(CommandQueue::kCount)> m_submissionRejectionsForTesting = {};
+    Futex m_submissionLedgerFinalizeHookForTestingMutex;
+    void* m_submissionLedgerFinalizeHookForTestingContext = nullptr;
+    void (*m_submissionLedgerFinalizeHookForTesting)(void*) = nullptr;
     Atomic<bool> m_submissionWaitCaptureArmedForTesting = false;
     mutable Futex m_submissionWaitTokensForTestingMutex;
     GpuPhysicalQueueId m_submissionWaitQueueForTesting;

@@ -366,14 +366,15 @@ bool CommandList::prepareUploadStaging(
 
     UploadManager& uploadMgr = m_device.m_uploadManager;
 
-    const u64 completedUploadVersion = m_device.queueGetCompletedInstance(m_desc.physicalQueue);
+    const u64 completedUploadVersion = m_device.queueGetCompletedInstance(m_creationDesc.physicalQueue);
     if(!uploadMgr.suballocateBuffer(
         static_cast<u64>(dataSize),
         &outStagingBuffer,
         &outStagingOffset,
         &outCpuVA,
         m_currentCmdBuf.get(),
-        m_desc.physicalQueue,
+        m_nativeRecordingID,
+        m_creationDesc.physicalQueue,
         completedUploadVersion,
         alignment
     )){

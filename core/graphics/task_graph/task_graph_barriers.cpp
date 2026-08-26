@@ -167,7 +167,7 @@ bool GpuTaskGraph::applyCompiledBarrier(
             resource.type != GpuGraphResourceType::Texture
             || !resource.texture
             || !resolveOwnershipQueues()
-            || commandList.getDescription().physicalQueue != sourceQueue->id
+            || commandList.getResolvedDescription().physicalQueue != sourceQueue->id
         )
             return false;
         if(commandList.getPermanentTextureState(resource.texture.get()) != ResourceStates::Unknown)
@@ -186,7 +186,7 @@ bool GpuTaskGraph::applyCompiledBarrier(
             resource.type != GpuGraphResourceType::Buffer
             || !resource.buffer
             || !resolveOwnershipQueues()
-            || commandList.getDescription().physicalQueue != sourceQueue->id
+            || commandList.getResolvedDescription().physicalQueue != sourceQueue->id
         )
             return false;
         if(commandList.getPermanentBufferState(resource.buffer.get()) != ResourceStates::Unknown)
@@ -201,7 +201,7 @@ bool GpuTaskGraph::applyCompiledBarrier(
             resource.type != GpuGraphResourceType::AccelStruct
             || !resource.accelStruct
             || !resolveOwnershipQueues()
-            || commandList.getDescription().physicalQueue != sourceQueue->id
+            || commandList.getResolvedDescription().physicalQueue != sourceQueue->id
         )
             return false;
         Buffer* const backingBuffer = resource.accelStruct->getBackingBuffer();
@@ -216,7 +216,7 @@ bool GpuTaskGraph::applyCompiledBarrier(
     case GpuCompiledBarrierType::BufferOwnershipAcquire:
     case GpuCompiledBarrierType::AccelStructOwnershipAcquire:{
         const GpuPhysicalQueueInfo* const destinationQueue = compiledGraph.queueInfo(barrier.destinationQueue);
-        if(!resolveOwnershipQueues() || commandList.getDescription().physicalQueue != destinationQueue->id)
+        if(!resolveOwnershipQueues() || commandList.getResolvedDescription().physicalQueue != destinationQueue->id)
             return false;
 
         // CommandList::open imports the compiler-selected producer state seed before packet prologue lowering. That

@@ -131,7 +131,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             ? m_device.getQueueFamilyIndex(ownerQueue)
             : VK_QUEUE_FAMILY_IGNORED
         ;
-        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_desc.physicalQueue);
+        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_creationDesc.physicalQueue);
         if(ownerQueue.valid() && (sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff references an unavailable queue family"));
             return false;
@@ -202,7 +202,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             ? m_device.getQueueFamilyIndex(ownerQueue)
             : VK_QUEUE_FAMILY_IGNORED
         ;
-        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_desc.physicalQueue);
+        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_creationDesc.physicalQueue);
         if(ownerQueue.valid() && (sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff references an unavailable queue family"));
             return false;
@@ -411,7 +411,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         if(m_device.usesConcurrentQueueSharing(sharing))
             return;
 
-        outOwner = m_desc.physicalQueue;
+        outOwner = m_creationDesc.physicalQueue;
         const auto releaseIt = m_textureOwnershipReleaseDestinations.find(key);
         if(releaseIt != m_textureOwnershipReleaseDestinations.end())
             outReleaseDestination = releaseIt.value();
@@ -422,7 +422,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         if(m_device.usesConcurrentQueueSharing(sharing))
             return;
 
-        outOwner = m_desc.physicalQueue;
+        outOwner = m_creationDesc.physicalQueue;
         const auto releaseIt = m_bufferOwnershipReleaseDestinations.find(buffer);
         if(releaseIt != m_bufferOwnershipReleaseDestinations.end())
             outReleaseDestination = releaseIt.value();
@@ -513,7 +513,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
     if(m_textureOwnershipReleaseDestinations.empty() && m_bufferOwnershipReleaseDestinations.empty())
         return;
 
-    const u32 sourceQueueFamily = m_device.getQueueFamilyIndex(m_desc.physicalQueue);
+    const u32 sourceQueueFamily = m_device.getQueueFamilyIndex(m_creationDesc.physicalQueue);
     if(sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED){
         rejectCommandRecording(NWB_TEXT("append ownership-release barriers"), NWB_TEXT("source queue family is unavailable"));
         return;

@@ -22,14 +22,15 @@ namespace VulkanDetail{
 
 
 struct SubmittedOwnersContext{
-    TrackedCommandBuffer* const* owners = nullptr;
+    const Queue::SubmissionCommandListIdentity* commandLists = nullptr;
     usize count = 0;
 };
 
 static constexpr usize s_SubmittedOwnerLookupThreshold = 8u;
 
-using SubmittedOwnerLookup = HashSet<
+using SubmittedOwnerLookup = HashMap<
     TrackedCommandBuffer*,
+    u64,
     Hasher<TrackedCommandBuffer*>,
     EqualTo<TrackedCommandBuffer*>,
     Alloc::ScratchArena
@@ -39,22 +40,45 @@ struct SubmittedOwnerLookupContext{
     const SubmittedOwnerLookup* owners = nullptr;
 };
 
-static bool IsSubmittedOwner(TrackedCommandBuffer* owner, const void* context){
+struct OwnerIdentityContext{
+    TrackedCommandBuffer* owner = nullptr;
+    u64 nativeRecordingID = 0u;
+};
+
+static bool IsSubmittedOwner(
+    TrackedCommandBuffer* const owner,
+    const u64 nativeRecordingID,
+    const void* const context
+){
     const auto& submitted = *static_cast<const SubmittedOwnersContext*>(context);
     for(usize i = 0; i < submitted.count; ++i){
-        if(submitted.owners[i] == owner)
+        const Queue::SubmissionCommandListIdentity& commandList = submitted.commandLists[i];
+        if(commandList.owner.get() == owner && commandList.nativeRecordingID == nativeRecordingID)
             return true;
     }
     return false;
 }
 
-static bool IsSubmittedOwnerInLookup(TrackedCommandBuffer* owner, const void* context){
+static bool IsSubmittedOwnerInLookup(
+    TrackedCommandBuffer* const owner,
+    const u64 nativeRecordingID,
+    const void* const context
+){
     const auto& submitted = *static_cast<const SubmittedOwnerLookupContext*>(context);
-    return owner && submitted.owners && submitted.owners->find(owner) != submitted.owners->end();
+    if(!owner || nativeRecordingID == 0u || !submitted.owners)
+        return false;
+
+    const auto it = submitted.owners->find(owner);
+    return it != submitted.owners->end() && it->second == nativeRecordingID;
 }
 
-static bool IsMatchingOwner(TrackedCommandBuffer* owner, const void* context){
-    return owner == static_cast<TrackedCommandBuffer*>(const_cast<void*>(context));
+static bool IsMatchingOwner(
+    TrackedCommandBuffer* const owner,
+    const u64 nativeRecordingID,
+    const void* const context
+){
+    const auto& expected = *static_cast<const OwnerIdentityContext*>(context);
+    return owner == expected.owner && nativeRecordingID == expected.nativeRecordingID;
 }
 
 
@@ -132,6 +156,7 @@ UploadManager::BufferChunkList* UploadManager::findActiveChunksLocked(
 UploadManager::BufferChunkList::iterator UploadManager::recycleActiveChunkLocked(BufferChunkList& activeChunks, BufferChunkList::iterator it, const u64 version, const bool resetAllocated){
     BufferChunkPtr& chunk = *it;
     chunk->owner = nullptr;
+    chunk->nativeRecordingID = 0u;
     if(resetAllocated)
         chunk->allocated = 0;
     chunk->version = version;
@@ -164,7 +189,7 @@ void UploadManager::recycleMatchingActiveChunks(
             it = activeChunks->erase(it);
             continue;
         }
-        if(!predicate(chunk->owner, predicateContext)){
+        if(!predicate(chunk->owner, chunk->nativeRecordingID, predicateContext)){
             ++it;
             continue;
         }
@@ -181,11 +206,12 @@ bool UploadManager::suballocateBuffer(
     u64* const pOffset,
     void** const pCpuVA,
     TrackedCommandBuffer* const owner,
+    const u64 nativeRecordingID,
     const GpuPhysicalQueueId queue,
     const u64 completedVersion,
     const u32 alignment
 ){
-    if(!pBuffer || !pOffset || !owner)
+    if(!pBuffer || !pOffset || !owner || nativeRecordingID == 0u)
         return false;
     if(!m_device.matchesPhysicalQueueIdentity(queue))
         return false;
@@ -213,7 +239,11 @@ bool UploadManager::suballocateBuffer(
     };
 
     for(auto it = activeChunks->rbegin(); it != activeChunks->rend(); ++it){
-        if((*it)->owner == owner && trySuballocateFromChunk(**it))
+        if(
+            (*it)->owner == owner
+            && (*it)->nativeRecordingID == nativeRecordingID
+            && trySuballocateFromChunk(**it)
+        )
             return true;
     }
 
@@ -228,6 +258,7 @@ bool UploadManager::suballocateBuffer(
             BufferChunkPtr& currentChunk = activeChunks->back();
             m_chunkPool.erase(it);
             currentChunk->owner = owner;
+            currentChunk->nativeRecordingID = nativeRecordingID;
             currentChunk->allocated = 0;
             currentChunk->version = completedVersion;
 
@@ -247,7 +278,14 @@ bool UploadManager::suballocateBuffer(
     if(!bufferHandle)
         return false;
 
-    activeChunks->push_back(MakeRefCount<BufferChunk>(m_device.m_context.threadPool, Move(bufferHandle), owner, queue, chunkSize));
+    activeChunks->push_back(MakeRefCount<BufferChunk>(
+        m_device.m_context.threadPool,
+        Move(bufferHandle),
+        owner,
+        nativeRecordingID,
+        queue,
+        chunkSize
+    ));
     BufferChunkPtr& currentChunk = activeChunks->back();
     currentChunk->version = completedVersion;
 
@@ -257,13 +295,13 @@ bool UploadManager::suballocateBuffer(
 void UploadManager::submitChunks(
     const GpuPhysicalQueueId queue,
     const u64 submittedVersion,
-    TrackedCommandBuffer* const* const submittedOwners,
-    const usize submittedOwnerCount
+    const Queue::SubmissionCommandListIdentity* const submittedCommandLists,
+    const usize submittedCommandListCount
 ){
-    if(!m_device.matchesPhysicalQueueIdentity(queue) || !submittedOwners || submittedOwnerCount == 0u)
+    if(!m_device.matchesPhysicalQueueIdentity(queue) || !submittedCommandLists || submittedCommandListCount == 0u)
         return;
 
-    if(submittedOwnerCount > VulkanDetail::s_SubmittedOwnerLookupThreshold){
+    if(submittedCommandListCount > VulkanDetail::s_SubmittedOwnerLookupThreshold){
         Alloc::ScratchArena scratchArena(VulkanArenaScope::s_SubmitChunksArena);
         VulkanDetail::SubmittedOwnerLookup submittedOwnerLookup(
             0,
@@ -271,10 +309,11 @@ void UploadManager::submitChunks(
             EqualTo<TrackedCommandBuffer*>(),
             scratchArena
         );
-        submittedOwnerLookup.reserve(submittedOwnerCount);
-        for(usize i = 0u; i < submittedOwnerCount; ++i){
-            if(submittedOwners[i])
-                submittedOwnerLookup.insert(submittedOwners[i]);
+        submittedOwnerLookup.reserve(submittedCommandListCount);
+        for(usize i = 0u; i < submittedCommandListCount; ++i){
+            const Queue::SubmissionCommandListIdentity& commandList = submittedCommandLists[i];
+            if(commandList.owner && commandList.nativeRecordingID != 0u)
+                submittedOwnerLookup[commandList.owner.get()] = commandList.nativeRecordingID;
         }
 
         const VulkanDetail::SubmittedOwnerLookupContext submittedLookupContext{ &submittedOwnerLookup };
@@ -288,19 +327,24 @@ void UploadManager::submitChunks(
         return;
     }
 
-    const VulkanDetail::SubmittedOwnersContext submittedContext{ submittedOwners, submittedOwnerCount };
+    const VulkanDetail::SubmittedOwnersContext submittedContext{
+        submittedCommandLists,
+        submittedCommandListCount,
+    };
     recycleMatchingActiveChunks(queue, submittedVersion, false, VulkanDetail::IsSubmittedOwner, &submittedContext);
 }
 
 void UploadManager::discardChunks(
     const GpuPhysicalQueueId queue,
     TrackedCommandBuffer* const owner,
+    const u64 nativeRecordingID,
     const u64 reusableVersion
 ){
-    if(!m_device.matchesPhysicalQueueIdentity(queue) || !owner)
+    if(!m_device.matchesPhysicalQueueIdentity(queue) || !owner || nativeRecordingID == 0u)
         return;
 
-    recycleMatchingActiveChunks(queue, reusableVersion, true, VulkanDetail::IsMatchingOwner, owner);
+    const VulkanDetail::OwnerIdentityContext ownerIdentity{ owner, nativeRecordingID };
+    recycleMatchingActiveChunks(queue, reusableVersion, true, VulkanDetail::IsMatchingOwner, &ownerIdentity);
 }
 
 

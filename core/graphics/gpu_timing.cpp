@@ -184,9 +184,10 @@ bool GpuTimingAccumulator::beginQuery(
     if(!commandList.beginTimerQuery(record.query.get()))
         return false;
 
-    record.physicalQueue = commandList.getDescription().physicalQueue;
+    const CommandListParameters commandListDescription = commandList.getResolvedDescription();
+    record.physicalQueue = commandListDescription.physicalQueue;
     record.acceptedSubmission = {};
-    record.queueClass = commandList.getDescription().queueType;
+    record.queueClass = commandListDescription.queueType;
     record.state = QueryState::Recording;
     record.publishSample = true;
     record.frameResetRecorded = false;
@@ -706,7 +707,8 @@ bool GpuTimingRecorder::beginScope(
     if(&commandList.getDevice() != &device)
         return false;
 
-    const GpuPhysicalQueueInfo* const queueInfo = device.getPhysicalQueueInfo(commandList.getDescription().physicalQueue);
+    const CommandListParameters commandListDescription = commandList.getResolvedDescription();
+    const GpuPhysicalQueueInfo* const queueInfo = device.getPhysicalQueueInfo(commandListDescription.physicalQueue);
     if(!queueInfo)
         return false;
     if(queueInfo->timestampValidBits == 0u)

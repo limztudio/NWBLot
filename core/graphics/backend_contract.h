@@ -303,6 +303,7 @@ concept CommandListApi = requires(
     commandList.getDevice();
     { commandList.getDevice() }->SameAs<Device&>;
     { commandList.getDescription() }->SameAs<const CommandListParameters&>;
+    { commandList.getResolvedDescription() }->SameAs<CommandListParameters>;
 
 };
 

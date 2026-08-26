@@ -312,7 +312,19 @@ void Queue::updateCommandBufferHighWater(Atomic<u64>& highWaterCount, const u64 
     }
 }
 
+u64 Queue::nextRecordingID()noexcept{
+    u64 recordingID = m_lastRecordingID.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+    while(recordingID == 0u)
+        recordingID = m_lastRecordingID.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+    return recordingID;
+}
+
 void Queue::registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
+    if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot register a command buffer with a foreign queue or context"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Command buffer registration owner mismatch"));
+        return;
+    }
     NWB_ASSERT(commandBuffer.m_arenaState == TrackedCommandBufferArenaState::Untracked);
     commandBuffer.m_arenaState = TrackedCommandBufferArenaState::Leased;
     const u64 currentCount = m_currentCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
@@ -344,6 +356,11 @@ void Queue::transitionCommandBufferState(
     TrackedCommandBuffer& commandBuffer,
     const TrackedCommandBufferArenaState::Enum nextState
 )noexcept{
+    if(&commandBuffer.m_queue != this || &commandBuffer.m_context != &m_context){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot transition a command buffer through a foreign queue"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Command buffer arena transition owner mismatch"));
+        return;
+    }
     const TrackedCommandBufferArenaState::Enum previousState = commandBuffer.m_arenaState;
     if(previousState == nextState)
         return;
@@ -506,7 +523,7 @@ TrackedCommandBufferPtr Queue::createCommandBuffer(
         return nullptr;
     }
 
-    cmdBuf->m_recordingID = m_lastRecordingID.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+    cmdBuf->m_recordingID = nextRecordingID();
     cmdBuf->m_recordingWorkerDomain = recordingWorkerDomain;
     cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
     registerCommandBuffer(*cmdBuf);
@@ -628,7 +645,7 @@ TrackedCommandBufferPtr Queue::getOrCreateDirectCommandBuffer(){
         transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Leased);
         m_commandBufferResetEventCount.fetch_add(1u, MemoryOrder::relaxed);
         m_directCommandBufferResetEventCount.fetch_add(1u, MemoryOrder::relaxed);
-        cmdBuf->m_recordingID = m_lastRecordingID.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+        cmdBuf->m_recordingID = nextRecordingID();
         cmdBuf->m_recordingWorkerDomain = 0u;
         cmdBuf->m_recordingWorkerIndex = 0u;
 
@@ -671,7 +688,7 @@ TrackedCommandBufferPtr Queue::getOrCreateWorkerCommandBuffer(
         transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Leased);
         m_commandBufferResetEventCount.fetch_add(1u, MemoryOrder::relaxed);
         arena->resetEventCount.fetch_add(1u, MemoryOrder::relaxed);
-        cmdBuf->m_recordingID = m_lastRecordingID.fetch_add(1u, MemoryOrder::relaxed) + 1u;
+        cmdBuf->m_recordingID = nextRecordingID();
         cmdBuf->m_recordingWorkerDomain = recordingWorkerDomain;
         cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
         return cmdBuf;
@@ -845,8 +862,10 @@ u64 Queue::submit(
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is still recording"), i);
                 return m_lastSubmittedID;
             }
-            if(!VulkanDetail::SubmissionCommandListMatchesExecutionQueue(cmdList->m_desc, m_physicalQueue, m_queueID)){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list physical queue does not match the execution queue"));
+            if(!cmdList->matchesSubmissionLease(m_physicalQueue, m_queueID)){
+                NWB_LOGGER_CRITICAL_WARNING(
+                    NWB_TEXT("Vulkan: Command-list lease provenance does not match execution queue")
+                );
                 return m_lastSubmittedID;
             }
             const SubmissionCommandListIdentity& expected = expectedCommandLists[i];
@@ -855,6 +874,13 @@ u64 Queue::submit(
                 || expected.owner.get() != cmdList->m_currentCmdBuf.get()
                 || expected.recordingLeaseSerial == 0u
                 || expected.recordingLeaseSerial != cmdList->m_recordingLeaseSerial
+                || expected.nativeRecordingID == 0u
+                || expected.nativeRecordingID != cmdList->m_nativeRecordingID
+                || expected.nativeRecordingID != cmdList->m_currentCmdBuf->m_recordingID
+                || expected.recordingWorkerDomain != cmdList->m_creationDesc.recordingWorkerDomain
+                || expected.recordingWorkerDomain != cmdList->m_currentCmdBuf->m_recordingWorkerDomain
+                || expected.recordingWorkerIndex != cmdList->m_creationDesc.recordingWorkerIndex
+                || expected.recordingWorkerIndex != cmdList->m_currentCmdBuf->m_recordingWorkerIndex
             ){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} replaced its validated native recording lease"), i);
                 return m_lastSubmittedID;
@@ -907,6 +933,7 @@ u64 Queue::submit(
 
             cmdList->m_currentCmdBuf->m_submissionID = m_lastSubmittedID + 1;
             trackedBuffers.push_back(Move(cmdList->m_currentCmdBuf));
+            cmdList->m_nativeRecordingID = 0u;
         }
     }
 
@@ -1109,6 +1136,11 @@ void Queue::clearPendingSemaphores(){
 void Queue::recycleCommandBuffer(TrackedCommandBufferPtr&& cmdBuf){
     if(!cmdBuf)
         return;
+    if(&cmdBuf->m_queue != this || &cmdBuf->m_context != &m_context){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot recycle a command buffer through a foreign queue"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Command buffer recycle owner mismatch"));
+        return;
+    }
 
     cmdBuf->clearTrackedReferences();
     transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Reusable);

@@ -327,6 +327,34 @@ void Device::destroySubmissionTimelineForTesting(Queue::SubmissionWait& wait){
     wait = {};
 }
 
+bool Device::armSubmissionLedgerFinalizeHookForTesting(void* const context, void (*invoke)(void*)){
+    if(!context || !invoke)
+        return false;
+
+    ScopedLock lock(m_submissionLedgerFinalizeHookForTestingMutex);
+    if(m_submissionLedgerFinalizeHookForTesting)
+        return false;
+
+    m_submissionLedgerFinalizeHookForTestingContext = context;
+    m_submissionLedgerFinalizeHookForTesting = invoke;
+    return true;
+}
+
+void Device::clearSubmissionLedgerFinalizeHookForTesting(){
+    ScopedLock lock(m_submissionLedgerFinalizeHookForTestingMutex);
+    m_submissionLedgerFinalizeHookForTestingContext = nullptr;
+    m_submissionLedgerFinalizeHookForTesting = nullptr;
+}
+
+bool Device::armRecordingIDWrapForTesting(const GpuPhysicalQueueId& queue){
+    Queue* const resolvedQueue = getQueue(queue);
+    if(!resolvedQueue)
+        return false;
+
+    resolvedQueue->m_lastRecordingID.store(Limit<u64>::s_Max - 1u, MemoryOrder::relaxed);
+    return true;
+}
+
 void Device::rejectNextSubmissionForTesting(const CommandQueue::Enum queue){
     const u32 index = static_cast<u32>(queue);
     if(index >= static_cast<u32>(CommandQueue::kCount))
@@ -383,6 +411,20 @@ bool Device::consumeSubmissionRejectionForTesting(const CommandQueue::Enum queue
             return true;
     }
     return false;
+}
+
+void Device::invokeSubmissionLedgerFinalizeHookForTesting(){
+    void* context = nullptr;
+    void (*invoke)(void*) = nullptr;
+    {
+        ScopedLock lock(m_submissionLedgerFinalizeHookForTestingMutex);
+        context = m_submissionLedgerFinalizeHookForTestingContext;
+        invoke = m_submissionLedgerFinalizeHookForTesting;
+        m_submissionLedgerFinalizeHookForTestingContext = nullptr;
+        m_submissionLedgerFinalizeHookForTesting = nullptr;
+    }
+    if(invoke)
+        invoke(context);
 }
 
 void Device::captureSubmissionWaitTokensForTesting(
@@ -469,10 +511,9 @@ u64 Device::executeCommandLists(
     }
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CommandListExecuteArena);
-    Vector<TrackedCommandBuffer*, Alloc::ScratchArena> submittedOwners{scratchArena};
     Vector<Queue::SubmissionCommandListIdentity, Alloc::ScratchArena> expectedCommandLists{scratchArena};
+    bool hasSubmittedOwner = false;
     if(pCommandLists && numCommandLists > 0){
-        submittedOwners.reserve(numCommandLists);
         expectedCommandLists.reserve(numCommandLists);
         for(usize i = 0; i < numCommandLists; ++i){
             CommandList* const commandList = pCommandLists[i];
@@ -480,9 +521,12 @@ u64 Device::executeCommandLists(
             expectedCommandLists.push_back(Queue::SubmissionCommandListIdentity{
                 .owner = owner,
                 .recordingLeaseSerial = commandList ? commandList->recordingLeaseSerial() : 0u,
+                .nativeRecordingID = commandList ? commandList->m_nativeRecordingID : 0u,
+                .recordingWorkerDomain = commandList ? commandList->m_creationDesc.recordingWorkerDomain : 0u,
+                .recordingWorkerIndex = commandList ? commandList->m_creationDesc.recordingWorkerIndex : 0u,
             });
             if(owner)
-                submittedOwners.push_back(owner.get());
+                hasSubmittedOwner = true;
         }
     }
 
@@ -495,32 +539,59 @@ u64 Device::executeCommandLists(
         0u,
         &submissionAccepted
     );
+#if !defined(NWB_FINAL)
+    invokeSubmissionLedgerFinalizeHookForTesting();
+#endif
     if(outCommandListsSubmitted)
-        *outCommandListsSubmitted = submissionAccepted && !submittedOwners.empty();
+        *outCommandListsSubmitted = submissionAccepted && hasSubmittedOwner;
 
-    if(!submittedOwners.empty()){
+    if(!expectedCommandLists.empty()){
         if(submissionAccepted){
-            m_uploadManager.submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
-            m_scratchManager.submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
+            m_uploadManager.submitChunks(
+                executionQueue,
+                submittedID,
+                expectedCommandLists.data(),
+                expectedCommandLists.size()
+            );
+            m_scratchManager.submitChunks(
+                executionQueue,
+                submittedID,
+                expectedCommandLists.data(),
+                expectedCommandLists.size()
+            );
         }
         else{
-            const auto ownerStillRecorded = [&](TrackedCommandBuffer* owner) -> bool {
-                if(!owner || !pCommandLists)
+            const auto ownerStillRecorded = [&](const Queue::SubmissionCommandListIdentity& expected) -> bool {
+                if(!expected.owner || expected.nativeRecordingID == 0u || !pCommandLists)
                     return false;
                 for(usize i = 0; i < numCommandLists; ++i){
                     auto* cmdList = pCommandLists[i];
-                    if(cmdList && cmdList->m_currentCmdBuf.get() == owner)
+                    if(
+                        cmdList
+                        && cmdList->m_currentCmdBuf.get() == expected.owner.get()
+                        && cmdList->m_nativeRecordingID == expected.nativeRecordingID
+                    )
                         return true;
                 }
                 return false;
             };
 
             const u64 reusableVersion = queueGetCompletedInstance(executionQueue);
-            for(TrackedCommandBuffer* owner : submittedOwners){
-                if(ownerStillRecorded(owner))
+            for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
+                if(ownerStillRecorded(expected))
                     continue;
-                m_uploadManager.discardChunks(executionQueue, owner, reusableVersion);
-                m_scratchManager.discardChunks(executionQueue, owner, reusableVersion);
+                m_uploadManager.discardChunks(
+                    executionQueue,
+                    expected.owner.get(),
+                    expected.nativeRecordingID,
+                    reusableVersion
+                );
+                m_scratchManager.discardChunks(
+                    executionQueue,
+                    expected.owner.get(),
+                    expected.nativeRecordingID,
+                    reusableVersion
+                );
             }
         }
     }
@@ -590,8 +661,10 @@ QueueSubmissionToken Device::executeCommandLists(
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} is still recording"), i);
             return {};
         }
-        if(!VulkanDetail::SubmissionCommandListMatchesExecutionQueue(commandList->m_desc, executionQueue, queue->m_queueID)){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} physical queue does not match the execution queue"), i);
+        if(!commandList->matchesSubmissionLease(executionQueue, queue->m_queueID)){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command list {} lease provenance does not match execution queue")
+                , i
+            );
             return {};
         }
     }
@@ -638,10 +711,8 @@ QueueSubmissionToken Device::executeCommandLists(
         }
     }
 
-    Vector<TrackedCommandBuffer*, Alloc::ScratchArena> submittedOwners{scratchArena};
     Vector<Queue::SubmissionCommandListIdentity, Alloc::ScratchArena> expectedCommandLists{scratchArena};
     if(pCommandLists && numCommandLists > 0u){
-        submittedOwners.reserve(numCommandLists);
         expectedCommandLists.reserve(numCommandLists);
         for(usize i = 0u; i < numCommandLists; ++i){
             CommandList* const commandList = pCommandLists[i];
@@ -649,8 +720,10 @@ QueueSubmissionToken Device::executeCommandLists(
             expectedCommandLists.push_back(Queue::SubmissionCommandListIdentity{
                 .owner = owner,
                 .recordingLeaseSerial = commandList->recordingLeaseSerial(),
+                .nativeRecordingID = commandList->m_nativeRecordingID,
+                .recordingWorkerDomain = commandList->m_creationDesc.recordingWorkerDomain,
+                .recordingWorkerIndex = commandList->m_creationDesc.recordingWorkerIndex,
             });
-            submittedOwners.push_back(owner.get());
         }
     }
 
@@ -701,30 +774,57 @@ QueueSubmissionToken Device::executeCommandLists(
         localSignals,
         localSignalCount
     );
+#if !defined(NWB_FINAL)
+    invokeSubmissionLedgerFinalizeHookForTesting();
+#endif
 
-    if(!submittedOwners.empty()){
+    if(!expectedCommandLists.empty()){
         if(submissionAccepted){
-            m_uploadManager.submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
-            m_scratchManager.submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
+            m_uploadManager.submitChunks(
+                executionQueue,
+                submittedID,
+                expectedCommandLists.data(),
+                expectedCommandLists.size()
+            );
+            m_scratchManager.submitChunks(
+                executionQueue,
+                submittedID,
+                expectedCommandLists.data(),
+                expectedCommandLists.size()
+            );
         }
         else{
-            const auto ownerStillRecorded = [&](TrackedCommandBuffer* owner) -> bool {
-                if(!owner || !pCommandLists)
+            const auto ownerStillRecorded = [&](const Queue::SubmissionCommandListIdentity& expected) -> bool {
+                if(!expected.owner || expected.nativeRecordingID == 0u || !pCommandLists)
                     return false;
                 for(usize i = 0u; i < numCommandLists; ++i){
                     CommandList* const cmdList = pCommandLists[i];
-                    if(cmdList && cmdList->m_currentCmdBuf.get() == owner)
+                    if(
+                        cmdList
+                        && cmdList->m_currentCmdBuf.get() == expected.owner.get()
+                        && cmdList->m_nativeRecordingID == expected.nativeRecordingID
+                    )
                         return true;
                 }
                 return false;
             };
 
             const u64 reusableVersion = queueGetCompletedInstance(executionQueue);
-            for(TrackedCommandBuffer* owner : submittedOwners){
-                if(ownerStillRecorded(owner))
+            for(const Queue::SubmissionCommandListIdentity& expected : expectedCommandLists){
+                if(ownerStillRecorded(expected))
                     continue;
-                m_uploadManager.discardChunks(executionQueue, owner, reusableVersion);
-                m_scratchManager.discardChunks(executionQueue, owner, reusableVersion);
+                m_uploadManager.discardChunks(
+                    executionQueue,
+                    expected.owner.get(),
+                    expected.nativeRecordingID,
+                    reusableVersion
+                );
+                m_scratchManager.discardChunks(
+                    executionQueue,
+                    expected.owner.get(),
+                    expected.nativeRecordingID,
+                    reusableVersion
+                );
             }
         }
     }

@@ -270,20 +270,18 @@ void CommandList::resetTimerQuery(TimerQuery* queryResource){
 }
 
 bool CommandList::canRecordTimerQueryHere()const{
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_desc.physicalQueue);
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     constexpr u8 s_KnownCapabilityBits = static_cast<u8>(GpuQueueCapability::Graphics)
         | static_cast<u8>(GpuQueueCapability::Compute)
         | static_cast<u8>(GpuQueueCapability::Transfer)
     ;
     return
         !m_commandRecordingFailed
-        && m_isRecording
-        && m_currentCmdBuf
-        && m_currentCmdBuf->m_cmdBuf != VK_NULL_HANDLE
-        && m_desc.physicalQueue.valid()
+        && matchesActiveNativeLeaseIdentity()
+        && m_creationDesc.physicalQueue.valid()
         && queueInfo
-        && queueInfo->id == m_desc.physicalQueue
-        && queueInfo->queueClass == m_desc.queueType
+        && queueInfo->id == m_creationDesc.physicalQueue
+        && queueInfo->queueClass == m_creationDesc.queueType
         && (static_cast<u8>(queueInfo->capabilities) & s_KnownCapabilityBits) != 0u
         && queueInfo->timestampValidBits > 0u
         && queueInfo->timestampValidBits <= 64u
@@ -294,7 +292,7 @@ bool CommandList::canResetTimerQueryHere()const{
     if(m_renderPassActive || !canRecordTimerQueryHere())
         return false;
 
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_desc.physicalQueue);
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     constexpr u8 s_ResetCapableBits = static_cast<u8>(GpuQueueCapability::Graphics)
         | static_cast<u8>(GpuQueueCapability::Compute)
     ;
@@ -319,7 +317,7 @@ bool CommandList::beginTimerQuery(TimerQuery* queryResource){
         return false;
     }
 
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_desc.physicalQueue);
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     if(!queueInfo || queueInfo->timestampValidBits == 0u || queueInfo->timestampValidBits > 64u){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to begin timer query on a queue without timestamp support"));
         invalidateCommandRecording();
@@ -351,7 +349,7 @@ bool CommandList::endTimerQuery(TimerQuery* queryResource){
     if(!validateCommandRecordingScope(NWB_TEXT("end timer query")))
         return false;
 
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_desc.physicalQueue);
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     if(
         !queueInfo
         || query->m_timestampQueue != queueInfo->id
@@ -396,7 +394,7 @@ void CommandList::beginMarker(const AStringView name){
             vkCmdSetCheckpointNV(m_currentCmdBuf->m_cmdBuf, reinterpret_cast<const void*>(gpuCrashMarker));
         if(useAmdBreadcrumb){
             const Device::AmdBreadcrumbWrite breadcrumb = m_device.reserveAmdBreadcrumb(
-                m_desc.physicalQueue,
+                m_creationDesc.physicalQueue,
                 gpuCrashMarker
             );
             if(breadcrumb.valid){
@@ -412,6 +410,8 @@ void CommandList::endMarker(){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring an unmatched command-list marker end"));
         return;
     }
+    if(!validateCommandRecordingScope(NWB_TEXT("end command-list marker")))
+        return;
 
     const bool useDebugUtils = m_context.extensions.EXT_debug_utils;
     const bool useGpuMarkers = m_device.isAnyGpuMarkerEnabled();

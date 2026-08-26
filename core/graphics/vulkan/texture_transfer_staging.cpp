@@ -249,7 +249,10 @@ bool CommandList::validateStagingTextureCopyResources(
     const VkImageUsageFlags requiredImageUsage,
     const tchar* const operationName
 )noexcept{
-    Queue* const expectedQueue = m_device.getQueue(m_desc.physicalQueue);
+    if(!validateCommandRecordingScope(operationName))
+        return false;
+
+    Queue* const expectedQueue = m_device.getQueue(m_creationDesc.physicalQueue);
     TrackedCommandBuffer* const activeCommandBuffer = m_currentCmdBuf.get();
     if(
         !m_isRecording
@@ -303,8 +306,8 @@ bool CommandList::validateStagingTextureCopyResources(
         return false;
     }
 
-    const GpuPhysicalQueueInfo* const exactQueue = m_device.getPhysicalQueueInfo(m_desc.physicalQueue);
-    if(!exactQueue || exactQueue->id != m_desc.physicalQueue){
+    const GpuPhysicalQueueInfo* const exactQueue = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
+    if(!exactQueue || exactQueue->id != m_creationDesc.physicalQueue){
         rejectCommandRecording(operationName, NWB_TEXT("command list has no valid exact physical queue"));
         return false;
     }

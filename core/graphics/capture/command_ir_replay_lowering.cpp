@@ -373,7 +373,7 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
             result.streamValidation
         );
     }
-    const CommandListParameters& commandListDescription = commandList.getDescription();
+    const CommandListParameters commandListDescription = commandList.getResolvedDescription();
     const GpuCommandIrReplayError::Enum commandListQueueError = GpuCommandIrDetail::ValidateReplayCommandListQueue(
         commandListDescription,
         packetPlan.queue,
@@ -493,7 +493,7 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
             result.streamValidation
         );
     }
-    const CommandListParameters& commandListDescription = commandList.getDescription();
+    const CommandListParameters commandListDescription = commandList.getResolvedDescription();
     const GpuCommandIrReplayError::Enum commandListQueueError = GpuCommandIrDetail::ValidateReplayCommandListQueue(
         commandListDescription,
         packetPlan.queue,

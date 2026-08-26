@@ -18,6 +18,7 @@ NWB_VULKAN_BEGIN
 
 CommandList::CommandList(Device& device, const CommandListParameters& params)
     : RefCounter<GraphicsResource>(device.m_context.threadPool)
+    , m_creationDesc(params)
     , m_desc(params)
     , m_stateTracker(device.m_context)
     , m_hostReadbackBarrierTracker(device.m_context.objectArena)
@@ -66,10 +67,12 @@ void CommandList::discardUnsubmittedUploadChunks(){
         return;
 
     TrackedCommandBuffer* owner = m_currentCmdBuf.get();
-    const u64 reusableVersion = m_device.queueGetCompletedInstance(m_desc.physicalQueue);
+    const u64 nativeRecordingID = m_nativeRecordingID;
+    const GpuPhysicalQueueId ownerQueue = owner->m_queue.m_physicalQueue;
+    const u64 reusableVersion = m_device.queueGetCompletedInstance(ownerQueue);
 
-    m_device.m_uploadManager.discardChunks(m_desc.physicalQueue, owner, reusableVersion);
-    m_device.m_scratchManager.discardChunks(m_desc.physicalQueue, owner, reusableVersion);
+    m_device.m_uploadManager.discardChunks(ownerQueue, owner, nativeRecordingID, reusableVersion);
+    m_device.m_scratchManager.discardChunks(ownerQueue, owner, nativeRecordingID, reusableVersion);
 }
 
 void CommandList::open(const CommandListResourceStateHandoff* initialStates){
@@ -79,15 +82,24 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
 
     NWB_ASSERT_MSG(m_markerDepth == 0u, NWB_TEXT("Vulkan: Command list reopened with unterminated marker scopes"));
     m_stateTracker.rollbackRecordingAttempt();
-    clearState();
+    clearStateInternal();
     m_hostReadbackBarrierTracker.clear();
     if(m_currentCmdBuf)
         m_currentCmdBuf->discardRetainedTextureStateCommits();
     discardUnsubmittedUploadChunks();
     m_currentCmdBuf.reset();
+    m_nativeRecordingID = 0u;
     m_isRecording = false;
     m_commandRecordingFailed = false;
     m_descriptorBuffersBound = false;
+
+    if(!descriptionMatchesCreation()){
+        rejectCommandRecording(
+            NWB_TEXT("open command list"),
+            NWB_TEXT("public description differs from resolved creation identity")
+        );
+        return;
+    }
 
     if(initialStates && !initialStates->valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot open command list from an invalid resource-state handoff"));
@@ -100,7 +112,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
         return;
     }
 
-    Queue* queue = m_device.getQueue(m_desc.physicalQueue);
+    Queue* queue = m_device.getQueue(m_creationDesc.physicalQueue);
     if(!queue){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Requested queue is not available"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Requested queue is not available"));
@@ -108,11 +120,24 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
         return;
     }
 
-    m_currentCmdBuf = queue->getOrCreateCommandBuffer(m_desc.recordingWorkerDomain, m_desc.recordingWorkerIndex);
+    m_currentCmdBuf = queue->getOrCreateCommandBuffer(
+        m_creationDesc.recordingWorkerDomain,
+        m_creationDesc.recordingWorkerIndex
+    );
     if(!m_currentCmdBuf || m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to acquire command buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to acquire command buffer"));
         m_currentCmdBuf = nullptr;
+        return;
+    }
+    m_nativeRecordingID = m_currentCmdBuf->m_recordingID;
+    if(!matchesNativeLeaseIdentity()){
+        rejectCommandRecording(
+            NWB_TEXT("open command list"),
+            NWB_TEXT("native lease does not match resolved creation identity")
+        );
+        m_currentCmdBuf.reset();
+        m_nativeRecordingID = 0u;
         return;
     }
 
@@ -125,6 +150,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin command buffer recording"));
         discardUnsubmittedUploadChunks();
         m_currentCmdBuf = nullptr;
+        m_nativeRecordingID = 0u;
         return;
     }
 
@@ -159,7 +185,12 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
 
     if(!m_isRecording){
         m_hostReadbackBarrierTracker.clear();
-        clearState();
+        clearStateInternal();
+        return;
+    }
+
+    if(!validateCommandRecordingScope(NWB_TEXT("close command list"))){
+        discardInvalidCommandBuffer();
         return;
     }
 
@@ -217,10 +248,16 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
         exportResourceStateHandoff(*finalStates);
 
     m_hostReadbackBarrierTracker.clear();
-    clearState();
+    clearStateInternal();
 }
 
 void CommandList::clearState(){
+    if(m_isRecording && !validateCommandRecordingScope(NWB_TEXT("clear command-list state")))
+        return;
+    clearStateInternal();
+}
+
+void CommandList::clearStateInternal(){
     NWB_ASSERT_MSG(m_markerDepth == 0u, NWB_TEXT("Vulkan: Command-list logical state cleared with unterminated marker scopes"));
     if(m_currentCmdBuf && m_renderPassActive)
         endActiveRenderPass();
@@ -247,6 +284,59 @@ void CommandList::clearState(){
     m_pendingBufferBarriers.clear();
     m_textureOwnershipReleaseDestinations.clear();
     m_bufferOwnershipReleaseDestinations.clear();
+}
+
+bool CommandList::descriptionMatchesCreation()const noexcept{
+    return
+        m_desc.queueType == m_creationDesc.queueType
+        && m_desc.physicalQueue == m_creationDesc.physicalQueue
+        && m_desc.renderLane == m_creationDesc.renderLane
+        && m_desc.resolveRenderLane == m_creationDesc.resolveRenderLane
+        && m_desc.recordingWorkerDomain == m_creationDesc.recordingWorkerDomain
+        && m_desc.recordingWorkerIndex == m_creationDesc.recordingWorkerIndex
+    ;
+}
+
+bool CommandList::matchesNativeLeaseIdentity()const noexcept{
+    if(
+        !descriptionMatchesCreation()
+        || !m_currentCmdBuf
+        || m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE
+        || m_currentCmdBuf->m_arenaState != TrackedCommandBufferArenaState::Leased
+        || &m_currentCmdBuf->m_context != &m_context
+        || m_recordingLeaseSerial == 0u
+        || m_nativeRecordingID == 0u
+        || m_currentCmdBuf->m_recordingID != m_nativeRecordingID
+        || m_currentCmdBuf->m_recordingWorkerDomain != m_creationDesc.recordingWorkerDomain
+        || m_currentCmdBuf->m_recordingWorkerIndex != m_creationDesc.recordingWorkerIndex
+    )
+        return false;
+
+    Queue* const expectedQueue = m_device.getQueue(m_creationDesc.physicalQueue);
+    return
+        expectedQueue
+        && expectedQueue->m_physicalQueue == m_creationDesc.physicalQueue
+        && expectedQueue->m_queueID == m_creationDesc.queueType
+        && &m_currentCmdBuf->m_queue == expectedQueue
+    ;
+}
+
+bool CommandList::matchesActiveNativeLeaseIdentity()const noexcept{
+    return m_isRecording && matchesNativeLeaseIdentity();
+}
+
+bool CommandList::matchesSubmissionLease(
+    const GpuPhysicalQueueId executionQueue,
+    const CommandQueue::Enum executionQueueClass
+)const noexcept{
+    return
+        !m_isRecording
+        && !m_commandRecordingFailed
+        && executionQueue.valid()
+        && executionQueue == m_creationDesc.physicalQueue
+        && executionQueueClass == m_creationDesc.queueType
+        && matchesNativeLeaseIdentity()
+    ;
 }
 
 bool CommandList::validateTrackedTexturesReadyForClose()noexcept{
@@ -425,17 +515,14 @@ bool CommandList::validateCommandRecordingScope(const tchar* const operationName
         | static_cast<u8>(GpuQueueCapability::Compute)
         | static_cast<u8>(GpuQueueCapability::Graphics)
     ;
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_desc.physicalQueue);
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     const CommandQueue::Enum exactQueueClass = queueInfo ? queueInfo->queueClass : CommandQueue::kCount;
     const u8 exactCapabilityBits = queueInfo ? static_cast<u8>(queueInfo->capabilities) : 0u;
-    const bool validRecordingScope = m_isRecording
-        && m_currentCmdBuf
-        && m_currentCmdBuf->m_cmdBuf != VK_NULL_HANDLE
-    ;
-    const bool validExactQueue = m_desc.physicalQueue.valid()
+    const bool validRecordingScope = matchesActiveNativeLeaseIdentity();
+    const bool validExactQueue = m_creationDesc.physicalQueue.valid()
         && queueInfo
-        && queueInfo->id == m_desc.physicalQueue
-        && queueInfo->queueClass == m_desc.queueType
+        && queueInfo->id == m_creationDesc.physicalQueue
+        && queueInfo->queueClass == m_creationDesc.queueType
         && (exactCapabilityBits & s_KnownCapabilityBits) != 0u
     ;
     if(validRecordingScope && validExactQueue)
@@ -444,9 +531,9 @@ bool CommandList::validateCommandRecordingScope(const tchar* const operationName
     NWB_LOGGER_CRITICAL_WARNING(
         NWB_TEXT("Vulkan: Cannot record {} on exact physical queue {}:{} (descriptor class {}, exact class {}, recording {})"),
         operationName ? operationName : NWB_TEXT("unnamed command"),
-        m_desc.physicalQueue.index,
-        m_desc.physicalQueue.deviceGeneration,
-        static_cast<u32>(m_desc.queueType),
+        m_creationDesc.physicalQueue.index,
+        m_creationDesc.physicalQueue.deviceGeneration,
+        static_cast<u32>(m_creationDesc.queueType),
         static_cast<u32>(exactQueueClass),
         validRecordingScope
     );
@@ -475,18 +562,18 @@ bool CommandList::recordAndValidateCommandCapability(
         | static_cast<u8>(GpuQueueCapability::Graphics)
     ;
     const u8 requiredBits = static_cast<u8>(requiredCapabilities);
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_desc.physicalQueue);
+    if(!validateCommandRecordingScope(operationName))
+        return false;
+
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     const u8 availableBits = queueInfo ? static_cast<u8>(queueInfo->capabilities) : 0u;
     const CommandQueue::Enum exactQueueClass = queueInfo ? queueInfo->queueClass : CommandQueue::kCount;
     const bool validRequiredMask = requiredBits != 0u && (requiredBits & ~s_KnownCapabilityBits) == 0u;
-    const bool validRecordingScope = m_isRecording
-        && m_currentCmdBuf
-        && m_currentCmdBuf->m_cmdBuf != VK_NULL_HANDLE
-    ;
-    const bool validExactQueue = m_desc.physicalQueue.valid()
+    const bool validRecordingScope = matchesActiveNativeLeaseIdentity();
+    const bool validExactQueue = m_creationDesc.physicalQueue.valid()
         && queueInfo
-        && queueInfo->id == m_desc.physicalQueue
-        && queueInfo->queueClass == m_desc.queueType
+        && queueInfo->id == m_creationDesc.physicalQueue
+        && queueInfo->queueClass == m_creationDesc.queueType
     ;
     const bool supported = validRequiredMask
         && validRecordingScope
@@ -499,9 +586,9 @@ bool CommandList::recordAndValidateCommandCapability(
     NWB_LOGGER_CRITICAL_WARNING(
         NWB_TEXT("Vulkan: Cannot record {} on exact physical queue {}:{} (descriptor class {}, exact class {}, required mask {}, available mask {}, recording {})"),
         operationName ? operationName : NWB_TEXT("unnamed command"),
-        m_desc.physicalQueue.index,
-        m_desc.physicalQueue.deviceGeneration,
-        static_cast<u32>(m_desc.queueType),
+        m_creationDesc.physicalQueue.index,
+        m_creationDesc.physicalQueue.deviceGeneration,
+        static_cast<u32>(m_creationDesc.queueType),
         static_cast<u32>(exactQueueClass),
         static_cast<u32>(requiredBits),
         static_cast<u32>(availableBits),
@@ -520,7 +607,7 @@ bool CommandList::recordAndValidateAnyCommandCapability(
         | static_cast<u8>(GpuQueueCapability::Graphics)
     ;
     const u8 alternativeBits = static_cast<u8>(alternativeCapabilities);
-    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_desc.physicalQueue);
+    const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     const u8 availableBits = queueInfo ? static_cast<u8>(queueInfo->capabilities) : 0u;
     u8 selectableBits = availableBits & alternativeBits;
 #if defined(NWB_DEBUG)
@@ -579,8 +666,9 @@ void CommandList::discardInvalidCommandBuffer()noexcept{
     m_currentCmdBuf->discardRetainedTextureStateCommits();
     discardUnsubmittedUploadChunks();
     m_currentCmdBuf.reset();
+    m_nativeRecordingID = 0u;
     m_hostReadbackBarrierTracker.clear();
-    clearState();
+    clearStateInternal();
 }
 
 #if defined(NWB_DEBUG)

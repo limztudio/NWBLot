@@ -250,7 +250,7 @@ bool GpuTimingFrameTransaction::begin(
         m_state = State::Inactive;
         return true;
     }
-    if(!device.supportsComparableGpuTimestamps(commandList.getDescription().physicalQueue)){
+    if(!device.supportsComparableGpuTimestamps(commandList.getResolvedDescription().physicalQueue)){
         m_state = State::Inactive;
         return true;
     }

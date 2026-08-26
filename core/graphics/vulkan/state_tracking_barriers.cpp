@@ -557,7 +557,7 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
     Vector<VkMemoryBarrier2, Alloc::ScratchArena> queueCompatibleMemoryBarriers{scratchArena};
     Vector<VkImageMemoryBarrier2, Alloc::ScratchArena> queueCompatibleImageBarriers{scratchArena};
     Vector<VkBufferMemoryBarrier2, Alloc::ScratchArena> queueCompatibleBufferBarriers{scratchArena};
-    const GpuPhysicalQueueInfo* const exactQueueInfo = m_device.getPhysicalQueueInfo(m_desc.physicalQueue);
+    const GpuPhysicalQueueInfo* const exactQueueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     const GpuQueueCapability::Mask exactQueueCapabilities = exactQueueInfo
         ? exactQueueInfo->capabilities
         : GpuQueueCapability::None

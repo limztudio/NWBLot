@@ -222,8 +222,11 @@ void CommandList::bindDescriptorBufferHeapNative(
     const GpuDescriptorHandle accelStructHandle,
     const tchar* const operationName
 ){
+    if(!validateCommandRecordingScope(operationName))
+        return;
+
     DescriptorBufferManager* const manager = m_context.descriptorBufferManager;
-    Queue* const expectedQueue = m_device.getQueue(m_desc.physicalQueue);
+    Queue* const expectedQueue = m_device.getQueue(m_creationDesc.physicalQueue);
     TrackedCommandBuffer* const activeCommandBuffer = m_currentCmdBuf.get();
     if(
         !m_isRecording
@@ -485,7 +488,10 @@ void CommandList::ensureDescriptorBuffersBound(
 
 void CommandList::bindDescriptorBufferEmptySet(const VkPipelineBindPoint bindPoint, const VkPipelineLayout pipelineLayout){
     constexpr const tchar* s_OperationName = NWB_TEXT("bind empty descriptor-buffer set");
-    Queue* const expectedQueue = m_device.getQueue(m_desc.physicalQueue);
+    if(!validateCommandRecordingScope(s_OperationName))
+        return;
+
+    Queue* const expectedQueue = m_device.getQueue(m_creationDesc.physicalQueue);
     TrackedCommandBuffer* const activeCommandBuffer = m_currentCmdBuf.get();
     if(
         !m_isRecording

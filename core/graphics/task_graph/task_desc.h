@@ -63,7 +63,9 @@ struct GpuTaskSchedulingHint{
     bool allowMergeAcrossConsumerFrontier = false;
     // A late recovery/finalization packet must wait for the latest accepted work on every other physical queue.
     // The compiler preserves it as a separate packet and the submitter derives those waits from the graph-owned
-    // submission transaction; callers do not assemble a queue-class token ladder.
+    // submission transaction; callers do not assemble a queue-class token ladder. It may use no resource or only
+    // HazardDomains, and may have outgoing task edges, but it cannot have an incoming task/external dependency,
+    // an external state source, or a concrete Texture/Buffer/AccelStruct use.
     bool joinsAcceptedQueueFrontier = false;
     // Recording stays serial unless every task in a packet explicitly opts in.  An opt-in record thunk may run on a
     // worker concurrently with other opt-in packets from the same compiler-derived ready frontier, so it must not

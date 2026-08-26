@@ -12766,6 +12766,318 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
     EXPECT_EQ(analysis.topologicalOrder()[2], first);
 }
 
+TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites){
+    TestArena testArena;
+    Graphics::GpuTaskSchedulingHint frontierScheduling;
+    frontierScheduling.forceSubmissionBoundary = true;
+    frontierScheduling.allowPacketMerge = false;
+    frontierScheduling.joinsAcceptedQueueFrontier = true;
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuTaskId predecessor = AddTask(
+            graph,
+            Name("tests/task_graph/frontier_explicit_predecessor"),
+            "Frontier Explicit Predecessor"
+        );
+        ASSERT_TRUE(predecessor.valid());
+        Graphics::GpuTaskDesc recoveryDesc;
+        recoveryDesc
+            .setIdentity(Name("tests/task_graph/frontier_explicit_recovery"))
+            .setMarkerLabel("Frontier Explicit Recovery")
+            .setScheduling(frontierScheduling)
+            .setDependencies(&predecessor, 1u)
+        ;
+        const Graphics::GpuTaskId recovery = graph.addTask(recoveryDesc);
+        ASSERT_TRUE(recovery.valid());
+
+        Graphics::GpuTaskGraph validGraph(testArena.arena);
+        ASSERT_TRUE(AddTask(
+            validGraph,
+            Name("tests/task_graph/frontier_stale_assignment_source"),
+            "Frontier Stale Assignment Source"
+        ).valid());
+        const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = &queue,
+            .queueCount = 1u,
+        };
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        ASSERT_TRUE(Compile(validGraph, analysis, topology, assignments, compiledGraph));
+        ASSERT_TRUE(assignments.valid());
+        ASSERT_TRUE(compiledGraph.validFor(validGraph));
+
+        EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_FALSE(analysis.valid());
+        EXPECT_FALSE(assignments.valid());
+        EXPECT_FALSE(compiledGraph.valid());
+        EXPECT_EQ(
+            analysis.diagnostic().status,
+            Graphics::GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask
+        );
+        EXPECT_EQ(analysis.diagnostic().task, recovery);
+        EXPECT_EQ(analysis.diagnostic().relatedTask, predecessor);
+        EXPECT_FALSE(analysis.diagnostic().resource.valid());
+    }
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
+            Graphics::GpuExternalCompletionDesc{}
+                .setIdentity(Name("tests/task_graph/frontier_external_completion"))
+                .setMarkerLabel("Frontier External Completion")
+        );
+        ASSERT_TRUE(completion.valid());
+        Graphics::GpuTaskDesc recoveryDesc;
+        recoveryDesc
+            .setIdentity(Name("tests/task_graph/frontier_external_recovery"))
+            .setMarkerLabel("Frontier External Recovery")
+            .setScheduling(frontierScheduling)
+            .setExternalDependencies(&completion, 1u)
+        ;
+        const Graphics::GpuTaskId recovery = graph.addTask(recoveryDesc);
+        ASSERT_TRUE(recovery.valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        EXPECT_FALSE(Analyze(graph, analysis));
+        EXPECT_EQ(
+            analysis.diagnostic().status,
+            Graphics::GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask
+        );
+        EXPECT_EQ(analysis.diagnostic().task, recovery);
+    }
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        Graphics::CommandListResourceStateHandoff externalStateSource(testArena.arena);
+        const Graphics::GpuTaskExternalStateSource externalStateSources[] = {
+            Graphics::GpuTaskExternalStateSource{ .states = &externalStateSource },
+        };
+        Graphics::GpuTaskDesc recoveryDesc;
+        recoveryDesc
+            .setIdentity(Name("tests/task_graph/frontier_external_state_recovery"))
+            .setMarkerLabel("Frontier External State Recovery")
+            .setScheduling(frontierScheduling)
+            .setExternalStateSources(externalStateSources, LengthOf(externalStateSources))
+        ;
+        const Graphics::GpuTaskId recovery = graph.addTask(recoveryDesc);
+        ASSERT_TRUE(recovery.valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        EXPECT_FALSE(Analyze(graph, analysis));
+        EXPECT_EQ(
+            analysis.diagnostic().status,
+            Graphics::GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask
+        );
+        EXPECT_EQ(analysis.diagnostic().task, recovery);
+    }
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId recoveryDomain = AddHazardDomain(
+            graph,
+            Name("tests/task_graph/frontier_inferred_domain"),
+            "Frontier Inferred Domain"
+        );
+        ASSERT_TRUE(recoveryDomain.valid());
+        const Graphics::GpuTaskResourceUse predecessorUses[] = {
+            Graphics::GpuTaskResourceUse{
+                .resource = recoveryDomain,
+                .range = {},
+                .requiredState = Graphics::ResourceStates::Common,
+                .access = Graphics::GpuTaskResourceAccess::Write,
+            },
+        };
+        const Graphics::GpuTaskResourceUse recoveryUses[] = {
+            Graphics::GpuTaskResourceUse{
+                .resource = recoveryDomain,
+                .range = {},
+                .requiredState = Graphics::ResourceStates::Common,
+                .access = Graphics::GpuTaskResourceAccess::Read,
+            },
+        };
+        const Graphics::GpuTaskId predecessor = AddTask(
+            graph,
+            Name("tests/task_graph/frontier_inferred_predecessor"),
+            "Frontier Inferred Predecessor",
+            nullptr,
+            0u,
+            predecessorUses,
+            LengthOf(predecessorUses)
+        );
+        ASSERT_TRUE(predecessor.valid());
+        Graphics::GpuTaskDesc recoveryDesc;
+        recoveryDesc
+            .setIdentity(Name("tests/task_graph/frontier_inferred_recovery"))
+            .setMarkerLabel("Frontier Inferred Recovery")
+            .setScheduling(frontierScheduling)
+            .setResourceUses(recoveryUses, LengthOf(recoveryUses))
+        ;
+        const Graphics::GpuTaskId recovery = graph.addTask(recoveryDesc);
+        ASSERT_TRUE(recovery.valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        EXPECT_FALSE(Analyze(graph, analysis));
+        EXPECT_EQ(
+            analysis.diagnostic().status,
+            Graphics::GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask
+        );
+        EXPECT_EQ(analysis.diagnostic().task, recovery);
+        EXPECT_EQ(analysis.diagnostic().relatedTask, predecessor);
+        EXPECT_EQ(analysis.diagnostic().resource, recoveryDomain);
+    }
+}
+
+TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithConcreteResources){
+    struct ResourceCase{
+        Graphics::GpuGraphResourceType::Enum type;
+        Name identity;
+        AStringView markerLabel;
+    };
+
+    TestArena testArena;
+    const ResourceCase resourceCases[] = {
+        ResourceCase{
+            .type = Graphics::GpuGraphResourceType::Texture,
+            .identity = Name("tests/task_graph/frontier_texture"),
+            .markerLabel = "Frontier Texture",
+        },
+        ResourceCase{
+            .type = Graphics::GpuGraphResourceType::Buffer,
+            .identity = Name("tests/task_graph/frontier_buffer"),
+            .markerLabel = "Frontier Buffer",
+        },
+        ResourceCase{
+            .type = Graphics::GpuGraphResourceType::AccelStruct,
+            .identity = Name("tests/task_graph/frontier_accel_struct"),
+            .markerLabel = "Frontier Accel Struct",
+        },
+    };
+    Graphics::GpuTaskSchedulingHint frontierScheduling;
+    frontierScheduling.forceSubmissionBoundary = true;
+    frontierScheduling.allowPacketMerge = false;
+    frontierScheduling.joinsAcceptedQueueFrontier = true;
+
+    for(const ResourceCase& resourceCase : resourceCases){
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId resource = graph.importResource(
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(resourceCase.identity)
+                .setMarkerLabel(resourceCase.markerLabel)
+                .setType(resourceCase.type)
+                .setInitialState(Graphics::ResourceStates::Common)
+        );
+        ASSERT_TRUE(resource.valid());
+        const Graphics::GpuTaskResourceUse recoveryUses[] = {
+            Graphics::GpuTaskResourceUse{
+                .resource = resource,
+                .range = {},
+                .requiredState = Graphics::ResourceStates::Common,
+                .access = Graphics::GpuTaskResourceAccess::Read,
+            },
+        };
+        Graphics::GpuTaskDesc recoveryDesc;
+        recoveryDesc
+            .setIdentity(Name("tests/task_graph/frontier_concrete_recovery"))
+            .setMarkerLabel("Frontier Concrete Recovery")
+            .setScheduling(frontierScheduling)
+            .setResourceUses(recoveryUses, LengthOf(recoveryUses))
+        ;
+        const Graphics::GpuTaskId recovery = graph.addTask(recoveryDesc);
+        ASSERT_TRUE(recovery.valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        EXPECT_FALSE(Analyze(graph, analysis));
+        EXPECT_EQ(
+            analysis.diagnostic().status,
+            Graphics::GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask
+        );
+        EXPECT_EQ(analysis.diagnostic().task, recovery);
+        EXPECT_EQ(analysis.diagnostic().resource, resource);
+    }
+}
+
+TEST(GpuTaskGraph, CompilesOnlyIndependentAcceptedQueueFrontierTasks){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId recoveryDomain = AddHazardDomain(
+        graph,
+        Name("tests/task_graph/independent_frontier_domain"),
+        "Independent Frontier Domain"
+    );
+    ASSERT_TRUE(recoveryDomain.valid());
+    Graphics::GpuTaskSchedulingHint frontierScheduling;
+    frontierScheduling.forceSubmissionBoundary = true;
+    frontierScheduling.allowPacketMerge = false;
+    frontierScheduling.joinsAcceptedQueueFrontier = true;
+
+    Graphics::GpuTaskDesc noUseRecoveryDesc;
+    noUseRecoveryDesc
+        .setIdentity(Name("tests/task_graph/independent_frontier_no_use"))
+        .setMarkerLabel("Independent Frontier No Use")
+        .setScheduling(frontierScheduling)
+    ;
+    const Graphics::GpuTaskId noUseRecovery = graph.addTask(noUseRecoveryDesc);
+    ASSERT_TRUE(noUseRecovery.valid());
+
+    const Graphics::GpuTaskResourceUse recoveryUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = recoveryDomain,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Common,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc domainRecoveryDesc;
+    domainRecoveryDesc
+        .setIdentity(Name("tests/task_graph/independent_frontier_domain_use"))
+        .setMarkerLabel("Independent Frontier Domain Use")
+        .setScheduling(frontierScheduling)
+        .setResourceUses(recoveryUses, LengthOf(recoveryUses))
+    ;
+    const Graphics::GpuTaskId domainRecovery = graph.addTask(domainRecoveryDesc);
+    ASSERT_TRUE(domainRecovery.valid());
+
+    const Graphics::GpuTaskId consumerDependencies[] = { domainRecovery };
+    Graphics::GpuTaskDesc consumerDesc;
+    consumerDesc
+        .setIdentity(Name("tests/task_graph/independent_frontier_consumer"))
+        .setMarkerLabel("Independent Frontier Consumer")
+        .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
+    ;
+    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    ASSERT_TRUE(consumer.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(compiledGraph.validFor(graph));
+    ASSERT_NE(FindEdge(analysis, domainRecovery, consumer), nullptr);
+
+    const Graphics::GpuTaskId recoveryTasks[] = { noUseRecovery, domainRecovery };
+    for(const Graphics::GpuTaskId recovery : recoveryTasks){
+        const Graphics::GpuCompiledTask* const compiledTask = compiledGraph.findTask(recovery);
+        ASSERT_NE(compiledTask, nullptr);
+        ASSERT_TRUE(compiledTask->packet.valid());
+        const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(compiledTask->packet);
+        EXPECT_EQ(packet.taskCount, 1u);
+        EXPECT_EQ(packet.dependencyCount, 0u);
+        EXPECT_EQ(packet.externalDependencyCount, 0u);
+        EXPECT_TRUE(packet.joinsAcceptedQueueFrontier);
+        EXPECT_EQ(compiledTask->prologueStateSeedCount, 0u);
+        EXPECT_EQ(compiledTask->prologueBarrierCount, 0u);
+        EXPECT_EQ(compiledTask->epilogueBarrierCount, 0u);
+    }
+}
+
 TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

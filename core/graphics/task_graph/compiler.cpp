@@ -29,6 +29,7 @@ bool GpuTaskGraphCompiler::compile(
     using namespace GpuTaskGraphCompilerDetail;
 
     outCompiledGraph.reset();
+    outAssignments.reset();
     const Timer compileBegin = TimerNow();
     const Timer analysisBegin = compileBegin;
     if(!analyze(graph, outAnalysis, scratchArena))
@@ -303,6 +304,93 @@ bool GpuTaskGraphCompiler::compile(
         return false;
     }
     const f64 packetDependencyPlanningSeconds = DurationInSeconds<f64>(TimerNow(), packetDependencyPlanningBegin);
+
+    const auto failAcceptedQueueFrontierPlan = [&](
+        const GpuTaskId task,
+        const GpuTaskId relatedTask = {},
+        const GpuGraphResourceId resource = {}
+    ){
+        outCompiledGraph.reset();
+        outAssignments.reset();
+        outAnalysis.m_diagnostic = GpuTaskGraphAnalysisDiagnostic{
+            .status = GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask,
+            .task = task,
+            .relatedTask = relatedTask,
+            .resource = resource,
+        };
+        outAnalysis.m_valid = false;
+        return false;
+    };
+    for(const GpuCompiledTask& compiledTask : outCompiledGraph.m_tasks){
+        const GpuTaskGraphTaskView task = graph.taskAt(compiledTask.task.index);
+        if(!task.scheduling.joinsAcceptedQueueFrontier)
+            continue;
+
+        if(
+            !compiledTask.packet.valid()
+            || compiledTask.packet.generation != outCompiledGraph.m_planGeneration
+            || compiledTask.packet.index >= outCompiledGraph.m_packets.size()
+        )
+            return failAcceptedQueueFrontierPlan(compiledTask.task);
+
+        const GpuSubmissionPacket& packet = outCompiledGraph.m_packets[compiledTask.packet.index];
+        const bool invalidRecoveryPlan = packet.taskCount != 1u
+            || packet.dependencyCount != 0u
+            || packet.externalDependencyCount != 0u
+            || !packet.joinsAcceptedQueueFrontier
+            || compiledTask.prologueStateSeedCount != 0u
+            || compiledTask.prologueBarrierCount != 0u
+            || compiledTask.epilogueBarrierCount != 0u
+        ;
+        if(!invalidRecoveryPlan)
+            continue;
+
+        GpuTaskId relatedTask;
+        GpuGraphResourceId resource;
+        if(
+            packet.taskCount > 1u
+            && packet.taskOffset <= outCompiledGraph.m_packetTasks.size()
+            && packet.taskCount <= outCompiledGraph.m_packetTasks.size() - packet.taskOffset
+        ){
+            for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
+                const GpuTaskId packetTask = outCompiledGraph.m_packetTasks[packet.taskOffset + taskIndex];
+                if(packetTask != compiledTask.task){
+                    relatedTask = packetTask;
+                    break;
+                }
+            }
+        }
+        if(
+            packet.dependencyCount != 0u
+            && packet.dependencyOffset < outCompiledGraph.m_packetDependencies.size()
+        ){
+            const GpuSubmissionPacketId producerPacket = outCompiledGraph.m_packetDependencies[
+                packet.dependencyOffset
+            ].producer;
+            if(producerPacket.index < outCompiledGraph.m_packets.size()){
+                const GpuSubmissionPacket& producer = outCompiledGraph.m_packets[producerPacket.index];
+                if(producer.taskCount != 0u && producer.taskOffset < outCompiledGraph.m_packetTasks.size())
+                    relatedTask = outCompiledGraph.m_packetTasks[producer.taskOffset];
+            }
+        }
+        if(
+            compiledTask.prologueStateSeedCount != 0u
+            && compiledTask.prologueStateSeedOffset < outCompiledGraph.m_prologueStateSeeds.size()
+        )
+            resource = outCompiledGraph.m_prologueStateSeeds[compiledTask.prologueStateSeedOffset].resource;
+        else if(
+            compiledTask.prologueBarrierCount != 0u
+            && compiledTask.prologueBarrierOffset < outCompiledGraph.m_prologueBarriers.size()
+        )
+            resource = outCompiledGraph.m_prologueBarriers[compiledTask.prologueBarrierOffset].resource;
+        else if(
+            compiledTask.epilogueBarrierCount != 0u
+            && compiledTask.epilogueBarrierOffset < outCompiledGraph.m_epilogueBarriers.size()
+        )
+            resource = outCompiledGraph.m_epilogueBarriers[compiledTask.epilogueBarrierOffset].resource;
+
+        return failAcceptedQueueFrontierPlan(compiledTask.task, relatedTask, resource);
+    }
 
     GpuTaskGraphCompileStatistics& statistics = outCompiledGraph.m_compileStatistics;
     statistics.graphGeneration = outCompiledGraph.m_generation;

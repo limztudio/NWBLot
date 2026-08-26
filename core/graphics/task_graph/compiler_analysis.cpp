@@ -558,6 +558,42 @@ bool GpuTaskGraphCompiler::analyze(
         + DurationInSeconds<f64>(TimerNow(), finalTopologyBegin)
     ;
 
+    const Timer acceptedQueueFrontierValidationBegin = TimerNow();
+    for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
+        const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
+        if(!task.scheduling.joinsAcceptedQueueFrontier)
+            continue;
+
+        // Recovery joins the latest accepted queue tokens at submission time. It must not inherit a graph
+        // prerequisite whose rejection could make recovery unavailable. Scheduling edges are a reduced subset of
+        // these raw edges, so rejecting every raw incoming edge also covers inferred HazardDomain prerequisites.
+        for(const GpuTaskDependencyEdge& edge : outAnalysis.m_edges){
+            if(edge.consumer == task.id){
+                return fail(
+                    GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask,
+                    task.id,
+                    edge.producer,
+                    edge.resource
+                );
+            }
+        }
+        if(task.externalDependencyCount != 0u || task.externalStateSourceCount != 0u)
+            return fail(GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask, task.id);
+
+        for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
+            const GpuTaskResourceUse& use = task.resourceUses[useIndex];
+            if(graph.resourceAt(use.resource.index).type != GpuGraphResourceType::HazardDomain){
+                return fail(
+                    GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask,
+                    task.id,
+                    {},
+                    use.resource
+                );
+            }
+        }
+    }
+    validationSeconds += DurationInSeconds<f64>(TimerNow(), acceptedQueueFrontierValidationBegin);
+
     const Timer presentationValidationBegin = TimerNow();
     if(const GpuPresentEndpoint* const endpoint = graph.presentEndpoint()){
         if(!graph.validTask(endpoint->producer) || !graph.validResource(endpoint->backBuffer))

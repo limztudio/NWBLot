@@ -31,6 +31,7 @@ namespace GpuTaskGraphAnalysisStatus{
         InvalidTaskDependency,
         InvalidExternalCompletionDependency,
         InvalidResourceUse,
+        InvalidAcceptedQueueFrontierTask,
         Cycle,
         InvalidPresentationEndpoint,
     };

@@ -7797,6 +7797,151 @@ TEST(GpuTaskGraph, DeduplicatesExplicitAndInferredEdgesAndProducesStableOrder){
     EXPECT_EQ(analysis.topologicalOrder()[2], second);
 }
 
+TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId handoff = AddHazardDomain(
+        graph,
+        Name("tests/task_graph/transitive_reduction_handoff"),
+        "Transitive Reduction Handoff"
+    );
+    ASSERT_TRUE(handoff.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    const Name mergeDomain("tests/task_graph/transitive_reduction_merge_domain");
+
+    Graphics::GpuTaskSchedulingHint firstScheduling;
+    firstScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    firstScheduling.frontierScoredMergeDomain = mergeDomain;
+    const Graphics::GpuTaskResourceUse firstUse{
+        .resource = handoff,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::UnorderedAccess,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    Graphics::GpuTaskDesc firstDesc;
+    firstDesc
+        .setIdentity(Name("tests/task_graph/transitive_reduction_first"))
+        .setMarkerLabel("Transitive Reduction First")
+        .setQueue(graphicsRequest)
+        .setScheduling(firstScheduling)
+        .setResourceUses(&firstUse, 1u)
+    ;
+    const Graphics::GpuTaskId first = graph.addTask(firstDesc);
+    ASSERT_TRUE(first.valid());
+
+    Graphics::GpuTaskSchedulingHint secondScheduling;
+    secondScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    secondScheduling.frontierScoredMergeDomain = mergeDomain;
+    Graphics::GpuTaskDesc secondDesc;
+    secondDesc
+        .setIdentity(Name("tests/task_graph/transitive_reduction_second"))
+        .setMarkerLabel("Transitive Reduction Second")
+        .setQueue(graphicsRequest)
+        .setScheduling(secondScheduling)
+        .setDependencies(&first, 1u)
+    ;
+    const Graphics::GpuTaskId second = graph.addTask(secondDesc);
+    ASSERT_TRUE(second.valid());
+
+    const Graphics::GpuTaskResourceUse thirdUse{
+        .resource = handoff,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::ShaderResource,
+        .access = Graphics::GpuTaskResourceAccess::Read,
+    };
+    Graphics::GpuTaskDesc thirdDesc;
+    thirdDesc
+        .setIdentity(Name("tests/task_graph/transitive_reduction_third"))
+        .setMarkerLabel("Transitive Reduction Third")
+        .setQueue(computeRequest)
+        .setDependencies(&second, 1u)
+        .setResourceUses(&thirdUse, 1u)
+    ;
+    const Graphics::GpuTaskId third = graph.addTask(thirdDesc);
+    ASSERT_TRUE(third.valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    ASSERT_EQ(analysis.edges().size(), 3u);
+    EXPECT_EQ(analysis.edges()[0u].producer, first);
+    EXPECT_EQ(analysis.edges()[0u].consumer, second);
+    EXPECT_EQ(analysis.edges()[1u].producer, second);
+    EXPECT_EQ(analysis.edges()[1u].consumer, third);
+    EXPECT_EQ(analysis.edges()[2u].producer, first);
+    EXPECT_EQ(analysis.edges()[2u].consumer, third);
+    ASSERT_EQ(analysis.schedulingEdges().size(), 2u);
+    EXPECT_EQ(analysis.schedulingEdges()[0u].producer, first);
+    EXPECT_EQ(analysis.schedulingEdges()[0u].consumer, second);
+    EXPECT_EQ(analysis.schedulingEdges()[1u].producer, second);
+    EXPECT_EQ(analysis.schedulingEdges()[1u].consumer, third);
+    ASSERT_EQ(analysis.inferredEdges().size(), 1u);
+    EXPECT_TRUE(HasInferredHazard(
+        analysis,
+        first,
+        third,
+        handoff,
+        Graphics::GpuTaskHazardType::ReadAfterWrite
+    ));
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis separateAnalysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments separateAssignments(testArena.arena);
+    Graphics::GpuCompiledGraph separateGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, separateAnalysis, topology, separateAssignments, separateGraph));
+    ASSERT_EQ(separateGraph.packetCount(), 3u);
+    const Graphics::GpuSubmissionPacketId separateFirstPacket = separateGraph.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId separateSecondPacket = separateGraph.packetForTask(second);
+    const Graphics::GpuSubmissionPacketId separateThirdPacket = separateGraph.packetForTask(third);
+    ASSERT_TRUE(separateFirstPacket.valid());
+    ASSERT_TRUE(separateSecondPacket.valid());
+    ASSERT_TRUE(separateThirdPacket.valid());
+    EXPECT_EQ(separateGraph.packet(separateFirstPacket).dependencyCount, 0u);
+    ASSERT_EQ(separateGraph.packet(separateSecondPacket).dependencyCount, 1u);
+    EXPECT_EQ(separateGraph.packetDependencies(separateSecondPacket)[0u].producer, separateFirstPacket);
+    ASSERT_EQ(separateGraph.packet(separateThirdPacket).dependencyCount, 1u);
+    EXPECT_EQ(separateGraph.packetDependencies(separateThirdPacket)[0u].producer, separateSecondPacket);
+
+    Graphics::GpuTaskGraphCompileOptions scoredOptions;
+    scoredOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierScored;
+    Graphics::GpuTaskGraphAnalysis scoredAnalysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments scoredAssignments(testArena.arena);
+    Graphics::GpuCompiledGraph scoredGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, scoredAnalysis, topology, scoredAssignments, scoredGraph, scoredOptions));
+    ASSERT_EQ(scoredGraph.packetCount(), 2u);
+    const Graphics::GpuSubmissionPacketId scoredFirstPacket = scoredGraph.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId scoredSecondPacket = scoredGraph.packetForTask(second);
+    const Graphics::GpuSubmissionPacketId scoredThirdPacket = scoredGraph.packetForTask(third);
+    ASSERT_TRUE(scoredFirstPacket.valid());
+    ASSERT_TRUE(scoredThirdPacket.valid());
+    EXPECT_EQ(scoredFirstPacket, scoredSecondPacket);
+    EXPECT_NE(scoredFirstPacket, scoredThirdPacket);
+    EXPECT_EQ(
+        scoredGraph.packetizationDecisionForTask(second),
+        Graphics::GpuTaskPacketizationDecision::MergedFrontierScored
+    );
+    ASSERT_EQ(scoredGraph.packet(scoredThirdPacket).dependencyCount, 1u);
+    EXPECT_EQ(scoredGraph.packetDependencies(scoredThirdPacket)[0u].producer, scoredFirstPacket);
+}
+
 TEST(GpuTaskGraph, TracksOnlyTheNearestWholeResourceWriters){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -8333,6 +8478,153 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     ASSERT_NE(assignment, nullptr);
     EXPECT_EQ(assignment->queue, auxiliaryGraphicsQueue.id);
     EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+}
+
+
+TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId handoff = AddHazardDomain(
+        graph,
+        Name("tests/task_graph/reduced_timing_score_handoff"),
+        "Reduced Timing Score Handoff"
+    );
+    ASSERT_TRUE(handoff.valid());
+
+    Graphics::GpuQueueRequest graphicsRequest;
+    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+    graphicsRequest.allowFallback = false;
+    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.allowSameClassQueueRouting = true;
+    scheduling.allowTimingFeedbackRouting = true;
+
+    const Name firstIdentity("tests/task_graph/reduced_timing_score_first");
+    const Graphics::GpuTaskResourceUse firstUse{
+        .resource = handoff,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::UnorderedAccess,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    Graphics::GpuTaskDesc firstDesc;
+    firstDesc
+        .setIdentity(firstIdentity)
+        .setMarkerLabel("Reduced Timing Score First")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+        .setResourceUses(&firstUse, 1u)
+    ;
+    const Graphics::GpuTaskId first = graph.addTask(firstDesc);
+    ASSERT_TRUE(first.valid());
+
+    const Name secondIdentity("tests/task_graph/reduced_timing_score_second");
+    Graphics::GpuTaskDesc secondDesc;
+    secondDesc
+        .setIdentity(secondIdentity)
+        .setMarkerLabel("Reduced Timing Score Second")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+        .setDependencies(&first, 1u)
+    ;
+    const Graphics::GpuTaskId second = graph.addTask(secondDesc);
+    ASSERT_TRUE(second.valid());
+
+    const Name thirdIdentity("tests/task_graph/reduced_timing_score_third");
+    const Graphics::GpuTaskResourceUse thirdUse{
+        .resource = handoff,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::ShaderResource,
+        .access = Graphics::GpuTaskResourceAccess::Read,
+    };
+    Graphics::GpuTaskDesc thirdDesc;
+    thirdDesc
+        .setIdentity(thirdIdentity)
+        .setMarkerLabel("Reduced Timing Score Third")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+        .setDependencies(&second, 1u)
+        .setResourceUses(&thirdUse, 1u)
+    ;
+    const Graphics::GpuTaskId third = graph.addTask(thirdDesc);
+    ASSERT_TRUE(third.valid());
+
+    Graphics::GpuPhysicalQueueInfo firstAuxiliaryQueue = GraphicsQueue(1u);
+    firstAuxiliaryQueue.queueIndex = 1u;
+    Graphics::GpuPhysicalQueueInfo secondAuxiliaryQueue = GraphicsQueue(2u);
+    secondAuxiliaryQueue.queueIndex = 2u;
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        firstAuxiliaryQueue,
+        secondAuxiliaryQueue,
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+
+    const Graphics::GpuTaskTimingKey thirdTimingKey{
+        .task = thirdIdentity,
+        .queue = Graphics::CommandQueue::Graphics,
+    };
+    Graphics::GpuTaskTimingHistoryStore timingHistory(testArena.arena);
+    for(u64 frameIndex = 1u; frameIndex <= 4u; ++frameIndex)
+        ASSERT_TRUE(timingHistory.recordSample(thirdTimingKey, firstAuxiliaryQueue.id, 0.001, frameIndex));
+    for(u64 frameIndex = 5u; frameIndex <= 8u; ++frameIndex)
+        ASSERT_TRUE(timingHistory.recordSample(thirdTimingKey, secondAuxiliaryQueue.id, 0.001, frameIndex));
+    for(u64 frameIndex = 9u; frameIndex <= 12u; ++frameIndex)
+        ASSERT_TRUE(timingHistory.recordSample(thirdTimingKey, queues[0u].id, 0.010, frameIndex));
+    Graphics::GpuTaskTimingHistorySnapshot timingSnapshot(testArena.arena);
+    timingHistory.snapshot(timingSnapshot);
+    ASSERT_TRUE(timingSnapshot.valid());
+
+    Graphics::GpuTaskTimingFeedbackPolicy timingPolicy;
+    timingPolicy.enabled = true;
+    timingPolicy.minimumSampleCount = 4u;
+    timingPolicy.calibrationIntervalFrames = 0u;
+    timingPolicy.minimumAbsoluteBenefitSeconds = 0.001;
+    timingPolicy.minimumRelativeBenefit = 0.1;
+    timingPolicy.minimumFramesBetweenSwitches = 0u;
+    const Graphics::GpuTaskTimingQueueOverride timingOverrides[] = {
+        Graphics::GpuTaskTimingQueueOverride{
+            .key = Graphics::GpuTaskTimingKey{
+                .task = firstIdentity,
+                .queue = Graphics::CommandQueue::Graphics,
+            },
+            .queue = firstAuxiliaryQueue.id,
+        },
+        Graphics::GpuTaskTimingQueueOverride{
+            .key = Graphics::GpuTaskTimingKey{
+                .task = secondIdentity,
+                .queue = Graphics::CommandQueue::Graphics,
+            },
+            .queue = secondAuxiliaryQueue.id,
+        },
+    };
+    Graphics::GpuTaskGraphQueueAssignmentOptions options;
+    options.timingHistory = &timingSnapshot;
+    options.timingFeedbackPolicy = &timingPolicy;
+    options.timingQueueOverrides = timingOverrides;
+    options.timingQueueOverrideCount = LengthOf(timingOverrides);
+    options.timingFrameIndex = 12u;
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    ASSERT_EQ(analysis.edges().size(), 3u);
+    ASSERT_EQ(analysis.schedulingEdges().size(), 2u);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    ASSERT_TRUE(Assign(graph, analysis, topology, assignments, options));
+    const Graphics::GpuTaskQueueAssignment* const firstAssignment = assignments.find(first);
+    const Graphics::GpuTaskQueueAssignment* const secondAssignment = assignments.find(second);
+    const Graphics::GpuTaskQueueAssignment* const thirdAssignment = assignments.find(third);
+    ASSERT_NE(firstAssignment, nullptr);
+    ASSERT_NE(secondAssignment, nullptr);
+    ASSERT_NE(thirdAssignment, nullptr);
+    EXPECT_EQ(firstAssignment->queue, firstAuxiliaryQueue.id);
+    EXPECT_EQ(secondAssignment->queue, secondAuxiliaryQueue.id);
+    // Equal timing and queue load leave incoming crossings decisive. Only the reduced B -> C edge participates, so
+    // C stays with B instead of tying on the redundant A -> C diagnostic and falling back to the lower queue ID.
+    EXPECT_EQ(thirdAssignment->queue, secondAuxiliaryQueue.id);
 }
 
 
@@ -24140,20 +24432,14 @@ TEST(GpuTaskGraph, OrdersAsyncAvboitExtinctionComputeEmulationPacketBetweenDepth
     EXPECT_EQ(extinctionPacketTasks[0u], producerTask);
     EXPECT_EQ(extinctionPacketTasks[1u], extinctionTask);
     ASSERT_EQ(extinctionPacketPlan.dependencyCount, 1u);
-    // Integration consumes the Extinction output and the Depth-Warp control buffer. The latter is only read by
-    // Extinction, so the compiler retains the original Compute producer as a second packet dependency.
-    ASSERT_EQ(integrationPacketPlan.dependencyCount, 2u);
     EXPECT_EQ(compiledGraph.packetDependencies(extinctionPacket)[0u].producer, depthWarpPacket);
+    // The raw Depth-Warp -> Integration resource edge remains diagnostic, while the scheduling reduction relies on
+    // the already-required Depth-Warp -> Extinction -> Integration packet chain.
+    EXPECT_NE(FindEdge(analysis, depthWarpTask, integrationTask), nullptr);
+    ASSERT_EQ(integrationPacketPlan.dependencyCount, 1u);
     const Graphics::GpuPacketDependency* const integrationDependencies = compiledGraph.packetDependencies(integrationPacket);
     ASSERT_NE(integrationDependencies, nullptr);
-    bool integrationDependsOnDepthWarp = false;
-    bool integrationDependsOnExtinction = false;
-    for(u32 dependencyIndex = 0u; dependencyIndex < integrationPacketPlan.dependencyCount; ++dependencyIndex){
-        integrationDependsOnDepthWarp |= integrationDependencies[dependencyIndex].producer == depthWarpPacket;
-        integrationDependsOnExtinction |= integrationDependencies[dependencyIndex].producer == extinctionPacket;
-    }
-    EXPECT_TRUE(integrationDependsOnDepthWarp);
-    EXPECT_TRUE(integrationDependsOnExtinction);
+    EXPECT_EQ(integrationDependencies[0u].producer, extinctionPacket);
 
     const Graphics::GpuCompiledTask* const compiledDepthWarp = compiledGraph.findTask(depthWarpTask);
     const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producerTask);
@@ -25797,7 +26083,10 @@ TEST(GpuTaskGraph, FrontierSafeConsumerFrontierOverrideRequiresExplicitImmediate
     EXPECT_NE(unrelatedPacket, consumerPacket);
     EXPECT_EQ(compiledGraph.packet(firstPacket).taskCount, 2u);
     EXPECT_EQ(compiledGraph.packet(unrelatedPacket).taskCount, 1u);
-    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 2u);
+    EXPECT_TRUE(analysis.hasExplicitEdge(first, computeConsumer));
+    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 1u);
+    ASSERT_NE(compiledGraph.packetDependencies(consumerPacket), nullptr);
+    EXPECT_EQ(compiledGraph.packetDependencies(consumerPacket)[0u].producer, unrelatedPacket);
     EXPECT_TRUE(HasInferredHazard(
         analysis,
         immediateFinalize,
@@ -36041,23 +36330,13 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     ;
     ASSERT_NE(shadowVisibilityExternalDependencies, nullptr);
     EXPECT_EQ(shadowVisibilityExternalDependencies[0u], historyCompletion);
-    ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 2u);
+    EXPECT_NE(FindEdge(analysis, shadowPrepare, shadowVisibility), nullptr);
+    ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 1u);
     const Graphics::GpuPacketDependency* const shadowVisibilityPacketDependencies = compiledGraph.packetDependencies(
         shadowVisibilityPacket
     );
     ASSERT_NE(shadowVisibilityPacketDependencies, nullptr);
-    bool shadowVisibilityWaitsForShadowPrepare = false;
-    bool shadowVisibilityWaitsForPrefix = false;
-    for(usize index = 0u; index < compiledGraph.packet(shadowVisibilityPacket).dependencyCount; ++index){
-        shadowVisibilityWaitsForShadowPrepare = shadowVisibilityWaitsForShadowPrepare
-            || shadowVisibilityPacketDependencies[index].producer == shadowPreparePacket
-        ;
-        shadowVisibilityWaitsForPrefix = shadowVisibilityWaitsForPrefix
-            || shadowVisibilityPacketDependencies[index].producer == prefixPacket
-        ;
-    }
-    EXPECT_TRUE(shadowVisibilityWaitsForShadowPrepare);
-    EXPECT_TRUE(shadowVisibilityWaitsForPrefix);
+    EXPECT_EQ(shadowVisibilityPacketDependencies[0u].producer, prefixPacket);
     ASSERT_EQ(compiledGraph.packet(hardwarePacket).externalDependencyCount, 1u);
     const Graphics::GpuExternalCompletionId* const hardwareExternalDependencies = compiledGraph.packetExternalDependencies(
         hardwarePacket
@@ -36751,6 +37030,7 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     EXPECT_NE(FindEdge(analysis, softwareCaustics, lighting), nullptr);
     EXPECT_NE(FindEdge(analysis, surfelGi, lighting), nullptr);
     EXPECT_NE(FindEdge(analysis, accumulation, lighting), nullptr);
+    EXPECT_NE(FindEdge(analysis, prefix, lighting), nullptr);
     const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting);
     ASSERT_NE(compiledLighting, nullptr);
     ASSERT_GT(compiledLighting->prologueStateSeedCount, 0u);
@@ -36778,7 +37058,7 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     EXPECT_TRUE(lightingImportsSoftwareCausticsState);
     EXPECT_TRUE(lightingImportsSurfelGiState);
     EXPECT_TRUE(lightingImportsAccumulationState);
-    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 5u);
+    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 4u);
     const Graphics::GpuPacketDependency* const lightingPacketDependencies = compiledGraph.packetDependencies(lightingPacket);
     ASSERT_NE(lightingPacketDependencies, nullptr);
     bool lightingWaitsForPrefix = false;
@@ -36801,7 +37081,7 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
             || lightingPacketDependencies[index].producer == accumulationPacket
         ;
     }
-    EXPECT_TRUE(lightingWaitsForPrefix);
+    EXPECT_FALSE(lightingWaitsForPrefix);
     EXPECT_TRUE(lightingWaitsForShadowVisibility);
     EXPECT_TRUE(lightingWaitsForSoftwareCaustics);
     EXPECT_TRUE(lightingWaitsForSurfelGi);
@@ -36826,23 +37106,13 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     }
     EXPECT_TRUE(shadowVisibilityImportsBindlessSlotsState);
     EXPECT_EQ(compiledGraph.packet(shadowVisibilityPacket).externalDependencyCount, 0u);
-    ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 2u);
+    EXPECT_NE(FindEdge(analysis, shadowPrepare, shadowVisibility), nullptr);
+    ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 1u);
     const Graphics::GpuPacketDependency* const shadowVisibilityPacketDependencies = compiledGraph.packetDependencies(
         shadowVisibilityPacket
     );
     ASSERT_NE(shadowVisibilityPacketDependencies, nullptr);
-    bool shadowVisibilityWaitsForShadowPrepare = false;
-    bool shadowVisibilityWaitsForPrefix = false;
-    for(usize index = 0u; index < compiledGraph.packet(shadowVisibilityPacket).dependencyCount; ++index){
-        shadowVisibilityWaitsForShadowPrepare = shadowVisibilityWaitsForShadowPrepare
-            || shadowVisibilityPacketDependencies[index].producer == shadowPreparePacket
-        ;
-        shadowVisibilityWaitsForPrefix = shadowVisibilityWaitsForPrefix
-            || shadowVisibilityPacketDependencies[index].producer == prefixPacket
-        ;
-    }
-    EXPECT_TRUE(shadowVisibilityWaitsForShadowPrepare);
-    EXPECT_TRUE(shadowVisibilityWaitsForPrefix);
+    EXPECT_EQ(shadowVisibilityPacketDependencies[0u].producer, prefixPacket);
     ASSERT_EQ(compiledGraph.packet(softwareCausticsPacket).externalDependencyCount, 0u);
     ASSERT_GE(compiledGraph.packet(softwareCausticsPacket).dependencyCount, 1u);
     const Graphics::GpuPacketDependency* const softwareCausticsPacketDependencies = compiledGraph.packetDependencies(

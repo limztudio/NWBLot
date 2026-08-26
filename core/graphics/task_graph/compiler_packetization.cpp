@@ -164,7 +164,7 @@ namespace GpuTaskGraphCompilerDetail{
                     precedingPacket.taskOffset + precedingPacket.taskCount - 1u
                 ];
                 bool directlyDependsOnPrecedingTask = false;
-                for(const GpuTaskDependencyEdge& edge : analysis.edges()){
+                for(const GpuTaskDependencyEdge& edge : analysis.schedulingEdges()){
                     if(edge.producer == precedingTask && edge.consumer == taskID){
                         directlyDependsOnPrecedingTask = true;
                         break;
@@ -212,7 +212,7 @@ namespace GpuTaskGraphCompilerDetail{
                     const GpuTaskId precedingTask = compiledPlan.packetTasks[
                         precedingPacket.taskOffset + precedingTaskIndex
                     ];
-                    for(const GpuTaskDependencyEdge& edge : analysis.edges()){
+                    for(const GpuTaskDependencyEdge& edge : analysis.schedulingEdges()){
                         if(edge.producer != precedingTask)
                             continue;
 

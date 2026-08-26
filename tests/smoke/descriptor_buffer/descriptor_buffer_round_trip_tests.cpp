@@ -39694,6 +39694,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitExtinctionComputeEmulationShare
     EXPECT_TRUE(analysis.hasInferredEdge(depthWarpTask, extinctionTask));
     EXPECT_TRUE(analysis.hasInferredEdge(producerTask, extinctionTask));
     EXPECT_TRUE(analysis.hasInferredEdge(extinctionTask, integrationTask));
+    EXPECT_TRUE(analysis.hasInferredEdge(depthWarpTask, integrationTask));
     ASSERT_EQ(analysis.topologicalOrder().size(), 4u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], depthWarpTask);
     EXPECT_EQ(analysis.topologicalOrder()[1u], producerTask);
@@ -39742,20 +39743,12 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitExtinctionComputeEmulationShare
     EXPECT_EQ(extinctionPacketTasks[0u], producerTask);
     EXPECT_EQ(extinctionPacketTasks[1u], extinctionTask);
     ASSERT_EQ(extinctionPacketPlan.dependencyCount, 1u);
-    ASSERT_EQ(integrationPacketPlan.dependencyCount, 2u);
+    ASSERT_EQ(integrationPacketPlan.dependencyCount, 1u);
     const GpuPacketDependency* const integrationPacketDependencies = compiledGraph.packetDependencies(integrationPacket);
     ASSERT_NE(integrationPacketDependencies, nullptr);
     EXPECT_EQ(compiledGraph.packetDependencies(extinctionPacket)[0u].producer, depthWarpPacket);
-    // Integration reads control directly from Depth Warp and extinction data from the merged Graphics packet. Both
-    // semantic RAW edges remain in packet topology; the same-Compute Depth Warp wait is elided at submission.
-    EXPECT_TRUE(
-        integrationPacketDependencies[0u].producer == depthWarpPacket
-        || integrationPacketDependencies[1u].producer == depthWarpPacket
-    );
-    EXPECT_TRUE(
-        integrationPacketDependencies[0u].producer == extinctionPacket
-        || integrationPacketDependencies[1u].producer == extinctionPacket
-    );
+    // The raw control-path edge remains diagnostic; packet scheduling uses Depth-Warp -> Extinction -> Integration.
+    EXPECT_EQ(integrationPacketDependencies[0u].producer, extinctionPacket);
 
     const GpuCompiledTask* const compiledDepthWarp = compiledGraph.findTask(depthWarpTask);
     const GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producerTask);
@@ -54525,6 +54518,8 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
 
     ASSERT_TRUE(analysis.hasExplicitEdge(shadowPrepareTask, graphicsPrefixTask));
+    ASSERT_TRUE(analysis.hasInferredEdge(shadowPrepareTask, shadowVisibilityTask));
+    ASSERT_TRUE(analysis.hasInferredEdge(shadowPrepareTask, presentTask));
     ASSERT_EQ(compiledGraph.packetCount(), 8u);
     const GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepareTask);
     const GpuSubmissionPacketId graphicsPrefixPacket = compiledGraph.packetForTask(graphicsPrefixTask);
@@ -54607,23 +54602,12 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
         ;
     }
     EXPECT_TRUE(shadowVisibilityImportsPrefixSlots);
-    ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 2u);
+    ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 1u);
     const GpuPacketDependency* const shadowVisibilityDependencies = compiledGraph.packetDependencies(
         shadowVisibilityPacket
     );
     ASSERT_NE(shadowVisibilityDependencies, nullptr);
-    bool shadowVisibilityWaitsForPrepare = false;
-    bool shadowVisibilityWaitsForPrefix = false;
-    for(usize index = 0u; index < compiledGraph.packet(shadowVisibilityPacket).dependencyCount; ++index){
-        shadowVisibilityWaitsForPrepare = shadowVisibilityWaitsForPrepare
-            || shadowVisibilityDependencies[index].producer == shadowPreparePacket
-        ;
-        shadowVisibilityWaitsForPrefix = shadowVisibilityWaitsForPrefix
-            || shadowVisibilityDependencies[index].producer == graphicsPrefixPacket
-        ;
-    }
-    EXPECT_TRUE(shadowVisibilityWaitsForPrepare);
-    EXPECT_TRUE(shadowVisibilityWaitsForPrefix);
+    EXPECT_EQ(shadowVisibilityDependencies[0u].producer, graphicsPrefixPacket);
 
     const GpuCompiledTask* const compiledPresent = compiledGraph.findTask(presentTask);
     ASSERT_NE(compiledPresent, nullptr);
@@ -54640,21 +54624,10 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
         ;
     }
     EXPECT_TRUE(presentImportsCompositeState);
-    ASSERT_EQ(compiledGraph.packet(presentPacket).dependencyCount, 2u);
+    ASSERT_EQ(compiledGraph.packet(presentPacket).dependencyCount, 1u);
     const GpuPacketDependency* const presentDependencies = compiledGraph.packetDependencies(presentPacket);
     ASSERT_NE(presentDependencies, nullptr);
-    bool presentWaitsForPrepare = false;
-    bool presentWaitsForComposite = false;
-    for(usize index = 0u; index < compiledGraph.packet(presentPacket).dependencyCount; ++index){
-        presentWaitsForPrepare = presentWaitsForPrepare
-            || presentDependencies[index].producer == shadowPreparePacket
-        ;
-        presentWaitsForComposite = presentWaitsForComposite
-            || presentDependencies[index].producer == compositePacket
-        ;
-    }
-    EXPECT_TRUE(presentWaitsForPrepare);
-    EXPECT_TRUE(presentWaitsForComposite);
+    EXPECT_EQ(presentDependencies[0u].producer, compositePacket);
 
     const GpuSubmissionPacketRange packetRange = compiledGraph.allPacketRange();
     ASSERT_TRUE(packetRange.valid());

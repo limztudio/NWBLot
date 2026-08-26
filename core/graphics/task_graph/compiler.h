@@ -130,6 +130,7 @@ class GpuTaskGraphAnalysis final : NoCopy{
 public:
     explicit GpuTaskGraphAnalysis(GraphicsArena& arena)
         : m_edges(arena)
+        , m_schedulingEdges(arena)
         , m_inferredEdges(arena)
         , m_externalDependencies(arena)
         , m_topologicalOrder(arena)
@@ -144,7 +145,14 @@ public:
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
     [[nodiscard]] bool validFor(const GpuTaskGraph& graph)const noexcept;
     [[nodiscard]] const GpuTaskGraphAnalysisDiagnostic& diagnostic()const noexcept{ return m_diagnostic; }
+    // Raw dependency pairs retain direct declarations and hazard reasons for validation and diagnostics, including
+    // edges that are transitively redundant for scheduling.
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& edges()const noexcept{ return m_edges; }
+    // Scheduling consumers use the stable transitive reduction so redundant raw relationships do not add queue
+    // crossings, signal frontiers, or packet waits.
+    [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& schedulingEdges()const noexcept{
+        return m_schedulingEdges;
+    }
     // Every resource reason remains available even when it shares one scheduling edge with an explicit dependency.
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& inferredEdges()const noexcept{ return m_inferredEdges; }
     [[nodiscard]] const GraphicsVector<GpuTaskExternalDependencyEdge>& externalDependencies()const noexcept{
@@ -161,6 +169,7 @@ public:
 
 private:
     GraphicsVector<GpuTaskDependencyEdge> m_edges;
+    GraphicsVector<GpuTaskDependencyEdge> m_schedulingEdges;
     GraphicsVector<GpuTaskDependencyEdge> m_inferredEdges;
     GraphicsVector<GpuTaskExternalDependencyEdge> m_externalDependencies;
     GraphicsVector<GpuTaskId> m_topologicalOrder;

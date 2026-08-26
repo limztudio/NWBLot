@@ -270,7 +270,7 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
             if(!compiledConsumerTask)
                 return false;
 
-            for(const GpuTaskDependencyEdge& edge : analysis.edges()){
+            for(const GpuTaskDependencyEdge& edge : analysis.schedulingEdges()){
                 if(edge.consumer != consumerTask)
                     continue;
 

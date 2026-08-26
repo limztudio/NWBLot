@@ -216,7 +216,7 @@ namespace GpuTaskGraphCompilerDetail{
     score.queueLoad = SaturateQueueScoreTerm(queueLoad);
 
     u64 incomingCrossings = 0u;
-    for(const GpuTaskDependencyEdge& edge : analysis.edges()){
+    for(const GpuTaskDependencyEdge& edge : analysis.schedulingEdges()){
         if(edge.consumer != task.id)
             continue;
 

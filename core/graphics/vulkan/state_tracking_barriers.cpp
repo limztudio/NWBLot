@@ -421,8 +421,13 @@ VkBufferMemoryBarrier2 BuildBufferOwnershipAcquireBarrier(
     return barrier;
 }
 
-bool NeedsTextureStateBarrier(const ResourceStates::Mask oldState, const ResourceStates::Mask stateBits, const bool uavBarrierEnabled){
-    return oldState != stateBits || (oldState == stateBits && uavBarrierEnabled);
+bool NeedsResourceStateBarrier(
+    const ResourceStates::Mask oldState,
+    const ResourceStates::Mask stateBits,
+    const bool uavBarrierEnabled,
+    const bool forceMemoryDependency
+){
+    return oldState != stateBits || forceMemoryDependency || (oldState == stateBits && uavBarrierEnabled);
 }
 
 bool ImageBarrierOverlapsTextureSubresources(
@@ -630,7 +635,12 @@ void CommandList::commitBarriers(){
     m_pendingBufferBarriers.clear();
 }
 
-void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
+void CommandList::setTextureState(
+    Texture* textureResource,
+    TextureSubresourceSet subresources,
+    ResourceStates::Mask stateBits,
+    const bool forceMemoryDependency
+){
     if(!textureResource)
         return;
     constexpr const tchar* s_OperationName = NWB_TEXT("set texture state");
@@ -683,7 +693,12 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
                 usePerSubresourceBarriers = true;
                 firstBarrierIndex = m_pendingImageBarriers.size();
                 ::ContainerDetail::ReserveAdditionalCapacity(m_pendingImageBarriers, subresourceCount);
-                if(VulkanStateTrackingDetail::NeedsTextureStateBarrier(oldState, stateBits, uavBarrierEnabled)){
+                if(VulkanStateTrackingDetail::NeedsResourceStateBarrier(
+                    oldState,
+                    stateBits,
+                    uavBarrierEnabled,
+                    forceMemoryDependency
+                )){
                     VulkanStateTrackingDetail::AppendTextureStateBarriersBefore(
                         m_pendingImageBarriers,
                         texture.m_image,
@@ -699,10 +714,11 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
                 }
             }
 
-            const bool subresourceNeedsBarrier = VulkanStateTrackingDetail::NeedsTextureStateBarrier(
+            const bool subresourceNeedsBarrier = VulkanStateTrackingDetail::NeedsResourceStateBarrier(
                 subresourceOldState,
                 stateBits,
-                uavBarrierEnabled
+                uavBarrierEnabled,
+                forceMemoryDependency
             );
             if(subresourceNeedsBarrier){
                 needsBarrier = true;
@@ -770,7 +786,11 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
     m_pendingImageBarriers.resize(firstBarrierIndex);
 }
 
-void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask stateBits){
+void CommandList::setBufferState(
+    Buffer* bufferResource,
+    ResourceStates::Mask stateBits,
+    const bool forceMemoryDependency
+){
     if(!bufferResource)
         return;
     if(!validateCommandRecordingScope(NWB_TEXT("set buffer state")))
@@ -799,7 +819,12 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
         && m_stateTracker.isUavBarrierEnabledForBuffer(buffer)
     ;
 
-    if(oldState == stateBits && !needsUavBarrier)
+    if(!VulkanStateTrackingDetail::NeedsResourceStateBarrier(
+        oldState,
+        stateBits,
+        needsUavBarrier,
+        forceMemoryDependency
+    ))
         return;
     retainResource(&buffer);
 
@@ -829,13 +854,17 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
     executePipelineBarrier(depInfo);
 }
 
-void CommandList::setAccelStructState(RayTracingAccelStruct* accelStructResource, ResourceStates::Mask stateBits){
+void CommandList::setAccelStructState(
+    RayTracingAccelStruct* accelStructResource,
+    ResourceStates::Mask stateBits,
+    const bool forceMemoryDependency
+){
     if(!accelStructResource)
         return;
 
     auto* as = accelStructResource;
     if(as->m_buffer)
-        setBufferState(as->m_buffer.get(), stateBits);
+        setBufferState(as->m_buffer.get(), stateBits, forceMemoryDependency);
 }
 
 void CommandList::releaseTextureOwnership(

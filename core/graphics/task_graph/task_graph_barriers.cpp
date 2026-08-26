@@ -75,7 +75,8 @@ bool GpuTaskGraph::applyCompiledBarrier(
         commandList.setTextureState(
             resource.texture.get(),
             barrier.range.textureSubresources,
-            barrier.after
+            barrier.after,
+            barrier.forceMemoryDependency
         );
         return true;
     }
@@ -92,7 +93,7 @@ bool GpuTaskGraph::applyCompiledBarrier(
             if(!commandList.hasExplicitBufferState(resource.buffer.get()))
                 commandList.beginTrackingBufferState(resource.buffer.get(), barrier.before);
         }
-        commandList.setBufferState(resource.buffer.get(), barrier.after);
+        commandList.setBufferState(resource.buffer.get(), barrier.after, barrier.forceMemoryDependency);
         return true;
     }
     case GpuCompiledBarrierType::TextureStateExport:{
@@ -157,7 +158,11 @@ bool GpuTaskGraph::applyCompiledBarrier(
             if(!commandList.hasExplicitBufferState(backingBuffer))
                 commandList.beginTrackingBufferState(backingBuffer, barrier.before);
         }
-        commandList.setAccelStructState(resource.accelStruct.get(), barrier.after);
+        commandList.setAccelStructState(
+            resource.accelStruct.get(),
+            barrier.after,
+            barrier.forceMemoryDependency
+        );
         return true;
     }
     case GpuCompiledBarrierType::TextureOwnershipRelease:{

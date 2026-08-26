@@ -318,6 +318,9 @@ struct GpuCompiledBarrier{
     // Only the first use of an imported external ownership handoff consumes the descriptor-owned state source.
     // Later graph-internal ownership acquires use their producer packet snapshot instead.
     bool isInitialOwnerHandoff = false;
+    // A same-state write hazard still requires native execution and memory dependencies even when the ordinary
+    // mutable UAV-barrier policy is disabled. Initial-state, ownership, and export records never set this flag.
+    bool forceMemoryDependency = false;
 };
 static_assert(sizeof(GpuCompiledBarrier) == 72u, "GpuCompiledBarrier should keep its compact runtime layout");
 

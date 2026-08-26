@@ -60,6 +60,20 @@ namespace __hidden_gpu_packet_runtime_preflight{
     ;
 }
 
+[[nodiscard]] static bool IsTransition(const GpuCompiledBarrierType::Enum type)noexcept{
+    return type == GpuCompiledBarrierType::TextureTransition
+        || type == GpuCompiledBarrierType::BufferTransition
+        || type == GpuCompiledBarrierType::AccelStructTransition
+    ;
+}
+
+[[nodiscard]] static bool IsUavDependency(const GpuCompiledBarrierType::Enum type)noexcept{
+    return type == GpuCompiledBarrierType::TextureUav
+        || type == GpuCompiledBarrierType::BufferUav
+        || type == GpuCompiledBarrierType::AccelStructUav
+    ;
+}
+
 [[nodiscard]] static bool IsOwnershipAcquire(const GpuCompiledBarrierType::Enum type)noexcept{
     return type == GpuCompiledBarrierType::TextureOwnershipAcquire
         || type == GpuCompiledBarrierType::BufferOwnershipAcquire
@@ -513,6 +527,38 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             const bool ownershipAcquire =
                 __hidden_gpu_packet_runtime_preflight::IsOwnershipAcquire(barrier.type)
             ;
+            const bool transition = __hidden_gpu_packet_runtime_preflight::IsTransition(barrier.type);
+            const bool uavDependency = __hidden_gpu_packet_runtime_preflight::IsUavDependency(barrier.type);
+            if(
+                (
+                    barrier.forceMemoryDependency
+                    && (
+                        (!transition && !uavDependency)
+                        || barrier.before == ResourceStates::Unknown
+                        || barrier.before != barrier.after
+                        || barrier.isGraphInitialState
+                        || barrier.isInitialOwnerHandoff
+                        || (
+                            transition
+                            && ResourceStates::HasUnorderedAccess(barrier.before)
+                        )
+                    )
+                )
+                || (
+                    transition
+                    && barrier.before == barrier.after
+                    && !barrier.isGraphInitialState
+                    && !barrier.forceMemoryDependency
+                )
+                || (
+                    uavDependency
+                    && (
+                        !barrier.forceMemoryDependency
+                        || !ResourceStates::HasUnorderedAccess(barrier.before)
+                    )
+                )
+            )
+                return false;
             if(
                 !compiledGraph.queueInfo(barrier.sourceQueue)
                 || !compiledGraph.queueInfo(barrier.destinationQueue)

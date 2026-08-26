@@ -353,11 +353,13 @@ namespace GpuTaskGraphCompilerDetail{
                         });
                     }
 
-                    const bool needsUavDependency =
+                    const bool needsSameStateDependency =
                         previousState
                         && before == use.requiredState
-                        && ResourceStates::HasUnorderedAccess(before)
                         && (IsWriteAccess(previousState->access) || IsWriteAccess(use.access))
+                    ;
+                    const bool needsUavDependency = needsSameStateDependency
+                        && ResourceStates::HasUnorderedAccess(before)
                     ;
                     if(previousState){
                         const GpuSubmissionPacketId sourcePacket = FindCompiledPacketForTask(
@@ -433,7 +435,7 @@ namespace GpuTaskGraphCompilerDetail{
                                 previousState->access == GpuTaskResourceAccess::Read
                                 && use.access == GpuTaskResourceAccess::Read
                                 && before == use.requiredState
-                                && !needsUavDependency
+                                && !needsSameStateDependency
                             ;
                             const bool mayOmitInternalStateSeed =
                                 use.hasIndependentStateSource
@@ -449,7 +451,7 @@ namespace GpuTaskGraphCompilerDetail{
                             }
                         }
                     }
-                    if(materializesGraphInitialState || before != use.requiredState || needsUavDependency){
+                    if(materializesGraphInitialState || before != use.requiredState || needsSameStateDependency){
                         compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{
                             .resource = use.resource,
                             .range = fragment.range,
@@ -461,6 +463,7 @@ namespace GpuTaskGraphCompilerDetail{
                                 ? UavBarrierType(resource.type)
                                 : TransitionBarrierType(resource.type),
                             .isGraphInitialState = materializesGraphInitialState || requiresExplicitInitialStateSource,
+                            .forceMemoryDependency = needsSameStateDependency,
                         });
                     }
                 }
@@ -586,11 +589,13 @@ namespace GpuTaskGraphCompilerDetail{
                     .consumer = taskID,
                 });
             }
-            const bool needsUavDependency =
+            const bool needsSameStateDependency =
                 previousState
                 && before == use.requiredState
-                && ResourceStates::HasUnorderedAccess(before)
                 && (IsWriteAccess(previousState->access) || IsWriteAccess(use.access))
+            ;
+            const bool needsUavDependency = needsSameStateDependency
+                && ResourceStates::HasUnorderedAccess(before)
             ;
             if(
                 previousState
@@ -669,7 +674,7 @@ namespace GpuTaskGraphCompilerDetail{
                         previousState->access == GpuTaskResourceAccess::Read
                         && use.access == GpuTaskResourceAccess::Read
                         && before == use.requiredState
-                        && !needsUavDependency
+                        && !needsSameStateDependency
                     ;
                     const bool mayOmitInternalStateSeed =
                         use.hasIndependentStateSource
@@ -685,7 +690,7 @@ namespace GpuTaskGraphCompilerDetail{
                     }
                 }
             }
-            if(materializesGraphInitialState || before != use.requiredState || needsUavDependency){
+            if(materializesGraphInitialState || before != use.requiredState || needsSameStateDependency){
                 compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{
                     .resource = use.resource,
                     .range = use.range,
@@ -697,6 +702,7 @@ namespace GpuTaskGraphCompilerDetail{
                         ? UavBarrierType(resource.type)
                         : TransitionBarrierType(resource.type),
                     .isGraphInitialState = materializesGraphInitialState || requiresExplicitInitialStateSource,
+                    .forceMemoryDependency = needsSameStateDependency,
                 });
             }
 

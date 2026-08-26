@@ -70,7 +70,12 @@ namespace VulkanStateTrackingDetail{
     bool rayTracingStageAvailable
 );
 
-[[nodiscard]] bool NeedsTextureStateBarrier(ResourceStates::Mask oldState, ResourceStates::Mask stateBits, bool uavBarrierEnabled);
+[[nodiscard]] bool NeedsResourceStateBarrier(
+    ResourceStates::Mask oldState,
+    ResourceStates::Mask stateBits,
+    bool uavBarrierEnabled,
+    bool forceMemoryDependency
+);
 
 [[nodiscard]] bool ImageBarrierOverlapsTextureSubresources(
     const VkImageMemoryBarrier2& barrier,

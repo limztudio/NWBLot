@@ -1303,6 +1303,47 @@ TEST(VulkanStateTracking, MapsAccelerationStructureBuildInputsAndReadScopesExact
     );
 }
 
+TEST(VulkanStateTracking, HonorsForcedSameStateMemoryDependenciesIndependentlyOfUavPolicy){
+    using Graphics::GraphicsBackend::VulkanStateTrackingDetail::NeedsResourceStateBarrier;
+
+    EXPECT_TRUE(NeedsResourceStateBarrier(
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::CopyDest,
+        false,
+        false
+    ));
+    EXPECT_FALSE(NeedsResourceStateBarrier(
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::CopyDest,
+        false,
+        false
+    ));
+    EXPECT_TRUE(NeedsResourceStateBarrier(
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::CopyDest,
+        false,
+        true
+    ));
+    EXPECT_TRUE(NeedsResourceStateBarrier(
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::UnorderedAccess,
+        true,
+        false
+    ));
+    EXPECT_FALSE(NeedsResourceStateBarrier(
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::UnorderedAccess,
+        false,
+        false
+    ));
+    EXPECT_TRUE(NeedsResourceStateBarrier(
+        Graphics::ResourceStates::UnorderedAccess,
+        Graphics::ResourceStates::UnorderedAccess,
+        false,
+        true
+    ));
+}
+
 
 TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     TestArena testArena;
@@ -28505,7 +28546,8 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
         const Graphics::GpuCompiledBarrierType::Enum type,
         const Graphics::GpuGraphResourceId resource,
         const Graphics::ResourceStates::Mask before,
-        const Graphics::ResourceStates::Mask after
+        const Graphics::ResourceStates::Mask after,
+        const bool forceMemoryDependency
     ){
         for(usize barrierIndex = 0u; barrierIndex < compiledShadowVisibility->prologueBarrierCount; ++barrierIndex){
             const Graphics::GpuCompiledBarrier& barrier = shadowBarriers[barrierIndex];
@@ -28514,6 +28556,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
                 && barrier.resource == resource
                 && barrier.before == before
                 && barrier.after == after
+                && barrier.forceMemoryDependency == forceMemoryDependency
             )
                 return true;
         }
@@ -28523,103 +28566,120 @@ TEST(GpuTaskGraph, PlansGraphOwnedShadowVisibilityEntryStates){
         Graphics::GpuCompiledBarrierType::TextureTransition,
         worldPosition,
         Graphics::ResourceStates::RenderTarget,
-        Graphics::ResourceStates::ShaderResource
+        Graphics::ResourceStates::ShaderResource,
+        false
     ));
     EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::TextureTransition,
         normal,
         Graphics::ResourceStates::RenderTarget,
-        Graphics::ResourceStates::ShaderResource
+        Graphics::ResourceStates::ShaderResource,
+        false
     ));
     EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::TextureTransition,
         depth,
         Graphics::ResourceStates::DepthWrite,
-        Graphics::ResourceStates::ShaderResource
+        Graphics::ResourceStates::ShaderResource,
+        false
     ));
     EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::TextureTransition,
         shadowVisibility,
         Graphics::ResourceStates::CopyDest,
-        Graphics::ResourceStates::UnorderedAccess
+        Graphics::ResourceStates::UnorderedAccess,
+        false
     ));
     EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::TextureTransition,
         shadowSoftHalfA,
         Graphics::ResourceStates::Common,
-        Graphics::ResourceStates::UnorderedAccess
+        Graphics::ResourceStates::UnorderedAccess,
+        false
     ));
     EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::TextureTransition,
         shadowCoarseTransmittance,
         Graphics::ResourceStates::Common,
-        Graphics::ResourceStates::UnorderedAccess
+        Graphics::ResourceStates::UnorderedAccess,
+        false
     ));
     EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::TextureTransition,
         shadowSoftGeometry,
         Graphics::ResourceStates::Common,
-        Graphics::ResourceStates::UnorderedAccess
+        Graphics::ResourceStates::UnorderedAccess,
+        false
     ));
     EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::BufferTransition,
         sceneShading,
         Graphics::ResourceStates::CopyDest,
-        Graphics::ResourceStates::ConstantBuffer
+        Graphics::ResourceStates::ConstantBuffer,
+        false
     ));
     EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::BufferTransition,
         lights,
         Graphics::ResourceStates::CopyDest,
-        Graphics::ResourceStates::ShaderResource
+        Graphics::ResourceStates::ShaderResource,
+        false
     ));
     EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::BufferTransition,
         softwareMeshNodes,
         Graphics::ResourceStates::UnorderedAccess,
-        Graphics::ResourceStates::ShaderResource
+        Graphics::ResourceStates::ShaderResource,
+        false
     ));
     EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::BufferTransition,
         sceneBvhNodes,
         Graphics::ResourceStates::UnorderedAccess,
-        Graphics::ResourceStates::ShaderResource
+        Graphics::ResourceStates::ShaderResource,
+        false
     ));
     EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::BufferTransition,
         shadowInstanceMaterials,
         Graphics::ResourceStates::UnorderedAccess,
-        Graphics::ResourceStates::ShaderResource
+        Graphics::ResourceStates::ShaderResource,
+        false
     ));
     EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::BufferTransition,
         shadowMaterialTyped,
         Graphics::ResourceStates::UnorderedAccess,
-        Graphics::ResourceStates::ShaderResource
+        Graphics::ResourceStates::ShaderResource,
+        false
     ));
     EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::BufferTransition,
         shadowInstances,
         Graphics::ResourceStates::UnorderedAccess,
-        Graphics::ResourceStates::ShaderResource
+        Graphics::ResourceStates::ShaderResource,
+        false
     ));
     EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::BufferTransition,
         edgeStatistics,
         Graphics::ResourceStates::Common,
-        Graphics::ResourceStates::UnorderedAccess
+        Graphics::ResourceStates::UnorderedAccess,
+        false
     ));
-    EXPECT_FALSE(hasShadowBarrier(
+    EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::AccelStructTransition,
         sceneTlas,
         Graphics::ResourceStates::AccelStructRead,
-        Graphics::ResourceStates::AccelStructRead
+        Graphics::ResourceStates::AccelStructRead,
+        true
     ));
-    EXPECT_FALSE(hasShadowBarrier(
+    EXPECT_TRUE(hasShadowBarrier(
         Graphics::GpuCompiledBarrierType::BufferTransition,
         sceneTlasBacking,
         Graphics::ResourceStates::AccelStructRead,
-        Graphics::ResourceStates::AccelStructRead
+        Graphics::ResourceStates::AccelStructRead,
+        true
     ));
     ASSERT_EQ(compiledLighting->prologueStateSeedCount, 1u);
     const Graphics::GpuPacketStateSeed* const lightingSeed = compiledGraph.taskPrologueStateSeeds(lighting);
@@ -34923,6 +34983,174 @@ TEST(GpuTaskGraph, MergesAccumulationTailIntoGraphicsAvboitPacket){
 }
 
 
+TEST(GpuTaskGraph, ForcesMergedSameStateWriteDependenciesAcrossResourceKinds){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId textureCopyDest = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/same_state_texture_copy_dest"),
+        "Same-state Texture Copy Destination"
+    );
+    const Graphics::GpuGraphResourceId bufferCopyDest = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/same_state_buffer_copy_dest"),
+        "Same-state Buffer Copy Destination"
+    );
+    const Graphics::GpuGraphResourceId renderTarget = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/same_state_render_target"),
+        "Same-state Render Target"
+    );
+    const Graphics::GpuGraphResourceId depthWrite = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/same_state_depth_write"),
+        "Same-state Depth Write"
+    );
+    const Graphics::GpuGraphResourceId accelStructWrite = AddAccelStructMetadata(
+        graph,
+        Name("tests/task_graph/same_state_accel_struct_write"),
+        "Same-state Acceleration Structure Write"
+    );
+    const Graphics::GpuGraphResourceId readOnly = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/same_state_read_only"),
+        "Same-state Read Only"
+    );
+    ASSERT_TRUE(textureCopyDest.valid());
+    ASSERT_TRUE(bufferCopyDest.valid());
+    ASSERT_TRUE(renderTarget.valid());
+    ASSERT_TRUE(depthWrite.valid());
+    ASSERT_TRUE(accelStructWrite.valid());
+    ASSERT_TRUE(readOnly.valid());
+
+    const Graphics::GpuTaskResourceUse uses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = textureCopyDest,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = bufferCopyDest,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = renderTarget,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::RenderTarget,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = depthWrite,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::DepthWrite,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = accelStructWrite,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::AccelStructWrite,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = readOnly,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/task_graph/same_state_dependency_producer"))
+        .setMarkerLabel("Same-state Dependency Producer")
+        .setResourceUses(uses, LengthOf(uses))
+    ;
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    ASSERT_TRUE(producer.valid());
+
+    Graphics::GpuTaskSchedulingHint consumerScheduling;
+    consumerScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskDesc consumerDesc;
+    consumerDesc
+        .setIdentity(Name("tests/task_graph/same_state_dependency_consumer"))
+        .setMarkerLabel("Same-state Dependency Consumer")
+        .setScheduling(consumerScheduling)
+        .setDependencies(&producer, 1u)
+        .setResourceUses(uses, LengthOf(uses))
+    ;
+    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    ASSERT_TRUE(consumer.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledConsumer, nullptr);
+    EXPECT_EQ(compiledProducer->packet, compiledConsumer->packet);
+    ASSERT_EQ(compiledProducer->prologueBarrierCount, LengthOf(uses));
+    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 5u);
+
+    const Graphics::GpuCompiledBarrier* const producerBarriers = compiledGraph.taskPrologueBarriers(producer);
+    const Graphics::GpuCompiledBarrier* const consumerBarriers = compiledGraph.taskPrologueBarriers(consumer);
+    ASSERT_NE(producerBarriers, nullptr);
+    ASSERT_NE(consumerBarriers, nullptr);
+    for(u32 barrierIndex = 0u; barrierIndex < compiledProducer->prologueBarrierCount; ++barrierIndex)
+        EXPECT_FALSE(producerBarriers[barrierIndex].forceMemoryDependency);
+
+    const auto findConsumerBarrier = [&](const Graphics::GpuGraphResourceId resource){
+        for(u32 barrierIndex = 0u; barrierIndex < compiledConsumer->prologueBarrierCount; ++barrierIndex){
+            if(consumerBarriers[barrierIndex].resource == resource)
+                return consumerBarriers + barrierIndex;
+        }
+        return static_cast<const Graphics::GpuCompiledBarrier*>(nullptr);
+    };
+    const Graphics::GpuGraphResourceId forcedResources[] = {
+        textureCopyDest,
+        bufferCopyDest,
+        renderTarget,
+        depthWrite,
+        accelStructWrite,
+    };
+    const Graphics::ResourceStates::Mask forcedStates[] = {
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::CopyDest,
+        Graphics::ResourceStates::RenderTarget,
+        Graphics::ResourceStates::DepthWrite,
+        Graphics::ResourceStates::AccelStructWrite,
+    };
+    const Graphics::GpuCompiledBarrierType::Enum forcedTypes[] = {
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        Graphics::GpuCompiledBarrierType::BufferTransition,
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        Graphics::GpuCompiledBarrierType::TextureTransition,
+        Graphics::GpuCompiledBarrierType::AccelStructTransition,
+    };
+    for(usize forcedIndex = 0u; forcedIndex < LengthOf(forcedResources); ++forcedIndex){
+        const Graphics::GpuCompiledBarrier* const barrier = findConsumerBarrier(forcedResources[forcedIndex]);
+        ASSERT_NE(barrier, nullptr);
+        EXPECT_EQ(barrier->type, forcedTypes[forcedIndex]);
+        EXPECT_EQ(barrier->before, forcedStates[forcedIndex]);
+        EXPECT_EQ(barrier->after, forcedStates[forcedIndex]);
+        EXPECT_FALSE(barrier->isGraphInitialState);
+        EXPECT_FALSE(barrier->isInitialOwnerHandoff);
+        EXPECT_TRUE(barrier->forceMemoryDependency);
+    }
+    EXPECT_EQ(findConsumerBarrier(readOnly), nullptr);
+}
+
+
 TEST(GpuTaskGraph, PlansPacketBoundaryTransitionsAndUavDependencies){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -35028,12 +35256,15 @@ TEST(GpuTaskGraph, PlansPacketBoundaryTransitionsAndUavDependencies){
     EXPECT_EQ(writerBarrier[0].type, Graphics::GpuCompiledBarrierType::TextureTransition);
     EXPECT_EQ(writerBarrier[0].before, Graphics::ResourceStates::Common);
     EXPECT_EQ(writerBarrier[0].after, Graphics::ResourceStates::UnorderedAccess);
+    EXPECT_FALSE(writerBarrier[0].forceMemoryDependency);
     EXPECT_EQ(uavBarrier[0].type, Graphics::GpuCompiledBarrierType::TextureUav);
     EXPECT_EQ(uavBarrier[0].before, Graphics::ResourceStates::UnorderedAccess);
     EXPECT_EQ(uavBarrier[0].after, Graphics::ResourceStates::UnorderedAccess);
+    EXPECT_TRUE(uavBarrier[0].forceMemoryDependency);
     EXPECT_EQ(shaderBarrier[0].type, Graphics::GpuCompiledBarrierType::TextureTransition);
     EXPECT_EQ(shaderBarrier[0].before, Graphics::ResourceStates::UnorderedAccess);
     EXPECT_EQ(shaderBarrier[0].after, Graphics::ResourceStates::ShaderResource);
+    EXPECT_FALSE(shaderBarrier[0].forceMemoryDependency);
 }
 
 
@@ -36392,7 +36623,7 @@ TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
     ASSERT_NE(consumerQueue, nullptr);
     EXPECT_EQ(consumerQueue->queueClass, Graphics::CommandQueue::Transfer);
     ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
-    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
+    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
 
     const Graphics::GpuCompiledBarrier* const release = compiledGraph.taskEpilogueBarriers(pair.producer);
@@ -36407,11 +36638,22 @@ TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
     EXPECT_EQ(release[0u].after, Graphics::ResourceStates::CopySource);
     EXPECT_EQ(release[0u].sourceQueue, compiledProducer->queue);
     EXPECT_EQ(release[0u].destinationQueue, compiledConsumer->queue);
+    EXPECT_FALSE(release[0u].forceMemoryDependency);
     EXPECT_EQ(acquire[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire);
     EXPECT_EQ(acquire[0u].resource, pair.texture);
     EXPECT_EQ(acquire[0u].sourceQueue, compiledProducer->queue);
     EXPECT_EQ(acquire[0u].destinationQueue, compiledConsumer->queue);
     EXPECT_FALSE(acquire[0u].isInitialOwnerHandoff);
+    EXPECT_FALSE(acquire[0u].forceMemoryDependency);
+    EXPECT_EQ(acquire[1u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
+    EXPECT_EQ(acquire[1u].resource, pair.texture);
+    EXPECT_EQ(acquire[1u].before, Graphics::ResourceStates::CopySource);
+    EXPECT_EQ(acquire[1u].after, Graphics::ResourceStates::CopySource);
+    EXPECT_EQ(acquire[1u].sourceQueue, compiledProducer->queue);
+    EXPECT_EQ(acquire[1u].destinationQueue, compiledConsumer->queue);
+    EXPECT_FALSE(acquire[1u].isGraphInitialState);
+    EXPECT_FALSE(acquire[1u].isInitialOwnerHandoff);
+    EXPECT_TRUE(acquire[1u].forceMemoryDependency);
     EXPECT_EQ(stateSeed[0u].resource, pair.texture);
     EXPECT_EQ(stateSeed[0u].sourcePacket, compiledProducer->packet);
 
@@ -36466,10 +36708,17 @@ TEST(GpuTaskGraph, UsesDeclaredTripleQueueSharingForDedicatedTransfer){
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledConsumer, nullptr);
     EXPECT_EQ(compiledProducer->epilogueBarrierCount, 0u);
-    EXPECT_EQ(compiledConsumer->prologueBarrierCount, 0u);
+    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
+    const Graphics::GpuCompiledBarrier* const dependency = compiledGraph.taskPrologueBarriers(pair.consumer);
     const Graphics::GpuPacketStateSeed* const stateSeed = compiledGraph.taskPrologueStateSeeds(pair.consumer);
+    ASSERT_NE(dependency, nullptr);
     ASSERT_NE(stateSeed, nullptr);
+    EXPECT_EQ(dependency[0u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
+    EXPECT_EQ(dependency[0u].resource, pair.texture);
+    EXPECT_EQ(dependency[0u].before, Graphics::ResourceStates::CopySource);
+    EXPECT_EQ(dependency[0u].after, Graphics::ResourceStates::CopySource);
+    EXPECT_TRUE(dependency[0u].forceMemoryDependency);
     EXPECT_EQ(stateSeed[0u].resource, pair.texture);
     EXPECT_EQ(stateSeed[0u].sourcePacket, compiledProducer->packet);
 }
@@ -36513,7 +36762,14 @@ TEST(GpuTaskGraph, AcceptsDedicatedTransferClassOnAConcurrentlySharedComputeFami
     EXPECT_EQ(consumerAssignment->queue, transferOnComputeFamily.id);
     EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedTransfer);
     EXPECT_EQ(compiledProducer->epilogueBarrierCount, 0u);
-    EXPECT_EQ(compiledConsumer->prologueBarrierCount, 0u);
+    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
+    const Graphics::GpuCompiledBarrier* const dependency = compiledGraph.taskPrologueBarriers(pair.consumer);
+    ASSERT_NE(dependency, nullptr);
+    EXPECT_EQ(dependency[0u].type, Graphics::GpuCompiledBarrierType::TextureTransition);
+    EXPECT_EQ(dependency[0u].resource, pair.texture);
+    EXPECT_EQ(dependency[0u].before, Graphics::ResourceStates::CopySource);
+    EXPECT_EQ(dependency[0u].after, Graphics::ResourceStates::CopySource);
+    EXPECT_TRUE(dependency[0u].forceMemoryDependency);
 }
 
 

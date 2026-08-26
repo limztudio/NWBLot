@@ -2747,9 +2747,22 @@ public:
     void setResourceStatesForFramebuffer(Framebuffer& framebuffer);
     void commitBarriers();
 
-    void setTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits);
-    void setBufferState(Buffer* buffer, ResourceStates::Mask stateBits);
-    void setAccelStructState(RayTracingAccelStruct* as, ResourceStates::Mask stateBits);
+    void setTextureState(
+        Texture* texture,
+        TextureSubresourceSet subresources,
+        ResourceStates::Mask stateBits,
+        bool forceMemoryDependency = false
+    );
+    void setBufferState(
+        Buffer* buffer,
+        ResourceStates::Mask stateBits,
+        bool forceMemoryDependency = false
+    );
+    void setAccelStructState(
+        RayTracingAccelStruct* as,
+        ResourceStates::Mask stateBits,
+        bool forceMemoryDependency = false
+    );
     // Exports an exclusive resource to an ordered physical consumer queue. RenderLane overloads preserve the
     // deprecated lane-facing contract while graph lowering uses the resolved CommandQueue transport directly.
     void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, CommandQueue::Enum destinationQueue);

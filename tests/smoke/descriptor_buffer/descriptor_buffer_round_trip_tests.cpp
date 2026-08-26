@@ -50418,6 +50418,202 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffTransfersFinalBuffe
 }
 
 
+// Compiled barrier metadata is treated as an immutable packet contract. Corrupted force markers must fail
+// preflight before task recording, including canonical UAV classification and graph-boundary exclusions.
+TEST_F(DescriptorBufferRoundTripTest, PacketPreflightRejectsCorruptedForcedMemoryDependencyMetadata){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const BufferHandle buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::CopyDest)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId resource = graph.importBuffer(
+        buffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/corrupted_forced_dependency"))
+            .setMarkerLabel("Corrupted Forced Dependency")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::CopyDest)
+    );
+    ASSERT_TRUE(resource.valid());
+
+    const GpuTaskResourceUse use{
+        .resource = resource,
+        .range = {},
+        .requiredState = ResourceStates::CopyDest,
+        .access = GpuTaskResourceAccess::Write,
+    };
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint producerScheduling;
+    producerScheduling.allowPacketMerge = true;
+    GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/descriptor_buffer/corrupted_forced_dependency_producer"))
+        .setMarkerLabel("Corrupted Forced Dependency Producer")
+        .setQueue(graphicsRequest)
+        .setScheduling(producerScheduling)
+        .setResourceUses(&use, 1u)
+    ;
+    const bool shouldRecord = true;
+    bool producerAttempted = false;
+    const GpuTaskId producerTask = graph.addTask<NativePacketCaptureRetryTask>(
+        producerDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &producerAttempted,
+        }
+    );
+    ASSERT_TRUE(producerTask.valid());
+
+    GpuTaskSchedulingHint consumerScheduling;
+    consumerScheduling.allowPacketMerge = true;
+    consumerScheduling.mergeWithPrevious = true;
+    GpuTaskDesc consumerDesc;
+    consumerDesc
+        .setIdentity(Name("tests/descriptor_buffer/corrupted_forced_dependency_consumer"))
+        .setMarkerLabel("Corrupted Forced Dependency Consumer")
+        .setQueue(graphicsRequest)
+        .setScheduling(consumerScheduling)
+        .setDependencies(&producerTask, 1u)
+        .setResourceUses(&use, 1u)
+    ;
+    bool consumerAttempted = false;
+    const GpuTaskId consumerTask = graph.addTask<NativePacketCaptureRetryTask>(
+        consumerDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &consumerAttempted,
+        }
+    );
+    ASSERT_TRUE(consumerTask.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/corrupted_forced_dependency_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(producerTask);
+    const GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumerTask);
+    const GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producerTask);
+    const GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumerTask);
+    ASSERT_TRUE(packet.valid());
+    ASSERT_EQ(consumerPacket, packet);
+    ASSERT_TRUE(compiledGraph.taskPrecedesInSamePacket(producerTask, consumerTask));
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledConsumer, nullptr);
+    ASSERT_EQ(compiledProducer->prologueBarrierCount, 1u);
+    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
+    GpuCompiledBarrier* const initialBarrier =
+        const_cast<GpuCompiledBarrier*>(compiledGraph.taskPrologueBarriers(producerTask))
+    ;
+    GpuCompiledBarrier* const dependencyBarrier =
+        const_cast<GpuCompiledBarrier*>(compiledGraph.taskPrologueBarriers(consumerTask))
+    ;
+    ASSERT_NE(initialBarrier, nullptr);
+    ASSERT_NE(dependencyBarrier, nullptr);
+    ASSERT_EQ(initialBarrier->type, GpuCompiledBarrierType::BufferTransition);
+    ASSERT_EQ(initialBarrier->before, ResourceStates::CopyDest);
+    ASSERT_EQ(initialBarrier->after, ResourceStates::CopyDest);
+    ASSERT_TRUE(initialBarrier->isGraphInitialState);
+    ASSERT_FALSE(initialBarrier->isInitialOwnerHandoff);
+    ASSERT_FALSE(initialBarrier->forceMemoryDependency);
+    ASSERT_EQ(dependencyBarrier->type, GpuCompiledBarrierType::BufferTransition);
+    ASSERT_EQ(dependencyBarrier->before, ResourceStates::CopyDest);
+    ASSERT_EQ(dependencyBarrier->after, ResourceStates::CopyDest);
+    ASSERT_FALSE(dependencyBarrier->isGraphInitialState);
+    ASSERT_FALSE(dependencyBarrier->isInitialOwnerHandoff);
+    ASSERT_TRUE(dependencyBarrier->forceMemoryDependency);
+    const GpuCompiledBarrier validInitialBarrier = *initialBarrier;
+    const GpuCompiledBarrier validDependencyBarrier = *dependencyBarrier;
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    const auto expectPreflightRejection = [&](
+        GpuCompiledBarrier& targetBarrier,
+        const GpuCompiledBarrier& corruptedBarrier,
+        const GpuCompiledBarrier& validTargetBarrier
+    ){
+        targetBarrier = corruptedBarrier;
+        producerAttempted = false;
+        consumerAttempted = false;
+        EXPECT_FALSE(recorder.recordPacket(
+            graph,
+            compiledGraph,
+            GpuNativePacketRecordDesc{ .packet = packet },
+            recordedGraph
+        ));
+        EXPECT_FALSE(producerAttempted);
+        EXPECT_FALSE(consumerAttempted);
+        EXPECT_EQ(recordedGraph.find(packet), nullptr);
+        targetBarrier = validTargetBarrier;
+    };
+
+    {
+        SCOPED_TRACE("graph-initial force marker");
+        GpuCompiledBarrier corruptedBarrier = validInitialBarrier;
+        corruptedBarrier.forceMemoryDependency = true;
+        expectPreflightRejection(*initialBarrier, corruptedBarrier, validInitialBarrier);
+    }
+    {
+        SCOPED_TRACE("forced transition carrying unordered access");
+        GpuCompiledBarrier corruptedBarrier = validInitialBarrier;
+        corruptedBarrier.before = ResourceStates::UnorderedAccess;
+        corruptedBarrier.after = ResourceStates::UnorderedAccess;
+        corruptedBarrier.isGraphInitialState = false;
+        corruptedBarrier.forceMemoryDependency = true;
+        expectPreflightRejection(*initialBarrier, corruptedBarrier, validInitialBarrier);
+    }
+    {
+        SCOPED_TRACE("unordered-access dependency without force marker");
+        GpuCompiledBarrier corruptedBarrier = validInitialBarrier;
+        corruptedBarrier.type = GpuCompiledBarrierType::BufferUav;
+        corruptedBarrier.before = ResourceStates::UnorderedAccess;
+        corruptedBarrier.after = ResourceStates::UnorderedAccess;
+        corruptedBarrier.isGraphInitialState = false;
+        expectPreflightRejection(*initialBarrier, corruptedBarrier, validInitialBarrier);
+    }
+    {
+        SCOPED_TRACE("forced external state export");
+        GpuCompiledBarrier corruptedBarrier = validInitialBarrier;
+        corruptedBarrier.type = GpuCompiledBarrierType::BufferStateExport;
+        corruptedBarrier.isGraphInitialState = false;
+        corruptedBarrier.forceMemoryDependency = true;
+        expectPreflightRejection(*initialBarrier, corruptedBarrier, validInitialBarrier);
+    }
+    {
+        SCOPED_TRACE("internal same-state transition without force marker");
+        GpuCompiledBarrier corruptedBarrier = validDependencyBarrier;
+        corruptedBarrier.forceMemoryDependency = false;
+        expectPreflightRejection(*dependencyBarrier, corruptedBarrier, validDependencyBarrier);
+    }
+
+    producerAttempted = false;
+    consumerAttempted = false;
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = packet },
+        recordedGraph
+    ));
+    EXPECT_TRUE(producerAttempted);
+    EXPECT_TRUE(consumerAttempted);
+}
+
+
 // Permanent state is an exact native contract, not merely a hint that suppresses transitions. Matching UAV use
 // still records its dependency barrier, while conflicting graph entry/export requests reject at the barrier
 // boundary. Invalid permanent setters must not leak contradictory state into a packet handoff.

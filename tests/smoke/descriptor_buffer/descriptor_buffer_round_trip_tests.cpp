@@ -45580,9 +45580,16 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
             .setCanHaveRawViews(true)
             .setInitialState(ResourceStates::Common)
     );
+    auto callbackFalseBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
     ASSERT_NE(sourceBuffer.get(), nullptr);
     ASSERT_NE(historyBuffer.get(), nullptr);
     ASSERT_NE(presentationBuffer.get(), nullptr);
+    ASSERT_NE(callbackFalseBuffer.get(), nullptr);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId source = graph.importBuffer(
@@ -45606,9 +45613,17 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
             .setMarkerLabel("Late History Presentation")
             .setType(GpuGraphResourceType::Buffer)
     );
+    const GpuGraphResourceId callbackFalseResource = graph.importBuffer(
+        callbackFalseBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/late_history_accepted_callback_false_resource"))
+            .setMarkerLabel("Late History Accepted Callback False Resource")
+            .setType(GpuGraphResourceType::Buffer)
+    );
     ASSERT_TRUE(source.valid());
     ASSERT_TRUE(history.valid());
     ASSERT_TRUE(presentation.valid());
+    ASSERT_TRUE(callbackFalseResource.valid());
 
     GpuTaskSchedulingHint scheduling;
     scheduling.forceSubmissionBoundary = true;
@@ -45781,6 +45796,87 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     );
     ASSERT_TRUE(preflightRejectedTailTask.valid());
 
+    u32 invalidAcceptedCallbackDiscardedCount = 0u;
+    bool invalidAcceptedCallbackRecorded = false;
+    const GpuTaskId invalidAcceptedCallbackTailTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/late_history_invalid_accepted_callback"))
+            .setMarkerLabel("Late History Invalid Accepted Callback")
+            .setQueue(GpuQueueRequest{
+                GpuQueueCapability::Transfer,
+                GpuQueuePreference::Transfer,
+                true,
+                true,
+            })
+            .setScheduling(scheduling)
+            .setDependencies(rejectedTailDependencies, LengthOf(rejectedTailDependencies))
+            .setResourceUses(rejectedTailUses, LengthOf(rejectedTailUses)),
+        NativePacketPrefixTask::Payload{
+            .buffer = historyBuffer.get(),
+            .expectedState = ResourceStates::CopyDest,
+            .recorded = &invalidAcceptedCallbackRecorded,
+            .discardedCount = &invalidAcceptedCallbackDiscardedCount,
+        }
+    );
+    ASSERT_TRUE(invalidAcceptedCallbackTailTask.valid());
+
+    u32 mismatchedAcceptedCallbackDiscardedCount = 0u;
+    bool mismatchedAcceptedCallbackRecorded = false;
+    const GpuTaskId mismatchedAcceptedCallbackTailTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/late_history_mismatched_accepted_callback"))
+            .setMarkerLabel("Late History Mismatched Accepted Callback")
+            .setQueue(GpuQueueRequest{
+                GpuQueueCapability::Transfer,
+                GpuQueuePreference::Transfer,
+                true,
+                true,
+            })
+            .setScheduling(scheduling)
+            .setDependencies(rejectedTailDependencies, LengthOf(rejectedTailDependencies))
+            .setResourceUses(rejectedTailUses, LengthOf(rejectedTailUses)),
+        NativePacketPrefixTask::Payload{
+            .buffer = historyBuffer.get(),
+            .expectedState = ResourceStates::CopyDest,
+            .recorded = &mismatchedAcceptedCallbackRecorded,
+            .discardedCount = &mismatchedAcceptedCallbackDiscardedCount,
+        }
+    );
+    ASSERT_TRUE(mismatchedAcceptedCallbackTailTask.valid());
+
+    const GpuTaskResourceUse callbackFalseUses[] = {
+        GpuTaskResourceUse{
+            .resource = callbackFalseResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    u32 callbackFalseDiscardedCount = 0u;
+    bool callbackFalseRecorded = false;
+    QueueSubmissionToken callbackFalseTypedToken;
+    const GpuTaskId callbackFalseTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/late_history_accepted_callback_false"))
+            .setMarkerLabel("Late History Accepted Callback False")
+            .setQueue(GpuQueueRequest{
+                GpuQueueCapability::Graphics,
+                GpuQueuePreference::Graphics,
+                false,
+                false,
+            })
+            .setScheduling(scheduling)
+            .setResourceUses(callbackFalseUses, LengthOf(callbackFalseUses)),
+        NativePacketPrefixTask::Payload{
+            .buffer = callbackFalseBuffer.get(),
+            .expectedState = ResourceStates::ShaderResource,
+            .recorded = &callbackFalseRecorded,
+            .acceptedToken = &callbackFalseTypedToken,
+            .discardedCount = &callbackFalseDiscardedCount,
+        }
+    );
+    ASSERT_TRUE(callbackFalseTask.valid());
+
     const GpuPhysicalQueueInfo queue{
         .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
@@ -45808,11 +45904,17 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     const GpuSubmissionPacketId historyPacket = compiledGraph.packetForTask(historyTask);
     const GpuSubmissionPacketId rejectedTailPacket = compiledGraph.packetForTask(rejectedTailTask);
     const GpuSubmissionPacketId preflightRejectedTailPacket = compiledGraph.packetForTask(preflightRejectedTailTask);
+    const GpuSubmissionPacketId invalidCallbackPacket = compiledGraph.packetForTask(invalidAcceptedCallbackTailTask);
+    const GpuSubmissionPacketId mismatchedCallbackPacket = compiledGraph.packetForTask(mismatchedAcceptedCallbackTailTask);
+    const GpuSubmissionPacketId callbackFalsePacket = compiledGraph.packetForTask(callbackFalseTask);
     ASSERT_TRUE(presentPacket.valid());
     ASSERT_TRUE(historyPacket.valid());
     ASSERT_TRUE(rejectedTailPacket.valid());
     ASSERT_TRUE(preflightRejectedTailPacket.valid());
-    ASSERT_EQ(compiledGraph.packetCount(), 4u);
+    ASSERT_TRUE(invalidCallbackPacket.valid());
+    ASSERT_TRUE(mismatchedCallbackPacket.valid());
+    ASSERT_TRUE(callbackFalsePacket.valid());
+    ASSERT_EQ(compiledGraph.packetCount(), 7u);
     EXPECT_EQ(compiledGraph.packetIdAt(0u), presentPacket);
     EXPECT_EQ(compiledGraph.packetIdAt(1u), historyPacket);
     EXPECT_EQ(compiledGraph.packetIdAt(2u), rejectedTailPacket);
@@ -45826,6 +45928,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     EXPECT_EQ(compiledGraph.packet(historyPacket).externalDependencyCount, 0u);
     ASSERT_EQ(compiledGraph.packet(rejectedTailPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(rejectedTailPacket)[0u].producer, historyPacket);
+    EXPECT_EQ(compiledGraph.packet(callbackFalsePacket).dependencyCount, 0u);
 
     // Current-frame producer state arrives independently from the terminal Present dependency. This is the same
     // late fan-in shape used by the renderer's shadow/caustic/surfel return snapshots.
@@ -45882,6 +45985,12 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         .context = &historyFinalStateObserved,
         .invoke = observeHistoryFinalState,
     };
+    NativeTaskAcceptanceObserver historyAcceptance;
+    const GpuTaskGraphTaskAcceptedCallback historyAcceptedCallback{
+        .task = historyTask,
+        .context = &historyAcceptance,
+        .invoke = ObserveNativeTaskAcceptance,
+    };
     ASSERT_TRUE(submitter.recordAndSubmitTask(
         graph,
         compiledGraph,
@@ -45892,13 +46001,66 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         LengthOf(lateHistoryStateBindings),
         &historyRecordedCallback,
         transaction,
-        scratchArena
+        scratchArena,
+        nullptr,
+        &historyAcceptedCallback
     ));
     EXPECT_TRUE(historyRecorded);
     EXPECT_TRUE(historyFinalStateObserved);
     const QueueSubmissionToken historySubmissionToken = transaction.packetToken(historyPacket);
     ASSERT_TRUE(historySubmissionToken.valid());
     EXPECT_EQ(historyAcceptedToken.value, historySubmissionToken.value);
+    EXPECT_EQ(historyAcceptance.acceptedCount, 1u);
+    EXPECT_EQ(historyAcceptance.lastToken.queue, historySubmissionToken.queue);
+    EXPECT_EQ(historyAcceptance.lastToken.value, historySubmissionToken.value);
+    EXPECT_EQ(historyAcceptance.lastToken.physicalQueueIndex, historySubmissionToken.physicalQueueIndex);
+    EXPECT_EQ(historyAcceptance.lastToken.deviceGeneration, historySubmissionToken.deviceGeneration);
+
+    NativeTaskAcceptanceObserver callbackFalseAcceptance;
+    callbackFalseAcceptance.continueSubmission = false;
+    const GpuTaskGraphTaskAcceptedCallback callbackFalseAcceptedCallback{
+        .task = callbackFalseTask,
+        .context = &callbackFalseAcceptance,
+        .invoke = ObserveNativeTaskAcceptance,
+    };
+    GpuRecordedGraph callbackFalseRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction callbackFalseTransaction(DescriptorBufferRoundTripTest::arena());
+    callbackFalseTransaction.reset(compiledGraph);
+    GpuSubmissionPacketId callbackFalseFailedPacket;
+    EXPECT_FALSE(submitter.recordAndSubmitTask(
+        graph,
+        compiledGraph,
+        recorder,
+        callbackFalseRecordedGraph,
+        callbackFalseTask,
+        nullptr,
+        0u,
+        nullptr,
+        callbackFalseTransaction,
+        scratchArena,
+        &callbackFalseFailedPacket,
+        &callbackFalseAcceptedCallback
+    ));
+    EXPECT_EQ(callbackFalseFailedPacket, callbackFalsePacket);
+    EXPECT_TRUE(callbackFalseRecorded);
+    EXPECT_EQ(callbackFalseAcceptance.acceptedCount, 1u);
+    const QueueSubmissionToken callbackFalsePacketToken = callbackFalseTransaction.packetToken(callbackFalsePacket);
+    const QueueSubmissionToken callbackFalseTaskToken = callbackFalseTransaction.taskToken(compiledGraph, callbackFalseTask);
+    ASSERT_TRUE(callbackFalsePacketToken.valid());
+    ASSERT_TRUE(callbackFalseTaskToken.valid());
+    EXPECT_EQ(callbackFalseAcceptance.lastToken.value, callbackFalsePacketToken.value);
+    EXPECT_EQ(callbackFalseTypedToken.value, callbackFalsePacketToken.value);
+    EXPECT_EQ(callbackFalseTaskToken.value, callbackFalsePacketToken.value);
+    ASSERT_NE(callbackFalseTransaction.packetRuntime(callbackFalsePacket), nullptr);
+    EXPECT_EQ(callbackFalseTransaction.packetRuntime(callbackFalsePacket)->state, GpuPacketRuntimeState::Accepted);
+    // The helper's false-result closeout calls rejectTask(), which must leave an already native-accepted packet
+    // untouched rather than discarding its payload or rewriting its terminal state.
+    EXPECT_EQ(callbackFalseDiscardedCount, 0u);
+    const GpuTaskGraphSubmissionStatistics callbackFalseStatistics = callbackFalseTransaction.submissionStatistics();
+    EXPECT_EQ(callbackFalseStatistics.acceptedPacketCount, 1u);
+    EXPECT_EQ(callbackFalseStatistics.acceptedTaskCount, 1u);
+    EXPECT_EQ(callbackFalseStatistics.rejectedPacketCount, 0u);
+    EXPECT_EQ(callbackFalseStatistics.nativeSubmissionCount, 1u);
 
     // Validation fails before the recorder can prepare its recorded graph. The helper must still establish the
     // current graph attempt for transactional cleanup, rather than leaving the declared tail armed.
@@ -45927,6 +46089,78 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     ASSERT_NE(preflightRejectedTransaction.packetRuntime(preflightRejectedTailPacket), nullptr);
     EXPECT_EQ(
         preflightRejectedTransaction.packetRuntime(preflightRejectedTailPacket)->state,
+        GpuPacketRuntimeState::Rejected
+    );
+
+    const GpuTaskGraphTaskAcceptedCallback invalidAcceptedCallback{
+        .task = invalidAcceptedCallbackTailTask,
+    };
+    GpuRecordedGraph invalidAcceptedCallbackRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction invalidAcceptedCallbackTransaction(DescriptorBufferRoundTripTest::arena());
+    invalidAcceptedCallbackTransaction.reset(compiledGraph);
+    EXPECT_FALSE(submitter.recordAndSubmitTask(
+        graph,
+        compiledGraph,
+        recorder,
+        invalidAcceptedCallbackRecordedGraph,
+        invalidAcceptedCallbackTailTask,
+        nullptr,
+        0u,
+        nullptr,
+        invalidAcceptedCallbackTransaction,
+        scratchArena,
+        nullptr,
+        &invalidAcceptedCallback
+    ));
+    EXPECT_FALSE(invalidAcceptedCallbackRecorded);
+    EXPECT_EQ(invalidAcceptedCallbackDiscardedCount, 1u);
+    EXPECT_FALSE(invalidAcceptedCallbackTransaction.packetToken(invalidCallbackPacket).valid());
+    const GpuTaskGraphSubmissionStatistics invalidAcceptedCallbackStatistics =
+        invalidAcceptedCallbackTransaction.submissionStatistics()
+    ;
+    EXPECT_EQ(invalidAcceptedCallbackStatistics.acceptedPacketCount, 0u);
+    EXPECT_EQ(invalidAcceptedCallbackStatistics.nativeSubmissionCount, 0u);
+    ASSERT_NE(invalidAcceptedCallbackTransaction.packetRuntime(invalidCallbackPacket), nullptr);
+    EXPECT_EQ(
+        invalidAcceptedCallbackTransaction.packetRuntime(invalidCallbackPacket)->state,
+        GpuPacketRuntimeState::Rejected
+    );
+
+    NativeTaskAcceptanceObserver mismatchedAcceptance;
+    const GpuTaskGraphTaskAcceptedCallback mismatchedAcceptedCallback{
+        .task = historyTask,
+        .context = &mismatchedAcceptance,
+        .invoke = ObserveNativeTaskAcceptance,
+    };
+    GpuRecordedGraph mismatchedAcceptedCallbackRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction mismatchedAcceptedCallbackTransaction(DescriptorBufferRoundTripTest::arena());
+    mismatchedAcceptedCallbackTransaction.reset(compiledGraph);
+    EXPECT_FALSE(submitter.recordAndSubmitTask(
+        graph,
+        compiledGraph,
+        recorder,
+        mismatchedAcceptedCallbackRecordedGraph,
+        mismatchedAcceptedCallbackTailTask,
+        nullptr,
+        0u,
+        nullptr,
+        mismatchedAcceptedCallbackTransaction,
+        scratchArena,
+        nullptr,
+        &mismatchedAcceptedCallback
+    ));
+    EXPECT_FALSE(mismatchedAcceptedCallbackRecorded);
+    EXPECT_EQ(mismatchedAcceptedCallbackDiscardedCount, 1u);
+    EXPECT_EQ(mismatchedAcceptance.acceptedCount, 0u);
+    EXPECT_FALSE(mismatchedAcceptedCallbackTransaction.packetToken(mismatchedCallbackPacket).valid());
+    const GpuTaskGraphSubmissionStatistics mismatchedAcceptedCallbackStatistics =
+        mismatchedAcceptedCallbackTransaction.submissionStatistics()
+    ;
+    EXPECT_EQ(mismatchedAcceptedCallbackStatistics.acceptedPacketCount, 0u);
+    EXPECT_EQ(mismatchedAcceptedCallbackStatistics.nativeSubmissionCount, 0u);
+    ASSERT_NE(mismatchedAcceptedCallbackTransaction.packetRuntime(mismatchedCallbackPacket), nullptr);
+    EXPECT_EQ(
+        mismatchedAcceptedCallbackTransaction.packetRuntime(mismatchedCallbackPacket)->state,
         GpuPacketRuntimeState::Rejected
     );
 

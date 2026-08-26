@@ -1107,9 +1107,10 @@ public:
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
     // Records and submits one semantic late task after its graph dependencies have accepted. Optional
-    // task-anchored state bindings are resolved only while recording, and a recorded callback may validate the
-    // packet's immutable final-state seed before submission. Any rejection leaves task lifecycle owned by the
-    // transaction rather than a renderer-local packet/retry path.
+    // task-anchored state bindings are resolved only while recording, a recorded callback may validate the
+    // packet's immutable final-state seed before submission, and an accepted callback may publish semantic state
+    // synchronously from the native submission token. Any rejection leaves task lifecycle owned by the transaction
+    // rather than a renderer-local packet/retry path.
     [[nodiscard]] bool recordAndSubmitTask(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -1121,7 +1122,8 @@ public:
         const GpuTaskGraphTaskRecordedCallback* recordedCallback,
         GpuGraphSubmissionTransaction& transaction,
         Alloc::ScratchArena& scratchArena,
-        GpuSubmissionPacketId* outFailedPacket = nullptr
+        GpuSubmissionPacketId* outFailedPacket = nullptr,
+        const GpuTaskGraphTaskAcceptedCallback* acceptedCallback = nullptr
     )const;
     // Semantic companion to the packet-timing overload above.  It resolves timing tickets and one-shot native
     // pre-submit hooks through the current compiled graph, so packet splitting/merging remains compiler-owned.

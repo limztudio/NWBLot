@@ -487,7 +487,8 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTask(
     const GpuTaskGraphTaskRecordedCallback* const recordedCallback,
     GpuGraphSubmissionTransaction& transaction,
     Alloc::ScratchArena& scratchArena,
-    GpuSubmissionPacketId* const outFailedPacket
+    GpuSubmissionPacketId* const outFailedPacket,
+    const GpuTaskGraphTaskAcceptedCallback* const acceptedCallback
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
@@ -521,6 +522,7 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTask(
         || !compiledGraph.findTask(task)
         || (taskStateBindingCount != 0u && !taskStateBindings)
         || (recordedCallback && !recordedCallback->invoke)
+        || (acceptedCallback && (!acceptedCallback->invoke || acceptedCallback->task != task))
     ){
         rejectTask();
         return false;
@@ -571,7 +573,12 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTask(
         0u,
         transaction,
         scratchArena,
-        &failedPacket
+        &failedPacket,
+        nullptr,
+        nullptr,
+        0u,
+        acceptedCallback,
+        acceptedCallback ? 1u : 0u
     )){
         if(outFailedPacket)
             *outFailedPacket = failedPacket;

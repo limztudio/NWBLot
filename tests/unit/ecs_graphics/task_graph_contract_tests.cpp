@@ -541,6 +541,13 @@ TEST(EcsGraphics, MeshSkinningUsesFrontierScoredSerialPacketization){
     EXPECT_TRUE(ContainsText(skinning, "terminalQueue->id != graphicsQueue"));
     EXPECT_EQ(CountText(skinning, "Core::GpuTaskGraphTaskTimingTicket{"), 1u);
     EXPECT_TRUE(ContainsText(skinning, ".task = terminalTask,\n            .timingTicket = &timingTicket,"));
+    EXPECT_TRUE(ContainsText(skinning, "m_acceptedSkinningState.buildMergedBufferSubset("));
+    EXPECT_TRUE(ContainsText(skinning, "const Core::GpuTaskGraphTaskAcceptedCallback acceptedCallback{"));
+    EXPECT_TRUE(ContainsText(skinning, ".task = terminalTask,\n        .context = &skinningAcceptance,"));
+    EXPECT_TRUE(ContainsText(skinning, "context->stateReady = context->cache->commit(*context->candidate);"));
+    EXPECT_TRUE(ContainsText(skinning, "const Core::QueueSubmissionToken skinningToken = transaction.taskToken("));
+    EXPECT_TRUE(ContainsText(skinning, "if(!skinningSubmitted || !skinningAcceptance.stateReady){"));
+    EXPECT_FALSE(ContainsText(skinning, "mergeAcceptedSkinningState("));
 }
 
 
@@ -935,6 +942,44 @@ TEST(EcsGraphics, LateGraphTailsUseRuntimeHelpers){
     EXPECT_FALSE(ContainsText(system, "const auto discardFrameRecovery"));
     EXPECT_FALSE(ContainsText(system, "failed to late-record deferred frame recovery packet"));
     EXPECT_FALSE(ContainsText(system, "deferred frame recovery submission was rejected"));
+}
+
+
+// The late history-copy packet prepares all three filtered return candidates while recording and commits them only
+// from its exact accepted callback. Its task token remains the source of truth when that callback reports failure.
+TEST(EcsGraphics, LaggedHistoryReturnCachesPublishOnlyOnTaskAcceptance){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemSource;
+    ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
+    const AStringView system(systemSource.data(), systemSource.size());
+
+    const usize acceptanceOffset = system.find("struct HistoryCopyAcceptanceContext{");
+    const usize submitOffset = system.find("const bool historyCopyAccepted = submitter.recordAndSubmitTask(", acceptanceOffset);
+    const usize tokenOffset = system.find("const Core::QueueSubmissionToken historyCopySubmissionToken =", submitOffset);
+    ASSERT_NE(acceptanceOffset, AStringView::npos);
+    ASSERT_NE(submitOffset, AStringView::npos);
+    ASSERT_NE(tokenOffset, AStringView::npos);
+    ASSERT_LT(acceptanceOffset, submitOffset);
+    ASSERT_LT(submitOffset, tokenOffset);
+    const AStringView acceptance = system.substr(acceptanceOffset, submitOffset - acceptanceOffset);
+    EXPECT_EQ(CountText(acceptance, "buildFilteredResourceSubset("), 3u);
+    EXPECT_EQ(CountText(acceptance, ".commit("), 3u);
+    EXPECT_TRUE(ContainsText(acceptance, ".task = m_deferredLaggedLightingHistoryTask,"));
+    EXPECT_TRUE(ContainsText(acceptance, ".context = &historyCopyAcceptance,"));
+    EXPECT_TRUE(ContainsText(acceptance, ".invoke = acceptHistoryCopyFinalState,"));
+    EXPECT_FALSE(ContainsText(acceptance, ".replaceTextureSubset("));
+
+    const usize failureOffset = system.find(
+        "if(historyCopySubmissionToken.valid() && (!historyCopyAccepted || !historyCopyAcceptance.acceptedStateReady))",
+        tokenOffset
+    );
+    ASSERT_NE(failureOffset, AStringView::npos);
+    EXPECT_TRUE(ContainsText(
+        system.substr(submitOffset, failureOffset - submitOffset),
+        "scratchArena,\n                nullptr,\n                &historyCopyAcceptedCallback"
+    ));
 }
 
 
@@ -1489,7 +1534,19 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
     EXPECT_TRUE(ContainsText(readback, ".setQueue(TransferQueueRequest())"));
 
     EXPECT_TRUE(ContainsText(system, "if(m_surfelGiCounterPersistentState.valid())"));
-    EXPECT_TRUE(ContainsText(system, "m_surfelGiCounterPersistentState.commit(readbackCounterStateCandidate)"));
+    EXPECT_TRUE(ContainsText(system, "m_surfelGiCounterPersistentState.buildFilteredBufferSubset("));
+    EXPECT_TRUE(ContainsText(system, "m_surfelGiCounterPersistentState.commit(\n                    *context->candidate"));
+    EXPECT_TRUE(ContainsText(system, ".task = m_deferredSurfelGiCounterReadbackTask,"));
+    EXPECT_TRUE(ContainsText(system, "scratchArena,\n                nullptr,\n                &readbackAcceptedCallback"));
+    const usize readbackSubmitOffset = system.find("const bool readbackAccepted = submitter.recordAndSubmitTask(");
+    const usize readbackTokenOffset = system.find(
+        "const Core::QueueSubmissionToken readbackSubmissionToken =",
+        readbackSubmitOffset
+    );
+    ASSERT_NE(readbackSubmitOffset, AStringView::npos);
+    ASSERT_NE(readbackTokenOffset, AStringView::npos);
+    EXPECT_LT(readbackSubmitOffset, readbackTokenOffset);
+    EXPECT_TRUE(ContainsText(system, "else if(!readbackAccepted || !readbackContext.acceptedStateReady){"));
 }
 
 
@@ -2019,39 +2076,93 @@ TEST(EcsGraphics, ShadowTemporalScratchRetainsAcceptedStateAcrossGraphicsRoute){
         "if(shadowVisibilityRunsOnCompute && m_shadowVisibilityReturnState.valid())"
     ));
 
-    const usize acceptedShadowOffset = system.find("const bool softwareCausticsAccepted =");
-    const usize scratchStateOffset = system.find(
-        "m_shadowComputePersistentState.replaceResourceSubset(",
-        acceptedShadowOffset
-    );
+    const usize acceptedShadowOffset = system.find("const Core::TextureHandle shadowVisibilityReturnTextures[]");
+    const usize scratchStateOffset = system.find("m_shadowComputePersistentState.buildFilteredResourceSubset(", acceptedShadowOffset);
+    const usize acceptedCallbackOffset = system.find("const auto acceptShadowVisibilityTask = [](", scratchStateOffset);
+    const usize returnCommitOffset = system.find("m_shadowVisibilityReturnState.commit(", acceptedCallbackOffset);
+    const usize scratchCommitOffset = system.find("m_shadowComputePersistentState.commit(", returnCommitOffset);
     const usize temporalFinalizeOffset = system.find(
-        "m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);",
-        scratchStateOffset
+        "m_raytracingSystem.finalizeSoftShadowTemporalHistory(*context->targets);",
+        scratchCommitOffset
     );
     ASSERT_NE(acceptedShadowOffset, AStringView::npos);
     ASSERT_NE(scratchStateOffset, AStringView::npos);
+    ASSERT_NE(acceptedCallbackOffset, AStringView::npos);
+    ASSERT_NE(returnCommitOffset, AStringView::npos);
+    ASSERT_NE(scratchCommitOffset, AStringView::npos);
     ASSERT_NE(temporalFinalizeOffset, AStringView::npos);
-    ASSERT_LT(acceptedShadowOffset, temporalFinalizeOffset);
-    const AStringView acceptedShadow = system.substr(
-        acceptedShadowOffset,
-        temporalFinalizeOffset - acceptedShadowOffset
-    );
-    const usize returnStateOffset = acceptedShadow.find("m_shadowVisibilityReturnState.replaceTextureSubset(");
-    const usize acceptedScratchStateOffset = acceptedShadow.find("m_shadowComputePersistentState.replaceResourceSubset(");
-    ASSERT_NE(returnStateOffset, AStringView::npos);
-    ASSERT_NE(acceptedScratchStateOffset, AStringView::npos);
-    EXPECT_LT(returnStateOffset, acceptedScratchStateOffset);
-    EXPECT_TRUE(ContainsText(
-        acceptedShadow,
-        "if(shadowVisibilityRunsOnCompute){\n            // Retain only the cross-queue return state"
-    ));
-    EXPECT_TRUE(ContainsText(
-        acceptedShadow,
-        "        }\n        const Core::TextureHandle shadowComputeScratchTextures[] = {"
-    ));
+    EXPECT_LT(returnCommitOffset, scratchCommitOffset);
+    EXPECT_LT(scratchCommitOffset, temporalFinalizeOffset);
+    const AStringView acceptedShadow = system.substr(acceptedShadowOffset, temporalFinalizeOffset - acceptedShadowOffset);
     EXPECT_TRUE(ContainsText(acceptedShadow, "deferredTargets.shadowSoftGeometry,"));
     EXPECT_TRUE(ContainsText(acceptedShadow, "deferredTargets.shadowSoftGeometryPrev,"));
-    EXPECT_TRUE(ContainsText(acceptedShadow, "m_shadowComputePersistentState.replaceResourceSubset("));
+    EXPECT_TRUE(ContainsText(acceptedShadow, "m_shadowComputePersistentState.buildFilteredResourceSubset("));
+    EXPECT_TRUE(ContainsText(acceptedShadow, "if(shadowVisibilityRunsOnCompute){"));
+    EXPECT_TRUE(ContainsText(acceptedShadow, "m_shadowVisibilityReturnState.buildFilteredResourceSubset("));
+    EXPECT_TRUE(ContainsText(acceptedShadow, "context->renderer->m_shadowVisibilityReturnState.commit("));
+    EXPECT_TRUE(ContainsText(acceptedShadow, "context->renderer->m_shadowComputePersistentState.commit("));
+    EXPECT_TRUE(ContainsText(system, "finalizeSoftShadowTemporalHistory(*context->targets)"));
+    EXPECT_TRUE(ContainsText(
+        system,
+        ".task = m_deferredShadowVisibilityTask,\n"
+        "                .context = &shadowVisibilityAcceptance,\n"
+        "                .invoke = acceptShadowVisibilityTask,"
+    ));
+}
+
+
+// Software-caustics scratch is private on both the dedicated Compute route and its legal Graphics fallback. Only
+// the cross-queue irradiance return cache is route-conditional; all retained state publishes from the exact task.
+TEST(EcsGraphics, SoftwareCausticsScratchRetainsAcceptedStateAcrossGraphicsRoute){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemSource;
+    ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
+    const AStringView system(systemSource.data(), systemSource.size());
+
+    const usize stateSourcesOffset = system.find("Core::GpuExternalPacketStateSource softwareCausticsStateSources[");
+    const usize surfelSourcesOffset = system.find("Core::GpuExternalPacketStateSource surfelGiStateSources[", stateSourcesOffset);
+    ASSERT_NE(stateSourcesOffset, AStringView::npos);
+    ASSERT_NE(surfelSourcesOffset, AStringView::npos);
+    ASSERT_LT(stateSourcesOffset, surfelSourcesOffset);
+    const AStringView stateSources = system.substr(stateSourcesOffset, surfelSourcesOffset - stateSourcesOffset);
+    EXPECT_TRUE(ContainsText(stateSources, "if(m_causticsComputePersistentState.valid())"));
+    EXPECT_FALSE(ContainsText(
+        stateSources,
+        "softwareCausticsRunsOnCompute && m_causticsComputePersistentState.valid()"
+    ));
+    EXPECT_TRUE(ContainsText(
+        stateSources,
+        "if(softwareCausticsRunsOnCompute && m_causticIrradianceReturnState.valid())"
+    ));
+
+    const usize candidatesOffset = system.find("const Core::TextureHandle causticsComputeScratchTextures[]");
+    const usize callbacksOffset = system.find("const Core::GpuTaskGraphTaskAcceptedCallback shadowEffectsAcceptedCallbacks[]", candidatesOffset);
+    ASSERT_NE(candidatesOffset, AStringView::npos);
+    ASSERT_NE(callbacksOffset, AStringView::npos);
+    ASSERT_LT(candidatesOffset, callbacksOffset);
+    const AStringView acceptedCaustics = system.substr(candidatesOffset, callbacksOffset - candidatesOffset);
+    EXPECT_TRUE(ContainsText(acceptedCaustics, "if(laggedAsyncLightingSchedule){"));
+    EXPECT_TRUE(ContainsText(acceptedCaustics, "m_causticIrradianceLightingState.buildFilteredResourceSubset("));
+    EXPECT_TRUE(ContainsText(acceptedCaustics, "if(softwareCausticsRunsOnCompute){"));
+    EXPECT_TRUE(ContainsText(acceptedCaustics, "m_causticIrradianceReturnState.buildFilteredResourceSubset("));
+    EXPECT_TRUE(ContainsText(acceptedCaustics, "m_causticsComputePersistentState.buildFilteredResourceSubset("));
+    EXPECT_TRUE(ContainsText(acceptedCaustics, "context->renderer->m_causticIrradianceLightingState.commit("));
+    EXPECT_TRUE(ContainsText(acceptedCaustics, "context->renderer->m_causticIrradianceReturnState.commit("));
+    EXPECT_TRUE(ContainsText(acceptedCaustics, "context->renderer->m_causticsComputePersistentState.commit("));
+    EXPECT_TRUE(ContainsText(system, ".task = m_deferredSoftwareCausticsTask,"));
+    EXPECT_TRUE(ContainsText(system, "shadowEffectsSubmitted && softwareCausticsSubmissionToken.valid()"));
+    const usize stateFailureOffset = system.find(
+        "if(!hardwareShadowSupported && softwareCausticsSubmissionToken.valid() && !softwareCausticsAcceptance.stateReady)"
+    );
+    const usize surfelSubmitOffset = system.find("if(!submitDeferredSurfelGi())", stateFailureOffset);
+    ASSERT_NE(stateFailureOffset, AStringView::npos);
+    ASSERT_NE(surfelSubmitOffset, AStringView::npos);
+    ASSERT_LT(stateFailureOffset, surfelSubmitOffset);
+    const AStringView stateFailure = system.substr(stateFailureOffset, surfelSubmitOffset - stateFailureOffset);
+    EXPECT_TRUE(ContainsText(stateFailure, "restoreUnacceptedShadowEffectsCpuState();"));
+    EXPECT_FALSE(ContainsText(stateFailure, "restoreAvboitCpuState();"));
 }
 
 

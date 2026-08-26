@@ -1977,7 +1977,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         graphicsPrefixFinalStateSeed
     );
     if(!hardwareShadowSupported){
-        if(softwareCausticsRunsOnCompute && m_causticsComputePersistentState.valid()){
+        if(m_causticsComputePersistentState.valid()){
             softwareCausticsStateSourcesReady = softwareCausticsStateSourcesReady
                 && appendDeclaredStateSource(
                     softwareCausticsStateSources,
@@ -3098,6 +3098,217 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? 1u
             : LengthOf(shadowEffectsTimingTickets)
         ;
+        const Core::TextureHandle shadowVisibilityReturnTextures[] = {
+            deferredTargets.shadowVisibility,
+        };
+        const Core::TextureHandle shadowComputeScratchTextures[] = {
+            deferredTargets.shadowCoarseTransmittance,
+            deferredTargets.shadowSoftHalfA,
+            deferredTargets.shadowSoftHalfB,
+            deferredTargets.shadowSoftGeometry,
+            deferredTargets.shadowSoftGeometryPrev,
+            deferredTargets.shadowHistA,
+            deferredTargets.shadowHistB,
+            deferredTargets.shadowMomentsA,
+            deferredTargets.shadowMomentsB,
+            deferredTargets.transparentSoftHalf,
+            deferredTargets.transparentHistA,
+            deferredTargets.transparentHistB,
+            deferredTargets.transparentMomentsA,
+            deferredTargets.transparentMomentsB,
+        };
+        const Core::BufferHandle shadowComputeScratchBuffers[] = {
+            m_rayTracingState.m_swShadowEdgeStatsBuffer,
+            m_rayTracingState.m_swShadowEdgeStatsReadback,
+            m_rayTracingState.m_swShadowEdgeCounterBuffer,
+            m_rayTracingState.m_swShadowEdgeListBuffer,
+            m_rayTracingState.m_swShadowIndirectArgsBuffer,
+        };
+        Core::GpuPersistentResourceStateCache::Candidate shadowVisibilityReturnStateCandidate(m_arena);
+        Core::GpuPersistentResourceStateCache::Candidate shadowComputeScratchStateCandidate(m_arena);
+        bool shadowEffectsStateCandidatesReady = m_shadowComputePersistentState.buildFilteredResourceSubset(
+            shadowComputeScratchStateCandidate,
+            *shadowVisibilityFinalStateSeed,
+            shadowComputeScratchTextures,
+            LengthOf(shadowComputeScratchTextures),
+            shadowComputeScratchBuffers,
+            LengthOf(shadowComputeScratchBuffers)
+        );
+        if(shadowVisibilityRunsOnCompute){
+            shadowEffectsStateCandidatesReady = m_shadowVisibilityReturnState.buildFilteredResourceSubset(
+                shadowVisibilityReturnStateCandidate,
+                *shadowVisibilityFinalStateSeed,
+                shadowVisibilityReturnTextures,
+                LengthOf(shadowVisibilityReturnTextures),
+                nullptr,
+                0u
+            ) && shadowEffectsStateCandidatesReady;
+        }
+
+        struct ShadowVisibilityAcceptanceContext{
+            RendererSystem* renderer = nullptr;
+            DeferredFrameTargets* targets = nullptr;
+            Core::GpuPersistentResourceStateCache::Candidate* returnStateCandidate = nullptr;
+            Core::GpuPersistentResourceStateCache::Candidate* scratchStateCandidate = nullptr;
+            bool runsOnCompute = false;
+            bool stateReady = false;
+        } shadowVisibilityAcceptance{
+            .renderer = this,
+            .targets = &deferredTargets,
+            .returnStateCandidate = &shadowVisibilityReturnStateCandidate,
+            .scratchStateCandidate = &shadowComputeScratchStateCandidate,
+            .runsOnCompute = shadowVisibilityRunsOnCompute,
+        };
+        const auto acceptShadowVisibilityTask = [](
+            void* const rawContext,
+            const Core::QueueSubmissionToken& token
+        ) -> bool {
+            static_cast<void>(token);
+            ShadowVisibilityAcceptanceContext* const context =
+                static_cast<ShadowVisibilityAcceptanceContext*>(rawContext)
+            ;
+            if(
+                !context
+                || !context->renderer
+                || !context->targets
+                || !context->returnStateCandidate
+                || !context->scratchStateCandidate
+            )
+                return false;
+
+            bool returnStateReady = true;
+            if(context->runsOnCompute){
+                returnStateReady = context->renderer->m_shadowVisibilityReturnState.commit(
+                    *context->returnStateCandidate
+                );
+            }
+            const bool scratchStateReady = context->renderer->m_shadowComputePersistentState.commit(
+                *context->scratchStateCandidate
+            );
+            context->stateReady = returnStateReady && scratchStateReady;
+            // The temporal CPU state belongs to the accepted native work even if retaining its next-frame layout
+            // fails. Recovery must never restore a pending history update that already reached a queue.
+            context->renderer->m_raytracingSystem.finalizeSoftShadowTemporalHistory(*context->targets);
+            return context->stateReady;
+        };
+
+        const Core::TextureHandle causticsComputeScratchTextures[] = {
+            deferredTargets.causticAccumulator,
+            deferredTargets.causticHistory,
+            deferredTargets.causticResolveHalf,
+            deferredTargets.causticResolveGeometry,
+        };
+        const Core::TextureHandle causticIrradianceTextures[] = {
+            deferredTargets.causticIrradiance,
+        };
+        Core::GpuPersistentResourceStateCache::Candidate causticLightingStateCandidate(m_arena);
+        Core::GpuPersistentResourceStateCache::Candidate causticReturnStateCandidate(m_arena);
+        Core::GpuPersistentResourceStateCache::Candidate causticsScratchStateCandidate(m_arena);
+        bool softwareCausticsStateCandidatesReady = true;
+        if(!hardwareShadowSupported){
+            if(laggedAsyncLightingSchedule){
+                softwareCausticsStateCandidatesReady =
+                    m_causticIrradianceLightingState.buildFilteredResourceSubset(
+                        causticLightingStateCandidate,
+                        *causticsFinalStateSeed,
+                        causticIrradianceTextures,
+                        LengthOf(causticIrradianceTextures),
+                        nullptr,
+                        0u
+                    ) && softwareCausticsStateCandidatesReady
+                ;
+            }
+            if(softwareCausticsRunsOnCompute){
+                softwareCausticsStateCandidatesReady =
+                    m_causticIrradianceReturnState.buildFilteredResourceSubset(
+                        causticReturnStateCandidate,
+                        *causticsFinalStateSeed,
+                        causticIrradianceTextures,
+                        LengthOf(causticIrradianceTextures),
+                        nullptr,
+                        0u
+                    ) && softwareCausticsStateCandidatesReady
+                ;
+            }
+            softwareCausticsStateCandidatesReady =
+                m_causticsComputePersistentState.buildFilteredResourceSubset(
+                    causticsScratchStateCandidate,
+                    *causticsFinalStateSeed,
+                    causticsComputeScratchTextures,
+                    LengthOf(causticsComputeScratchTextures),
+                    nullptr,
+                    0u
+                ) && softwareCausticsStateCandidatesReady
+            ;
+        }
+
+        struct SoftwareCausticsAcceptanceContext{
+            RendererSystem* renderer = nullptr;
+            Core::GpuPersistentResourceStateCache::Candidate* lightingStateCandidate = nullptr;
+            Core::GpuPersistentResourceStateCache::Candidate* returnStateCandidate = nullptr;
+            Core::GpuPersistentResourceStateCache::Candidate* scratchStateCandidate = nullptr;
+            bool usesLaggedHistory = false;
+            bool runsOnCompute = false;
+            bool stateReady = false;
+        } softwareCausticsAcceptance{
+            .renderer = this,
+            .lightingStateCandidate = &causticLightingStateCandidate,
+            .returnStateCandidate = &causticReturnStateCandidate,
+            .scratchStateCandidate = &causticsScratchStateCandidate,
+            .usesLaggedHistory = laggedAsyncLightingSchedule,
+            .runsOnCompute = softwareCausticsRunsOnCompute,
+        };
+        const auto acceptSoftwareCausticsTask = [](
+            void* const rawContext,
+            const Core::QueueSubmissionToken& token
+        ) -> bool {
+            static_cast<void>(token);
+            SoftwareCausticsAcceptanceContext* const context =
+                static_cast<SoftwareCausticsAcceptanceContext*>(rawContext)
+            ;
+            if(
+                !context
+                || !context->renderer
+                || !context->lightingStateCandidate
+                || !context->returnStateCandidate
+                || !context->scratchStateCandidate
+            )
+                return false;
+
+            bool lightingStateReady = true;
+            if(context->usesLaggedHistory){
+                lightingStateReady = context->renderer->m_causticIrradianceLightingState.commit(
+                    *context->lightingStateCandidate
+                );
+            }
+            bool returnStateReady = true;
+            if(context->runsOnCompute){
+                returnStateReady = context->renderer->m_causticIrradianceReturnState.commit(
+                    *context->returnStateCandidate
+                );
+            }
+            const bool scratchStateReady = context->renderer->m_causticsComputePersistentState.commit(
+                *context->scratchStateCandidate
+            );
+            context->stateReady = lightingStateReady && returnStateReady && scratchStateReady;
+            return context->stateReady;
+        };
+        const Core::GpuTaskGraphTaskAcceptedCallback shadowEffectsAcceptedCallbacks[] = {
+            Core::GpuTaskGraphTaskAcceptedCallback{
+                .task = m_deferredShadowVisibilityTask,
+                .context = &shadowVisibilityAcceptance,
+                .invoke = acceptShadowVisibilityTask,
+            },
+            Core::GpuTaskGraphTaskAcceptedCallback{
+                .task = m_deferredSoftwareCausticsTask,
+                .context = &softwareCausticsAcceptance,
+                .invoke = acceptSoftwareCausticsTask,
+            },
+        };
+        const usize shadowEffectsAcceptedCallbackCount = hardwareShadowSupported
+            ? 1u
+            : LengthOf(shadowEffectsAcceptedCallbacks)
+        ;
         const bool shadowEffectsSubmitted =
             m_deferredLightingTaskGraphValid
             && m_deferredShadowVisibilityTask.valid()
@@ -3107,6 +3318,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && shadowVisibilityAllLitClearMerged
             && shadowVisibilityAdaptivePrimitivesMerged
             && shadowEffectsPacketRange.valid()
+            && shadowEffectsStateCandidatesReady
+            && softwareCausticsStateCandidatesReady
             && (hardwareShadowSupported || softwareShadowEffectsTimingPacketsAreDistinct)
             && (hardwareShadowSupported || (
                 m_deferredSoftwareCausticsTask.valid()
@@ -3123,7 +3336,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 shadowEffectsTimingTickets,
                 shadowEffectsTimingTicketCount,
                 m_deferredLightingSubmissionTransaction,
-                shadowEffectsScratchArena
+                shadowEffectsScratchArena,
+                nullptr,
+                nullptr,
+                nullptr,
+                0u,
+                shadowEffectsAcceptedCallbacks,
+                shadowEffectsAcceptedCallbackCount
             )
         ;
         shadowVisibilitySubmissionToken = m_deferredLightingSubmissionTransaction.taskToken(
@@ -3150,73 +3369,29 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return;
         }
 
-        const bool softwareCausticsAccepted = hardwareShadowSupported || (
-            shadowEffectsSubmitted && softwareCausticsSubmissionToken.valid()
-        );
-
-        if(shadowVisibilityRunsOnCompute){
-            // Retain only the cross-queue return state; shared inputs come from next frame's prefix.
-            // Retain accepted producer state for recovery after later rejection.
-            const bool producerReturnStatesReady =
-                m_shadowVisibilityReturnState.replaceTextureSubset(
-                    *shadowVisibilityFinalStateSeed,
-                    deferredTargets.shadowVisibility
-                )
-            ;
-            if(!producerReturnStatesReady){
-                const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
-                discardTimingTickets();
-                restoreUnacceptedShadowEffectsCpuState();
-                m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-                if(!recovered)
-                    failFrameRenderRecovery();
-                // Missing accepted producer state leaves no safe next layout.
-                failFrameRenderRecovery();
-                return;
-            }
-        }
-        const Core::TextureHandle shadowComputeScratchTextures[] = {
-            deferredTargets.shadowCoarseTransmittance,
-            deferredTargets.shadowSoftHalfA,
-            deferredTargets.shadowSoftHalfB,
-            deferredTargets.shadowSoftGeometry,
-            deferredTargets.shadowSoftGeometryPrev,
-            deferredTargets.shadowHistA,
-            deferredTargets.shadowHistB,
-            deferredTargets.shadowMomentsA,
-            deferredTargets.shadowMomentsB,
-            deferredTargets.transparentSoftHalf,
-            deferredTargets.transparentHistA,
-            deferredTargets.transparentHistB,
-            deferredTargets.transparentMomentsA,
-            deferredTargets.transparentMomentsB,
-        };
-        const Core::BufferHandle shadowComputeScratchBuffers[] = {
-            m_rayTracingState.m_swShadowEdgeStatsBuffer,
-            m_rayTracingState.m_swShadowEdgeStatsReadback,
-            m_rayTracingState.m_swShadowEdgeCounterBuffer,
-            m_rayTracingState.m_swShadowEdgeListBuffer,
-            m_rayTracingState.m_swShadowIndirectArgsBuffer,
-        };
-        if(!m_shadowComputePersistentState.replaceResourceSubset(
-            *shadowVisibilityFinalStateSeed,
-            shadowComputeScratchTextures,
-            LengthOf(shadowComputeScratchTextures),
-            shadowComputeScratchBuffers,
-            LengthOf(shadowComputeScratchBuffers)
-        )){
+        if(!shadowVisibilityAcceptance.stateReady){
             const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
             restoreUnacceptedShadowEffectsCpuState();
-            m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
             if(!recovered)
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to recover an accepted deferred packet before abandoning shadow scratch state"));
-            // Missing private shadow scratch leaves no safe layout restoration.
+                failFrameRenderRecovery();
+            // The native packet accepted, so a failed callback cannot be retried without losing its exact layout.
             failFrameRenderRecovery();
             return;
         }
-
-        m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
+        const bool softwareCausticsAccepted = hardwareShadowSupported || (
+            shadowEffectsSubmitted && softwareCausticsSubmissionToken.valid()
+        );
+        if(!hardwareShadowSupported && softwareCausticsSubmissionToken.valid() && !softwareCausticsAcceptance.stateReady){
+            const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
+            discardTimingTickets();
+            restoreUnacceptedShadowEffectsCpuState();
+            if(!recovered)
+                failFrameRenderRecovery();
+            // The accepted producer cannot safely span frames without all of its route-specific retained state.
+            failFrameRenderRecovery();
+            return;
+        }
         if(!hardwareShadowSupported && (!softwareCausticsAccepted || !softwareCausticsSubmissionToken.valid())){
             const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
@@ -3337,60 +3512,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 return;
             }
         }
-        if(!hardwareShadowSupported && laggedAsyncLightingSchedule){
-            if(!m_causticIrradianceLightingState.replaceTextureSubset(
-                *causticsFinalStateSeed,
-                deferredTargets.causticIrradiance
-            )){
-                const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
-                discardTimingTickets();
-                restoreAvboitCpuState();
-                if(!recovered)
-                    failFrameRenderRecovery();
-                failFrameRenderRecovery();
-                return;
-            }
-        }
-        if(!hardwareShadowSupported && softwareCausticsRunsOnCompute){
-            const bool softwareCausticsStateReady =
-                m_causticIrradianceReturnState.replaceTextureSubset(
-                    *causticsFinalStateSeed,
-                    deferredTargets.causticIrradiance
-                )
-            ;
-            if(!softwareCausticsStateReady){
-                const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
-                discardTimingTickets();
-                restoreAvboitCpuState();
-                if(!recovered)
-                    failFrameRenderRecovery();
-                // An accepted Compute producer without retained output state cannot safely span frames.
-                failFrameRenderRecovery();
-                return;
-            }
-
-            const Core::TextureHandle causticsComputeScratchTextures[] = {
-                deferredTargets.causticAccumulator,
-                deferredTargets.causticHistory,
-                deferredTargets.causticResolveHalf,
-                deferredTargets.causticResolveGeometry,
-            };
-            if(!m_causticsComputePersistentState.replaceResourceSubset(
-                *causticsFinalStateSeed,
-                causticsComputeScratchTextures,
-                LengthOf(causticsComputeScratchTextures),
-                nullptr,
-                0u
-            )){
-                const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
-                discardTimingTickets();
-                restoreAvboitCpuState();
-                if(!recovered)
-                    failFrameRenderRecovery();
-                failFrameRenderRecovery();
-                return;
-            }
-        }
         if(!submitAvboitLightingAndComposite() || !submitDeferredPresent())
             return;
     }
@@ -3422,13 +3543,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             };
             // Keep the filtered final-state candidate private until the Transfer task accepts, so a rejected
             // readback cannot replace the last accepted Surfel-GI counter state.
-            struct SurfelCounterReadbackRecordContext{
+            struct SurfelCounterReadbackContext{
                 RendererSystem* renderer = nullptr;
                 Core::GpuPersistentResourceStateCache::Candidate* candidate = nullptr;
                 const Core::BufferHandle* buffers = nullptr;
                 usize bufferCount = 0u;
                 bool finalStateReady = false;
-            } readbackRecordContext{
+                bool acceptedStateReady = false;
+            } readbackContext{
                 .renderer = this,
                 .candidate = &readbackCounterStateCandidate,
                 .buffers = readbackCounterBuffers,
@@ -3438,8 +3560,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 void* const rawContext,
                 const Core::CommandListResourceStateHandoff* const finalState
             ) -> bool {
-                SurfelCounterReadbackRecordContext* const context =
-                    static_cast<SurfelCounterReadbackRecordContext*>(rawContext)
+                SurfelCounterReadbackContext* const context =
+                    static_cast<SurfelCounterReadbackContext*>(rawContext)
                 ;
                 if(!context || !context->renderer || !context->candidate || !context->buffers)
                     return false;
@@ -3454,8 +3576,28 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 return context->finalStateReady;
             };
             const Core::GpuTaskGraphTaskRecordedCallback readbackRecordedCallback{
-                .context = &readbackRecordContext,
+                .context = &readbackContext,
                 .invoke = prepareReadbackFinalState,
+            };
+            const auto acceptReadbackFinalState = [](
+                void* const rawContext,
+                const Core::QueueSubmissionToken& token
+            ) -> bool {
+                static_cast<void>(token);
+                SurfelCounterReadbackContext* const context =
+                    static_cast<SurfelCounterReadbackContext*>(rawContext)
+                ;
+                if(!context || !context->renderer || !context->candidate || !context->finalStateReady)
+                    return false;
+                context->acceptedStateReady = context->renderer->m_surfelGiCounterPersistentState.commit(
+                    *context->candidate
+                );
+                return context->acceptedStateReady;
+            };
+            const Core::GpuTaskGraphTaskAcceptedCallback readbackAcceptedCallback{
+                .task = m_deferredSurfelGiCounterReadbackTask,
+                .context = &readbackContext,
+                .invoke = acceptReadbackFinalState,
             };
             Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
             const Core::GpuNativePacketRecorder recorder(device);
@@ -3470,24 +3612,25 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 0u,
                 &readbackRecordedCallback,
                 m_deferredLightingSubmissionTransaction,
-                scratchArena
+                scratchArena,
+                nullptr,
+                &readbackAcceptedCallback
             );
-            const Core::QueueSubmissionToken readbackSubmissionToken = readbackAccepted
-                ? m_deferredLightingSubmissionTransaction.taskToken(
+            const Core::QueueSubmissionToken readbackSubmissionToken =
+                m_deferredLightingSubmissionTransaction.taskToken(
                     m_deferredLightingCompiledGraph,
                     m_deferredSurfelGiCounterReadbackTask
                 )
-                : Core::QueueSubmissionToken{}
             ;
             if(!readbackSubmissionToken.valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback record/submission was rejected"));
             }
+            else if(!readbackAccepted || !readbackContext.acceptedStateReady){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: accepted surfel counter-readback tail lost its retained state"));
+                failFrameRenderRecovery();
+                return;
+            }
             else{
-                if(!m_surfelGiCounterPersistentState.commit(readbackCounterStateCandidate)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: accepted surfel counter-readback tail lost its retained state"));
-                    failFrameRenderRecovery();
-                    return;
-                }
                 // addCopyBufferTask publishes only on accepted submission, keeping CPU polling tied to the
                 // selected physical transport rather than the preceding Surfel-GI packet.
                 NWB_ASSERT(
@@ -3578,22 +3721,113 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     .externalStateSourceCount = historyCopyStateSourceCount,
                 },
             };
-            struct HistoryCopyRecordContext{
-                const Core::CommandListResourceStateHandoff* finalState = nullptr;
-            } historyCopyRecordContext;
-            const auto retainHistoryCopyFinalState = [](
+            Core::GpuPersistentResourceStateCache::Candidate shadowHistoryReturnStateCandidate(m_arena);
+            Core::GpuPersistentResourceStateCache::Candidate causticHistoryReturnStateCandidate(m_arena);
+            Core::GpuPersistentResourceStateCache::Candidate surfelHistoryReturnStateCandidate(m_arena);
+            struct HistoryCopyAcceptanceContext{
+                RendererSystem* renderer = nullptr;
+                DeferredFrameTargets* targets = nullptr;
+                Core::GpuPersistentResourceStateCache::Candidate* shadowStateCandidate = nullptr;
+                Core::GpuPersistentResourceStateCache::Candidate* causticStateCandidate = nullptr;
+                Core::GpuPersistentResourceStateCache::Candidate* surfelStateCandidate = nullptr;
+                bool finalStateReady = false;
+                bool acceptedStateReady = false;
+            } historyCopyAcceptance{
+                .renderer = this,
+                .targets = &deferredTargets,
+                .shadowStateCandidate = &shadowHistoryReturnStateCandidate,
+                .causticStateCandidate = &causticHistoryReturnStateCandidate,
+                .surfelStateCandidate = &surfelHistoryReturnStateCandidate,
+            };
+            const auto prepareHistoryCopyFinalState = [](
                 void* const rawContext,
                 const Core::CommandListResourceStateHandoff* const finalState
             ) -> bool {
-                HistoryCopyRecordContext* const context = static_cast<HistoryCopyRecordContext*>(rawContext);
-                if(!context || !finalState)
+                HistoryCopyAcceptanceContext* const context =
+                    static_cast<HistoryCopyAcceptanceContext*>(rawContext)
+                ;
+                if(
+                    !context
+                    || !context->renderer
+                    || !context->targets
+                    || !context->shadowStateCandidate
+                    || !context->causticStateCandidate
+                    || !context->surfelStateCandidate
+                    || !finalState
+                )
                     return false;
-                context->finalState = finalState;
-                return true;
+
+                const bool shadowStateReady =
+                    context->renderer->m_shadowVisibilityReturnState.buildFilteredResourceSubset(
+                        *context->shadowStateCandidate,
+                        *finalState,
+                        &context->targets->shadowVisibility,
+                        1u,
+                        nullptr,
+                        0u
+                    )
+                ;
+                const bool causticStateReady =
+                    context->renderer->m_causticIrradianceReturnState.buildFilteredResourceSubset(
+                        *context->causticStateCandidate,
+                        *finalState,
+                        &context->targets->causticIrradiance,
+                        1u,
+                        nullptr,
+                        0u
+                    )
+                ;
+                const bool surfelStateReady =
+                    context->renderer->m_surfelIrradianceReturnState.buildFilteredResourceSubset(
+                        *context->surfelStateCandidate,
+                        *finalState,
+                        &context->targets->surfelIrradiance,
+                        1u,
+                        nullptr,
+                        0u
+                    )
+                ;
+                context->finalStateReady = shadowStateReady && causticStateReady && surfelStateReady;
+                return context->finalStateReady;
             };
             const Core::GpuTaskGraphTaskRecordedCallback historyCopyRecordedCallback{
-                .context = &historyCopyRecordContext,
-                .invoke = retainHistoryCopyFinalState,
+                .context = &historyCopyAcceptance,
+                .invoke = prepareHistoryCopyFinalState,
+            };
+            const auto acceptHistoryCopyFinalState = [](
+                void* const rawContext,
+                const Core::QueueSubmissionToken& token
+            ) -> bool {
+                static_cast<void>(token);
+                HistoryCopyAcceptanceContext* const context =
+                    static_cast<HistoryCopyAcceptanceContext*>(rawContext)
+                ;
+                if(
+                    !context
+                    || !context->renderer
+                    || !context->shadowStateCandidate
+                    || !context->causticStateCandidate
+                    || !context->surfelStateCandidate
+                    || !context->finalStateReady
+                )
+                    return false;
+
+                const bool shadowStateReady = context->renderer->m_shadowVisibilityReturnState.commit(
+                    *context->shadowStateCandidate
+                );
+                const bool causticStateReady = context->renderer->m_causticIrradianceReturnState.commit(
+                    *context->causticStateCandidate
+                );
+                const bool surfelStateReady = context->renderer->m_surfelIrradianceReturnState.commit(
+                    *context->surfelStateCandidate
+                );
+                context->acceptedStateReady = shadowStateReady && causticStateReady && surfelStateReady;
+                return context->acceptedStateReady;
+            };
+            const Core::GpuTaskGraphTaskAcceptedCallback historyCopyAcceptedCallback{
+                .task = m_deferredLaggedLightingHistoryTask,
+                .context = &historyCopyAcceptance,
+                .invoke = acceptHistoryCopyFinalState,
             };
             Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
             const Core::GpuNativePacketRecorder recorder(device);
@@ -3608,12 +3842,24 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 LengthOf(historyCopyStateBindings),
                 &historyCopyRecordedCallback,
                 m_deferredLightingSubmissionTransaction,
-                scratchArena
+                scratchArena,
+                nullptr,
+                &historyCopyAcceptedCallback
             );
-            const Core::CommandListResourceStateHandoff* const historyCopyFinalStateSeed =
-                historyCopyRecordContext.finalState
+            const Core::QueueSubmissionToken historyCopySubmissionToken =
+                m_deferredLightingSubmissionTransaction.taskToken(
+                    m_deferredLightingCompiledGraph,
+                    m_deferredLaggedLightingHistoryTask
+                )
             ;
-            if(!historyCopyAccepted || !historyCopyFinalStateSeed){
+            if(historyCopySubmissionToken.valid() && (!historyCopyAccepted || !historyCopyAcceptance.acceptedStateReady)){
+                if(!submitFrameRecoveryPacket())
+                    failFrameRenderRecovery();
+                // The accepted copy cannot be replayed, and losing any return cache leaves no safe producer layout.
+                failFrameRenderRecovery();
+                return;
+            }
+            if(!historyCopyAccepted || !historyCopySubmissionToken.valid()){
                 if(!m_deferredLightingSubmissionTransaction.discardUnaccepted(
                     m_deferredLightingTaskGraph,
                     m_deferredLightingCompiledGraph,
@@ -3624,51 +3870,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 invalidateLaggedLightingHistorySubmission();
             }
             else{
-                const Core::QueueSubmissionToken historyCopySubmissionToken =
-                    m_deferredLightingSubmissionTransaction.taskToken(
-                        m_deferredLightingCompiledGraph,
-                        m_deferredLaggedLightingHistoryTask
-                    )
-                ;
-                if(!historyCopySubmissionToken.valid()){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned lagged lighting-history capture submission was rejected; reverting to current-frame lighting"));
-                    invalidateLaggedLightingHistorySubmission();
-                }
-                else{
-                    const bool historyCopyReturnStatesReady =
-                        m_shadowVisibilityReturnState.replaceTextureSubset(
-                            *historyCopyFinalStateSeed,
-                            deferredTargets.shadowVisibility
-                        )
-                        && m_causticIrradianceReturnState.replaceTextureSubset(
-                            *historyCopyFinalStateSeed,
-                            deferredTargets.causticIrradiance
-                        )
-                        && m_surfelIrradianceReturnState.replaceTextureSubset(
-                            *historyCopyFinalStateSeed,
-                            deferredTargets.surfelIrradiance
-                        )
-                    ;
-                    if(!historyCopyReturnStatesReady){
-                        if(!submitFrameRecoveryPacket())
-                            failFrameRenderRecovery();
-                        // Lost retained copy state leaves no safe producer layout.
-                        failFrameRenderRecovery();
-                        return;
-                    }
-
-                    // The task's accepted hook publishes this exact token.  Keep the assertion close to the handoff
-                    // so a future lifecycle change cannot accidentally reintroduce a renderer-side publication path.
-                    NWB_ASSERT(
-                        m_laggedLightingHistorySubmissionToken.queue == historyCopySubmissionToken.queue
-                        && m_laggedLightingHistorySubmissionToken.value == historyCopySubmissionToken.value
+                // The task's accepted hook publishes this exact token.  Keep the assertion close to the handoff
+                // so a future lifecycle change cannot accidentally reintroduce a renderer-side publication path.
+                NWB_ASSERT(
+                    m_laggedLightingHistorySubmissionToken.queue == historyCopySubmissionToken.queue
+                    && m_laggedLightingHistorySubmissionToken.value == historyCopySubmissionToken.value
+                );
+                if(!laggedAsyncLightingSchedule){
+                    reportLaggedLightingTransition(
+                        LaggedLightingReport::BootstrapAccepted,
+                        deferredTargets.laggedLightingHistory.generation
                     );
-                    if(!laggedAsyncLightingSchedule){
-                        reportLaggedLightingTransition(
-                            LaggedLightingReport::BootstrapAccepted,
-                            deferredTargets.laggedLightingHistory.generation
-                        );
-                    }
                 }
             }
         }

@@ -23,6 +23,66 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if !defined(NWB_FINAL)
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Narrow diagnostic peer for adversarial validation of the private two-phase submission lease contract.
+class GpuGraphSubmissionTransactionDiagnosticPeer final{
+public:
+    [[nodiscard]] static bool beginPacketSubmission(
+        GpuGraphSubmissionTransaction& transaction,
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        u64 recordingAttemptGeneration,
+        GpuTaskPacketSubmissionLease& outLease
+    )noexcept{
+        return transaction.beginPacketSubmission(
+            graph,
+            compiledGraph,
+            packet,
+            recordingAttemptGeneration,
+            outLease
+        );
+    }
+
+    [[nodiscard]] static bool acceptSubmittingPacket(
+        GpuGraphSubmissionTransaction& transaction,
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        const QueueSubmissionToken& token,
+        GpuTaskPacketSubmissionLease& lease
+    )noexcept{
+        return transaction.acceptSubmittingPacket(graph, compiledGraph, packet, token, lease);
+    }
+
+    static void rejectSubmittingPacket(
+        GpuGraphSubmissionTransaction& transaction,
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        GpuTaskPacketSubmissionLease& lease
+    )noexcept{
+        transaction.rejectSubmittingPacket(graph, compiledGraph, packet, lease);
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_BEGIN
 
 
@@ -487,6 +547,126 @@ struct NativeRecordProbeTask{
         return true;
     }
 };
+
+struct MalformedLifecycleTask{
+    struct Payload{
+        u32* recordCount = nullptr;
+        u32* acceptedCount = nullptr;
+        u32* discardedCount = nullptr;
+    };
+
+    static bool record(
+        const Payload& payload,
+        Graphics::CommandList&,
+        const Graphics::GpuTaskRecordContext&,
+        const u32 lookalike = 0u
+    ){
+        static_cast<void>(lookalike);
+        if(payload.recordCount)
+            ++*payload.recordCount;
+        return true;
+    }
+    static bool accepted(Payload& payload, const Graphics::QueueSubmissionToken&){
+        if(payload.acceptedCount)
+            ++*payload.acceptedCount;
+        return true;
+    }
+    static void discarded(const Payload& payload){
+        if(payload.discardedCount)
+            ++*payload.discardedCount;
+    }
+};
+
+template<typename GraphT>
+concept HasDeclarationTaskAcceptance = requires(
+    GraphT& graph,
+    const Graphics::GpuTaskId& task,
+    const Graphics::QueueSubmissionToken& token
+){
+    graph.acceptTask(task, token);
+};
+
+template<typename GraphT>
+concept HasAttemptTaskAcceptance = requires(
+    GraphT& graph,
+    const Graphics::GpuTaskId& task,
+    const Graphics::QueueSubmissionToken& token,
+    const u64 recordingAttemptGeneration
+){
+    graph.acceptTask(task, token, recordingAttemptGeneration);
+};
+
+template<typename GraphT>
+concept HasAttemptTaskDiscard = requires(
+    const GraphT& graph,
+    const Graphics::GpuTaskId& task,
+    const u64 recordingAttemptGeneration
+){
+    graph.discardTask(task, recordingAttemptGeneration);
+};
+
+template<typename GraphT>
+concept HasAnyRawTaskSlicePacketLifecycle =
+    requires(
+        GraphT& graph,
+        const Graphics::GpuCompiledGraph& compiledGraph,
+        const Graphics::GpuTaskId* tasks,
+        const usize taskCount
+    ){
+        graph.beginRecordingAttempt(compiledGraph, tasks, taskCount);
+    }
+    || requires(
+        GraphT& graph,
+        const Graphics::GpuCompiledGraph& compiledGraph,
+        const Graphics::GpuTaskId* tasks,
+        const usize taskCount,
+        const u64 recordingAttemptGeneration,
+        Graphics::GpuTaskPacketRecordingLease& lease
+    ){
+        graph.beginPacketRecording(compiledGraph, tasks, taskCount, recordingAttemptGeneration, lease);
+    }
+    || requires(
+        GraphT& graph,
+        const Graphics::GpuCompiledGraph& compiledGraph,
+        const Graphics::GpuTaskId* tasks,
+        const usize taskCount,
+        Graphics::GpuTaskPacketRecordingLease& lease
+    ){
+        graph.completePacketRecording(compiledGraph, tasks, taskCount, lease);
+    }
+    || requires(
+        GraphT& graph,
+        const Graphics::GpuCompiledGraph& compiledGraph,
+        const Graphics::GpuTaskId* tasks,
+        const usize taskCount,
+        Graphics::GpuTaskPacketRecordingLease& lease
+    ){
+        graph.abortPacketRecording(compiledGraph, tasks, taskCount, lease);
+    }
+    || requires(
+        GraphT& graph,
+        const Graphics::GpuCompiledGraph& compiledGraph,
+        const Graphics::GpuTaskId* tasks,
+        const usize taskCount,
+        const u64 recordingAttemptGeneration
+    ){
+        graph.packetReadyForSubmission(compiledGraph, tasks, taskCount, recordingAttemptGeneration);
+    }
+    || requires(
+        GraphT& graph,
+        const Graphics::GpuCompiledGraph& compiledGraph,
+        const Graphics::GpuTaskId* tasks,
+        const usize taskCount,
+        const u64 recordingAttemptGeneration
+    ){
+        graph.discardUnacceptedPacket(compiledGraph, tasks, taskCount, recordingAttemptGeneration);
+    }
+;
+
+static_assert(!HasDeclarationTaskAcceptance<Graphics::GpuTaskGraph>);
+static_assert(!HasAttemptTaskAcceptance<Graphics::GpuTaskGraph>);
+static_assert(!HasAttemptTaskDiscard<Graphics::GpuTaskGraph>);
+static_assert(!HasAnyRawTaskSlicePacketLifecycle<Graphics::GpuTaskGraph>);
 
 inline constexpr Graphics::GpuTaskId s_CommandIrTask{ 4u, 17u };
 inline constexpr Graphics::GpuSubmissionPacketId s_CommandIrPacket{ 2u, 19u };
@@ -1458,6 +1638,84 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
     EXPECT_EQ(discardedCount, 1u);
 }
 
+TEST(GpuTaskGraph, RegistersOnlyExactTypedPayloadLifecycleSignatures){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    u32 recordCount = 0u;
+    u32 acceptedCount = 0u;
+    u32 discardedCount = 0u;
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/malformed_lifecycle_signatures"))
+        .setMarkerLabel("Malformed Lifecycle Signatures")
+    ;
+    const Graphics::GpuTaskId task = graph.addTask<MalformedLifecycleTask>(
+        desc,
+        MalformedLifecycleTask::Payload{
+            .recordCount = &recordCount,
+            .acceptedCount = &acceptedCount,
+            .discardedCount = &discardedCount,
+        }
+    );
+    ASSERT_TRUE(task.valid());
+    EXPECT_TRUE(graph.taskAt(task.index).hasPayload);
+    EXPECT_FALSE(graph.taskAt(task.index).hasRecordPayload);
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+    ASSERT_TRUE(graph.beginRecordingAttempt(compiledGraph, packet));
+    Graphics::GpuTaskPacketRecordingLease recordingLease;
+    ASSERT_TRUE(graph.beginPacketRecording(
+        compiledGraph,
+        packet,
+        graph.recordingAttemptGeneration(),
+        recordingLease
+    ));
+    ASSERT_TRUE(graph.completePacketRecording(compiledGraph, packet, recordingLease));
+
+    Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
+    transaction.reset(compiledGraph);
+    ASSERT_TRUE(transaction.markPacketRecorded(
+        graph,
+        compiledGraph,
+        packet,
+        graph.recordingAttemptGeneration()
+    ));
+    const Graphics::QueueSubmissionToken token{
+        .queue = queue.queueClass,
+        .value = 1u,
+        .physicalQueueIndex = queue.id.index,
+        .deviceGeneration = queue.id.deviceGeneration,
+    };
+    ASSERT_TRUE(transaction.acceptPacket(graph, compiledGraph, packet, token));
+    graph.reset();
+
+    EXPECT_EQ(recordCount, 0u);
+    EXPECT_EQ(acceptedCount, 0u);
+    EXPECT_EQ(discardedCount, 0u);
+
+    Graphics::GpuTaskGraph discardGraph(testArena.arena);
+    const Graphics::GpuTaskId discardTask = discardGraph.addTask<MalformedLifecycleTask>(
+        desc,
+        MalformedLifecycleTask::Payload{
+            .discardedCount = &discardedCount,
+        }
+    );
+    ASSERT_TRUE(discardTask.valid());
+    discardGraph.discardTask(discardTask);
+    discardGraph.reset();
+    EXPECT_EQ(discardedCount, 0u);
+}
+
 TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
     TestArena testArena;
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
@@ -1642,8 +1900,36 @@ TEST(GpuTaskGraph, ResolvesTypedPayloadLifecycleOnlyOnceWhenGraphIsAbandoned){
         );
         ASSERT_TRUE(task.valid());
 
-        graph.acceptTask(task, token);
-        graph.acceptTask(task, token);
+        const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = &queue,
+            .queueCount = 1u,
+        };
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+        ASSERT_TRUE(packet.valid());
+        ASSERT_TRUE(graph.beginRecordingAttempt(compiledGraph, packet));
+        Graphics::GpuTaskPacketRecordingLease recordingLease;
+        ASSERT_TRUE(graph.beginPacketRecording(
+            compiledGraph,
+            packet,
+            graph.recordingAttemptGeneration(),
+            recordingLease
+        ));
+        ASSERT_TRUE(graph.completePacketRecording(compiledGraph, packet, recordingLease));
+        Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
+        transaction.reset(compiledGraph);
+        ASSERT_TRUE(transaction.markPacketRecorded(
+            graph,
+            compiledGraph,
+            packet,
+            graph.recordingAttemptGeneration()
+        ));
+        ASSERT_TRUE(transaction.acceptPacket(graph, compiledGraph, packet, token));
+        EXPECT_FALSE(transaction.acceptPacket(graph, compiledGraph, packet, token));
         graph.discardTask(task);
         graph.reset();
 
@@ -13329,22 +13615,17 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_TRUE(recoveryPacketPlan.joinsAcceptedQueueFrontier);
 
     const auto completeGraphPacketRecording = [&](const Graphics::GpuSubmissionPacketId& packetID){
-        const Graphics::GpuSubmissionPacket& packetPlan = compiledGraph.packet(packetID);
-        const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packetID);
         Graphics::GpuTaskPacketRecordingLease recordingLease;
-        return packetTasks
-            && graph.beginRecordingAttempt(compiledGraph, packetTasks, packetPlan.taskCount)
+        return graph.beginRecordingAttempt(compiledGraph, packetID)
             && graph.beginPacketRecording(
                 compiledGraph,
-                packetTasks,
-                packetPlan.taskCount,
+                packetID,
                 graph.recordingAttemptGeneration(),
                 recordingLease
             )
             && graph.completePacketRecording(
                 compiledGraph,
-                packetTasks,
-                packetPlan.taskCount,
+                packetID,
                 recordingLease
             )
         ;
@@ -13441,8 +13722,6 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_EQ(transaction.latestAcceptedToken(compiledGraph.packet(firstPacket).queue)->value, firstToken.value);
     EXPECT_EQ(transaction.latestAcceptedToken(recoveryQueue), nullptr);
 
-    // An attempt-tagged direct callback is still not allowed to skip native packet recording.
-    graph.acceptTask(second, firstToken, graph.recordingAttemptGeneration());
     EXPECT_EQ(acceptedCount, 1u);
 
     // A fresh transaction cannot turn an already accepted graph packet into a second native submission. The
@@ -13881,13 +14160,7 @@ TEST(GpuTaskGraph, DiscardsUnacceptedPayloadsAfterPacketRecordFailureCleanup){
 
     // A native recorder reports failure before marking its packet recorded. Range-recording callers then invoke
     // this transaction cleanup, which must reject the failed packet and all still-unaccepted work.
-    const Graphics::GpuTaskId* const firstPacketTasks = compiledGraph.packetTasks(firstPacket);
-    ASSERT_NE(firstPacketTasks, nullptr);
-    ASSERT_TRUE(graph.beginRecordingAttempt(
-        compiledGraph,
-        firstPacketTasks,
-        compiledGraph.packet(firstPacket).taskCount
-    ));
+    ASSERT_TRUE(graph.beginRecordingAttempt(compiledGraph, firstPacket));
     EXPECT_TRUE(transaction.discardUnaccepted(graph, compiledGraph, graph.recordingAttemptGeneration()));
     EXPECT_EQ(acceptedCount, 0u);
     EXPECT_EQ(discardedCount, 2u);
@@ -13944,7 +14217,7 @@ TEST(GpuTaskGraph, KeepsDeclarationDiscardedTasksTerminalBeforeFirstRecordingAtt
     const u64 declarationAttempt = graph.recordingAttemptGeneration();
     graph.discardTask(task);
     EXPECT_EQ(discardedCount, 1u);
-    EXPECT_FALSE(graph.beginRecordingAttempt(compiledGraph, packetTasks, compiledGraph.packet(packet).taskCount));
+    EXPECT_FALSE(graph.beginRecordingAttempt(compiledGraph, packet));
     EXPECT_EQ(graph.recordingAttemptGeneration(), declarationAttempt);
 
     graph.reset();
@@ -13981,7 +14254,7 @@ TEST(GpuTaskGraph, ClaimsOnePacketRecordingAcrossConcurrentRecorders){
     const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
     ASSERT_TRUE(packet.valid());
     ASSERT_NE(packetTasks, nullptr);
-    ASSERT_TRUE(graph.beginRecordingAttempt(compiledGraph, packetTasks, compiledGraph.packet(packet).taskCount));
+    ASSERT_TRUE(graph.beginRecordingAttempt(compiledGraph, packet));
     const u64 recordingAttemptGeneration = graph.recordingAttemptGeneration();
 
     Atomic<u32> successfulClaims{ 0u };
@@ -13995,8 +14268,7 @@ TEST(GpuTaskGraph, ClaimsOnePacketRecordingAcrossConcurrentRecorders){
         ;
         if(graph.beginPacketRecording(
             compiledGraph,
-            packetTasks,
-            compiledGraph.packet(packet).taskCount,
+            packet,
             recordingAttemptGeneration,
             recordingLease
         ))
@@ -14006,17 +14278,18 @@ TEST(GpuTaskGraph, ClaimsOnePacketRecordingAcrossConcurrentRecorders){
 
     // A transaction-side discard cannot cancel a thunk that its owning recorder may still be executing. The claim
     // remains active until that recorder explicitly aborts or completes it, so no retry can re-arm this graph.
-    graph.discardTask(task, recordingAttemptGeneration);
+    Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
+    transaction.reset(compiledGraph);
+    transaction.rejectTask(graph, compiledGraph, task, recordingAttemptGeneration);
     EXPECT_EQ(discardedCount, 0u);
-    EXPECT_FALSE(graph.beginRecordingAttempt(compiledGraph, packetTasks, compiledGraph.packet(packet).taskCount));
+    EXPECT_FALSE(graph.beginRecordingAttempt(compiledGraph, packet));
 
     // A claimed packet may be abandoned only by its owner. Once the discard callback resolves, reset can release
     // the graph without racing a recorder that still holds the opaque lease.
     if(firstRecordingLease.valid()){
         graph.abortPacketRecording(
             compiledGraph,
-            packetTasks,
-            compiledGraph.packet(packet).taskCount,
+            packet,
             firstRecordingLease
         );
     }
@@ -14024,14 +14297,471 @@ TEST(GpuTaskGraph, ClaimsOnePacketRecordingAcrossConcurrentRecorders){
         ASSERT_TRUE(secondRecordingLease.valid());
         graph.abortPacketRecording(
             compiledGraph,
-            packetTasks,
-            compiledGraph.packet(packet).taskCount,
+            packet,
             secondRecordingLease
         );
     }
     EXPECT_EQ(discardedCount, 1u);
     graph.reset();
     EXPECT_EQ(discardedCount, 1u);
+}
+
+
+TEST(GpuTaskGraph, RejectsCrossPacketRecordingLeaseResolution){
+    TestArena testArena;
+    u32 firstDiscardedCount = 0u;
+    u32 secondDiscardedCount = 0u;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Graphics::GpuTaskDesc firstDesc;
+    firstDesc
+        .setIdentity(Name("tests/task_graph/cross_packet_lease_first"))
+        .setMarkerLabel("Cross Packet Lease First")
+        .setScheduling(scheduling)
+    ;
+    const Graphics::GpuTaskId first = graph.addTask<PacketLifecycleTask>(
+        firstDesc,
+        PacketLifecycleTask::Payload{ .discardedCount = &firstDiscardedCount }
+    );
+    ASSERT_TRUE(first.valid());
+
+    Graphics::GpuTaskDesc secondDesc;
+    secondDesc
+        .setIdentity(Name("tests/task_graph/cross_packet_lease_second"))
+        .setMarkerLabel("Cross Packet Lease Second")
+        .setScheduling(scheduling)
+        .setDependencies(&first, 1u)
+    ;
+    const Graphics::GpuTaskId second = graph.addTask<PacketLifecycleTask>(
+        secondDesc,
+        PacketLifecycleTask::Payload{ .discardedCount = &secondDiscardedCount }
+    );
+    ASSERT_TRUE(second.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(second);
+    ASSERT_TRUE(firstPacket.valid());
+    ASSERT_TRUE(secondPacket.valid());
+    ASSERT_NE(firstPacket, secondPacket);
+
+    ASSERT_TRUE(graph.beginRecordingAttempt(compiledGraph, firstPacket));
+    const u64 recordingAttemptGeneration = graph.recordingAttemptGeneration();
+    Graphics::GpuTaskPacketRecordingLease firstLease;
+    ASSERT_TRUE(graph.beginPacketRecording(
+        compiledGraph,
+        firstPacket,
+        recordingAttemptGeneration,
+        firstLease
+    ));
+    EXPECT_FALSE(graph.completePacketRecording(compiledGraph, secondPacket, firstLease));
+    graph.abortPacketRecording(compiledGraph, secondPacket, firstLease);
+    EXPECT_TRUE(firstLease.valid());
+    EXPECT_EQ(firstDiscardedCount, 0u);
+    EXPECT_EQ(secondDiscardedCount, 0u);
+
+    graph.abortPacketRecording(compiledGraph, firstPacket, firstLease);
+    EXPECT_FALSE(firstLease.valid());
+    EXPECT_EQ(firstDiscardedCount, 1u);
+    EXPECT_EQ(secondDiscardedCount, 0u);
+
+    Graphics::GpuTaskPacketRecordingLease secondLease;
+    ASSERT_TRUE(graph.beginPacketRecording(
+        compiledGraph,
+        secondPacket,
+        recordingAttemptGeneration,
+        secondLease
+    ));
+    graph.abortPacketRecording(compiledGraph, secondPacket, secondLease);
+    EXPECT_FALSE(secondLease.valid());
+    EXPECT_EQ(firstDiscardedCount, 1u);
+    EXPECT_EQ(secondDiscardedCount, 1u);
+
+    graph.reset();
+    EXPECT_EQ(firstDiscardedCount, 1u);
+    EXPECT_EQ(secondDiscardedCount, 1u);
+}
+
+
+#if !defined(NWB_FINAL)
+TEST(GpuTaskGraph, RejectsCrossPacketSubmissionLeaseResolution){
+    TestArena testArena;
+    u32 firstAcceptedCount = 0u;
+    u32 firstDiscardedCount = 0u;
+    u32 secondAcceptedCount = 0u;
+    u32 secondDiscardedCount = 0u;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Graphics::GpuTaskDesc firstDesc;
+    firstDesc
+        .setIdentity(Name("tests/task_graph/cross_packet_submission_lease_first"))
+        .setMarkerLabel("Cross Packet Submission Lease First")
+        .setScheduling(scheduling)
+    ;
+    const Graphics::GpuTaskId first = graph.addTask<PacketLifecycleTask>(
+        firstDesc,
+        PacketLifecycleTask::Payload{
+            .acceptedCount = &firstAcceptedCount,
+            .discardedCount = &firstDiscardedCount,
+        }
+    );
+    ASSERT_TRUE(first.valid());
+
+    Graphics::GpuTaskDesc secondDesc;
+    secondDesc
+        .setIdentity(Name("tests/task_graph/cross_packet_submission_lease_second"))
+        .setMarkerLabel("Cross Packet Submission Lease Second")
+        .setScheduling(scheduling)
+        .setDependencies(&first, 1u)
+    ;
+    const Graphics::GpuTaskId second = graph.addTask<PacketLifecycleTask>(
+        secondDesc,
+        PacketLifecycleTask::Payload{
+            .acceptedCount = &secondAcceptedCount,
+            .discardedCount = &secondDiscardedCount,
+        }
+    );
+    ASSERT_TRUE(second.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(second);
+    ASSERT_TRUE(firstPacket.valid());
+    ASSERT_TRUE(secondPacket.valid());
+    ASSERT_NE(firstPacket, secondPacket);
+
+    ASSERT_TRUE(graph.beginRecordingAttempt(compiledGraph, firstPacket));
+    const u64 recordingAttemptGeneration = graph.recordingAttemptGeneration();
+    Graphics::GpuTaskPacketRecordingLease firstRecordingLease;
+    ASSERT_TRUE(graph.beginPacketRecording(
+        compiledGraph,
+        firstPacket,
+        recordingAttemptGeneration,
+        firstRecordingLease
+    ));
+    ASSERT_TRUE(graph.completePacketRecording(compiledGraph, firstPacket, firstRecordingLease));
+    ASSERT_TRUE(graph.beginRecordingAttempt(compiledGraph, secondPacket));
+    Graphics::GpuTaskPacketRecordingLease secondRecordingLease;
+    ASSERT_TRUE(graph.beginPacketRecording(
+        compiledGraph,
+        secondPacket,
+        recordingAttemptGeneration,
+        secondRecordingLease
+    ));
+    ASSERT_TRUE(graph.completePacketRecording(compiledGraph, secondPacket, secondRecordingLease));
+
+    Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
+    transaction.reset(compiledGraph);
+    ASSERT_TRUE(transaction.markPacketRecorded(
+        graph,
+        compiledGraph,
+        firstPacket,
+        recordingAttemptGeneration
+    ));
+    ASSERT_TRUE(transaction.markPacketRecorded(
+        graph,
+        compiledGraph,
+        secondPacket,
+        recordingAttemptGeneration
+    ));
+    Graphics::GpuTaskPacketSubmissionLease submissionLease;
+    ASSERT_TRUE(Graphics::GpuGraphSubmissionTransactionDiagnosticPeer::beginPacketSubmission(
+        transaction,
+        graph,
+        compiledGraph,
+        firstPacket,
+        recordingAttemptGeneration,
+        submissionLease
+    ));
+    const Graphics::QueueSubmissionToken token{
+        .queue = queue.queueClass,
+        .value = 23u,
+        .physicalQueueIndex = queue.id.index,
+        .deviceGeneration = queue.id.deviceGeneration,
+    };
+
+    EXPECT_FALSE(Graphics::GpuGraphSubmissionTransactionDiagnosticPeer::acceptSubmittingPacket(
+        transaction,
+        graph,
+        compiledGraph,
+        secondPacket,
+        token,
+        submissionLease
+    ));
+    Graphics::GpuGraphSubmissionTransactionDiagnosticPeer::rejectSubmittingPacket(
+        transaction,
+        graph,
+        compiledGraph,
+        secondPacket,
+        submissionLease
+    );
+    EXPECT_TRUE(submissionLease.valid());
+    ASSERT_NE(transaction.packetRuntime(firstPacket), nullptr);
+    ASSERT_NE(transaction.packetRuntime(secondPacket), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(firstPacket)->state, Graphics::GpuPacketRuntimeState::Submitting);
+    EXPECT_EQ(transaction.packetRuntime(secondPacket)->state, Graphics::GpuPacketRuntimeState::Recorded);
+    EXPECT_EQ(firstAcceptedCount, 0u);
+    EXPECT_EQ(firstDiscardedCount, 0u);
+    EXPECT_EQ(secondAcceptedCount, 0u);
+    EXPECT_EQ(secondDiscardedCount, 0u);
+
+    ASSERT_TRUE(Graphics::GpuGraphSubmissionTransactionDiagnosticPeer::acceptSubmittingPacket(
+        transaction,
+        graph,
+        compiledGraph,
+        firstPacket,
+        token,
+        submissionLease
+    ));
+    EXPECT_FALSE(submissionLease.valid());
+    EXPECT_FALSE(Graphics::GpuGraphSubmissionTransactionDiagnosticPeer::acceptSubmittingPacket(
+        transaction,
+        graph,
+        compiledGraph,
+        firstPacket,
+        token,
+        submissionLease
+    ));
+    EXPECT_EQ(transaction.packetRuntime(firstPacket)->state, Graphics::GpuPacketRuntimeState::Accepted);
+    EXPECT_EQ(transaction.packetRuntime(secondPacket)->state, Graphics::GpuPacketRuntimeState::Recorded);
+    EXPECT_EQ(firstAcceptedCount, 1u);
+    EXPECT_EQ(firstDiscardedCount, 0u);
+    EXPECT_EQ(secondAcceptedCount, 0u);
+    EXPECT_EQ(secondDiscardedCount, 0u);
+
+    transaction.rejectTask(graph, compiledGraph, second, recordingAttemptGeneration);
+    EXPECT_EQ(transaction.packetRuntime(secondPacket)->state, Graphics::GpuPacketRuntimeState::Rejected);
+    EXPECT_EQ(firstAcceptedCount, 1u);
+    EXPECT_EQ(firstDiscardedCount, 0u);
+    EXPECT_EQ(secondAcceptedCount, 0u);
+    EXPECT_EQ(secondDiscardedCount, 1u);
+
+    graph.reset();
+    EXPECT_EQ(firstAcceptedCount, 1u);
+    EXPECT_EQ(firstDiscardedCount, 0u);
+    EXPECT_EQ(secondAcceptedCount, 0u);
+    EXPECT_EQ(secondDiscardedCount, 1u);
+}
+#endif
+
+
+TEST(GpuTaskGraph, ResolvesEveryMergedPacketPayloadExactlyOnceOnAcceptance){
+    TestArena testArena;
+    u32 acceptedCounts[2u] = {};
+    u32 discardedCounts[2u] = {};
+    Graphics::QueueSubmissionToken acceptedTokens[2u] = {};
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuTaskSchedulingHint firstScheduling;
+    firstScheduling.allowPacketMerge = true;
+    Graphics::GpuTaskDesc firstDesc;
+    firstDesc
+        .setIdentity(Name("tests/task_graph/merged_lifecycle_accept_first"))
+        .setMarkerLabel("Merged Lifecycle Accept First")
+        .setScheduling(firstScheduling)
+    ;
+    const Graphics::GpuTaskId first = graph.addTask<PacketLifecycleTask>(
+        firstDesc,
+        PacketLifecycleTask::Payload{
+            .acceptedCount = &acceptedCounts[0u],
+            .discardedCount = &discardedCounts[0u],
+            .acceptedToken = &acceptedTokens[0u],
+        }
+    );
+    ASSERT_TRUE(first.valid());
+
+    Graphics::GpuTaskSchedulingHint secondScheduling;
+    secondScheduling.allowPacketMerge = true;
+    secondScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskDesc secondDesc;
+    secondDesc
+        .setIdentity(Name("tests/task_graph/merged_lifecycle_accept_second"))
+        .setMarkerLabel("Merged Lifecycle Accept Second")
+        .setScheduling(secondScheduling)
+        .setDependencies(&first, 1u)
+    ;
+    const Graphics::GpuTaskId second = graph.addTask<PacketLifecycleTask>(
+        secondDesc,
+        PacketLifecycleTask::Payload{
+            .acceptedCount = &acceptedCounts[1u],
+            .discardedCount = &discardedCounts[1u],
+            .acceptedToken = &acceptedTokens[1u],
+        }
+    );
+    ASSERT_TRUE(second.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(first);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(second), packet);
+    EXPECT_EQ(compiledGraph.packet(packet).taskCount, 2u);
+
+    ASSERT_TRUE(graph.beginRecordingAttempt(compiledGraph, packet));
+    Graphics::GpuTaskPacketRecordingLease recordingLease;
+    ASSERT_TRUE(graph.beginPacketRecording(
+        compiledGraph,
+        packet,
+        graph.recordingAttemptGeneration(),
+        recordingLease
+    ));
+    ASSERT_TRUE(graph.completePacketRecording(compiledGraph, packet, recordingLease));
+
+    Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
+    transaction.reset(compiledGraph);
+    ASSERT_TRUE(transaction.markPacketRecorded(
+        graph,
+        compiledGraph,
+        packet,
+        graph.recordingAttemptGeneration()
+    ));
+    const Graphics::QueueSubmissionToken token{
+        .queue = queue.queueClass,
+        .value = 17u,
+        .physicalQueueIndex = queue.id.index,
+        .deviceGeneration = queue.id.deviceGeneration,
+    };
+    ASSERT_TRUE(transaction.acceptPacket(graph, compiledGraph, packet, token));
+    EXPECT_FALSE(transaction.acceptPacket(graph, compiledGraph, packet, token));
+    EXPECT_EQ(acceptedCounts[0u], 1u);
+    EXPECT_EQ(acceptedCounts[1u], 1u);
+    EXPECT_EQ(discardedCounts[0u], 0u);
+    EXPECT_EQ(discardedCounts[1u], 0u);
+    EXPECT_EQ(acceptedTokens[0u].queue, token.queue);
+    EXPECT_EQ(acceptedTokens[0u].value, token.value);
+    EXPECT_EQ(acceptedTokens[0u].physicalQueueIndex, token.physicalQueueIndex);
+    EXPECT_EQ(acceptedTokens[0u].deviceGeneration, token.deviceGeneration);
+    EXPECT_EQ(acceptedTokens[1u].queue, token.queue);
+    EXPECT_EQ(acceptedTokens[1u].value, token.value);
+    EXPECT_EQ(acceptedTokens[1u].physicalQueueIndex, token.physicalQueueIndex);
+    EXPECT_EQ(acceptedTokens[1u].deviceGeneration, token.deviceGeneration);
+
+    graph.reset();
+    EXPECT_EQ(acceptedCounts[0u], 1u);
+    EXPECT_EQ(acceptedCounts[1u], 1u);
+    EXPECT_EQ(discardedCounts[0u], 0u);
+    EXPECT_EQ(discardedCounts[1u], 0u);
+}
+
+
+TEST(GpuTaskGraph, RejectingEitherMergedPacketTaskDiscardsEveryPayloadExactlyOnce){
+    TestArena testArena;
+    for(usize rejectedTaskIndex = 0u; rejectedTaskIndex < 2u; ++rejectedTaskIndex){
+        u32 acceptedCounts[2u] = {};
+        u32 discardedCounts[2u] = {};
+        Graphics::GpuTaskGraph graph(testArena.arena);
+
+        Graphics::GpuTaskSchedulingHint firstScheduling;
+        firstScheduling.allowPacketMerge = true;
+        Graphics::GpuTaskDesc firstDesc;
+        firstDesc
+            .setIdentity(Name("tests/task_graph/merged_lifecycle_reject_first"))
+            .setMarkerLabel("Merged Lifecycle Reject First")
+            .setScheduling(firstScheduling)
+        ;
+        const Graphics::GpuTaskId first = graph.addTask<PacketLifecycleTask>(
+            firstDesc,
+            PacketLifecycleTask::Payload{
+                .acceptedCount = &acceptedCounts[0u],
+                .discardedCount = &discardedCounts[0u],
+            }
+        );
+        ASSERT_TRUE(first.valid());
+
+        Graphics::GpuTaskSchedulingHint secondScheduling;
+        secondScheduling.allowPacketMerge = true;
+        secondScheduling.mergeWithPrevious = true;
+        Graphics::GpuTaskDesc secondDesc;
+        secondDesc
+            .setIdentity(Name("tests/task_graph/merged_lifecycle_reject_second"))
+            .setMarkerLabel("Merged Lifecycle Reject Second")
+            .setScheduling(secondScheduling)
+            .setDependencies(&first, 1u)
+        ;
+        const Graphics::GpuTaskId second = graph.addTask<PacketLifecycleTask>(
+            secondDesc,
+            PacketLifecycleTask::Payload{
+                .acceptedCount = &acceptedCounts[1u],
+                .discardedCount = &discardedCounts[1u],
+            }
+        );
+        ASSERT_TRUE(second.valid());
+
+        const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = &queue,
+            .queueCount = 1u,
+        };
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        ASSERT_EQ(compiledGraph.packetCount(), 1u);
+        const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(first);
+        ASSERT_TRUE(packet.valid());
+        EXPECT_EQ(compiledGraph.packetForTask(second), packet);
+        EXPECT_EQ(compiledGraph.packet(packet).taskCount, 2u);
+
+        ASSERT_TRUE(graph.beginRecordingAttempt(compiledGraph, packet));
+        const u64 recordingAttemptGeneration = graph.recordingAttemptGeneration();
+        Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
+        transaction.reset(compiledGraph);
+        const Graphics::GpuTaskId tasks[] = { first, second };
+        transaction.rejectTask(
+            graph,
+            compiledGraph,
+            tasks[rejectedTaskIndex],
+            recordingAttemptGeneration
+        );
+        EXPECT_EQ(acceptedCounts[0u], 0u);
+        EXPECT_EQ(acceptedCounts[1u], 0u);
+        EXPECT_EQ(discardedCounts[0u], 1u);
+        EXPECT_EQ(discardedCounts[1u], 1u);
+
+        transaction.rejectTask(
+            graph,
+            compiledGraph,
+            tasks[rejectedTaskIndex == 0u ? 1u : 0u],
+            recordingAttemptGeneration
+        );
+        EXPECT_TRUE(transaction.discardUnaccepted(graph, compiledGraph, recordingAttemptGeneration));
+        EXPECT_EQ(discardedCounts[0u], 1u);
+        EXPECT_EQ(discardedCounts[1u], 1u);
+
+        graph.reset();
+        EXPECT_EQ(discardedCounts[0u], 1u);
+        EXPECT_EQ(discardedCounts[1u], 1u);
+    }
 }
 
 
@@ -14932,9 +15662,7 @@ TEST(GpuTaskGraph, MergesExplicitCompatibleSuccessorIntoOnePacket){
     // packet's complete task cardinality rather than count only the selected task.
     Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
     transaction.reset(compiledGraph);
-    const Graphics::GpuTaskId* const packetTasks = compiledGraph.packetTasks(prefixPacket);
-    ASSERT_NE(packetTasks, nullptr);
-    ASSERT_TRUE(graph.beginRecordingAttempt(compiledGraph, packetTasks, packet.taskCount));
+    ASSERT_TRUE(graph.beginRecordingAttempt(compiledGraph, prefixPacket));
     transaction.rejectTask(graph, compiledGraph, suffix, graph.recordingAttemptGeneration());
     const Graphics::GpuTaskGraphSubmissionStatistics mergedRejectedStatistics = transaction.submissionStatistics();
     ASSERT_TRUE(mergedRejectedStatistics.valid());

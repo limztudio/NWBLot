@@ -254,8 +254,7 @@ bool GpuGraphSubmissionTransaction::markPacketRecorded(
         !compiledGraph.validPacket(packet)
         || !graph.packetReadyForSubmission(
             compiledGraph,
-            compiledGraph.packetTasks(packet),
-            compiledGraph.packet(packet).taskCount,
+            packet,
             recordingAttemptGeneration
         )
         || !bindRecordingAttempt(graph, compiledGraph, recordingAttemptGeneration)
@@ -292,8 +291,7 @@ bool GpuGraphSubmissionTransaction::beginPacketSubmission(
         || outLease.valid()
         || !graph.packetReadyForSubmission(
             compiledGraph,
-            compiledGraph.packetTasks(packetID),
-            compiledGraph.packet(packetID).taskCount,
+            packetID,
             recordingAttemptGeneration
         )
         || !bindRecordingAttempt(graph, compiledGraph, recordingAttemptGeneration)
@@ -319,11 +317,9 @@ bool GpuGraphSubmissionTransaction::beginPacketSubmission(
         runtime.state = GpuPacketRuntimeState::Submitting;
     }
 
-    const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
     if(!graph.beginPacketSubmission(
         compiledGraph,
-        compiledGraph.packetTasks(packetID),
-        packet.taskCount,
+        packetID,
         recordingAttemptGeneration,
         outLease
     )){
@@ -392,6 +388,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
         || !compiledGraph.validPacket(packetID)
         || !token.valid()
         || !lease.valid()
+        || lease.m_packet != packetID
         || lease.m_planGeneration != compiledGraph.planGeneration()
         || !bindRecordingAttempt(graph, compiledGraph, lease.m_recordingAttemptGeneration)
     )
@@ -409,8 +406,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
 
     if(!graph.completePacketSubmission(
         compiledGraph,
-        compiledGraph.packetTasks(packetID),
-        packet.taskCount,
+        packetID,
         token,
         lease
     ))

@@ -69,11 +69,9 @@ void GpuGraphSubmissionTransaction::rejectPacket(
     }
 
     const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
-    const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
     if(!graph.discardUnacceptedPacket(
         compiledGraph,
-        tasks,
-        packet.taskCount,
+        packetID,
         recordingAttemptGeneration
     ))
     {
@@ -109,6 +107,7 @@ void GpuGraphSubmissionTransaction::rejectSubmittingPacket(
         !validFor(compiledGraph)
         || !compiledGraph.validPacket(packetID)
         || !lease.valid()
+        || lease.m_packet != packetID
         || lease.m_planGeneration != compiledGraph.planGeneration()
         || !bindRecordingAttempt(graph, compiledGraph, lease.m_recordingAttemptGeneration)
     )
@@ -130,8 +129,7 @@ void GpuGraphSubmissionTransaction::rejectSubmittingPacket(
     const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
     graph.abortPacketSubmission(
         compiledGraph,
-        compiledGraph.packetTasks(packetID),
-        packet.taskCount,
+        packetID,
         lease
     );
     if(lease.valid())

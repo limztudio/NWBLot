@@ -44345,12 +44345,31 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTextureHooksDiscardOnPacketRec
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(s_logger.has_value());
+    const u32 messageCountBeforeRecordFailure = s_logger->messageCount();
+    const u32 errorCountBeforeRecordFailure = s_logger->errorCount();
     EXPECT_FALSE(recorder.recordPacket(
         graph,
         compiledGraph,
         GpuNativePacketRecordDesc{ .packet = packet },
         recordedGraph
     ));
+    EXPECT_EQ(s_logger->messageCount(), messageCountBeforeRecordFailure + 1u);
+    EXPECT_EQ(s_logger->errorCount(), errorCountBeforeRecordFailure);
+    EXPECT_EQ(s_logger->lastType(), Core::Common::LogType::CriticalWarning);
+    const GpuTaskGraphTaskView retryTaskView = graph.taskAt(retryTask.index);
+    const auto expectedFailure = StringFormat(
+        DescriptorBufferRoundTripTest::arena(),
+        NWB_TEXT("Gpu task graph: semantic record thunk for task identity '{}' marker '{}' returned false for packet {}:{} on assigned physical queue class {} index {} device generation {}"),
+        StringConvert(retryTaskView.identity.c_str()),
+        StringConvert(retryTaskView.markerLabel),
+        packet.index,
+        packet.generation,
+        static_cast<u32>(queue.queueClass),
+        queue.id.index,
+        queue.id.deviceGeneration
+    );
+    EXPECT_TRUE(s_logger->sawMessageContaining(expectedFailure));
     EXPECT_EQ(hooks.discardedCount, 1u);
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);

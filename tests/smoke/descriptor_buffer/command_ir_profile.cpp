@@ -254,18 +254,7 @@ struct Result{
 ){
     if(!compiledGraph.validPacket(packet) || !recordedGraph.validFor(graph, compiledGraph))
         return false;
-    const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
-    const GpuTaskId* const tasks = compiledGraph.packetTasks(packet);
-    if(
-        !tasks
-        || packetPlan.taskCount == 0u
-        || !graph.discardUnacceptedPacket(
-            compiledGraph,
-            tasks,
-            packetPlan.taskCount,
-            recordedGraph.recordingAttemptGeneration()
-        )
-    )
+    if(!graph.discardUnacceptedPacket(compiledGraph, packet, recordedGraph.recordingAttemptGeneration()))
         return false;
 
     // Discard resolves the graph's exact recording attempt; reset then releases the unsubmitted native artifact.

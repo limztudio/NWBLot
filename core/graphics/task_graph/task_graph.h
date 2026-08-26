@@ -152,7 +152,8 @@ public:
 
 public:
     [[nodiscard]] bool valid()const noexcept{
-        return m_planGeneration != 0u
+        return m_packet.valid()
+            && m_planGeneration != 0u
             && m_recordingAttemptGeneration != 0u
             && m_claimGeneration != 0u
         ;
@@ -162,6 +163,7 @@ public:
 
 private:
     void reset()noexcept{
+        m_packet = {};
         m_planGeneration = 0u;
         m_recordingAttemptGeneration = 0u;
         m_claimGeneration = 0u;
@@ -169,6 +171,7 @@ private:
 
 
 private:
+    GpuSubmissionPacketId m_packet;
     u64 m_planGeneration = 0u;
     u64 m_recordingAttemptGeneration = 0u;
     u64 m_claimGeneration = 0u;
@@ -189,7 +192,8 @@ public:
 
 public:
     [[nodiscard]] bool valid()const noexcept{
-        return m_planGeneration != 0u
+        return m_packet.valid()
+            && m_planGeneration != 0u
             && m_recordingAttemptGeneration != 0u
             && m_claimGeneration != 0u
         ;
@@ -198,6 +202,7 @@ public:
 
 private:
     void reset()noexcept{
+        m_packet = {};
         m_planGeneration = 0u;
         m_recordingAttemptGeneration = 0u;
         m_claimGeneration = 0u;
@@ -205,6 +210,7 @@ private:
 
 
 private:
+    GpuSubmissionPacketId m_packet;
     u64 m_planGeneration = 0u;
     u64 m_recordingAttemptGeneration = 0u;
     u64 m_claimGeneration = 0u;
@@ -386,20 +392,20 @@ public:
             return {};
 
         GpuTaskRecordThunk recordPayload = nullptr;
-        if constexpr(requires(const Payload& value, CommandList& commandList, const GpuTaskRecordContext& context){
-            { TaskT::record(value, commandList, context) } -> SameAs<bool>;
+        if constexpr(requires{
+            { &TaskT::record } -> SameAs<bool (*)(const Payload&, CommandList&, const GpuTaskRecordContext&)>;
         })
             recordPayload = &RecordPayload<TaskT>;
 
         GpuTaskAcceptedThunk acceptPayload = nullptr;
-        if constexpr(requires(Payload& value, const QueueSubmissionToken& token){
-            TaskT::accepted(value, token);
+        if constexpr(requires{
+            { &TaskT::accepted } -> SameAs<void (*)(Payload&, const QueueSubmissionToken&)>;
         })
             acceptPayload = &AcceptPayload<TaskT>;
 
         GpuTaskDiscardedThunk discardPayload = nullptr;
-        if constexpr(requires(Payload& value){
-            TaskT::discarded(value);
+        if constexpr(requires{
+            { &TaskT::discarded } -> SameAs<void (*)(Payload&)>;
         })
             discardPayload = &DiscardPayload<TaskT>;
 
@@ -473,12 +479,11 @@ public:
     // changes that leave task/resource handle generations and counts unchanged.
     [[nodiscard]] u64 declarationRevision()const noexcept{ return m_declarationRevision; }
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
-    // Starts or validates one native-recording attempt for the supplied graph tasks. A retry can begin only after
+    // Starts or validates one native-recording attempt for the compiler-owned packet. A retry can begin only after
     // every task from the previous attempt was discarded; accepted-frontier recovery remains in that same attempt.
     [[nodiscard]] bool beginRecordingAttempt(
         const GpuCompiledGraph& compiledGraph,
-        const GpuTaskId* tasks,
-        usize taskCount
+        GpuSubmissionPacketId packet
     )const noexcept;
     [[nodiscard]] bool matchesRecordingAttempt(
         const GpuCompiledGraph& compiledGraph,
@@ -528,7 +533,8 @@ private:
         const GpuTaskId& task,
         CommandList& commandList,
         const GpuTaskRecordContext& context,
-        const GpuTaskPacketRecordingLease& lease
+        const GpuTaskPacketRecordingLease& lease,
+        bool& outRecordThunkInvoked
     )const;
 
 
@@ -538,16 +544,14 @@ public:
     // The returned opaque lease authenticates the one recorder that may invoke task thunks, complete, or abort it.
     [[nodiscard]] bool beginPacketRecording(
         const GpuCompiledGraph& compiledGraph,
-        const GpuTaskId* tasks,
-        usize taskCount,
+        GpuSubmissionPacketId packet,
         u64 recordingAttemptGeneration,
         GpuTaskPacketRecordingLease& outLease
     )const noexcept;
     // A claimed native packet becomes submission-eligible only after every one of its task record thunks completed.
     [[nodiscard]] bool completePacketRecording(
         const GpuCompiledGraph& compiledGraph,
-        const GpuTaskId* tasks,
-        usize taskCount,
+        GpuSubmissionPacketId packet,
         GpuTaskPacketRecordingLease& lease
     )const noexcept;
     // Abandons an active packet claim after its owning recorder has stopped invoking task thunks. Ordinary
@@ -555,14 +559,12 @@ public:
     // re-arm graph payload while the original recorder still owns it.
     void abortPacketRecording(
         const GpuCompiledGraph& compiledGraph,
-        const GpuTaskId* tasks,
-        usize taskCount,
+        GpuSubmissionPacketId packet,
         GpuTaskPacketRecordingLease& lease
     )const noexcept;
     [[nodiscard]] bool packetReadyForSubmission(
         const GpuCompiledGraph& compiledGraph,
-        const GpuTaskId* tasks,
-        usize taskCount,
+        GpuSubmissionPacketId packet,
         u64 recordingAttemptGeneration
     )const noexcept;
 
@@ -570,22 +572,19 @@ public:
 private:
     [[nodiscard]] bool beginPacketSubmission(
         const GpuCompiledGraph& compiledGraph,
-        const GpuTaskId* tasks,
-        usize taskCount,
+        GpuSubmissionPacketId packet,
         u64 recordingAttemptGeneration,
         GpuTaskPacketSubmissionLease& outLease
     )const noexcept;
     [[nodiscard]] bool completePacketSubmission(
         const GpuCompiledGraph& compiledGraph,
-        const GpuTaskId* tasks,
-        usize taskCount,
+        GpuSubmissionPacketId packet,
         const QueueSubmissionToken& token,
         GpuTaskPacketSubmissionLease& lease
     )const noexcept;
     void abortPacketSubmission(
         const GpuCompiledGraph& compiledGraph,
-        const GpuTaskId* tasks,
-        usize taskCount,
+        GpuSubmissionPacketId packet,
         GpuTaskPacketSubmissionLease& lease
     )const noexcept;
 
@@ -595,8 +594,7 @@ public:
     // transaction cancellation cannot race native command recording or reopen the graph for a retry.
     [[nodiscard]] bool discardUnacceptedPacket(
         const GpuCompiledGraph& compiledGraph,
-        const GpuTaskId* tasks,
-        usize taskCount,
+        GpuSubmissionPacketId packet,
         u64 recordingAttemptGeneration
     )const noexcept;
     // Lowers a compiler-owned packet-boundary barrier through the existing CommandList state tracker.  Task thunks
@@ -613,16 +611,8 @@ public:
         const GpuTaskId& task,
         CommandList& commandList
     )const;
-    // Declaration-only lifecycle helper. Compiled packets must retain their explicit recording-attempt generation.
-    void acceptTask(const GpuTaskId& task, const QueueSubmissionToken& token)noexcept;
-    void acceptTask(
-        const GpuTaskId& task,
-        const QueueSubmissionToken& token,
-        u64 recordingAttemptGeneration
-    )noexcept;
-    // Declaration-only lifecycle helper. Compiled packets must retain their explicit recording-attempt generation.
+    // Declaration-only teardown helper. Compiled work must resolve through its compiler-owned packet transaction.
     void discardTask(const GpuTaskId& task)const noexcept;
-    void discardTask(const GpuTaskId& task, u64 recordingAttemptGeneration)const noexcept;
     [[nodiscard]] bool appendFrameGraphTelemetry(
         Telemetry::FrameGraphBuilder& builder,
         const GpuTaskGraphAnalysis& analysis,

@@ -25,6 +25,9 @@ NWB_CORE_BEGIN
 class GpuTimingSubmissionTicket;
 class GpuTaskGraph;
 class GpuTaskGraphSubmitter;
+#if !defined(NWB_FINAL)
+class GpuGraphSubmissionTransactionDiagnosticPeer;
+#endif
 class GpuTaskPacketSubmissionLease;
 class GpuCommandIrCapture;
 struct GpuExternalPacketStateSource;
@@ -647,6 +650,9 @@ struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
 
 class GpuGraphSubmissionTransaction final : NoCopy{
     friend class GpuTaskGraphSubmitter;
+#if !defined(NWB_FINAL)
+    friend class GpuGraphSubmissionTransactionDiagnosticPeer;
+#endif
 
 
 private:

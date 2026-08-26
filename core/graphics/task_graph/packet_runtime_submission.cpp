@@ -252,11 +252,9 @@ bool GpuTaskGraphSubmitter::submitPacketWithinSubmissionOperation(
         return false;
 
     const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
-    const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
     if(!graph.packetReadyForSubmission(
         compiledGraph,
-        tasks,
-        packet.taskCount,
+        packetID,
         recordedGraph.recordingAttemptGeneration()
     ))
         return false;

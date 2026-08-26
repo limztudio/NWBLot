@@ -76,10 +76,13 @@ u64 GpuTaskGraph::recordingAttemptGeneration()const noexcept{
 
 bool GpuTaskGraph::beginRecordingAttempt(
     const GpuCompiledGraph& compiledGraph,
-    const GpuTaskId* const tasks,
-    const usize taskCount
+    const GpuSubmissionPacketId packet
 )const noexcept{
-    if(!compiledGraph.validFor(*this) || !tasks || taskCount == 0u)
+    if(!compiledGraph.validFor(*this) || !compiledGraph.validPacket(packet))
+        return false;
+    const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
+    const GpuTaskId* const tasks = compiledGraph.packetTasks(packet);
+    if(!tasks || packetPlan.taskCount == 0u)
         return false;
 
     ScopedLock lock(m_lifecycleMutex);
@@ -87,7 +90,7 @@ bool GpuTaskGraph::beginRecordingAttempt(
         return false;
 
     bool selectedTaskWasDiscarded = false;
-    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+    for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
         if(!validTask(tasks[taskIndex]))
             return false;
         const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];

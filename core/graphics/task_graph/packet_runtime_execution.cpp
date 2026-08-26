@@ -436,11 +436,7 @@ bool GpuTaskGraphSubmitter::recordAndSubmitAcceptedFrontierTask(
             u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();
             if(recordingAttemptGeneration == 0u){
                 const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
-                const GpuTaskId* const packetTasks = packet.valid() ? compiledGraph.packetTasks(packet) : nullptr;
-                if(
-                    !packetTasks
-                    || !graph.beginRecordingAttempt(compiledGraph, packetTasks, compiledGraph.packet(packet).taskCount)
-                )
+                if(!graph.beginRecordingAttempt(compiledGraph, packet))
                     return;
                 recordingAttemptGeneration = graph.recordingAttemptGeneration();
             }
@@ -506,11 +502,7 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTask(
             u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();
             if(recordingAttemptGeneration == 0u){
                 const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
-                const GpuTaskId* const packetTasks = packet.valid() ? compiledGraph.packetTasks(packet) : nullptr;
-                if(
-                    !packetTasks
-                    || !graph.beginRecordingAttempt(compiledGraph, packetTasks, compiledGraph.packet(packet).taskCount)
-                )
+                if(!graph.beginRecordingAttempt(compiledGraph, packet))
                     return;
                 recordingAttemptGeneration = graph.recordingAttemptGeneration();
             }

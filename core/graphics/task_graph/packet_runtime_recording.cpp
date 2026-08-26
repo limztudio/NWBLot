@@ -250,17 +250,11 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     const CommandListResourceStateHandoff* initialStates = nullptr;
     GpuTaskPacketRecordingLease recordingLease;
     const auto abortPacketRecording = [&]{
-        graph.abortPacketRecording(
-            compiledGraph,
-            tasks,
-            packet.taskCount,
-            recordingLease
-        );
+        graph.abortPacketRecording(compiledGraph, desc.packet, recordingLease);
     };
     if(!graph.beginPacketRecording(
         compiledGraph,
-        tasks,
-        packet.taskCount,
+        desc.packet,
         outRecordedGraph.recordingAttemptGeneration(),
         recordingLease
     ))
@@ -410,7 +404,8 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
 #endif
         if(recorded){
             const Timer taskRecordBegin = TimerNow();
-            recorded = graph.recordTask(task, *commandList, context, recordingLease);
+            bool recordThunkInvoked = false;
+            recorded = graph.recordTask(task, *commandList, context, recordingLease, recordThunkInvoked);
             taskRecordSeconds += DurationInSeconds<f64>(TimerNow(), taskRecordBegin);
             taskRecordingLeaseIntact = commandList->matchesRecordingLease(taskRecordingLeaseSerial);
             if(!taskRecordingLeaseIntact){
@@ -428,6 +423,17 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
                     packet.queue.deviceGeneration
                 );
                 recorded = false;
+            }
+            else if(!recorded && recordThunkInvoked){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Gpu task graph: semantic record thunk for task identity '{}' marker '{}' returned false for packet {}:{} on assigned physical queue class {} index {} device generation {}")
+                    , StringConvert(taskView.identity.c_str())
+                    , StringConvert(taskView.markerLabel)
+                    , desc.packet.index
+                    , desc.packet.generation
+                    , static_cast<u32>(queue->queueClass)
+                    , queue->id.index
+                    , queue->id.deviceGeneration
+                );
             }
         }
         if(recorded)
@@ -485,8 +491,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     }
     if(!graph.completePacketRecording(
         compiledGraph,
-        tasks,
-        packet.taskCount,
+        desc.packet,
         recordingLease
     )){
         packetStateSeed->reset();
@@ -529,9 +534,7 @@ bool GpuNativePacketRecorder::prepareRecordingAttempt(
     const usize rangeEnd = rangeBegin + range.packetCount;
     for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
         const GpuSubmissionPacketId packetID = compiledGraph.packetIdAt(packetIndex);
-        const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
-        const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
-        if(!tasks || packet.taskCount == 0u || !graph.beginRecordingAttempt(compiledGraph, tasks, packet.taskCount))
+        if(!graph.beginRecordingAttempt(compiledGraph, packetID))
             return false;
     }
 

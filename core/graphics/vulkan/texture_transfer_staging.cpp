@@ -28,63 +28,32 @@ namespace __hidden_texture_transfer_staging{
     const VulkanDetail::StagingTextureMipLayout& stagingMipLayout,
     const VulkanDetail::TextureFormatBlockLayout& stagingFormatLayout,
     const u64 stagingArrayByteSize,
-    const u32 stagingArraySize,
+    const u64 stagingTotalByteSize,
+    const u32 requiredOffsetAlignment,
     VkBufferImageCopy& outRegion
 ){
-    u64 bufferOffset = stagingMipLayout.byteOffset;
-    u64 product = 0u;
-    if(
-        !TryMultiply<u64>(stagingArrayByteSize, static_cast<u64>(stagingSlice.arraySlice), product)
-        || !AddNoOverflow(bufferOffset, product, bufferOffset)
-        || !TryMultiply<u64>(stagingMipLayout.slicePitch, static_cast<u64>(stagingSlice.z), product)
-        || !AddNoOverflow(bufferOffset, product, bufferOffset)
-        || !TryMultiply<u64>(
-            stagingMipLayout.rowPitch,
-            static_cast<u64>(stagingSlice.y / stagingFormatLayout.blockHeight),
-            product
-        )
-        || !AddNoOverflow(bufferOffset, product, bufferOffset)
-        || !TryMultiply<u64>(
-            static_cast<u64>(stagingFormatLayout.bytesPerBlock),
-            static_cast<u64>(stagingSlice.x / stagingFormatLayout.blockWidth),
-            product
-        )
-        || !AddNoOverflow(bufferOffset, product, bufferOffset)
-    )
+    VulkanDetail::StagingTextureRange range;
+    if(!VulkanDetail::BuildStagingTextureRange(
+        stagingSlice,
+        stagingMipLayout,
+        stagingFormatLayout,
+        stagingArrayByteSize,
+        stagingTotalByteSize,
+        requiredOffsetAlignment,
+        false,
+        range
+    ))
         return false;
-
-    const u64 mappedBlocksX = Max<u64>(
-        DivideUp(static_cast<u64>(stagingSlice.width), static_cast<u64>(stagingFormatLayout.blockWidth)),
-        1ull
-    );
-    const u64 mappedBlocksY = Max<u64>(
-        DivideUp(static_cast<u64>(stagingSlice.height), static_cast<u64>(stagingFormatLayout.blockHeight)),
-        1ull
-    );
-    u64 rangeSize = 0u;
     if(
-        !TryMultiply<u64>(static_cast<u64>(stagingSlice.depth - 1u), stagingMipLayout.slicePitch, rangeSize)
-        || !TryMultiply<u64>(mappedBlocksY - 1u, stagingMipLayout.rowPitch, product)
-        || !AddNoOverflow(rangeSize, product, rangeSize)
-        || !TryMultiply<u64>(mappedBlocksX, static_cast<u64>(stagingFormatLayout.bytesPerBlock), product)
-        || !AddNoOverflow(rangeSize, product, rangeSize)
-    )
-        return false;
-
-    u64 totalSize = 0u;
-    if(
-        !TryMultiply<u64>(stagingArrayByteSize, static_cast<u64>(stagingArraySize), totalSize)
-        || rangeSize == 0u
-        || (bufferOffset & s_BufferAlignmentMask) != 0u
-        || bufferOffset > totalSize
-        || rangeSize > totalSize - bufferOffset
+        (range.byteOffset % s_BufferAlignmentBytes) != 0u
+        || (range.byteOffset % stagingFormatLayout.bytesPerBlock) != 0u
     )
         return false;
 
     outRegion = {};
-    outRegion.bufferOffset = bufferOffset;
-    outRegion.bufferRowLength = stagingMipLayout.bufferRowLength;
-    outRegion.bufferImageHeight = stagingMipLayout.bufferImageHeight;
+    outRegion.bufferOffset = range.byteOffset;
+    outRegion.bufferRowLength = range.bufferRowLength;
+    outRegion.bufferImageHeight = range.bufferImageHeight;
     outRegion.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(
         aspectMask,
         imageSlice.mipLevel,
@@ -280,11 +249,31 @@ bool CommandList::validateStagingTextureCopyResources(
     const VkImageUsageFlags requiredImageUsage,
     const tchar* const operationName
 )noexcept{
+    Queue* const expectedQueue = m_device.getQueue(m_desc.physicalQueue);
+    TrackedCommandBuffer* const activeCommandBuffer = m_currentCmdBuf.get();
+    if(
+        !m_isRecording
+        || m_commandRecordingFailed
+        || !activeCommandBuffer
+        || activeCommandBuffer->m_cmdBuf == VK_NULL_HANDLE
+        || activeCommandBuffer->m_arenaState != TrackedCommandBufferArenaState::Leased
+        || &activeCommandBuffer->m_context != &m_context
+        || !expectedQueue
+        || &activeCommandBuffer->m_queue != expectedQueue
+        || m_recordingLeaseSerial == 0u
+    ){
+        rejectCommandRecording(operationName, NWB_TEXT("command list has no exact active command-buffer lease"));
+        return false;
+    }
     if(&stagingTexture.m_context != &m_context || &texture.m_context != &m_context){
         rejectCommandRecording(operationName, NWB_TEXT("staging texture and texture must belong to this device"));
         return false;
     }
-    if(stagingTexture.m_buffer == VK_NULL_HANDLE || texture.m_image == VK_NULL_HANDLE){
+    if(
+        stagingTexture.m_buffer == VK_NULL_HANDLE
+        || !stagingTexture.m_allocation
+        || texture.m_image == VK_NULL_HANDLE
+    ){
         rejectCommandRecording(operationName, NWB_TEXT("staging buffer and image handles must be non-null"));
         return false;
     }
@@ -294,6 +283,70 @@ bool CommandList::validateStagingTextureCopyResources(
     }
     if((texture.m_imageInfo.usage & requiredImageUsage) != requiredImageUsage){
         rejectCommandRecording(operationName, NWB_TEXT("image lacks the required transfer usage"));
+        return false;
+    }
+
+    u64 expectedTotalByteSize = 0u;
+    if(
+        stagingTexture.m_creationDesc.arraySize == 0u
+        || stagingTexture.m_creationDesc.mipLevels == 0u
+        || stagingTexture.m_mipLayouts.size() != stagingTexture.m_creationDesc.mipLevels
+        || stagingTexture.m_creationQueueSharing != stagingTexture.m_creationDesc.queueSharing
+        || !TryMultiply<u64>(
+            stagingTexture.m_arrayByteSize,
+            static_cast<u64>(stagingTexture.m_creationDesc.arraySize),
+            expectedTotalByteSize
+        )
+        || expectedTotalByteSize != stagingTexture.m_totalByteSize
+    ){
+        rejectCommandRecording(operationName, NWB_TEXT("staging texture has invalid immutable layout provenance"));
+        return false;
+    }
+
+    const GpuPhysicalQueueInfo* const exactQueue = m_device.getPhysicalQueueInfo(m_desc.physicalQueue);
+    if(!exactQueue || exactQueue->id != m_desc.physicalQueue){
+        rejectCommandRecording(operationName, NWB_TEXT("command list has no valid exact physical queue"));
+        return false;
+    }
+    if(
+        stagingTexture.m_admittedQueueFamilies.empty()
+        || stagingTexture.m_admittedQueueFamilies.size() > Limit<u32>::s_Max
+        || (
+            stagingTexture.m_creationSharingMode != VK_SHARING_MODE_EXCLUSIVE
+            && stagingTexture.m_creationSharingMode != VK_SHARING_MODE_CONCURRENT
+        )
+        || (
+            stagingTexture.m_creationSharingMode == VK_SHARING_MODE_EXCLUSIVE
+            && stagingTexture.m_admittedQueueFamilies.size() != 1u
+        )
+        || (
+            stagingTexture.m_creationSharingMode == VK_SHARING_MODE_CONCURRENT
+            && stagingTexture.m_admittedQueueFamilies.size() < 2u
+        )
+    ){
+        rejectCommandRecording(operationName, NWB_TEXT("staging texture has invalid immutable sharing provenance"));
+        return false;
+    }
+
+    bool familyAdmitted = false;
+    for(const u32 familyIndex : stagingTexture.m_admittedQueueFamilies){
+        if(familyIndex == exactQueue->familyIndex){
+            familyAdmitted = true;
+            break;
+        }
+    }
+    if(!familyAdmitted){
+        rejectCommandRecording(operationName, NWB_TEXT("exact command queue family was not admitted at creation"));
+        return false;
+    }
+    if(
+        stagingTexture.m_creationSharingMode == VK_SHARING_MODE_CONCURRENT
+        && !VulkanDetail::StagingTextureSharingIncludesQueueClass(
+            stagingTexture.m_creationQueueSharing,
+            exactQueue->queueClass
+        )
+    ){
+        rejectCommandRecording(operationName, NWB_TEXT("exact command queue class was not admitted at creation"));
         return false;
     }
     return true;
@@ -306,7 +359,7 @@ bool CommandList::prepareStagingTextureCopy(
     const TextureSlice& textureSlice,
     VkBufferImageCopy& outRegion
 )const{
-    const TextureDesc& stagingDesc = stagingResource.m_desc;
+    const TextureDesc& stagingDesc = stagingResource.m_creationDesc;
     const TextureDesc& textureDesc = textureResource.m_desc;
     if(textureDesc.sampleCount != 1)
         return false;
@@ -326,6 +379,10 @@ bool CommandList::prepareStagingTextureCopy(
         || stagingResource.m_formatLayout.blockWidth != expectedFormatLayout.blockWidth
         || stagingResource.m_formatLayout.blockHeight != expectedFormatLayout.blockHeight
         || stagingResource.m_formatLayout.bytesPerBlock != expectedFormatLayout.bytesPerBlock
+        || stagingResource.m_creationQueueSharing != stagingDesc.queueSharing
+        || stagingResource.m_totalByteSize == 0u
+        || stagingResource.m_arrayByteSize == 0u
+        || stagingResource.m_bufferOffsetAlignment == 0u
         || textureResource.m_formatLayout.blockWidth != expectedFormatLayout.blockWidth
         || textureResource.m_formatLayout.blockHeight != expectedFormatLayout.blockHeight
         || textureResource.m_formatLayout.bytesPerBlock != expectedFormatLayout.bytesPerBlock
@@ -367,7 +424,8 @@ bool CommandList::prepareStagingTextureCopy(
         stagingResource.m_mipLayouts[resolvedStaging.mipLevel],
         stagingResource.m_formatLayout,
         stagingResource.m_arrayByteSize,
-        stagingDesc.arraySize,
+        stagingResource.m_totalByteSize,
+        stagingResource.m_bufferOffsetAlignment,
         outRegion
     ))
         return false;

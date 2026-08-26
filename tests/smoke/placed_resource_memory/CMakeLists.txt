@@ -8,6 +8,7 @@ target_sources(nwb_placed_resource_memory_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/permanent_state_lifetime_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/placed_resource_memory_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/staging_texture_contract_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/staging_texture_provenance_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/texture_accel_gpu_readiness_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/texture_gpu_readiness_state_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/texture_gpu_readiness_submission_tests.cpp"

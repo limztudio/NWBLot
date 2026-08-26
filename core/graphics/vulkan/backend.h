@@ -103,6 +103,15 @@ struct StagingTextureMipLayout{
 };
 using StagingTextureMipLayoutVector = Vector<StagingTextureMipLayout, Alloc::GlobalArena>;
 
+struct StagingTextureRange{
+    u64 byteOffset = 0;
+    u64 byteSize = 0;
+    u64 rowPitch = 0;
+    u32 bufferRowLength = 0;
+    u32 bufferImageHeight = 0;
+};
+using StagingTextureQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
+
 struct GraphicsPipelineFixedState{
     VkPipelineViewportStateCreateInfo viewportState = {};
     VkPipelineMultisampleStateCreateInfo multisampling = {};
@@ -146,7 +155,12 @@ bool IsSupportedSampleCount(u32 sampleCount);
 bool ValidateTextureShape(const TextureDesc& desc, const tchar* operationName);
 VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo);
 bool GetTextureFormatBlockLayout(const FormatInfo& formatInfo, TextureFormatBlockLayout& outLayout);
+bool TryComputeCommonAlignment(u32 firstAlignment, u32 secondAlignment, u32& outAlignment)noexcept;
 bool TryComputeUploadSuballocationAlignment(u32 requiredAlignment, u32& outAlignment)noexcept;
+bool StagingTextureSharingIncludesQueueClass(
+    ResourceQueueSharing::Mask sharing,
+    CommandQueue::Enum queueClass
+)noexcept;
 bool IsBufferImageCopyAspectMaskSupported(VkImageAspectFlags aspectMask)noexcept;
 bool ValidateBufferImageCopyAspectMask(VkImageAspectFlags aspectMask, const tchar* operationName);
 VkExtent3D GetTextureMipExtent(const TextureDesc& desc, MipLevel mipLevel);
@@ -186,16 +200,16 @@ bool BuildTextureImageViewCreateInfo(
     VkImageViewCreateInfo& outViewInfo
 );
 bool BuildImageViewCreateInfo(Texture& texture, const DescriptorWriteItem& item, VkImageViewCreateInfo& outViewInfo);
-u64 ComputeStagingTextureOffset(
+bool BuildStagingTextureRange(
     const TextureSlice& resolvedSlice,
     const StagingTextureMipLayout& mipLayout,
     const TextureFormatBlockLayout& formatLayout,
     u64 arrayByteSize,
-    usize* outRowPitch = nullptr,
-    u32* outBufferRowLength = nullptr,
-    u32* outBufferImageHeight = nullptr,
-    u64* outRangeSize = nullptr
-);
+    u64 totalByteSize,
+    u32 requiredOffsetAlignment,
+    bool requireHostPointerRange,
+    StagingTextureRange& outRange
+)noexcept;
 bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout, TextureSlice* outResolved = nullptr);
 bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes);
 
@@ -1417,8 +1431,10 @@ public:
 public:
     [[nodiscard]] const TextureDesc& getDescription()const{ return m_desc; }
 #if !defined(NWB_FINAL)
-    [[nodiscard]] const QueueFamilySharingInfo& getNativeQueueFamilySharingForTesting()const{
-        return m_nativeQueueFamilySharingForTesting;
+    [[nodiscard]] VkSharingMode getNativeQueueFamilySharingModeForTesting()const{ return m_creationSharingMode; }
+    [[nodiscard]] usize getAdmittedQueueFamilyCountForTesting()const{ return m_admittedQueueFamilies.size(); }
+    [[nodiscard]] u32 getAdmittedQueueFamilyForTesting(const usize index)const{
+        return index < m_admittedQueueFamilies.size() ? m_admittedQueueFamilies[index] : Limit<u32>::s_Max;
     }
     [[nodiscard]] bool hasMappedMemoryForTesting();
     [[nodiscard]] bool isPersistentlyMappedForTesting();
@@ -1428,13 +1444,16 @@ public:
 
 private:
     TextureDesc m_desc;
+    TextureDesc m_creationDesc;
     VulkanDetail::TextureFormatBlockLayout m_formatLayout;
     VkImageAspectFlags m_aspectMask = 0;
     u64 m_arrayByteSize = 0;
+    u64 m_totalByteSize = 0;
+    u32 m_bufferOffsetAlignment = 0;
+    ResourceQueueSharing::Mask m_creationQueueSharing = ResourceQueueSharing::Exclusive;
+    VkSharingMode m_creationSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     VulkanDetail::StagingTextureMipLayoutVector m_mipLayouts;
-#if !defined(NWB_FINAL)
-    QueueFamilySharingInfo m_nativeQueueFamilySharingForTesting;
-#endif
+    VulkanDetail::StagingTextureQueueFamilyVector m_admittedQueueFamilies;
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;

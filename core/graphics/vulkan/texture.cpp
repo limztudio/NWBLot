@@ -133,13 +133,17 @@ bool GetTextureFormatBlockLayout(const FormatInfo& formatInfo, TextureFormatBloc
     return outLayout.blockWidth != 0 && outLayout.blockHeight != 0 && outLayout.bytesPerBlock != 0;
 }
 
-bool TryComputeUploadSuballocationAlignment(const u32 requiredAlignment, u32& outAlignment)noexcept{
+bool TryComputeCommonAlignment(
+    const u32 firstAlignment,
+    const u32 secondAlignment,
+    u32& outAlignment
+)noexcept{
     outAlignment = 0u;
-    if(requiredAlignment == 0u)
+    if(firstAlignment == 0u || secondAlignment == 0u)
         return false;
 
-    u32 first = s_DefaultUploadSuballocationAlignment;
-    u32 second = requiredAlignment;
+    u32 first = firstAlignment;
+    u32 second = secondAlignment;
     while(second != 0u){
         const u32 remainder = first % second;
         first = second;
@@ -148,9 +152,13 @@ bool TryComputeUploadSuballocationAlignment(const u32 requiredAlignment, u32& ou
     if(first == 0u)
         return false;
 
-    return TryMultiply<u32>(s_DefaultUploadSuballocationAlignment / first, requiredAlignment, outAlignment)
+    return TryMultiply<u32>(firstAlignment / first, secondAlignment, outAlignment)
         && outAlignment != 0u
     ;
+}
+
+bool TryComputeUploadSuballocationAlignment(const u32 requiredAlignment, u32& outAlignment)noexcept{
+    return TryComputeCommonAlignment(s_DefaultUploadSuballocationAlignment, requiredAlignment, outAlignment);
 }
 
 bool IsBufferImageCopyAspectMaskSupported(const VkImageAspectFlags aspectMask)noexcept{
@@ -597,6 +605,7 @@ Object Texture::getNativeView(ObjectType objectType, Format::Enum format, Textur
 StagingTexture::StagingTexture(const VulkanContext& context, VulkanAllocator& allocator)
     : RefCounter<GraphicsResource>(context.threadPool)
     , m_mipLayouts(context.objectArena)
+    , m_admittedQueueFamilies(context.objectArena)
     , m_context(context)
     , m_allocator(allocator)
 {}

@@ -124,7 +124,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     if(
         !pipeline
         || pipeline->m_pipeline == VK_NULL_HANDLE
-        || !pipeline->m_desc.allowClusterAccelerationStructures
+        || !pipeline->allowsClusterAccelerationStructures()
     ){
         rejectCommandRecording(s_OperationName, NWB_TEXT("a cluster-enabled ray tracing pipeline must be bound"));
         return;

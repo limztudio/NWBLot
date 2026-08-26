@@ -142,12 +142,18 @@ bool BuildClusterOperationInputInfo(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AccelStruct::AccelStruct(const VulkanContext& context)
+AccelStruct::AccelStruct(
+    const VulkanContext& context,
+    const ResourceQueueSharing::Mask creationQueueSharing
+)
     : RefCounter<GraphicsResource>(context.threadPool)
     , m_desc(context.objectArena)
+    , m_creationQueueSharing(creationQueueSharing)
     , m_acceptedBuildGeometrySignatures(context.objectArena)
     , m_context(context)
-{}
+{
+    m_desc.queueSharing = creationQueueSharing;
+}
 AccelStruct::~AccelStruct(){
     if(m_accelStruct){
         vkDestroyAccelerationStructureKHR(m_context.device, m_accelStruct, m_context.allocationCallbacks);
@@ -180,7 +186,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     ))
         return nullptr;
 
-    auto* as = NewArenaObject<AccelStruct>(m_context.objectArena, m_context);
+    auto* as = NewArenaObject<AccelStruct>(m_context.objectArena, m_context, desc.queueSharing);
     as->m_desc = desc;
     as->m_isTopLevelAtCreation = desc.isTopLevel;
 
@@ -613,8 +619,10 @@ bool Device::isAccelStructReadyForGpuUse(RayTracingAccelStruct* accelStructResou
     return &accelerationStructure.m_context == &m_context
         && accelerationStructure.m_accelStruct != VK_NULL_HANDLE
         && accelerationStructure.m_deviceAddress != 0u
+        && accelerationStructure.queueSharingMatchesCreation()
         && backingBuffer
         && backingBuffer->getDeviceGeneration() == m_context.deviceGeneration
+        && backingBuffer->getCreationDescription().queueSharing == accelerationStructure.m_creationQueueSharing
         && isBufferReadyForGpuUse(
             backingBuffer,
             VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT

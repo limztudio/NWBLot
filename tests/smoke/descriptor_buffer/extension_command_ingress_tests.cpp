@@ -85,7 +85,8 @@ static constexpr u32 s_ClusterRayGenerationSpirv[] = {
 
 [[nodiscard]] RayTracingShaderTableHandle CreateClusterShaderTable(
     GraphicsBackend::Device& device,
-    Alloc::GlobalArena& arena
+    Alloc::GlobalArena& arena,
+    const bool allowClusterAccelerationStructures = true
 ){
     ShaderDesc shaderDesc(arena);
     shaderDesc.setShaderType(ShaderType::RayGeneration).setDebugName(Name("tests/cluster/ray_generation"));
@@ -95,7 +96,7 @@ static constexpr u32 s_ClusterRayGenerationSpirv[] = {
 
     RayTracingPipelineDesc pipelineDesc(arena);
     pipelineDesc.addBindingLayout(device.getDescriptorHeap().getResourceLayout());
-    pipelineDesc.setAllowClusterAccelerationStructures(true);
+    pipelineDesc.setAllowClusterAccelerationStructures(allowClusterAccelerationStructures);
 
     RayTracingPipelineShaderDesc rayGeneration(arena);
     rayGeneration.setShader(shader).setExportName("cluster_ray_generation");
@@ -307,12 +308,96 @@ TEST_F(ExtensionCommandIngressTest, ClusterFeatureAdvertisementRequiresPipelineA
     EXPECT_FALSE(advertisedWithoutBuildCommand);
 }
 
+TEST_F(ExtensionCommandIngressTest, ClusterPipelineCapabilityDoesNotFollowMutableDescriptionDrift){
+    if(!device().queryFeatureSupport(Feature::RayTracingPipeline))
+        GTEST_SKIP() << "Cluster pipeline provenance: ray tracing pipelines are unavailable.";
+
+    const RayTracingShaderTableHandle table = __hidden_extension_command_ingress_tests::CreateClusterShaderTable(
+        device(),
+        arena(),
+        false
+    );
+    ASSERT_TRUE(table);
+    RayTracingPipeline* const pipeline = table->getPipeline();
+    ASSERT_NE(pipeline, nullptr);
+    EXPECT_FALSE(pipeline->allowsClusterAccelerationStructures());
+
+    RayTracingPipelineDesc& mutableDesc = const_cast<RayTracingPipelineDesc&>(pipeline->getDescription());
+    mutableDesc.allowClusterAccelerationStructures = true;
+    EXPECT_TRUE(pipeline->getDescription().allowClusterAccelerationStructures);
+    EXPECT_FALSE(pipeline->allowsClusterAccelerationStructures());
+
+    if(!device().queryFeatureSupport(Feature::RayTracingClusters))
+        return;
+
+    const RayTracingClusterOperationParams params = __hidden_extension_command_ingress_tests::MakeClusterMoveParams();
+    const RayTracingClusterOperationSizeInfo sizeInfo = device().getClusterOperationSizeInfo(params);
+    if(sizeInfo.resultMaxSizeInBytes == 0u && sizeInfo.scratchSizeInBytes == 0u)
+        GTEST_SKIP() << "Cluster pipeline provenance: driver returned no move-operation size information.";
+
+    const BufferHandle source = __hidden_extension_command_ingress_tests::CreateClusterBuildInputBuffer(
+        device(),
+        sizeof(VkClusterAccelerationStructureMoveObjectsInfoNV),
+        0u
+    );
+    const BufferHandle count = __hidden_extension_command_ingress_tests::CreateClusterBuildInputBuffer(device(), sizeof(u32), sizeof(u32));
+    const BufferHandle addresses = __hidden_extension_command_ingress_tests::CreateClusterStorageArrayBuffer(device(), sizeof(u64), sizeof(u64));
+    const BufferHandle sizes = __hidden_extension_command_ingress_tests::CreateClusterStorageArrayBuffer(device(), sizeof(u32), sizeof(u32));
+    ASSERT_TRUE(source);
+    ASSERT_TRUE(count);
+    ASSERT_TRUE(addresses);
+    ASSERT_TRUE(sizes);
+
+    CommandListHandle commandList = device().createCommandList();
+    ASSERT_TRUE(commandList);
+    commandList->open();
+    commandList->setRayTracingState(RayTracingState().setShaderTable(table.get()));
+    ASSERT_FALSE(commandList->commandRecordingFailed());
+    const RayTracingClusterOperationDesc desc = __hidden_extension_command_ingress_tests::MakeExplicitClusterOperation(
+        params,
+        *source,
+        *count,
+        *addresses,
+        *sizes,
+        sizeInfo.scratchSizeInBytes,
+        0u
+    );
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        commandList->executeMultiIndirectClusterOperation(desc);
+    }, "");
+#else
+    const u32 sourceReferences = source->getReferenceCount();
+    const u32 countReferences = count->getReferenceCount();
+    const u32 addressReferences = addresses->getReferenceCount();
+    const u32 sizeReferences = sizes->getReferenceCount();
+    commandList->executeMultiIndirectClusterOperation(desc);
+    EXPECT_TRUE(commandList->commandRecordingFailed());
+    EXPECT_EQ(source->getReferenceCount(), sourceReferences);
+    EXPECT_EQ(count->getReferenceCount(), countReferences);
+    EXPECT_EQ(addresses->getReferenceCount(), addressReferences);
+    EXPECT_EQ(sizes->getReferenceCount(), sizeReferences);
+    EXPECT_FALSE(commandList->hasExplicitBufferState(source.get()));
+    EXPECT_FALSE(commandList->hasExplicitBufferState(count.get()));
+    EXPECT_FALSE(commandList->hasExplicitBufferState(addresses.get()));
+    EXPECT_FALSE(commandList->hasExplicitBufferState(sizes.get()));
+#endif
+    commandList->close();
+}
+
 TEST_F(ExtensionCommandIngressTest, ClusterExplicitDynamicCountRecordsAndRetainsValidatedArrays){
     if(!device().queryFeatureSupport(Feature::RayTracingClusters))
         GTEST_SKIP() << "Cluster command ingress: VK_NV_cluster_acceleration_structure is unavailable.";
 
     const RayTracingShaderTableHandle table = __hidden_extension_command_ingress_tests::CreateClusterShaderTable(device(), arena());
     ASSERT_TRUE(table);
+    RayTracingPipeline* const pipeline = table->getPipeline();
+    ASSERT_NE(pipeline, nullptr);
+    EXPECT_TRUE(pipeline->allowsClusterAccelerationStructures());
+    RayTracingPipelineDesc& mutablePipelineDesc = const_cast<RayTracingPipelineDesc&>(pipeline->getDescription());
+    mutablePipelineDesc.allowClusterAccelerationStructures = false;
+    EXPECT_FALSE(pipeline->getDescription().allowClusterAccelerationStructures);
+    EXPECT_TRUE(pipeline->allowsClusterAccelerationStructures());
 
     const RayTracingClusterOperationParams params = __hidden_extension_command_ingress_tests::MakeClusterMoveParams();
     const RayTracingClusterOperationSizeInfo sizeInfo = device().getClusterOperationSizeInfo(params);

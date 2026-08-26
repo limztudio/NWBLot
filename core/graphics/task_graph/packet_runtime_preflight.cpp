@@ -361,10 +361,17 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         case GpuGraphResourceType::AccelStruct:{
             RayTracingAccelStruct* const accelStruct = graph.accelStructForResource(resourceID);
             Buffer* const backingBuffer = accelStruct ? accelStruct->getBackingBuffer() : nullptr;
+            const ResourceQueueSharing::Mask creationQueueSharing = accelStruct
+                ? accelStruct->getCreationQueueSharing()
+                : ResourceQueueSharing::Exclusive
+            ;
             return accelStruct
                 && backingBuffer
                 && accelStruct->getDeviceGeneration() == compiledGraph.deviceGeneration()
-                && accelStruct->getDescription().queueSharing == resource.queueSharing
+                && accelStruct->queueSharingMatchesCreation()
+                && creationQueueSharing == resource.queueSharing
+                && backingBuffer->descriptionMatchesCreation()
+                && backingBuffer->getCreationDescription().queueSharing == creationQueueSharing
                 && m_device.isAccelStructReadyForGpuUse(accelStruct)
                 && (
                     requiredState == ResourceStates::Unknown

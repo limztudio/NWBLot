@@ -750,6 +750,14 @@ TEST_F(GpuResourceReadinessTest, AccelStructPredicateTracksVirtualMemoryBinding)
     if(!device.bindAccelStructMemory(accelStruct.get(), heap.get(), 0u))
         GTEST_SKIP() << "GPU readiness: DeviceLocal heap is incompatible with virtual acceleration structures.";
     EXPECT_TRUE(device.isAccelStructReadyForGpuUse(accelStruct.get()));
+
+    RayTracingAccelStructDesc& mutableDesc = const_cast<RayTracingAccelStructDesc&>(accelStruct->getDescription());
+    mutableDesc.queueSharing = ResourceQueueSharing::GraphicsAndAsyncCompute;
+    EXPECT_FALSE(accelStruct->queueSharingMatchesCreation());
+    EXPECT_FALSE(device.isAccelStructReadyForGpuUse(accelStruct.get()));
+    mutableDesc.queueSharing = accelStruct->getCreationQueueSharing();
+    EXPECT_TRUE(accelStruct->queueSharingMatchesCreation());
+    EXPECT_TRUE(device.isAccelStructReadyForGpuUse(accelStruct.get()));
 }
 
 

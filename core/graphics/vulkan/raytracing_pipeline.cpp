@@ -71,9 +71,14 @@ bool ComputeRayTracingHandleLayout(const VulkanContext& context, u32& outHandleS
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingPipeline::RayTracingPipeline(const VulkanContext& context, Device& device)
+RayTracingPipeline::RayTracingPipeline(
+    const VulkanContext& context,
+    Device& device,
+    const bool allowClusterAccelerationStructures
+)
     : RefCounter<GraphicsResource>(context.threadPool)
     , m_desc(context.objectArena)
+    , m_allowClusterAccelerationStructuresAtCreation(allowClusterAccelerationStructures)
     , m_shaderGroupHandles(context.objectArena)
     , m_shaderGroups(context.objectArena)
     , m_context(context)
@@ -170,7 +175,12 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
     }
 
-    auto* pso = NewArenaObject<RayTracingPipeline>(m_context.objectArena, m_context, *this);
+    auto* pso = NewArenaObject<RayTracingPipeline>(
+        m_context.objectArena,
+        m_context,
+        *this,
+        desc.allowClusterAccelerationStructures
+    );
     if(!pso){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: object allocation failed"));
         return nullptr;
@@ -324,10 +334,10 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     auto clusterCreateInfo = VulkanDetail::MakeVkStruct<VkRayTracingPipelineClusterAccelerationStructureCreateInfoNV>(
         VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CLUSTER_ACCELERATION_STRUCTURE_CREATE_INFO_NV
     );
-    clusterCreateInfo.allowClusterAccelerationStructure = desc.allowClusterAccelerationStructures ? VK_TRUE : VK_FALSE;
+    clusterCreateInfo.allowClusterAccelerationStructure = pso->allowsClusterAccelerationStructures() ? VK_TRUE : VK_FALSE;
 
     void* createInfoPNext = nullptr;
-    if(desc.allowClusterAccelerationStructures){
+    if(pso->allowsClusterAccelerationStructures()){
         clusterCreateInfo.pNext = createInfoPNext;
         createInfoPNext = &clusterCreateInfo;
     }

@@ -2263,19 +2263,21 @@ class RayTracingPipeline final : public RefCounter<GraphicsResource>, public Pip
 
 
 public:
-    RayTracingPipeline(const VulkanContext& context, Device& device);
+    RayTracingPipeline(const VulkanContext& context, Device& device, bool allowClusterAccelerationStructures);
     ~RayTracingPipeline();
 
 
 public:
     [[nodiscard]] const RayTracingPipelineDesc& getDescription()const{ return m_desc; }
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
+    [[nodiscard]] bool allowsClusterAccelerationStructures()const noexcept{ return m_allowClusterAccelerationStructuresAtCreation; }
     [[nodiscard]] RayTracingShaderTableHandle createShaderTable();
     Object getNativeHandle(ObjectType objectType);
 
 
 private:
     RayTracingPipelineDesc m_desc;
+    const bool m_allowClusterAccelerationStructuresAtCreation;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     // vkGetRayTracingShaderGroupHandlesKHR returns tightly packed handles; SBT records add alignment later.
     Vector<u8, Alloc::GlobalArena> m_shaderGroupHandles;
@@ -2470,12 +2472,17 @@ class AccelStruct final : public RefCounter<GraphicsResource>, NoCopy{
     friend class TrackedCommandBuffer;
 
 public:
-    AccelStruct(const VulkanContext& context);
+    AccelStruct(
+        const VulkanContext& context,
+        ResourceQueueSharing::Mask creationQueueSharing = ResourceQueueSharing::Exclusive
+    );
     ~AccelStruct();
 
 
 public:
     [[nodiscard]] const RayTracingAccelStructDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] ResourceQueueSharing::Mask getCreationQueueSharing()const noexcept{ return m_creationQueueSharing; }
+    [[nodiscard]] bool queueSharingMatchesCreation()const noexcept{ return m_desc.queueSharing == m_creationQueueSharing; }
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     [[nodiscard]] u64 getDeviceAddress()const{ return m_deviceAddress; }
     // Exposed for explicit scheduling handoffs.
@@ -2487,6 +2494,7 @@ public:
 
 private:
     RayTracingAccelStructDesc m_desc;
+    const ResourceQueueSharing::Mask m_creationQueueSharing;
     VkAccelerationStructureKHR m_accelStruct = VK_NULL_HANDLE;
     BufferHandle m_buffer;
     u64 m_deviceAddress = 0;

@@ -252,11 +252,14 @@ GpuGraphResourceId GpuTaskGraph::importAccelStruct(
     if(!accelStruct || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphResourceType::AccelStruct)
         return {};
 
-    const RayTracingAccelStructDesc& accelStructDesc = accelStruct->getDescription();
+    const ResourceQueueSharing::Mask creationQueueSharing = accelStruct->getCreationQueueSharing();
+    if(!accelStruct->queueSharingMatchesCreation())
+        return {};
     if(const Buffer* const backingBuffer = accelStruct->getBackingBuffer()){
         const BufferDesc& backingBufferDesc = backingBuffer->getCreationDescription();
         if(
             !backingBuffer->descriptionMatchesCreation()
+            || backingBufferDesc.queueSharing != creationQueueSharing
             || !__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(
                 backingBufferDesc.keepInitialState,
                 backingBufferDesc.initialState,
@@ -269,10 +272,10 @@ GpuGraphResourceId GpuTaskGraph::importAccelStruct(
     GpuGraphResourceDesc resolvedDesc = desc;
     if(
         resolvedDesc.queueSharing != ResourceQueueSharing::Exclusive
-        && resolvedDesc.queueSharing != accelStructDesc.queueSharing
+        && resolvedDesc.queueSharing != creationQueueSharing
     )
         return {};
-    resolvedDesc.queueSharing = accelStructDesc.queueSharing;
+    resolvedDesc.queueSharing = creationQueueSharing;
 
     for(usize resourceIndex = 0u; resourceIndex < m_resources.size(); ++resourceIndex){
         const GpuGraphResourceNode& existing = m_resources[resourceIndex];

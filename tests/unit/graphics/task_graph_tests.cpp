@@ -2480,12 +2480,20 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
         allocator,
         Graphics::BufferDesc().setQueueSharing(s_NativeQueueSharing)
     );
+    Graphics::Buffer* const mismatchedAccelStructBackingObject = NewArenaObject<Graphics::Buffer>(
+        testArena.arena,
+        context,
+        allocator,
+        Graphics::BufferDesc().setQueueSharing(s_MismatchedQueueSharing)
+    );
     Graphics::RayTracingAccelStruct* const accelStructObject = NewArenaObject<Graphics::RayTracingAccelStruct>(
         testArena.arena,
-        context
+        context,
+        s_NativeQueueSharing
     );
     ASSERT_NE(textureObject, nullptr);
     ASSERT_NE(bufferObject, nullptr);
+    ASSERT_NE(mismatchedAccelStructBackingObject, nullptr);
     ASSERT_NE(accelStructObject, nullptr);
 
     Graphics::TextureHandle texture(
@@ -2498,6 +2506,11 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
         Graphics::BufferHandle::deleter_type(&testArena.arena),
         AdoptRef
     );
+    Graphics::BufferHandle mismatchedAccelStructBacking(
+        mismatchedAccelStructBackingObject,
+        Graphics::BufferHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
     Graphics::RayTracingAccelStructHandle accelStruct(
         accelStructObject,
         Graphics::RayTracingAccelStructHandle::deleter_type(&testArena.arena),
@@ -2507,7 +2520,6 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
     Graphics::RayTracingAccelStructDesc& accelStructDesc = const_cast<Graphics::RayTracingAccelStructDesc&>(
         accelStruct->getDescription()
     );
-    accelStructDesc.queueSharing = s_NativeQueueSharing;
 
     Graphics::TextureDesc& textureDesc = const_cast<Graphics::TextureDesc&>(texture->getDescription());
     textureDesc.width += 1u;
@@ -2547,6 +2559,47 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
     }
     bufferDesc = buffer->getCreationDescription();
     EXPECT_TRUE(buffer->descriptionMatchesCreation());
+
+    EXPECT_EQ(accelStruct->getCreationQueueSharing(), s_NativeQueueSharing);
+    EXPECT_TRUE(accelStruct->queueSharingMatchesCreation());
+    accelStructDesc.queueSharing = s_MismatchedQueueSharing;
+    EXPECT_FALSE(accelStruct->queueSharingMatchesCreation());
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const u64 declarationRevision = graph.declarationRevision();
+        EXPECT_FALSE(graph.importAccelStruct(
+            accelStruct,
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/native_queue_sharing_accel_struct_drift"))
+                .setMarkerLabel("Native Queue Sharing Accel Struct Drift")
+                .setType(Graphics::GpuGraphResourceType::AccelStruct)
+                .setInitialState(Graphics::ResourceStates::Common)
+        ).valid());
+        EXPECT_EQ(graph.resourceCount(), 0u);
+        EXPECT_EQ(graph.declarationRevision(), declarationRevision);
+    }
+    accelStructDesc.queueSharing = accelStruct->getCreationQueueSharing();
+    EXPECT_TRUE(accelStruct->queueSharingMatchesCreation());
+
+    Graphics::BufferHandle& accelStructBacking = const_cast<Graphics::BufferHandle&>(
+        accelStruct->getBackingBufferHandle()
+    );
+    accelStructBacking = mismatchedAccelStructBacking;
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const u64 declarationRevision = graph.declarationRevision();
+        EXPECT_FALSE(graph.importAccelStruct(
+            accelStruct,
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/native_queue_sharing_accel_struct_backing_mismatch"))
+                .setMarkerLabel("Native Queue Sharing Accel Struct Backing Mismatch")
+                .setType(Graphics::GpuGraphResourceType::AccelStruct)
+                .setInitialState(Graphics::ResourceStates::Common)
+        ).valid());
+        EXPECT_EQ(graph.resourceCount(), 0u);
+        EXPECT_EQ(graph.declarationRevision(), declarationRevision);
+    }
+    accelStructBacking = buffer;
 
     const auto expectQueueSharingContract = [&](
         const auto& import,

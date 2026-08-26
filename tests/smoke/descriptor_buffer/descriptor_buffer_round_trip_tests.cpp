@@ -11289,8 +11289,70 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnsAccelStructPacketStateAndExternal
     EXPECT_EQ(consumerEpilogue[0u].before, ResourceStates::AccelStructWrite);
     EXPECT_EQ(consumerEpilogue[0u].after, ResourceStates::AccelStructRead);
 
-    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraph driftGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId driftAccelStruct = driftGraph.importAccelStruct(
+        tlas,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/typed_accel_struct_handoff_drift"))
+            .setMarkerLabel("Typed Accel-Struct Handoff Drift")
+            .setType(GpuGraphResourceType::AccelStruct)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(driftAccelStruct.valid());
+    const GpuTaskResourceUse driftUse{
+        .resource = driftAccelStruct,
+        .range = {},
+        .requiredState = ResourceStates::AccelStructWrite,
+        .access = GpuTaskResourceAccess::Write,
+    };
+    GpuTaskDesc driftTaskDesc;
+    driftTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/typed_accel_struct_handoff_drift_task"))
+        .setMarkerLabel("Typed Accel-Struct Handoff Drift Task")
+        .setQueue(graphicsQueue)
+        .setResourceUses(&driftUse, 1u)
+    ;
+    bool driftTaskRecorded = false;
+    const GpuTaskId driftTask = driftGraph.addTask<NativePacketPrefixTask>(
+        driftTaskDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = backingBuffer,
+            .expectedState = ResourceStates::AccelStructWrite,
+            .recorded = &driftTaskRecorded,
+        }
+    );
+    ASSERT_TRUE(driftTask.valid());
+    GpuTaskGraphAnalysis driftAnalysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments driftAssignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph driftCompiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena driftScratchArena(Name("tests/descriptor_buffer/typed_accel_struct_handoff_drift_scratch"));
+    ASSERT_TRUE(compiler.compile(driftGraph, driftAnalysis, topology, driftAssignments, driftCompiledGraph, driftScratchArena));
+    ASSERT_EQ(driftCompiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId driftPacket = driftCompiledGraph.packetForTask(driftTask);
+    ASSERT_TRUE(driftPacket.valid());
+
     const GpuNativePacketRecorder recorder(device);
+    RayTracingAccelStructDesc& mutableTlasDesc = const_cast<RayTracingAccelStructDesc&>(tlas->getDescription());
+    mutableTlasDesc.queueSharing = ResourceQueueSharing::GraphicsAndAsyncCompute;
+    EXPECT_FALSE(tlas->queueSharingMatchesCreation());
+    GpuRecordedGraph driftRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuSubmissionPacketId driftFailedPacket;
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
+        driftGraph,
+        driftCompiledGraph,
+        driftCompiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        driftRecordedGraph,
+        &driftFailedPacket
+    ));
+    EXPECT_EQ(driftFailedPacket, driftPacket);
+    EXPECT_FALSE(driftTaskRecorded);
+    EXPECT_EQ(driftRecordedGraph.find(driftPacket), nullptr);
+    mutableTlasDesc.queueSharing = tlas->getCreationQueueSharing();
+    EXPECT_TRUE(tlas->queueSharingMatchesCreation());
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuSubmissionPacketId failedPacket;
     ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,

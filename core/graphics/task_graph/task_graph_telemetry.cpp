@@ -74,8 +74,21 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
                 flags |= GpuTaskGraphTelemetryNodeFlag::AssignedDedicatedQueue;
             if(assignment->reason == GpuTaskQueueAssignmentReason::Fallback)
                 flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentFallback;
-            if(assignment->reason == GpuTaskQueueAssignmentReason::SameClassRouting)
+            if(assignment->reason == GpuTaskQueueAssignmentReason::CompilerOverride)
+                flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentCompilerOverride;
+            if(
+                (assignment->modifiers & GpuTaskQueueAssignmentModifier::DirectDependencyAffinity)
+                || (assignment->modifiers & GpuTaskQueueAssignmentModifier::SameClassLoadBalance)
+                || (assignment->modifiers & GpuTaskQueueAssignmentModifier::NonPrimaryPreference)
+                || assignment->initialQueue != assignment->queue
+            )
                 flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentSameClassRouting;
+            if(
+                (assignment->modifiers & GpuTaskQueueAssignmentModifier::DebugTimingOverride)
+                || (assignment->modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration)
+                || (assignment->modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback)
+            )
+                flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentTimingRouting;
         }
         taskNodes.push_back(builder.addPass(task.identity, task.markerLabel, flags));
     }

@@ -53,9 +53,25 @@ namespace GpuTaskQueueAssignmentReason{
         Fallback,
         ConservativeAny,
         SameClassRouting,
+        CompilerOverride,
+        ScoredAny,
 
         kCount,
     };
+};
+
+namespace GpuTaskQueueAssignmentModifier{
+    enum Mask : u8{
+        None = 0u,
+        DirectDependencyAffinity = 1u << 0u,
+        SameClassLoadBalance = 1u << 1u,
+        NonPrimaryPreference = 1u << 2u,
+        DebugTimingOverride = 1u << 3u,
+        TimingCalibration = 1u << 4u,
+        TimingFeedback = 1u << 5u,
+    };
+
+    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
 namespace GpuTaskGraphQueueAssignmentStatus{
@@ -77,9 +93,12 @@ struct GpuTaskQueueAssignmentDiagnostic{
 
 struct GpuTaskQueueAssignment{
     GpuTaskId task;
+    GpuPhysicalQueueId initialQueue;
     GpuPhysicalQueueId queue;
+    GpuQueueAssignmentScore score;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     GpuTaskQueueAssignmentReason::Enum reason = GpuTaskQueueAssignmentReason::Unknown;
+    GpuTaskQueueAssignmentModifier::Mask modifiers = GpuTaskQueueAssignmentModifier::None;
     bool dedicated = false;
 };
 
@@ -240,6 +259,7 @@ public:
         const GpuTaskGraphAnalysis& analysis,
         const GpuTaskGraphQueueTopology& topology,
         GpuTaskGraphQueueAssignments& outAssignments,
+        Alloc::ScratchArena& scratchArena,
         const GpuTaskGraphQueueAssignmentOptions& options = {}
     )const;
 

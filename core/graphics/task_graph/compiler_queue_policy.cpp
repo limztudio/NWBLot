@@ -74,6 +74,22 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     return queueBit != 0u && (static_cast<u8>(sharing) & queueBit) != 0u;
 }
 
+[[nodiscard]] bool ResourceSharingIncludesQueueFamily(
+    const ResourceQueueSharing::Mask sharing,
+    const GpuTaskGraphQueueTopology& topology,
+    const u32 familyIndex
+)noexcept{
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
+        if(
+            queue.familyIndex == familyIndex
+            && ResourceSharingIncludesQueueClass(sharing, queue.queueClass)
+        )
+            return true;
+    }
+    return false;
+}
+
 // A sharing mask becomes Vulkan concurrent sharing only when it names at least two distinct families supplied by
 // this compile topology. A single requested family remains exclusive and may use ordinary ownership handoffs.
 [[nodiscard]] bool ResourceUsesConcurrentQueueSharing(
@@ -112,8 +128,8 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 )noexcept{
     return sourceQueue.familyIndex != destinationQueue.familyIndex
         && ResourceUsesConcurrentQueueSharing(sharing, topology)
-        && ResourceSharingIncludesQueueClass(sharing, sourceQueue.queueClass)
-        && ResourceSharingIncludesQueueClass(sharing, destinationQueue.queueClass)
+        && ResourceSharingIncludesQueueFamily(sharing, topology, sourceQueue.familyIndex)
+        && ResourceSharingIncludesQueueFamily(sharing, topology, destinationQueue.familyIndex)
     ;
 }
 

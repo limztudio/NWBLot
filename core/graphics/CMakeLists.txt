@@ -30,6 +30,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_packetization.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_queue_assignment.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_queue_policy.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_queue_scoring.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_resource_ranges.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler_resource_state.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime_execution.cpp"

@@ -82,7 +82,7 @@ bool GpuTaskGraphCompiler::compile(
     }
 
     const Timer queueAssignmentBegin = TimerNow();
-    if(!assignQueues(graph, outAnalysis, topology, outAssignments, options.queueAssignmentOptions))
+    if(!assignQueues(graph, outAnalysis, topology, outAssignments, scratchArena, options.queueAssignmentOptions))
         return false;
     const f64 queueAssignmentSeconds = DurationInSeconds<f64>(TimerNow(), queueAssignmentBegin);
     const Timer planningBegin = TimerNow();

@@ -176,10 +176,11 @@ namespace GpuTaskGraphCompilerDetail{
                     || resource.type == GpuGraphResourceType::AccelStruct
                 )
                 && ResourceUsesConcurrentQueueSharing(resource.queueSharing, topology)
-                && !ResourceSharingIncludesQueueClass(resource.queueSharing, taskQueue->queueClass)
+                && !ResourceSharingIncludesQueueFamily(resource.queueSharing, topology, taskQueue->familyIndex)
             ){
-                // A Vulkan-concurrent resource may only be used by the families named when it was created. Do not
-                // turn a missing Transfer bit into an illegal ownership handoff for a concurrent image/buffer.
+                // Vulkan concurrent sharing admits native families, not graph queue-class labels. A Transfer queue
+                // may therefore use a family already admitted through AsyncCompute, while an omitted family remains
+                // illegal because concurrent resources cannot gain it through an ownership transfer.
                 return false;
             }
 

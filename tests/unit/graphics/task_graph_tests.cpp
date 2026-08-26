@@ -222,7 +222,9 @@ struct ImportedTexturePair{
     const AStringView label,
     const Graphics::GpuQueueRequest& queue,
     const Graphics::GpuTaskSchedulingHint& scheduling = {},
-    const Graphics::GpuTaskTimingMetadata& timing = {}
+    const Graphics::GpuTaskTimingMetadata& timing = {},
+    const Graphics::GpuTaskId* const dependencies = nullptr,
+    const usize dependencyCount = 0u
 ){
     Graphics::GpuTaskDesc desc;
     desc
@@ -231,6 +233,7 @@ struct ImportedTexturePair{
         .setQueue(queue)
         .setScheduling(scheduling)
         .setTimingMetadata(timing)
+        .setDependencies(dependencies, dependencyCount)
     ;
     return graph.addTask(desc);
 }
@@ -251,8 +254,9 @@ struct ImportedTexturePair{
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     const Graphics::GpuTaskGraphQueueAssignmentOptions& options = {}
 ){
+    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     const Graphics::GpuTaskGraphCompiler compiler;
-    return compiler.assignQueues(graph, analysis, topology, assignments, options);
+    return compiler.assignQueues(graph, analysis, topology, assignments, scratchArena, options);
 }
 
 [[nodiscard]] bool Compile(
@@ -335,7 +339,8 @@ struct TransferOwnershipPair{
 
 [[nodiscard]] TransferOwnershipPair AddTransferOwnershipPair(
     Graphics::GpuTaskGraph& graph,
-    const Graphics::ResourceQueueSharing::Mask queueSharing
+    const Graphics::ResourceQueueSharing::Mask queueSharing,
+    const bool allowFallback = true
 ){
     const Graphics::GpuGraphResourceId texture = AddTextureMetadata(
         graph,
@@ -387,8 +392,8 @@ struct TransferOwnershipPair{
         .setQueue(Graphics::GpuQueueRequest{
             Graphics::GpuQueueCapability::Transfer,
             Graphics::GpuQueuePreference::Transfer,
-            true,
-            true,
+            allowFallback,
+            allowFallback,
         })
         .setScheduling(scheduling)
         .setResourceUses(consumerUses, LengthOf(consumerUses))
@@ -8091,6 +8096,8 @@ TEST(GpuTaskGraph, RetainsTinyAndNonOverlappingComputeTasksOnGraphics){
     noOverlapScheduling.overlapPreferred = false;
     Graphics::GpuQueueRequest strictComputeRequest = computeRequest;
     strictComputeRequest.compilerMayOverridePreference = false;
+    Graphics::GpuQueueRequest noFallbackComputeRequest = computeRequest;
+    noFallbackComputeRequest.allowFallback = false;
 
     const Graphics::GpuTaskId tinyTask = AddTaskWithQueue(
         graph,
@@ -8113,9 +8120,17 @@ TEST(GpuTaskGraph, RetainsTinyAndNonOverlappingComputeTasksOnGraphics){
         strictComputeRequest,
         tinyScheduling
     );
+    const Graphics::GpuTaskId noFallbackTask = AddTaskWithQueue(
+        graph,
+        Name("tests/task_graph/queue_no_fallback_compute"),
+        "Queue No Fallback Compute",
+        noFallbackComputeRequest,
+        tinyScheduling
+    );
     ASSERT_TRUE(tinyTask.valid());
     ASSERT_TRUE(noOverlapTask.valid());
     ASSERT_TRUE(strictTask.valid());
+    ASSERT_TRUE(noFallbackTask.valid());
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
@@ -8130,14 +8145,687 @@ TEST(GpuTaskGraph, RetainsTinyAndNonOverlappingComputeTasksOnGraphics){
     const Graphics::GpuTaskQueueAssignment* const tinyAssignment = assignments.find(tinyTask);
     const Graphics::GpuTaskQueueAssignment* const noOverlapAssignment = assignments.find(noOverlapTask);
     const Graphics::GpuTaskQueueAssignment* const strictAssignment = assignments.find(strictTask);
+    const Graphics::GpuTaskQueueAssignment* const noFallbackAssignment = assignments.find(noFallbackTask);
     ASSERT_NE(tinyAssignment, nullptr);
     ASSERT_NE(noOverlapAssignment, nullptr);
     ASSERT_NE(strictAssignment, nullptr);
+    ASSERT_NE(noFallbackAssignment, nullptr);
     EXPECT_EQ(tinyAssignment->queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(tinyAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::CompilerOverride);
+    EXPECT_EQ(tinyAssignment->initialQueue, tinyAssignment->queue);
     EXPECT_EQ(noOverlapAssignment->queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(noOverlapAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::CompilerOverride);
     EXPECT_EQ(strictAssignment->queueClass, Graphics::CommandQueue::Compute);
     EXPECT_EQ(strictAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute);
+    EXPECT_EQ(noFallbackAssignment->queueClass, Graphics::CommandQueue::Compute);
+    EXPECT_EQ(noFallbackAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute);
 }
+
+
+TEST(GpuTaskGraph, FallsBackOnlyWhenConcretePreferenceIsUnavailableAndFallbackIsAllowed){
+    const auto runCase = [](const bool compilerMayOverridePreference, const bool allowFallback, const bool expectedResult){
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        Graphics::GpuQueueRequest computeRequest;
+        computeRequest.requiredCapabilities = Graphics::GpuQueueCapability::Compute;
+        computeRequest.preferredQueue = Graphics::GpuQueuePreference::Compute;
+        computeRequest.compilerMayOverridePreference = compilerMayOverridePreference;
+        computeRequest.allowFallback = allowFallback;
+        const Graphics::GpuTaskId task = AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/unavailable_strict_compute"),
+            "Unavailable Strict Compute",
+            computeRequest
+        );
+        ASSERT_TRUE(task.valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        ASSERT_TRUE(Analyze(graph, analysis));
+        const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = queues,
+            .queueCount = LengthOf(queues),
+        };
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        EXPECT_EQ(Assign(graph, analysis, topology, assignments), expectedResult);
+        if(expectedResult){
+            const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
+            ASSERT_NE(assignment, nullptr);
+            EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
+            EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::Fallback);
+        }
+        else{
+            EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue);
+        }
+    };
+
+    runCase(false, true, true);
+    runCase(true, false, false);
+    runCase(true, true, true);
+}
+
+
+TEST(GpuTaskGraph, PreservesConcretePreferenceSemanticsForGraphicsRequiredTasks){
+    const auto runCase = [](
+        const bool allowFallback,
+        const bool exposeGraphicsCapableCompute,
+        const bool expectedResult,
+        const Graphics::CommandQueue::Enum expectedQueueClass,
+        const Graphics::GpuTaskQueueAssignmentReason::Enum expectedReason
+    ){
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        Graphics::GpuQueueRequest queueRequest;
+        queueRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+        queueRequest.preferredQueue = Graphics::GpuQueuePreference::Compute;
+        queueRequest.allowFallback = allowFallback;
+        queueRequest.compilerMayOverridePreference = false;
+        const Graphics::GpuTaskId task = AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/graphics_required_compute_preference"),
+            "Graphics Required Compute Preference",
+            queueRequest
+        );
+        ASSERT_TRUE(task.valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        ASSERT_TRUE(Analyze(graph, analysis));
+        Graphics::GpuPhysicalQueueInfo graphicsCapableCompute = DedicatedComputeQueue();
+        graphicsCapableCompute.capabilities = QueueCapabilities(
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueueCapability::Compute,
+            Graphics::GpuQueueCapability::Transfer
+        );
+        graphicsCapableCompute.dedicated = false;
+        const Graphics::GpuPhysicalQueueInfo queues[] = {
+            GraphicsQueue(),
+            graphicsCapableCompute,
+        };
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = queues,
+            .queueCount = exposeGraphicsCapableCompute ? LengthOf(queues) : 1u,
+        };
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        const bool result = Assign(graph, analysis, topology, assignments);
+        if(!expectedResult){
+            EXPECT_FALSE(result);
+            EXPECT_EQ(assignments.diagnostic().status, Graphics::GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue);
+            EXPECT_EQ(assignments.diagnostic().task, task);
+            EXPECT_EQ(assignments.diagnostic().requiredCapabilities, Graphics::GpuQueueCapability::Graphics);
+            return;
+        }
+
+        ASSERT_TRUE(result);
+        const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
+        ASSERT_NE(assignment, nullptr);
+        EXPECT_EQ(assignment->queueClass, expectedQueueClass);
+        EXPECT_EQ(assignment->reason, expectedReason);
+        EXPECT_EQ(
+            assignment->queue,
+            exposeGraphicsCapableCompute ? graphicsCapableCompute.id : GraphicsQueue().id
+        );
+    };
+
+    runCase(
+        false,
+        false,
+        false,
+        Graphics::CommandQueue::kCount,
+        Graphics::GpuTaskQueueAssignmentReason::Unknown
+    );
+    runCase(
+        true,
+        false,
+        true,
+        Graphics::CommandQueue::Graphics,
+        Graphics::GpuTaskQueueAssignmentReason::Fallback
+    );
+    runCase(
+        false,
+        true,
+        true,
+        Graphics::CommandQueue::Compute,
+        Graphics::GpuTaskQueueAssignmentReason::PreferredQueue
+    );
+}
+
+
+TEST(GpuTaskGraph, ScoresAnyAcrossQueueClassesDeterministicallyWithoutPhysicalRoutingOptIn){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuQueueRequest graphicsRequest;
+    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+    graphicsRequest.allowFallback = false;
+    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskSchedulingHint graphicsScheduling;
+    graphicsScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    const Graphics::GpuTaskId graphicsTask = AddTaskWithQueue(
+        graph,
+        Name("tests/task_graph/scored_any_graphics"),
+        "Scored Any Graphics",
+        graphicsRequest,
+        graphicsScheduling
+    );
+
+    Graphics::GpuQueueRequest anyRequest;
+    anyRequest.requiredCapabilities = Graphics::GpuQueueCapability::Transfer;
+    anyRequest.preferredQueue = Graphics::GpuQueuePreference::Any;
+    const Graphics::GpuTaskId anyTask = AddTaskWithQueue(
+        graph,
+        Name("tests/task_graph/scored_any"),
+        "Scored Any",
+        anyRequest
+    );
+    ASSERT_TRUE(graphicsTask.valid());
+    ASSERT_TRUE(anyTask.valid());
+
+    Graphics::GpuPhysicalQueueInfo auxiliaryGraphics = GraphicsQueue(3u);
+    auxiliaryGraphics.queueIndex = 1u;
+    const Graphics::GpuPhysicalQueueInfo firstQueues[] = {
+        auxiliaryGraphics,
+        DedicatedTransferQueue(),
+        DedicatedComputeQueue(),
+        GraphicsQueue(),
+    };
+    const Graphics::GpuPhysicalQueueInfo secondQueues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+        auxiliaryGraphics,
+        DedicatedTransferQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology firstTopology{
+        .queues = firstQueues,
+        .queueCount = LengthOf(firstQueues),
+    };
+    const Graphics::GpuTaskGraphQueueTopology secondTopology{
+        .queues = secondQueues,
+        .queueCount = LengthOf(secondQueues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    Graphics::GpuTaskGraphQueueAssignments firstAssignments(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments secondAssignments(testArena.arena);
+    ASSERT_TRUE(Assign(graph, analysis, firstTopology, firstAssignments));
+    ASSERT_TRUE(Assign(graph, analysis, secondTopology, secondAssignments));
+
+    const Graphics::GpuTaskQueueAssignment* const firstAssignment = firstAssignments.find(anyTask);
+    const Graphics::GpuTaskQueueAssignment* const secondAssignment = secondAssignments.find(anyTask);
+    ASSERT_NE(firstAssignment, nullptr);
+    ASSERT_NE(secondAssignment, nullptr);
+    EXPECT_EQ(firstAssignment->queue, DedicatedComputeQueue().id);
+    EXPECT_EQ(secondAssignment->queue, firstAssignment->queue);
+    EXPECT_NE(firstAssignment->queue, auxiliaryGraphics.id);
+    EXPECT_EQ(firstAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::ScoredAny);
+    EXPECT_EQ(firstAssignment->initialQueue, firstAssignment->queue);
+    EXPECT_EQ(firstAssignment->modifiers, Graphics::GpuTaskQueueAssignmentModifier::None);
+    EXPECT_EQ(firstAssignment->score.overlap, 8);
+    EXPECT_EQ(firstAssignment->score.queueLoad, 0);
+    EXPECT_EQ(firstAssignment->score.incomingCrossings, 0);
+    EXPECT_EQ(firstAssignment->score.outgoingCrossings, 0);
+    EXPECT_EQ(firstAssignment->score.ownershipTransfers, 0);
+}
+
+
+TEST(GpuTaskGraph, ScoresComputeIndependenceOwnershipAndStrictTiePolicy){
+    const auto runCase = [](
+        const Graphics::ResourceQueueSharing::Mask queueSharing,
+        const bool compilerMayOverridePreference,
+        const bool addIndependentGraphics,
+        const Graphics::CommandQueue::Enum expectedQueue,
+        const Graphics::GpuTaskQueueAssignmentReason::Enum expectedReason,
+        const i32 expectedOwnershipTransfers
+    ){
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Name resourceNames[] = {
+            Name("tests/task_graph/scored_compute_resource_a"),
+            Name("tests/task_graph/scored_compute_resource_b"),
+            Name("tests/task_graph/scored_compute_resource_c"),
+        };
+        Graphics::GpuGraphResourceId resources[LengthOf(resourceNames)] = {};
+        for(usize resourceIndex = 0u; resourceIndex < LengthOf(resources); ++resourceIndex){
+            resources[resourceIndex] = AddBufferMetadata(
+                graph,
+                resourceNames[resourceIndex],
+                "Scored Compute Resource",
+                Graphics::ResourceStates::Common,
+                queueSharing
+            );
+            ASSERT_TRUE(resources[resourceIndex].valid());
+        }
+
+        Graphics::GpuQueueRequest graphicsRequest;
+        graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+        graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+        graphicsRequest.allowFallback = false;
+        graphicsRequest.compilerMayOverridePreference = false;
+        Graphics::GpuTaskSchedulingHint producerScheduling;
+        producerScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+        const Name producerNames[] = {
+            Name("tests/task_graph/scored_compute_producer_a"),
+            Name("tests/task_graph/scored_compute_producer_b"),
+            Name("tests/task_graph/scored_compute_producer_c"),
+        };
+        for(usize producerIndex = 0u; producerIndex < LengthOf(producerNames); ++producerIndex){
+            const Graphics::GpuTaskResourceUse producerUse{
+                .resource = resources[producerIndex],
+                .range = {},
+                .requiredState = Graphics::ResourceStates::UnorderedAccess,
+                .access = Graphics::GpuTaskResourceAccess::Write,
+            };
+            Graphics::GpuTaskDesc producerDesc;
+            producerDesc
+                .setIdentity(producerNames[producerIndex])
+                .setMarkerLabel("Scored Compute Producer")
+                .setQueue(graphicsRequest)
+                .setScheduling(producerScheduling)
+                .setResourceUses(&producerUse, 1u)
+            ;
+            ASSERT_TRUE(graph.addTask(producerDesc).valid());
+        }
+
+        if(addIndependentGraphics){
+            const Graphics::GpuTaskId independentGraphics = AddTaskWithQueue(
+                graph,
+                Name("tests/task_graph/scored_compute_independent_graphics"),
+                "Scored Compute Independent Graphics",
+                graphicsRequest,
+                producerScheduling
+            );
+            ASSERT_TRUE(independentGraphics.valid());
+        }
+
+        Graphics::GpuQueueRequest computeRequest;
+        computeRequest.requiredCapabilities = Graphics::GpuQueueCapability::Compute;
+        computeRequest.preferredQueue = Graphics::GpuQueuePreference::Compute;
+        computeRequest.allowFallback = true;
+        computeRequest.compilerMayOverridePreference = compilerMayOverridePreference;
+        Graphics::GpuTaskSchedulingHint computeScheduling;
+        computeScheduling.cost = Graphics::GpuTaskCostHint::Small;
+        const Graphics::GpuTaskResourceUse computeUses[] = {
+            { .resource = resources[0u], .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+            { .resource = resources[1u], .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+            { .resource = resources[2u], .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+        };
+        Graphics::GpuTaskDesc computeDesc;
+        computeDesc
+            .setIdentity(Name("tests/task_graph/scored_compute_consumer"))
+            .setMarkerLabel("Scored Compute Consumer")
+            .setQueue(computeRequest)
+            .setScheduling(computeScheduling)
+            .setResourceUses(computeUses, LengthOf(computeUses))
+        ;
+        const Graphics::GpuTaskId computeTask = graph.addTask(computeDesc);
+        ASSERT_TRUE(computeTask.valid());
+
+        const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = queues,
+            .queueCount = LengthOf(queues),
+        };
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        ASSERT_TRUE(Analyze(graph, analysis));
+        ASSERT_EQ(analysis.inferredEdges().size(), 3u);
+        ASSERT_EQ(analysis.schedulingEdges().size(), 3u);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
+        const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(computeTask);
+        ASSERT_NE(assignment, nullptr);
+        EXPECT_EQ(assignment->queueClass, expectedQueue);
+        EXPECT_EQ(assignment->reason, expectedReason);
+        EXPECT_EQ(assignment->initialQueue, assignment->queue);
+        EXPECT_EQ(assignment->score.incomingCrossings, expectedQueue == Graphics::CommandQueue::Compute ? 3 : 0);
+        EXPECT_EQ(assignment->score.ownershipTransfers, expectedOwnershipTransfers);
+    };
+
+    runCase(
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        true,
+        false,
+        Graphics::CommandQueue::Graphics,
+        Graphics::GpuTaskQueueAssignmentReason::CompilerOverride,
+        0
+    );
+    runCase(
+        Graphics::ResourceQueueSharing::Exclusive,
+        true,
+        true,
+        Graphics::CommandQueue::Graphics,
+        Graphics::GpuTaskQueueAssignmentReason::CompilerOverride,
+        0
+    );
+    runCase(
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        true,
+        true,
+        Graphics::CommandQueue::Compute,
+        Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute,
+        0
+    );
+    runCase(
+        Graphics::ResourceQueueSharing::Exclusive,
+        false,
+        true,
+        Graphics::CommandQueue::Compute,
+        Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute,
+        3
+    );
+}
+
+
+TEST(GpuTaskGraph, QueueScoreUsesOnlyReducedOutgoingDependencies){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuQueueRequest computeRequest;
+    computeRequest.requiredCapabilities = Graphics::GpuQueueCapability::Compute;
+    computeRequest.preferredQueue = Graphics::GpuQueuePreference::Compute;
+    computeRequest.allowFallback = false;
+    computeRequest.compilerMayOverridePreference = false;
+    Graphics::GpuQueueRequest graphicsRequest;
+    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+    graphicsRequest.allowFallback = false;
+    graphicsRequest.compilerMayOverridePreference = false;
+
+    const Graphics::GpuTaskId producer = AddTaskWithQueue(
+        graph,
+        Name("tests/task_graph/reduced_queue_score_producer"),
+        "Reduced Queue Score Producer",
+        computeRequest
+    );
+    const Graphics::GpuTaskId middle = AddTaskWithQueue(
+        graph,
+        Name("tests/task_graph/reduced_queue_score_middle"),
+        "Reduced Queue Score Middle",
+        graphicsRequest,
+        {},
+        {},
+        &producer,
+        1u
+    );
+    const Graphics::GpuTaskId finalDependencies[] = { producer, middle };
+    const Graphics::GpuTaskId finalTask = AddTaskWithQueue(
+        graph,
+        Name("tests/task_graph/reduced_queue_score_final"),
+        "Reduced Queue Score Final",
+        graphicsRequest,
+        {},
+        {},
+        finalDependencies,
+        LengthOf(finalDependencies)
+    );
+    ASSERT_TRUE(producer.valid());
+    ASSERT_TRUE(middle.valid());
+    ASSERT_TRUE(finalTask.valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    ASSERT_EQ(analysis.edges().size(), 3u);
+    ASSERT_EQ(analysis.schedulingEdges().size(), 2u);
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
+    const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
+    ASSERT_NE(producerAssignment, nullptr);
+    EXPECT_EQ(producerAssignment->queueClass, Graphics::CommandQueue::Compute);
+    EXPECT_EQ(producerAssignment->score.outgoingCrossings, 1);
+    EXPECT_EQ(producerAssignment->score.incomingCrossings, 0);
+    EXPECT_EQ(producerAssignment->score.ownershipTransfers, 0);
+}
+
+
+TEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossings){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId texture = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/ownership_score_texture"),
+        "Ownership Score Texture"
+    );
+    ASSERT_TRUE(texture.valid());
+
+    const Graphics::GpuTaskResourceUse producerUse{
+        .resource = texture,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::UnorderedAccess,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    const Graphics::GpuTaskResourceUse consumerUse{
+        .resource = texture,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::UnorderedAccess,
+        .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+    };
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    Graphics::GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/task_graph/ownership_score_producer"))
+        .setMarkerLabel("Ownership Score Producer")
+        .setQueue(graphicsRequest)
+        .setResourceUses(&producerUse, 1u)
+    ;
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    Graphics::GpuTaskDesc consumerDesc;
+    consumerDesc
+        .setIdentity(Name("tests/task_graph/ownership_score_consumer"))
+        .setMarkerLabel("Ownership Score Consumer")
+        .setQueue(computeRequest)
+        .setResourceUses(&consumerUse, 1u)
+    ;
+    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    ASSERT_TRUE(producer.valid());
+    ASSERT_TRUE(consumer.valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    ASSERT_EQ(analysis.inferredEdges().size(), 2u);
+    ASSERT_EQ(analysis.schedulingEdges().size(), 1u);
+
+    const Graphics::GpuPhysicalQueueInfo separateFamilyQueues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology separateFamilyTopology{
+        .queues = separateFamilyQueues,
+        .queueCount = LengthOf(separateFamilyQueues),
+    };
+    Graphics::GpuTaskGraphQueueAssignments separateFamilyAssignments(testArena.arena);
+    ASSERT_TRUE(Assign(graph, analysis, separateFamilyTopology, separateFamilyAssignments));
+    const Graphics::GpuTaskQueueAssignment* const separateFamilyAssignment = separateFamilyAssignments.find(consumer);
+    ASSERT_NE(separateFamilyAssignment, nullptr);
+    EXPECT_EQ(separateFamilyAssignment->score.incomingCrossings, 1);
+    EXPECT_EQ(separateFamilyAssignment->score.ownershipTransfers, 1);
+
+    Graphics::GpuPhysicalQueueInfo sameFamilyCompute = DedicatedComputeQueue();
+    sameFamilyCompute.familyIndex = GraphicsQueue().familyIndex;
+    sameFamilyCompute.queueIndex = 1u;
+    const Graphics::GpuPhysicalQueueInfo sameFamilyQueues[] = {
+        GraphicsQueue(),
+        sameFamilyCompute,
+    };
+    const Graphics::GpuTaskGraphQueueTopology sameFamilyTopology{
+        .queues = sameFamilyQueues,
+        .queueCount = LengthOf(sameFamilyQueues),
+    };
+    Graphics::GpuTaskGraphQueueAssignments sameFamilyAssignments(testArena.arena);
+    ASSERT_TRUE(Assign(graph, analysis, sameFamilyTopology, sameFamilyAssignments));
+    const Graphics::GpuTaskQueueAssignment* const sameFamilyAssignment = sameFamilyAssignments.find(consumer);
+    ASSERT_NE(sameFamilyAssignment, nullptr);
+    EXPECT_EQ(sameFamilyAssignment->score.incomingCrossings, 1);
+    EXPECT_EQ(sameFamilyAssignment->score.ownershipTransfers, 0);
+}
+
+
+TEST(GpuTaskGraph, UsesCompleteProvisionalRoutesWhenScoringFutureConsumers){
+    const auto runCase = [](const bool addFutureConsumer, const Graphics::CommandQueue::Enum expectedQueue){
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId incoming = AddBufferMetadata(
+            graph,
+            Name("tests/task_graph/provisional_score_incoming"),
+            "Provisional Score Incoming"
+        );
+        const Graphics::GpuGraphResourceId outgoing = AddBufferMetadata(
+            graph,
+            Name("tests/task_graph/provisional_score_outgoing"),
+            "Provisional Score Outgoing"
+        );
+        ASSERT_TRUE(incoming.valid());
+        ASSERT_TRUE(outgoing.valid());
+
+        const Graphics::GpuQueueRequest graphicsRequest{
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueuePreference::Graphics,
+            false,
+            false,
+        };
+        const Graphics::GpuQueueRequest strictComputeRequest{
+            Graphics::GpuQueueCapability::Compute,
+            Graphics::GpuQueuePreference::Compute,
+            false,
+            false,
+        };
+        const Graphics::GpuQueueRequest movableComputeRequest{
+            Graphics::GpuQueueCapability::Compute,
+            Graphics::GpuQueuePreference::Compute,
+            true,
+            true,
+        };
+        Graphics::GpuTaskSchedulingHint tinyScheduling;
+        tinyScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+        Graphics::GpuTaskSchedulingHint movableScheduling;
+        movableScheduling.cost = Graphics::GpuTaskCostHint::Small;
+
+        const Graphics::GpuTaskResourceUse producerUse{
+            .resource = incoming,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc producerDesc;
+        producerDesc
+            .setIdentity(Name("tests/task_graph/provisional_score_producer"))
+            .setMarkerLabel("Provisional Score Producer")
+            .setQueue(graphicsRequest)
+            .setScheduling(tinyScheduling)
+            .setResourceUses(&producerUse, 1u)
+        ;
+        const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+        ASSERT_TRUE(producer.valid());
+
+        const Graphics::GpuTaskResourceUse movableUses[] = {
+            { .resource = incoming, .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+            { .resource = outgoing, .range = {}, .requiredState = Graphics::ResourceStates::UnorderedAccess, .access = Graphics::GpuTaskResourceAccess::Write },
+        };
+        Graphics::GpuTaskDesc movableDesc;
+        movableDesc
+            .setIdentity(Name("tests/task_graph/provisional_score_movable"))
+            .setMarkerLabel("Provisional Score Movable")
+            .setQueue(movableComputeRequest)
+            .setScheduling(movableScheduling)
+            .setResourceUses(movableUses, LengthOf(movableUses))
+        ;
+        const Graphics::GpuTaskId movable = graph.addTask(movableDesc);
+        ASSERT_TRUE(movable.valid());
+
+        ASSERT_TRUE(AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/provisional_score_compute_load"),
+            "Provisional Score Compute Load",
+            strictComputeRequest,
+            tinyScheduling
+        ).valid());
+        ASSERT_TRUE(AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/provisional_score_independent_graphics"),
+            "Provisional Score Independent Graphics",
+            graphicsRequest,
+            tinyScheduling
+        ).valid());
+
+        Graphics::GpuTaskId futureConsumer;
+        if(addFutureConsumer){
+            const Graphics::GpuTaskResourceUse consumerUse{
+                .resource = outgoing,
+                .range = {},
+                .requiredState = Graphics::ResourceStates::ShaderResource,
+                .access = Graphics::GpuTaskResourceAccess::Read,
+            };
+            Graphics::GpuTaskDesc consumerDesc;
+            consumerDesc
+                .setIdentity(Name("tests/task_graph/provisional_score_future_consumer"))
+                .setMarkerLabel("Provisional Score Future Consumer")
+                .setQueue(strictComputeRequest)
+                .setScheduling(tinyScheduling)
+                .setResourceUses(&consumerUse, 1u)
+            ;
+            futureConsumer = graph.addTask(consumerDesc);
+            ASSERT_TRUE(futureConsumer.valid());
+        }
+
+        const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = queues,
+            .queueCount = LengthOf(queues),
+        };
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        ASSERT_TRUE(Analyze(graph, analysis));
+        if(addFutureConsumer){
+            const Graphics::GpuTaskDependencyEdge* const edge = FindEdge(analysis, movable, futureConsumer);
+            ASSERT_NE(edge, nullptr);
+        }
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
+        const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(movable);
+        ASSERT_NE(assignment, nullptr);
+        EXPECT_EQ(assignment->queueClass, expectedQueue);
+        EXPECT_EQ(
+            assignment->reason,
+            expectedQueue == Graphics::CommandQueue::Compute
+                ? Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute
+                : Graphics::GpuTaskQueueAssignmentReason::CompilerOverride
+        );
+        if(expectedQueue == Graphics::CommandQueue::Compute){
+            EXPECT_EQ(assignment->score.preference, 1);
+            EXPECT_EQ(assignment->score.overlap, 1);
+            EXPECT_EQ(assignment->score.queueLoad, 2);
+            EXPECT_EQ(assignment->score.incomingCrossings, 1);
+            EXPECT_EQ(assignment->score.outgoingCrossings, 0);
+            EXPECT_EQ(assignment->score.ownershipTransfers, 1);
+            EXPECT_EQ(assignment->score.total(), -2);
+        }
+        else{
+            EXPECT_EQ(assignment->score.preference, 0);
+            EXPECT_EQ(assignment->score.overlap, 1);
+            EXPECT_EQ(assignment->score.queueLoad, 2);
+            EXPECT_EQ(assignment->score.incomingCrossings, 0);
+            EXPECT_EQ(assignment->score.outgoingCrossings, 0);
+            EXPECT_EQ(assignment->score.ownershipTransfers, 0);
+            EXPECT_EQ(assignment->score.total(), -1);
+        }
+    };
+
+    runCase(false, Graphics::CommandQueue::Graphics);
+    runCase(true, Graphics::CommandQueue::Compute);
+}
+
 
 TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
     TestArena testArena;
@@ -8218,7 +8906,8 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
     ASSERT_NE(consumerAssignment, nullptr);
     EXPECT_EQ(producerAssignment->queue, queues[0u].id);
     EXPECT_EQ(consumerAssignment->queue, queues[1u].id);
-    EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+    EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
+    EXPECT_TRUE(consumerAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
 
     const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
     const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumer);
@@ -8355,14 +9044,18 @@ TEST(GpuTaskGraph, AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOption
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
     const Graphics::GpuTaskQueueAssignment* assignment = assignments.find(task);
     ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->initialQueue, queues[0u].id);
     EXPECT_EQ(assignment->queue, queues[0u].id);
+    EXPECT_FALSE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback);
 
     timingPolicy.enabled = true;
     // The accepted primary route switched at frame five, so the configured dwell period still retains it.
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
     assignment = assignments.find(task);
     ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->initialQueue, queues[0u].id);
     EXPECT_EQ(assignment->queue, queues[0u].id);
+    EXPECT_FALSE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback);
 
     timingPolicy.minimumFramesBetweenSwitches = 0u;
     Graphics::GpuTaskGraphCompileOptions compileOptions;
@@ -8371,8 +9064,27 @@ TEST(GpuTaskGraph, AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOption
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, compileOptions));
     assignment = assignments.find(task);
     ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->initialQueue, queues[0u].id);
     EXPECT_EQ(assignment->queue, auxiliaryGraphicsQueue.id);
-    EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+    EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
+    EXPECT_TRUE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback);
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    Telemetry::FrameGraphPendingNameEdges pendingEdges(testArena.arena);
+    Telemetry::FrameGraphBuilder builder(nodes, edges, pendingEdges);
+    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
+    const Graphics::GpuTaskGraphTelemetryOptions telemetryOptions{
+        .queueAssignments = &assignments,
+    };
+    ASSERT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
+    ASSERT_EQ(nodes.size(), 1u);
+    EXPECT_EQ(
+        nodes[0u].flags,
+        Graphics::GpuTaskGraphTelemetryNodeFlag::AssignedGraphicsQueue
+        | Graphics::GpuTaskGraphTelemetryNodeFlag::QueueAssignmentSameClassRouting
+        | Graphics::GpuTaskGraphTelemetryNodeFlag::QueueAssignmentTimingRouting
+    );
 }
 
 
@@ -8448,6 +9160,7 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
     const Graphics::GpuTaskQueueAssignment* assignment = assignments.find(task);
     ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->initialQueue, queues[0u].id);
     EXPECT_EQ(assignment->queue, queues[0u].id);
 
     ASSERT_TRUE(timingHistory.recordSample(timingKey, queues[0u].id, 0.010, 1u));
@@ -8457,8 +9170,10 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
     assignment = assignments.find(task);
     ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->initialQueue, queues[0u].id);
     EXPECT_EQ(assignment->queue, auxiliaryGraphicsQueue.id);
-    EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+    EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
+    EXPECT_TRUE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingCalibration);
 
     ASSERT_TRUE(timingHistory.recordSample(timingKey, auxiliaryGraphicsQueue.id, 0.001, 2u));
     ASSERT_TRUE(timingHistory.noteAcceptedAssignment(timingKey, auxiliaryGraphicsQueue.id, 2u));
@@ -8467,7 +9182,21 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
     assignment = assignments.find(task);
     ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->initialQueue, queues[0u].id);
     EXPECT_EQ(assignment->queue, queues[0u].id);
+    EXPECT_FALSE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingCalibration);
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    Telemetry::FrameGraphPendingNameEdges pendingEdges(testArena.arena);
+    Telemetry::FrameGraphBuilder builder(nodes, edges, pendingEdges);
+    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
+    const Graphics::GpuTaskGraphTelemetryOptions telemetryOptions{
+        .queueAssignments = &assignments,
+    };
+    ASSERT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
+    ASSERT_EQ(nodes.size(), 1u);
+    EXPECT_EQ(nodes[0u].flags, Graphics::GpuTaskGraphTelemetryNodeFlag::AssignedGraphicsQueue);
 
     ASSERT_TRUE(timingHistory.recordSample(timingKey, queues[0u].id, 0.010, 3u));
     ASSERT_TRUE(timingHistory.noteAcceptedAssignment(timingKey, queues[0u].id, 3u));
@@ -8476,8 +9205,10 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
     assignment = assignments.find(task);
     ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->initialQueue, queues[0u].id);
     EXPECT_EQ(assignment->queue, auxiliaryGraphicsQueue.id);
-    EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+    EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
+    EXPECT_TRUE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback);
 }
 
 
@@ -8798,7 +9529,8 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
     const Graphics::GpuTaskQueueAssignment* const crossFamilyAssignment = crossFamilyAssignments.find(crossFamilyTask);
     ASSERT_NE(crossFamilyAssignment, nullptr);
     EXPECT_EQ(crossFamilyAssignment->queue, crossFamilyGraphicsQueue.id);
-    EXPECT_EQ(crossFamilyAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+    EXPECT_EQ(crossFamilyAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
+    EXPECT_TRUE(crossFamilyAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DebugTimingOverride);
 }
 
 
@@ -8911,7 +9643,8 @@ TEST(GpuTaskGraph, RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnershipH
     ASSERT_NE(consumerAssignment, nullptr);
     EXPECT_EQ(producerAssignment->queue, queues[0u].id);
     EXPECT_EQ(consumerAssignment->queue, auxiliaryGraphicsQueue.id);
-    EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+    EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
+    EXPECT_TRUE(consumerAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback);
 
     const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
     const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumer);
@@ -9018,11 +9751,10 @@ TEST(GpuTaskGraph, BalancesAcrossAllRegisteredSameClassPhysicalQueues){
         const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(tasks[taskIndex]);
         ASSERT_NE(assignment, nullptr);
         EXPECT_EQ(assignment->queue, queues[taskIndex].id);
+        EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
         EXPECT_EQ(
-            assignment->reason,
-            taskIndex == 0u
-                ? Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics
-                : Graphics::GpuTaskQueueAssignmentReason::SameClassRouting
+            static_cast<bool>(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance),
+            taskIndex != 0u
         );
     }
 }
@@ -9080,11 +9812,10 @@ TEST(GpuTaskGraph, BalancesAcrossAllRegisteredDedicatedSameClassPhysicalQueues){
             const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(tasks[taskIndex]);
             ASSERT_NE(assignment, nullptr);
             EXPECT_EQ(assignment->queue, queues[taskIndex].id);
+            EXPECT_EQ(assignment->reason, primaryReason);
             EXPECT_EQ(
-                assignment->reason,
-                taskIndex == 0u
-                    ? primaryReason
-                    : Graphics::GpuTaskQueueAssignmentReason::SameClassRouting
+                static_cast<bool>(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance),
+                taskIndex != 0u
             );
         }
     };
@@ -9190,7 +9921,9 @@ TEST(GpuTaskGraph, RoutesIsolatedOffloadToAuxiliaryAndReturnsPrimaryBridge){
     ASSERT_NE(uploadAssignment, nullptr);
     ASSERT_NE(bridgeAssignment, nullptr);
     EXPECT_EQ(uploadAssignment->queue, auxiliaryGraphicsQueue.id);
-    EXPECT_EQ(uploadAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+    EXPECT_EQ(uploadAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::PreferredQueue);
+    EXPECT_TRUE(uploadAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
+    EXPECT_TRUE(uploadAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::NonPrimaryPreference);
     EXPECT_EQ(bridgeAssignment->queue, queues[0u].id);
 
     const Graphics::GpuSubmissionPacketId uploadPacket = compiledGraph.packetForTask(upload);
@@ -9286,7 +10019,8 @@ TEST(GpuTaskGraph, PreservesAuxiliarySameClassQueueAcrossSerialOffloadChain){
     ASSERT_NE(bridgeAssignment, nullptr);
     EXPECT_EQ(firstAssignment->queue, auxiliaryGraphicsQueue.id);
     EXPECT_EQ(secondAssignment->queue, auxiliaryGraphicsQueue.id);
-    EXPECT_EQ(secondAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+    EXPECT_EQ(secondAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::PreferredQueue);
+    EXPECT_TRUE(secondAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DirectDependencyAffinity);
     EXPECT_EQ(bridgeAssignment->queue, queues[0u].id);
 
     const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
@@ -9440,7 +10174,8 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
     ASSERT_NE(consumerAssignment, nullptr);
     EXPECT_EQ(producerAssignment->queue, queues[0u].id);
     EXPECT_EQ(consumerAssignment->queue, queues[1u].id);
-    EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+    EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
+    EXPECT_TRUE(consumerAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
 
     const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
     const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumer);
@@ -9582,7 +10317,8 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOw
     ASSERT_NE(compiledConsumer, nullptr);
     EXPECT_EQ(producerAssignment->queue, queues[0u].id);
     EXPECT_EQ(consumerAssignment->queue, auxiliaryGraphicsQueue.id);
-    EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+    EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
+    EXPECT_TRUE(consumerAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
     EXPECT_EQ(compiledProducer->epilogueBarrierCount, 0u);
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
     ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
@@ -9682,7 +10418,13 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         ASSERT_NE(compiledConsumer, nullptr);
         EXPECT_EQ(producerAssignment->queue, primaryQueue.id);
         EXPECT_EQ(consumerAssignment->queue, auxiliaryQueue.id);
-        EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+        EXPECT_EQ(
+            consumerAssignment->reason,
+            preference == Graphics::GpuQueuePreference::Compute
+                ? Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute
+                : Graphics::GpuTaskQueueAssignmentReason::DedicatedTransfer
+        );
+        EXPECT_TRUE(consumerAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
         EXPECT_EQ(compiledProducer->queue, primaryQueue.id);
         EXPECT_EQ(compiledConsumer->queue, auxiliaryQueue.id);
         ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
@@ -11804,11 +12546,21 @@ TEST(GpuTaskGraph, ExportsDetailedQueueAssignmentTelemetry){
         graphicsRequest,
         sameClassScheduling
     );
+    Graphics::GpuTaskSchedulingHint tinyScheduling;
+    tinyScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    const Graphics::GpuTaskId compilerOverride = AddTaskWithQueue(
+        graph,
+        Name("tests/task_graph/telemetry_compiler_override"),
+        "Telemetry Compiler Override",
+        transferRequest,
+        tinyScheduling
+    );
     ASSERT_TRUE(compute.valid());
     ASSERT_TRUE(transfer.valid());
     ASSERT_TRUE(computeFallback.valid());
     ASSERT_TRUE(sameClassPrimary.valid());
     ASSERT_TRUE(sameClassRouted.valid());
+    ASSERT_TRUE(compilerOverride.valid());
 
     Graphics::GpuPhysicalQueueInfo secondaryGraphicsQueue = GraphicsQueue(3u);
     secondaryGraphicsQueue.queueIndex = 1u;
@@ -11827,11 +12579,20 @@ TEST(GpuTaskGraph, ExportsDetailedQueueAssignmentTelemetry){
     ASSERT_TRUE(Analyze(graph, analysis));
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
     const Graphics::GpuTaskQueueAssignment* const fallbackAssignment = assignments.find(computeFallback);
+    const Graphics::GpuTaskQueueAssignment* const primaryAssignment = assignments.find(sameClassPrimary);
     const Graphics::GpuTaskQueueAssignment* const routedAssignment = assignments.find(sameClassRouted);
+    const Graphics::GpuTaskQueueAssignment* const overrideAssignment = assignments.find(compilerOverride);
     ASSERT_NE(fallbackAssignment, nullptr);
+    ASSERT_NE(primaryAssignment, nullptr);
     ASSERT_NE(routedAssignment, nullptr);
+    ASSERT_NE(overrideAssignment, nullptr);
     EXPECT_EQ(fallbackAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::Fallback);
-    EXPECT_EQ(routedAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+    EXPECT_EQ(primaryAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
+    EXPECT_TRUE(primaryAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
+    EXPECT_EQ(routedAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
+    EXPECT_FALSE(routedAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
+    EXPECT_EQ(overrideAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::CompilerOverride);
+    EXPECT_EQ(overrideAssignment->initialQueue, overrideAssignment->queue);
 
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
@@ -11843,7 +12604,7 @@ TEST(GpuTaskGraph, ExportsDetailedQueueAssignmentTelemetry){
     };
     ASSERT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
 
-    ASSERT_EQ(nodes.size(), 5u);
+    ASSERT_EQ(nodes.size(), 6u);
     EXPECT_EQ(
         nodes[0u].flags,
         Graphics::GpuTaskGraphTelemetryNodeFlag::AssignedComputeQueue
@@ -11856,15 +12617,19 @@ TEST(GpuTaskGraph, ExportsDetailedQueueAssignmentTelemetry){
     );
     EXPECT_EQ(
         nodes[2u].flags,
-        Graphics::GpuTaskGraphTelemetryNodeFlag::AssignedComputeQueue
-        | Graphics::GpuTaskGraphTelemetryNodeFlag::AssignedDedicatedQueue
+        Graphics::GpuTaskGraphTelemetryNodeFlag::AssignedGraphicsQueue
         | Graphics::GpuTaskGraphTelemetryNodeFlag::QueueAssignmentFallback
     );
-    EXPECT_EQ(nodes[3u].flags, Graphics::GpuTaskGraphTelemetryNodeFlag::AssignedGraphicsQueue);
     EXPECT_EQ(
-        nodes[4u].flags,
+        nodes[3u].flags,
         Graphics::GpuTaskGraphTelemetryNodeFlag::AssignedGraphicsQueue
         | Graphics::GpuTaskGraphTelemetryNodeFlag::QueueAssignmentSameClassRouting
+    );
+    EXPECT_EQ(nodes[4u].flags, Graphics::GpuTaskGraphTelemetryNodeFlag::AssignedGraphicsQueue);
+    EXPECT_EQ(
+        nodes[5u].flags,
+        Graphics::GpuTaskGraphTelemetryNodeFlag::AssignedGraphicsQueue
+        | Graphics::GpuTaskGraphTelemetryNodeFlag::QueueAssignmentCompilerOverride
     );
 }
 
@@ -31660,7 +32425,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedSurfelGiResolveAndEntryStates){
         Graphics::GpuQueueCapability::Compute,
         Graphics::GpuQueuePreference::Compute,
         true,
-        true,
+        false,
     };
     const Graphics::GpuQueueRequest computeTransferRequest{
         Graphics::GpuQueueCapability::Transfer,
@@ -33052,7 +33817,7 @@ TEST(GpuTaskGraph, PlansNonTemporalCausticAccumulatorClearBeforePhotonProducer){
             Graphics::GpuQueueCapability::Compute,
             Graphics::GpuQueuePreference::Compute,
             true,
-            true,
+            false,
         };
         Graphics::GpuTaskSchedulingHint clearScheduling;
         clearScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
@@ -35156,7 +35921,7 @@ TEST(GpuTaskGraph, OrdersLaggedLightingAfterAvboitDepthFinalizer){
         Graphics::GpuQueueCapability::Compute,
         Graphics::GpuQueuePreference::Compute,
         true,
-        true,
+        false,
     };
     Graphics::GpuTaskSchedulingHint prefixScheduling;
     prefixScheduling.cost = Graphics::GpuTaskCostHint::Medium;
@@ -35710,12 +36475,55 @@ TEST(GpuTaskGraph, UsesDeclaredTripleQueueSharingForDedicatedTransfer){
 }
 
 
+TEST(GpuTaskGraph, AcceptsDedicatedTransferClassOnAConcurrentlySharedComputeFamily){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const TransferOwnershipPair pair = AddTransferOwnershipPair(
+        graph,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        false
+    );
+    ASSERT_TRUE(pair.texture.valid());
+    ASSERT_TRUE(pair.producer.valid());
+    ASSERT_TRUE(pair.consumer.valid());
+
+    Graphics::GpuPhysicalQueueInfo transferOnComputeFamily = DedicatedTransferQueue();
+    transferOnComputeFamily.familyIndex = DedicatedComputeQueue().familyIndex;
+    transferOnComputeFamily.queueIndex = 1u;
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+        transferOnComputeFamily,
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(pair.consumer);
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(pair.producer);
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(pair.consumer);
+    ASSERT_NE(consumerAssignment, nullptr);
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledConsumer, nullptr);
+    EXPECT_EQ(consumerAssignment->queue, transferOnComputeFamily.id);
+    EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedTransfer);
+    EXPECT_EQ(compiledProducer->epilogueBarrierCount, 0u);
+    EXPECT_EQ(compiledConsumer->prologueBarrierCount, 0u);
+}
+
+
 TEST(GpuTaskGraph, RejectsDedicatedTransferUseOutsideConcurrentSharingContract){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const TransferOwnershipPair pair = AddTransferOwnershipPair(
         graph,
-        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        false
     );
     ASSERT_TRUE(pair.texture.valid());
     ASSERT_TRUE(pair.producer.valid());
@@ -35734,6 +36542,10 @@ TEST(GpuTaskGraph, RejectsDedicatedTransferUseOutsideConcurrentSharingContract){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    EXPECT_EQ(
+        assignments.diagnostic().status,
+        Graphics::GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue
+    );
     EXPECT_FALSE(compiledGraph.valid());
 }
 
@@ -36543,7 +37355,7 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
         Graphics::GpuQueueCapability::Compute,
         Graphics::GpuQueuePreference::Compute,
         true,
-        true,
+        false,
     };
 
     const Graphics::GpuTaskResourceUse shadowPrepareUses[] = {
@@ -41603,7 +42415,7 @@ TEST(GpuTaskGraph, RetainsTinyTransferTasksOnGraphics){
     const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(copyTask);
     ASSERT_NE(assignment, nullptr);
     EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
-    EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::Fallback);
+    EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::CompilerOverride);
 }
 
 

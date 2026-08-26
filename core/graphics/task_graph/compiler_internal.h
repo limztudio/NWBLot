@@ -91,6 +91,12 @@ struct GpuTaskGraphResourceStatePlan{
     CommandQueue::Enum queueClass
 )noexcept;
 
+[[nodiscard]] bool ResourceSharingIncludesQueueFamily(
+    ResourceQueueSharing::Mask sharing,
+    const GpuTaskGraphQueueTopology& topology,
+    u32 familyIndex
+)noexcept;
+
 [[nodiscard]] bool ResourceUsesConcurrentQueueSharing(
     ResourceQueueSharing::Mask sharing,
     const GpuTaskGraphQueueTopology& topology
@@ -117,6 +123,56 @@ struct GpuTaskGraphResourceStatePlan{
 [[nodiscard]] bool IsValidQueueRequest(const GpuQueueRequest& request)noexcept;
 [[nodiscard]] bool IsValidSchedulingHint(const GpuTaskSchedulingHint& hint)noexcept;
 [[nodiscard]] u64 QueueCostWeight(GpuTaskCostHint::Enum cost)noexcept;
+
+[[nodiscard]] const GpuPhysicalQueueInfo* FindPhysicalQueueInfo(
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueId& queue
+)noexcept;
+
+[[nodiscard]] bool IsLegalQueueAssignmentCandidate(
+    const GpuTaskGraph& graph,
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& candidate
+)noexcept;
+
+[[nodiscard]] const GpuPhysicalQueueInfo* FindBestLegalQueueAssignmentCandidate(
+    const GpuTaskGraph& graph,
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuTaskGraphTaskView& task,
+    CommandQueue::Enum requiredClass = CommandQueue::kCount,
+    bool dedicatedOnly = false
+)noexcept;
+
+[[nodiscard]] bool BuildGpuTaskSchedulingReachability(
+    const GpuTaskGraphAnalysis& analysis,
+    usize taskCount,
+    Vector<u8, Alloc::ScratchArena>& outReachability
+);
+
+[[nodiscard]] bool HasTransitivelyIndependentRequiredGraphicsTask(
+    const GpuTaskGraph& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    const Vector<u8, Alloc::ScratchArena>& schedulingReachability,
+    const GpuTaskGraphTaskView& task
+)noexcept;
+
+[[nodiscard]] GpuQueueAssignmentScore BuildQueueAssignmentScore(
+    const GpuTaskGraph& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GpuTaskGraphQueueTopology& topology,
+    const Vector<u8, Alloc::ScratchArena>& schedulingReachability,
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& candidate
+)noexcept;
+
+[[nodiscard]] bool IsBetterAnyQueueAssignmentCandidate(
+    const GpuQueueAssignmentScore& candidateScore,
+    const GpuPhysicalQueueInfo& candidate,
+    const GpuQueueAssignmentScore& currentScore,
+    const GpuPhysicalQueueInfo* current
+)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

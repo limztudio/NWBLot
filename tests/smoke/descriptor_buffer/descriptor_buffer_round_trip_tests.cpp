@@ -1576,7 +1576,8 @@ TEST_F(DescriptorBufferRoundTripTest, SameClassGraphicsQueuesRouteGraphPacketsAn
     ASSERT_NE(copyAssignment, nullptr);
     EXPECT_EQ(uploadAssignment->queue, primaryGraphicsQueue);
     EXPECT_EQ(copyAssignment->queue, secondaryGraphicsQueue->id);
-    EXPECT_EQ(copyAssignment->reason, GpuTaskQueueAssignmentReason::SameClassRouting);
+    EXPECT_EQ(copyAssignment->reason, GpuTaskQueueAssignmentReason::PreferredQueue);
+    EXPECT_TRUE(copyAssignment->modifiers & GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
     const GpuSubmissionPacketId uploadPacket = compiledGraph.packetForTask(uploadTask);
     const GpuSubmissionPacketId copyPacket = compiledGraph.packetForTask(copyTask);
     ASSERT_TRUE(uploadPacket.valid());
@@ -1988,7 +1989,8 @@ TEST_F(DescriptorBufferRoundTripTest, CrossFamilySameClassGraphicsQueuesRouteWit
     ASSERT_NE(copyAssignment, nullptr);
     EXPECT_EQ(uploadAssignment->queue, primaryGraphicsQueue);
     EXPECT_EQ(copyAssignment->queue, secondaryGraphicsQueue->id);
-    EXPECT_EQ(copyAssignment->reason, GpuTaskQueueAssignmentReason::SameClassRouting);
+    EXPECT_EQ(copyAssignment->reason, GpuTaskQueueAssignmentReason::PreferredQueue);
+    EXPECT_TRUE(copyAssignment->modifiers & GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
     const GpuSubmissionPacketId uploadPacket = compiledGraph.packetForTask(uploadTask);
     const GpuSubmissionPacketId copyPacket = compiledGraph.packetForTask(copyTask);
     ASSERT_TRUE(uploadPacket.valid());

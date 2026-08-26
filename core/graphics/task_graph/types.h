@@ -96,8 +96,10 @@ namespace GpuTaskGraphTelemetryNodeFlag{
         AssignedComputeQueue = 1u << 1u,
         AssignedDedicatedQueue = 1u << 2u,
         QueueAssignmentFallback = 1u << 3u,
+        QueueAssignmentCompilerOverride = 1u << 4u,
         AssignedTransferQueue = 1u << 5u,
         QueueAssignmentSameClassRouting = 1u << 6u,
+        QueueAssignmentTimingRouting = 1u << 7u,
     };
 };
 

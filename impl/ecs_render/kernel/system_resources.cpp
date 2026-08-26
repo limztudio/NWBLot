@@ -41,7 +41,8 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
     if(!targetsReady)
         return false;
 
-    if(Core::Framebuffer* presentationFramebuffer = m_graphics.getCurrentFramebuffer()){
+    // Pipeline compatibility setup uses the stable framebuffer-zero prototype, not a currently acquired image.
+    if(Core::Framebuffer* presentationFramebuffer = m_graphics.getFramebuffer(0u)){
         if(!m_deferredSystem.createDeferredPresentPipeline(presentationFramebuffer))
             return false;
     }

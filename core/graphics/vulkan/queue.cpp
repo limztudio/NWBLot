@@ -926,7 +926,8 @@ u64 Queue::submit(
     const usize localWaitCount,
     bool* const outSubmissionAccepted,
     const SubmissionSignal* const localSignals,
-    const usize localSignalCount
+    const usize localSignalCount,
+    const bool forceNativeSubmission
 ){
     ScopedLock lock(m_mutex);
     DescriptorBufferManager* const descriptorBufferManager = m_context.descriptorBufferManager;
@@ -963,6 +964,7 @@ u64 Queue::submit(
         || !m_waitSemaphores.empty()
         || !m_signalSemaphores.empty()
     ;
+    const bool requiresNativeSubmission = forceNativeSubmission || hasCommands || hasPendingSemaphores;
 
     if(hasCommands && numCmd > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list count exceeds Vulkan limit"));
@@ -977,7 +979,7 @@ u64 Queue::submit(
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queued semaphore count exceeds Vulkan limit"));
         return m_lastSubmittedID;
     }
-    if((hasCommands || hasPendingSemaphores) && m_lastSubmittedID == Limit<u64>::s_Max){
+    if(requiresNativeSubmission && m_lastSubmittedID == Limit<u64>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queue submission ID exhausted"));
         return m_lastSubmittedID;
     }
@@ -1095,7 +1097,7 @@ u64 Queue::submit(
         }
     };
 
-    if(cmdBufInfos.empty() && !hasPendingSemaphores)
+    if(!requiresNativeSubmission)
         return m_lastSubmittedID;
 
     if(m_trackingSemaphore == VK_NULL_HANDLE){

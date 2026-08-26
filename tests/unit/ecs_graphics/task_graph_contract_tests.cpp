@@ -920,6 +920,188 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
 }
 
 
+// One typed CPU snapshot binds an acquired WSI image to its exact owning framebuffer. Graphics publishes it only
+// after attachment identity validation, clears it on every lifecycle boundary, and never asks mutable backend
+// current-image state which framebuffer should render.
+TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString graphicsHeaderSource;
+    AString graphicsSource;
+    AString backendContractSource;
+    AString backendOrchestrationSource;
+    AString rendererResourcesSource;
+    AString uiSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.h", graphicsHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.cpp", graphicsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "backend_contract.h", backendContractSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_context_orchestration.cpp", backendOrchestrationSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system_resources.cpp", rendererResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
+    const AStringView graphicsHeader(graphicsHeaderSource.data(), graphicsHeaderSource.size());
+    const AStringView graphics(graphicsSource.data(), graphicsSource.size());
+    const AStringView backendContract(backendContractSource.data(), backendContractSource.size());
+    const AStringView backendOrchestration(backendOrchestrationSource.data(), backendOrchestrationSource.size());
+    const AStringView rendererResources(rendererResourcesSource.data(), rendererResourcesSource.size());
+    const AStringView ui(uiSource.data(), uiSource.size());
+
+    EXPECT_TRUE(ContainsText(graphicsHeader, "const AcquiredPresentationFrame& acquiredPresentationFrame()const noexcept"));
+    EXPECT_TRUE(ContainsText(graphicsHeader, "AcquiredPresentationFrame m_acquiredPresentationFrame;"));
+    EXPECT_FALSE(ContainsText(graphicsHeader, "getCurrentBackBuffer"));
+    EXPECT_FALSE(ContainsText(graphicsHeader, "getCurrentBackBufferIndex"));
+    EXPECT_FALSE(ContainsText(graphicsHeader, "getCurrentFramebuffer"));
+    EXPECT_TRUE(ContainsText(backendContract, "{ backend.abandonAcquiredFrame() }->SameAs<bool>;"));
+
+    const usize abandonmentOffset = backendOrchestration.find("bool BackendContext::abandonAcquiredFrame()noexcept{");
+    const usize presentDefinitionOffset = backendOrchestration.find("bool BackendContext::present(){", abandonmentOffset);
+    ASSERT_NE(abandonmentOffset, AStringView::npos);
+    ASSERT_NE(presentDefinitionOffset, AStringView::npos);
+    const AStringView abandonment = backendOrchestration.substr(
+        abandonmentOffset,
+        presentDefinitionOffset - abandonmentOffset
+    );
+    const usize quarantineOffset = abandonment.find("m_swapChainIndex = Limit<u32>::s_Max;");
+    const usize signalIdleOffset = abandonment.find("presentationSignalNeedsIdle && !m_rhiDevice->waitForIdle()");
+    const usize signalResetOffset = abandonment.find("resetFramePresentationSignal();", signalIdleOffset);
+    const usize forceSubmitOffset = abandonment.find("drainSubmitDesc.forceNativeSubmission = true;");
+    const usize drainSubmitOffset = abandonment.find("m_rhiDevice->executeCommandLists(nullptr, 0u, primaryGraphicsQueue, drainSubmitDesc)");
+    const usize idleOffset = abandonment.find("m_rhiDevice->waitForIdle()", drainSubmitOffset);
+    ASSERT_NE(quarantineOffset, AStringView::npos);
+    ASSERT_NE(signalIdleOffset, AStringView::npos);
+    ASSERT_NE(signalResetOffset, AStringView::npos);
+    ASSERT_NE(forceSubmitOffset, AStringView::npos);
+    ASSERT_NE(drainSubmitOffset, AStringView::npos);
+    ASSERT_NE(idleOffset, AStringView::npos);
+    EXPECT_LT(quarantineOffset, signalIdleOffset);
+    EXPECT_LT(signalIdleOffset, signalResetOffset);
+    EXPECT_LT(signalResetOffset, forceSubmitOffset);
+    EXPECT_LT(forceSubmitOffset, drainSubmitOffset);
+    EXPECT_LT(drainSubmitOffset, idleOffset);
+    EXPECT_TRUE(ContainsText(abandonment, "if(!m_frameAcquired)\n        return true;"));
+    EXPECT_TRUE(ContainsText(abandonment, "if(m_frameAbandonmentComplete){"));
+    EXPECT_TRUE(ContainsText(abandonment, "replaceFramePresentationSemaphoreAfterIdle()"));
+    EXPECT_TRUE(ContainsText(abandonment, "m_rhiDevice->captureGpuCrash(\"acquired-frame abandonment drain\")"));
+    EXPECT_TRUE(ContainsText(abandonment, "m_rhiDevice->captureGpuCrash(\"acquired-frame abandonment drain idle\")"));
+    EXPECT_TRUE(ContainsText(abandonment, "m_frameAbandonmentComplete = true;"));
+    EXPECT_FALSE(ContainsText(abandonment, "m_frameAcquired = false"));
+
+    const AStringView present = backendOrchestration.substr(presentDefinitionOffset);
+    const usize nonConsumedOffset = present.find(
+        "presentWaitDisposition != VulkanDetail::QueuePresentWaitDisposition::Consumed"
+    );
+    const usize deviceLostOffset = present.find(
+        "presentWaitDisposition == VulkanDetail::QueuePresentWaitDisposition::DeviceLost",
+        nonConsumedOffset
+    );
+    const usize unconsumedIdleOffset = present.find("if(!m_rhiDevice->waitForIdle())", deviceLostOffset);
+    const usize idleFailureCaptureOffset = present.find("captureGpuCrash(\"present semaphore idle\")", unconsumedIdleOffset);
+    const usize replacementOffset = present.find("if(!replaceFramePresentationSemaphoreAfterIdle())", idleFailureCaptureOffset);
+    const usize replacementFailureCaptureOffset = present.find(
+        "captureGpuCrash(\"present semaphore replacement\")",
+        replacementOffset
+    );
+    const usize unconsumedResetOffset = present.find("resetFramePresentationSignal();", replacementFailureCaptureOffset);
+    ASSERT_NE(nonConsumedOffset, AStringView::npos);
+    ASSERT_NE(deviceLostOffset, AStringView::npos);
+    ASSERT_NE(unconsumedIdleOffset, AStringView::npos);
+    ASSERT_NE(idleFailureCaptureOffset, AStringView::npos);
+    ASSERT_NE(replacementOffset, AStringView::npos);
+    ASSERT_NE(replacementFailureCaptureOffset, AStringView::npos);
+    ASSERT_NE(unconsumedResetOffset, AStringView::npos);
+    EXPECT_LT(nonConsumedOffset, deviceLostOffset);
+    EXPECT_LT(deviceLostOffset, unconsumedIdleOffset);
+    EXPECT_LT(unconsumedIdleOffset, idleFailureCaptureOffset);
+    EXPECT_LT(idleFailureCaptureOffset, replacementOffset);
+    EXPECT_LT(replacementOffset, replacementFailureCaptureOffset);
+    EXPECT_LT(replacementFailureCaptureOffset, unconsumedResetOffset);
+    EXPECT_TRUE(ContainsText(present, "if(!frameSignalAccepted || !m_rhiDevice){"));
+    EXPECT_FALSE(ContainsText(
+        present.substr(nonConsumedOffset, replacementFailureCaptureOffset - nonConsumedOffset),
+        "resetFramePresentationSignal();"
+    ));
+
+    const usize renderOffset = graphics.find("void Graphics::render(){");
+    const usize averageOffset = graphics.find("void Graphics::updateAverageFrameTime", renderOffset);
+    ASSERT_NE(renderOffset, AStringView::npos);
+    ASSERT_NE(averageOffset, AStringView::npos);
+    const AStringView render = graphics.substr(renderOffset, averageOffset - renderOffset);
+    EXPECT_TRUE(ContainsText(render, "Framebuffer* const framebuffer = m_acquiredPresentationFrame.framebuffer.get();"));
+    EXPECT_FALSE(ContainsText(render, "getCurrent"));
+
+    const usize animateOffset = graphics.find("bool Graphics::animateRenderPresentInternal");
+    ASSERT_NE(animateOffset, AStringView::npos);
+    const AStringView animate = graphics.substr(animateOffset);
+    const usize entryClearOffset = animate.find("m_acquiredPresentationFrame = {};");
+    const usize acquireOffset = animate.find("AcquiredBackBuffer acquiredBackBuffer = m_backend->beginFrame(resizeCallbacks);");
+    const usize identityOffset = animate.find("acquiredFramebufferDesc.colorAttachments[0].texture != acquiredBackBuffer.texture.get()");
+    const usize publishOffset = animate.find("m_acquiredPresentationFrame = {", acquireOffset);
+    const usize resetOffset = animate.find("ScopedAcquiredPresentationFrameReset acquiredFrameReset", publishOffset);
+    const usize preambleOffset = animate.find("prepareFramePreamble()", resetOffset);
+    ASSERT_NE(entryClearOffset, AStringView::npos);
+    ASSERT_NE(acquireOffset, AStringView::npos);
+    ASSERT_NE(identityOffset, AStringView::npos);
+    ASSERT_NE(publishOffset, AStringView::npos);
+    ASSERT_NE(resetOffset, AStringView::npos);
+    ASSERT_NE(preambleOffset, AStringView::npos);
+    EXPECT_LT(entryClearOffset, acquireOffset);
+    EXPECT_LT(acquireOffset, identityOffset);
+    EXPECT_LT(identityOffset, publishOffset);
+    EXPECT_LT(publishOffset, resetOffset);
+    EXPECT_LT(resetOffset, preambleOffset);
+    EXPECT_TRUE(ContainsText(animate, "acquiredFramebufferDesc.colorAttachments.size() != 1u"));
+    const usize missingFramebufferWarningOffset = animate.find("acquired swap-chain image has no matching framebuffer");
+    const usize missingFramebufferAbandonOffset = animate.find("m_backend->abandonAcquiredFrame()", missingFramebufferWarningOffset);
+    const usize missingFramebufferRecreationOffset = animate.find("requestDeviceRecreation()", missingFramebufferAbandonOffset);
+    const usize attachmentWarningOffset = animate.find("acquired swap-chain image mismatches its framebuffer attachment");
+    const usize attachmentAbandonOffset = animate.find("m_backend->abandonAcquiredFrame()", attachmentWarningOffset);
+    const usize attachmentRecreationOffset = animate.find("requestDeviceRecreation()", attachmentAbandonOffset);
+    ASSERT_NE(missingFramebufferWarningOffset, AStringView::npos);
+    ASSERT_NE(missingFramebufferAbandonOffset, AStringView::npos);
+    ASSERT_NE(missingFramebufferRecreationOffset, AStringView::npos);
+    ASSERT_NE(attachmentWarningOffset, AStringView::npos);
+    ASSERT_NE(attachmentAbandonOffset, AStringView::npos);
+    ASSERT_NE(attachmentRecreationOffset, AStringView::npos);
+    EXPECT_LT(missingFramebufferWarningOffset, missingFramebufferAbandonOffset);
+    EXPECT_LT(missingFramebufferAbandonOffset, missingFramebufferRecreationOffset);
+    EXPECT_LT(missingFramebufferRecreationOffset, attachmentWarningOffset);
+    EXPECT_LT(attachmentWarningOffset, attachmentAbandonOffset);
+    EXPECT_LT(attachmentAbandonOffset, attachmentRecreationOffset);
+    EXPECT_LT(attachmentRecreationOffset, publishOffset);
+    const usize renderCallOffset = animate.find("render();", preambleOffset);
+    const usize postRenderExitOffset = animate.find("if(m_deviceRecreationRequested || device.isDeviceLost()){", renderCallOffset);
+    const usize postRenderAbandonOffset = animate.find("else if(!m_backend->abandonAcquiredFrame())", postRenderExitOffset);
+    const usize presentCallOffset = animate.find("const bool presented = m_backend->present();", postRenderAbandonOffset);
+    const usize presentFailureOffset = animate.find("if(!presented){", presentCallOffset);
+    const usize presentAbandonOffset = animate.find("!device.isDeviceLost() && !m_backend->abandonAcquiredFrame()", presentFailureOffset);
+    ASSERT_NE(renderCallOffset, AStringView::npos);
+    ASSERT_NE(postRenderExitOffset, AStringView::npos);
+    ASSERT_NE(postRenderAbandonOffset, AStringView::npos);
+    ASSERT_NE(presentCallOffset, AStringView::npos);
+    ASSERT_NE(presentFailureOffset, AStringView::npos);
+    ASSERT_NE(presentAbandonOffset, AStringView::npos);
+    EXPECT_LT(renderCallOffset, postRenderExitOffset);
+    EXPECT_LT(postRenderExitOffset, postRenderAbandonOffset);
+    EXPECT_LT(postRenderAbandonOffset, presentCallOffset);
+    EXPECT_LT(presentCallOffset, presentFailureOffset);
+    EXPECT_LT(presentFailureOffset, presentAbandonOffset);
+    EXPECT_EQ(CountText(animate, "m_backend->abandonAcquiredFrame()"), 4u);
+    EXPECT_TRUE(ContainsText(animate, "prepareFramePreamble() returns false only after terminal device loss"));
+    EXPECT_TRUE(ContainsText(animate, "required device teardown owns the unresolved acquired image and synchronization"));
+    EXPECT_TRUE(ContainsText(graphics, "~ScopedAcquiredPresentationFrameReset(){ m_frame = {}; }"));
+    EXPECT_TRUE(ContainsText(graphics, "bool Graphics::init(const Common::FrameData& data){\n    m_acquiredPresentationFrame = {};"));
+    EXPECT_TRUE(ContainsText(graphics, "bool Graphics::createHeadlessDevice(){\n    m_acquiredPresentationFrame = {};"));
+    EXPECT_TRUE(ContainsText(graphics, "void Graphics::destroy(){\n    m_acquiredPresentationFrame = {};"));
+    EXPECT_TRUE(ContainsText(graphics, "void Graphics::backBufferResizing(){\n    m_acquiredPresentationFrame = {};"));
+
+    for(const AStringView setupSource : { rendererResources, ui }){
+        EXPECT_TRUE(ContainsText(setupSource, "Pipeline compatibility setup uses the stable framebuffer-zero prototype"));
+        EXPECT_TRUE(ContainsText(setupSource, "m_graphics.getFramebuffer(0u)"));
+        EXPECT_FALSE(ContainsText(setupSource, "getCurrentFramebuffer"));
+    }
+}
+
+
 // Late recovery, readback, and history tasks own their record/submit/reject sequencing in the generic runtime.
 // Keep the renderer limited to payload validation, timing arming, and device-recreation policy rather than
 // reconstructing compiler packet ranges around every late tail.

@@ -123,6 +123,9 @@ struct QueueSubmissionDesc{
     const QueueSubmissionToken* waitTokens = nullptr;
     usize waitTokenCount = 0;
     QueueSubmissionPreSubmitHook preSubmitHook;
+    // Error-recovery paths may require an exact queue timeline submission even after earlier work consumed every
+    // pending wait. Normal empty submissions retain their no-op behavior unless this is explicit.
+    bool forceNativeSubmission = false;
 
     constexpr QueueSubmissionDesc& setWaitTokens(const QueueSubmissionToken* value, usize count){
         waitTokens = value;

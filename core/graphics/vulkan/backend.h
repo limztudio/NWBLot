@@ -970,7 +970,8 @@ public:
         usize localWaitCount = 0u,
         bool* outSubmissionAccepted = nullptr,
         const SubmissionSignal* localSignals = nullptr,
-        usize localSignalCount = 0u
+        usize localSignalCount = 0u,
+        bool forceNativeSubmission = false
     );
     void updateLastFinishedID();
 

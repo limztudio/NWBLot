@@ -37,9 +37,7 @@ concept BackendApi = requires(
 
     { backend.enumerateAdapters(adapters) }->SameAs<bool>;
     { constBackend.getSelectedAdapterInfo(adapters[0]) }->SameAs<bool>;
-    { backend.getCurrentBackBuffer() }->SameAs<Texture*>;
     { backend.getBackBuffer(u32{}) }->SameAs<Texture*>;
-    { backend.getCurrentBackBufferIndex() }->SameAs<u32>;
     { backend.getBackBufferCount() }->SameAs<u32>;
 
     backend.setPlatformFrameParam(frameParam);
@@ -48,7 +46,8 @@ concept BackendApi = requires(
     { backend.createSwapChain() }->SameAs<bool>;
     backend.destroy();
     backend.resizeSwapChain();
-    { backend.beginFrame(callbacks) }->SameAs<bool>;
+    { backend.beginFrame(callbacks) }->SameAs<AcquiredBackBuffer>;
+    { backend.abandonAcquiredFrame() }->SameAs<bool>;
     { backend.claimFramePresentationSignal() }->SameAs<QueueSubmissionPreSubmitHook>;
     { backend.confirmFramePresentationSignal(submissionToken) }->SameAs<bool>;
     backend.cancelFramePresentationSignal();

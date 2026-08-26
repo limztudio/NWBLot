@@ -92,10 +92,16 @@ void BackendContext::destroySwapChain(){
     VkResult idleResult = VK_SUCCESS;
     if(m_vulkanDevice)
         idleResult = vkDeviceWaitIdle(m_vulkanDevice);
-    if(replacePresentationSemaphore && idleResult == VK_SUCCESS)
-        replaceFramePresentationSemaphoreAfterIdle();
+    if(
+        replacePresentationSemaphore
+        && idleResult == VK_SUCCESS
+        && !replaceFramePresentationSemaphoreAfterIdle()
+    )
+        clearSemaphores(m_presentSemaphores);
     resetFramePresentationSignal();
     m_frameAcquired = false;
+    m_frameAbandonmentComplete = false;
+    m_swapChainIndex = Limit<u32>::s_Max;
 
     for(SwapChainImage& swapChainImage : m_swapChainImages){
         if(
@@ -372,7 +378,7 @@ bool BackendContext::createVulkanSwapChain(){
         m_swapChainImages.push_back(Move(sci));
     }
 
-    m_swapChainIndex = 0;
+    m_swapChainIndex = Limit<u32>::s_Max;
 
     if(m_deviceParams.enableDebugRuntime){
         auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);

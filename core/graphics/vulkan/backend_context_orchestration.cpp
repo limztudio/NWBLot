@@ -261,10 +261,11 @@ bool BackendContext::createSwapChain(){
         return false;
     }
 
-    m_swapChainIndex = 0;
+    m_swapChainIndex = Limit<u32>::s_Max;
     m_acquireSemaphoreIndex = 0;
     resetFramePresentationSignal();
     m_frameAcquired = false;
+    m_frameAbandonmentComplete = false;
 
     return true;
 }
@@ -277,6 +278,7 @@ void BackendContext::destroy(){
     // replacement for an abandoned graph signal on this terminal path.
     resetFramePresentationSignal();
     m_frameAcquired = false;
+    m_frameAbandonmentComplete = false;
 
     while(!m_framesInFlight.empty())
         m_framesInFlight.pop();
@@ -320,26 +322,29 @@ void BackendContext::destroy(){
 // Frame management
 
 
-bool BackendContext::beginFrame(const BackBufferResizeCallbacks& callbacks){
+AcquiredBackBuffer BackendContext::beginFrame(const BackBufferResizeCallbacks& callbacks){
     VkResult res = VK_SUCCESS;
     VkSemaphore semaphore = VK_NULL_HANDLE;
+    u32 acquiredIndex = Limit<u32>::s_Max;
 
     if(m_frameAcquired){
         NWB_LOGGER_ERROR(NWB_TEXT("Cannot begin a Vulkan frame while the previous acquired swap-chain image remains unresolved"));
-        return false;
+        return {};
     }
 
     cancelFramePresentationSignal();
+    m_swapChainIndex = Limit<u32>::s_Max;
+    m_frameAbandonmentComplete = false;
 
     if(!m_swapChain || m_acquireSemaphores.empty()){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: beginFrame skipped because swap chain or acquire semaphores are not ready."));
-        return false;
+        return {};
     }
 
     for(usize attempt = 0; attempt < s_MaxRetryCountAcquireNextImage; ++attempt){
         if(!m_swapChain || m_acquireSemaphores.empty()){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: beginFrame aborted because swap chain or acquire semaphores are unavailable."));
-            return false;
+            return {};
         }
 
         if(m_acquireSemaphoreIndex >= m_acquireSemaphores.size())
@@ -353,7 +358,7 @@ bool BackendContext::beginFrame(const BackBufferResizeCallbacks& callbacks){
             UINT64_MAX,
             semaphore,
             VK_NULL_HANDLE,
-            &m_swapChainIndex
+            &acquiredIndex
         );
 
         // Render acquired suboptimal images before recreating the swapchain.
@@ -365,7 +370,7 @@ bool BackendContext::beginFrame(const BackBufferResizeCallbacks& callbacks){
             res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceCaps);
             if(res != VK_SUCCESS){
                 NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query surface capabilities during resize. {}"), ResultToString(res));
-                return false;
+                return {};
             }
 
             if(surfaceCaps.currentExtent.width != UINT32_MAX && surfaceCaps.currentExtent.height != UINT32_MAX){
@@ -380,6 +385,7 @@ bool BackendContext::beginFrame(const BackBufferResizeCallbacks& callbacks){
             resizeSwapChain();
             if(callbacks.afterResize)
                 callbacks.afterResize(callbacks.userData);
+            acquiredIndex = Limit<u32>::s_Max;
         }
         else
             break;
@@ -387,20 +393,168 @@ bool BackendContext::beginFrame(const BackBufferResizeCallbacks& callbacks){
 
     if(m_acquireSemaphores.empty()){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: beginFrame aborted because acquire semaphore pool became empty."));
-        return false;
+        return {};
     }
 
     if(res == VK_SUCCESS || res == VK_SUBOPTIMAL_KHR){
+        if(acquiredIndex >= m_swapChainImages.size() || !m_swapChainImages[acquiredIndex].rhiHandle){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Acquired swap-chain image index does not identify a live back buffer."));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan returned a successful swap-chain acquisition with an invalid image identity"));
+
+            // A successful acquire has queued a WSI signal even when its returned identity is unusable. Drain that
+            // exact binary semaphore before retiring the pools; device idle alone does not consume a WSI signal.
+            m_frameAcquired = true;
+            m_rhiDevice->queueWaitForSemaphore(CommandQueue::Graphics, semaphore, 0u);
+            const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
+            QueueSubmissionToken drainToken;
+            if(primaryGraphicsQueue.valid()){
+                const QueueSubmissionDesc drainSubmitDesc;
+                drainToken = m_rhiDevice->executeCommandLists(nullptr, 0u, primaryGraphicsQueue, drainSubmitDesc);
+            }
+            if(!drainToken.valid()){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit the invalid acquired-image semaphore drain; forcing device teardown."));
+                m_rhiDevice->captureGpuCrash("invalid acquired-image semaphore drain");
+                return {};
+            }
+            if(!m_rhiDevice->waitForIdle()){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to join the acquired-image semaphore drain; forcing device teardown."));
+                m_rhiDevice->captureGpuCrash("invalid acquired-image semaphore drain idle");
+                return {};
+            }
+
+            if(callbacks.beforeResize)
+                callbacks.beforeResize(callbacks.userData);
+
+            clearSemaphores(m_presentSemaphores);
+            clearSemaphores(m_acquireSemaphores);
+            resizeSwapChain();
+
+            if(callbacks.afterResize)
+                callbacks.afterResize(callbacks.userData);
+            const usize requiredAcquireSemaphoreCount = Max<usize>(m_maxFramesInFlight, m_swapChainImages.size());
+            const bool rebuildReady =
+                m_swapChain
+                && !m_swapChainImages.empty()
+                && m_presentSemaphores.size() == m_swapChainImages.size()
+                && m_acquireSemaphores.size() == requiredAcquireSemaphoreCount
+                && !m_frameAcquired
+                && !m_frameAbandonmentComplete
+                && m_swapChainIndex == Limit<u32>::s_Max
+                && m_framePresentationSignalState == FramePresentationSignalState::Idle
+            ;
+            if(!rebuildReady){
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Invalid acquired-image recovery left presentation incomplete; forcing device teardown."));
+                m_rhiDevice->captureGpuCrash("invalid acquired-image recovery rebuild");
+            }
+            return {};
+        }
+
         m_acquireSemaphoreIndex = (m_acquireSemaphoreIndex + 1) % static_cast<uint32_t>(m_acquireSemaphores.size());
         m_rhiDevice->queueWaitForSemaphore(CommandQueue::Graphics, semaphore, 0);
+        const SwapChainImage& swapChainImage = m_swapChainImages[acquiredIndex];
+        AcquiredBackBuffer backBuffer;
+        backBuffer.texture = swapChainImage.rhiHandle;
+        backBuffer.nativeInitialState = swapChainImage.presentationState.nativeInitialState();
+        backBuffer.index = acquiredIndex;
+        NWB_ASSERT(backBuffer.valid());
+
+        m_swapChainIndex = acquiredIndex;
         m_frameAcquired = true;
-        return true;
+        m_frameAbandonmentComplete = false;
+        return backBuffer;
     }
 
     if(res == VK_ERROR_DEVICE_LOST && m_rhiDevice)
         m_rhiDevice->captureGpuCrash("acquire next image");
     NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to acquire next swap chain image. {}"), ResultToString(res));
-    return false;
+    return {};
+}
+
+bool BackendContext::abandonAcquiredFrame()noexcept{
+    if(!m_frameAcquired)
+        return true;
+    if(m_frameAbandonmentComplete){
+        NWB_ASSERT(m_swapChainIndex == Limit<u32>::s_Max);
+        NWB_ASSERT(m_framePresentationSignalState == FramePresentationSignalState::Idle);
+        return true;
+    }
+    if(!m_rhiDevice){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot abandon an acquired frame without a live RHI device."));
+        NWB_ASSERT_MSG(false, NWB_TEXT("A valid acquired frame must retain its RHI device"));
+        m_swapChainIndex = Limit<u32>::s_Max;
+        return false;
+    }
+    if(m_rhiDevice->isDeviceLost()){
+        m_swapChainIndex = Limit<u32>::s_Max;
+        return false;
+    }
+
+    const bool currentImageReady =
+        m_swapChain
+        && m_swapChainIndex < m_swapChainImages.size()
+        && m_swapChainIndex < m_presentSemaphores.size()
+        && m_swapChainImages[m_swapChainIndex].rhiHandle
+        && m_presentSemaphores[m_swapChainIndex] != VK_NULL_HANDLE
+    ;
+    const bool presentationSignalIdle =
+        m_framePresentationSignalState == FramePresentationSignalState::Idle
+        && m_framePresentationSemaphore == VK_NULL_HANDLE
+        && !m_framePresentationQueue.valid()
+        && m_framePresentationSwapChainIndex == Limit<u32>::s_Max
+    ;
+    const bool presentationSignalTracked =
+        currentImageReady
+        && m_framePresentationSignalState != FramePresentationSignalState::Idle
+        && m_framePresentationSemaphore == m_presentSemaphores[m_swapChainIndex]
+        && m_framePresentationSwapChainIndex == m_swapChainIndex
+    ;
+    const bool abandonmentReady = currentImageReady && (presentationSignalIdle || presentationSignalTracked);
+    const bool presentationSignalNeedsIdle =
+        m_framePresentationSignalState == FramePresentationSignalState::Queued
+        || m_framePresentationSignalState == FramePresentationSignalState::Accepted
+    ;
+
+    // Invalidate presentation identity before touching signal state. Keeping m_frameAcquired set quarantines the
+    // WSI image even if retirement or draining fails, so no later beginFrame, claim, or present can reuse it.
+    m_swapChainIndex = Limit<u32>::s_Max;
+    if(!abandonmentReady){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Acquired-frame abandonment preconditions failed; forcing device teardown."));
+        m_rhiDevice->captureGpuCrash("acquired-frame abandonment precondition");
+        return false;
+    }
+
+    if(presentationSignalNeedsIdle && !m_rhiDevice->waitForIdle()){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to join the abandoned presentation signal; forcing device teardown."));
+        m_rhiDevice->captureGpuCrash("acquired-frame abandonment presentation idle");
+        return false;
+    }
+    if(presentationSignalNeedsIdle && !replaceFramePresentationSemaphoreAfterIdle()){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to quarantine the abandoned presentation signal; forcing device teardown."));
+        m_rhiDevice->captureGpuCrash("acquired-frame abandonment presentation replacement");
+        return false;
+    }
+    resetFramePresentationSignal();
+
+    const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    QueueSubmissionToken drainToken;
+    if(primaryGraphicsQueue.valid()){
+        QueueSubmissionDesc drainSubmitDesc;
+        drainSubmitDesc.forceNativeSubmission = true;
+        drainToken = m_rhiDevice->executeCommandLists(nullptr, 0u, primaryGraphicsQueue, drainSubmitDesc);
+    }
+    if(!drainToken.valid()){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit the acquired-frame wait drain; forcing device teardown."));
+        m_rhiDevice->captureGpuCrash("acquired-frame abandonment drain");
+        return false;
+    }
+    if(!m_rhiDevice->waitForIdle()){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to join the acquired-frame wait drain; forcing device teardown."));
+        m_rhiDevice->captureGpuCrash("acquired-frame abandonment drain idle");
+        return false;
+    }
+
+    m_frameAbandonmentComplete = true;
+    return true;
 }
 
 bool BackendContext::present(){
@@ -465,19 +619,36 @@ bool BackendContext::present(){
     res = vkQueuePresentKHR(m_presentQueue, &presentInfo);
     const VulkanDetail::QueuePresentWaitDisposition::Enum presentWaitDisposition =
         VulkanDetail::ClassifyQueuePresentWaitDisposition(res);
+    m_swapChainImages[m_swapChainIndex].presentationState.observeQueuePresentWaitDisposition(presentWaitDisposition);
     if(presentWaitDisposition != VulkanDetail::QueuePresentWaitDisposition::Consumed){
-        // Host/device OOM and unknown failures do not prove the accepted binary signal was consumed. Quarantine it
-        // after joining successful submissions; device loss is terminal and tears the whole backend down instead.
-        if(
-            presentWaitDisposition != VulkanDetail::QueuePresentWaitDisposition::DeviceLost
-            && frameSignalAccepted
-            && m_rhiDevice
-            && m_rhiDevice->waitForIdle()
-        )
-            replaceFramePresentationSemaphoreAfterIdle();
+        // Host/device OOM and unknown failures do not prove the accepted binary signal was consumed. Preserve its
+        // tracking until successful idle-and-replacement quarantine or terminal teardown.
+        if(presentWaitDisposition == VulkanDetail::QueuePresentWaitDisposition::DeviceLost){
+            if(m_rhiDevice)
+                m_rhiDevice->captureGpuCrash("present");
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue present failed. {}"), ResultToString(res));
+            return false;
+        }
+        if(!frameSignalAccepted || !m_rhiDevice){
+            NWB_LOGGER_CRITICAL_WARNING(
+                NWB_TEXT("Vulkan: Queue present lost its accepted signal tracking; forcing device teardown.")
+            );
+            if(m_rhiDevice)
+                m_rhiDevice->captureGpuCrash("present semaphore tracking");
+            return false;
+        }
+        if(!m_rhiDevice->waitForIdle()){
+            NWB_LOGGER_CRITICAL_WARNING(
+                NWB_TEXT("Vulkan: Failed to join the unconsumed presentation signal; forcing device teardown.")
+            );
+            m_rhiDevice->captureGpuCrash("present semaphore idle");
+            return false;
+        }
+        if(!replaceFramePresentationSemaphoreAfterIdle()){
+            m_rhiDevice->captureGpuCrash("present semaphore replacement");
+            return false;
+        }
         resetFramePresentationSignal();
-        if(presentWaitDisposition == VulkanDetail::QueuePresentWaitDisposition::DeviceLost && m_rhiDevice)
-            m_rhiDevice->captureGpuCrash("present");
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue present failed. {}"), ResultToString(res));
         return false;
     }
@@ -485,6 +656,8 @@ bool BackendContext::present(){
     // Every consumed disposition has retired the binary wait even when the surface itself must be recreated.
     resetFramePresentationSignal();
     m_frameAcquired = false;
+    m_frameAbandonmentComplete = false;
+    m_swapChainIndex = Limit<u32>::s_Max;
     if(!(res == VK_SUCCESS || res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue present consumed synchronization but requires recreation. {}")
             , ResultToString(res)

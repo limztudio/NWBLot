@@ -116,6 +116,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/backend_contract.h"
     "${CMAKE_CURRENT_LIST_DIR}/backend_selection.h"
     "${CMAKE_CURRENT_LIST_DIR}/api.h"
+    "${CMAKE_CURRENT_LIST_DIR}/rhi/presentation.h"
     "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir.h"
     "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir_internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing.h"

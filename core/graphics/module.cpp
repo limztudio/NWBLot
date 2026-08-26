@@ -26,6 +26,18 @@ namespace __hidden_graphics_lifecycle{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ScopedAcquiredPresentationFrameReset final : NoCopy{
+public:
+    explicit ScopedAcquiredPresentationFrameReset(AcquiredPresentationFrame& frame)
+        : m_frame(frame)
+    {}
+    ~ScopedAcquiredPresentationFrameReset(){ m_frame = {}; }
+
+private:
+    AcquiredPresentationFrame& m_frame;
+};
+
+
 inline constexpr Name s_GraphicsFrameCpuTimingScope("graphics.frame");
 inline constexpr Name s_GraphicsAnimateCpuTimingScope("graphics.animate");
 inline constexpr Name s_GraphicsBeginFrameCpuTimingScope("graphics.begin_frame");
@@ -139,6 +151,7 @@ Graphics::~Graphics(){
 }
 
 bool Graphics::init(const Common::FrameData& data){
+    m_acquiredPresentationFrame = {};
     m_deviceCreationParams.headlessDevice = false;
     m_hasPresentedFrame = false;
 
@@ -176,6 +189,7 @@ bool Graphics::init(const Common::FrameData& data){
 }
 
 bool Graphics::createHeadlessDevice(){
+    m_acquiredPresentationFrame = {};
     m_deviceCreationParams.headlessDevice = true;
     m_hasPresentedFrame = false;
 
@@ -325,6 +339,7 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
 }
 
 void Graphics::destroy(){
+    m_acquiredPresentationFrame = {};
     waitAllJobs();
     waitForIdle();
 
@@ -432,16 +447,8 @@ void Graphics::setPointerScaleChangedCallback(PointerScaleChangedCallback callba
     notifyPointerScaleChanged();
 }
 
-Texture* Graphics::getCurrentBackBuffer()const{
-    return m_backend->getCurrentBackBuffer();
-}
-
 Texture* Graphics::getBackBuffer(u32 index)const{
     return m_backend->getBackBuffer(index);
-}
-
-u32 Graphics::getCurrentBackBufferIndex()const{
-    return m_backend->getCurrentBackBufferIndex();
 }
 
 u32 Graphics::getBackBufferCount()const{
@@ -463,6 +470,7 @@ TextureHandle Graphics::createTexture(const TextureDesc& desc)const{
 }
 
 void Graphics::backBufferResizing(){
+    m_acquiredPresentationFrame = {};
     waitAllJobs();
     waitForIdle();
 
@@ -561,7 +569,7 @@ bool Graphics::prepareFramePreamble(){
 }
 
 void Graphics::render(){
-    Framebuffer* framebuffer = getCurrentFramebuffer();
+    Framebuffer* const framebuffer = m_acquiredPresentationFrame.framebuffer.get();
     auto& device = getDevice();
     if(device.isDeviceLost()){
         requestDeviceRecreation();
@@ -679,6 +687,7 @@ bool Graphics::animateRenderPresent(){
 }
 
 bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTiming){
+    m_acquiredPresentationFrame = {};
     if(m_deviceRecreationRequested)
         return false;
 
@@ -715,10 +724,41 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
             Timer beginFrameBegin;
             if(phaseTiming)
                 beginFrameBegin = TimerNow();
-            const bool frameBegan = m_backend->beginFrame(resizeCallbacks);
+            AcquiredBackBuffer acquiredBackBuffer = m_backend->beginFrame(resizeCallbacks);
             if(phaseTiming)
                 phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsBeginFrameCpuTimingScope, beginFrameBegin);
-            if(frameBegan){
+            if(acquiredBackBuffer.valid()){
+                const u32 acquiredBackBufferIndex = acquiredBackBuffer.index;
+                if(
+                    acquiredBackBufferIndex >= m_swapChainFramebuffers.size()
+                    || !m_swapChainFramebuffers[acquiredBackBufferIndex]
+                ){
+                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: acquired swap-chain image has no matching framebuffer; requesting recreation."));
+                    if(!m_backend->abandonAcquiredFrame())
+                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: failed to drain the abandoned acquired-frame wait; device teardown is required."));
+                    requestDeviceRecreation();
+                    return false;
+                }
+
+                Framebuffer* const acquiredFramebuffer = m_swapChainFramebuffers[acquiredBackBufferIndex].get();
+                const FramebufferDesc& acquiredFramebufferDesc = acquiredFramebuffer->getDescription();
+                if(
+                    acquiredFramebufferDesc.colorAttachments.size() != 1u
+                    || acquiredFramebufferDesc.colorAttachments[0].texture != acquiredBackBuffer.texture.get()
+                ){
+                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: acquired swap-chain image mismatches its framebuffer attachment; requesting recreation."));
+                    if(!m_backend->abandonAcquiredFrame())
+                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: failed to drain the abandoned acquired-frame wait; device teardown is required."));
+                    requestDeviceRecreation();
+                    return false;
+                }
+
+                m_acquiredPresentationFrame = {
+                    .backBuffer = Move(acquiredBackBuffer),
+                    .framebuffer = m_swapChainFramebuffers[acquiredBackBufferIndex],
+                };
+                const __hidden_graphics_lifecycle::ScopedAcquiredPresentationFrameReset acquiredFrameReset(m_acquiredPresentationFrame);
+
                 Timer framePreambleBegin;
                 if(phaseTiming)
                     framePreambleBegin = TimerNow();
@@ -726,8 +766,8 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
                 if(phaseTiming)
                     phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsFramePreambleCpuTimingScope, framePreambleBegin);
                 if(!preamblePrepared){
-                    // beginFrame has already acquired an image and queued its binary wait. A rejected preamble
-                    // cannot safely advance to another acquisition without tearing down that unresolved frame.
+                    // prepareFramePreamble() returns false only after terminal device loss. Do not issue recovery
+                    // GPU work; required device teardown owns the unresolved acquired image and synchronization.
                     requestDeviceRecreation();
                     return false;
                 }
@@ -742,6 +782,8 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
                 if(m_deviceRecreationRequested || device.isDeviceLost()){
                     if(device.isDeviceLost())
                         requestDeviceRecreation();
+                    else if(!m_backend->abandonAcquiredFrame())
+                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: failed to quarantine the aborted acquired frame; device teardown is required."));
                     return false;
                 }
 
@@ -752,8 +794,10 @@ bool Graphics::animateRenderPresentInternal(CpuTimingPhaseBatch* const phaseTimi
                 if(phaseTiming)
                     phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsPresentCpuTimingScope, presentBegin);
                 if(!presented){
-                    // Presentation failure leaves binary acquire/signal ownership backend-dependent. Recreate
-                    // before another beginFrame instead of reusing a potentially signaled semaphore.
+                    // A consumed presentation already cleared acquisition and makes abandonment a no-op. Every
+                    // healthy unconsumed failure is drained and quarantined before recreation.
+                    if(!device.isDeviceLost() && !m_backend->abandonAcquiredFrame())
+                        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: failed to quarantine the unpresented acquired frame; device teardown is required."));
                     requestDeviceRecreation();
                     return false;
                 }

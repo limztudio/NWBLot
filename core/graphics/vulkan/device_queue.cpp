@@ -788,7 +788,8 @@ QueueSubmissionToken Device::executeCommandLists(
         localWaits.size(),
         &submissionAccepted,
         localSignals,
-        localSignalCount
+        localSignalCount,
+        submitDesc.forceNativeSubmission
     );
 #if !defined(NWB_FINAL)
     invokeSubmissionLedgerFinalizeHookForTesting();

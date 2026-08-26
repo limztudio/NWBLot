@@ -32,6 +32,19 @@ namespace QueuePresentWaitDisposition{
     };
 };
 
+struct SwapChainImagePresentationState{
+    bool hasPresented = false;
+
+    [[nodiscard]] ResourceStates::Mask nativeInitialState()const noexcept{
+        return hasPresented ? ResourceStates::Present : ResourceStates::Unknown;
+    }
+
+    void observeQueuePresentWaitDisposition(const QueuePresentWaitDisposition::Enum disposition)noexcept{
+        if(disposition == QueuePresentWaitDisposition::Consumed)
+            hasPresented = true;
+    }
+};
+
 struct SwapChainSurfaceFormatSelection{
     VkSurfaceFormatKHR surfaceFormat = {};
     Format::Enum backBufferFormat = Format::UNKNOWN;

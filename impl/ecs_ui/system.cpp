@@ -503,7 +503,8 @@ bool UiSystem::validateResources(const u32 width, const u32 height, const u32 sa
     if(width == 0 || height == 0)
         return true;
 
-    Core::Framebuffer* framebuffer = m_graphics.getCurrentFramebuffer();
+    // Pipeline compatibility setup uses the stable framebuffer-zero prototype, not a currently acquired image.
+    Core::Framebuffer* framebuffer = m_graphics.getFramebuffer(0u);
     return !framebuffer || ensureRenderResources(framebuffer);
 }
 

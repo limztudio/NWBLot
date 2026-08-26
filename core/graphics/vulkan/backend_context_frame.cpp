@@ -15,12 +15,6 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Texture* BackendContext::getCurrentBackBuffer()const{
-    if(m_swapChainIndex < m_swapChainImages.size())
-        return m_swapChainImages[m_swapChainIndex].rhiHandle.get();
-    return nullptr;
-}
-
 Texture* BackendContext::getBackBuffer(u32 index)const{
     if(index < m_swapChainImages.size())
         return m_swapChainImages[index].rhiHandle.get();
@@ -124,14 +118,14 @@ bool BackendContext::confirmFramePresentationSignal(const QueueSubmissionToken& 
     return true;
 }
 
-void BackendContext::replaceFramePresentationSemaphoreAfterIdle()noexcept{
+bool BackendContext::replaceFramePresentationSemaphoreAfterIdle()noexcept{
     if(
         !m_vulkanDevice
         || m_framePresentationSemaphore == VK_NULL_HANDLE
         || m_framePresentationSwapChainIndex >= m_presentSemaphores.size()
         || m_presentSemaphores[m_framePresentationSwapChainIndex] != m_framePresentationSemaphore
     )
-        return;
+        return false;
 
     VkSemaphoreCreateInfo createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -139,11 +133,12 @@ void BackendContext::replaceFramePresentationSemaphoreAfterIdle()noexcept{
     const VkResult result = vkCreateSemaphore(m_vulkanDevice, &createInfo, nullptr, &replacement);
     if(result != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to replace an abandoned presentation semaphore. {}"), ResultToString(result));
-        return;
+        return false;
     }
 
     vkDestroySemaphore(m_vulkanDevice, m_framePresentationSemaphore, nullptr);
     m_presentSemaphores[m_framePresentationSwapChainIndex] = replacement;
+    return true;
 }
 
 void BackendContext::resetFramePresentationSignal()noexcept{
@@ -164,8 +159,15 @@ void BackendContext::cancelFramePresentationSignal()noexcept{
 
     // The callback runs before the Vulkan submit returns. If graph acceptance then fails, Queued may still have
     // reached the driver, so wait and replace the binary semaphore rather than risking a second signal on it.
-    if(m_rhiDevice && m_rhiDevice->waitForIdle())
-        replaceFramePresentationSemaphoreAfterIdle();
+    if(!m_rhiDevice || !m_rhiDevice->waitForIdle()){
+        if(m_rhiDevice)
+            m_rhiDevice->captureGpuCrash("cancel frame presentation signal idle");
+        return;
+    }
+    if(!replaceFramePresentationSemaphoreAfterIdle()){
+        m_rhiDevice->captureGpuCrash("cancel frame presentation signal replacement");
+        return;
+    }
     resetFramePresentationSignal();
 }
 
@@ -265,7 +267,7 @@ void BackendContext::resizeSwapChain(){
             return;
         }
 
-        m_swapChainIndex = 0;
+        m_swapChainIndex = Limit<u32>::s_Max;
         m_acquireSemaphoreIndex = 0;
     }
 }

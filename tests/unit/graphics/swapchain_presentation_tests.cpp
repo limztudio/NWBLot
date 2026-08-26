@@ -26,13 +26,22 @@ namespace __hidden_swapchain_presentation_tests{
 
 namespace Format = Core::Format;
 namespace QueuePresentWaitDisposition = Core::GraphicsBackend::VulkanDetail::QueuePresentWaitDisposition;
+namespace ResourceStates = Core::ResourceStates;
 namespace SwapChainOutputMode = Core::SwapChainOutputMode;
+using Core::AcquiredBackBuffer;
+using Core::AcquiredPresentationFrame;
+using Core::FramebufferHandle;
 using Core::GpuPhysicalQueueId;
 using Core::GpuPhysicalQueueInfo;
+using Core::TextureHandle;
 using Core::GraphicsBackend::VulkanDetail::ClassifyQueuePresentWaitDisposition;
 using Core::GraphicsBackend::VulkanDetail::IsPrimaryGraphicsPresentationQueue;
 using Core::GraphicsBackend::VulkanDetail::SelectSurfaceFormat;
+using Core::GraphicsBackend::VulkanDetail::SwapChainImagePresentationState;
 using Core::GraphicsBackend::VulkanDetail::SwapChainSurfaceFormatSelection;
+
+static_assert(SameAs<decltype(AcquiredBackBuffer::texture), TextureHandle>);
+static_assert(SameAs<decltype(AcquiredPresentationFrame::framebuffer), FramebufferHandle>);
 
 constexpr VkSurfaceFormatKHR MakeSurfaceFormat(const VkFormat format, const VkColorSpaceKHR colorSpace){
     return { format, colorSpace };
@@ -186,6 +195,55 @@ TEST(SwapChainPresentation, ClassifiesWhetherQueuePresentConsumedItsBinaryWait){
     );
     EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_ERROR_DEVICE_LOST), QueuePresentWaitDisposition::DeviceLost);
     EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_ERROR_UNKNOWN), QueuePresentWaitDisposition::Unknown);
+}
+
+TEST(SwapChainPresentation, AcquiredPresentationTypesRejectIncompleteOrInvalidSnapshots){
+    AcquiredBackBuffer backBuffer;
+    EXPECT_FALSE(backBuffer.valid());
+    EXPECT_EQ(backBuffer.index, Limit<u32>::s_Max);
+    EXPECT_EQ(backBuffer.nativeInitialState, ResourceStates::Unknown);
+
+    backBuffer.index = 0u;
+    backBuffer.nativeInitialState = ResourceStates::RenderTarget;
+    EXPECT_FALSE(backBuffer.valid());
+
+    AcquiredPresentationFrame frame;
+    EXPECT_FALSE(frame.valid());
+}
+
+TEST(SwapChainPresentation, ReacquiredImagesExposeUnknownUntilTheirFirstConsumedPresent){
+    SwapChainImagePresentationState images[2];
+
+    EXPECT_EQ(images[0].nativeInitialState(), ResourceStates::Unknown);
+    images[0].observeQueuePresentWaitDisposition(QueuePresentWaitDisposition::Consumed);
+
+    EXPECT_EQ(images[1].nativeInitialState(), ResourceStates::Unknown);
+    images[1].observeQueuePresentWaitDisposition(QueuePresentWaitDisposition::Consumed);
+
+    EXPECT_EQ(images[0].nativeInitialState(), ResourceStates::Present);
+}
+
+TEST(SwapChainPresentation, PresentationStateAdvancesOnlyForConsumedWaitsAndResetsOnRebuild){
+    SwapChainImagePresentationState state;
+    state.observeQueuePresentWaitDisposition(QueuePresentWaitDisposition::NotConsumed);
+    state.observeQueuePresentWaitDisposition(QueuePresentWaitDisposition::DeviceLost);
+    state.observeQueuePresentWaitDisposition(QueuePresentWaitDisposition::Unknown);
+    EXPECT_FALSE(state.hasPresented);
+    EXPECT_EQ(state.nativeInitialState(), ResourceStates::Unknown);
+
+    state.observeQueuePresentWaitDisposition(QueuePresentWaitDisposition::Consumed);
+    EXPECT_TRUE(state.hasPresented);
+    EXPECT_EQ(state.nativeInitialState(), ResourceStates::Present);
+
+    state.observeQueuePresentWaitDisposition(QueuePresentWaitDisposition::NotConsumed);
+    state.observeQueuePresentWaitDisposition(QueuePresentWaitDisposition::DeviceLost);
+    state.observeQueuePresentWaitDisposition(QueuePresentWaitDisposition::Unknown);
+    EXPECT_TRUE(state.hasPresented);
+    EXPECT_EQ(state.nativeInitialState(), ResourceStates::Present);
+
+    state = SwapChainImagePresentationState{};
+    EXPECT_FALSE(state.hasPresented);
+    EXPECT_EQ(state.nativeInitialState(), ResourceStates::Unknown);
 }
 
 

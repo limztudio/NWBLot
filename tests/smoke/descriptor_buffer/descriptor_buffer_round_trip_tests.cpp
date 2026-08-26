@@ -47563,6 +47563,33 @@ TEST_F(DescriptorBufferRoundTripTest, QueueGlobalSynchronizationSurvivesPreDrive
     EXPECT_TRUE(device.waitForIdle());
 }
 
+// A forced empty submission is an explicit timeline packet, unlike the default empty no-op. Presentation recovery
+// uses this to accept a drain even when earlier Graphics work already consumed every queue-global acquire wait.
+TEST_F(DescriptorBufferRoundTripTest, ForcedEmptySubmissionAdvancesExactQueueAndRetriesAfterRejection){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(graphicsQueue.valid());
+
+    EXPECT_FALSE(device.executeCommandLists(nullptr, 0u, graphicsQueue, QueueSubmissionDesc{}).valid());
+
+    QueueSubmissionDesc forcedSubmitDesc;
+    forcedSubmitDesc.forceNativeSubmission = true;
+    const QueueSubmissionToken firstToken = device.executeCommandLists(nullptr, 0u, graphicsQueue, forcedSubmitDesc);
+    ASSERT_TRUE(firstToken.valid());
+    EXPECT_EQ(firstToken.queue, CommandQueue::Graphics);
+    EXPECT_TRUE(firstToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
+    ASSERT_TRUE(device.waitForIdle());
+
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    EXPECT_FALSE(device.executeCommandLists(nullptr, 0u, graphicsQueue, forcedSubmitDesc).valid());
+
+    const QueueSubmissionToken retryToken = device.executeCommandLists(nullptr, 0u, graphicsQueue, forcedSubmitDesc);
+    ASSERT_TRUE(retryToken.valid());
+    EXPECT_TRUE(retryToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
+    EXPECT_GT(retryToken.value, firstToken.value);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
 
 // Queue completion must release a direct command list's retained resource during periodic device GC, even when no
 // later command-list acquire or explicit wait-for-idle happens to trigger the same queue sweep.

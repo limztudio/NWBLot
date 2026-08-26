@@ -15,6 +15,7 @@
 #include "rhi/shader.h"
 #include "rhi/pipeline_state.h"
 #include "rhi/framebuffer.h"
+#include "rhi/presentation.h"
 #include "rhi/raytracing.h"
 #include "rhi/binding.h"
 #include "rhi/gpu_descriptor_heap.h"

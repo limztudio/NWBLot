@@ -255,11 +255,12 @@ public:
     void setWindowTitle(NotNull<const tchar*> title);
     void setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData);
 
-    [[nodiscard]] Texture* getCurrentBackBuffer()const;
+    // Valid only while Graphics is preparing, rendering, or presenting one successfully acquired frame. The
+    // snapshot owns the exact back buffer and its matching framebuffer so presentation consumers never infer WSI
+    // identity from mutable backend state.
+    [[nodiscard]] const AcquiredPresentationFrame& acquiredPresentationFrame()const noexcept{ return m_acquiredPresentationFrame; }
     [[nodiscard]] Texture* getBackBuffer(u32 index)const;
-    [[nodiscard]] u32 getCurrentBackBufferIndex()const;
     [[nodiscard]] u32 getBackBufferCount()const;
-    [[nodiscard]] Framebuffer* getCurrentFramebuffer()const{ return getFramebuffer(getCurrentBackBufferIndex()); }
     [[nodiscard]] Framebuffer* getFramebuffer(u32 index)const;
 
     [[nodiscard]] BufferHandle createBuffer(const BufferDesc& desc)const;
@@ -366,6 +367,7 @@ private:
 #endif
 
     Vector<FramebufferHandle, Alloc::GlobalArena> m_swapChainFramebuffers;
+    AcquiredPresentationFrame m_acquiredPresentationFrame;
 
     GraphicsTString m_windowTitle;
     PointerScaleChangedCallback m_pointerScaleChangedCallback = nullptr;

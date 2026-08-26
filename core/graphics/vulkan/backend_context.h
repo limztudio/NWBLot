@@ -6,6 +6,7 @@
 
 
 #include "backend.h"
+#include "swapchain_presentation.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -64,8 +65,9 @@ private:
     };
 
     struct SwapChainImage{
-        VkImage image;
+        VkImage image = VK_NULL_HANDLE;
         TextureHandle rhiHandle;
+        VulkanDetail::SwapChainImagePresentationState presentationState;
     };
     using SemaphoreVector = GraphicsVector<VkSemaphore>;
 
@@ -154,9 +156,7 @@ public:
         return m_enabledExtensions.layers.find(lookup) != m_enabledExtensions.layers.end();
     }
 
-    Texture* getCurrentBackBuffer()const;
     Texture* getBackBuffer(u32 index)const;
-    u32 getCurrentBackBufferIndex()const{ return m_swapChainIndex; }
     u32 getBackBufferCount()const{ return static_cast<u32>(m_swapChainImages.size()); }
 
     void setPlatformFrameParam(const Common::FrameParam& frameParam){ m_platformFrameParam = frameParam; }
@@ -165,7 +165,10 @@ public:
     bool createSwapChain();
     void destroy();
     void resizeSwapChain();
-    bool beginFrame(const BackBufferResizeCallbacks& callbacks);
+    [[nodiscard]] AcquiredBackBuffer beginFrame(const BackBufferResizeCallbacks& callbacks);
+    // Idempotently retires synchronization for a healthy aborted frame. The acquired WSI image stays quarantined
+    // until swap-chain or device teardown; an already-resolved frame is a successful no-op.
+    [[nodiscard]] bool abandonAcquiredFrame()noexcept;
     bool present();
     // Claims the acquired image's completion semaphore for one exact graph packet. A null hook leaves the
     // compatibility empty-submit path in present() active.
@@ -211,7 +214,7 @@ private:
         const GpuPhysicalQueueId& executionQueue,
         QueueSubmissionNativeSignal& outSignal
     )noexcept;
-    void replaceFramePresentationSemaphoreAfterIdle()noexcept;
+    [[nodiscard]] bool replaceFramePresentationSemaphoreAfterIdle()noexcept;
     void resetFramePresentationSignal()noexcept;
 
 
@@ -278,11 +281,12 @@ private:
     u32 m_framePresentationSwapChainIndex = Limit<u32>::s_Max;
     FramePresentationSignalState m_framePresentationSignalState = FramePresentationSignalState::Idle;
     bool m_frameAcquired = false;
+    bool m_frameAbandonmentComplete = false;
 
     ::Queue<EventQueryHandle, Alloc::GlobalArena> m_framesInFlight;
     Vector<EventQueryHandle, Alloc::GlobalArena> m_queryPool;
 
-    u32 m_swapChainIndex = static_cast<u32>(-1);
+    u32 m_swapChainIndex = Limit<u32>::s_Max;
     u32 m_acquireSemaphoreIndex = 0;
     u32 m_maxFramesInFlight = s_MaxFramesInFlight;
 

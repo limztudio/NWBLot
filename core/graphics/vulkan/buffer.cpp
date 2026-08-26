@@ -374,6 +374,9 @@ BufferHandle Device::createHandleForNativeBuffer(
 #if !defined(NWB_FINAL)
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool Device::revokeBufferNativeIdentityForTesting(
     Buffer* bufferResource,
     const Object expectedNativeBufferHandle
@@ -417,6 +420,9 @@ bool Device::restoreBufferNativeIdentityForTesting(
         return false;
     return m_allocator.tryRegisterBufferNativeIdentity(buffer);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #endif

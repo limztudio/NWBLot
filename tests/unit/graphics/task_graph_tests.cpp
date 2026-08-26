@@ -11014,6 +11014,22 @@ TEST(GpuTaskGraph, CompilesMultiSourceInitialTextureOwnershipHandoff){
     }
 }
 
+TEST(GpuTaskGraph, ClampsReadyFrontierWorkerUtilization){
+    Graphics::GpuTaskGraphRecordingStatistics statistics;
+    EXPECT_EQ(statistics.readyFrontierWorkerUtilization(), 0.0);
+
+    statistics.readyFrontierWorkerBusySeconds = 0.25;
+    statistics.readyFrontierWorkerCapacitySeconds = 1.0;
+    EXPECT_EQ(statistics.readyFrontierWorkerUtilization(), 0.25);
+
+    statistics.readyFrontierWorkerBusySeconds = 2.0;
+    EXPECT_EQ(statistics.readyFrontierWorkerUtilization(), 1.0);
+
+    statistics.readyFrontierWorkerBusySeconds = -1.0;
+    EXPECT_EQ(statistics.readyFrontierWorkerUtilization(), 0.0);
+}
+
+
 TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -11058,6 +11074,7 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     EXPECT_EQ(firstQueueStatistics.taskCount, 0u);
     EXPECT_EQ(firstQueueStatistics.commandListCount, 0u);
     EXPECT_EQ(firstQueueStatistics.barrierCount, 0u);
+    EXPECT_EQ(firstQueueStatistics.workerRoutedPacketCount, 0u);
     EXPECT_EQ(firstQueueStatistics.parallelPacketCount, 0u);
     EXPECT_EQ(firstQueueStatistics.commandListAcquisitionSeconds, 0.0);
     EXPECT_EQ(firstQueueStatistics.graphBarrierRecordingSeconds, 0.0);
@@ -11115,6 +11132,7 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     EXPECT_EQ(secondQueueStatistics.taskCount, 0u);
     EXPECT_EQ(secondQueueStatistics.commandListCount, 0u);
     EXPECT_EQ(secondQueueStatistics.barrierCount, 0u);
+    EXPECT_EQ(secondQueueStatistics.workerRoutedPacketCount, 0u);
     EXPECT_EQ(secondQueueStatistics.parallelPacketCount, 0u);
     EXPECT_EQ(secondQueueStatistics.commandListAcquisitionSeconds, 0.0);
     EXPECT_EQ(secondQueueStatistics.graphBarrierRecordingSeconds, 0.0);

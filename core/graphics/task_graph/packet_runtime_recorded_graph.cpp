@@ -16,6 +16,61 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_gpu_packet_runtime_recorded_graph{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool RecordingIntervalsOverlap(
+    const GpuRecordedPacket& packetA,
+    const GpuRecordedPacket& packetB
+)noexcept{
+    return packetA.recordingBeginNanoseconds < packetA.recordingEndNanoseconds
+        && packetB.recordingBeginNanoseconds < packetB.recordingEndNanoseconds
+        && packetA.recordingBeginNanoseconds < packetB.recordingEndNanoseconds
+        && packetB.recordingBeginNanoseconds < packetA.recordingEndNanoseconds
+    ;
+}
+
+[[nodiscard]] bool PacketRecordingOverlapsAny(
+    const GraphicsVector<GpuRecordedPacket>& packets,
+    const GpuCompiledGraph& compiledGraph,
+    const usize packetIndex
+)noexcept{
+    if(packetIndex >= packets.size())
+        return false;
+    const GpuRecordedPacket& packet = packets[packetIndex];
+    if(
+        packet.commandListCount == 0u
+        || packet.packet != compiledGraph.packetIdAt(packetIndex)
+    )
+        return false;
+
+    for(usize otherPacketIndex = 0u; otherPacketIndex < packets.size(); ++otherPacketIndex){
+        if(otherPacketIndex == packetIndex)
+            continue;
+        const GpuRecordedPacket& otherPacket = packets[otherPacketIndex];
+        if(
+            otherPacket.commandListCount != 0u
+            && otherPacket.packet == compiledGraph.packetIdAt(otherPacketIndex)
+            && RecordingIntervalsOverlap(packet, otherPacket)
+        )
+            return true;
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void GpuRecordedGraph::reset(const GpuCompiledGraph& compiledGraph){
     m_packets.clear();
     m_packets.resize(compiledGraph.packetCount());
@@ -33,6 +88,10 @@ void GpuRecordedGraph::reset(const GpuCompiledGraph& compiledGraph){
     m_serialRecordingScratch.stateMergeScratch.reset();
     m_serialRecordingScratch.externalBaseStateSeed.reset();
     m_serialRecordingScratch.externalMergedStateSeed.reset();
+    m_recordingElapsedSeconds = 0.0;
+    m_readyFrontierElapsedSeconds = 0.0;
+    m_readyFrontierWorkerBusySeconds = 0.0;
+    m_readyFrontierWorkerCapacitySeconds = 0.0;
     m_generation = compiledGraph.generation();
     m_planGeneration = compiledGraph.planGeneration();
     m_recordingAttemptGeneration = 0u;
@@ -87,6 +146,10 @@ GpuTaskGraphRecordingStatistics GpuRecordedGraph::recordingStatistics(
     statistics.planGeneration = m_planGeneration;
     statistics.recordingAttemptGeneration = m_recordingAttemptGeneration;
     statistics.deviceGeneration = m_deviceGeneration;
+    statistics.recordingElapsedSeconds = m_recordingElapsedSeconds;
+    statistics.readyFrontierElapsedSeconds = m_readyFrontierElapsedSeconds;
+    statistics.readyFrontierWorkerBusySeconds = m_readyFrontierWorkerBusySeconds;
+    statistics.readyFrontierWorkerCapacitySeconds = m_readyFrontierWorkerCapacitySeconds;
     for(usize packetIndex = 0u; packetIndex < m_packets.size(); ++packetIndex){
         const GpuRecordedPacket& recordedPacket = m_packets[packetIndex];
         if(
@@ -104,6 +167,8 @@ GpuTaskGraphRecordingStatistics GpuRecordedGraph::recordingStatistics(
         statistics.taskRecordSeconds += recordedPacket.taskRecordSeconds;
         statistics.recordingSeconds += recordedPacket.recordingSeconds;
         if(recordedPacket.recordingWorkerIndex != 0u)
+            ++statistics.workerRoutedPacketCount;
+        if(__hidden_gpu_packet_runtime_recorded_graph::PacketRecordingOverlapsAny(m_packets, compiledGraph, packetIndex))
             ++statistics.parallelPacketCount;
     }
     return statistics;
@@ -150,6 +215,10 @@ GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueReco
         statistics.taskRecordSeconds += recordedPacket.taskRecordSeconds;
         statistics.recordingSeconds += recordedPacket.recordingSeconds;
         if(recordedPacket.recordingWorkerIndex != 0u)
+            ++statistics.workerRoutedPacketCount;
+        // Compare this queue's packet against every published graph packet. CPU recording overlap is graph-wide and
+        // may cross physical queues; restricting the comparison to this queue would undercount and break partitioning.
+        if(__hidden_gpu_packet_runtime_recorded_graph::PacketRecordingOverlapsAny(m_packets, compiledGraph, packetIndex))
             ++statistics.parallelPacketCount;
     }
     return statistics;

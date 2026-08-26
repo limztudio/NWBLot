@@ -1647,10 +1647,12 @@ TEST_F(DescriptorBufferRoundTripTest, SameClassGraphicsQueuesRouteGraphPacketsAn
     EXPECT_EQ(primaryQueueRecordingStatistics.packetCount, 1u);
     EXPECT_EQ(primaryQueueRecordingStatistics.taskCount, 1u);
     EXPECT_EQ(primaryQueueRecordingStatistics.commandListCount, 1u);
+    EXPECT_EQ(primaryQueueRecordingStatistics.workerRoutedPacketCount, 0u);
     EXPECT_EQ(primaryQueueRecordingStatistics.parallelPacketCount, 0u);
     EXPECT_EQ(secondaryQueueRecordingStatistics.packetCount, 1u);
     EXPECT_EQ(secondaryQueueRecordingStatistics.taskCount, 1u);
     EXPECT_EQ(secondaryQueueRecordingStatistics.commandListCount, 1u);
+    EXPECT_EQ(secondaryQueueRecordingStatistics.workerRoutedPacketCount, 0u);
     EXPECT_EQ(secondaryQueueRecordingStatistics.parallelPacketCount, 0u);
     // The recorder completed synchronously before these immutable snapshots, so the two exact physical queues sum
     // to the aggregate without an in-flight ready-frontier worker or reset/recompile mutation window.
@@ -1674,6 +1676,8 @@ TEST_F(DescriptorBufferRoundTripTest, SameClassGraphicsQueuesRouteGraphPacketsAn
         primaryQueueRecordingStatistics.parallelPacketCount + secondaryQueueRecordingStatistics.parallelPacketCount,
         recordingStatistics.parallelPacketCount
     );
+    EXPECT_EQ(recordingStatistics.workerRoutedPacketCount, 0u);
+    EXPECT_EQ(recordingStatistics.parallelPacketCount, 0u);
     EXPECT_NEAR(
         primaryQueueRecordingStatistics.commandListAcquisitionSeconds
             + secondaryQueueRecordingStatistics.commandListAcquisitionSeconds,
@@ -1696,6 +1700,11 @@ TEST_F(DescriptorBufferRoundTripTest, SameClassGraphicsQueuesRouteGraphPacketsAn
         recordingStatistics.recordingSeconds,
         0.000001
     );
+    EXPECT_GE(recordingStatistics.recordingElapsedSeconds, recordingStatistics.recordingSeconds);
+    EXPECT_EQ(recordingStatistics.readyFrontierElapsedSeconds, 0.0);
+    EXPECT_EQ(recordingStatistics.readyFrontierWorkerBusySeconds, 0.0);
+    EXPECT_EQ(recordingStatistics.readyFrontierWorkerCapacitySeconds, 0.0);
+    EXPECT_EQ(recordingStatistics.readyFrontierWorkerUtilization(), 0.0);
     const GpuTaskGraphSubmissionStatistics submissionStatistics = transaction.submissionStatistics();
     ASSERT_TRUE(submissionStatistics.valid());
     EXPECT_EQ(submissionStatistics.acceptedTaskCount, 2u);
@@ -22115,10 +22124,9 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitPhaseUploadsKeepImmutableSnapshotsIs
 }
 
 
-// Independent immutable uploads are the first production opt-in packets for worker recording.  Use the real Vulkan
-// Device to prove the packet recorder keeps per-packet state scratch and command pools isolated before serial graph
-// submission consumes the recorded command lists in compiler order.
-TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRecordsIndependentGraphOwnedUploadsOnWorkers){
+// A ready frontier may contain one worker-eligible packet and one serial packet. Use real graph-owned uploads to
+// prove that worker routing remains observable without falsely reporting overlap for the caller-serialized batch.
+TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderReportsWorkerRoutingWithoutInventingOverlap){
     auto& device = DescriptorBufferRoundTripTest::device();
     static constexpr u32 s_FirstWords[] = {
         0x4ef8a219u,
@@ -22178,13 +22186,15 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRecordsIndependentGra
     scheduling.cost = GpuTaskCostHint::Medium;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
-    scheduling.allowParallelRecording = true;
     const auto addUpload = [&](const Name& identity,
         const AStringView label,
         const GpuUploadBlobId source,
         const GpuGraphResourceId destination,
+        const bool allowParallelRecording,
         QueueSubmissionToken* const acceptedToken
     ){
+        GpuTaskSchedulingHint taskScheduling = scheduling;
+        taskScheduling.allowParallelRecording = allowParallelRecording;
         GpuTaskDesc desc;
         desc
             .setIdentity(identity)
@@ -22195,7 +22205,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRecordsIndependentGra
                 true,
                 true,
             })
-            .setScheduling(scheduling)
+            .setScheduling(taskScheduling)
         ;
         return graph.addUploadBufferTask(
             desc,
@@ -22214,6 +22224,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRecordsIndependentGra
         "Parallel Upload First",
         firstSource,
         firstDestinationResource,
+        true,
         &firstAcceptedToken
     );
     const GpuTaskId secondUpload = addUpload(
@@ -22221,6 +22232,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRecordsIndependentGra
         "Parallel Upload Second",
         secondSource,
         secondDestinationResource,
+        false,
         &secondAcceptedToken
     );
     ASSERT_TRUE(firstUpload.valid());
@@ -22267,10 +22279,38 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRecordsIndependentGra
         recordedGraph,
         recordingWorkers
     ));
-    ASSERT_NE(recordedGraph.find(firstPacket), nullptr);
-    ASSERT_NE(recordedGraph.find(secondPacket), nullptr);
+    const GpuRecordedPacket* const firstRecorded = recordedGraph.find(firstPacket);
+    const GpuRecordedPacket* const secondRecorded = recordedGraph.find(secondPacket);
+    ASSERT_NE(firstRecorded, nullptr);
+    ASSERT_NE(secondRecorded, nullptr);
     ASSERT_NE(recordedGraph.packetFinalStateSeed(firstPacket), nullptr);
     ASSERT_NE(recordedGraph.packetFinalStateSeed(secondPacket), nullptr);
+    EXPECT_EQ(firstRecorded->recordingWorkerDomain, recordingWorkers.domainIdentity());
+    EXPECT_NE(firstRecorded->recordingWorkerIndex, 0u);
+    EXPECT_EQ(secondRecorded->recordingWorkerDomain, 0u);
+    EXPECT_EQ(secondRecorded->recordingWorkerIndex, 0u);
+    EXPECT_LT(firstRecorded->recordingBeginNanoseconds, firstRecorded->recordingEndNanoseconds);
+    EXPECT_LT(secondRecorded->recordingBeginNanoseconds, secondRecorded->recordingEndNanoseconds);
+    EXPECT_LE(secondRecorded->recordingEndNanoseconds, firstRecorded->recordingBeginNanoseconds);
+    const GpuTaskGraphRecordingStatistics recordingStatistics = recordedGraph.recordingStatistics(compiledGraph);
+    ASSERT_TRUE(recordingStatistics.valid());
+    EXPECT_EQ(recordingStatistics.workerRoutedPacketCount, 1u);
+    EXPECT_EQ(recordingStatistics.parallelPacketCount, 0u);
+    EXPECT_EQ(recordingStatistics.recordingElapsedSeconds, recordingStatistics.readyFrontierElapsedSeconds);
+    EXPECT_EQ(
+        recordingStatistics.readyFrontierWorkerBusySeconds,
+        firstRecorded->recordingSeconds + secondRecorded->recordingSeconds
+    );
+    EXPECT_EQ(
+        recordingStatistics.readyFrontierWorkerCapacitySeconds,
+        recordingStatistics.readyFrontierElapsedSeconds * 3.0
+    );
+    ASSERT_GT(recordingStatistics.readyFrontierWorkerCapacitySeconds, 0.0);
+    EXPECT_DOUBLE_EQ(
+        recordingStatistics.readyFrontierWorkerUtilization(),
+        recordingStatistics.readyFrontierWorkerBusySeconds
+            / recordingStatistics.readyFrontierWorkerCapacitySeconds
+    );
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
@@ -22487,10 +22527,32 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRecordsExplicitGpuDep
     EXPECT_EQ(secondRecorded->recordingWorkerDomain, recordingWorkers.domainIdentity());
     EXPECT_EQ(firstRecorded->recordingWorkerIndex, firstWorkerIndex);
     EXPECT_EQ(secondRecorded->recordingWorkerIndex, secondWorkerIndex);
+    EXPECT_LT(firstRecorded->recordingBeginNanoseconds, firstRecorded->recordingEndNanoseconds);
+    EXPECT_LT(secondRecorded->recordingBeginNanoseconds, secondRecorded->recordingEndNanoseconds);
+    EXPECT_LT(firstRecorded->recordingBeginNanoseconds, secondRecorded->recordingEndNanoseconds);
+    EXPECT_LT(secondRecorded->recordingBeginNanoseconds, firstRecorded->recordingEndNanoseconds);
     const GpuTaskGraphRecordingStatistics recordingStatistics = recordedGraph.recordingStatistics(compiledGraph);
     ASSERT_TRUE(recordingStatistics.valid());
     EXPECT_EQ(recordingStatistics.packetCount, 2u);
+    EXPECT_EQ(recordingStatistics.workerRoutedPacketCount, 2u);
     EXPECT_EQ(recordingStatistics.parallelPacketCount, 2u);
+    EXPECT_EQ(recordingStatistics.recordingElapsedSeconds, recordingStatistics.readyFrontierElapsedSeconds);
+    EXPECT_EQ(
+        recordingStatistics.readyFrontierWorkerBusySeconds,
+        firstRecorded->recordingSeconds + secondRecorded->recordingSeconds
+    );
+    EXPECT_EQ(
+        recordingStatistics.readyFrontierWorkerCapacitySeconds,
+        recordingStatistics.readyFrontierElapsedSeconds * 2.0
+    );
+    ASSERT_GT(recordingStatistics.readyFrontierWorkerCapacitySeconds, 0.0);
+    EXPECT_DOUBLE_EQ(
+        recordingStatistics.readyFrontierWorkerUtilization(),
+        recordingStatistics.readyFrontierWorkerBusySeconds
+            / recordingStatistics.readyFrontierWorkerCapacitySeconds
+    );
+    EXPECT_GT(recordingStatistics.readyFrontierWorkerUtilization(), 0.0);
+    EXPECT_LE(recordingStatistics.readyFrontierWorkerUtilization(), 1.0);
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
@@ -22728,6 +22790,10 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedComm
     EXPECT_EQ(secondRecorded->recordingWorkerDomain, recordingWorkers.domainIdentity());
     EXPECT_EQ(firstRecorded->recordingWorkerIndex, firstWorkerIndex);
     EXPECT_EQ(secondRecorded->recordingWorkerIndex, secondWorkerIndex);
+    EXPECT_LT(firstRecorded->recordingBeginNanoseconds, firstRecorded->recordingEndNanoseconds);
+    EXPECT_LT(secondRecorded->recordingBeginNanoseconds, secondRecorded->recordingEndNanoseconds);
+    EXPECT_LT(firstRecorded->recordingBeginNanoseconds, secondRecorded->recordingEndNanoseconds);
+    EXPECT_LT(secondRecorded->recordingBeginNanoseconds, firstRecorded->recordingEndNanoseconds);
     EXPECT_GE(firstRecorded->commandListAcquisitionSeconds, 0.0);
     EXPECT_GE(firstRecorded->graphBarrierRecordingSeconds, 0.0);
     EXPECT_GE(firstRecorded->taskRecordSeconds, 0.0);
@@ -22737,7 +22803,23 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedComm
     const GpuTaskGraphRecordingStatistics recordingStatistics = recordedGraph.recordingStatistics(compiledGraph);
     ASSERT_TRUE(recordingStatistics.valid());
     EXPECT_EQ(recordingStatistics.packetCount, 2u);
+    EXPECT_EQ(recordingStatistics.workerRoutedPacketCount, 2u);
     EXPECT_EQ(recordingStatistics.parallelPacketCount, 2u);
+    EXPECT_EQ(recordingStatistics.recordingElapsedSeconds, recordingStatistics.readyFrontierElapsedSeconds);
+    EXPECT_EQ(
+        recordingStatistics.readyFrontierWorkerBusySeconds,
+        firstRecorded->recordingSeconds + secondRecorded->recordingSeconds
+    );
+    EXPECT_EQ(
+        recordingStatistics.readyFrontierWorkerCapacitySeconds,
+        recordingStatistics.readyFrontierElapsedSeconds * 2.0
+    );
+    ASSERT_GT(recordingStatistics.readyFrontierWorkerCapacitySeconds, 0.0);
+    EXPECT_DOUBLE_EQ(
+        recordingStatistics.readyFrontierWorkerUtilization(),
+        recordingStatistics.readyFrontierWorkerBusySeconds
+            / recordingStatistics.readyFrontierWorkerCapacitySeconds
+    );
     // recordPacketRangeInReadyFrontiers() completed synchronously, so no worker can still publish a slot while this
     // exact physical-queue snapshot reads the aggregate's ordinary per-packet counters.
     const GpuTaskGraphPhysicalQueueRecordingStatistics graphicsQueueRecordingStatistics =
@@ -22754,11 +22836,13 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedComm
     EXPECT_EQ(graphicsQueueRecordingStatistics.queue, graphicsQueue.id);
     EXPECT_EQ(graphicsQueueRecordingStatistics.queueClass, CommandQueue::Graphics);
     EXPECT_EQ(graphicsQueueRecordingStatistics.packetCount, 2u);
+    EXPECT_EQ(graphicsQueueRecordingStatistics.workerRoutedPacketCount, 2u);
     EXPECT_EQ(graphicsQueueRecordingStatistics.parallelPacketCount, 2u);
     EXPECT_EQ(graphicsQueueRecordingStatistics.packetCount, recordingStatistics.packetCount);
     EXPECT_EQ(graphicsQueueRecordingStatistics.taskCount, recordingStatistics.taskCount);
     EXPECT_EQ(graphicsQueueRecordingStatistics.commandListCount, recordingStatistics.commandListCount);
     EXPECT_EQ(graphicsQueueRecordingStatistics.barrierCount, recordingStatistics.barrierCount);
+    EXPECT_EQ(graphicsQueueRecordingStatistics.workerRoutedPacketCount, recordingStatistics.workerRoutedPacketCount);
     EXPECT_EQ(graphicsQueueRecordingStatistics.parallelPacketCount, recordingStatistics.parallelPacketCount);
     EXPECT_NEAR(
         graphicsQueueRecordingStatistics.commandListAcquisitionSeconds,
@@ -44231,6 +44315,11 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTextureHooksDiscardOnPacketRec
     EXPECT_EQ(failedRecordingStatistics.graphBarrierRecordingSeconds, 0.0);
     EXPECT_EQ(failedRecordingStatistics.taskRecordSeconds, 0.0);
     EXPECT_EQ(failedRecordingStatistics.recordingSeconds, 0.0);
+    EXPECT_EQ(failedRecordingStatistics.recordingElapsedSeconds, 0.0);
+    EXPECT_EQ(failedRecordingStatistics.readyFrontierElapsedSeconds, 0.0);
+    EXPECT_EQ(failedRecordingStatistics.readyFrontierWorkerBusySeconds, 0.0);
+    EXPECT_EQ(failedRecordingStatistics.readyFrontierWorkerCapacitySeconds, 0.0);
+    EXPECT_EQ(failedRecordingStatistics.readyFrontierWorkerUtilization(), 0.0);
 }
 
 
@@ -44544,19 +44633,30 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
-    // The writer override proves that range recording may seed only selected packets; the reader receives the
-    // compiler-derived default descriptor.
+    // The writer override proves that incremental range recording may seed only selected packets; the reader receives
+    // the compiler-derived default descriptor. Each one-packet ready call deliberately takes the serial fallback.
     const GpuNativePacketRecordDesc recordOverrides[] = {
         GpuNativePacketRecordDesc{ .packet = writerPacket },
     };
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+    Alloc::ThreadPool recordingWorkers(1u, CpuAffinity::Any);
+    ASSERT_TRUE(recorder.recordPacketRangeInReadyFrontiers(
         graph,
         compiledGraph,
-        compiledGraph.allPacketRange(),
+        GpuSubmissionPacketRange{ .first = writerPacket, .packetCount = 1u },
         recordOverrides,
         1u,
-        recordedGraph
+        recordedGraph,
+        recordingWorkers
+    ));
+    ASSERT_TRUE(recorder.recordPacketRangeInReadyFrontiers(
+        graph,
+        compiledGraph,
+        GpuSubmissionPacketRange{ .first = readerPacket, .packetCount = 1u },
+        nullptr,
+        0u,
+        recordedGraph,
+        recordingWorkers
     ));
     EXPECT_TRUE(writerRecorded);
     EXPECT_TRUE(readerRecorded);
@@ -44572,11 +44672,15 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
         recordingStatistics.barrierCount,
         compileStatistics.prologueBarrierCount + compileStatistics.epilogueBarrierCount
     );
+    EXPECT_EQ(recordingStatistics.workerRoutedPacketCount, 0u);
     EXPECT_EQ(recordingStatistics.parallelPacketCount, 0u);
     const GpuRecordedPacket* const writerRecordedPacket = recordedGraph.find(writerPacket);
     const GpuRecordedPacket* const readerRecordedPacket = recordedGraph.find(readerPacket);
     ASSERT_NE(writerRecordedPacket, nullptr);
     ASSERT_NE(readerRecordedPacket, nullptr);
+    EXPECT_LT(writerRecordedPacket->recordingBeginNanoseconds, writerRecordedPacket->recordingEndNanoseconds);
+    EXPECT_LT(readerRecordedPacket->recordingBeginNanoseconds, readerRecordedPacket->recordingEndNanoseconds);
+    EXPECT_LE(writerRecordedPacket->recordingEndNanoseconds, readerRecordedPacket->recordingBeginNanoseconds);
     EXPECT_GE(writerRecordedPacket->commandListAcquisitionSeconds, 0.0);
     EXPECT_GE(writerRecordedPacket->graphBarrierRecordingSeconds, 0.0);
     EXPECT_GE(writerRecordedPacket->taskRecordSeconds, 0.0);
@@ -44600,6 +44704,18 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
         writerRecordedPacket->recordingSeconds + readerRecordedPacket->recordingSeconds
     );
     EXPECT_GE(recordingStatistics.recordingSeconds, 0.0);
+    EXPECT_EQ(recordingStatistics.recordingElapsedSeconds, recordingStatistics.readyFrontierElapsedSeconds);
+    EXPECT_EQ(recordingStatistics.readyFrontierWorkerBusySeconds, recordingStatistics.recordingSeconds);
+    EXPECT_EQ(
+        recordingStatistics.readyFrontierWorkerCapacitySeconds,
+        recordingStatistics.readyFrontierElapsedSeconds * 2.0
+    );
+    ASSERT_GT(recordingStatistics.readyFrontierWorkerCapacitySeconds, 0.0);
+    EXPECT_DOUBLE_EQ(
+        recordingStatistics.readyFrontierWorkerUtilization(),
+        recordingStatistics.readyFrontierWorkerBusySeconds
+            / recordingStatistics.readyFrontierWorkerCapacitySeconds
+    );
 
     // A recording artifact alone cannot be combined with an unbound transaction snapshot from this plan: aggregate
     // telemetry is attempt-scoped, just like packet submission itself.

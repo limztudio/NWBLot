@@ -166,6 +166,7 @@ bool GpuNativePacketRecorder::recordPacket(
         )
     )
         return false;
+    const Timer recordingOperationBegin = TimerNow();
     if(!prepareRecordingAttempt(
         graph,
         compiledGraph,
@@ -173,7 +174,7 @@ bool GpuNativePacketRecorder::recordPacket(
         outRecordedGraph
     ))
         return false;
-    return recordPacketWithScratch(
+    if(!recordPacketWithScratch(
         graph,
         compiledGraph,
         desc,
@@ -182,7 +183,10 @@ bool GpuNativePacketRecorder::recordPacket(
         commandIrCapture,
         taskStateBindings,
         taskStateBindingCount
-    );
+    ))
+        return false;
+    outRecordedGraph.m_recordingElapsedSeconds += DurationInSeconds<f64>(TimerNow(), recordingOperationBegin);
+    return true;
 }
 
 
@@ -491,6 +495,7 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
             commandIrCapture->rollback(captureRecordCount);
         return false;
     }
+    const Timer recordingEnd = TimerNow();
     GpuRecordedPacket& recordedPacket = outRecordedGraph.m_packets[desc.packet.index];
     recordedPacket.packet = desc.packet;
     recordedPacket.commandLists[0u] = commandList.get();
@@ -500,7 +505,9 @@ bool GpuNativePacketRecorder::recordPacketWithScratch(
     recordedPacket.commandListAcquisitionSeconds = commandListAcquisitionSeconds;
     recordedPacket.graphBarrierRecordingSeconds = graphBarrierRecordingSeconds;
     recordedPacket.taskRecordSeconds = taskRecordSeconds;
-    recordedPacket.recordingSeconds = DurationInSeconds<f64>(TimerNow(), recordingBegin);
+    recordedPacket.recordingBeginNanoseconds = DurationInNS<u64>(recordingBegin);
+    recordedPacket.recordingEndNanoseconds = DurationInNS<u64>(recordingEnd);
+    recordedPacket.recordingSeconds = DurationInSeconds<f64>(recordingEnd, recordingBegin);
     recordedPacket.recordingWorkerDomain = desc.recordingWorkerDomain;
     recordedPacket.recordingWorkerIndex = desc.recordingWorkerIndex;
     // Publish the slot only after its owned native list is retained. Frontier workers are joined before callers can

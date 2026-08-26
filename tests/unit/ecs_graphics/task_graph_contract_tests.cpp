@@ -165,14 +165,15 @@ TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){
     EXPECT_TRUE(ContainsText(frameGraph, "\"Task graph: tasks={} packets={} deps={} transitions={}\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"Declarations: resource sets={} resource-set members={} direct uses={} declared set uses={} expanded set-member uses={} materialized uses={}\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"Data: payload objects={} payload object bytes={} upload blobs={} upload blob bytes={}\\n\""));
-    EXPECT_TRUE(ContainsText(frameGraph, "\"Recording: packets={} tasks={} command lists={} barriers={} parallel={}\\n\""));
+    EXPECT_TRUE(ContainsText(frameGraph, "\"Recording: packets={} tasks={} command lists={} barriers={} worker-routed={} overlapped={}\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"Submission: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} submissions={} command lists={} waits={} failed submissions={}\\n\""));
-    EXPECT_TRUE(ContainsText(frameGraph, "\"CPU: declaration={:.3f} ms compile={:.3f} ms record={:.3f} ms submit={:.3f} ms\\n\""));
+    EXPECT_TRUE(ContainsText(frameGraph, "\"CPU: declaration={:.3f} ms compile={:.3f} ms native recording elapsed={:.3f} ms submit={:.3f} ms\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.declarationSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "\"CPU compile phases: analysis={:.3f} ms queue assignment={:.3f} ms planning={:.3f} ms\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"CPU analysis detail: validation={:.3f} ms dependencies={:.3f} ms hazards={:.3f} ms cycles/topology={:.3f} ms\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"CPU planning detail: packetization={:.3f} ms resource states/barriers={:.3f} ms packet dependencies={:.3f} ms\\n\""));
-    EXPECT_TRUE(ContainsText(frameGraph, "\"CPU recording phases: command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task recording={:.3f} ms\""));
+    EXPECT_TRUE(ContainsText(frameGraph, "\"CPU recording summed spans: packet={:.3f} ms command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task={:.3f} ms\\n\""));
+    EXPECT_TRUE(ContainsText(frameGraph, "\"Ready-frontier recording: elapsed={:.3f} ms logical-worker busy={:.3f} ms logical-worker capacity={:.3f} ms utilization={:.1f}%\""));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.analysisSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.queueAssignmentSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.planningSeconds * 1000.0,"));
@@ -195,7 +196,12 @@ TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.uploadBlobBytes,"));
     EXPECT_TRUE(ContainsText(frameGraph, "recordingStatistics.commandListAcquisitionSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "recordingStatistics.graphBarrierRecordingSeconds * 1000.0,"));
-    EXPECT_TRUE(ContainsText(frameGraph, "recordingStatistics.taskRecordSeconds * 1000.0"));
+    EXPECT_TRUE(ContainsText(frameGraph, "recordingStatistics.taskRecordSeconds * 1000.0,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "recordingStatistics.recordingElapsedSeconds * 1000.0,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "recordingStatistics.readyFrontierElapsedSeconds * 1000.0,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "recordingStatistics.readyFrontierWorkerBusySeconds * 1000.0,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "recordingStatistics.readyFrontierWorkerCapacitySeconds * 1000.0,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "recordingStatistics.readyFrontierWorkerUtilization() * 100.0"));
     EXPECT_TRUE(ContainsText(frameGraph, "submissionStatistics.acceptedPacketCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "submissionStatistics.acceptedTaskCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "submissionStatistics.rejectedPacketCount,"));
@@ -442,7 +448,7 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
-        "  Recording: packets={} tasks={} command lists={} barriers={} parallel={} CPU command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task recording={:.3f} ms total={:.3f} ms"
+        "  Recording: packets={} tasks={} command lists={} barriers={} worker-routed={} overlapped={} CPU summed spans: command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task={:.3f} ms packet={:.3f} ms"
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
@@ -505,6 +511,7 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.taskCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.commandListCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.barrierCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.workerRoutedPacketCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.parallelPacketCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.commandListAcquisitionSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueRecordingStatistics.graphBarrierRecordingSeconds * 1000.0,"));

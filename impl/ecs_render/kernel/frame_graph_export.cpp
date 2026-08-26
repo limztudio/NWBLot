@@ -102,13 +102,14 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             "Task graph: tasks={} packets={} deps={} transitions={}\n"
             "Declarations: resource sets={} resource-set members={} direct uses={} declared set uses={} expanded set-member uses={} materialized uses={}\n"
             "Data: payload objects={} payload object bytes={} upload blobs={} upload blob bytes={}\n"
-            "Recording: packets={} tasks={} command lists={} barriers={} parallel={}\n"
+            "Recording: packets={} tasks={} command lists={} barriers={} worker-routed={} overlapped={}\n"
             "Submission: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} submissions={} command lists={} waits={} failed submissions={}\n"
-            "CPU: declaration={:.3f} ms compile={:.3f} ms record={:.3f} ms submit={:.3f} ms\n"
+            "CPU: declaration={:.3f} ms compile={:.3f} ms native recording elapsed={:.3f} ms submit={:.3f} ms\n"
             "CPU compile phases: analysis={:.3f} ms queue assignment={:.3f} ms planning={:.3f} ms\n"
             "CPU analysis detail: validation={:.3f} ms dependencies={:.3f} ms hazards={:.3f} ms cycles/topology={:.3f} ms\n"
             "CPU planning detail: packetization={:.3f} ms resource states/barriers={:.3f} ms packet dependencies={:.3f} ms\n"
-            "CPU recording phases: command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task recording={:.3f} ms",
+            "CPU recording summed spans: packet={:.3f} ms command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task={:.3f} ms\n"
+            "Ready-frontier recording: elapsed={:.3f} ms logical-worker busy={:.3f} ms logical-worker capacity={:.3f} ms utilization={:.1f}%",
             compileStatistics.taskCount,
             compileStatistics.packetCount,
             compileStatistics.packetDependencyCount,
@@ -127,6 +128,7 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             recordingStatistics.taskCount,
             recordingStatistics.commandListCount,
             recordingStatistics.barrierCount,
+            recordingStatistics.workerRoutedPacketCount,
             recordingStatistics.parallelPacketCount,
             submissionStatistics.acceptedPacketCount,
             submissionStatistics.acceptedTaskCount,
@@ -138,7 +140,7 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             submissionStatistics.rejectedSubmissionCount,
             compileStatistics.declarationSeconds * 1000.0,
             compileStatistics.totalSeconds * 1000.0,
-            recordingStatistics.recordingSeconds * 1000.0,
+            recordingStatistics.recordingElapsedSeconds * 1000.0,
             submissionStatistics.submissionSeconds * 1000.0,
             compileStatistics.analysisSeconds * 1000.0,
             compileStatistics.queueAssignmentSeconds * 1000.0,
@@ -150,9 +152,14 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             compileStatistics.packetizationSeconds * 1000.0,
             compileStatistics.resourceStatePlanningSeconds * 1000.0,
             compileStatistics.packetDependencyPlanningSeconds * 1000.0,
+            recordingStatistics.recordingSeconds * 1000.0,
             recordingStatistics.commandListAcquisitionSeconds * 1000.0,
             recordingStatistics.graphBarrierRecordingSeconds * 1000.0,
-            recordingStatistics.taskRecordSeconds * 1000.0
+            recordingStatistics.taskRecordSeconds * 1000.0,
+            recordingStatistics.readyFrontierElapsedSeconds * 1000.0,
+            recordingStatistics.readyFrontierWorkerBusySeconds * 1000.0,
+            recordingStatistics.readyFrontierWorkerCapacitySeconds * 1000.0,
+            recordingStatistics.readyFrontierWorkerUtilization() * 100.0
         );
 
         // This borrows immutable compiled-plan topology and entries plus recorded packet slots under the same renderer-
@@ -195,7 +202,7 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
                 m_frameGraphRendererLabel,
                 "\nPhysical queue index={} generation={} class={} family index={} native queue index={} dedicated={}: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} native submissions={} rejected submit paths={} command lists={} planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={} accepted frontier={} CPU={:.3f} ms"
                 "\n  Compile plan: tasks={} packets={} merged tasks={} prologue barriers={} epilogue barriers={} ownership release barriers (subset)={} ownership acquire barriers (subset)={}"
-                "\n  Recording: packets={} tasks={} command lists={} barriers={} parallel={} CPU command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task recording={:.3f} ms total={:.3f} ms"
+                "\n  Recording: packets={} tasks={} command lists={} barriers={} worker-routed={} overlapped={} CPU summed spans: command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task={:.3f} ms packet={:.3f} ms"
                 "\n  Command arena: workers={} epochs={} pending epochs={} command buffers current/high-water={}/{} reusable={} leased={} pending={} growth={} resets={} native handle storage lower bound={} bytes",
                 queueStatistics.queue.index,
                 queueStatistics.queue.deviceGeneration,
@@ -227,6 +234,7 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
                 queueRecordingStatistics.taskCount,
                 queueRecordingStatistics.commandListCount,
                 queueRecordingStatistics.barrierCount,
+                queueRecordingStatistics.workerRoutedPacketCount,
                 queueRecordingStatistics.parallelPacketCount,
                 queueRecordingStatistics.commandListAcquisitionSeconds * 1000.0,
                 queueRecordingStatistics.graphBarrierRecordingSeconds * 1000.0,

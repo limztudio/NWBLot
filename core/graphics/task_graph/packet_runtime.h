@@ -46,6 +46,10 @@ struct GpuRecordedPacket{
     f64 commandListAcquisitionSeconds = 0.0;
     f64 graphBarrierRecordingSeconds = 0.0;
     f64 taskRecordSeconds = 0.0;
+    // Monotonic steady-clock endpoints make actual CPU recording overlap observable without exposing Timer in the
+    // public packet snapshot. Both endpoints are published before commandListCount makes the slot visible.
+    u64 recordingBeginNanoseconds = 0u;
+    u64 recordingEndNanoseconds = 0u;
     f64 recordingSeconds = 0.0;
     // Worker zero is serial/default recording. Ready-frontier workers retain both their process-unique ThreadPool
     // domain and pool-local index for transactional diagnostics and native arena-affinity smoke coverage.
@@ -55,7 +59,8 @@ struct GpuRecordedPacket{
 
 
 // Immutable snapshot assembled from successfully published native packet slots. Recording can be parallel, so
-// recordingSeconds is the sum of per-packet CPU work rather than elapsed wall-clock time for the whole frontier.
+// recordingSeconds is the sum of per-packet steady-clock spans rather than elapsed wall-clock time for the whole
+// recording operation. It approximates logical recording-slot occupancy, not operating-system CPU consumption.
 // The phase counters isolate native list acquisition, graph-owned barrier lowering, and task callbacks; they do not
 // sum to recordingSeconds because graph preparation, markers, close, and lifecycle work intentionally remain there.
 struct GpuTaskGraphRecordingStatistics{
@@ -67,12 +72,29 @@ struct GpuTaskGraphRecordingStatistics{
     usize taskCount = 0u;
     usize commandListCount = 0u;
     usize barrierCount = 0u;
+    // Worker-routed packets used a non-default ready-frontier command-arena shard. A one-packet worker batch is
+    // still routed but is not parallel; parallelPacketCount instead requires strict overlap of packet intervals.
+    usize workerRoutedPacketCount = 0u;
     usize parallelPacketCount = 0u;
     f64 commandListAcquisitionSeconds = 0.0;
     f64 graphBarrierRecordingSeconds = 0.0;
     f64 taskRecordSeconds = 0.0;
     f64 recordingSeconds = 0.0;
+    // Sum of successful outer recorder-operation wall spans. Multiple incremental range calls accumulate without
+    // including unrelated caller work between them.
+    f64 recordingElapsedSeconds = 0.0;
+    f64 readyFrontierElapsedSeconds = 0.0;
+    // Busy is summed packet-span occupancy across logical recording slots, not operating-system CPU time. Capacity
+    // is readyFrontierElapsedSeconds weighted per call by every callable ThreadPool slot, including its caller.
+    f64 readyFrontierWorkerBusySeconds = 0.0;
+    f64 readyFrontierWorkerCapacitySeconds = 0.0;
 
+    [[nodiscard]] f64 readyFrontierWorkerUtilization()const noexcept{
+        return readyFrontierWorkerCapacitySeconds > 0.0
+            ? Saturate(readyFrontierWorkerBusySeconds / readyFrontierWorkerCapacitySeconds)
+            : 0.0
+        ;
+    }
     [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
 };
 
@@ -91,6 +113,7 @@ struct GpuTaskGraphPhysicalQueueRecordingStatistics{
     usize taskCount = 0u;
     usize commandListCount = 0u;
     usize barrierCount = 0u;
+    usize workerRoutedPacketCount = 0u;
     usize parallelPacketCount = 0u;
     f64 commandListAcquisitionSeconds = 0.0;
     f64 graphBarrierRecordingSeconds = 0.0;
@@ -200,6 +223,10 @@ private:
     GraphicsVector<CommandListResourceStateHandoff> m_packetStateSeeds;
     PacketRecordingScratch m_serialRecordingScratch;
     GraphicsVector<PacketRecordingScratch> m_packetRecordingScratch;
+    f64 m_recordingElapsedSeconds = 0.0;
+    f64 m_readyFrontierElapsedSeconds = 0.0;
+    f64 m_readyFrontierWorkerBusySeconds = 0.0;
+    f64 m_readyFrontierWorkerCapacitySeconds = 0.0;
     u64 m_generation = 0u;
     u64 m_planGeneration = 0u;
     u64 m_recordingAttemptGeneration = 0u;

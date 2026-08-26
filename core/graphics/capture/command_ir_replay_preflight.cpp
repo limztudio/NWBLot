@@ -7,6 +7,7 @@
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/task_graph/compiled_graph.h>
 #include <core/graphics/task_graph/task_graph.h>
+#include <core/graphics/vulkan/texture_clear_contract.h>
 #include <core/graphics/vulkan/texture_copy_contract.h>
 
 
@@ -152,38 +153,26 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     return false;
 }
 
-[[nodiscard]] static bool ClearTextureValueMatchesFormat(
-    const TextureDesc& description,
-    const GpuCommandIrBuiltinTaskRecord& record
+[[nodiscard]] static bool TryMapTextureClearValueKind(
+    const GpuClearTextureTaskValueType::Enum valueType,
+    GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Enum& outValueKind
 )noexcept{
-    const FormatInfo& formatInfo = GetFormatInfo(description.format);
-    const bool depthStencilFormat = formatInfo.hasDepth || formatInfo.hasStencil;
-    switch(record.clearTextureValueType){
+    outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Float;
+    switch(valueType){
     case GpuClearTextureTaskValueType::Float:
-        return !depthStencilFormat
-            && (formatInfo.kind == FormatKind::Normalized || formatInfo.kind == FormatKind::Float)
-        ;
+        return true;
     case GpuClearTextureTaskValueType::UInt:
-        return !depthStencilFormat && formatInfo.kind == FormatKind::Integer && !formatInfo.isSigned;
+        outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::UInt;
+        return true;
     case GpuClearTextureTaskValueType::Int:
-        return !depthStencilFormat && formatInfo.kind == FormatKind::Integer && formatInfo.isSigned;
+        outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Int;
+        return true;
     case GpuClearTextureTaskValueType::DepthStencil:
-        return depthStencilFormat
-            && (record.clearDepth || record.clearStencil)
-            && (!record.clearDepth || formatInfo.hasDepth)
-            && (!record.clearStencil || formatInfo.hasStencil)
-        ;
+        outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::DepthStencil;
+        return true;
     default:
         return false;
     }
-}
-
-[[nodiscard]] static bool ClearTextureRectUIntValueMatchesFormat(const TextureDesc& description)noexcept{
-    const FormatInfo& formatInfo = GetFormatInfo(description.format);
-    return !formatInfo.hasDepth && !formatInfo.hasStencil
-        && formatInfo.kind == FormatKind::Integer
-        && !formatInfo.isSigned
-    ;
 }
 
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateRecordContext(
@@ -432,7 +421,8 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureClearRecord(
     const GpuCommandIrBuiltinTaskRecord& record,
     const GpuTaskGraph& graph,
-    const GpuTaskGraphTaskView& task
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& queue
 )noexcept{
     if(!graph.validResource(record.destination))
         return GpuCommandIrReplayError::InvalidResource;
@@ -455,18 +445,30 @@ namespace __hidden_gpu_command_ir_replay_preflight{
         return GpuCommandIrReplayError::ResourceUseMismatch;
 
     const TextureDesc& description = destination->getDescription();
+    GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Enum valueKind;
+    GraphicsBackend::VulkanTextureDetail::TextureClearContract clearContract;
     if(
-        (
-            description.sampleCount != 1u
-            && Format::IsBlockCompressedFormat(description.format)
-        )
-        || !TextureSubresourcesAreCanonical(description, record.destinationSubresources)
+        !TextureSubresourcesAreCanonical(description, record.destinationSubresources)
         || !TextureSubresourcesContain(
             destinationUse->range.textureSubresources,
             description,
             record.destinationSubresources
         )
-        || !ClearTextureValueMatchesFormat(description, record)
+        || !TryMapTextureClearValueKind(record.clearTextureValueType, valueKind)
+        || !GraphicsBackend::VulkanTextureDetail::ResolveTextureClearContract(
+            description,
+            record.destinationSubresources,
+            valueKind,
+            record.clearDepth,
+            record.clearStencil,
+            clearContract
+        )
+        || clearContract.subresources != record.destinationSubresources
+        || !GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirementSatisfied(
+            clearContract.queueRequirement,
+            task.queue.requiredCapabilities,
+            queue.capabilities
+        )
     )
         return GpuCommandIrReplayError::InvalidTextureClear;
     return GpuCommandIrReplayError::None;
@@ -475,7 +477,8 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureRectUIntClearRecord(
     const GpuCommandIrBuiltinTaskRecord& record,
     const GpuTaskGraph& graph,
-    const GpuTaskGraphTaskView& task
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& queue
 )noexcept{
     if(!graph.validResource(record.destination))
         return GpuCommandIrReplayError::InvalidResource;
@@ -498,6 +501,8 @@ namespace __hidden_gpu_command_ir_replay_preflight{
         return GpuCommandIrReplayError::ResourceUseMismatch;
 
     const TextureDesc& description = destination->getDescription();
+    GraphicsBackend::VulkanTextureDetail::TextureClearContract clearContract;
+    const Box clearBox(record.clearRect, 0, Limit<i32>::s_Max);
     if(
         record.clearRect.maxX <= record.clearRect.minX
         || record.clearRect.maxY <= record.clearRect.minY
@@ -508,7 +513,24 @@ namespace __hidden_gpu_command_ir_replay_preflight{
             description,
             record.destinationSubresources
         )
-        || !ClearTextureRectUIntValueMatchesFormat(description)
+        || !GraphicsBackend::VulkanTextureDetail::ResolveTextureClearContract(
+            description,
+            record.destinationSubresources,
+            GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::UInt,
+            false,
+            false,
+            clearContract
+        )
+        || clearContract.subresources != record.destinationSubresources
+        || !GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirementSatisfied(
+            GraphicsBackend::VulkanTextureDetail::TextureClearBoxQueueRequirement(
+                description,
+                clearContract.subresources,
+                clearBox
+            ),
+            task.queue.requiredCapabilities,
+            queue.capabilities
+        )
     )
         return GpuCommandIrReplayError::InvalidTextureClear;
     return GpuCommandIrReplayError::None;
@@ -528,9 +550,9 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     case GpuCommandIrOpcode::ClearBuffer:
         return ValidateBufferClearRecord(record, graph, task);
     case GpuCommandIrOpcode::ClearTexture:
-        return ValidateTextureClearRecord(record, graph, task);
+        return ValidateTextureClearRecord(record, graph, task, queue);
     case GpuCommandIrOpcode::ClearTextureRectUInt:
-        return ValidateTextureRectUIntClearRecord(record, graph, task);
+        return ValidateTextureRectUIntClearRecord(record, graph, task, queue);
     default:
         return GpuCommandIrReplayError::InvalidStream;
     }

@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "backend.h"
+#include "texture_clear_contract.h"
 #include "arena_names.h"
 
 #include <global/math/convert.h>
@@ -31,7 +31,7 @@ inline constexpr u32 s_TextureClearRGBAComponentCount = 4u;
 inline constexpr u32 s_TextureClearDepthPatternBytes = 4u;
 inline constexpr u32 s_TextureClearStencilPatternBytes = 1u;
 inline constexpr u32 s_TextureClearMaxPatternBytes = 16u;
-inline constexpr u64 s_TextureClearUploadAlignment = 4ull;
+inline constexpr u32 s_TextureClearUploadAlignment = 4u;
 inline constexpr u32 s_BCSingleClearBlockBytes = 8u;
 inline constexpr u32 s_BCDoubleClearBlockBytes = 16u;
 inline constexpr u32 s_BC4EndpointByteCount = 2u;
@@ -53,10 +53,6 @@ inline bool TextureClearRectEmpty(const Rect& rect){
     return rect.minX >= rect.maxX || rect.minY >= rect.maxY;
 }
 
-inline bool TextureClearBoxEmpty(const Box& box){
-    return box.minX >= box.maxX || box.minY >= box.maxY || box.minZ >= box.maxZ;
-}
-
 inline Rect ResolveTextureClearRect(const TextureDesc& desc, const MipLevel mipLevel, const Rect& rect){
     const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
     const i32 width = static_cast<i32>(mipExtent.width);
@@ -69,38 +65,8 @@ inline Rect ResolveTextureClearRect(const TextureDesc& desc, const MipLevel mipL
     );
 }
 
-inline Box ResolveTextureClearBox(const TextureDesc& desc, const MipLevel mipLevel, const Box& box){
-    const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
-    const i32 width = static_cast<i32>(mipExtent.width);
-    const i32 height = static_cast<i32>(mipExtent.height);
-    const i32 depth = static_cast<i32>(mipExtent.depth);
-    return Box(
-        Max<i32>(0, Min<i32>(box.minX, width)),
-        Max<i32>(0, Min<i32>(box.maxX, width)),
-        Max<i32>(0, Min<i32>(box.minY, height)),
-        Max<i32>(0, Min<i32>(box.maxY, height)),
-        Max<i32>(0, Min<i32>(box.minZ, depth)),
-        Max<i32>(0, Min<i32>(box.maxZ, depth))
-    );
-}
-
 inline bool TextureClearBoxCoversSubresources(const TextureDesc& desc, const TextureSubresourceSet& subresources, const Box& box){
-    const MipLevel mipEnd = subresources.baseMipLevel + subresources.numMipLevels;
-    for(MipLevel mipLevel = subresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
-        const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mipLevel);
-        const Box resolvedBox = ResolveTextureClearBox(desc, mipLevel, box);
-        if(
-            resolvedBox.minX != 0
-            || resolvedBox.minY != 0
-            || resolvedBox.minZ != 0
-            || resolvedBox.maxX != static_cast<i32>(mipExtent.width)
-            || resolvedBox.maxY != static_cast<i32>(mipExtent.height)
-            || resolvedBox.maxZ != static_cast<i32>(mipExtent.depth)
-        )
-            return false;
-    }
-
-    return true;
+    return TextureClearBoxFullyCoversSubresources(desc, subresources, box);
 }
 
 inline bool TextureClearSubresourcesContainedBy(const TextureSubresourceSet& requested, const TextureSubresourceSet& container){
@@ -219,8 +185,11 @@ inline bool TextureClearBoxAlignedToBlocks(const Box& box, const VkExtent3D& mip
 inline constexpr u64 s_TextureClearMergedLayerUploadThreshold = 64ull * 1024ull;
 
 struct TextureClearUploadLayout{
+    u64 uploadSize = 0ull;
     u64 layerPitch = 0ull;
     usize clearByteCount = 0u;
+    u32 copyOffsetAlignment = 0u;
+    u32 stagingAlignment = 0u;
     bool mergeArrayLayerCopies = false;
 };
 
@@ -230,6 +199,7 @@ inline bool BuildTextureClearUploadLayout(
     const u64 arrayLayerCount,
     TextureClearUploadLayout& outLayout
 ){
+    outLayout = {};
     if(
         elementCount == 0ull
         || elementSize == 0u
@@ -239,8 +209,20 @@ inline bool BuildTextureClearUploadLayout(
         return false;
 
     const u64 uploadSize = elementCount * elementSize;
+    u32 copyOffsetAlignment = 0u;
+    u32 stagingAlignment = 0u;
+    if(
+        !VulkanDetail::TryComputeCommonAlignment(
+            s_TextureClearUploadAlignment,
+            elementSize,
+            copyOffsetAlignment
+        )
+        || !VulkanDetail::TryComputeUploadSuballocationAlignment(copyOffsetAlignment, stagingAlignment)
+    )
+        return false;
+
     u64 layerPitch = uploadSize;
-    if(!AlignUpU64Checked(layerPitch, s_TextureClearUploadAlignment, layerPitch))
+    if(!AlignUpU64Checked(layerPitch, copyOffsetAlignment, layerPitch))
         return false;
     const bool mergeArrayLayerCopies =
         arrayLayerCount > 1ull
@@ -253,8 +235,11 @@ inline bool BuildTextureClearUploadLayout(
     if(clearByteCount > static_cast<u64>(Limit<usize>::s_Max))
         return false;
 
+    outLayout.uploadSize = uploadSize;
     outLayout.layerPitch = layerPitch;
     outLayout.clearByteCount = static_cast<usize>(clearByteCount);
+    outLayout.copyOffsetAlignment = copyOffsetAlignment;
+    outLayout.stagingAlignment = stagingAlignment;
     outLayout.mergeArrayLayerCopies = mergeArrayLayerCopies;
     return true;
 }

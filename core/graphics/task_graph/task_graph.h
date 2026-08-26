@@ -366,12 +366,12 @@ public:
 
     // Adds a graph-owned native texture clear. The helper retains the imported texture and derives its CopyDest
     // write declaration, so desc must declare Transfer capability and must not provide separate resource uses.
-    // It augments full color clears with Compute capability, and depth/stencil clears with Graphics.
+    // It adds Compute for ordinary color unless Graphics is declared, and adds Graphics for depth/stencil.
     [[nodiscard]] GpuTaskId addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc);
 
     // Adds a graph-owned native rectangular unsigned-integer texture clear. The helper retains the imported texture
     // and derives its exact subresource CopyDest write declaration, so desc must declare Transfer capability and
-    // must not provide separate resource uses. Its single-sample recorder ends rendering and uses the Transfer route.
+    // must not provide separate resource uses. Partial regions additionally require Compute or Graphics.
     [[nodiscard]] GpuTaskId addClearTextureRectUIntTask(
         const GpuTaskDesc& desc,
         const GpuClearTextureRectUIntTaskDesc& clearDesc

@@ -4375,7 +4375,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryResetRejectsExactTransferQueueAn
 }
 
 
-TEST_F(DescriptorBufferRoundTripTest, OrdinaryCommandIrReplayReportsStickyExactQueueCapabilityFailure){
+TEST_F(DescriptorBufferRoundTripTest, OrdinaryCommandIrReplayPreflightRejectsExactQueueCapabilityMismatch){
     HeadlessGraphicsScope transferScope;
     ASSERT_TRUE(transferScope.setTransferQueueEnabled(true));
     if(!transferScope.initialize())
@@ -4488,12 +4488,12 @@ TEST_F(DescriptorBufferRoundTripTest, OrdinaryCommandIrReplayReportsStickyExactQ
         packet,
         *replayCommandList
     );
-    EXPECT_EQ(replayResult.error, GpuCommandIrReplayError::CommandListRecordingFailed);
+    EXPECT_EQ(replayResult.error, GpuCommandIrReplayError::InvalidTextureClear);
     EXPECT_EQ(replayResult.recordIndex, 0u);
-    EXPECT_TRUE(replayCommandList->commandRecordingFailed());
+    EXPECT_FALSE(replayCommandList->commandRecordingFailed());
 
     replayCommandList->close();
-    EXPECT_FALSE(replayCommandList->hasCommandBuffer());
+    EXPECT_TRUE(replayCommandList->hasCommandBuffer());
 }
 
 

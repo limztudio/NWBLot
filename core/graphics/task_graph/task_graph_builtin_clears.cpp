@@ -8,6 +8,7 @@
 #include <core/graphics/capture/command_ir.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/rhi/command.h>
+#include <core/graphics/vulkan/texture_clear_contract.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -101,8 +102,12 @@ struct ClearTextureTask{
             )
         )
             return false;
+        if(commandList.commandRecordingFailed())
+            return false;
 
         commandList.endRenderPass();
+        if(commandList.commandRecordingFailed())
+            return false;
         bool clearRecorded = false;
         switch(payload.clearDesc.valueType){
         case GpuClearTextureTaskValueType::Float:
@@ -143,6 +148,8 @@ struct ClearTextureTask{
         default:
             return false;
         }
+        if(commandList.commandRecordingFailed())
+            return false;
         return clearRecorded
             && (
                 !payload.clearDesc.recordHooks.afterClear
@@ -202,14 +209,20 @@ struct ClearTextureRectUIntTask{
             )
         )
             return false;
+        if(commandList.commandRecordingFailed())
+            return false;
 
         commandList.endRenderPass();
+        if(commandList.commandRecordingFailed())
+            return false;
         commandList.clearTextureRectUInt(
             payload.destination.get(),
             payload.clearDesc.subresources,
             payload.clearDesc.rect,
             payload.clearDesc.uintValue
         );
+        if(commandList.commandRecordingFailed())
+            return false;
         return !payload.clearDesc.recordHooks.afterClear
             || payload.clearDesc.recordHooks.afterClear(
                 payload.clearDesc.recordHooks.context,
@@ -274,26 +287,23 @@ template<typename ResourceDesc>
     return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
 }
 
-[[nodiscard]] static bool ClearTextureValueMatchesFormat(
-    const TextureDesc& textureDesc,
-    const GpuClearTextureTaskDesc& clearDesc
+[[nodiscard]] static bool TryMapTextureClearValueKind(
+    const GpuClearTextureTaskValueType::Enum valueType,
+    GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Enum& outValueKind
 )noexcept{
-    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
-    const bool depthStencilFormat = formatInfo.hasDepth || formatInfo.hasStencil;
-    switch(clearDesc.valueType){
+    outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Float;
+    switch(valueType){
     case GpuClearTextureTaskValueType::Float:
-        return !depthStencilFormat
-            && (formatInfo.kind == FormatKind::Normalized || formatInfo.kind == FormatKind::Float)
-        ;
+        return true;
     case GpuClearTextureTaskValueType::UInt:
-        return !depthStencilFormat && formatInfo.kind == FormatKind::Integer && !formatInfo.isSigned;
+        outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::UInt;
+        return true;
     case GpuClearTextureTaskValueType::Int:
-        return !depthStencilFormat && formatInfo.kind == FormatKind::Integer && formatInfo.isSigned;
+        outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Int;
+        return true;
     case GpuClearTextureTaskValueType::DepthStencil:
-        return depthStencilFormat
-            && (!clearDesc.clearDepth || formatInfo.hasDepth)
-            && (!clearDesc.clearStencil || formatInfo.hasStencil)
-        ;
+        outValueKind = GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::DepthStencil;
+        return true;
     default:
         return false;
     }
@@ -396,12 +406,6 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
     if(
         destinationResource.type != GpuGraphResourceType::Texture
         || !destinationResource.texture
-        // Compressed Vulkan images cannot be multisampled. Imported metadata can still be malformed, so keep this
-        // defensive rejection even though full uncompressed image clears support every legal sample count.
-        || (
-            destinationResource.texture->getDescription().sampleCount != 1u
-            && Format::IsBlockCompressedFormat(destinationResource.texture->getDescription().format)
-        )
         || !__hidden_gpu_task_graph_builtin_clears::CopyOrClearTextureDestinationCanMaterializeRetainedState(
             destinationResource.texture->getDescription(),
             destinationResource.initialState,
@@ -409,17 +413,21 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         )
     )
         return {};
-    if(!__hidden_gpu_task_graph_builtin_clears::ClearTextureValueMatchesFormat(
-        destinationResource.texture->getDescription(),
-        clearDesc
-    ))
+    GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Enum valueKind;
+    GraphicsBackend::VulkanTextureDetail::TextureClearContract clearContract;
+    if(
+        !__hidden_gpu_task_graph_builtin_clears::TryMapTextureClearValueKind(clearDesc.valueType, valueKind)
+        || !GraphicsBackend::VulkanTextureDetail::ResolveTextureClearContract(
+            destinationResource.texture->getDescription(),
+            clearDesc.subresources,
+            valueKind,
+            clearDesc.clearDepth,
+            clearDesc.clearStencil,
+            clearContract
+        )
+    )
         return {};
-    const TextureSubresourceSet resolvedSubresources = clearDesc.subresources.resolve(
-        destinationResource.texture->getDescription(),
-        TextureSubresourceMipResolve::Range
-    );
-    if(resolvedSubresources.numMipLevels == 0u || resolvedSubresources.numArraySlices == 0u)
-        return {};
+    const TextureSubresourceSet resolvedSubresources = clearContract.subresources;
 
     using ClearTask = __hidden_gpu_task_graph_builtin_clears::ClearTextureTask;
     ClearTask::Payload* const payload = NewArenaObject<ClearTask::Payload>(m_arena);
@@ -441,11 +449,16 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         .access = GpuTaskResourceAccess::Write,
     };
     GpuTaskDesc resolvedDesc = desc;
-    // The recorder ends rendering before this primitive. Ordinary color clears require Compute, depth/stencil
-    // requires Graphics, and block-compressed color uses the Transfer-only staging route.
-    if(clearDesc.valueType == GpuClearTextureTaskValueType::DepthStencil)
+    if(clearContract.queueRequirement == GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::Graphics)
         resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Graphics;
-    else if(!Format::IsBlockCompressedFormat(destinationResource.texture->getDescription().format))
+    else if(
+        clearContract.queueRequirement
+            == GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::ComputeOrGraphics
+        && (
+            static_cast<u8>(resolvedDesc.queue.requiredCapabilities)
+            & static_cast<u8>(GpuQueueCapability::Graphics)
+        ) == 0u
+    )
         resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Compute;
     resolvedDesc.setResourceUses(&resourceUse, 1u);
     const GpuTaskId task = appendTask(
@@ -499,21 +512,17 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
         )
     )
         return {};
-    const GpuClearTextureTaskDesc formatValidation{
-        .destination = {},
-        .valueType = GpuClearTextureTaskValueType::UInt,
-    };
-    if(!__hidden_gpu_task_graph_builtin_clears::ClearTextureValueMatchesFormat(
+    GraphicsBackend::VulkanTextureDetail::TextureClearContract clearContract;
+    if(!GraphicsBackend::VulkanTextureDetail::ResolveTextureClearContract(
         destinationResource.texture->getDescription(),
-        formatValidation
+        clearDesc.subresources,
+        GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::UInt,
+        false,
+        false,
+        clearContract
     ))
         return {};
-    const TextureSubresourceSet resolvedSubresources = clearDesc.subresources.resolve(
-        destinationResource.texture->getDescription(),
-        TextureSubresourceMipResolve::Range
-    );
-    if(resolvedSubresources.numMipLevels == 0u || resolvedSubresources.numArraySlices == 0u)
-        return {};
+    const TextureSubresourceSet resolvedSubresources = clearContract.subresources;
 
     using ClearTask = __hidden_gpu_task_graph_builtin_clears::ClearTextureRectUIntTask;
     ClearTask::Payload* const payload = NewArenaObject<ClearTask::Payload>(m_arena);
@@ -533,8 +542,22 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
         .access = GpuTaskResourceAccess::Write,
     };
     GpuTaskDesc resolvedDesc = desc;
-    // The recorder ends rendering and the single-sample contract deterministically selects the staging Transfer
-    // route, so the caller's required Transfer capability is already exact.
+    const Box clearBox(clearDesc.rect, 0, Limit<i32>::s_Max);
+    const GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::Enum queueRequirement =
+        GraphicsBackend::VulkanTextureDetail::TextureClearBoxQueueRequirement(
+            destinationResource.texture->getDescription(),
+            resolvedSubresources,
+            clearBox
+        )
+    ;
+    if(
+        queueRequirement == GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::ComputeOrGraphics
+        && (
+            static_cast<u8>(resolvedDesc.queue.requiredCapabilities)
+            & static_cast<u8>(GpuQueueCapability::Graphics)
+        ) == 0u
+    )
+        resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Compute;
     resolvedDesc.setResourceUses(&resourceUse, 1u);
     const GpuTaskId task = appendTask(
         resolvedDesc,

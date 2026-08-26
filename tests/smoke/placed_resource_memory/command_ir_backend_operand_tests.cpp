@@ -215,7 +215,8 @@ struct BackendOperandGraph{
             },
         };
         const GpuQueueRequest queueRequest{
-            GpuQueueCapability::Transfer, GpuQueuePreference::Graphics, false, false
+            static_cast<GpuQueueCapability::Mask>(GpuQueueCapability::Transfer | GpuQueueCapability::Compute),
+            GpuQueuePreference::Graphics, false, false
         };
         GpuTaskDesc prefixDesc;
         prefixDesc

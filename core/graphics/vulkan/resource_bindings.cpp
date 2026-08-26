@@ -414,7 +414,7 @@ VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc){
 }
 
 bool BuildImageViewCreateInfo(Texture& texture, const DescriptorWriteItem& item, VkImageViewCreateInfo& outViewInfo){
-    const TextureDesc& textureDesc = texture.m_desc;
+    const TextureDesc& textureDesc = texture.m_creationDesc;
     TextureDimension::Enum dimension = item.dimension != TextureDimension::Unknown ? item.dimension : textureDesc.dimension;
     Format::Enum format = item.format != Format::UNKNOWN ? item.format : textureDesc.format;
     TextureSubresourceSet subresources = item.subresources.resolve(textureDesc, TextureSubresourceMipResolve::Range);

@@ -47,7 +47,7 @@ namespace GpuTaskGraphCompilerDetail{
         return true;
 
     outRange.textureSubresources = range.textureSubresources.resolve(
-        texture->getDescription(),
+        texture->getCreationDescription(),
         TextureSubresourceMipResolve::Range
     );
     return IsValidTextureRange(outRange.textureSubresources);

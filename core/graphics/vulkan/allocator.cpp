@@ -374,8 +374,12 @@ VkResult VulkanAllocator::createTexture(Texture& texture, const VkImageCreateInf
     if(res == VK_SUCCESS){
         texture.m_allocation = __hidden_vulkan_allocator::ToVulkanAllocationHandle(allocation);
 #if defined(NWB_DEBUG)
-        if(texture.m_desc.name)
-            vmaSetAllocationName(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), allocation, texture.m_desc.name.logText());
+        if(texture.m_creationDesc.name)
+            vmaSetAllocationName(
+                __hidden_vulkan_allocator::ToVmaAllocator(m_allocator),
+                allocation,
+                texture.m_creationDesc.name.logText()
+            );
 #endif
     }
     return res;

@@ -391,7 +391,7 @@ namespace __hidden_graphics_api{
 
 
 bool ResolveFramebufferAttachmentExtent(const FramebufferAttachment& attachment, u32& outWidth, u32& outHeight, u32& outArraySize){
-    const TextureDesc& textureDesc = attachment.texture->getDescription();
+    const TextureDesc& textureDesc = attachment.texture->getCreationDescription();
     const TextureSubresourceSet subresources = attachment.subresources.resolve(textureDesc, TextureSubresourceMipResolve::Single);
     if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
         outWidth = 0;
@@ -420,17 +420,21 @@ FramebufferInfo::FramebufferInfo(const FramebufferDesc& desc){
     const usize colorAttachmentCount = desc.colorAttachments.size();
     for(usize i = 0; i < colorAttachmentCount; ++i){
         const FramebufferAttachment& attachment = desc.colorAttachments[i];
-        colorFormats.push_back(attachment.format == Format::UNKNOWN && attachment.texture ? attachment.texture->getDescription().format : attachment.format);
+        const Format::Enum attachmentFormat = attachment.format == Format::UNKNOWN && attachment.texture
+            ? attachment.texture->getCreationDescription().format
+            : attachment.format
+        ;
+        colorFormats.push_back(attachmentFormat);
     }
 
     if(desc.depthAttachment.valid()){
-        const TextureDesc& textureDesc = desc.depthAttachment.texture->getDescription();
+        const TextureDesc& textureDesc = desc.depthAttachment.texture->getCreationDescription();
         depthFormat = textureDesc.format;
         sampleCount = textureDesc.sampleCount;
         sampleQuality = textureDesc.sampleQuality;
     }
     else if(!desc.colorAttachments.empty() && desc.colorAttachments[0].valid()){
-        const TextureDesc& textureDesc = desc.colorAttachments[0].texture->getDescription();
+        const TextureDesc& textureDesc = desc.colorAttachments[0].texture->getCreationDescription();
         sampleCount = textureDesc.sampleCount;
         sampleQuality = textureDesc.sampleQuality;
     }

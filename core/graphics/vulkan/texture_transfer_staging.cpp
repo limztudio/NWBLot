@@ -111,7 +111,12 @@ void CommandList::copyTexture(
         s_OperationName
     ))
         return;
-    if(!validateTextureForGpuState(src, ResourceStates::CopySource, s_OperationName))
+    if(!validateTextureForGpuState(
+        src,
+        ResourceStates::CopySource,
+        s_OperationName,
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+    ))
         return;
 
     VkBufferImageCopy region{};
@@ -132,7 +137,7 @@ void CommandList::copyTexture(
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
             return;
     }
-    else if(!__hidden_texture_transfer_staging::IsWholeImageSubresourceCopy(src->m_desc, region)){
+    else if(!__hidden_texture_transfer_staging::IsWholeImageSubresourceCopy(src->m_creationDesc, region)){
         if(!recordAndValidateAnyCommandCapability(
             GpuQueueCapability::Compute | GpuQueueCapability::Graphics,
             s_OperationName
@@ -184,7 +189,12 @@ void CommandList::copyTexture(
         s_OperationName
     ))
         return;
-    if(!validateTextureForGpuState(dest, ResourceStates::CopyDest, s_OperationName))
+    if(!validateTextureForGpuState(
+        dest,
+        ResourceStates::CopyDest,
+        s_OperationName,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    ))
         return;
 
     VkBufferImageCopy region{};
@@ -205,7 +215,7 @@ void CommandList::copyTexture(
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
             return;
     }
-    else if(!__hidden_texture_transfer_staging::IsWholeImageSubresourceCopy(dest->m_desc, region)){
+    else if(!__hidden_texture_transfer_staging::IsWholeImageSubresourceCopy(dest->m_creationDesc, region)){
         if(!recordAndValidateAnyCommandCapability(
             GpuQueueCapability::Compute | GpuQueueCapability::Graphics,
             s_OperationName
@@ -363,7 +373,7 @@ bool CommandList::prepareStagingTextureCopy(
     VkBufferImageCopy& outRegion
 )const{
     const TextureDesc& stagingDesc = stagingResource.m_creationDesc;
-    const TextureDesc& textureDesc = textureResource.m_desc;
+    const TextureDesc& textureDesc = textureResource.m_creationDesc;
     if(textureDesc.sampleCount != 1)
         return false;
     if(textureDesc.format != stagingDesc.format)

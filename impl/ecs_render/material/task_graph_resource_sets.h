@@ -214,7 +214,7 @@ namespace RendererTaskGraphDetail{
     for(const Core::TextureHandle& texture : sampledTextures){
         Core::GpuGraphResourceId resource = graph.findImportedTexture(texture);
         if(!resource.valid()){
-            const Name textureIdentity = texture->getDescription().name;
+            const Name textureIdentity = texture->getCreationDescription().name;
             if(!textureIdentity)
                 return false;
             resource = graph.importTexture(

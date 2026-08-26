@@ -407,7 +407,7 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         destinationResource.type != GpuGraphResourceType::Texture
         || !destinationResource.texture
         || !__hidden_gpu_task_graph_builtin_clears::CopyOrClearTextureDestinationCanMaterializeRetainedState(
-            destinationResource.texture->getDescription(),
+            destinationResource.texture->getCreationDescription(),
             destinationResource.initialState,
             destinationResource.externalFinalState
         )
@@ -418,7 +418,7 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
     if(
         !__hidden_gpu_task_graph_builtin_clears::TryMapTextureClearValueKind(clearDesc.valueType, valueKind)
         || !GraphicsBackend::VulkanTextureDetail::ResolveTextureClearContract(
-            destinationResource.texture->getDescription(),
+            destinationResource.texture->getCreationDescription(),
             clearDesc.subresources,
             valueKind,
             clearDesc.clearDepth,
@@ -504,9 +504,9 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
         || !destinationResource.texture
         // Bounded multisample clears require an active attachment. Graph recording ends rendering before this
         // primitive and has no framebuffer lowering, so every multisample rectangle remains unsupported.
-        || destinationResource.texture->getDescription().sampleCount != 1u
+        || destinationResource.texture->getCreationDescription().sampleCount != 1u
         || !__hidden_gpu_task_graph_builtin_clears::BuiltInTaskCanMaterializeRetainedState(
-            destinationResource.texture->getDescription(),
+            destinationResource.texture->getCreationDescription(),
             destinationResource.initialState,
             destinationResource.externalFinalState
         )
@@ -514,7 +514,7 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
         return {};
     GraphicsBackend::VulkanTextureDetail::TextureClearContract clearContract;
     if(!GraphicsBackend::VulkanTextureDetail::ResolveTextureClearContract(
-        destinationResource.texture->getDescription(),
+        destinationResource.texture->getCreationDescription(),
         clearDesc.subresources,
         GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::UInt,
         false,
@@ -545,7 +545,7 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
     const Box clearBox(clearDesc.rect, 0, Limit<i32>::s_Max);
     const GraphicsBackend::VulkanTextureDetail::TextureClearQueueRequirement::Enum queueRequirement =
         GraphicsBackend::VulkanTextureDetail::TextureClearBoxQueueRequirement(
-            destinationResource.texture->getDescription(),
+            destinationResource.texture->getCreationDescription(),
             resolvedSubresources,
             clearBox
         )

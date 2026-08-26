@@ -28,12 +28,23 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
         return;
     }
+    const VkImageUsageFlags requiredUsage = m_renderPassActive
+        ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+        : VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    ;
+    if(!m_device.isTextureReadyForGpuUse(textureResource, requiredUsage)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear"));
+        return;
+    }
     if(!VulkanTextureDetail::TextureDepthStencilClearAspectsAreValid(texture.m_aspectMask, clearDepth, clearStencil)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("requested aspect is not present in the texture format"));
         return;
     }
 
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Range);
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(
+        texture.m_creationDesc,
+        TextureSubresourceMipResolve::Range
+    );
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("subresource range is empty or invalid"));
         return;
@@ -74,7 +85,7 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
     if(m_commandRecordingFailed)
         return;
-    if(texture.m_desc.dimension != TextureDimension::Texture3D && resolvedSubresources.numArraySlices > 1u){
+    if(texture.m_creationDesc.dimension != TextureDimension::Texture3D && resolvedSubresources.numArraySlices > 1u){
         Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
         Vector<VkImageSubresourceRange, Alloc::ScratchArena> ranges(resolvedSubresources.numArraySlices, scratchArena);
         VulkanTextureDetail::BuildArrayLayerImageSubresourceRanges(resolvedSubresources, aspectMask, ranges);
@@ -113,7 +124,7 @@ bool CommandList::clearActiveRenderPassColorTextureRect(
     }
 
     const Rect resolvedRect = VulkanTextureDetail::ResolveTextureClearRect(
-        texture.m_desc,
+        texture.m_creationDesc,
         resolvedSubresources.baseMipLevel,
         rect
     );
@@ -180,7 +191,11 @@ bool CommandList::clearActiveRenderPassDepthStencilTextureRect(
         return false;
     }
 
-    const Rect resolvedRect = VulkanTextureDetail::ResolveTextureClearRect(texture.m_desc, resolvedSubresources.baseMipLevel, rect);
+    const Rect resolvedRect = VulkanTextureDetail::ResolveTextureClearRect(
+        texture.m_creationDesc,
+        resolvedSubresources.baseMipLevel,
+        rect
+    );
     if(VulkanTextureDetail::TextureClearRectEmpty(resolvedRect))
         return true;
 
@@ -239,7 +254,7 @@ void CommandList::clearDepthStencilTextureBox(
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
         return;
     }
-    const TextureDesc& desc = texture.m_desc;
+    const TextureDesc& desc = texture.m_creationDesc;
     if(!VulkanTextureDetail::TextureDepthStencilClearAspectsAreValid(texture.m_aspectMask, clearDepth, clearStencil)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("requested aspect is not present in the texture format"));
         return;
@@ -259,6 +274,14 @@ void CommandList::clearDepthStencilTextureBox(
     const Box baseResolvedBox = VulkanTextureDetail::ResolveTextureClearBox(desc, resolvedSubresources.baseMipLevel, box);
     if(VulkanTextureDetail::TextureClearBoxEmpty(baseResolvedBox))
         return;
+    const VkImageUsageFlags requiredUsage = m_renderPassActive
+        ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+        : VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    ;
+    if(!m_device.isTextureReadyForGpuUse(textureResource, requiredUsage)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear"));
+        return;
+    }
     const f32 clearDepthValue = clearDepth
         ? VulkanTextureDetail::ClampClearFloat(depth, 0.0f, 1.0f)
         : 0.0f

@@ -83,11 +83,12 @@ namespace __hidden_gpu_command_ir_replay_lowering{
 [[nodiscard]] static GpuCommandIrReplayError::Enum ValidateTextureBackendOperand(
     Texture* const texture,
     const ResourceStates::Mask requiredState,
+    const VkImageUsageFlags requiredUsage,
     CommandList& commandList
 )noexcept{
     if(!texture)
         return GpuCommandIrReplayError::StreamChangedDuringReplay;
-    if(!commandList.getDevice().isTextureReadyForGpuUse(texture))
+    if(!commandList.getDevice().isTextureReadyForGpuUse(texture, requiredUsage))
         return GpuCommandIrReplayError::BackendResourceNotReady;
 
     const ResourceStates::Mask permanentState = commandList.getPermanentTextureState(texture);
@@ -130,6 +131,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         const GpuCommandIrReplayError::Enum sourceError = ValidateTextureBackendOperand(
             graph.textureForResource(record.source),
             ResourceStates::CopySource,
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
             commandList
         );
         if(sourceError != GpuCommandIrReplayError::None)
@@ -137,6 +139,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         return ValidateTextureBackendOperand(
             graph.textureForResource(record.destination),
             ResourceStates::CopyDest,
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT,
             commandList
         );
     }
@@ -151,6 +154,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
         return ValidateTextureBackendOperand(
             graph.textureForResource(record.destination),
             ResourceStates::CopyDest,
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT,
             commandList
         );
     default:

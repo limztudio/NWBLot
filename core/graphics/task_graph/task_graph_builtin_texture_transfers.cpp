@@ -342,19 +342,19 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
             && sourceResource.texture
             && destinationResource.texture
             && __hidden_gpu_task_graph_builtin_texture_transfers::BuiltInTaskCanMaterializeRetainedState(
-                sourceResource.texture->getDescription(),
+                sourceResource.texture->getCreationDescription(),
                 sourceResource.initialState,
                 sourceResource.externalFinalState
             )
             && __hidden_gpu_task_graph_builtin_texture_transfers::CopyOrClearTextureDestinationCanMaterializeRetainedState(
-                destinationResource.texture->getDescription(),
+                destinationResource.texture->getCreationDescription(),
                 destinationResource.initialState,
                 destinationResource.externalFinalState
             )
             && GraphicsBackend::VulkanTextureDetail::ResolveTextureCopyContract(
-                sourceResource.texture->getDescription(),
+                sourceResource.texture->getCreationDescription(),
                 region.sourceSlice,
-                destinationResource.texture->getDescription(),
+                destinationResource.texture->getCreationDescription(),
                 region.destinationSlice,
                 contract
             )
@@ -502,19 +502,19 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
             && sourceResource.texture
             && destinationResource.texture
             && __hidden_gpu_task_graph_builtin_texture_transfers::BuiltInTaskCanMaterializeRetainedState(
-                sourceResource.texture->getDescription(),
+                sourceResource.texture->getCreationDescription(),
                 sourceResource.initialState,
                 sourceResource.externalFinalState
             )
             && __hidden_gpu_task_graph_builtin_texture_transfers::BuiltInTaskCanMaterializeRetainedState(
-                destinationResource.texture->getDescription(),
+                destinationResource.texture->getCreationDescription(),
                 destinationResource.initialState,
                 destinationResource.externalFinalState
             )
             && __hidden_gpu_task_graph_builtin_texture_transfers::ResolveTextureContractValid(
-                sourceResource.texture->getDescription(),
+                sourceResource.texture->getCreationDescription(),
                 region.sourceSubresources,
-                destinationResource.texture->getDescription(),
+                destinationResource.texture->getCreationDescription(),
                 region.destinationSubresources,
                 resolvedSourceSubresources,
                 resolvedDestinationSubresources

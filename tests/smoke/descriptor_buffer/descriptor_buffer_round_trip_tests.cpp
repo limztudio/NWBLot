@@ -56419,6 +56419,7 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelUpsampleShapeBuildsAsDescriptorBuffe
             TextureDesc()
                 .setWidth(w).setHeight(h)
                 .setFormat(Format::RGBA16_FLOAT)
+                .setInUAV(true)
                 .setInitialState(ResourceStates::UnorderedAccess)
                 .setKeepInitialState(true)
         );
@@ -56664,6 +56665,7 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelResolveShapeBuildsAsDescriptorBuffer
             TextureDesc()
                 .setWidth(w).setHeight(h)
                 .setFormat(Format::RGBA16_FLOAT)
+                .setInUAV(true)
                 .setInitialState(ResourceStates::UnorderedAccess)
                 .setKeepInitialState(true)
         );

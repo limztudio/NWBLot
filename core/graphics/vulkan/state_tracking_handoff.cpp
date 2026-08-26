@@ -5,6 +5,7 @@
 #include "backend.h"
 #include "arena_names.h"
 #include "state_tracking_detail.h"
+#include "texture_resource_detail.h"
 
 #include <core/common/log.h>
 #include <global/containers.h>
@@ -78,11 +79,29 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
     NWB_ASSERT(states.m_valid);
 
     for(const CommandListResourceStateHandoff::TextureState& state : states.m_textureStates){
-        if(state.texture && !m_device.isTextureReadyForGpuUse(state.texture))
+        if(
+            state.texture
+            && (
+                !VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state)
+                || !m_device.isTextureReadyForGpuUse(
+                    state.texture,
+                    VulkanTextureDetail::RequiredImageUsageForResourceStates(state.state)
+                )
+            )
+        )
             return false;
     }
     for(const CommandListResourceStateHandoff::PermanentTextureState& state : states.m_permanentTextureStates){
-        if(state.texture && !m_device.isTextureReadyForGpuUse(state.texture))
+        if(
+            state.texture
+            && (
+                !VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state)
+                || !m_device.isTextureReadyForGpuUse(
+                    state.texture,
+                    VulkanTextureDetail::RequiredImageUsageForResourceStates(state.state)
+                )
+            )
+        )
             return false;
     }
     for(const CommandListResourceStateHandoff::BufferState& state : states.m_bufferStates){
@@ -105,7 +124,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
     Vector<VkBufferMemoryBarrier2, Alloc::ScratchArena> acquireBufferBarriers{scratchArena};
 
     const auto appendTextureAcquire = [&](Texture& texture, const TextureSubresourceSet& subresources, const ResourceStates::Mask state, const ResourceQueueSharing::Mask sharing, const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue) -> bool {
-        if(sharing != texture.m_desc.queueSharing){
+        if(sharing != texture.m_creationDesc.queueSharing){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff texture sharing contract does not match the resource description"));
             return false;
         }
@@ -436,13 +455,13 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
 
         GpuPhysicalQueueId ownerQueue;
         GpuPhysicalQueueId releaseDestinationQueue;
-        getTextureOwnership(key, key.texture->m_desc.queueSharing, ownerQueue, releaseDestinationQueue);
+        getTextureOwnership(key, key.texture->m_creationDesc.queueSharing, ownerQueue, releaseDestinationQueue);
         states.m_textureStates.push_back(CommandListResourceStateHandoff::TextureState{
             key.texture,
             key.mipLevel,
             key.arraySlice,
             it.value(),
-            key.texture->m_desc.queueSharing,
+            key.texture->m_creationDesc.queueSharing,
             ownerQueue,
             releaseDestinationQueue
         });
@@ -474,11 +493,11 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         GpuPhysicalQueueId ownerQueue;
         GpuPhysicalQueueId releaseDestinationQueue;
         const TextureSubresourceStateKey key{ texture, 0u, 0u };
-        getTextureOwnership(key, texture->m_desc.queueSharing, ownerQueue, releaseDestinationQueue);
+        getTextureOwnership(key, texture->m_creationDesc.queueSharing, ownerQueue, releaseDestinationQueue);
         states.m_permanentTextureStates.push_back(CommandListResourceStateHandoff::PermanentTextureState{
             texture,
             it.value().state,
-            texture->m_desc.queueSharing,
+            texture->m_creationDesc.queueSharing,
             ownerQueue,
             releaseDestinationQueue
         });
@@ -529,7 +548,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
             );
             return;
         }
-        if(m_device.usesConcurrentQueueSharing(texture->m_desc.queueSharing)){
+        if(m_device.usesConcurrentQueueSharing(texture->m_creationDesc.queueSharing)){
             rejectCommandRecording(
                 NWB_TEXT("append ownership-release barriers"),
                 NWB_TEXT("concurrent texture has a pending exclusive release")

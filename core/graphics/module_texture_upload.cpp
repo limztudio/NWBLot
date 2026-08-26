@@ -39,18 +39,18 @@ constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
     }
     if(!desc.regions || desc.regionCount == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch '{}': regions are empty")
-            , StringConvert(desc.destination->getDescription().name.c_str())
+            , StringConvert(desc.destination->getCreationDescription().name.c_str())
         );
         return false;
     }
     if(desc.finalState == ResourceStates::Unknown){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch '{}': final state is unknown")
-            , StringConvert(desc.destination->getDescription().name.c_str())
+            , StringConvert(desc.destination->getCreationDescription().name.c_str())
         );
         return false;
     }
 
-    const TextureDesc& textureDesc = desc.destination->getDescription();
+    const TextureDesc& textureDesc = desc.destination->getCreationDescription();
     if(textureDesc.keepInitialState && textureDesc.initialState == ResourceStates::Unknown){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to upload texture batch '{}': keep-initial-state uploads require a concrete initial state")
             , StringConvert(textureDesc.name.c_str())
@@ -247,7 +247,7 @@ bool Graphics::uploadTextureBatch(const TextureUploadBatchDesc& desc)const{
     if(!__hidden_graphics_texture_upload::ValidateTextureUploadBatch(desc, totalByteCount))
         return false;
 
-    const TextureDesc& textureDesc = desc.destination->getDescription();
+    const TextureDesc& textureDesc = desc.destination->getCreationDescription();
     const ResourceStates::Mask graphInitialState = desc.hasPhysicalInitialState
         ? desc.physicalInitialState
         : textureDesc.initialState

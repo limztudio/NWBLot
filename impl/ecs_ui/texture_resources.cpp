@@ -346,7 +346,7 @@ Core::GpuGraphResourceId UiSystem::importTaskGraphTexture(
 
     const Core::GpuGraphResourceId imported = graph.importTexture(
         resource.texture,
-        __hidden_ui::TextureResourceDesc(resource.texture->getDescription(), resource.initialUploadAccepted)
+        __hidden_ui::TextureResourceDesc(resource.texture->getCreationDescription(), resource.initialUploadAccepted)
     );
     if(imported.valid()){
         resource.taskGraphResource = imported;

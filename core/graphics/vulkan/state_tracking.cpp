@@ -181,7 +181,7 @@ bool StateTracker::hasExplicitBufferState(Buffer* const buffer)const{
 bool StateTracker::getTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel, ResourceStates::Mask& outState)const{
     outState = ResourceStates::Unknown;
 
-    const TextureDesc& desc = texture.getDescription();
+    const TextureDesc& desc = texture.getCreationDescription();
     if(mipLevel >= desc.mipLevels || arraySlice >= desc.arraySize)
         return false;
 
@@ -199,7 +199,7 @@ bool StateTracker::getResolvedTransientTextureState(Texture& texture, ArraySlice
     }
 
     if(texture.isRetainedSubresourceStateKnown(arraySlice, mipLevel))
-        outState = texture.m_desc.initialState;
+        outState = texture.m_creationDesc.initialState;
 
     return true;
 }
@@ -250,7 +250,7 @@ void StateTracker::appendKeepInitialStateBarriers(
         if(!key.texture)
             continue;
 
-        const TextureDesc& desc = key.texture->getDescription();
+        const TextureDesc& desc = key.texture->getCreationDescription();
         const ResourceStates::Mask currentState = it.value();
         if(!desc.keepInitialState)
             continue;
@@ -311,7 +311,10 @@ bool StateTracker::isUavBarrierEnabledForBuffer(Buffer& buffer)const{
 }
 
 void StateTracker::beginTrackingTransientTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Range);
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(
+        texture.m_creationDesc,
+        TextureSubresourceMipResolve::Range
+    );
     beginTrackingResolvedTransientTexture(texture, resolvedSubresources, state);
 }
 
@@ -413,7 +416,7 @@ void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresource
         return;
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(
-        texture->m_desc,
+        texture->m_creationDesc,
         TextureSubresourceMipResolve::Range
     );
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){

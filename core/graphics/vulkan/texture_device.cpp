@@ -20,8 +20,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     if(!VulkanTextureDetail::ValidateTextureCreateDesc(d, NWB_TEXT("create texture"), true, metadata))
         return nullptr;
 
-    auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator);
-    texture->m_desc = d;
+    auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator, d);
     texture->m_formatLayout = metadata.formatLayout;
     texture->m_aspectMask = metadata.aspectMask;
     texture->initializeRetainedSubresourceStates(false);
@@ -69,7 +68,7 @@ MemoryRequirements Device::getTextureMemoryRequirements(Texture* textureResource
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture memory requirements: texture belongs to another device"));
         return {};
     }
-    if(!texture.m_managed || !texture.m_desc.isVirtual || texture.m_allocation != nullptr){
+    if(!texture.m_managed || !texture.m_creationDesc.isVirtual || texture.m_allocation != nullptr){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Vulkan: Failed to get texture memory requirements: texture is not a managed virtual texture")
         );
@@ -107,7 +106,7 @@ bool Device::bindTextureMemory(Texture* textureResource, Heap* heap, u64 offset)
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: texture belongs to another device"));
         return false;
     }
-    if(!texture.m_managed || !texture.m_desc.isVirtual || texture.m_allocation != nullptr){
+    if(!texture.m_managed || !texture.m_creationDesc.isVirtual || texture.m_allocation != nullptr){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: texture is not a managed virtual texture"));
         return false;
     }
@@ -174,7 +173,7 @@ bool Device::bindTextureMemory(Texture* textureResource, Heap* heap, u64 offset)
     return true;
 }
 
-bool Device::isTextureReadyForGpuUse(Texture* textureResource)const noexcept{
+bool Device::isTextureReadyForGpuUse(Texture* textureResource, const VkImageUsageFlags requiredUsage)const noexcept{
     if(!textureResource)
         return false;
 
@@ -183,6 +182,10 @@ bool Device::isTextureReadyForGpuUse(Texture* textureResource)const noexcept{
 
     if(&texture.m_context != &m_context || &texture.m_allocator != &m_allocator)
         return false;
+    if(!texture.descriptionMatchesCreation())
+        return false;
+    if(!VulkanTextureDetail::IsTextureImageInfoConsistent(texture.m_creationDesc, texture.m_imageInfo, requiredUsage))
+        return false;
     if(texture.m_image == VK_NULL_HANDLE)
         return false;
     if(!m_allocator.isTextureNativeIdentityRegistered(texture.m_image, texture))
@@ -190,7 +193,7 @@ bool Device::isTextureReadyForGpuUse(Texture* textureResource)const noexcept{
     if(!texture.m_managed)
         return true;
 
-    if(!texture.m_desc.isVirtual)
+    if(!texture.m_creationDesc.isVirtual)
         return texture.m_allocation != nullptr;
     if(texture.m_allocation || !texture.m_boundHeap || texture.m_heapBindingRange.size == 0u)
         return false;
@@ -219,8 +222,7 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
     if(!VulkanTextureDetail::ValidateTextureCreateDesc(desc, NWB_TEXT("create texture handle for native texture"), false, metadata))
         return nullptr;
 
-    auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator);
-    texture->m_desc = desc;
+    auto* texture = NewArenaObject<Texture>(m_context.objectArena, m_context, m_allocator, desc);
     texture->m_formatLayout = metadata.formatLayout;
     texture->m_aspectMask = metadata.aspectMask;
     texture->m_image = nativeImage;
@@ -228,6 +230,14 @@ TextureHandle Device::createHandleForNativeTexture(ObjectType objectType, Object
     texture->initializeRetainedSubresourceStates(desc.keepInitialState);
 
     texture->m_imageInfo = VulkanTextureDetail::BuildTextureImageCreateInfo(desc, metadata);
+    texture->m_imageInfo.usage &= ~(VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+    if(!VulkanTextureDetail::IsTextureImageInfoConsistent(desc, texture->m_imageInfo)){
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Vulkan: Failed to create texture handle for native texture: declared initial state is unsupported")
+        );
+        DestroyArenaObject(m_context.objectArena, texture);
+        return nullptr;
+    }
 
     if(!m_allocator.tryRegisterTextureNativeIdentity(*texture)){
         NWB_LOGGER_WARNING(

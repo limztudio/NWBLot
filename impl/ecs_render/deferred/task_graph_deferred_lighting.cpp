@@ -345,7 +345,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     for(const Core::TextureHandle& texture : preparedTraceMaterialSampledTextures){
         Core::GpuGraphResourceId resource = m_deferredLightingTaskGraph.findImportedTexture(texture);
         if(!resource.valid()){
-            const Name textureIdentity = texture ? texture->getDescription().name : NAME_NONE;
+            const Name textureIdentity = texture ? texture->getCreationDescription().name : NAME_NONE;
             if(!textureIdentity){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared trace material texture has no stable identity"));
                 return;

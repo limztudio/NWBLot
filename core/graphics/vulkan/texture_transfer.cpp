@@ -79,16 +79,26 @@ void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSli
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination must be distinct native images"));
         return;
     }
-    if(!validateTextureForGpuState(srcResource, ResourceStates::CopySource, s_OperationName))
+    if(!validateTextureForGpuState(
+        srcResource,
+        ResourceStates::CopySource,
+        s_OperationName,
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+    ))
         return;
-    if(!validateTextureForGpuState(destResource, ResourceStates::CopyDest, s_OperationName))
+    if(!validateTextureForGpuState(
+        destResource,
+        ResourceStates::CopyDest,
+        s_OperationName,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    ))
         return;
 
     VulkanTextureDetail::TextureCopyContract contract;
     if(!VulkanTextureDetail::ResolveTextureCopyContract(
-        src.m_desc,
+        src.m_creationDesc,
         srcSlice,
-        dest.m_desc,
+        dest.m_creationDesc,
         destSlice,
         contract
     )){
@@ -109,8 +119,8 @@ void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSli
         return;
     }
     if(
-        !VulkanTextureDetail::IsTextureImageInfoConsistent(src.m_desc, src.m_imageInfo)
-        || !VulkanTextureDetail::IsTextureImageInfoConsistent(dest.m_desc, dest.m_imageInfo)
+        !VulkanTextureDetail::IsTextureImageInfoConsistent(src.m_creationDesc, src.m_imageInfo)
+        || !VulkanTextureDetail::IsTextureImageInfoConsistent(dest.m_creationDesc, dest.m_imageInfo)
         || src.m_imageInfo.imageType != contract.imageType
         || dest.m_imageInfo.imageType != contract.imageType
     ){
@@ -253,7 +263,7 @@ bool CommandList::tryWriteTexture(
     }
 
     Texture& dest = *destResource;
-    const TextureDesc& texDesc = dest.m_desc;
+    const TextureDesc& texDesc = dest.m_creationDesc;
     if(texDesc.sampleCount != 1){
         rejectCommandRecording(s_OperationName, NWB_TEXT("destination texture must be single-sampled"));
         return false;
@@ -263,7 +273,12 @@ bool CommandList::tryWriteTexture(
         rejectCommandRecording(s_OperationName, NWB_TEXT("destination subresource is out of bounds"));
         return false;
     }
-    if(!validateTextureForGpuState(destResource, ResourceStates::CopyDest, s_OperationName))
+    if(!validateTextureForGpuState(
+        destResource,
+        ResourceStates::CopyDest,
+        s_OperationName,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    ))
         return false;
 
     if(!VulkanTextureDetail::IsTextureImageInfoConsistent(texDesc, dest.m_imageInfo)){
@@ -401,30 +416,40 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination must be distinct native images"));
         return;
     }
-    if(!validateTextureForGpuState(srcResource, ResourceStates::ResolveSource, s_OperationName))
+    if(!validateTextureForGpuState(
+        srcResource,
+        ResourceStates::ResolveSource,
+        s_OperationName,
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+    ))
         return;
-    if(!validateTextureForGpuState(destResource, ResourceStates::ResolveDest, s_OperationName))
+    if(!validateTextureForGpuState(
+        destResource,
+        ResourceStates::ResolveDest,
+        s_OperationName,
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    ))
         return;
     if(
-        !VulkanTextureDetail::IsTextureDescShapeValid(src.m_desc)
-        || !VulkanTextureDetail::IsTextureDescShapeValid(dest.m_desc)
-        || !VulkanTextureDetail::IsTextureImageInfoConsistent(src.m_desc, src.m_imageInfo)
-        || !VulkanTextureDetail::IsTextureImageInfoConsistent(dest.m_desc, dest.m_imageInfo)
+        !VulkanTextureDetail::IsTextureDescShapeValid(src.m_creationDesc)
+        || !VulkanTextureDetail::IsTextureDescShapeValid(dest.m_creationDesc)
+        || !VulkanTextureDetail::IsTextureImageInfoConsistent(src.m_creationDesc, src.m_imageInfo)
+        || !VulkanTextureDetail::IsTextureImageInfoConsistent(dest.m_creationDesc, dest.m_imageInfo)
         || src.m_imageInfo.imageType != dest.m_imageInfo.imageType
     ){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture descriptions and native image metadata must agree"));
         return;
     }
     if(
-        src.m_desc.sampleCount <= 1u
-        || dest.m_desc.sampleCount != 1u
-        || !VulkanDetail::IsSupportedSampleCount(src.m_desc.sampleCount)
+        src.m_creationDesc.sampleCount <= 1u
+        || dest.m_creationDesc.sampleCount != 1u
+        || !VulkanDetail::IsSupportedSampleCount(src.m_creationDesc.sampleCount)
     ){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source must be multisampled and destination must be single-sampled"));
         return;
     }
     if(
-        src.m_desc.format != dest.m_desc.format
+        src.m_creationDesc.format != dest.m_creationDesc.format
         || src.m_imageInfo.format == VK_FORMAT_UNDEFINED
         || src.m_imageInfo.format != dest.m_imageInfo.format
     ){
@@ -432,7 +457,7 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
         return;
     }
 
-    const FormatInfo& formatInfo = GetFormatInfo(src.m_desc.format);
+    const FormatInfo& formatInfo = GetFormatInfo(src.m_creationDesc.format);
     VulkanDetail::TextureFormatBlockLayout expectedFormatLayout;
     const VkImageAspectFlags expectedAspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
     if(
@@ -458,8 +483,14 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
         return;
     }
 
-    const TextureSubresourceSet resolvedSrc = srcSubresources.resolve(src.m_desc, TextureSubresourceMipResolve::Range);
-    const TextureSubresourceSet resolvedDst = dstSubresources.resolve(dest.m_desc, TextureSubresourceMipResolve::Range);
+    const TextureSubresourceSet resolvedSrc = srcSubresources.resolve(
+        src.m_creationDesc,
+        TextureSubresourceMipResolve::Range
+    );
+    const TextureSubresourceSet resolvedDst = dstSubresources.resolve(
+        dest.m_creationDesc,
+        TextureSubresourceMipResolve::Range
+    );
     if(
         !VulkanDetail::IsTextureSubresourceRangeValid(resolvedSrc)
         || !VulkanDetail::IsTextureSubresourceRangeValid(resolvedDst)
@@ -473,7 +504,12 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
     if(
         resolvedSrc.numMipLevels != resolvedDst.numMipLevels
         || resolvedSrc.numArraySlices != resolvedDst.numArraySlices
-        || !__hidden_texture_transfer::ResolveMipExtentsMatch(dest.m_desc, resolvedDst, src.m_desc, resolvedSrc)
+        || !__hidden_texture_transfer::ResolveMipExtentsMatch(
+            dest.m_creationDesc,
+            resolvedDst,
+            src.m_creationDesc,
+            resolvedSrc
+        )
     ){
         rejectCommandRecording(
             s_OperationName,
@@ -541,7 +577,7 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
     for(MipLevel mipOffset = 0; mipOffset < resolvedSrc.numMipLevels; ++mipOffset){
         const MipLevel srcMipLevel = resolvedSrc.baseMipLevel + mipOffset;
         const MipLevel dstMipLevel = resolvedDst.baseMipLevel + mipOffset;
-        const VkExtent3D srcExtent = VulkanDetail::GetTextureMipExtent(src.m_desc, srcMipLevel);
+        const VkExtent3D srcExtent = VulkanDetail::GetTextureMipExtent(src.m_creationDesc, srcMipLevel);
 
         VkImageResolve region{};
         region.srcSubresource = VulkanDetail::BuildImageSubresourceLayers(

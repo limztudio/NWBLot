@@ -50,20 +50,21 @@ namespace TextureStateIngress{
 static void ApplyTextureStateIngress(
     CommandList& commandList,
     Texture* const texture,
-    const TextureStateIngress::Enum ingress
+    const TextureStateIngress::Enum ingress,
+    const ResourceStates::Mask state = ResourceStates::Common
 ){
     switch(ingress){
     case TextureStateIngress::UavPolicy:
         commandList.setEnableUavBarriersForTexture(texture, false);
         break;
     case TextureStateIngress::BeginTracking:
-        commandList.beginTrackingTextureState(texture, s_AllSubresources, ResourceStates::Common);
+        commandList.beginTrackingTextureState(texture, s_AllSubresources, state);
         break;
     case TextureStateIngress::SetState:
-        commandList.setTextureState(texture, s_AllSubresources, ResourceStates::Common);
+        commandList.setTextureState(texture, s_AllSubresources, state);
         break;
     case TextureStateIngress::SetPermanentState:
-        commandList.setPermanentTextureState(texture, ResourceStates::Common);
+        commandList.setPermanentTextureState(texture, state);
         break;
     case TextureStateIngress::ReleaseOwnership:
         commandList.releaseTextureOwnership(
@@ -267,6 +268,35 @@ TEST_F(TextureGpuReadinessStateTest, BeginTrackingRejectsUnknownRangeAndPermanen
     EXPECT_EQ(permanentList->getPermanentTextureState(texture.get()), ResourceStates::Common);
     EXPECT_EQ(texture->getReferenceCount(), permanentReferences);
     permanentList->close();
+}
+
+
+TEST_F(TextureGpuReadinessStateTest, TextureStateIngressRejectsBufferOnlyStatesAtomically){
+    TextureHandle texture = device().createTexture(ordinaryTextureDesc());
+    ASSERT_TRUE(texture);
+
+    for(
+        u8 ingress = __hidden_texture_gpu_readiness_state::TextureStateIngress::BeginTracking;
+        ingress <= __hidden_texture_gpu_readiness_state::TextureStateIngress::SetPermanentState;
+        ++ingress
+    ){
+        CommandListHandle commandList = device().createCommandList();
+        ASSERT_TRUE(commandList);
+        const u32 referenceCount = texture->getReferenceCount();
+        commandList->open();
+        __hidden_texture_gpu_readiness_state::ApplyTextureStateIngress(
+            *commandList,
+            texture.get(),
+            static_cast<__hidden_texture_gpu_readiness_state::TextureStateIngress::Enum>(ingress),
+            ResourceStates::VertexBuffer
+        );
+        EXPECT_TRUE(commandList->commandRecordingFailed());
+        EXPECT_FALSE(commandList->hasExplicitTextureSubresourceState(texture.get(), 0u, 0u));
+        EXPECT_EQ(commandList->getPermanentTextureState(texture.get()), ResourceStates::Unknown);
+        EXPECT_EQ(texture->getReferenceCount(), referenceCount);
+        commandList->close();
+        EXPECT_FALSE(commandList->hasCommandBuffer());
+    }
 }
 
 

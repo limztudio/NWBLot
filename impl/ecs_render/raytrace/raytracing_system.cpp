@@ -1381,7 +1381,7 @@ bool RendererRayTracingSystem::appendPreparedShadowTraceMaterialSampledTextures(
         return false;
 
     for(const Core::TextureHandle& texture : sampledTextures){
-        if(!texture || !texture->getDescription().name)
+        if(!texture || !texture->getCreationDescription().name)
             return false;
 
         bool alreadyCollected = false;

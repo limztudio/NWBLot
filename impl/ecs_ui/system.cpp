@@ -1195,7 +1195,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
             textureResource = graph.importTexture(
                 drawCommand.texture,
                 __hidden_ui::TextureResourceDesc(
-                    drawCommand.texture->getDescription(),
+                    drawCommand.texture->getCreationDescription(),
                     drawCommand.textureInitialUploadAccepted
                 )
             );

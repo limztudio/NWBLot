@@ -433,7 +433,7 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
         return {};
 
     usize requiredBytes = 0u;
-    const TextureDesc& destinationDesc = destinationResource.texture->getDescription();
+    const TextureDesc& destinationDesc = destinationResource.texture->getCreationDescription();
     if(
         !__hidden_gpu_task_graph_builtin_uploads::UploadTextureTaskCanMaterializeRetainedState(
             destinationDesc,

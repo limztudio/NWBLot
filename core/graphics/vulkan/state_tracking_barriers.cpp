@@ -519,7 +519,7 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
                 return false;
 
             const TextureSubresourceSet resolvedSubresources = attachment.subresources.resolve(
-                attachment.texture->m_desc,
+                attachment.texture->m_creationDesc,
                 TextureSubresourceMipResolve::Single
             );
             for(u32 index = 0u; index < depInfo.imageMemoryBarrierCount; ++index){
@@ -640,7 +640,10 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
         return;
 
     Texture& texture = *textureResource;
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Range);
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(
+        texture.m_creationDesc,
+        TextureSubresourceMipResolve::Range
+    );
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("subresource range is empty or outside the texture"));
         return;
@@ -873,7 +876,7 @@ void CommandList::releaseTextureOwnership(
         );
         return;
     }
-    if(m_device.usesConcurrentQueueSharing(texture.m_desc.queueSharing)){
+    if(m_device.usesConcurrentQueueSharing(texture.m_creationDesc.queueSharing)){
         rejectCommandRecording(
             NWB_TEXT("release texture ownership"),
             NWB_TEXT("concurrently shared textures do not have exclusive ownership")
@@ -881,7 +884,10 @@ void CommandList::releaseTextureOwnership(
         return;
     }
 
-    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Range);
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(
+        texture.m_creationDesc,
+        TextureSubresourceMipResolve::Range
+    );
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
         rejectCommandRecording(
             NWB_TEXT("release texture ownership"),
@@ -1015,7 +1021,7 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
         rejectCommandRecording(NWB_TEXT("set permanent texture state"), NWB_TEXT("texture is not ready for GPU access"));
         return;
     }
-    if(texture->m_desc.keepInitialState && texture->m_desc.initialState != stateBits){
+    if(texture->m_creationDesc.keepInitialState && texture->m_creationDesc.initialState != stateBits){
         rejectCommandRecording(
             NWB_TEXT("set permanent texture state"),
             NWB_TEXT("permanent state conflicts with the retained initial state")

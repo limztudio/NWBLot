@@ -91,9 +91,19 @@ TEST(PermanentStateOwnership, StateTrackerValuesOwnSnapshotsTransactionally){
     GraphicsBackend::VulkanAllocator allocator(context);
 
     Buffer* const baselineBufferObject = NewArenaObject<Buffer>(testArena.arena, context, allocator);
-    Texture* const baselineTextureObject = NewArenaObject<Texture>(testArena.arena, context, allocator);
+    Texture* const baselineTextureObject = NewArenaObject<Texture>(
+        testArena.arena,
+        context,
+        allocator,
+        TextureDesc{}
+    );
     Buffer* const provisionalBufferObject = NewArenaObject<Buffer>(testArena.arena, context, allocator);
-    Texture* const provisionalTextureObject = NewArenaObject<Texture>(testArena.arena, context, allocator);
+    Texture* const provisionalTextureObject = NewArenaObject<Texture>(
+        testArena.arena,
+        context,
+        allocator,
+        TextureDesc{}
+    );
     ASSERT_NE(baselineBufferObject, nullptr);
     ASSERT_NE(baselineTextureObject, nullptr);
     ASSERT_NE(provisionalBufferObject, nullptr);
@@ -198,7 +208,8 @@ TEST(PermanentStateOwnership, StateTrackerUsesEachResourceArenaForLastOwnerDelet
         Texture* const textureObject = NewArenaObject<Texture>(
             resourceArena.arena,
             resourceContext,
-            resourceAllocator
+            resourceAllocator,
+            TextureDesc{}
         );
         ASSERT_NE(bufferObject, nullptr);
         ASSERT_NE(textureObject, nullptr);

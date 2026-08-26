@@ -381,7 +381,7 @@ bool CommandListResourceStateHandoff::buildTextureRangeSubset(
     }
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(
-        texture->getDescription(),
+        texture->getCreationDescription(),
         TextureSubresourceMipResolve::Range
     );
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;

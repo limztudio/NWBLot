@@ -55,7 +55,8 @@ struct TextureClearTestContext{
         Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
             testArena.arena,
             context,
-            allocator
+            allocator,
+            description
         );
         if(!textureObject)
             return {};
@@ -65,8 +66,6 @@ struct TextureClearTestContext{
             Graphics::TextureHandle::deleter_type(&testArena.arena),
             AdoptRef
         );
-        Graphics::TextureDesc& storedDescription = const_cast<Graphics::TextureDesc&>(texture->getDescription());
-        storedDescription = description;
         return texture;
     }
 };
@@ -524,7 +523,6 @@ TEST(GpuTextureClearContract, RejectsUnsupportedStagedFormatsAtDeclarationAndRep
     ;
     Graphics::TextureHandle texture = testContext.createTexture(supportedDescription);
     ASSERT_TRUE(texture);
-    Graphics::TextureDesc& textureDescription = const_cast<Graphics::TextureDesc&>(texture->getDescription());
 
     Graphics::GpuTaskGraph supportedGraph(testContext.testArena.arena);
     const Graphics::GpuGraphResourceId supportedResource = ImportTexture(
@@ -589,20 +587,14 @@ TEST(GpuTextureClearContract, RejectsUnsupportedStagedFormatsAtDeclarationAndRep
     };
     for(const Graphics::Format::Enum format : s_UnsupportedFormats){
         SCOPED_TRACE(static_cast<u32>(format));
-        textureDescription.setFormat(format);
-        const Graphics::GpuCommandIrReplayResult replayResult = Graphics::PreflightGpuCommandIrPacket(
-            capture.commandBytes(),
-            supportedGraph,
-            compiledGraph,
-            packet
-        );
-        EXPECT_EQ(replayResult.error, Graphics::GpuCommandIrReplayError::InvalidTextureClear);
-        EXPECT_EQ(replayResult.recordIndex, 0u);
-
+        Graphics::TextureDesc unsupportedDescription = supportedDescription;
+        unsupportedDescription.setFormat(format);
+        Graphics::TextureHandle unsupportedTexture = testContext.createTexture(unsupportedDescription);
+        ASSERT_TRUE(unsupportedTexture);
         Graphics::GpuTaskGraph rejectedGraph(testContext.testArena.arena);
         const Graphics::GpuGraphResourceId rejectedResource = ImportTexture(
             rejectedGraph,
-            texture,
+            unsupportedTexture,
             Name("tests/texture_clear_contract/rejected_compressed"),
             "Rejected Compressed Clear"
         );
@@ -625,8 +617,52 @@ TEST(GpuTextureClearContract, RejectsUnsupportedStagedFormatsAtDeclarationAndRep
         ).valid());
         EXPECT_FALSE(acceptedToken.valid());
         EXPECT_EQ(rejectedGraph.taskCount(), 0u);
+
+        rejectedClear.acceptedToken = nullptr;
+        const Graphics::GpuTaskResourceUse replayUse{
+            .resource = rejectedResource,
+            .range = Graphics::GpuTaskResourceRange{ .textureSubresources = rejectedClear.subresources },
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc replayTaskDesc = MakeTransferTaskDesc(
+            Name("tests/texture_clear_contract/rejected_compressed_replay_task"),
+            "Rejected Compressed Clear Replay Task"
+        );
+        replayTaskDesc.setResourceUses(&replayUse, 1u);
+        const Graphics::GpuTaskId replayTask = rejectedGraph.addTask(replayTaskDesc);
+        ASSERT_TRUE(replayTask.valid());
+        Graphics::GpuTaskGraphAnalysis replayAnalysis(testContext.testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments replayAssignments(testContext.testArena.arena);
+        Graphics::GpuCompiledGraph replayCompiledGraph(testContext.testArena.arena);
+        ASSERT_TRUE(Compile(
+            rejectedGraph,
+            replayAnalysis,
+            topology,
+            replayAssignments,
+            replayCompiledGraph,
+            scratchArena
+        ));
+        const Graphics::GpuSubmissionPacketId replayPacket = replayCompiledGraph.packetForTask(replayTask);
+        ASSERT_TRUE(replayPacket.valid());
+        const Graphics::GpuPhysicalQueueId replayQueueId = replayCompiledGraph.packet(replayPacket).queue;
+        Graphics::GpuCommandIrCapture replayCapture(testContext.testArena.arena);
+        ASSERT_TRUE(replayCapture.captureClearTexture(
+            replayTask,
+            replayPacket,
+            replayQueueId,
+            rejectedResource,
+            rejectedClear
+        ));
+        const Graphics::GpuCommandIrReplayResult replayResult = Graphics::PreflightGpuCommandIrPacket(
+            replayCapture.commandBytes(),
+            rejectedGraph,
+            replayCompiledGraph,
+            replayPacket
+        );
+        EXPECT_EQ(replayResult.error, Graphics::GpuCommandIrReplayError::InvalidTextureClear);
+        EXPECT_EQ(replayResult.recordIndex, 0u);
     }
-    textureDescription.setFormat(Graphics::Format::BC1_UNORM);
 }
 
 

@@ -120,7 +120,10 @@ inline bool ResolveTextureAttachmentClearSubresources(
     if(attachment.texture != &texture)
         return false;
 
-    const TextureSubresourceSet resolvedAttachmentSubresources = attachment.subresources.resolve(texture.getDescription(), TextureSubresourceMipResolve::Single);
+    const TextureSubresourceSet resolvedAttachmentSubresources = attachment.subresources.resolve(
+        texture.getCreationDescription(),
+        TextureSubresourceMipResolve::Single
+    );
     if(!TextureClearSubresourcesContainedBy(requestedSubresources, resolvedAttachmentSubresources))
         return false;
 

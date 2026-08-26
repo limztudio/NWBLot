@@ -322,6 +322,8 @@ concept TextureApi = DescribedResourceApi<T, TextureDesc> && requires(
     T& texture,
     TextureSubresourceSet subresources
 ){
+    { texture.getCreationDescription() }->SameAs<const TextureDesc&>;
+    { texture.descriptionMatchesCreation() }->SameAs<bool>;
     { texture.getNativeView(ObjectType{}, Format::UNKNOWN, subresources, TextureDimension::Unknown, bool{}) }->SameAs<Object>;
 };
 

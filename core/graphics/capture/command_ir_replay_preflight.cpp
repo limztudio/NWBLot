@@ -324,8 +324,8 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     )
         return GpuCommandIrReplayError::ResourceUseMismatch;
 
-    const TextureDesc& sourceDescription = source->getDescription();
-    const TextureDesc& destinationDescription = destination->getDescription();
+    const TextureDesc& sourceDescription = source->getCreationDescription();
+    const TextureDesc& destinationDescription = destination->getCreationDescription();
     GraphicsBackend::VulkanTextureDetail::TextureCopyContract contract;
     if(!GraphicsBackend::VulkanTextureDetail::ResolveTextureCopyContract(
         sourceDescription,
@@ -444,7 +444,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     if(!destinationUse)
         return GpuCommandIrReplayError::ResourceUseMismatch;
 
-    const TextureDesc& description = destination->getDescription();
+    const TextureDesc& description = destination->getCreationDescription();
     GraphicsBackend::VulkanTextureDetail::TextureClearValueKind::Enum valueKind;
     GraphicsBackend::VulkanTextureDetail::TextureClearContract clearContract;
     if(
@@ -500,7 +500,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     if(!destinationUse)
         return GpuCommandIrReplayError::ResourceUseMismatch;
 
-    const TextureDesc& description = destination->getDescription();
+    const TextureDesc& description = destination->getCreationDescription();
     GraphicsBackend::VulkanTextureDetail::TextureClearContract clearContract;
     const Box clearBox(record.clearRect, 0, Limit<i32>::s_Max);
     if(

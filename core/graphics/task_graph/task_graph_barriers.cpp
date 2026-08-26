@@ -52,7 +52,7 @@ bool GpuTaskGraph::applyCompiledBarrier(
             if(barrier.before == ResourceStates::Unknown)
                 return false;
             const TextureSubresourceSet subresources = barrier.range.textureSubresources.resolve(
-                resource.texture->getDescription(),
+                resource.texture->getCreationDescription(),
                 TextureSubresourceMipResolve::Range
             );
             const MipLevel mipEnd = subresources.baseMipLevel + subresources.numMipLevels;
@@ -257,7 +257,7 @@ bool GpuTaskGraph::seedTaskRetainedResourceStates(
         case GpuGraphResourceType::Texture:{
             if(!resource.texture)
                 return false;
-            const TextureDesc& description = resource.texture->getDescription();
+            const TextureDesc& description = resource.texture->getCreationDescription();
             // Only seed a state that the Vulkan backend will retain exactly at packet close. Other graph resources
             // must already have an explicit compiler transition or native record-time state before they can become
             // a source.

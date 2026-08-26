@@ -401,9 +401,12 @@ bool CommandList::beginDynamicRendering(Framebuffer* framebuffer, const RenderPa
         if(fbDesc.colorAttachments[i].texture){
             auto* tex = fbDesc.colorAttachments[i].texture;
 
-            const TextureSubresourceSet resolvedColorSubresources = fbDesc.colorAttachments[i].subresources.resolve(tex->m_desc, TextureSubresourceMipResolve::Single);
+            const TextureSubresourceSet resolvedColorSubresources = fbDesc.colorAttachments[i].subresources.resolve(
+                tex->m_creationDesc,
+                TextureSubresourceMipResolve::Single
+            );
             const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(
-                tex->m_desc,
+                tex->m_creationDesc,
                 resolvedColorSubresources
             );
             VkImageView view = tex->getView(
@@ -441,9 +444,12 @@ bool CommandList::beginDynamicRendering(Framebuffer* framebuffer, const RenderPa
 
     if(fbDesc.depthAttachment.texture){
         auto* depthTex = fbDesc.depthAttachment.texture;
-        const TextureSubresourceSet resolvedDepthSubresources = fbDesc.depthAttachment.subresources.resolve(depthTex->m_desc, TextureSubresourceMipResolve::Single);
+        const TextureSubresourceSet resolvedDepthSubresources = fbDesc.depthAttachment.subresources.resolve(
+            depthTex->m_creationDesc,
+            TextureSubresourceMipResolve::Single
+        );
         const TextureDimension::Enum depthViewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(
-            depthTex->m_desc,
+            depthTex->m_creationDesc,
             resolvedDepthSubresources
         );
         VkImageView depthView = depthTex->getView(

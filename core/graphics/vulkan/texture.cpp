@@ -332,7 +332,7 @@ bool BuildTextureImageViewCreateInfo(
     const bool assertFailure,
     VkImageViewCreateInfo& outViewInfo
 ){
-    const bool usesTextureFormat = format == texture.m_desc.format;
+    const bool usesTextureFormat = format == texture.m_creationDesc.format;
     const VkFormat vkFormat = usesTextureFormat ? texture.m_imageInfo.format : ConvertFormat(format);
     if(vkFormat == VK_FORMAT_UNDEFINED){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: format is unsupported"), operationName);
@@ -372,8 +372,10 @@ bool BuildTextureImageViewCreateInfo(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator)
+Texture::Texture(const VulkanContext& context, VulkanAllocator& allocator, const TextureDesc& creationDesc)
     : RefCounter<GraphicsResource>(context.threadPool)
+    , m_desc(creationDesc)
+    , m_creationDesc(creationDesc)
     , m_views(0, TextureViewKeyHasher(), EqualTo<TextureViewKey>(), context.objectArena)
     , m_retainedSubresourceStates(context.objectArena)
     , m_context(context)
@@ -402,7 +404,7 @@ Texture::~Texture(){
             m_boundHeap.reset();
         }
         else if(m_managed){
-            if(m_desc.isVirtual){
+            if(m_creationDesc.isVirtual){
                 if(m_image != VK_NULL_HANDLE){
                     vkDestroyImage(m_context.device, m_image, m_context.allocationCallbacks);
                     m_image = VK_NULL_HANDLE;
@@ -417,14 +419,66 @@ Texture::~Texture(){
     m_allocator.unregisterTextureNativeIdentity(registeredNativeImage, *this);
 }
 
+bool Texture::descriptionMatchesCreation()const noexcept{
+    return VulkanTextureDetail::TextureDescriptionsEqual(m_desc, m_creationDesc);
+}
+
+bool Texture::hasPartiallyKnownRetainedSubresourceState()const{
+    if(!m_creationDesc.keepInitialState)
+        return false;
+
+    const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels)
+        * static_cast<usize>(m_creationDesc.arraySize)
+    ;
+    if(subresourceCount == 0u)
+        return false;
+
+    ScopedLock lock(m_retainedSubresourceStatesMutex);
+    const usize trackedSubresourceCount = Min(subresourceCount, m_retainedSubresourceStates.size());
+    bool hasKnownState = false;
+    bool hasUnknownState = trackedSubresourceCount < subresourceCount;
+    for(usize subresourceIndex = 0u; subresourceIndex < trackedSubresourceCount; ++subresourceIndex){
+        if(m_retainedSubresourceStates[subresourceIndex] != 0u)
+            hasKnownState = true;
+        else
+            hasUnknownState = true;
+
+        if(hasKnownState && hasUnknownState)
+            return true;
+    }
+    return false;
+}
+
+Object Texture::getNativeHandle(ObjectType objectType){
+    if(objectType == ObjectTypes::VK_Image){
+        ScopedLock bindingLock(m_memoryBindingMutex);
+        return Object(m_image);
+    }
+    return Object(nullptr);
+}
+
+Object Texture::getNativeView(
+    ObjectType objectType,
+    Format::Enum format,
+    TextureSubresourceSet subresources,
+    TextureDimension::Enum dimension,
+    bool
+){
+    if(objectType == ObjectTypes::VK_ImageView)
+        return getView(subresources, dimension, format);
+    if(objectType == ObjectTypes::VK_Image)
+        return getNativeHandle(objectType);
+    return nullptr;
+}
+
 VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format){
     if(dimension == TextureDimension::Unknown)
-        dimension = m_desc.dimension;
+        dimension = m_creationDesc.dimension;
 
     if(format == Format::UNKNOWN)
-        format = m_desc.format;
+        format = m_creationDesc.format;
 
-    TextureSubresourceSet resolvedSubresources = subresources.resolve(m_desc, TextureSubresourceMipResolve::Range);
+    TextureSubresourceSet resolvedSubresources = subresources.resolve(m_creationDesc, TextureSubresourceMipResolve::Range);
     if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: invalid subresource range"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image view: invalid subresource range"));
@@ -499,45 +553,25 @@ void Texture::releaseRevokedNativeImageIdentity(const VkImage expectedNativeImag
     m_allocator.unregisterTextureNativeIdentity(expectedNativeImage, *this);
 }
 
-bool Texture::hasPartiallyKnownRetainedSubresourceState()const{
-    if(!m_desc.keepInitialState)
-        return false;
-
-    const usize subresourceCount = static_cast<usize>(m_desc.mipLevels) * static_cast<usize>(m_desc.arraySize);
-    if(subresourceCount == 0u)
-        return false;
-
-    ScopedLock lock(m_retainedSubresourceStatesMutex);
-    const usize trackedSubresourceCount = Min(subresourceCount, m_retainedSubresourceStates.size());
-    bool hasKnownState = false;
-    bool hasUnknownState = trackedSubresourceCount < subresourceCount;
-    for(usize subresourceIndex = 0u; subresourceIndex < trackedSubresourceCount; ++subresourceIndex){
-        if(m_retainedSubresourceStates[subresourceIndex] != 0u)
-            hasKnownState = true;
-        else
-            hasUnknownState = true;
-
-        if(hasKnownState && hasUnknownState)
-            return true;
-    }
-    return false;
-}
-
 void Texture::initializeRetainedSubresourceStates(const bool known){
-    const usize subresourceCount = static_cast<usize>(m_desc.mipLevels) * static_cast<usize>(m_desc.arraySize);
+    const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels)
+        * static_cast<usize>(m_creationDesc.arraySize)
+    ;
     ScopedLock lock(m_retainedSubresourceStatesMutex);
     m_retainedSubresourceStates.assign(subresourceCount, known ? 1u : 0u);
 }
 
 bool Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel){
     if(
-        !m_desc.keepInitialState
-        || arraySlice >= m_desc.arraySize
-        || mipLevel >= m_desc.mipLevels
+        !m_creationDesc.keepInitialState
+        || arraySlice >= m_creationDesc.arraySize
+        || mipLevel >= m_creationDesc.mipLevels
     )
         return false;
 
-    const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_desc.mipLevels) + static_cast<usize>(mipLevel);
+    const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_creationDesc.mipLevels)
+        + static_cast<usize>(mipLevel)
+    ;
     ScopedLock lock(m_retainedSubresourceStatesMutex);
     NWB_ASSERT(index < m_retainedSubresourceStates.size());
     return index < m_retainedSubresourceStates.size() && m_retainedSubresourceStates[index] != 0u;
@@ -545,13 +579,15 @@ bool Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const
 
 void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, const MipLevel mipLevel, const bool known){
     if(
-        !m_desc.keepInitialState
-        || arraySlice >= m_desc.arraySize
-        || mipLevel >= m_desc.mipLevels
+        !m_creationDesc.keepInitialState
+        || arraySlice >= m_creationDesc.arraySize
+        || mipLevel >= m_creationDesc.mipLevels
     )
         return;
 
-    const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_desc.mipLevels) + static_cast<usize>(mipLevel);
+    const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(m_creationDesc.mipLevels)
+        + static_cast<usize>(mipLevel)
+    ;
     ScopedLock lock(m_retainedSubresourceStatesMutex);
     NWB_ASSERT(index < m_retainedSubresourceStates.size());
     if(index >= m_retainedSubresourceStates.size())
@@ -567,37 +603,24 @@ void VulkanDetail::MarkRetainedTextureSubresourceStateKnownForTesting(
     const MipLevel mipLevel
 ){
     if(
-        !texture.m_desc.keepInitialState
-        || arraySlice >= texture.m_desc.arraySize
-        || mipLevel >= texture.m_desc.mipLevels
+        !texture.m_creationDesc.keepInitialState
+        || arraySlice >= texture.m_creationDesc.arraySize
+        || mipLevel >= texture.m_creationDesc.mipLevels
     )
         return;
 
-    const usize subresourceCount = static_cast<usize>(texture.m_desc.mipLevels) * static_cast<usize>(texture.m_desc.arraySize);
-    const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(texture.m_desc.mipLevels) + static_cast<usize>(mipLevel);
+    const usize subresourceCount = static_cast<usize>(texture.m_creationDesc.mipLevels)
+        * static_cast<usize>(texture.m_creationDesc.arraySize)
+    ;
+    const usize index = static_cast<usize>(arraySlice) * static_cast<usize>(texture.m_creationDesc.mipLevels)
+        + static_cast<usize>(mipLevel)
+    ;
     ScopedLock lock(texture.m_retainedSubresourceStatesMutex);
     if(texture.m_retainedSubresourceStates.size() != subresourceCount)
         texture.m_retainedSubresourceStates.assign(subresourceCount, 0u);
     texture.m_retainedSubresourceStates[index] = 1u;
 }
 #endif
-
-Object Texture::getNativeHandle(ObjectType objectType){
-    if(objectType == ObjectTypes::VK_Image){
-        ScopedLock bindingLock(m_memoryBindingMutex);
-        return Object(m_image);
-    }
-    return Object(nullptr);
-}
-
-Object Texture::getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool){
-    if(objectType == ObjectTypes::VK_ImageView)
-        return getView(subresources, dimension, format);
-    if(objectType == ObjectTypes::VK_Image)
-        return getNativeHandle(objectType);
-    return nullptr;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

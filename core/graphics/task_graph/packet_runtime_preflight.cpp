@@ -7,6 +7,7 @@
 #include "task_graph.h"
 
 #include <core/graphics/backend_selection.h>
+#include <core/graphics/vulkan/texture_resource_detail.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -164,10 +165,13 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             const CommandListResourceStateHandoff::TextureState& state = initialStates->m_textureStates[stateIndex];
             if(!state.texture)
                 continue;
-            const TextureDesc& description = state.texture->getDescription();
+            const TextureDesc& description = state.texture->getCreationDescription();
             if(
-                state.state == ResourceStates::Unknown
-                || !m_device.isTextureReadyForGpuUse(state.texture)
+                !GraphicsBackend::VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state)
+                || !m_device.isTextureReadyForGpuUse(
+                    state.texture,
+                    GraphicsBackend::VulkanTextureDetail::RequiredImageUsageForResourceStates(state.state)
+                )
                 || state.mipLevel >= description.mipLevels
                 || state.arraySlice >= description.arraySize
                 || !validateOwnership(
@@ -202,11 +206,14 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             if(
                 state.texture
                 && (
-                    state.state == ResourceStates::Unknown
-                    || !m_device.isTextureReadyForGpuUse(state.texture)
+                    !GraphicsBackend::VulkanTextureDetail::IsTextureResourceStateMaskValid(state.state)
+                    || !m_device.isTextureReadyForGpuUse(
+                        state.texture,
+                        GraphicsBackend::VulkanTextureDetail::RequiredImageUsageForResourceStates(state.state)
+                    )
                     || !validateOwnership(
                         state.queueSharing,
-                        state.texture->getDescription().queueSharing,
+                        state.texture->getCreationDescription().queueSharing,
                         state.ownerQueue,
                         state.releaseDestinationQueue
                     )
@@ -271,7 +278,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
     const auto validateTextureRange = [](Texture* const texture, const TextureSubresourceSet& sourceRange){
         if(!texture)
             return false;
-        const TextureDesc& description = texture->getDescription();
+        const TextureDesc& description = texture->getCreationDescription();
         const TextureSubresourceSet range = sourceRange.resolve(description, TextureSubresourceMipResolve::Range);
         return range.numMipLevels != 0u
             && range.numArraySlices != 0u
@@ -291,7 +298,8 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         ;
     };
     const auto validateResourceReady = [&](const GpuGraphResourceId resourceID,
-                                           ResourceStates::Mask& outPermanentState){
+                                           ResourceStates::Mask& outPermanentState,
+                                           const ResourceStates::Mask requiredState = ResourceStates::Unknown){
         outPermanentState = ResourceStates::Unknown;
         if(!graph.validResource(resourceID))
             return false;
@@ -307,9 +315,16 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         case GpuGraphResourceType::Texture:{
             Texture* const texture = graph.textureForResource(resourceID);
             return texture
+                && (
+                    requiredState == ResourceStates::Unknown
+                    || GraphicsBackend::VulkanTextureDetail::IsTextureResourceStateMaskValid(requiredState)
+                )
                 && texture->getDeviceGeneration() == compiledGraph.deviceGeneration()
-                && texture->getDescription().queueSharing == resource.queueSharing
-                && m_device.isTextureReadyForGpuUse(texture)
+                && texture->getCreationDescription().queueSharing == resource.queueSharing
+                && m_device.isTextureReadyForGpuUse(
+                    texture,
+                    GraphicsBackend::VulkanTextureDetail::RequiredImageUsageForResourceStates(requiredState)
+                )
                 && permanentTextureState(texture, outPermanentState)
             ;
         }
@@ -350,7 +365,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             return false;
 
         ResourceStates::Mask permanentState = ResourceStates::Unknown;
-        if(!validateResourceReady(resourceID, permanentState))
+        if(!validateResourceReady(resourceID, permanentState, requiredState))
             return false;
         return permanentState == ResourceStates::Unknown || permanentState == requiredState;
     };
@@ -381,7 +396,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
             if(permanentState != ResourceStates::Unknown)
                 return true;
             const TextureSubresourceSet range = barrier.range.textureSubresources.resolve(
-                texture->getDescription(),
+                texture->getCreationDescription(),
                 TextureSubresourceMipResolve::Range
             );
             for(ArraySlice arraySlice = range.baseArraySlice;
@@ -473,6 +488,11 @@ bool GpuNativePacketRecorder::preflightPacketResources(
                 || (!ownershipRelease && !ownershipAcquire && barrier.destinationQueue != packet.queue)
             )
                 return false;
+            if(barrier.before != ResourceStates::Unknown){
+                ResourceStates::Mask ignoredPermanentState = ResourceStates::Unknown;
+                if(!validateResourceReady(barrier.resource, ignoredPermanentState, barrier.before))
+                    return false;
+            }
             if(
                 barrier.after != ResourceStates::Unknown
                 && !validateResourceState(barrier.resource, barrier.after)

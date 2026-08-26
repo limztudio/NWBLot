@@ -2,8 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "backend.h"
 #include "command_validation.h"
+#include "backend.h"
+#include "texture_resource_detail.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,11 +81,11 @@ bool CommandList::validateFramebufferForRendering(
             rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment is not ready for GPU access"));
             return false;
         }
-        if(requireRenderTargetUsage && !texture->m_desc.isRenderTarget){
+        if(requireRenderTargetUsage && !texture->m_creationDesc.isRenderTarget){
             rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment lacks render-target usage"));
             return false;
         }
-        if(requireShadingRateUsage && !texture->m_desc.isShadingRateSurface){
+        if(requireShadingRateUsage && !texture->m_creationDesc.isShadingRateSurface){
             rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment lacks shading-rate usage"));
             return false;
         }
@@ -92,13 +93,16 @@ bool CommandList::validateFramebufferForRendering(
             rejectCommandRecording(operationName, NWB_TEXT("only depth/stencil attachments may be read-only"));
             return false;
         }
-        if(!VulkanDetail::IsFramebufferAttachmentSubresourceSetValid(texture->m_desc, attachment.subresources)){
+        if(!VulkanDetail::IsFramebufferAttachmentSubresourceSetValid(
+            texture->m_creationDesc,
+            attachment.subresources
+        )){
             rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment subresource metadata is invalid"));
             return false;
         }
 
         const TextureSubresourceSet resolved = attachment.subresources.resolve(
-            texture->m_desc,
+            texture->m_creationDesc,
             TextureSubresourceMipResolve::Range
         );
         if(resolved.numMipLevels != 1u || resolved.numArraySlices == 0u){
@@ -106,8 +110,11 @@ bool CommandList::validateFramebufferForRendering(
             return false;
         }
 
-        const Format::Enum format = attachment.format == Format::UNKNOWN ? texture->m_desc.format : attachment.format;
-        if(format != texture->m_desc.format){
+        const Format::Enum format = attachment.format == Format::UNKNOWN
+            ? texture->m_creationDesc.format
+            : attachment.format
+        ;
+        if(format != texture->m_creationDesc.format){
             rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment format overrides are unsupported"));
             return false;
         }
@@ -130,14 +137,14 @@ bool CommandList::validateFramebufferForRendering(
         }
 
         if(requireFramebufferExtent){
-            const u32 width = Max(texture->m_desc.width >> resolved.baseMipLevel, 1u);
-            const u32 height = Max(texture->m_desc.height >> resolved.baseMipLevel, 1u);
+            const u32 width = Max(texture->m_creationDesc.width >> resolved.baseMipLevel, 1u);
+            const u32 height = Max(texture->m_creationDesc.height >> resolved.baseMipLevel, 1u);
             if(
                 width != framebufferInfo.width
                 || height != framebufferInfo.height
                 || resolved.numArraySlices != framebufferInfo.arraySize
-                || texture->m_desc.sampleCount != framebufferInfo.sampleCount
-                || texture->m_desc.sampleQuality != framebufferInfo.sampleQuality
+                || texture->m_creationDesc.sampleCount != framebufferInfo.sampleCount
+                || texture->m_creationDesc.sampleQuality != framebufferInfo.sampleQuality
             ){
                 rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment extent or sampling is inconsistent"));
                 return false;
@@ -145,7 +152,7 @@ bool CommandList::validateFramebufferForRendering(
         }
 
         const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(
-            texture->m_desc,
+            texture->m_creationDesc,
             resolved
         );
         if(viewDimension == TextureDimension::Unknown){
@@ -202,7 +209,7 @@ bool CommandList::validateFramebufferForRendering(
     for(usize colorIndex = 0u; colorIndex < framebufferDesc.colorAttachments.size(); ++colorIndex){
         const FramebufferAttachment& colorAttachment = framebufferDesc.colorAttachments[colorIndex];
         const TextureSubresourceSet colorRange = colorAttachment.subresources.resolve(
-            colorAttachment.texture->m_desc,
+            colorAttachment.texture->m_creationDesc,
             TextureSubresourceMipResolve::Range
         );
         for(usize priorIndex = 0u; priorIndex < colorIndex; ++priorIndex){
@@ -210,7 +217,7 @@ bool CommandList::validateFramebufferForRendering(
             if(priorAttachment.texture != colorAttachment.texture)
                 continue;
             const TextureSubresourceSet priorRange = priorAttachment.subresources.resolve(
-                priorAttachment.texture->m_desc,
+                priorAttachment.texture->m_creationDesc,
                 TextureSubresourceMipResolve::Range
             );
             if(VulkanDetail::TextureSubresourceRangesOverlap(colorRange, priorRange)){
@@ -220,7 +227,7 @@ bool CommandList::validateFramebufferForRendering(
         }
         if(framebufferDesc.depthAttachment.texture == colorAttachment.texture){
             const TextureSubresourceSet depthRange = framebufferDesc.depthAttachment.subresources.resolve(
-                framebufferDesc.depthAttachment.texture->m_desc,
+                framebufferDesc.depthAttachment.texture->m_creationDesc,
                 TextureSubresourceMipResolve::Range
             );
             if(VulkanDetail::TextureSubresourceRangesOverlap(colorRange, depthRange)){
@@ -247,11 +254,11 @@ bool CommandList::prepareFramebufferForRendering(
         if(!attachment.texture)
             return true;
         const TextureSubresourceSet resolved = attachment.subresources.resolve(
-            attachment.texture->m_desc,
+            attachment.texture->m_creationDesc,
             TextureSubresourceMipResolve::Range
         );
         const TextureDimension::Enum viewDimension = VulkanDetail::GetFramebufferAttachmentViewDimension(
-            attachment.texture->m_desc,
+            attachment.texture->m_creationDesc,
             resolved
         );
         if(
@@ -312,9 +319,17 @@ bool CommandList::validateViewportState(
 bool CommandList::validateTextureForGpuState(
     Texture* const texture,
     const ResourceStates::Mask requiredState,
-    const tchar* const operationName
+    const tchar* const operationName,
+    const VkImageUsageFlags explicitRequiredUsage
 )noexcept{
-    if(!m_device.isTextureReadyForGpuUse(texture)){
+    if(!VulkanTextureDetail::IsTextureResourceStateMaskValid(requiredState)){
+        rejectCommandRecording(operationName, NWB_TEXT("state is invalid for a texture"));
+        return false;
+    }
+    const VkImageUsageFlags requiredUsage = explicitRequiredUsage
+        | VulkanTextureDetail::RequiredImageUsageForResourceStates(requiredState)
+    ;
+    if(!m_device.isTextureReadyForGpuUse(texture, requiredUsage)){
         rejectCommandRecording(operationName, NWB_TEXT("texture is not ready for GPU access"));
         return false;
     }

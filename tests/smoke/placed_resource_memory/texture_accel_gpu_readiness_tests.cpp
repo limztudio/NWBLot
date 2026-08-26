@@ -269,6 +269,100 @@ TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsUnboundTextureBeforeThunk
     EXPECT_EQ(recordedGraph.find(packet), nullptr);
 }
 
+TEST_F(GpuResourceReadinessTest, PacketPreflightRejectsInvalidGraphInitialTextureState){
+    auto& device = GpuResourceReadinessTest::device();
+    const TextureDesc desc = TextureDesc()
+        .setWidth(16u)
+        .setHeight(16u)
+        .setFormat(Format::RGBA8_UNORM)
+        .setInitialState(ResourceStates::Common)
+    ;
+    TextureHandle texture = device.createHandleForNativeTexture(
+        GraphicsBackend::ObjectTypes::VK_Image,
+        Object(static_cast<u64>(0x71a00001u)),
+        desc
+    );
+    ASSERT_TRUE(texture);
+    ASSERT_TRUE(device.isTextureReadyForGpuUse(texture.get(), VK_IMAGE_USAGE_SAMPLED_BIT));
+    ASSERT_FALSE(device.isTextureReadyForGpuUse(texture.get(), VK_IMAGE_USAGE_TRANSFER_SRC_BIT));
+
+    GpuTaskGraph graph(GpuResourceReadinessTest::arena());
+    const GpuGraphResourceId resource = graph.importTexture(
+        texture,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/gpu_readiness/unsupported_initial_texture"))
+            .setMarkerLabel("Unsupported Initial Texture")
+            .setType(GpuGraphResourceType::Texture)
+            .setInitialState(ResourceStates::VertexBuffer)
+    );
+    ASSERT_TRUE(resource.valid());
+    GpuTaskResourceRange range;
+    range.textureSubresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
+    const GpuTaskResourceUse use{
+        .resource = resource,
+        .range = range,
+        .requiredState = ResourceStates::ShaderResource,
+        .access = GpuTaskResourceAccess::Read,
+    };
+    GpuTaskDesc taskDesc;
+    taskDesc
+        .setIdentity(Name("tests/gpu_readiness/unsupported_initial_texture_task"))
+        .setMarkerLabel("Unsupported Initial Texture Task")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setResourceUses(&use, 1u)
+    ;
+    bool recorded = false;
+    u32 discardedCount = 0u;
+    const GpuTaskId task = graph.addTask<PacketPreflightProbeTask>(
+        taskDesc,
+        PacketPreflightProbeTask::Payload{
+            .recorded = &recorded,
+            .discardedCount = &discardedCount,
+        }
+    );
+    ASSERT_TRUE(task.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    GpuTaskGraphAnalysis analysis(GpuResourceReadinessTest::arena());
+    GpuTaskGraphQueueAssignments assignments(GpuResourceReadinessTest::arena());
+    GpuCompiledGraph compiledGraph(GpuResourceReadinessTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/gpu_readiness/unsupported_initial_texture_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+    ASSERT_NE(compiledTask, nullptr);
+    const GpuCompiledBarrier* const barriers = compiledGraph.taskPrologueBarriers(task);
+    ASSERT_NE(barriers, nullptr);
+    ASSERT_EQ(compiledTask->prologueBarrierCount, 1u);
+    EXPECT_EQ(barriers[0u].type, GpuCompiledBarrierType::TextureTransition);
+    EXPECT_EQ(barriers[0u].before, ResourceStates::VertexBuffer);
+    EXPECT_EQ(barriers[0u].after, ResourceStates::ShaderResource);
+    EXPECT_TRUE(barriers[0u].isGraphInitialState);
+
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+    GpuRecordedGraph recordedGraph(GpuResourceReadinessTest::arena());
+    GpuCommandIrCapture capture(GpuResourceReadinessTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    EXPECT_FALSE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = packet },
+        recordedGraph,
+        &capture
+    ));
+    EXPECT_FALSE(recorded);
+    EXPECT_EQ(discardedCount, 1u);
+    EXPECT_EQ(capture.recordCount(), 0u);
+    EXPECT_EQ(capture.recordingAttemptGeneration(), 0u);
+    EXPECT_EQ(recordedGraph.find(packet), nullptr);
+}
+
 
 TEST_F(GpuResourceReadinessTest, OrderedUploadCopyDestConflictRejectsMergedPacketBeforePrefixAndStaging){
     auto& device = GpuResourceReadinessTest::device();

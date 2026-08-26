@@ -1381,19 +1381,31 @@ class Texture final : public RefCounter<GraphicsResource>, NoCopy{
 
 
 public:
-    Texture(const VulkanContext& context, VulkanAllocator& allocator);
+    Texture(const VulkanContext& context, VulkanAllocator& allocator, const TextureDesc& creationDesc);
     ~Texture();
 
 
 public:
     [[nodiscard]] const TextureDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] const TextureDesc& getCreationDescription()const noexcept{ return m_creationDesc; }
+    [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     // True when accepted retained-state publication covers only a strict subset of this texture's subresources.
     [[nodiscard]] bool hasPartiallyKnownRetainedSubresourceState()const;
     Object getNativeHandle(ObjectType objectType);
-    Object getNativeView(ObjectType objectType, Format::Enum format, TextureSubresourceSet subresources, TextureDimension::Enum dimension, bool);
+    Object getNativeView(
+        ObjectType objectType,
+        Format::Enum format,
+        TextureSubresourceSet subresources,
+        TextureDimension::Enum dimension,
+        bool
+    );
 
-    [[nodiscard]] VkImageView getView(const TextureSubresourceSet& subresources, TextureDimension::Enum dimension, Format::Enum format);
+    [[nodiscard]] VkImageView getView(
+        const TextureSubresourceSet& subresources,
+        TextureDimension::Enum dimension,
+        Format::Enum format
+    );
 
 
 private:
@@ -1406,6 +1418,7 @@ private:
 
 private:
     TextureDesc m_desc;
+    const TextureDesc m_creationDesc;
     VulkanDetail::TextureFormatBlockLayout m_formatLayout;
     VkImageAspectFlags m_aspectMask = 0;
 
@@ -2787,7 +2800,8 @@ private:
     [[nodiscard]] bool validateTextureForGpuState(
         Texture* texture,
         ResourceStates::Mask requiredState,
-        const tchar* operationName
+        const tchar* operationName,
+        VkImageUsageFlags requiredUsage = 0u
     )noexcept;
     [[nodiscard]] bool validateBufferForGpuState(
         Buffer* buffer,
@@ -3056,7 +3070,10 @@ public:
     [[nodiscard]] MemoryRequirements getTextureMemoryRequirements(Texture* texture);
     bool bindTextureMemory(Texture* texture, Heap* heap, u64 offset);
     // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
-    [[nodiscard]] bool isTextureReadyForGpuUse(Texture* texture)const noexcept;
+    [[nodiscard]] bool isTextureReadyForGpuUse(
+        Texture* texture,
+        VkImageUsageFlags requiredUsage = 0u
+    )const noexcept;
     // The caller owns native binding and lifetime. Only one live Texture wrapper may name a VkImage per Device.
     [[nodiscard]] TextureHandle createHandleForNativeTexture(ObjectType objectType, Object texture, const TextureDesc& desc);
 #if !defined(NWB_FINAL)

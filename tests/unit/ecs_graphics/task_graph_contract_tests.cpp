@@ -1049,7 +1049,7 @@ TEST(EcsGraphics, UiFreshTextureImportsPreserveNativeOrigins){
     }
     EXPECT_TRUE(ContainsText(
         uiTextures,
-        "__hidden_ui::TextureResourceDesc(resource.texture->getDescription(), resource.initialUploadAccepted)"
+        "__hidden_ui::TextureResourceDesc(resource.texture->getCreationDescription(), resource.initialUploadAccepted)"
     ));
     EXPECT_TRUE(ContainsText(uiTextures, "m_textureUploadBatch.add(*textureData, &resource->initialUploadAccepted)"));
     EXPECT_TRUE(ContainsText(ui, ".textureInitialUploadAccepted = textureResource->initialUploadAccepted,"));
@@ -1057,7 +1057,7 @@ TEST(EcsGraphics, UiFreshTextureImportsPreserveNativeOrigins){
     EXPECT_TRUE(ContainsText(
         ui,
         "__hidden_ui::TextureResourceDesc(\n"
-        "                    drawCommand.texture->getDescription(),\n"
+        "                    drawCommand.texture->getCreationDescription(),\n"
         "                    drawCommand.textureInitialUploadAccepted\n"
         "                )"
     ));

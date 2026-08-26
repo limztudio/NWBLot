@@ -182,7 +182,15 @@ void CommandList::clearColorTexture(
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
         return;
     }
-    const TextureDesc& desc = texture.m_desc;
+    const VkImageUsageFlags requiredUsage = m_renderPassActive
+        ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+        : VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    ;
+    if(!m_device.isTextureReadyForGpuUse(textureResource, requiredUsage)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear"));
+        return;
+    }
+    const TextureDesc& desc = texture.m_creationDesc;
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
@@ -247,7 +255,7 @@ void CommandList::clearColorTexture(
     setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
     if(m_commandRecordingFailed)
         return;
-    if(texture.m_desc.dimension != TextureDimension::Texture3D && resolvedSubresources.numArraySlices > 1u){
+    if(texture.m_creationDesc.dimension != TextureDimension::Texture3D && resolvedSubresources.numArraySlices > 1u){
         Alloc::ScratchArena scratchArena(VulkanArenaScope::s_TextureClearArena);
         Vector<VkImageSubresourceRange, Alloc::ScratchArena> ranges(resolvedSubresources.numArraySlices, scratchArena);
         VulkanTextureDetail::BuildArrayLayerImageSubresourceRanges(resolvedSubresources, VK_IMAGE_ASPECT_COLOR_BIT, ranges);
@@ -299,7 +307,7 @@ void CommandList::clearColorTextureBox(
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
         return;
     }
-    const TextureDesc& desc = texture.m_desc;
+    const TextureDesc& desc = texture.m_creationDesc;
 
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(desc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
@@ -335,6 +343,14 @@ void CommandList::clearColorTextureBox(
     );
     if(VulkanTextureDetail::TextureClearBoxEmpty(baseResolvedBox))
         return;
+    const VkImageUsageFlags requiredUsage = m_renderPassActive
+        ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+        : VK_IMAGE_USAGE_TRANSFER_DST_BIT
+    ;
+    if(!m_device.isTextureReadyForGpuUse(textureResource, requiredUsage)){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear"));
+        return;
+    }
     if(blockCompressed && desc.sampleCount != 1u){
         rejectCommandRecording(
             s_OperationName,

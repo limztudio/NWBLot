@@ -45,7 +45,7 @@ namespace __hidden_gpu_packet_runtime_recording{
         if(!texture)
             return false;
 
-        const TextureDesc& description = texture->getDescription();
+        const TextureDesc& description = texture->getCreationDescription();
         const TextureSubresourceSet subresources = barrier.range.textureSubresources.resolve(
             description,
             TextureSubresourceMipResolve::Range

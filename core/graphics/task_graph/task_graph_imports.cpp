@@ -122,8 +122,10 @@ GpuGraphResourceId GpuTaskGraph::importResource(const GpuGraphResourceDesc& desc
 GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, const GpuGraphResourceDesc& desc){
     if(!texture || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphResourceType::Texture)
         return {};
+    if(!texture->descriptionMatchesCreation())
+        return {};
 
-    const TextureDesc& textureDesc = texture->getDescription();
+    const TextureDesc& textureDesc = texture->getCreationDescription();
     if(!__hidden_gpu_task_graph_imports::CompatibleRetainedExternalFinalState(
         textureDesc.keepInitialState,
         textureDesc.initialState,

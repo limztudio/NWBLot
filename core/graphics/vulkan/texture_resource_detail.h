@@ -28,6 +28,20 @@ namespace VulkanTextureDetail{
 
 
 inline constexpr u32 s_TextureCubeLayerCount = 6u;
+inline constexpr ResourceStates::Mask s_ValidTextureResourceStates =
+    ResourceStates::Common
+    | ResourceStates::ShaderResource
+    | ResourceStates::UnorderedAccess
+    | ResourceStates::RenderTarget
+    | ResourceStates::DepthWrite
+    | ResourceStates::DepthRead
+    | ResourceStates::CopyDest
+    | ResourceStates::CopySource
+    | ResourceStates::ResolveDest
+    | ResourceStates::ResolveSource
+    | ResourceStates::Present
+    | ResourceStates::ShadingRateSurface
+;
 struct TextureCreateMetadata{
     VkFormat format = VK_FORMAT_UNDEFINED;
     VulkanDetail::TextureFormatBlockLayout formatLayout;
@@ -37,6 +51,61 @@ struct TextureCreateMetadata{
     VkImageCreateFlags flags = 0;
     VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_1_BIT;
 };
+
+[[nodiscard]] inline bool TextureDescriptionsEqual(const TextureDesc& lhs, const TextureDesc& rhs)noexcept{
+    return
+        lhs.name == rhs.name
+        && NWB_MEMCMP(&lhs.clearValue, &rhs.clearValue, sizeof(Color)) == 0
+        && lhs.width == rhs.width
+        && lhs.height == rhs.height
+        && lhs.depth == rhs.depth
+        && lhs.arraySize == rhs.arraySize
+        && lhs.mipLevels == rhs.mipLevels
+        && lhs.sampleCount == rhs.sampleCount
+        && lhs.sampleQuality == rhs.sampleQuality
+        && lhs.initialState == rhs.initialState
+        && lhs.format == rhs.format
+        && lhs.dimension == rhs.dimension
+        && lhs.queueSharing == rhs.queueSharing
+        && lhs.isShaderResource == rhs.isShaderResource
+        && lhs.isRenderTarget == rhs.isRenderTarget
+        && lhs.isUAV == rhs.isUAV
+        && lhs.isTypeless == rhs.isTypeless
+        && lhs.isShadingRateSurface == rhs.isShadingRateSurface
+        && lhs.isVirtual == rhs.isVirtual
+        && lhs.useClearValue == rhs.useClearValue
+        && lhs.keepInitialState == rhs.keepInitialState
+    ;
+}
+
+[[nodiscard]] constexpr bool IsTextureResourceStateMaskValid(const ResourceStates::Mask states)noexcept{
+    return states != ResourceStates::Unknown && (states & ~s_ValidTextureResourceStates) == 0u;
+}
+
+[[nodiscard]] constexpr bool IsTextureCreationStateMaskValid(const ResourceStates::Mask states)noexcept{
+    return states == ResourceStates::Unknown || IsTextureResourceStateMaskValid(states);
+}
+
+[[nodiscard]] inline VkImageUsageFlags RequiredImageUsageForResourceStates(
+    const ResourceStates::Mask states
+)noexcept{
+    VkImageUsageFlags usage = 0u;
+    if(states & ResourceStates::ShaderResource)
+        usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    if(states & ResourceStates::UnorderedAccess)
+        usage |= VK_IMAGE_USAGE_STORAGE_BIT;
+    if(states & ResourceStates::RenderTarget)
+        usage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    if(states & (ResourceStates::DepthRead | ResourceStates::DepthWrite))
+        usage |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    if(states & (ResourceStates::CopySource | ResourceStates::ResolveSource))
+        usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    if(states & (ResourceStates::CopyDest | ResourceStates::ResolveDest))
+        usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    if(states & ResourceStates::ShadingRateSurface)
+        usage |= VK_IMAGE_USAGE_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR;
+    return usage;
+}
 
 inline u32 GetMaxMipLevels(const TextureDesc& desc){
     const u32 depth = desc.dimension == TextureDimension::Texture3D ? desc.depth : 1u;
@@ -201,7 +270,8 @@ inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, co
 
 [[nodiscard]] inline bool IsTextureImageInfoConsistent(
     const TextureDesc& desc,
-    const VkImageCreateInfo& imageInfo
+    const VkImageCreateInfo& imageInfo,
+    const VkImageUsageFlags requiredUsage = 0u
 )noexcept{
     VkImageType expectedImageType = VK_IMAGE_TYPE_MAX_ENUM;
     if(
@@ -215,9 +285,10 @@ inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, co
     if(expectedFormat == VK_FORMAT_UNDEFINED)
         return false;
     const VkImageAspectFlags expectedAspectMask = VulkanDetail::GetImageAspectMask(GetFormatInfo(desc.format));
-    const VkImageUsageFlags requiredUsage = PickImageUsage(desc, expectedAspectMask)
+    const VkImageUsageFlags descriptionUsage = (
+        PickImageUsage(desc, expectedAspectMask)
         & ~(VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)
-    ;
+    ) | RequiredImageUsageForResourceStates(desc.initialState);
     const VkImageCreateFlags requiredFlags = PickImageFlags(desc);
     return
         imageInfo.sType == VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO
@@ -230,7 +301,7 @@ inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, co
         && imageInfo.arrayLayers == desc.arraySize
         && imageInfo.samples == VulkanDetail::GetSampleCountFlagBits(desc.sampleCount)
         && imageInfo.tiling == VK_IMAGE_TILING_OPTIMAL
-        && (imageInfo.usage & requiredUsage) == requiredUsage
+        && (imageInfo.usage & (descriptionUsage | requiredUsage)) == (descriptionUsage | requiredUsage)
         && (imageInfo.flags & requiredFlags) == requiredFlags
         && (imageInfo.flags & VK_IMAGE_CREATE_SUBSAMPLED_BIT_EXT) == 0u
         && imageInfo.initialLayout == VK_IMAGE_LAYOUT_UNDEFINED
@@ -278,6 +349,8 @@ inline bool ValidateTextureCreateDesc(
     TextureCreateMetadata& outMetadata
 ){
     outMetadata = {};
+    if(!IsTextureCreationStateMaskValid(desc.initialState))
+        return ReportTextureCreateDescError(operationName, NWB_TEXT("initial state is invalid for a texture"), assertFailure);
     if(!VulkanDetail::ValidateTextureShape(desc, operationName)){
         if(assertFailure)
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: invalid texture shape"), operationName);
@@ -315,6 +388,14 @@ inline bool ValidateTextureCreateDesc(
         return ReportTextureCreateDescError(operationName, NWB_TEXT("multisampled texture mip levels must be 1"), assertFailure);
 
     outMetadata.usage = PickImageUsage(desc, outMetadata.aspectMask);
+    const VkImageUsageFlags requiredInitialUsage = RequiredImageUsageForResourceStates(desc.initialState);
+    if((outMetadata.usage & requiredInitialUsage) != requiredInitialUsage){
+        return ReportTextureCreateDescError(
+            operationName,
+            NWB_TEXT("initial state requires an undeclared image usage"),
+            assertFailure
+        );
+    }
     outMetadata.flags = PickImageFlags(desc);
     outMetadata.sampleCount = VulkanDetail::GetSampleCountFlagBits(desc.sampleCount);
     return true;

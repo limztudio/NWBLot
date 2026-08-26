@@ -247,7 +247,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
             return false;
         }
 
-        const TextureDesc& textureDesc = texture->getDescription();
+        const TextureDesc& textureDesc = texture->getCreationDescription();
         if(textureDesc.sampleCount != 1u){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write rejected a multisampled bindless image."));
             return false;

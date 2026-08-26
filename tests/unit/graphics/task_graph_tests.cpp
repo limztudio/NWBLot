@@ -203,6 +203,45 @@ struct ImportedTexturePair{
     return graph.importResource(desc);
 }
 
+[[nodiscard]] Graphics::GpuGraphResourceId AddPresentationTexture(
+    TestArena& testArena,
+    Graphics::GraphicsBackend::VulkanContext& context,
+    Graphics::GraphicsBackend::VulkanAllocator& allocator,
+    Graphics::GpuTaskGraph& graph,
+    const Name& identity,
+    const AStringView label,
+    const Graphics::ResourceStates::Mask initialState,
+    const Graphics::ResourceStates::Mask externalFinalState = Graphics::ResourceStates::Present,
+    const Graphics::GpuPhysicalQueueId externalFinalReleaseDestinationQueue = {}
+){
+    Graphics::Texture* const textureObject = NewArenaObject<Graphics::Texture>(
+        testArena.arena,
+        context,
+        allocator,
+        Graphics::TextureDesc()
+            .setName(identity)
+            .setInRenderTarget(true)
+            .setInitialState(initialState)
+    );
+    if(!textureObject)
+        return {};
+    Graphics::TextureHandle texture(
+        textureObject,
+        Graphics::TextureHandle::deleter_type(&testArena.arena),
+        AdoptRef
+    );
+    return graph.importTexture(
+        texture,
+        Graphics::GpuGraphResourceDesc{}
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(initialState)
+            .setExternalFinalState(externalFinalState)
+            .setExternalFinalReleaseDestinationQueue(externalFinalReleaseDestinationQueue)
+    );
+}
+
 [[nodiscard]] Graphics::GpuGraphResourceId AddBufferMetadata(
     Graphics::GpuTaskGraph& graph,
     const Name& identity,
@@ -14931,13 +14970,24 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
 
 TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
     TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId backbuffer = AddHazardDomain(
+    const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
+        testArena,
+        context,
+        allocator,
         graph,
         Name("tests/task_graph/presentation_backbuffer"),
-        "Presentation Back Buffer"
+        "Presentation Back Buffer",
+        Graphics::ResourceStates::Unknown
     );
     ASSERT_TRUE(backbuffer.valid());
+    EXPECT_NE(graph.textureForResource(backbuffer), nullptr);
+    EXPECT_EQ(graph.resourceAt(backbuffer.index).initialState, Graphics::ResourceStates::Unknown);
+    EXPECT_EQ(graph.resourceAt(backbuffer.index).externalFinalState, Graphics::ResourceStates::Present);
 
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
@@ -14955,7 +15005,7 @@ TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
         Graphics::GpuTaskResourceUse{
             .resource = backbuffer,
             .range = {},
-            .requiredState = Graphics::ResourceStates::Present,
+            .requiredState = Graphics::ResourceStates::RenderTarget,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
     };
@@ -15062,11 +15112,93 @@ TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
     EXPECT_EQ(endpoint->backBuffer, backbuffer);
     EXPECT_EQ(endpoint->packet, terminalPacket);
     EXPECT_EQ(endpoint->queue, queues[0].id);
+
+    const Graphics::GpuCompiledTask* const compiledOverlay = compiledGraph.findTask(overlay);
+    ASSERT_NE(compiledOverlay, nullptr);
+    const Graphics::GpuCompiledBarrier* const overlayEpilogue = compiledGraph.taskEpilogueBarriers(overlay);
+    ASSERT_NE(overlayEpilogue, nullptr);
+    bool foundPresentExport = false;
+    for(u32 barrierIndex = 0u; barrierIndex < compiledOverlay->epilogueBarrierCount; ++barrierIndex){
+        const Graphics::GpuCompiledBarrier& barrier = overlayEpilogue[barrierIndex];
+        foundPresentExport = foundPresentExport || (
+            barrier.type == Graphics::GpuCompiledBarrierType::TextureStateExport
+            && barrier.resource == backbuffer
+            && barrier.before == Graphics::ResourceStates::RenderTarget
+            && barrier.after == Graphics::ResourceStates::Present
+            && barrier.sourceQueue == queues[0u].id
+            && barrier.destinationQueue == queues[0u].id
+        );
+    }
+    EXPECT_TRUE(foundPresentExport);
+}
+
+
+TEST(GpuTaskGraph, AcceptsPresentationEndpointFromPresentAcquisitionState){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
+        testArena,
+        context,
+        allocator,
+        graph,
+        Name("tests/task_graph/present_acquisition_backbuffer"),
+        "Present Acquisition Back Buffer",
+        Graphics::ResourceStates::Present
+    );
+    ASSERT_TRUE(backbuffer.valid());
+
+    const Graphics::GpuTaskResourceUse writerUse{
+        .resource = backbuffer,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::RenderTarget,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    Graphics::GpuTaskDesc writerDesc;
+    writerDesc
+        .setIdentity(Name("tests/task_graph/present_acquisition_writer"))
+        .setMarkerLabel("Present Acquisition Writer")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setResourceUses(&writerUse, 1u)
+    ;
+    const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+    ASSERT_TRUE(writer.valid());
+    ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+        .producer = writer,
+        .backBuffer = backbuffer,
+    }));
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_NE(compiledGraph.presentEndpoint(), nullptr);
+    EXPECT_EQ(compiledGraph.presentEndpoint()->producer, writer);
+    EXPECT_EQ(compiledGraph.presentEndpoint()->backBuffer, backbuffer);
+    EXPECT_EQ(graph.resourceAt(backbuffer.index).initialState, Graphics::ResourceStates::Present);
+    EXPECT_EQ(graph.resourceAt(backbuffer.index).externalFinalState, Graphics::ResourceStates::Present);
 }
 
 
 TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
     TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
     const Graphics::GpuTaskGraphQueueTopology topology{
         .queues = &queue,
@@ -15100,10 +15232,14 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
     {
         Graphics::GpuTaskGraph graph(testArena.arena);
         Graphics::GpuTaskGraph foreignGraph(testArena.arena);
-        const Graphics::GpuGraphResourceId backbuffer = AddHazardDomain(
+        const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
+            testArena,
+            context,
+            allocator,
             graph,
             Name("tests/task_graph/presentation_declaration_backbuffer"),
-            "Presentation Declaration Back Buffer"
+            "Presentation Declaration Back Buffer",
+            Graphics::ResourceStates::Unknown
         );
         const Graphics::GpuTaskId producer = AddTaskWithQueue(
             graph,
@@ -15111,10 +15247,14 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
             "Presentation Declaration Terminal",
             graphicsRequest
         );
-        const Graphics::GpuGraphResourceId foreignBackbuffer = AddHazardDomain(
+        const Graphics::GpuGraphResourceId foreignBackbuffer = AddPresentationTexture(
+            testArena,
+            context,
+            allocator,
             foreignGraph,
             Name("tests/task_graph/presentation_declaration_foreign_backbuffer"),
-            "Presentation Declaration Foreign Back Buffer"
+            "Presentation Declaration Foreign Back Buffer",
+            Graphics::ResourceStates::Present
         );
         const Graphics::GpuTaskId foreignProducer = AddTaskWithQueue(
             foreignGraph,
@@ -15146,6 +15286,47 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
         ASSERT_NE(endpoint, nullptr);
         EXPECT_EQ(endpoint->producer, producer);
         EXPECT_EQ(endpoint->backBuffer, backbuffer);
+    }
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId backbuffer = AddHazardDomain(
+            graph,
+            Name("tests/task_graph/presentation_hazard_domain_backbuffer"),
+            "Presentation Hazard Domain Back Buffer"
+        );
+        ASSERT_TRUE(backbuffer.valid());
+        const Graphics::GpuTaskResourceUse writerUse{
+            .resource = backbuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::RenderTarget,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc writerDesc;
+        writerDesc
+            .setIdentity(Name("tests/task_graph/presentation_hazard_domain_writer"))
+            .setMarkerLabel("Presentation Hazard Domain Writer")
+            .setQueue(graphicsRequest)
+            .setResourceUses(&writerUse, 1u)
+        ;
+        const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+        ASSERT_TRUE(writer.valid());
+        const Graphics::GpuTaskId producer = AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/presentation_hazard_domain_terminal"),
+            "Presentation Hazard Domain Terminal",
+            graphicsRequest,
+            {},
+            {},
+            &writer,
+            1u
+        );
+        ASSERT_TRUE(producer.valid());
+        ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = producer,
+            .backBuffer = backbuffer,
+        }));
+        expectInvalidEndpoint(graph, producer, {}, backbuffer);
     }
 
     {
@@ -15195,16 +15376,20 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
 
     {
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId backbuffer = AddHazardDomain(
+        const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
+            testArena,
+            context,
+            allocator,
             graph,
             Name("tests/task_graph/presentation_non_graphics_backbuffer"),
-            "Presentation Non-Graphics Back Buffer"
+            "Presentation Non-Graphics Back Buffer",
+            Graphics::ResourceStates::Unknown
         );
         ASSERT_TRUE(backbuffer.valid());
         const Graphics::GpuTaskResourceUse writerUse{
             .resource = backbuffer,
             .range = {},
-            .requiredState = Graphics::ResourceStates::Present,
+            .requiredState = Graphics::ResourceStates::RenderTarget,
             .access = Graphics::GpuTaskResourceAccess::Write,
         };
         Graphics::GpuTaskDesc writerDesc;
@@ -15238,10 +15423,14 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
 
     {
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId backbuffer = AddHazardDomain(
+        const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
+            testArena,
+            context,
+            allocator,
             graph,
             Name("tests/task_graph/presentation_unwritten_backbuffer"),
-            "Presentation Unwritten Back Buffer"
+            "Presentation Unwritten Back Buffer",
+            Graphics::ResourceStates::Present
         );
         ASSERT_TRUE(backbuffer.valid());
         const Graphics::GpuTaskId producer = AddTaskWithQueue(
@@ -15260,16 +15449,20 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
 
     {
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId backbuffer = AddHazardDomain(
+        const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
+            testArena,
+            context,
+            allocator,
             graph,
             Name("tests/task_graph/presentation_disconnected_backbuffer"),
-            "Presentation Disconnected Back Buffer"
+            "Presentation Disconnected Back Buffer",
+            Graphics::ResourceStates::Unknown
         );
         ASSERT_TRUE(backbuffer.valid());
         const Graphics::GpuTaskResourceUse writerUse{
             .resource = backbuffer,
             .range = {},
-            .requiredState = Graphics::ResourceStates::Present,
+            .requiredState = Graphics::ResourceStates::RenderTarget,
             .access = Graphics::GpuTaskResourceAccess::Write,
         };
         Graphics::GpuTaskDesc writerDesc;
@@ -15297,16 +15490,20 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
 
     {
         Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId backbuffer = AddHazardDomain(
+        const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
+            testArena,
+            context,
+            allocator,
             graph,
             Name("tests/task_graph/presentation_mixed_writer_backbuffer"),
-            "Presentation Mixed Writer Back Buffer"
+            "Presentation Mixed Writer Back Buffer",
+            Graphics::ResourceStates::Present
         );
         ASSERT_TRUE(backbuffer.valid());
         const Graphics::GpuTaskResourceUse writerUse{
             .resource = backbuffer,
             .range = {},
-            .requiredState = Graphics::ResourceStates::Present,
+            .requiredState = Graphics::ResourceStates::RenderTarget,
             .access = Graphics::GpuTaskResourceAccess::Write,
         };
         Graphics::GpuTaskDesc reachableWriterDesc;
@@ -15344,13 +15541,411 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
     }
 }
 
+
+TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const auto expectInvalidEndpoint = [&](
+        Graphics::GpuTaskGraph& graph,
+        const Graphics::GpuTaskId producer,
+        const Graphics::GpuTaskId relatedTask,
+        const Graphics::GpuGraphResourceId resource
+    ){
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint);
+        EXPECT_EQ(analysis.diagnostic().task, producer);
+        EXPECT_EQ(analysis.diagnostic().relatedTask, relatedTask);
+        EXPECT_EQ(analysis.diagnostic().resource, resource);
+        EXPECT_FALSE(analysis.valid());
+        EXPECT_FALSE(assignments.valid());
+        EXPECT_FALSE(compiledGraph.valid());
+    };
+    const auto addTerminal = [&](Graphics::GpuTaskGraph& graph, const Graphics::GpuTaskId dependency){
+        return AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/presentation_texture_contract_terminal"),
+            "Presentation Texture Contract Terminal",
+            graphicsRequest,
+            {},
+            {},
+            dependency.valid() ? &dependency : nullptr,
+            dependency.valid() ? 1u : 0u
+        );
+    };
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId backbuffer = graph.importResource(
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/presentation_metadata_backbuffer"))
+                .setMarkerLabel("Presentation Metadata Back Buffer")
+                .setType(Graphics::GpuGraphResourceType::Texture)
+                .setInitialState(Graphics::ResourceStates::Unknown)
+                .setExternalFinalState(Graphics::ResourceStates::Present)
+        );
+        ASSERT_TRUE(backbuffer.valid());
+        EXPECT_FALSE(graph.resourceAt(backbuffer.index).hasBackendResource);
+        const Graphics::GpuTaskResourceUse writerUse{
+            .resource = backbuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::RenderTarget,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc writerDesc;
+        writerDesc
+            .setIdentity(Name("tests/task_graph/presentation_metadata_writer"))
+            .setMarkerLabel("Presentation Metadata Writer")
+            .setQueue(graphicsRequest)
+            .setResourceUses(&writerUse, 1u)
+        ;
+        const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+        const Graphics::GpuTaskId producer = addTerminal(graph, writer);
+        ASSERT_TRUE(writer.valid());
+        ASSERT_TRUE(producer.valid());
+        ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = producer,
+            .backBuffer = backbuffer,
+        }));
+        expectInvalidEndpoint(graph, producer, {}, backbuffer);
+    }
+
+    const auto expectStateContractRejected = [&](
+        const Graphics::ResourceStates::Mask initialState,
+        const Graphics::ResourceStates::Mask externalFinalState,
+        const Graphics::GpuPhysicalQueueId externalFinalReleaseDestinationQueue,
+        const Name& identity,
+        const AStringView label
+    ){
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
+            testArena,
+            context,
+            allocator,
+            graph,
+            identity,
+            label,
+            initialState,
+            externalFinalState,
+            externalFinalReleaseDestinationQueue
+        );
+        ASSERT_TRUE(backbuffer.valid());
+        const Graphics::GpuTaskResourceUse writerUse{
+            .resource = backbuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::RenderTarget,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc writerDesc;
+        writerDesc
+            .setIdentity(Name("tests/task_graph/presentation_state_contract_writer"))
+            .setMarkerLabel("Presentation State Contract Writer")
+            .setQueue(graphicsRequest)
+            .setResourceUses(&writerUse, 1u)
+        ;
+        const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+        const Graphics::GpuTaskId producer = addTerminal(graph, writer);
+        ASSERT_TRUE(writer.valid());
+        ASSERT_TRUE(producer.valid());
+        ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = producer,
+            .backBuffer = backbuffer,
+        }));
+        expectInvalidEndpoint(graph, producer, {}, backbuffer);
+    };
+    expectStateContractRejected(
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceStates::Present,
+        {},
+        Name("tests/task_graph/presentation_common_initial_backbuffer"),
+        "Presentation Common Initial Back Buffer"
+    );
+    expectStateContractRejected(
+        Graphics::ResourceStates::Unknown,
+        Graphics::ResourceStates::Unknown,
+        {},
+        Name("tests/task_graph/presentation_missing_final_backbuffer"),
+        "Presentation Missing Final Back Buffer"
+    );
+    expectStateContractRejected(
+        Graphics::ResourceStates::Unknown,
+        Graphics::ResourceStates::ShaderResource,
+        {},
+        Name("tests/task_graph/presentation_wrong_final_backbuffer"),
+        "Presentation Wrong Final Back Buffer"
+    );
+    expectStateContractRejected(
+        Graphics::ResourceStates::Unknown,
+        Graphics::ResourceStates::Present,
+        queue.id,
+        Name("tests/task_graph/presentation_external_release_backbuffer"),
+        "Presentation External Release Back Buffer"
+    );
+
+    const auto expectPresentWriteRejected = [&](
+        const Graphics::ResourceStates::Mask writerState,
+        const Name& identity,
+        const AStringView label
+    ){
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
+            testArena,
+            context,
+            allocator,
+            graph,
+            identity,
+            label,
+            Graphics::ResourceStates::Unknown
+        );
+        ASSERT_TRUE(backbuffer.valid());
+        const Graphics::GpuTaskResourceUse writerUse{
+            .resource = backbuffer,
+            .range = {},
+            .requiredState = writerState,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc writerDesc;
+        writerDesc
+            .setIdentity(Name("tests/task_graph/presentation_present_state_writer"))
+            .setMarkerLabel("Presentation Present State Writer")
+            .setQueue(graphicsRequest)
+            .setResourceUses(&writerUse, 1u)
+        ;
+        const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+        const Graphics::GpuTaskId producer = addTerminal(graph, writer);
+        ASSERT_TRUE(writer.valid());
+        ASSERT_TRUE(producer.valid());
+        ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = producer,
+            .backBuffer = backbuffer,
+        }));
+        expectInvalidEndpoint(graph, producer, writer, backbuffer);
+    };
+    expectPresentWriteRejected(
+        Graphics::ResourceStates::Present,
+        Name("tests/task_graph/presentation_exact_present_write_backbuffer"),
+        "Presentation Exact Present Write Back Buffer"
+    );
+    expectPresentWriteRejected(
+        Graphics::ResourceStates::RenderTarget | Graphics::ResourceStates::Present,
+        Name("tests/task_graph/presentation_combined_present_write_backbuffer"),
+        "Presentation Combined Present Write Back Buffer"
+    );
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
+            testArena,
+            context,
+            allocator,
+            graph,
+            Name("tests/task_graph/presentation_read_only_backbuffer"),
+            "Presentation Read Only Back Buffer",
+            Graphics::ResourceStates::Present
+        );
+        ASSERT_TRUE(backbuffer.valid());
+        const Graphics::GpuTaskResourceUse readerUse{
+            .resource = backbuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        };
+        Graphics::GpuTaskDesc readerDesc;
+        readerDesc
+            .setIdentity(Name("tests/task_graph/presentation_read_only_reader"))
+            .setMarkerLabel("Presentation Read Only Reader")
+            .setQueue(graphicsRequest)
+            .setResourceUses(&readerUse, 1u)
+        ;
+        const Graphics::GpuTaskId reader = graph.addTask(readerDesc);
+        const Graphics::GpuTaskId producer = addTerminal(graph, reader);
+        ASSERT_TRUE(reader.valid());
+        ASSERT_TRUE(producer.valid());
+        ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = producer,
+            .backBuffer = backbuffer,
+        }));
+        expectInvalidEndpoint(graph, producer, {}, backbuffer);
+    }
+
+    {
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
+            testArena,
+            context,
+            allocator,
+            graph,
+            Name("tests/task_graph/presentation_later_read_backbuffer"),
+            "Presentation Later Read Back Buffer",
+            Graphics::ResourceStates::Unknown
+        );
+        ASSERT_TRUE(backbuffer.valid());
+        const Graphics::GpuTaskResourceUse writerUse{
+            .resource = backbuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::RenderTarget,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc writerDesc;
+        writerDesc
+            .setIdentity(Name("tests/task_graph/presentation_later_read_writer"))
+            .setMarkerLabel("Presentation Later Read Writer")
+            .setQueue(graphicsRequest)
+            .setResourceUses(&writerUse, 1u)
+        ;
+        const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+        const Graphics::GpuTaskId producer = addTerminal(graph, writer);
+        ASSERT_TRUE(writer.valid());
+        ASSERT_TRUE(producer.valid());
+        const Graphics::GpuTaskResourceUse laterReaderUse{
+            .resource = backbuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        };
+        Graphics::GpuTaskDesc laterReaderDesc;
+        laterReaderDesc
+            .setIdentity(Name("tests/task_graph/presentation_later_read_reader"))
+            .setMarkerLabel("Presentation Later Read Reader")
+            .setQueue(graphicsRequest)
+            .setResourceUses(&laterReaderUse, 1u)
+        ;
+        const Graphics::GpuTaskId laterReader = graph.addTask(laterReaderDesc);
+        ASSERT_TRUE(laterReader.valid());
+        ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+            .producer = producer,
+            .backBuffer = backbuffer,
+        }));
+        expectInvalidEndpoint(graph, producer, laterReader, backbuffer);
+    }
+}
+
+
+TEST(GpuTaskGraph, RejectsPresentationEndpointUsersOnDifferentGraphicsQueuesDuringFinalization){
+    TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
+        testArena,
+        context,
+        allocator,
+        graph,
+        Name("tests/task_graph/presentation_queue_mismatch_backbuffer"),
+        "Presentation Queue Mismatch Back Buffer",
+        Graphics::ResourceStates::Unknown
+    );
+    ASSERT_TRUE(backbuffer.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint writerScheduling;
+    writerScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    writerScheduling.allowSameClassQueueRouting = true;
+    writerScheduling.allowPacketMerge = false;
+    const Graphics::GpuTaskResourceUse writerUse{
+        .resource = backbuffer,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::RenderTarget,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    Graphics::GpuTaskDesc writerDesc;
+    writerDesc
+        .setIdentity(Name("tests/task_graph/presentation_queue_mismatch_writer"))
+        .setMarkerLabel("Presentation Queue Mismatch Writer")
+        .setQueue(graphicsRequest)
+        .setScheduling(writerScheduling)
+        .setResourceUses(&writerUse, 1u)
+    ;
+    const Graphics::GpuTaskId writer = graph.addTask(writerDesc);
+    ASSERT_TRUE(writer.valid());
+
+    Graphics::GpuTaskSchedulingHint producerScheduling;
+    producerScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    producerScheduling.allowSameClassQueueRouting = true;
+    producerScheduling.allowPacketMerge = false;
+    Graphics::GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/task_graph/presentation_queue_mismatch_terminal"))
+        .setMarkerLabel("Presentation Queue Mismatch Terminal")
+        .setQueue(graphicsRequest)
+        .setScheduling(producerScheduling)
+        .setDependencies(&writer, 1u)
+    ;
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    ASSERT_TRUE(producer.valid());
+    ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{
+        .producer = producer,
+        .backBuffer = backbuffer,
+    }));
+
+    Graphics::GpuPhysicalQueueInfo secondaryGraphicsQueue = GraphicsQueue(1u);
+    secondaryGraphicsQueue.queueIndex = 1u;
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        secondaryGraphicsQueue,
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    EXPECT_TRUE(analysis.validFor(graph));
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
+    const Graphics::GpuTaskQueueAssignment* const writerAssignment = assignments.find(writer);
+    const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
+    ASSERT_NE(writerAssignment, nullptr);
+    ASSERT_NE(producerAssignment, nullptr);
+    EXPECT_EQ(writerAssignment->queue, queues[0u].id);
+    EXPECT_EQ(producerAssignment->queue, queues[1u].id);
+    EXPECT_NE(writerAssignment->queue, producerAssignment->queue);
+
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    EXPECT_TRUE(analysis.validFor(graph));
+    EXPECT_TRUE(assignments.validFor(graph));
+    EXPECT_FALSE(compiledGraph.valid());
+}
+
 TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
     TestArena testArena;
+    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+    Core::Alloc::ThreadPool threadPool(0u);
+    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, threadPool, 1u);
+    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId backbuffer = AddHazardDomain(
+    const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
+        testArena,
+        context,
+        allocator,
         graph,
         Name("tests/task_graph/setup_upload_backbuffer"),
-        "Setup Upload Back Buffer"
+        "Setup Upload Back Buffer",
+        Graphics::ResourceStates::Unknown
     );
     const Graphics::GpuGraphResourceId vertices = AddBufferMetadata(
         graph,
@@ -15405,7 +16000,7 @@ TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
         Graphics::GpuTaskResourceUse{
             .resource = backbuffer,
             .range = {},
-            .requiredState = Graphics::ResourceStates::Present,
+            .requiredState = Graphics::ResourceStates::RenderTarget,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
     };
@@ -15491,7 +16086,7 @@ TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
         Graphics::GpuTaskResourceUse{
             .resource = backbuffer,
             .range = {},
-            .requiredState = Graphics::ResourceStates::Present,
+            .requiredState = Graphics::ResourceStates::RenderTarget,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
         Graphics::GpuTaskResourceUse{

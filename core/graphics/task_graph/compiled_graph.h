@@ -105,8 +105,9 @@ struct GpuCompiledExternalResourceExport{
     ResourceStates::Mask finalState = ResourceStates::Unknown;
 };
 
-// Immutable presentation completion resolved from a graph declaration. It retains the semantic producer/backbuffer
-// pair along with the compiler-owned packet and physical queue selected for the one native present signal.
+// Immutable presentation completion resolved from a strict typed-texture declaration. It retains the semantic
+// producer/backbuffer pair along with the compiler-owned packet and exact physical queue shared by every backbuffer
+// user before the one native present signal.
 struct GpuCompiledPresentEndpoint{
     GpuTaskId producer;
     GpuGraphResourceId backBuffer;

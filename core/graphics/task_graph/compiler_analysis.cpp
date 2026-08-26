@@ -601,8 +601,17 @@ bool GpuTaskGraphCompiler::analyze(
 
         const GpuTaskGraphTaskView producer = graph.taskAt(endpoint->producer.index);
         const GpuTaskGraphResourceView backBuffer = graph.resourceAt(endpoint->backBuffer.index);
+        const Texture* const backBufferTexture = graph.textureForResource(endpoint->backBuffer);
         if(
-            (backBuffer.type != GpuGraphResourceType::Texture && backBuffer.type != GpuGraphResourceType::HazardDomain)
+            backBuffer.type != GpuGraphResourceType::Texture
+            || !backBuffer.hasBackendResource
+            || !backBufferTexture
+            || backBuffer.externalFinalReleaseDestinationQueue.valid()
+            || (
+                backBuffer.initialState != ResourceStates::Unknown
+                && backBuffer.initialState != ResourceStates::Present
+            )
+            || backBuffer.externalFinalState != ResourceStates::Present
             || !HasCapabilities(
                 producer.queue.requiredCapabilities,
                 GpuQueueCapability::Graphics
@@ -629,10 +638,9 @@ bool GpuTaskGraphCompiler::analyze(
             const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
             for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
                 const GpuTaskResourceUse& use = task.resourceUses[useIndex];
-                if(use.resource != endpoint->backBuffer || !IsWriteAccess(use.access))
+                if(use.resource != endpoint->backBuffer)
                     continue;
 
-                hasBackBufferWriter = true;
                 if(!reachesProducer[task.id.index]){
                     return fail(
                         GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint,
@@ -641,6 +649,20 @@ bool GpuTaskGraphCompiler::analyze(
                         endpoint->backBuffer
                     );
                 }
+                if(!IsWriteAccess(use.access))
+                    continue;
+                if(
+                    use.requiredState == ResourceStates::Unknown
+                    || (use.requiredState & ResourceStates::Present) != ResourceStates::Unknown
+                ){
+                    return fail(
+                        GpuTaskGraphAnalysisStatus::InvalidPresentationEndpoint,
+                        endpoint->producer,
+                        task.id,
+                        endpoint->backBuffer
+                    );
+                }
+                hasBackBufferWriter = true;
             }
         }
         if(!hasBackBufferWriter)

@@ -379,6 +379,19 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
             || queue->queueClass != CommandQueue::Graphics
         )
             return false;
+
+        for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
+            const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
+            for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
+                if(task.resourceUses[useIndex].resource != endpoint->backBuffer)
+                    continue;
+
+                const GpuCompiledTask* const user = FindCompiledTask(compiledPlan, task.id);
+                if(!user || user->queue != producer->queue)
+                    return false;
+                break;
+            }
+        }
         compiledPlan.presentEndpoint = GpuCompiledPresentEndpoint{
             .producer = endpoint->producer,
             .backBuffer = endpoint->backBuffer,

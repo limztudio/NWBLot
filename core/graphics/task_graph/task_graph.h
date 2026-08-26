@@ -109,9 +109,10 @@ struct GpuTaskGraphExternalCompletionView{
     bool hasToken = false;
 };
 
-// One graph-declared presentation completion. The producer is intentionally allowed to contain no direct use of
-// the backbuffer: a terminal timing/finalization task can publish after the earlier backbuffer writers that reach
-// it through ordinary graph dependencies.
+// One graph-declared presentation completion. The backbuffer is a retained typed texture captured in its native
+// Unknown/Present acquisition state and exported only to the Present sink, without a second ownership release.
+// Every declared user must reach the Graphics producer and compile onto its exact physical queue. The producer may
+// omit a direct use so a terminal timing/finalization task can publish after the earlier backbuffer writers.
 struct GpuPresentEndpoint{
     GpuTaskId producer;
     GpuGraphResourceId backBuffer;
@@ -462,9 +463,9 @@ public:
         const GpuGraphPipelineDesc& desc
     );
     [[nodiscard]] GpuExternalCompletionId importExternalCompletion(const GpuExternalCompletionDesc& desc);
-    // One graph may publish one presentation completion. The compiler validates the producer's Graphics routing,
-    // the backbuffer kind, and the complete writer-to-producer dependency closure before exposing it to native
-    // presentation policy.
+    // One graph may publish one presentation completion. The compiler validates the retained typed backbuffer,
+    // its single-sink acquisition/final-state contract, every user-to-producer dependency, at least one real
+    // writer, and exact physical Graphics routing before exposing it to native presentation policy.
     [[nodiscard]] bool declarePresentEndpoint(const GpuPresentEndpoint& endpoint);
     [[nodiscard]] const GpuPresentEndpoint* presentEndpoint()const noexcept{
         return m_hasPresentEndpoint ? &m_presentEndpoint : nullptr;

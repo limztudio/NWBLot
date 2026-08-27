@@ -72,9 +72,10 @@ private:
     Core::GpuTaskTimingHistoryStore m_history;
     Core::GpuTaskTimingHistorySnapshot m_snapshot;
     Vector<PendingSample, Core::Alloc::GlobalArena> m_pendingSamples;
+    Futex m_lifecycleMutex;
     Futex m_mutex;
     Core::GpuTaskTimingFeedbackPolicy m_policy;
-    Core::GpuTimingSampleAttribution m_nextAttribution = Core::s_NoGpuTimingSampleAttribution;
+    Core::GpuTimingSampleSubscription m_subscription;
     bool m_active = false;
 };
 

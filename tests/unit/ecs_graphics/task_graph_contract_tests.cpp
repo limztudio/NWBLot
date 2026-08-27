@@ -3245,9 +3245,11 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
 
     AString systemHeaderSource;
     AString timingFeedbackHeaderSource;
+    AString timingFeedbackSource;
     AString taskGraphSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", systemHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_timing_feedback.h", timingFeedbackHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "task_timing_feedback.cpp", timingFeedbackSource));
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
@@ -3263,9 +3265,17 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     ));
     const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
     const AStringView timingFeedbackHeader(timingFeedbackHeaderSource.data(), timingFeedbackHeaderSource.size());
+    const AStringView timingFeedback(timingFeedbackSource.data(), timingFeedbackSource.size());
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
 
     EXPECT_TRUE(ContainsText(timingFeedbackHeader, "class RendererTaskTimingFeedback final"));
+    EXPECT_TRUE(ContainsText(timingFeedbackHeader, "Core::GpuTimingSampleSubscription m_subscription"));
+    EXPECT_FALSE(ContainsText(timingFeedbackHeader, "m_nextAttribution"));
+    EXPECT_TRUE(ContainsText(timingFeedback, "subscribeSampleListener(Core::GpuTimingSampleListener{"));
+    EXPECT_TRUE(ContainsText(timingFeedback, "unsubscribeSampleListener(subscription)"));
+    EXPECT_TRUE(ContainsText(timingFeedback, "setFeedbackCollectionEnabled(subscription, policy.enabled)"));
+    EXPECT_TRUE(ContainsText(timingFeedback, "m_graphics.gpuTiming().allocateSampleAttribution()"));
+    EXPECT_TRUE(ContainsText(timingFeedback, "!m_active || !m_policy.enabled || !m_subscription.valid()"));
     EXPECT_TRUE(ContainsText(systemHeader, "RendererTaskTimingFeedback m_deferredTaskTimingFeedback"));
 
     const usize lightingOffset = taskGraph.find("void RendererSystem::buildDeferredLightingTaskGraph");

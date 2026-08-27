@@ -119,17 +119,24 @@ class ScopedGpuTimingSampleListener final : NoCopy{
 public:
     ScopedGpuTimingSampleListener(GpuTimingRecorder& timing, GpuTimingSampleCapture& capture)
         : m_timing(timing)
-    {
-        m_timing.setSampleListener(GpuTimingSampleListener{
+        , m_subscription(m_timing.subscribeSampleListener(GpuTimingSampleListener{
             .context = &capture,
             .invoke = &GpuTimingSampleCapture::Invoke,
-        });
+        }))
+    {}
+    ~ScopedGpuTimingSampleListener(){ m_timing.unsubscribeSampleListener(m_subscription); }
+
+
+public:
+    [[nodiscard]] bool valid()const noexcept{ return m_subscription.valid(); }
+    [[nodiscard]] bool setFeedbackCollectionEnabled(const bool enabled){
+        return m_timing.setFeedbackCollectionEnabled(m_subscription, enabled);
     }
-    ~ScopedGpuTimingSampleListener(){ m_timing.setSampleListener({}); }
 
 
 private:
     GpuTimingRecorder& m_timing;
+    GpuTimingSampleSubscription m_subscription;
 };
 
 
@@ -1370,7 +1377,9 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingCompletionTracksExactAuxiliaryPhy
     timing.beginFrame(240u);
     GpuTimingSampleCapture completedSamples;
     ScopedGpuTimingSampleListener sampleListener(timing, completedSamples);
-    constexpr GpuTimingSampleAttribution s_AuxiliaryAttribution = 24u;
+    ASSERT_TRUE(sampleListener.valid());
+    const GpuTimingSampleAttribution auxiliaryAttribution = timing.allocateSampleAttribution();
+    ASSERT_TRUE(auxiliaryAttribution.valid());
 
     CommandListParameters parameters;
     parameters.setPhysicalQueue(secondaryInfo->id);
@@ -1386,7 +1395,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingCompletionTracksExactAuxiliaryPhy
                 s_AuxiliaryCompletionScope,
                 nativeDevice,
                 *commandList,
-                s_AuxiliaryAttribution
+                auxiliaryAttribution
             );
             ASSERT_TRUE(measure.valid());
         }
@@ -1418,7 +1427,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingCompletionTracksExactAuxiliaryPhy
     timing.collect(nativeDevice, 241u);
     ASSERT_EQ(completedSamples.sampleCount, 1u);
     EXPECT_EQ(completedSamples.samples[0u].scopeName, s_AuxiliaryCompletionScope.identity);
-    EXPECT_EQ(completedSamples.samples[0u].attribution, s_AuxiliaryAttribution);
+    EXPECT_EQ(completedSamples.samples[0u].attribution, auxiliaryAttribution);
     EXPECT_TRUE(completedSamples.samples[0u].published);
     if(nativeDevice.supportsComparableGpuTimestamps(secondaryInfo->id)){
         EXPECT_TRUE(completedSamples.samples[0u].comparableRange.valid());
@@ -46626,7 +46635,6 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingStatisticsDistinguishSkipsOutcome
         GTEST_SKIP() << "GPU timing statistics: the primary graphics queue does not support timestamps.";
 
     s_scope->setGpuTimingEnabled(false);
-    timing.setFeedbackCollectionEnabled(false);
     timing.resetQueries();
 
     const GpuTimingRecorderStatistics initialStatistics = timing.statistics(device);
@@ -46803,9 +46811,17 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQuer
     ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingFeedbackOnlyScope.identity, device, 1u));
     GpuTimingSampleCapture completedSamples;
     ScopedGpuTimingSampleListener sampleListener(timing, completedSamples);
-    constexpr GpuTimingSampleAttribution s_FeedbackOnlyAttribution = 4u;
+    GpuTimingSampleCapture observingSamples;
+    ScopedGpuTimingSampleListener observingListener(timing, observingSamples);
+    ASSERT_TRUE(sampleListener.valid());
+    ASSERT_TRUE(observingListener.valid());
+    const GpuTimingSampleAttribution feedbackOnlyAttribution = timing.allocateSampleAttribution();
+    ASSERT_TRUE(feedbackOnlyAttribution.valid());
 
-    timing.setFeedbackCollectionEnabled(true);
+    ASSERT_TRUE(sampleListener.setFeedbackCollectionEnabled(true));
+    ASSERT_TRUE(observingListener.setFeedbackCollectionEnabled(true));
+    ASSERT_TRUE(sampleListener.setFeedbackCollectionEnabled(false));
+    ASSERT_TRUE(timing.collectionActive());
     ASSERT_TRUE(graphics.prepareFramePreamble());
 
     auto commandList = device.createCommandList();
@@ -46821,7 +46837,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQuer
                 s_FrameTimingFeedbackOnlyScope,
                 device,
                 *commandList,
-                s_FeedbackOnlyAttribution
+                feedbackOnlyAttribution
             );
             ASSERT_TRUE(timingMeasure.valid());
         }
@@ -46836,12 +46852,17 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQuer
 
     ASSERT_EQ(completedSamples.sampleCount, 1u);
     EXPECT_EQ(completedSamples.samples[0u].scopeName, s_FrameTimingFeedbackOnlyScope.identity);
-    EXPECT_EQ(completedSamples.samples[0u].attribution, s_FeedbackOnlyAttribution);
+    EXPECT_EQ(completedSamples.samples[0u].attribution, feedbackOnlyAttribution);
     EXPECT_TRUE(completedSamples.samples[0u].published);
     EXPECT_GE(completedSamples.samples[0u].durationSeconds, 0.0);
+    ASSERT_EQ(observingSamples.sampleCount, 1u);
+    EXPECT_EQ(observingSamples.samples[0u].scopeName, s_FrameTimingFeedbackOnlyScope.identity);
+    EXPECT_EQ(observingSamples.samples[0u].attribution, feedbackOnlyAttribution);
+    EXPECT_TRUE(observingSamples.samples[0u].published);
     EXPECT_FALSE(timingSink.stats(s_FrameTimingFeedbackOnlyScope.identity).valid());
 
-    timing.setFeedbackCollectionEnabled(false);
+    ASSERT_TRUE(observingListener.setFeedbackCollectionEnabled(false));
+    EXPECT_FALSE(timing.collectionActive());
     timing.resetQueries();
 }
 
@@ -46905,6 +46926,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingAcceptedSubmissionCompletionGates
     ASSERT_TRUE(timing.prepareScopeQueries(s_AcceptedCompletionScope.identity, device, 1u));
     GpuTimingSampleCapture completedSamples;
     ScopedGpuTimingSampleListener sampleListener(timing, completedSamples);
+    ASSERT_TRUE(sampleListener.valid());
 
     timing.beginFrame(230u);
     auto seedCommandList = device.createCommandList();
@@ -46933,7 +46955,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingAcceptedSubmissionCompletionGates
     EXPECT_EQ(completedSamples.sampleCount, 0u);
 
     timing.beginFrame(231u);
-    constexpr GpuTimingSampleAttribution s_AcceptedAttribution = 23u;
+    const GpuTimingSampleAttribution acceptedAttribution = timing.allocateSampleAttribution();
+    ASSERT_TRUE(acceptedAttribution.valid());
     auto acceptedCommandList = device.createCommandList();
     ASSERT_NE(acceptedCommandList.get(), nullptr);
     GpuTimingSubmissionTicket acceptedTicket(timing);
@@ -46946,7 +46969,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingAcceptedSubmissionCompletionGates
                 s_AcceptedCompletionScope,
                 device,
                 *acceptedCommandList,
-                s_AcceptedAttribution
+                acceptedAttribution
             );
             ASSERT_TRUE(acceptedMeasure.valid());
         }
@@ -46989,7 +47012,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingAcceptedSubmissionCompletionGates
     ASSERT_EQ(completedSamples.sampleCount, 1u);
     EXPECT_EQ(completedSamples.samples[0u].scopeName, s_AcceptedCompletionScope.identity);
     EXPECT_EQ(completedSamples.samples[0u].sourceFrameIndex, 231u);
-    EXPECT_EQ(completedSamples.samples[0u].attribution, s_AcceptedAttribution);
+    EXPECT_EQ(completedSamples.samples[0u].attribution, acceptedAttribution);
     EXPECT_TRUE(completedSamples.samples[0u].published);
 
     auto reusableCommandList = device.createCommandList();
@@ -47084,7 +47107,9 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketStaleScopeCannotR
 
     GpuTimingSampleCapture completedSamples;
     ScopedGpuTimingSampleListener sampleListener(timing, completedSamples);
-    constexpr GpuTimingSampleAttribution s_AcceptedTimingAttribution = 21u;
+    ASSERT_TRUE(sampleListener.valid());
+    const GpuTimingSampleAttribution acceptedTimingAttribution = timing.allocateSampleAttribution();
+    ASSERT_TRUE(acceptedTimingAttribution.valid());
     auto acceptedCommandList = device.createCommandList();
     ASSERT_NE(acceptedCommandList.get(), nullptr);
     GpuTimingSubmissionTicket acceptedTicket(timing);
@@ -47097,7 +47122,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketStaleScopeCannotR
                 s_StableSubmissionTicketScope,
                 device,
                 *acceptedCommandList,
-                s_AcceptedTimingAttribution
+                acceptedTimingAttribution
             );
             ASSERT_TRUE(acceptedTiming.valid());
         }
@@ -47113,7 +47138,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketStaleScopeCannotR
     ASSERT_EQ(completedSamples.sampleCount, 1u);
     EXPECT_EQ(completedSamples.samples[0u].scopeName, s_StableSubmissionTicketScope.identity);
     EXPECT_EQ(completedSamples.samples[0u].sourceFrameIndex, 211u);
-    EXPECT_EQ(completedSamples.samples[0u].attribution, s_AcceptedTimingAttribution);
+    EXPECT_EQ(completedSamples.samples[0u].attribution, acceptedTimingAttribution);
     EXPECT_TRUE(completedSamples.samples[0u].published);
     EXPECT_GE(completedSamples.samples[0u].durationSeconds, 0.0);
 
@@ -47156,7 +47181,9 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionStaleScopeCannotR
 
     GpuTimingSampleCapture completedSamples;
     ScopedGpuTimingSampleListener sampleListener(timing, completedSamples);
-    constexpr GpuTimingSampleAttribution s_AcceptedTimingAttribution = 22u;
+    ASSERT_TRUE(sampleListener.valid());
+    const GpuTimingSampleAttribution acceptedTimingAttribution = timing.allocateSampleAttribution();
+    ASSERT_TRUE(acceptedTimingAttribution.valid());
     GpuTimingFrameTransaction acceptedTransaction(timing);
     GpuTimingSubmissionTicket acceptedTicket(timing);
     auto acceptedCommandList = device.createCommandList();
@@ -47168,7 +47195,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionStaleScopeCannotR
             s_StableFrameTransactionScope,
             device,
             *acceptedCommandList,
-            s_AcceptedTimingAttribution
+            acceptedTimingAttribution
         ));
         ASSERT_TRUE(acceptedTransaction.recordEnd(*acceptedCommandList));
         acceptedCommandList->close();
@@ -47192,7 +47219,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionStaleScopeCannotR
     ASSERT_EQ(completedSamples.sampleCount, 1u);
     EXPECT_EQ(completedSamples.samples[0u].scopeName, s_StableFrameTransactionScope.identity);
     EXPECT_EQ(completedSamples.samples[0u].sourceFrameIndex, 221u);
-    EXPECT_EQ(completedSamples.samples[0u].attribution, s_AcceptedTimingAttribution);
+    EXPECT_EQ(completedSamples.samples[0u].attribution, acceptedTimingAttribution);
     EXPECT_TRUE(completedSamples.samples[0u].published);
     EXPECT_GE(completedSamples.samples[0u].durationSeconds, 0.0);
     EXPECT_TRUE(completedSamples.samples[0u].comparableRange.valid());
@@ -47218,8 +47245,11 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
     ASSERT_TRUE(timing.prepareScopeQueries(s_SubmissionTicketScope.identity, device, 1u));
     GpuTimingSampleCapture completedSamples;
     ScopedGpuTimingSampleListener sampleListener(timing, completedSamples);
-    constexpr GpuTimingSampleAttribution s_RejectedTimingAttribution = 1u;
-    constexpr GpuTimingSampleAttribution s_AcceptedTimingAttribution = 2u;
+    ASSERT_TRUE(sampleListener.valid());
+    const GpuTimingSampleAttribution rejectedTimingAttribution = timing.allocateSampleAttribution();
+    const GpuTimingSampleAttribution acceptedTimingAttribution = timing.allocateSampleAttribution();
+    ASSERT_TRUE(rejectedTimingAttribution.valid());
+    ASSERT_TRUE(acceptedTimingAttribution.valid());
 
     auto target = device.createTexture(
         TextureDesc()
@@ -47283,7 +47313,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
                 s_SubmissionTicketScope,
                 device,
                 *producer,
-                s_RejectedTimingAttribution
+                rejectedTimingAttribution
             );
             rejectedTiming.finishMarker();
             producer->endRenderPass();
@@ -47354,7 +47384,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
                 s_SubmissionTicketScope,
                 device,
                 *acceptedCommandList,
-                s_AcceptedTimingAttribution
+                acceptedTimingAttribution
             );
         }
         acceptedCommandList->endRenderPass();
@@ -47368,7 +47398,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
     EXPECT_TRUE(timingSink.stats(s_SubmissionTicketScope.identity).valid());
     ASSERT_EQ(completedSamples.sampleCount, 1u);
     EXPECT_EQ(completedSamples.samples[0u].scopeName, s_SubmissionTicketScope.identity);
-    EXPECT_EQ(completedSamples.samples[0u].attribution, s_AcceptedTimingAttribution);
+    EXPECT_EQ(completedSamples.samples[0u].attribution, acceptedTimingAttribution);
     EXPECT_TRUE(completedSamples.samples[0u].published);
     EXPECT_GE(completedSamples.samples[0u].durationSeconds, 0.0);
 
@@ -47387,7 +47417,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
 
     // Retiring capture before an accepted query is collected must notify the listener with an unusable result. This
     // releases higher-level task attribution without turning an old epoch into a timing sample after reactivation.
-    constexpr GpuTimingSampleAttribution s_RetiredTimingAttribution = 3u;
+    const GpuTimingSampleAttribution retiredTimingAttribution = timing.allocateSampleAttribution();
+    ASSERT_TRUE(retiredTimingAttribution.valid());
     auto retiredCommandList = device.createCommandList();
     ASSERT_NE(retiredCommandList.get(), nullptr);
     GpuTimingSubmissionTicket retiredTicket(timing);
@@ -47403,7 +47434,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
                 s_SubmissionTicketScope,
                 device,
                 *retiredCommandList,
-                s_RetiredTimingAttribution
+                retiredTimingAttribution
             );
         }
         retiredCommandList->endRenderPass();
@@ -47416,7 +47447,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
     s_scope->setGpuTimingEnabled(false);
     ASSERT_EQ(completedSamples.sampleCount, 2u);
     EXPECT_EQ(completedSamples.samples[1u].scopeName, s_SubmissionTicketScope.identity);
-    EXPECT_EQ(completedSamples.samples[1u].attribution, s_RetiredTimingAttribution);
+    EXPECT_EQ(completedSamples.samples[1u].attribution, retiredTimingAttribution);
     EXPECT_FALSE(completedSamples.samples[1u].published);
     EXPECT_EQ(completedSamples.samples[1u].durationSeconds, 0.0);
     EXPECT_FALSE(completedSamples.samples[1u].comparableRange.valid());
@@ -48967,7 +48998,9 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
     auto& timingSink = s_scope->gpuTimingSink();
     GpuTimingSampleCapture completedSamples;
     ScopedGpuTimingSampleListener sampleListener(timing, completedSamples);
-    constexpr GpuTimingSampleAttribution s_RecoveryAttribution = 25u;
+    ASSERT_TRUE(sampleListener.valid());
+    const GpuTimingSampleAttribution recoveryAttribution = timing.allocateSampleAttribution();
+    ASSERT_TRUE(recoveryAttribution.valid());
 
     s_scope->setGpuTimingEnabled(true);
     ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTransactionScope.identity, device, 1u));
@@ -48989,7 +49022,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
             s_FrameTransactionScope,
             device,
             *prefix,
-            s_RecoveryAttribution
+            recoveryAttribution
         ));
         prefix->close();
     }
@@ -49062,7 +49095,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
     timing.collect(device, 91u);
     ASSERT_EQ(completedSamples.sampleCount, 1u);
     EXPECT_EQ(completedSamples.samples[0u].scopeName, s_FrameTransactionScope.identity);
-    EXPECT_EQ(completedSamples.samples[0u].attribution, s_RecoveryAttribution);
+    EXPECT_EQ(completedSamples.samples[0u].attribution, recoveryAttribution);
     EXPECT_FALSE(completedSamples.samples[0u].published);
     EXPECT_FALSE(completedSamples.samples[0u].comparableRange.valid());
 

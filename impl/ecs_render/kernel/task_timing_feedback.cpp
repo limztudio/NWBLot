@@ -28,33 +28,51 @@ RendererTaskTimingFeedback::~RendererTaskTimingFeedback(){
 
 
 void RendererTaskTimingFeedback::activate(){
+    ScopedLock lifecycleLock(m_lifecycleMutex);
+
+    bool feedbackCollectionEnabled = false;
     {
         ScopedLock lock(m_mutex);
         if(m_active)
             return;
+        feedbackCollectionEnabled = m_policy.enabled;
     }
 
-    m_graphics.gpuTiming().setSampleListener(Core::GpuTimingSampleListener{
+    Core::GpuTimingRecorder& timing = m_graphics.gpuTiming();
+    const Core::GpuTimingSampleSubscription subscription = timing.subscribeSampleListener(Core::GpuTimingSampleListener{
         .context = this,
         .invoke = &OnGpuTimingSample,
     });
+    if(!subscription.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback failed to subscribe to GPU timing samples."));
+        return;
+    }
+    if(feedbackCollectionEnabled && !timing.setFeedbackCollectionEnabled(subscription, true)){
+        timing.unsubscribeSampleListener(subscription);
+        NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback failed to enable GPU sample collection."));
+        return;
+    }
 
     ScopedLock lock(m_mutex);
+    m_subscription = subscription;
     m_active = true;
 }
 
 void RendererTaskTimingFeedback::deactivate(){
+    ScopedLock lifecycleLock(m_lifecycleMutex);
+
+    Core::GpuTimingSampleSubscription subscription;
     {
         ScopedLock lock(m_mutex);
         if(!m_active)
             return;
         m_active = false;
+        subscription = m_subscription;
+        m_subscription = {};
     }
 
-    // GpuTimingRecorder serializes listener replacement with an active callback, so no callback can retain this
-    // bridge after the clear returns.
-    m_graphics.gpuTiming().setFeedbackCollectionEnabled(false);
-    m_graphics.gpuTiming().setSampleListener({});
+    // Unsubscription removes only this bridge's collection demand and waits for any callback retaining this context.
+    m_graphics.gpuTiming().unsubscribeSampleListener(subscription);
     reset();
 }
 
@@ -62,11 +80,21 @@ bool RendererTaskTimingFeedback::setPolicy(const Core::GpuTaskTimingFeedbackPoli
     if(!policy.valid())
         return false;
 
+    ScopedLock lifecycleLock(m_lifecycleMutex);
+    Core::GpuTaskTimingFeedbackPolicy previousPolicy;
+    Core::GpuTimingSampleSubscription subscription;
     {
         ScopedLock lock(m_mutex);
+        previousPolicy = m_policy;
         m_policy = policy;
+        if(m_active)
+            subscription = m_subscription;
     }
-    m_graphics.gpuTiming().setFeedbackCollectionEnabled(policy.enabled);
+    if(subscription.valid() && !m_graphics.gpuTiming().setFeedbackCollectionEnabled(subscription, policy.enabled)){
+        ScopedLock lock(m_mutex);
+        m_policy = previousPolicy;
+        return false;
+    }
     return true;
 }
 
@@ -79,21 +107,21 @@ Core::GpuTimingSampleAttribution RendererTaskTimingFeedback::beginSample(
         return Core::s_NoGpuTimingSampleAttribution;
 
     ScopedLock lock(m_mutex);
-    if(!m_active)
+    if(!m_active || !m_policy.enabled || !m_subscription.valid())
         return Core::s_NoGpuTimingSampleAttribution;
 
-    ++m_nextAttribution;
-    if(m_nextAttribution == Core::s_NoGpuTimingSampleAttribution)
-        ++m_nextAttribution;
+    const Core::GpuTimingSampleAttribution attribution = m_graphics.gpuTiming().allocateSampleAttribution();
+    if(!attribution.valid())
+        return Core::s_NoGpuTimingSampleAttribution;
 
     m_pendingSamples.push_back(PendingSample{
-        .attribution = m_nextAttribution,
+        .attribution = attribution,
         .scopeName = scopeName,
         .key = key,
         .expectedQueue = expectedQueue,
         .sourceFrameIndex = m_graphics.getFrameIndex(),
     });
-    return m_nextAttribution;
+    return attribution;
 }
 
 void RendererTaskTimingFeedback::acceptSubmission(

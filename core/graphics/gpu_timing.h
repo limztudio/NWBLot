@@ -23,6 +23,7 @@ class GpuTimingAccumulator;
 class GpuTimingFrameTransaction;
 class GpuTimingMeasure;
 class GpuTimingRecorder;
+class GpuTimingRecorderDiagnosticPeer;
 class GpuTimingSubmissionTicket;
 
 struct GpuTimingScope{
@@ -96,10 +97,48 @@ struct GpuTimingScopeDefinition{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A caller-owned, opaque value retained from recording until the matching accepted GPU query completes. Zero keeps
-// ordinary timing scopes out of the optional completed-sample listener path.
-using GpuTimingSampleAttribution = u64;
-inline constexpr GpuTimingSampleAttribution s_NoGpuTimingSampleAttribution = 0u;
+// A recorder-issued opaque value retained from recording until the matching accepted GPU query completes. The
+// default-invalid value keeps ordinary timing scopes out of the optional completed-sample listener path.
+class GpuTimingSampleAttribution final{
+    friend class GpuTimingRecorder;
+    friend constexpr bool operator==(
+        const GpuTimingSampleAttribution& lhs,
+        const GpuTimingSampleAttribution& rhs
+    )noexcept;
+
+
+public:
+    constexpr GpuTimingSampleAttribution() = default;
+
+
+public:
+    [[nodiscard]] constexpr bool valid()const noexcept{ return m_identity != 0u; }
+
+
+private:
+    constexpr explicit GpuTimingSampleAttribution(const u64 identity)
+        : m_identity(identity)
+    {}
+
+
+private:
+    u64 m_identity = 0u;
+};
+
+inline constexpr bool operator==(
+    const GpuTimingSampleAttribution& lhs,
+    const GpuTimingSampleAttribution& rhs
+)noexcept{
+    return lhs.m_identity == rhs.m_identity;
+}
+inline constexpr bool operator!=(
+    const GpuTimingSampleAttribution& lhs,
+    const GpuTimingSampleAttribution& rhs
+)noexcept{
+    return !(lhs == rhs);
+}
+
+inline constexpr GpuTimingSampleAttribution s_NoGpuTimingSampleAttribution;
 
 struct GpuTimingSample{
     Name scopeName = NAME_NONE;
@@ -114,10 +153,10 @@ struct GpuTimingSample{
     GpuComparableTimestampRange comparableRange;
 };
 
-// The listener context belongs to its caller. setSampleListener() serializes replacement with any active callback,
-// so an external caller may release the previous context after that call returns. A callback may clear or replace
-// itself, but must keep its own context alive until that callback returns. A false GpuTimingSample::published
-// notification only retires caller attribution; it never represents usable timing data.
+// The listener context belongs to its caller. Unsubscription serializes with any active callback, so the caller may
+// release its context after unsubscribeSampleListener() returns. A callback may unsubscribe itself, but must keep its
+// own context alive until that callback returns. A false GpuTimingSample::published notification only retires caller
+// attribution; it never represents usable timing data.
 struct GpuTimingSampleListener{
     void* context = nullptr;
     void (*invoke)(void* context, const GpuTimingSample& sample) = nullptr;
@@ -125,6 +164,47 @@ struct GpuTimingSampleListener{
 
     [[nodiscard]] constexpr bool valid()const noexcept{ return invoke != nullptr; }
 };
+
+// Identifies one independently owned listener registration. Identities are process-unique and are never reused, so
+// delayed dispatch snapshots cannot resolve a removed subscription to a replacement context.
+class GpuTimingSampleSubscription final{
+    friend class GpuTimingRecorder;
+    friend constexpr bool operator==(
+        const GpuTimingSampleSubscription& lhs,
+        const GpuTimingSampleSubscription& rhs
+    )noexcept;
+
+
+public:
+    constexpr GpuTimingSampleSubscription() = default;
+
+
+public:
+    [[nodiscard]] constexpr bool valid()const noexcept{ return m_identity != 0u; }
+
+
+private:
+    constexpr explicit GpuTimingSampleSubscription(const u64 identity)
+        : m_identity(identity)
+    {}
+
+
+private:
+    u64 m_identity = 0u;
+};
+
+inline constexpr bool operator==(
+    const GpuTimingSampleSubscription& lhs,
+    const GpuTimingSampleSubscription& rhs
+)noexcept{
+    return lhs.m_identity == rhs.m_identity;
+}
+inline constexpr bool operator!=(
+    const GpuTimingSampleSubscription& lhs,
+    const GpuTimingSampleSubscription& rhs
+)noexcept{
+    return !(lhs == rhs);
+}
 
 
 namespace GpuTimingScopeSkipReason{
@@ -291,6 +371,7 @@ class GpuTimingRecorder final : NoCopy{
     friend class GpuTimingAccumulator;
     friend class GpuTimingFrameTransaction;
     friend class GpuTimingMeasure;
+    friend class GpuTimingRecorderDiagnosticPeer;
     friend class GpuTimingSubmissionTicket;
 
 private:
@@ -321,7 +402,16 @@ private:
         {}
     };
 
+    struct SampleListenerRecord{
+        GpuTimingSampleSubscription subscription;
+        GpuTimingSampleListener listener;
+        bool feedbackCollectionEnabled = false;
+    };
+
     using OverlapVector = Vector<OverlapRecord, Alloc::GlobalArena>;
+    using SampleListenerVector = Vector<SampleListenerRecord, Alloc::GlobalArena>;
+    using SampleSubscriptionVector = Vector<GpuTimingSampleSubscription, Alloc::GlobalArena>;
+    using SampleVector = Vector<GpuTimingSample, Alloc::GlobalArena>;
 
 
 public:
@@ -330,17 +420,24 @@ public:
 
 public:
     void setQueryCollectionEnabled(bool enabled);
+    // Every valid registration receives attributed samples captured in a dispatch batch. New listeners begin with
+    // the next batch; removing one registration never replaces or clears another consumer.
+    [[nodiscard]] GpuTimingSampleSubscription subscribeSampleListener(const GpuTimingSampleListener& listener);
+    void unsubscribeSampleListener(const GpuTimingSampleSubscription& subscription);
     // A higher-level adaptive policy may collect only the scopes it needs even while general Perf capture is off.
-    // This does not enable Perf publication; it only keeps prepared GPU query pools active for an accepted-sample
-    // listener.
-    void setFeedbackCollectionEnabled(bool enabled);
-    // Callbacks run only for scopes that supplied a non-zero attribution. They run after GpuTimingRecorder's query
-    // state lock has been released, so listeners may safely interact with higher-level timing consumers.
-    void setSampleListener(const GpuTimingSampleListener& listener);
-    [[nodiscard]] bool queryCollectionEnabled()const{ return m_enabled; }
+    // Demand belongs to one subscription, and collection remains active until every requesting subscription clears
+    // its demand. This does not enable Perf publication.
+    [[nodiscard]] bool setFeedbackCollectionEnabled(
+        const GpuTimingSampleSubscription& subscription,
+        bool enabled
+    );
+    // Globally unique attribution identities remain unique across recorder reset, destruction, and recreation.
+    // Allocation is lock-free so packet-recording workers can issue identities without taking listener/query locks.
+    [[nodiscard]] GpuTimingSampleAttribution allocateSampleAttribution()noexcept;
+    [[nodiscard]] bool queryCollectionEnabled()const;
     // True when either normal Perf capture or an adaptive feedback consumer needs query pools to be materialized
     // and reset for the current frame.
-    [[nodiscard]] bool collectionActive()const{ return (m_enabled && m_timing.enabled()) || m_feedbackCollectionEnabled; }
+    [[nodiscard]] bool collectionActive()const;
     [[nodiscard]] GpuTimingRecorderStatistics statistics(const Device& device)const;
     void resetQueries();
     void collect(Device& device);
@@ -412,11 +509,15 @@ private:
         Vector<GpuTimingSample, Alloc::GlobalArena>* completedSamples
     );
     [[nodiscard]] bool submissionCompleted(Device& device, const QueueSubmissionToken& token);
+    [[nodiscard]] SampleListenerRecord* findSampleListenerLocked(
+        const GpuTimingSampleSubscription& subscription
+    )noexcept;
+    void snapshotSampleSubscriptionsLocked(SampleSubscriptionVector& outSubscriptions)const;
     void dispatchCompletedSamples(
-        const Vector<GpuTimingSample, Alloc::GlobalArena>& samples,
-        u64 listenerGeneration
+        const SampleVector& samples,
+        const SampleSubscriptionVector& subscriptions
     );
-    void retirePendingAttributionsLocked(Vector<GpuTimingSample, Alloc::GlobalArena>& outSamples);
+    void retirePendingAttributionsLocked(SampleVector& outSamples);
     void recordTimestampRange(const Name& scopeName, u64 frameIndex, const GpuComparableTimestampRange& range);
     void discardFrameResetLocked();
     void noteSkippedScope(GpuTimingScopeSkipReason::Enum reason);
@@ -425,21 +526,22 @@ private:
 
 
 private:
+    static thread_local GpuTimingSubmissionTicket* s_activeSubmissionTicket;
+
     Alloc::GlobalArena& m_arena;
     Perf::TimingSink& m_timing;
     AccumulatorMap m_accumulators;
     Vector<QueueCompletion, Alloc::GlobalArena> m_queueCompletions;
     OverlapVector m_overlapRecords;
+    SampleListenerVector m_sampleListeners;
+    // Listener mutation may re-enter from a callback. Whenever both recorder locks are needed, acquire this listener
+    // lock first and m_mutex second; no path retains m_mutex while acquiring this lock.
+    RecursiveMutex m_sampleListenerMutex;
     // A submission ticket protects its own rollback list, while this lock serializes every query-pool mutation and
     // recorder-map access. Worker command-list recordings may share a ticket and begin timing scopes concurrently.
     mutable Futex m_mutex;
-    // This intentionally permits callback-driven removal. It serializes listener replacement with each invocation
-    // without retaining m_mutex across external code.
-    RecursiveMutex m_sampleListenerMutex;
-    GpuTimingSampleListener m_sampleListener;
-    Atomic<u64> m_sampleListenerGeneration{ 1u };
-    Atomic<bool> m_hasSampleListener{ false };
     u64 m_currentFrameIndex = 0u;
+    u64 m_feedbackCollectionRequestCount = 0u;
     u32 m_epoch = 1u;
     GpuTimingRecorderStatistics m_statistics;
 #if !defined(NWB_FINAL)
@@ -447,9 +549,6 @@ private:
 #endif
     bool m_accumulatorsActive = false;
     bool m_enabled = false;
-    bool m_feedbackCollectionEnabled = false;
-
-    static thread_local GpuTimingSubmissionTicket* s_activeSubmissionTicket;
 };
 
 

@@ -2,9 +2,44 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/common/test_context.h>
+
 #include <gtest/gtest.h>
 
 #include <core/graphics/gpu_timing.h>
+#include <core/perf/timing.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Narrow diagnostic peer for deterministic CPU validation of private listener-dispatch batch semantics.
+class GpuTimingRecorderDiagnosticPeer final{
+public:
+    static void dispatchSample(GpuTimingRecorder& recorder, const GpuTimingSample& sample){
+        GpuTimingRecorder::SampleVector samples{ recorder.m_arena };
+        GpuTimingRecorder::SampleSubscriptionVector subscriptions{ recorder.m_arena };
+        {
+            ScopedLock lock(recorder.m_sampleListenerMutex);
+
+            recorder.snapshotSampleSubscriptionsLocked(subscriptions);
+        }
+        samples.push_back(sample);
+        recorder.dispatchCompletedSamples(samples, subscriptions);
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,6 +58,164 @@ namespace Tests{
 
 
 namespace __hidden_gpu_timing_tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using TestArena = ::NWB::Tests::TestArena<struct GpuTimingTestsTag>;
+
+
+struct GpuTimingSubscriptionCapture{
+    Core::GpuTimingRecorder* recorder = nullptr;
+    Core::GpuTimingSampleSubscription* subscription = nullptr;
+    Core::GpuTimingSampleSubscription* replacementSubscription = nullptr;
+    GpuTimingSubscriptionCapture* replacementCapture = nullptr;
+    u32 sampleCount = 0u;
+    bool replaceOnFirstSample = false;
+
+
+    static void Invoke(void* const context, const Core::GpuTimingSample&){
+        GpuTimingSubscriptionCapture* const capture = static_cast<GpuTimingSubscriptionCapture*>(context);
+        if(!capture)
+            return;
+
+        ++capture->sampleCount;
+        if(
+            !capture->replaceOnFirstSample
+            || !capture->recorder
+            || !capture->subscription
+            || !capture->replacementSubscription
+            || !capture->replacementCapture
+        )
+            return;
+
+        capture->replaceOnFirstSample = false;
+        capture->recorder->unsubscribeSampleListener(*capture->subscription);
+        *capture->replacementSubscription = capture->recorder->subscribeSampleListener(Core::GpuTimingSampleListener{
+            .context = capture->replacementCapture,
+            .invoke = &Invoke,
+        });
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST(GpuTimingSampleSubscriptions, AggregateIndependentCollectionRequests){
+    TestArena testArena;
+    Core::Perf::TimingRecorder timingSink(testArena.arena);
+    Core::GpuTimingRecorder recorder(testArena.arena, timingSink);
+    GpuTimingSubscriptionCapture firstCapture;
+    GpuTimingSubscriptionCapture secondCapture;
+    const Core::GpuTimingSampleSubscription first = recorder.subscribeSampleListener(Core::GpuTimingSampleListener{
+        .context = &firstCapture,
+        .invoke = &GpuTimingSubscriptionCapture::Invoke,
+    });
+    const Core::GpuTimingSampleSubscription second = recorder.subscribeSampleListener(Core::GpuTimingSampleListener{
+        .context = &secondCapture,
+        .invoke = &GpuTimingSubscriptionCapture::Invoke,
+    });
+
+    ASSERT_TRUE(first.valid());
+    ASSERT_TRUE(second.valid());
+    EXPECT_NE(first, second);
+    EXPECT_FALSE(recorder.collectionActive());
+    ASSERT_TRUE(recorder.setFeedbackCollectionEnabled(first, true));
+    EXPECT_TRUE(recorder.collectionActive());
+    ASSERT_TRUE(recorder.setFeedbackCollectionEnabled(second, true));
+    ASSERT_TRUE(recorder.setFeedbackCollectionEnabled(first, false));
+    EXPECT_TRUE(recorder.collectionActive());
+    ASSERT_TRUE(recorder.setFeedbackCollectionEnabled(first, false));
+    EXPECT_TRUE(recorder.collectionActive());
+
+    recorder.unsubscribeSampleListener(second);
+    EXPECT_FALSE(recorder.collectionActive());
+    EXPECT_FALSE(recorder.setFeedbackCollectionEnabled(second, true));
+    recorder.unsubscribeSampleListener(second);
+    recorder.unsubscribeSampleListener(first);
+}
+
+TEST(GpuTimingSampleSubscriptions, ReplacementStartsWithNextDispatchBatch){
+    TestArena testArena;
+    Core::Perf::TimingRecorder timingSink(testArena.arena);
+    Core::GpuTimingRecorder recorder(testArena.arena, timingSink);
+    Core::GpuTimingSampleSubscription firstSubscription;
+    Core::GpuTimingSampleSubscription secondSubscription;
+    Core::GpuTimingSampleSubscription replacementSubscription;
+    GpuTimingSubscriptionCapture replacementCapture;
+    GpuTimingSubscriptionCapture firstCapture{
+        .recorder = &recorder,
+        .subscription = &firstSubscription,
+        .replacementSubscription = &replacementSubscription,
+        .replacementCapture = &replacementCapture,
+        .replaceOnFirstSample = true,
+    };
+    GpuTimingSubscriptionCapture secondCapture;
+    firstSubscription = recorder.subscribeSampleListener(Core::GpuTimingSampleListener{
+        .context = &firstCapture,
+        .invoke = &GpuTimingSubscriptionCapture::Invoke,
+    });
+    secondSubscription = recorder.subscribeSampleListener(Core::GpuTimingSampleListener{
+        .context = &secondCapture,
+        .invoke = &GpuTimingSubscriptionCapture::Invoke,
+    });
+    ASSERT_TRUE(firstSubscription.valid());
+    ASSERT_TRUE(secondSubscription.valid());
+
+    const Core::GpuTimingSampleAttribution attribution = recorder.allocateSampleAttribution();
+    ASSERT_TRUE(attribution.valid());
+    const Core::GpuTimingSample sample{
+        .scopeName = Name("tests/timing/subscription_dispatch"),
+        .sourceFrameIndex = 7u,
+        .durationSeconds = 0.001,
+        .attribution = attribution,
+        .published = true,
+        .comparableRange = {},
+    };
+    Core::GpuTimingRecorderDiagnosticPeer::dispatchSample(recorder, sample);
+
+    ASSERT_TRUE(replacementSubscription.valid());
+    EXPECT_NE(firstSubscription, replacementSubscription);
+    EXPECT_EQ(firstCapture.sampleCount, 1u);
+    EXPECT_EQ(secondCapture.sampleCount, 1u);
+    EXPECT_EQ(replacementCapture.sampleCount, 0u);
+
+    Core::GpuTimingRecorderDiagnosticPeer::dispatchSample(recorder, sample);
+    EXPECT_EQ(firstCapture.sampleCount, 1u);
+    EXPECT_EQ(secondCapture.sampleCount, 2u);
+    EXPECT_EQ(replacementCapture.sampleCount, 1u);
+
+    recorder.unsubscribeSampleListener(firstSubscription);
+    recorder.unsubscribeSampleListener(secondSubscription);
+    recorder.unsubscribeSampleListener(replacementSubscription);
+}
+
+TEST(GpuTimingSampleAttribution, IssuesUniqueProcessIdentitiesAcrossRecorderResetAndRecreation){
+    TestArena testArena;
+    Core::Perf::TimingRecorder firstSink(testArena.arena);
+    Core::Perf::TimingRecorder secondSink(testArena.arena);
+    Core::GpuTimingRecorder firstRecorder(testArena.arena, firstSink);
+    Core::GpuTimingRecorder secondRecorder(testArena.arena, secondSink);
+
+    const Core::GpuTimingSampleAttribution first = firstRecorder.allocateSampleAttribution();
+    const Core::GpuTimingSampleAttribution second = firstRecorder.allocateSampleAttribution();
+    const Core::GpuTimingSampleAttribution recreated = secondRecorder.allocateSampleAttribution();
+    firstRecorder.resetQueries();
+    const Core::GpuTimingSampleAttribution afterReset = firstRecorder.allocateSampleAttribution();
+
+    ASSERT_TRUE(first.valid());
+    ASSERT_TRUE(second.valid());
+    ASSERT_TRUE(recreated.valid());
+    ASSERT_TRUE(afterReset.valid());
+    EXPECT_NE(first, second);
+    EXPECT_NE(first, recreated);
+    EXPECT_NE(first, afterReset);
+    EXPECT_NE(second, recreated);
+    EXPECT_NE(second, afterReset);
+    EXPECT_NE(recreated, afterReset);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

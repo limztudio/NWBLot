@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // api.h explodes into rhi/*.h (concern-grouped, chained). Include this umbrella (unchanged) or a narrow rhi/<concern>.h.
 
+
 #include "rhi/foundation.h"
 #include "rhi/primitives.h"
 #include "rhi/format.h"

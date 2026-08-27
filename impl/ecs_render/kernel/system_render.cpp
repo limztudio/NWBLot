@@ -55,6 +55,8 @@ inline constexpr usize s_LaggedLightingHistoryStateSourceCapacity = 3u;
 
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
+    m_frameGraphSourceFrameIndex = m_graphics.getFrameIndex();
+
     // Preserve the exact accepted frontier even when frame-graph capture was disabled for the completed frame. The
     // tracker owns persistent history; every graph artifact below is about to be reset for the next declaration.
     if(m_deferredLightingTaskGraphValid){

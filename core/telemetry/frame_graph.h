@@ -19,7 +19,8 @@ NWB_TELEMETRY_BEGIN
 
 inline constexpr u16 s_FrameGraphLegacyPayloadVersion = 1u;
 inline constexpr u16 s_FrameGraphQueueAssignmentPayloadVersion = 2u;
-inline constexpr u16 s_FrameGraphPayloadVersion = 3u;
+inline constexpr u16 s_FrameGraphCompiledTaskPayloadVersion = 3u;
+inline constexpr u16 s_FrameGraphPayloadVersion = 4u;
 inline constexpr u32 s_FrameGraphPayloadMagic = 0x4E574647u; // NWFG
 
 namespace FrameGraphNodeKind{
@@ -163,6 +164,97 @@ struct FrameGraphCompiledTask{
     bool present = false;
 };
 
+// Aggregate, graph-generation-scoped CPU runtime telemetry. Counts use fixed-width values so the public decoded
+// representation and the binary payload remain architecture independent; durations are always expressed in seconds.
+struct FrameGraphCompileRuntimeStatistics{
+    u64 taskCount = 0u;
+    u64 resourceCount = 0u;
+    u64 resourceUseCount = 0u;
+    u64 explicitDependencyCount = 0u;
+    u64 inferredDependencyCount = 0u;
+    u64 packetCount = 0u;
+    u64 packetDependencyCount = 0u;
+    u64 mergedTaskCount = 0u;
+    u64 transitionBarrierCount = 0u;
+    u64 uavBarrierCount = 0u;
+    u64 ownershipReleaseBarrierCount = 0u;
+    u64 ownershipAcquireBarrierCount = 0u;
+    u64 stateExportBarrierCount = 0u;
+    u64 logicalOwnershipTransferCount = 0u;
+    u64 logicalOwnershipTransferSignatureCount = 0u;
+    u64 repeatedOwnershipTransferSignatureCount = 0u;
+    u64 concurrentSharingCouldAvoidTransferCount = 0u;
+    u64 concurrentSharingAdviceResourceCount = 0u;
+    u64 logicalOwnershipTransferInternalCount = 0u;
+    u64 logicalOwnershipTransferExternalImportCount = 0u;
+    u64 logicalOwnershipTransferExternalExportCount = 0u;
+    u64 resourceSetCount = 0u;
+    u64 resourceSetMemberCount = 0u;
+    u64 directResourceUseCount = 0u;
+    u64 declaredResourceSetUseCount = 0u;
+    u64 expandedResourceSetMemberUseCount = 0u;
+    u64 payloadObjectCount = 0u;
+    u64 payloadObjectBytes = 0u;
+    u64 uploadBlobCount = 0u;
+    u64 uploadBlobBytes = 0u;
+    f64 declarationSeconds = 0.0;
+    f64 analysisSeconds = 0.0;
+    f64 validationSeconds = 0.0;
+    f64 dependencyAnalysisSeconds = 0.0;
+    f64 hazardAnalysisSeconds = 0.0;
+    f64 topologicalOrderSeconds = 0.0;
+    f64 queueAssignmentSeconds = 0.0;
+    f64 planningSeconds = 0.0;
+    f64 packetizationSeconds = 0.0;
+    f64 resourceStatePlanningSeconds = 0.0;
+    f64 packetDependencyPlanningSeconds = 0.0;
+    f64 totalSeconds = 0.0;
+};
+
+struct FrameGraphRecordingRuntimeStatistics{
+    u64 packetCount = 0u;
+    u64 taskCount = 0u;
+    u64 commandListCount = 0u;
+    u64 barrierCount = 0u;
+    u64 workerRoutedPacketCount = 0u;
+    u64 parallelPacketCount = 0u;
+    f64 commandListAcquisitionSeconds = 0.0;
+    f64 graphBarrierRecordingSeconds = 0.0;
+    f64 taskRecordSeconds = 0.0;
+    f64 recordingSeconds = 0.0;
+    f64 recordingElapsedSeconds = 0.0;
+    f64 readyFrontierElapsedSeconds = 0.0;
+    f64 readyFrontierWorkerBusySeconds = 0.0;
+    f64 readyFrontierWorkerCapacitySeconds = 0.0;
+};
+
+struct FrameGraphSubmissionRuntimeStatistics{
+    u64 acceptedPacketCount = 0u;
+    u64 acceptedTaskCount = 0u;
+    u64 rejectedPacketCount = 0u;
+    u64 rejectedTaskCount = 0u;
+    u64 nativeSubmissionCount = 0u;
+    u64 rejectedSubmissionCount = 0u;
+    u64 nativeCommandListCount = 0u;
+    u64 plannedWaitTokenCount = 0u;
+    u64 sameQueueWaitElisionCount = 0u;
+    u64 timelineWaitCount = 0u;
+    u64 mergedTimelineWaitCount = 0u;
+    u64 acceptedFrontierSubmissionCount = 0u;
+    f64 submissionSeconds = 0.0;
+};
+
+struct FrameGraphRuntimeStatistics{
+    u64 graphGeneration = 0u;
+    u64 planGeneration = 0u;
+    u64 recordingAttemptGeneration = 0u;
+    u16 deviceGeneration = 0u;
+    FrameGraphCompileRuntimeStatistics compile;
+    FrameGraphRecordingRuntimeStatistics recording;
+    FrameGraphSubmissionRuntimeStatistics submission;
+    bool present = false;
+};
+
 #pragma pack(push, 1)
 struct EncodedFrameGraphPayloadHeader{
     u32 magic = s_FrameGraphPayloadMagic;
@@ -187,6 +279,18 @@ struct EncodedFrameGraphPayloadHeaderV2{
 
 struct EncodedFrameGraphPayloadHeaderV3{
     u32 magic = s_FrameGraphPayloadMagic;
+    u16 version = s_FrameGraphCompiledTaskPayloadVersion;
+    u16 reserved = 0u;
+    u64 frameIndex = 0u;
+    u32 nodeCount = 0u;
+    u32 edgeCount = 0u;
+    u32 stringTableBytes = 0u;
+    u32 queueAssignmentCount = 0u;
+    u32 compiledTaskCount = 0u;
+};
+
+struct EncodedFrameGraphPayloadHeaderV4{
+    u32 magic = s_FrameGraphPayloadMagic;
     u16 version = s_FrameGraphPayloadVersion;
     u16 reserved = 0u;
     u64 frameIndex = 0u;
@@ -195,6 +299,7 @@ struct EncodedFrameGraphPayloadHeaderV3{
     u32 stringTableBytes = 0u;
     u32 queueAssignmentCount = 0u;
     u32 compiledTaskCount = 0u;
+    u32 runtimeStatisticsCount = 0u;
 };
 
 struct EncodedFrameGraphNode{
@@ -246,6 +351,18 @@ struct EncodedFrameGraphCompiledTask{
     u8 packetizationDecision = FrameGraphTaskPacketizationDecision::Unknown;
     u8 reserved[3u] = {};
 };
+
+struct EncodedFrameGraphRuntimeStatistics{
+    u32 nodeIndex = 0u;
+    u16 deviceGeneration = 0u;
+    u16 reserved = 0u;
+    u64 graphGeneration = 0u;
+    u64 planGeneration = 0u;
+    u64 recordingAttemptGeneration = 0u;
+    FrameGraphCompileRuntimeStatistics compile;
+    FrameGraphRecordingRuntimeStatistics recording;
+    FrameGraphSubmissionRuntimeStatistics submission;
+};
 #pragma pack(pop)
 static_assert(sizeof(EncodedFrameGraphPayloadHeader) == 28u, "EncodedFrameGraphPayloadHeader wire layout drifted");
 static_assert(alignof(EncodedFrameGraphPayloadHeader) == 1u, "EncodedFrameGraphPayloadHeader must stay packed");
@@ -259,6 +376,10 @@ static_assert(sizeof(EncodedFrameGraphPayloadHeaderV3) == 36u, "EncodedFrameGrap
 static_assert(alignof(EncodedFrameGraphPayloadHeaderV3) == 1u, "EncodedFrameGraphPayloadHeaderV3 must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPayloadHeaderV3>, "EncodedFrameGraphPayloadHeaderV3 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPayloadHeaderV3>, "EncodedFrameGraphPayloadHeaderV3 must stay binary-serializable");
+static_assert(sizeof(EncodedFrameGraphPayloadHeaderV4) == 40u, "EncodedFrameGraphPayloadHeaderV4 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPayloadHeaderV4) == 1u, "EncodedFrameGraphPayloadHeaderV4 must stay packed");
+static_assert(IsStandardLayout_V<EncodedFrameGraphPayloadHeaderV4>, "EncodedFrameGraphPayloadHeaderV4 must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPayloadHeaderV4>, "EncodedFrameGraphPayloadHeaderV4 must stay binary-serializable");
 static_assert(sizeof(EncodedFrameGraphNode) == 72u, "EncodedFrameGraphNode wire layout drifted");
 static_assert(alignof(EncodedFrameGraphNode) == 1u, "EncodedFrameGraphNode must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphNode>, "EncodedFrameGraphNode must stay binary-serializable");
@@ -279,6 +400,19 @@ static_assert(sizeof(EncodedFrameGraphCompiledTask) == 20u, "EncodedFrameGraphCo
 static_assert(alignof(EncodedFrameGraphCompiledTask) == 1u, "EncodedFrameGraphCompiledTask must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphCompiledTask>, "EncodedFrameGraphCompiledTask must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphCompiledTask>, "EncodedFrameGraphCompiledTask must stay binary-serializable");
+static_assert(sizeof(FrameGraphCompileRuntimeStatistics) == 336u, "FrameGraphCompileRuntimeStatistics wire fields drifted");
+static_assert(IsStandardLayout_V<FrameGraphCompileRuntimeStatistics>, "FrameGraphCompileRuntimeStatistics must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<FrameGraphCompileRuntimeStatistics>, "FrameGraphCompileRuntimeStatistics must stay binary-serializable");
+static_assert(sizeof(FrameGraphRecordingRuntimeStatistics) == 112u, "FrameGraphRecordingRuntimeStatistics wire fields drifted");
+static_assert(IsStandardLayout_V<FrameGraphRecordingRuntimeStatistics>, "FrameGraphRecordingRuntimeStatistics must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<FrameGraphRecordingRuntimeStatistics>, "FrameGraphRecordingRuntimeStatistics must stay binary-serializable");
+static_assert(sizeof(FrameGraphSubmissionRuntimeStatistics) == 104u, "FrameGraphSubmissionRuntimeStatistics wire fields drifted");
+static_assert(IsStandardLayout_V<FrameGraphSubmissionRuntimeStatistics>, "FrameGraphSubmissionRuntimeStatistics must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<FrameGraphSubmissionRuntimeStatistics>, "FrameGraphSubmissionRuntimeStatistics must stay binary-serializable");
+static_assert(sizeof(EncodedFrameGraphRuntimeStatistics) == 584u, "EncodedFrameGraphRuntimeStatistics wire layout drifted");
+static_assert(alignof(EncodedFrameGraphRuntimeStatistics) == 1u, "EncodedFrameGraphRuntimeStatistics must stay packed");
+static_assert(IsStandardLayout_V<EncodedFrameGraphRuntimeStatistics>, "EncodedFrameGraphRuntimeStatistics must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<EncodedFrameGraphRuntimeStatistics>, "EncodedFrameGraphRuntimeStatistics must stay binary-serializable");
 
 struct FrameGraphNodeDesc{
     Name name = NAME_NONE;
@@ -287,6 +421,7 @@ struct FrameGraphNodeDesc{
     u8 flags = 0u;
     FrameGraphQueueAssignment queueAssignment;
     FrameGraphCompiledTask compiledTask;
+    FrameGraphRuntimeStatistics runtimeStatistics;
 };
 
 struct FrameGraphEdgeDesc{
@@ -303,6 +438,7 @@ struct FrameGraphNodePayload{
     u8 flags = 0u;
     FrameGraphQueueAssignment queueAssignment;
     FrameGraphCompiledTask compiledTask;
+    FrameGraphRuntimeStatistics runtimeStatistics;
 
     explicit FrameGraphNodePayload(TelemetryArena& arena)
         : label(arena)
@@ -342,6 +478,7 @@ using FrameGraphEdgeDescs = Vector<FrameGraphEdgeDesc, TelemetryArena>;
 [[nodiscard]] bool IsValidFrameGraphTaskPacketizationDecision(FrameGraphTaskPacketizationDecision::Enum decision)noexcept;
 [[nodiscard]] bool IsValidFrameGraphQueueAssignment(const FrameGraphQueueAssignment& assignment)noexcept;
 [[nodiscard]] bool IsValidFrameGraphCompiledTask(const FrameGraphCompiledTask& compiledTask)noexcept;
+[[nodiscard]] bool IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& statistics)noexcept;
 [[nodiscard]] bool BuildFrameGraphPayload(
     TelemetryArena& arena,
     u64 frameIndex,

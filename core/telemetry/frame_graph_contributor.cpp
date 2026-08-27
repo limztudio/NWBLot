@@ -53,6 +53,7 @@ FrameGraphNodeHandle FrameGraphBuilder::addNode(
         .flags = flags,
         .queueAssignment = metadata.queueAssignment,
         .compiledTask = metadata.compiledTask,
+        .runtimeStatistics = metadata.runtimeStatistics,
     });
     return FrameGraphNodeHandle{ .index = index };
 }

@@ -37,6 +37,7 @@ using FrameGraphPendingNameEdges = Vector<FrameGraphPendingNameEdge, TelemetryAr
 struct FrameGraphPassMetadata{
     FrameGraphQueueAssignment queueAssignment;
     FrameGraphCompiledTask compiledTask;
+    FrameGraphRuntimeStatistics runtimeStatistics;
 };
 
 
@@ -48,15 +49,19 @@ public:
     FrameGraphBuilder(
         FrameGraphNodeDescs& nodes,
         FrameGraphEdgeDescs& edges,
-        FrameGraphPendingNameEdges& pendingNameEdges
+        FrameGraphPendingNameEdges& pendingNameEdges,
+        const u64 frameIndex = 0u
     )
         : m_nodes(nodes)
         , m_edges(edges)
         , m_pendingNameEdges(pendingNameEdges)
+        , m_frameIndex(frameIndex)
     {}
 
 
 public:
+    [[nodiscard]] u64 frameIndex()const{ return m_frameIndex; }
+
     [[nodiscard]] FrameGraphNodeHandle addPass(const Name& scope, const AStringView label, const u8 flags = 0u){
         return addNode(scope, label, FrameGraphNodeKind::Pass, FrameGraphPassMetadata{}, flags);
     }
@@ -70,7 +75,7 @@ public:
             scope,
             label,
             FrameGraphNodeKind::Pass,
-            FrameGraphPassMetadata{ .queueAssignment = queueAssignment, .compiledTask = {} },
+            FrameGraphPassMetadata{ .queueAssignment = queueAssignment, .compiledTask = {}, .runtimeStatistics = {} },
             flags
         );
     }
@@ -105,6 +110,7 @@ private:
     FrameGraphNodeDescs& m_nodes;
     FrameGraphEdgeDescs& m_edges;
     FrameGraphPendingNameEdges& m_pendingNameEdges;
+    u64 m_frameIndex = 0u;
 };
 
 

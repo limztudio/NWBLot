@@ -467,6 +467,9 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;
+    // A successful graphics tick can skip renderer execution while telemetry still captures. Keep the exact source
+    // frame separate from graph generations so retained prior-frame runtime statistics never look current.
+    u64 m_frameGraphSourceFrameIndex = Limit<u64>::s_Max;
     // FrameGraphBuilder retains labels by view until the capture payload is encoded, so this storage must outlive
     // appendFrameGraph() rather than using its task-graph scratch arena.
     AString<Core::Alloc::GlobalArena> m_frameGraphRendererLabel;

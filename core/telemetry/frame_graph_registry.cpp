@@ -88,7 +88,7 @@ bool FrameGraphRegistry::record(CaptureSession& session){
 
     bool hasGraph = false;
     for(auto* contributor : m_contributors){
-        FrameGraphBuilder builder(nodes, edges, pendingNameEdges);
+        FrameGraphBuilder builder(nodes, edges, pendingNameEdges, session.frameIndex());
         if(contributor->appendFrameGraph(builder))
             hasGraph = true;
     }

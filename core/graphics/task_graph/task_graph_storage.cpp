@@ -99,7 +99,10 @@ GpuTaskId GpuTaskGraph::appendTask(
         return {};
 
     for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
-        if(!desc.externalStateSources[sourceIndex].states)
+        if(
+            !desc.externalStateSources[sourceIndex].states
+            || desc.externalStateSources[sourceIndex].applicableConsumerQueueClass > CommandQueue::kCount
+        )
             return {};
     }
 
@@ -185,7 +188,10 @@ GpuTaskId GpuTaskGraph::appendTask(
     m_externalStateSnapshots.reserve(m_externalStateSnapshots.size() + desc.externalStateSourceCount);
     for(usize sourceIndex = 0u; sourceIndex < desc.externalStateSourceCount; ++sourceIndex){
         const CommandListResourceStateHandoff* const snapshot = externalStateSnapshots[sourceIndex];
-        m_externalStateSources.push_back(GpuTaskExternalStateSource{ .states = snapshot });
+        m_externalStateSources.push_back(GpuTaskExternalStateSource{
+            .states = snapshot,
+            .applicableConsumerQueueClass = desc.externalStateSources[sourceIndex].applicableConsumerQueueClass,
+        });
         m_externalStateSnapshots.push_back(externalStateSnapshots[sourceIndex]);
     }
     for(usize useIndex = 0u; useIndex < desc.resourceUseCount; ++useIndex)

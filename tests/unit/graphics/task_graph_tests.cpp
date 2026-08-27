@@ -1814,7 +1814,10 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     Graphics::GpuTaskId dependencies[] = { predecessor };
     Graphics::CommandListResourceStateHandoff externalStateSource(testArena.arena);
     Graphics::GpuTaskExternalStateSource externalStateSources[] = {
-        Graphics::GpuTaskExternalStateSource{ .states = &externalStateSource },
+        Graphics::GpuTaskExternalStateSource{
+            .states = &externalStateSource,
+            .applicableConsumerQueueClass = Graphics::CommandQueue::Compute,
+        },
     };
     Graphics::GpuTaskResourceUse uses[] = {
         Graphics::GpuTaskResourceUse{
@@ -1841,6 +1844,7 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
 
     dependencies[0] = {};
     externalStateSources[0].states = nullptr;
+    externalStateSources[0].applicableConsumerQueueClass = Graphics::CommandQueue::Graphics;
     externalStateSource.reset();
     uses[0].resource = {};
     markerLabel[0] = 'X';
@@ -1852,6 +1856,7 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     ASSERT_NE(stored.externalStateSources[0].states, nullptr);
     EXPECT_NE(stored.externalStateSources[0].states, &externalStateSource);
     EXPECT_FALSE(stored.externalStateSources[0].states->valid());
+    EXPECT_EQ(stored.externalStateSources[0].applicableConsumerQueueClass, Graphics::CommandQueue::Compute);
     EXPECT_EQ(stored.resourceUses[0].resource, resource);
     EXPECT_EQ(stored.markerLabel, AStringView("Stack Marker"));
     EXPECT_TRUE(stored.hasPayload);
@@ -1860,6 +1865,29 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     EXPECT_EQ(destructionCount, 1u);
     EXPECT_FALSE(graph.validTask(task));
     EXPECT_FALSE(graph.validResource(resource));
+}
+
+TEST(GpuTaskGraph, RejectsInvalidExternalStateConsumerQueueClassWithoutDeclarationMutation){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::CommandListResourceStateHandoff externalStateSource(testArena.arena);
+    const Graphics::GpuTaskExternalStateSource externalStateSources[] = {
+        Graphics::GpuTaskExternalStateSource{
+            .states = &externalStateSource,
+            .applicableConsumerQueueClass = static_cast<Graphics::CommandQueue::Enum>(
+                static_cast<u8>(Graphics::CommandQueue::kCount) + 1u
+            ),
+        },
+    };
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/invalid_external_state_consumer_queue"))
+        .setMarkerLabel("Invalid External State Consumer Queue")
+        .setExternalStateSources(externalStateSources, LengthOf(externalStateSources))
+    ;
+
+    EXPECT_FALSE(graph.addTask(desc).valid());
+    EXPECT_EQ(graph.taskCount(), 0u);
 }
 
 TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){

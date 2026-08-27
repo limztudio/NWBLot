@@ -30,6 +30,9 @@ struct GpuTaskRecordContext;
 // producer becomes an in-graph packet, and avoids renderer-owned packet-specific record overrides.
 struct GpuTaskExternalStateSource{
     const CommandListResourceStateHandoff* states = nullptr;
+    // This predicate is evaluated after queue assignment and never constrains routing. kCount keeps the snapshot
+    // applicable to every consumer queue class.
+    CommandQueue::Enum applicableConsumerQueueClass = CommandQueue::kCount;
 };
 
 // Typed task payloads are stored in graph-owned memory, while these static thunks let the packet recorder invoke

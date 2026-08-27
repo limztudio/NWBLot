@@ -427,9 +427,23 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         const GpuTaskGraphTaskView task = graph.taskAt(tasks[taskIndex].index);
         if(task.externalStateSourceCount != 0u && !task.externalStateSources)
             return false;
+        if(task.externalStateSourceCount == 0u)
+            continue;
+
+        const GpuPhysicalQueueInfo* const taskQueue = compiledGraph.queueInfoForTask(tasks[taskIndex]);
+        if(!taskQueue || taskQueue->queueClass >= CommandQueue::kCount)
+            return false;
         for(usize sourceIndex = 0u; sourceIndex < task.externalStateSourceCount; ++sourceIndex){
+            const GpuTaskExternalStateSource& source = task.externalStateSources[sourceIndex];
+            if(source.applicableConsumerQueueClass > CommandQueue::kCount)
+                return false;
+            if(
+                source.applicableConsumerQueueClass != CommandQueue::kCount
+                && source.applicableConsumerQueueClass != taskQueue->queueClass
+            )
+                continue;
             if(!appendStateSource(
-                task.externalStateSources[sourceIndex].states,
+                source.states,
                 tasks + taskIndex,
                 1u
             ))

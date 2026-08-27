@@ -53665,6 +53665,167 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferStateValidatesMatchingUavAn
 }
 
 
+// Queue applicability is an import predicate evaluated after assignment, not a routing request. An invalid snapshot
+// makes the distinction observable without relying on a particular native state transition: Graphics must skip the
+// Compute-only source and record, while Compute must apply it and reject the packet before entering the task thunk.
+TEST_F(DescriptorBufferRoundTripTest, DeclarationStateSourceApplicabilityFollowsAssignedConsumerQueueClass){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "State-source applicability: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "State-source applicability: adapter has no dedicated compute-only queue family.";
+
+    const BufferHandle graphicsBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    const BufferHandle computeBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    ASSERT_NE(graphicsBuffer.get(), nullptr);
+    ASSERT_NE(computeBuffer.get(), nullptr);
+
+    CommandListResourceStateHandoff invalidHandoff(asyncScope.arena());
+    ASSERT_FALSE(invalidHandoff.valid());
+
+    GpuTaskGraph graph(asyncScope.arena());
+    const auto importBuffer = [&graph](const BufferHandle& buffer, const Name& identity, const AStringView label){
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Buffer)
+                .setInitialState(ResourceStates::Common)
+                .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        );
+    };
+    const GpuGraphResourceId graphicsResource = importBuffer(
+        graphicsBuffer,
+        Name("tests/descriptor_buffer/state_source_applicability_graphics"),
+        "State Source Applicability Graphics"
+    );
+    const GpuGraphResourceId computeResource = importBuffer(
+        computeBuffer,
+        Name("tests/descriptor_buffer/state_source_applicability_compute"),
+        "State Source Applicability Compute"
+    );
+    ASSERT_TRUE(graphicsResource.valid());
+    ASSERT_TRUE(computeResource.valid());
+
+    const GpuTaskExternalStateSource stateSources[] = {
+        GpuTaskExternalStateSource{
+            .states = &invalidHandoff,
+            .applicableConsumerQueueClass = CommandQueue::Compute,
+        },
+    };
+    const auto addProbe = [&graph, &stateSources](
+        const Name& identity,
+        const AStringView label,
+        const GpuGraphResourceId resource,
+        const GpuQueueRequest& queue,
+        const bool& shouldRecord,
+        bool& attempted
+    ){
+        const GpuTaskResourceUse use{
+            .resource = resource,
+            .range = {},
+            .requiredState = ResourceStates::Common,
+            .access = GpuTaskResourceAccess::Read,
+        };
+        GpuTaskSchedulingHint scheduling;
+        scheduling.forceSubmissionBoundary = true;
+        scheduling.allowPacketMerge = false;
+        GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(queue)
+            .setScheduling(scheduling)
+            .setExternalStateSources(stateSources, LengthOf(stateSources))
+            .setResourceUses(&use, 1u)
+        ;
+        return graph.addTask<NativePacketCaptureRetryTask>(
+            desc,
+            NativePacketCaptureRetryTask::Payload{
+                .shouldRecord = &shouldRecord,
+                .attempted = &attempted,
+            }
+        );
+    };
+    const bool shouldRecord = true;
+    bool graphicsAttempted = false;
+    bool computeAttempted = false;
+    const GpuTaskId graphicsTask = addProbe(
+        Name("tests/descriptor_buffer/state_source_applicability_graphics_task"),
+        "State Source Applicability Graphics Task",
+        graphicsResource,
+        GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        },
+        shouldRecord,
+        graphicsAttempted
+    );
+    const GpuTaskId computeTask = addProbe(
+        Name("tests/descriptor_buffer/state_source_applicability_compute_task"),
+        "State Source Applicability Compute Task",
+        computeResource,
+        GpuQueueRequest{
+            GpuQueueCapability::Compute,
+            GpuQueuePreference::Compute,
+            false,
+            false,
+        },
+        shouldRecord,
+        computeAttempted
+    );
+    ASSERT_TRUE(graphicsTask.valid());
+    ASSERT_TRUE(computeTask.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    GpuTaskGraphAnalysis analysis(asyncScope.arena());
+    GpuTaskGraphQueueAssignments assignments(asyncScope.arena());
+    GpuCompiledGraph compiledGraph(asyncScope.arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/state_source_applicability_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuPhysicalQueueInfo* const graphicsQueue = compiledGraph.queueInfoForTask(graphicsTask);
+    const GpuPhysicalQueueInfo* const computeQueue = compiledGraph.queueInfoForTask(computeTask);
+    ASSERT_NE(graphicsQueue, nullptr);
+    ASSERT_NE(computeQueue, nullptr);
+    EXPECT_EQ(graphicsQueue->queueClass, CommandQueue::Graphics);
+    EXPECT_EQ(computeQueue->queueClass, CommandQueue::Compute);
+
+    GpuRecordedGraph recordedGraph(asyncScope.arena());
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = compiledGraph.packetForTask(graphicsTask) },
+        recordedGraph
+    ));
+    EXPECT_FALSE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = compiledGraph.packetForTask(computeTask) },
+        recordedGraph
+    ));
+    EXPECT_TRUE(graphicsAttempted);
+    EXPECT_FALSE(computeAttempted);
+}
+
+
 // A permanent resource cannot participate in a Vulkan queue-family ownership handoff. The graph recorder must
 // reject the compiler-planned release before recording the producer thunk or publishing any native packet work.
 TEST_F(DescriptorBufferRoundTripTest, PermanentBufferOwnershipReleaseFailsClosedAcrossDedicatedQueues){

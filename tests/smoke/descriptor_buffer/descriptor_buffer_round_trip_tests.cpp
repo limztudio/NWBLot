@@ -46742,6 +46742,40 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
 
+    const GpuTaskResourceUse sourceProducerUses[] = {
+        GpuTaskResourceUse{
+            .resource = source,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    GpuTaskDesc sourceProducerDesc;
+    sourceProducerDesc
+        .setIdentity(Name("tests/descriptor_buffer/late_history_source_producer"))
+        .setMarkerLabel("Late History Source Producer")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(scheduling)
+        .setResourceUses(sourceProducerUses, LengthOf(sourceProducerUses))
+    ;
+    bool sourceProducerRecorded = false;
+    QueueSubmissionToken sourceProducerAcceptedToken;
+    const GpuTaskId sourceProducerTask = graph.addTask<NativePacketPrefixTask>(
+        sourceProducerDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = sourceBuffer.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .recorded = &sourceProducerRecorded,
+            .acceptedToken = &sourceProducerAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(sourceProducerTask.valid());
+
     const GpuTaskResourceUse presentUses[] = {
         GpuTaskResourceUse{
             .resource = presentation,
@@ -46750,6 +46784,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
             .access = GpuTaskResourceAccess::Read,
         },
     };
+    const GpuTaskId presentDependencies[] = { sourceProducerTask };
     GpuTaskDesc presentDesc;
     presentDesc
         .setIdentity(Name("tests/descriptor_buffer/late_history_present"))
@@ -46761,6 +46796,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
             false,
         })
         .setScheduling(scheduling)
+        .setDependencies(presentDependencies, LengthOf(presentDependencies))
         .setResourceUses(presentUses, LengthOf(presentUses))
     ;
     bool presentRecorded = false;
@@ -46790,18 +46826,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
             .access = GpuTaskResourceAccess::Write,
         },
     };
-    // The late history packet imports a prior producer's state through its declaration, not a renderer-selected
-    // packet-record override.  Submit the producer after Present below to retain the existing late-record shape.
-    CommandListResourceStateHandoff sourceState(DescriptorBufferRoundTripTest::arena());
-    auto sourceProducer = device.createCommandList();
-    ASSERT_NE(sourceProducer.get(), nullptr);
-    sourceProducer->open();
-    sourceProducer->setBufferState(sourceBuffer.get(), ResourceStates::CopySource);
-    sourceProducer->close(&sourceState);
-    ASSERT_TRUE(sourceState.valid());
-    const GpuTaskExternalStateSource historyDeclaredStateSources[] = {
-        GpuTaskExternalStateSource{ .states = &sourceState },
-    };
+    // The current-frame producer records through normal execution. The late task imports its authoritative packet
+    // snapshot through the compiler-produced state seed, with no declaration or runtime compatibility source.
     const GpuTaskId historyDependencies[] = { presentTask };
     GpuTaskDesc historyDesc;
     historyDesc
@@ -46815,7 +46841,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         })
         .setScheduling(scheduling)
         .setDependencies(historyDependencies, LengthOf(historyDependencies))
-        .setExternalStateSources(historyDeclaredStateSources, LengthOf(historyDeclaredStateSources))
         .setResourceUses(historyUses, LengthOf(historyUses))
     ;
     bool historyRecorded = false;
@@ -46830,29 +46855,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         }
     );
     ASSERT_TRUE(historyTask.valid());
-    const GpuTaskGraphTaskView historyTaskView = graph.taskAt(historyTask.index);
-    ASSERT_EQ(historyTaskView.externalStateSourceCount, 1u);
-    ASSERT_NE(historyTaskView.externalStateSources, nullptr);
-    ASSERT_NE(historyTaskView.externalStateSources[0u].states, nullptr);
-    EXPECT_NE(historyTaskView.externalStateSources[0u].states, &sourceState);
-    EXPECT_TRUE(historyTaskView.externalStateSources[0u].states->valid());
-    // The late history task owns an immutable graph snapshot. The closed producer command list remains submitable
-    // after its caller-side handoff is released, and late packet recording must still receive CopySource.
-    sourceState.reset();
-    EXPECT_FALSE(sourceState.valid());
-    EXPECT_TRUE(graph.taskAt(historyTask.index).externalStateSources[0u].states->valid());
-    // The declaration already owns this snapshot; repeat it through the late task binding so the generic helper
-    // proves it forwards task-anchored state sources without a renderer-selected packet override.
-    const GpuExternalPacketStateSource lateHistoryStateSources[] = {
-        GpuExternalPacketStateSource{ .states = historyTaskView.externalStateSources[0u].states },
-    };
-    const GpuTaskPacketStateBinding lateHistoryStateBindings[] = {
-        GpuTaskPacketStateBinding{
-            .task = historyTask,
-            .externalStateSources = lateHistoryStateSources,
-            .externalStateSourceCount = LengthOf(lateHistoryStateSources),
-        },
-    };
+    EXPECT_EQ(graph.taskAt(historyTask.index).externalStateSourceCount, 0u);
 
     const GpuTaskId rejectedTailDependencies[] = { historyTask };
     const GpuTaskResourceUse rejectedTailUses[] = {
@@ -47013,6 +47016,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     const GpuTaskGraphCompiler compiler;
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
 
+    const GpuSubmissionPacketId sourceProducerPacket = compiledGraph.packetForTask(sourceProducerTask);
     const GpuSubmissionPacketId presentPacket = compiledGraph.packetForTask(presentTask);
     const GpuSubmissionPacketId historyPacket = compiledGraph.packetForTask(historyTask);
     const GpuSubmissionPacketId rejectedTailPacket = compiledGraph.packetForTask(rejectedTailTask);
@@ -47020,6 +47024,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     const GpuSubmissionPacketId invalidCallbackPacket = compiledGraph.packetForTask(invalidAcceptedCallbackTailTask);
     const GpuSubmissionPacketId mismatchedCallbackPacket = compiledGraph.packetForTask(mismatchedAcceptedCallbackTailTask);
     const GpuSubmissionPacketId callbackFalsePacket = compiledGraph.packetForTask(callbackFalseTask);
+    ASSERT_TRUE(sourceProducerPacket.valid());
     ASSERT_TRUE(presentPacket.valid());
     ASSERT_TRUE(historyPacket.valid());
     ASSERT_TRUE(rejectedTailPacket.valid());
@@ -47027,10 +47032,18 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     ASSERT_TRUE(invalidCallbackPacket.valid());
     ASSERT_TRUE(mismatchedCallbackPacket.valid());
     ASSERT_TRUE(callbackFalsePacket.valid());
-    ASSERT_EQ(compiledGraph.packetCount(), 7u);
-    EXPECT_EQ(compiledGraph.packetIdAt(0u), presentPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(1u), historyPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(2u), rejectedTailPacket);
+    ASSERT_EQ(compiledGraph.packetCount(), 8u);
+    EXPECT_EQ(compiledGraph.packetIdAt(0u), sourceProducerPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(1u), presentPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(2u), historyPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(3u), rejectedTailPacket);
+    const GpuCompiledTask* const compiledHistoryTask = compiledGraph.findTask(historyTask);
+    ASSERT_NE(compiledHistoryTask, nullptr);
+    ASSERT_EQ(compiledHistoryTask->prologueStateSeedCount, 1u);
+    const GpuPacketStateSeed* const historyStateSeeds = compiledGraph.taskPrologueStateSeeds(historyTask);
+    ASSERT_NE(historyStateSeeds, nullptr);
+    EXPECT_EQ(historyStateSeeds[0u].resource, source);
+    EXPECT_EQ(historyStateSeeds[0u].sourcePacket, sourceProducerPacket);
     ASSERT_GE(compiledGraph.packet(historyPacket).dependencyCount, 1u);
     const GpuPacketDependency* const historyPacketDependencies = compiledGraph.packetDependencies(historyPacket);
     ASSERT_NE(historyPacketDependencies, nullptr);
@@ -47043,43 +47056,32 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     EXPECT_EQ(compiledGraph.packetDependencies(rejectedTailPacket)[0u].producer, historyPacket);
     EXPECT_EQ(compiledGraph.packet(callbackFalsePacket).dependencyCount, 0u);
 
-    // Current-frame producer state arrives independently from the terminal Present dependency. This is the same
-    // late fan-in shape used by the renderer's shadow/caustic/surfel return snapshots.
-    CommandList* const sourceProducerCommandLists[] = { sourceProducer.get() };
-    bool sourceProducerSubmitted = false;
-    EXPECT_GT(device.executeCommandLists(
-        sourceProducerCommandLists,
-        LengthOf(sourceProducerCommandLists),
-        CommandQueue::Graphics,
-        &sourceProducerSubmitted
-    ), 0u);
-    ASSERT_TRUE(sourceProducerSubmitted);
-
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(
-        graph,
-        compiledGraph,
-        GpuNativePacketRecordDesc{ .packet = presentPacket },
-        recordedGraph
-    ));
-    EXPECT_TRUE(presentRecorded);
-
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacket(
+    GpuTaskGraphNormalExecutionDesc normalExecution;
+    normalExecution.terminalTask = presentTask;
+    GpuSubmissionPacketId normalFailedPacket;
+    ASSERT_TRUE(submitter.recordAndSubmitNormalGraph(
         graph,
         compiledGraph,
+        recorder,
         recordedGraph,
-        presentPacket,
-        nullptr,
-        0u,
+        normalExecution,
         transaction,
-        scratchArena
+        scratchArena,
+        &normalFailedPacket
     ));
+    EXPECT_FALSE(normalFailedPacket.valid());
+    EXPECT_TRUE(sourceProducerRecorded);
+    EXPECT_TRUE(presentRecorded);
+    const QueueSubmissionToken sourceProducerSubmissionToken = transaction.packetToken(sourceProducerPacket);
     const QueueSubmissionToken presentSubmissionToken = transaction.packetToken(presentPacket);
+    ASSERT_TRUE(sourceProducerSubmissionToken.valid());
     ASSERT_TRUE(presentSubmissionToken.valid());
+    EXPECT_EQ(sourceProducerAcceptedToken.value, sourceProducerSubmissionToken.value);
     EXPECT_EQ(presentAcceptedToken.value, presentSubmissionToken.value);
     EXPECT_FALSE(transaction.packetToken(historyPacket).valid());
 
@@ -47111,8 +47113,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         recorder,
         recordedGraph,
         historyTask,
-        lateHistoryStateBindings,
-        LengthOf(lateHistoryStateBindings),
+        nullptr,
+        0u,
         &historyRecordedCallback,
         transaction,
         scratchArena,

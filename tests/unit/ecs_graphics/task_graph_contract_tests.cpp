@@ -2566,6 +2566,15 @@ TEST(EcsGraphics, LaggedHistoryReturnCachesPublishOnlyOnTaskAcceptance){
     EXPECT_TRUE(ContainsText(acceptance, ".context = &historyCopyAcceptance,"));
     EXPECT_TRUE(ContainsText(acceptance, ".invoke = acceptHistoryCopyFinalState,"));
     EXPECT_FALSE(ContainsText(acceptance, ".replaceTextureSubset("));
+    EXPECT_FALSE(ContainsText(system, "historyCopyStateBindings"));
+    EXPECT_FALSE(ContainsText(system, "GpuTaskPacketStateBinding"));
+    EXPECT_TRUE(ContainsText(
+        system.substr(submitOffset, tokenOffset - submitOffset),
+        "m_deferredLaggedLightingHistoryTask,\n"
+        "                nullptr,\n"
+        "                0u,\n"
+        "                &historyCopyRecordedCallback,"
+    ));
 
     const usize failureOffset = system.find(
         "if(historyCopySubmissionToken.valid() && (!historyCopyAccepted || !historyCopyAcceptance.acceptedStateReady))",
@@ -3434,12 +3443,11 @@ TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAc
         3u
     );
     EXPECT_FALSE(ContainsText(system, "deferredStateBindings"));
+    EXPECT_FALSE(ContainsText(system, "m_causticIrradianceLightingState"));
     EXPECT_TRUE(ContainsText(hardwareLifecycle, "prepareHardwareCausticsTask"));
     EXPECT_TRUE(ContainsText(hardwareLifecycle, "m_hardwareCausticAccumulatorPersistentState.buildFilteredResourceSubset("));
-    EXPECT_TRUE(ContainsText(hardwareLifecycle, "m_causticIrradianceLightingState.buildFilteredResourceSubset("));
     EXPECT_TRUE(ContainsText(hardwareLifecycle, "acceptHardwareCausticsTask"));
     EXPECT_TRUE(ContainsText(hardwareLifecycle, "m_hardwareCausticAccumulatorPersistentState.commit("));
-    EXPECT_TRUE(ContainsText(hardwareLifecycle, "m_causticIrradianceLightingState.commit("));
     EXPECT_FALSE(ContainsText(hardwareLifecycle, "replaceTextureSubset("));
     EXPECT_TRUE(ContainsText(
         system,
@@ -3836,12 +3844,10 @@ TEST(EcsGraphics, SoftwareCausticsScratchRetainsAcceptedStateAcrossGraphicsRoute
     ASSERT_NE(callbacksOffset, AStringView::npos);
     ASSERT_LT(candidatesOffset, callbacksOffset);
     const AStringView acceptedCaustics = system.substr(candidatesOffset, callbacksOffset - candidatesOffset);
-    EXPECT_TRUE(ContainsText(acceptedCaustics, "if(context->usesLaggedHistory){"));
-    EXPECT_TRUE(ContainsText(acceptedCaustics, "m_causticIrradianceLightingState.buildFilteredResourceSubset("));
+    EXPECT_FALSE(ContainsText(system, "m_causticIrradianceLightingState"));
     EXPECT_TRUE(ContainsText(acceptedCaustics, "if(context->runsOnCompute){"));
     EXPECT_TRUE(ContainsText(acceptedCaustics, "m_causticIrradianceReturnState.buildFilteredResourceSubset("));
     EXPECT_TRUE(ContainsText(acceptedCaustics, "m_causticsComputePersistentState.buildFilteredResourceSubset("));
-    EXPECT_TRUE(ContainsText(acceptedCaustics, "context->renderer->m_causticIrradianceLightingState.commit("));
     EXPECT_TRUE(ContainsText(acceptedCaustics, "context->renderer->m_causticIrradianceReturnState.commit("));
     EXPECT_TRUE(ContainsText(acceptedCaustics, "context->renderer->m_causticsComputePersistentState.commit("));
     EXPECT_TRUE(ContainsText(

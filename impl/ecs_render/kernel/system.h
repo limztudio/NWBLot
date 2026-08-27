@@ -256,13 +256,10 @@ public:
 
 private:
     [[nodiscard]] bool prepareGpuTimingScopes();
-    // These reset groups deliberately remain lifecycle-specific. Some handoffs retain accepted AsyncCompute scratch
-    // or producer return state across frames, while unsubmitted work must be discarded before the next recording pass.
+    // Accepted cross-frame scratch and producer-return state survives ordinary recording attempts. Reset it only
+    // when the imported target/resource generation changes.
     void resetTargetGenerationStateHandoffs()noexcept;
     void resetInvalidatedResourceStateHandoffs()noexcept;
-    void resetFrameRecordingStateHandoffs()noexcept;
-    void resetAbandonedFrameStateHandoffs()noexcept;
-    void resetRejectedShadowVisibilityStateHandoffs()noexcept;
     void invalidateLaggedLightingHistorySubmission()noexcept;
     void invalidateLaggedLightingHistoryWriterDrain()noexcept;
     void resetLaggedLightingHistoryReadTracking()noexcept;
@@ -656,29 +653,28 @@ private:
     RendererAvboitState m_avboitState;
     RendererRayTracingState m_rayTracingState;
     CsgFrameState m_preparedCsgFrameState;
-    // Compute-only shadow scratch/history retains accepted graph packet state across frames. Deferred lighting now
-    // consumes the visibility result on the same Compute lane, so retain the private scratch and its typed backings.
+    // Shadow scratch/history retains accepted graph packet state across frames on either compiler-selected route.
+    // Declaration-owned first-use sources restore the private scratch and its typed backings.
     Core::GpuPersistentResourceStateCache m_shadowComputePersistentState;
     Core::GpuPersistentResourceStateCache m_shadowVisibilityReturnState;
     // Native TLAS/BLAS, software-BVH build storage, and normalized trace geometry change inside Shadow Preparation.
     // Retain only accepted live generations so the next frame's first graph packet seeds their real acceleration,
     // UAV, and descriptor-visible ShaderResource states.
     Core::GpuPersistentResourceStateCache m_shadowPreparePersistentState;
-    // Software caustics retain their temporal scratch on the dedicated Compute lane. Hardware dispatch-rays caustics
+    // Software caustics retain their temporal scratch on either compiler-selected route. Hardware dispatch-rays caustics
     // retain their temporal accumulator only after the Graphics hardware-caustics packet accepts; the next warm
     // decay imports that exact native state alongside the current-frame Prefix source.
     Core::GpuPersistentResourceStateCache m_causticsComputePersistentState;
     Core::GpuPersistentResourceStateCache m_hardwareCausticAccumulatorPersistentState;
-    // Normal deferred lighting consumes either resolved irradiance on Compute, while the optional lagged path
-    // snapshots it for the next Graphics lighting packet.
-    Core::GpuPersistentResourceStateCache m_causticIrradianceLightingState;
+    // Retain only the accepted cross-queue return state needed when resolved irradiance moves from Graphics lighting
+    // back to a Compute-routed caustics packet. Current-frame producer/lighting flow is compiler-seeded.
     Core::GpuPersistentResourceStateCache m_causticIrradianceReturnState;
-    // Surfel GI is also entirely compute-dispatched, including its RayQuery trace variant. Its field/history stays on
-    // AsyncCompute; the resolved full-resolution irradiance is either consumed there or snapshotted for optional
-    // frame-lagged Graphics lighting. Retain only the accepted private Compute scratch and its typed backings.
+    // Surfel GI retains its field/history on either compiler-selected route, including its RayQuery trace variant. The
+    // resolved full-resolution irradiance is consumed on that route or snapshotted for optional frame-lagged Graphics
+    // lighting. Retain only the accepted private scratch and its typed backings.
     Core::GpuPersistentResourceStateCache m_surfelGiComputePersistentState;
     // The counter can continue into a late Transfer readback, so retain the accepted tail state and its typed backing
-    // separately. The next Surfel-GI packet imports this cache through its semantic task binding.
+    // separately. The next Surfel-GI packet imports this cache through its first-use declaration.
     Core::GpuPersistentResourceStateCache m_surfelGiCounterPersistentState;
     Core::GpuPersistentResourceStateCache m_surfelIrradianceReturnState;
     bool m_preparedCsgFrameStateValid = false;

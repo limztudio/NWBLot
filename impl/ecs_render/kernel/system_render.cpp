@@ -27,11 +27,10 @@ namespace RendererSystemRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// These fixed arrays describe the maximum number of independently retained lifecycle callbacks, timing tickets,
-// and late history-copy sources. They are capacities, not a runtime packet-count assumption.
+// These fixed arrays describe the maximum number of independently retained lifecycle callbacks and timing tickets.
+// They are capacities, not a runtime packet-count assumption.
 inline constexpr usize s_DeferredStateLifecycleCallbackCapacity = 6u;
 inline constexpr usize s_DeferredTimingTicketCapacity = 15u + s_AvboitTaskGraphTimingTicketCapacity;
-inline constexpr usize s_LaggedLightingHistoryStateSourceCapacity = 3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -294,7 +293,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         .hasTransparentRenderers = hasTransparentRenderers,
         .hardwareCaustics = hardwareShadowSupported,
     };
-    resetFrameRecordingStateHandoffs();
     m_raytracingSystem.discardSoftShadowTemporalHistory();
 
     // Preserve CPU mirrors so rejected recordings can be retried exactly.
@@ -1624,21 +1622,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ;
         restorePostGbufferPacketCpuState(!shadowPrepareAccepted);
         m_raytracingSystem.discardSoftShadowTemporalHistory();
-        resetAbandonedFrameStateHandoffs();
-    };
-
-    const auto appendDeclaredStateSource = [](
-        Core::GpuExternalPacketStateSource* const sources,
-        const usize capacity,
-        usize& sourceCount,
-        const Core::CommandListResourceStateHandoff* const states
-    ){
-        if(!states || !states->valid() || sourceCount >= capacity)
-            return false;
-        sources[sourceCount++] = Core::GpuExternalPacketStateSource{
-            .states = states,
-        };
-        return true;
     };
 
     // Record preparation and prefix through the graph's ready-frontier path. These renderer payloads intentionally
@@ -1996,32 +1979,27 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::TextureHandle causticIrradianceTextures[] = {
         deferredTargets.causticIrradiance,
     };
-    Core::GpuPersistentResourceStateCache::Candidate causticLightingStateCandidate(m_arena);
     Core::GpuPersistentResourceStateCache::Candidate causticReturnStateCandidate(m_arena);
     Core::GpuPersistentResourceStateCache::Candidate causticsScratchStateCandidate(m_arena);
     struct SoftwareCausticsStateLifecycleContext{
         RendererSystem* renderer = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* lightingStateCandidate = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* returnStateCandidate = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* scratchStateCandidate = nullptr;
         const Core::TextureHandle* irradianceTextures = nullptr;
         const Core::TextureHandle* scratchTextures = nullptr;
         usize irradianceTextureCount = 0u;
         usize scratchTextureCount = 0u;
-        bool usesLaggedHistory = false;
         bool runsOnCompute = false;
         bool statePrepared = false;
         bool stateReady = false;
     } softwareCausticsStateLifecycle{
         .renderer = this,
-        .lightingStateCandidate = &causticLightingStateCandidate,
         .returnStateCandidate = &causticReturnStateCandidate,
         .scratchStateCandidate = &causticsScratchStateCandidate,
         .irradianceTextures = causticIrradianceTextures,
         .scratchTextures = causticsComputeScratchTextures,
         .irradianceTextureCount = LengthOf(causticIrradianceTextures),
         .scratchTextureCount = LengthOf(causticsComputeScratchTextures),
-        .usesLaggedHistory = laggedAsyncLightingSchedule,
         .runsOnCompute = softwareCausticsRunsOnCompute,
     };
     const auto prepareSoftwareCausticsTask = [](
@@ -2034,7 +2012,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(
             !context
             || !context->renderer
-            || !context->lightingStateCandidate
             || !context->returnStateCandidate
             || !context->scratchStateCandidate
             || !context->irradianceTextures
@@ -2043,17 +2020,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         )
             return false;
 
-        bool lightingStateReady = true;
-        if(context->usesLaggedHistory){
-            lightingStateReady = context->renderer->m_causticIrradianceLightingState.buildFilteredResourceSubset(
-                *context->lightingStateCandidate,
-                *finalState,
-                context->irradianceTextures,
-                context->irradianceTextureCount,
-                nullptr,
-                0u
-            );
-        }
         bool returnStateReady = true;
         if(context->runsOnCompute){
             returnStateReady = context->renderer->m_causticIrradianceReturnState.buildFilteredResourceSubset(
@@ -2073,7 +2039,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             nullptr,
             0u
         );
-        context->statePrepared = lightingStateReady && returnStateReady && scratchStateReady;
+        context->statePrepared = returnStateReady && scratchStateReady;
         return context->statePrepared;
     };
     const auto acceptSoftwareCausticsTask = [](
@@ -2087,23 +2053,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(
             !context
             || !context->renderer
-            || !context->lightingStateCandidate
             || !context->returnStateCandidate
             || !context->scratchStateCandidate
             || !context->statePrepared
         )
             return false;
 
-        bool lightingStateReady = true;
-        if(context->usesLaggedHistory)
-            lightingStateReady = context->renderer->m_causticIrradianceLightingState.commit(*context->lightingStateCandidate);
         bool returnStateReady = true;
         if(context->runsOnCompute)
             returnStateReady = context->renderer->m_causticIrradianceReturnState.commit(*context->returnStateCandidate);
         const bool scratchStateReady =
             context->renderer->m_causticsComputePersistentState.commit(*context->scratchStateCandidate)
         ;
-        context->stateReady = lightingStateReady && returnStateReady && scratchStateReady;
+        context->stateReady = returnStateReady && scratchStateReady;
         return context->stateReady;
     };
 
@@ -2231,31 +2193,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::TextureHandle hardwareCausticAccumulatorTextures[] = {
         deferredTargets.causticAccumulator,
     };
-    const Core::TextureHandle hardwareCausticLightingTextures[] = {
-        deferredTargets.causticIrradiance,
-    };
     Core::GpuPersistentResourceStateCache::Candidate hardwareCausticAccumulatorStateCandidate(m_arena);
-    Core::GpuPersistentResourceStateCache::Candidate hardwareCausticLightingStateCandidate(m_arena);
     struct HardwareCausticsStateLifecycleContext{
         RendererSystem* renderer = nullptr;
         Core::GpuPersistentResourceStateCache::Candidate* accumulatorStateCandidate = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* lightingStateCandidate = nullptr;
         const Core::TextureHandle* accumulatorTextures = nullptr;
-        const Core::TextureHandle* lightingTextures = nullptr;
         usize accumulatorTextureCount = 0u;
-        usize lightingTextureCount = 0u;
-        bool usesLaggedHistory = false;
         bool statePrepared = false;
         bool stateReady = false;
     } hardwareCausticsStateLifecycle{
         .renderer = this,
         .accumulatorStateCandidate = &hardwareCausticAccumulatorStateCandidate,
-        .lightingStateCandidate = &hardwareCausticLightingStateCandidate,
         .accumulatorTextures = hardwareCausticAccumulatorTextures,
-        .lightingTextures = hardwareCausticLightingTextures,
         .accumulatorTextureCount = LengthOf(hardwareCausticAccumulatorTextures),
-        .lightingTextureCount = LengthOf(hardwareCausticLightingTextures),
-        .usesLaggedHistory = laggedAsyncLightingSchedule,
     };
     const auto prepareHardwareCausticsTask = [](
         void* const rawContext,
@@ -2268,9 +2218,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             !context
             || !context->renderer
             || !context->accumulatorStateCandidate
-            || !context->lightingStateCandidate
             || !context->accumulatorTextures
-            || !context->lightingTextures
             || !finalState
         )
             return false;
@@ -2285,18 +2233,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 0u
             )
         ;
-        bool lightingStateReady = true;
-        if(context->usesLaggedHistory){
-            lightingStateReady = context->renderer->m_causticIrradianceLightingState.buildFilteredResourceSubset(
-                *context->lightingStateCandidate,
-                *finalState,
-                context->lightingTextures,
-                context->lightingTextureCount,
-                nullptr,
-                0u
-            );
-        }
-        context->statePrepared = accumulatorStateReady && lightingStateReady;
+        context->statePrepared = accumulatorStateReady;
         return context->statePrepared;
     };
     const auto acceptHardwareCausticsTask = [](
@@ -2311,7 +2248,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             !context
             || !context->renderer
             || !context->accumulatorStateCandidate
-            || !context->lightingStateCandidate
             || !context->statePrepared
         )
             return false;
@@ -2319,10 +2255,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const bool accumulatorStateReady =
             context->renderer->m_hardwareCausticAccumulatorPersistentState.commit(*context->accumulatorStateCandidate)
         ;
-        bool lightingStateReady = true;
-        if(context->usesLaggedHistory)
-            lightingStateReady = context->renderer->m_causticIrradianceLightingState.commit(*context->lightingStateCandidate);
-        context->stateReady = accumulatorStateReady && lightingStateReady;
+        context->stateReady = accumulatorStateReady;
         return context->stateReady;
     };
 
@@ -2803,7 +2736,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 if(!shadowVisibilitySubmissionToken.valid()){
                     restoreShadowCpuState();
                     m_raytracingSystem.discardSoftShadowTemporalHistory();
-                    resetRejectedShadowVisibilityStateHandoffs();
                 }
                 if(!selectedCausticsSubmissionToken.valid())
                     restoreCausticsCpuState();
@@ -2981,47 +2913,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
     else if(captureLaggedLightingHistory){
         // The deferred graph's terminal history-copy task depends on Present internally. Its retained producer
-        // snapshots are only available after those producers accept, so this remains a late record into the shared
-        // recorded graph rather than part of the initial packet prefix; its source binding stays task-anchored.
-        const Core::CommandListResourceStateHandoff* const causticHistoryCopySource = laggedAsyncLightingSchedule
-            ? m_causticIrradianceLightingState.source()
-            : m_causticIrradianceReturnState.source()
-        ;
-        Core::GpuExternalPacketStateSource historyCopyStateSources[
-            RendererSystemRenderDetail::s_LaggedLightingHistoryStateSourceCapacity
-        ] = {};
-        usize historyCopyStateSourceCount = 0u;
-        const bool historyCopyStateSourcesReady =
-            appendDeclaredStateSource(
-                historyCopyStateSources,
-                LengthOf(historyCopyStateSources),
-                historyCopyStateSourceCount,
-                m_shadowVisibilityReturnState.source()
-            )
-            && appendDeclaredStateSource(
-                historyCopyStateSources,
-                LengthOf(historyCopyStateSources),
-                historyCopyStateSourceCount,
-                causticHistoryCopySource
-            )
-            && appendDeclaredStateSource(
-                historyCopyStateSources,
-                LengthOf(historyCopyStateSources),
-                historyCopyStateSourceCount,
-                m_surfelIrradianceReturnState.source()
-            )
-        ;
-        if(!historyCopyStateSourcesReady){
-            if(!m_deferredLightingSubmissionTransaction.discardUnaccepted(
-                m_deferredLightingTaskGraph,
-                m_deferredLightingCompiledGraph,
-                m_deferredLightingRecordedGraph.recordingAttemptGeneration()
-            ))
-                m_graphics.requestDeviceRecreation();
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged lighting-history capture skipped because its source state was unavailable"));
-            invalidateLaggedLightingHistorySubmission();
-        }
-        else if(
+        // snapshots are graph-owned state seeds, so the late runtime helper needs no renderer packet-state binding.
+        // The task remains outside normal execution because its publication is conditional on accepted presentation.
+        if(
             !finalPresentationSubmissionToken.valid()
             || !m_deferredLightingTaskGraphValid
             || !m_deferredLaggedLightingHistoryTask.valid()
@@ -3042,13 +2936,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             invalidateLaggedLightingHistorySubmission();
         }
         else{
-            const Core::GpuTaskPacketStateBinding historyCopyStateBindings[] = {
-                Core::GpuTaskPacketStateBinding{
-                    .task = m_deferredLaggedLightingHistoryTask,
-                    .externalStateSources = historyCopyStateSources,
-                    .externalStateSourceCount = historyCopyStateSourceCount,
-                },
-            };
             Core::GpuPersistentResourceStateCache::Candidate shadowHistoryReturnStateCandidate(m_arena);
             Core::GpuPersistentResourceStateCache::Candidate causticHistoryReturnStateCandidate(m_arena);
             Core::GpuPersistentResourceStateCache::Candidate surfelHistoryReturnStateCandidate(m_arena);
@@ -3167,8 +3054,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 recorder,
                 m_deferredLightingRecordedGraph,
                 m_deferredLaggedLightingHistoryTask,
-                historyCopyStateBindings,
-                LengthOf(historyCopyStateBindings),
+                nullptr,
+                0u,
                 &historyCopyRecordedCallback,
                 m_deferredLightingSubmissionTransaction,
                 scratchArena,

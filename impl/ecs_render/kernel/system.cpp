@@ -53,7 +53,6 @@ RendererSystem::RendererSystem(
     , m_shadowPreparePersistentState(arena)
     , m_causticsComputePersistentState(arena)
     , m_hardwareCausticAccumulatorPersistentState(arena)
-    , m_causticIrradianceLightingState(arena)
     , m_causticIrradianceReturnState(arena)
     , m_surfelGiComputePersistentState(arena)
     , m_surfelGiCounterPersistentState(arena)
@@ -180,7 +179,6 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     m_shadowVisibilityReturnState.reset();
     m_causticsComputePersistentState.reset();
     m_hardwareCausticAccumulatorPersistentState.reset();
-    m_causticIrradianceLightingState.reset();
     m_causticIrradianceReturnState.reset();
     m_surfelGiComputePersistentState.reset();
     m_surfelGiCounterPersistentState.reset();
@@ -192,23 +190,6 @@ void RendererSystem::resetInvalidatedResourceStateHandoffs()noexcept{
     resetTargetGenerationStateHandoffs();
     m_shadowPreparePersistentState.reset();
 }
-
-void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
-    // Preserve accepted compute-local state across fresh recordings.
-    m_causticIrradianceLightingState.reset();
-}
-
-void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
-    // Rejected frames keep only cross-frame state from earlier accepted producers. The hardware caustic accumulator
-    // changes only in its accepted callback, so a rejected record must preserve its prior warm-decay source.
-    m_causticIrradianceLightingState.reset();
-}
-
-void RendererSystem::resetRejectedShadowVisibilityStateHandoffs()noexcept{
-    // Preserve accepted Graphics prefix state when graph-owned shadow visibility rejects.
-    m_causticIrradianceLightingState.reset();
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

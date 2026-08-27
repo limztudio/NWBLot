@@ -14,6 +14,34 @@ NWB_TELEMETRY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool FrameGraphBuilder::addPhysicalQueueRuntimeStatistics(
+    const FrameGraphNodeHandle owner,
+    const FrameGraphPhysicalQueueRuntimeStatistics& statistics
+){
+    if(
+        !m_physicalQueueRuntimeStatistics
+        || !owner.valid()
+        || owner.index >= m_nodes.size()
+        || m_nodes[owner.index].kind != FrameGraphNodeKind::Pass
+        || !IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(
+            statistics,
+            m_nodes[owner.index].runtimeStatistics
+        )
+    )
+        return false;
+
+    for(const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record : *m_physicalQueueRuntimeStatistics){
+        if(record.ownerNodeIndex == owner.index && record.statistics.queue == statistics.queue)
+            return false;
+    }
+
+    m_physicalQueueRuntimeStatistics->push_back(FrameGraphPhysicalQueueRuntimeStatisticsRecord{
+        .ownerNodeIndex = owner.index,
+        .statistics = statistics,
+    });
+    return true;
+}
+
 void FrameGraphBuilder::addEdge(const FrameGraphNodeHandle from, const FrameGraphNodeHandle to, const FrameGraphEdgeKind::Enum kind, const u8 flags){
     if(!from.valid() || !to.valid())
         return;

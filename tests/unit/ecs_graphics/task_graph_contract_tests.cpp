@@ -393,8 +393,14 @@ TEST(EcsGraphics, DeferredGraphAttachesStructuredRuntimeStatisticsOnlyToRenderer
         "        rendererFrameMetadata\n"
         "    );"
     ));
-    EXPECT_EQ(CountText(frameGraph, "rendererFrameMetadata"), 3u);
-    EXPECT_EQ(CountText(frameGraph, ".runtimeStatistics ="), 1u);
+    EXPECT_EQ(CountText(
+        frameGraph,
+        "Core::Telemetry::FrameGraphPassMetadata rendererFrameMetadata;"
+    ), 1u);
+    EXPECT_EQ(CountText(
+        frameGraph,
+        "rendererFrameMetadata.runtimeStatistics = ECSRenderDetail::BuildFrameGraphRuntimeStatistics("
+    ), 1u);
 }
 
 
@@ -512,7 +518,9 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideDescriptorHeapLifecycle){
 
     const usize snapshotOffset = frameGraph.find("const Core::GpuDescriptorHeapLifecycleStatistics descriptorHeapLifecycleStatistics");
     const usize runtimeValidOffset = frameGraph.find("if(deferredRuntimeStatistics.valid()){");
-    const usize queueLoopOffset = frameGraph.find("for(usize queueIndex = 0u; queueIndex < queueTopology.queueCount; ++queueIndex){");
+    const usize queueLoopOffset = frameGraph.find(
+        "for(usize queueIndex = 0u; queueIndex < physicalQueueRuntimeStatistics.size(); ++queueIndex){"
+    );
     const usize fallbackOffset = frameGraph.find("m_frameGraphRendererLabel += \"Renderer Frame\";");
     const usize lifecycleLabelOffset = frameGraph.find("Descriptor heap lifecycle (device-wide current):");
     const usize rendererFrameOffset = frameGraph.find("const Handle rendererFrame = builder.addPass(");
@@ -645,30 +653,61 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     EXPECT_FALSE(ContainsText(compiledQueueTelemetry, "getPhysicalQueueTopology()"));
     EXPECT_TRUE(ContainsText(
         frameGraph,
-        "const Core::GpuPhysicalQueueInfo& queueInfo = queueTopology.queues[queueIndex];"
+        "const Core::GpuPhysicalQueueId queue = runtimeQueueTopology.queues[queueIndex].id;"
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
-        "m_deferredLightingSubmissionTransaction.physicalQueueSubmissionStatistics(\n"
-        "                    m_deferredLightingCompiledGraph,\n"
-        "                    queueInfo.id\n"
-        "                )"
-    ));
-    EXPECT_TRUE(ContainsText(
-        frameGraph,
-        "m_deferredLightingCompiledGraph.physicalQueueCompileStatistics(queueInfo.id)"
+        "m_deferredLightingCompiledGraph.physicalQueueCompileStatistics(queue)"
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
         "m_deferredLightingRecordedGraph.physicalQueueRecordingStatistics(\n"
-        "                    m_deferredLightingCompiledGraph,\n"
-        "                    queueInfo.id\n"
-        "                )"
+        "                        m_deferredLightingCompiledGraph,\n"
+        "                        queue\n"
+        "                    )"
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
-        "if(!queueStatistics.valid() || !queueCompileStatistics.valid())\n"
-        "                continue;"
+        "m_deferredLightingSubmissionTransaction.physicalQueueSubmissionStatistics(\n"
+        "                        m_deferredLightingCompiledGraph,\n"
+        "                        queue\n"
+        "                    )"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics("
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner("
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "physicalQueueRuntimeStatistics.push_back(queueStatistics);"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "const Core::GpuPhysicalQueueInfo& queueInfo = runtimeQueueTopology.queues[queueIndex];"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueRuntimeStatistics =\n"
+        "                physicalQueueRuntimeStatistics[queueIndex]"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "const Core::Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics& queueStatistics =\n"
+        "                queueRuntimeStatistics.submission"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "const Core::Telemetry::FrameGraphPhysicalQueueCompileRuntimeStatistics& queueCompileStatistics =\n"
+        "                queueRuntimeStatistics.compile"
+    ));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        "const Core::Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics& queueRecordingStatistics =\n"
+        "                queueRuntimeStatistics.recording"
     ));
     EXPECT_TRUE(ContainsText(
         frameGraph,
@@ -687,45 +726,64 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
         "if(!hasTerminalSubmissionWork && !hasLogicalOwnershipTelemetry)\n"
         "                continue;"
     ));
-    EXPECT_TRUE(ContainsText(frameGraph, "if(!queueRecordingStatistics.valid())\n                continue;"));
     EXPECT_TRUE(ContainsText(
         frameGraph,
         "m_graphics.getDevice().getCommandArenaStatistics(queueInfo.id)"
     ));
     EXPECT_TRUE(ContainsText(frameGraph, "if(!commandArenaStatistics.valid())\n                continue;"));
-    const usize queueCompileQueryOffset = frameGraph.find(
-        "m_deferredLightingCompiledGraph.physicalQueueCompileStatistics(queueInfo.id)"
+    const usize snapshotLoopOffset = frameGraph.find(
+        "for(usize queueIndex = 0u; queueIndex < runtimeQueueTopology.queueCount; ++queueIndex){"
     );
-    const usize queueCompileGateOffset = frameGraph.find("queueCompileStatistics.valid()");
-    const usize terminalSubmissionGateOffset = frameGraph.find("const bool hasTerminalSubmissionWork =");
-    const usize logicalOwnershipGateOffset = frameGraph.find("const bool hasLogicalOwnershipTelemetry =");
-    const usize idleQueueGateOffset = frameGraph.find("if(!hasTerminalSubmissionWork && !hasLogicalOwnershipTelemetry)");
+    const usize queueCompileQueryOffset = frameGraph.find(
+        "m_deferredLightingCompiledGraph.physicalQueueCompileStatistics(queue)"
+    );
     const usize queueRecordingQueryOffset = frameGraph.find(
         "m_deferredLightingRecordedGraph.physicalQueueRecordingStatistics("
     );
-    const usize queueRecordingGateOffset = frameGraph.find("queueRecordingStatistics.valid()");
+    const usize queueSubmissionQueryOffset = frameGraph.find(
+        "m_deferredLightingSubmissionTransaction.physicalQueueSubmissionStatistics("
+    );
+    const usize queueValidationOffset = frameGraph.find(
+        "Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner("
+    );
+    const usize queueCacheOffset = frameGraph.find("physicalQueueRuntimeStatistics.push_back(queueStatistics);");
+    const usize cachedLabelLoopOffset = frameGraph.find(
+        "for(usize queueIndex = 0u; queueIndex < physicalQueueRuntimeStatistics.size(); ++queueIndex){"
+    );
+    const usize terminalSubmissionGateOffset = frameGraph.find("const bool hasTerminalSubmissionWork =");
+    const usize logicalOwnershipGateOffset = frameGraph.find("const bool hasLogicalOwnershipTelemetry =");
+    const usize idleQueueGateOffset = frameGraph.find("if(!hasTerminalSubmissionWork && !hasLogicalOwnershipTelemetry)");
     const usize queueFamilyIndexOffset = frameGraph.find("queueInfo.familyIndex,");
     const usize queueNativeIndexOffset = frameGraph.find("queueInfo.queueIndex,");
     const usize queueDedicatedOffset = frameGraph.find("queueInfo.dedicated,");
+    ASSERT_NE(snapshotLoopOffset, AStringView::npos);
     ASSERT_NE(queueCompileQueryOffset, AStringView::npos);
-    ASSERT_NE(queueCompileGateOffset, AStringView::npos);
+    ASSERT_NE(queueRecordingQueryOffset, AStringView::npos);
+    ASSERT_NE(queueSubmissionQueryOffset, AStringView::npos);
+    ASSERT_NE(queueValidationOffset, AStringView::npos);
+    ASSERT_NE(queueCacheOffset, AStringView::npos);
+    ASSERT_NE(cachedLabelLoopOffset, AStringView::npos);
     ASSERT_NE(terminalSubmissionGateOffset, AStringView::npos);
     ASSERT_NE(logicalOwnershipGateOffset, AStringView::npos);
     ASSERT_NE(idleQueueGateOffset, AStringView::npos);
-    ASSERT_NE(queueRecordingQueryOffset, AStringView::npos);
-    ASSERT_NE(queueRecordingGateOffset, AStringView::npos);
     ASSERT_NE(queueFamilyIndexOffset, AStringView::npos);
     ASSERT_NE(queueNativeIndexOffset, AStringView::npos);
     ASSERT_NE(queueDedicatedOffset, AStringView::npos);
-    EXPECT_LT(queueCompileQueryOffset, queueCompileGateOffset);
-    EXPECT_LT(queueCompileGateOffset, terminalSubmissionGateOffset);
+    EXPECT_LT(snapshotLoopOffset, queueCompileQueryOffset);
+    EXPECT_LT(queueCompileQueryOffset, queueRecordingQueryOffset);
+    EXPECT_LT(queueRecordingQueryOffset, queueSubmissionQueryOffset);
+    EXPECT_LT(queueSubmissionQueryOffset, queueValidationOffset);
+    EXPECT_LT(queueValidationOffset, queueCacheOffset);
+    EXPECT_LT(queueCacheOffset, cachedLabelLoopOffset);
+    EXPECT_LT(cachedLabelLoopOffset, terminalSubmissionGateOffset);
     EXPECT_LT(terminalSubmissionGateOffset, logicalOwnershipGateOffset);
     EXPECT_LT(logicalOwnershipGateOffset, idleQueueGateOffset);
-    EXPECT_LT(idleQueueGateOffset, queueRecordingQueryOffset);
-    EXPECT_LT(queueRecordingQueryOffset, queueRecordingGateOffset);
-    EXPECT_LT(queueRecordingGateOffset, queueFamilyIndexOffset);
+    EXPECT_LT(idleQueueGateOffset, queueFamilyIndexOffset);
     EXPECT_LT(queueFamilyIndexOffset, queueNativeIndexOffset);
     EXPECT_LT(queueNativeIndexOffset, queueDedicatedOffset);
+    EXPECT_EQ(CountText(frameGraph, ".physicalQueueCompileStatistics("), 1u);
+    EXPECT_EQ(CountText(frameGraph, ".physicalQueueRecordingStatistics("), 1u);
+    EXPECT_EQ(CountText(frameGraph, ".physicalQueueSubmissionStatistics("), 1u);
     EXPECT_FALSE(ContainsText(frameGraph, "queueCompileStatistics.taskCount == 0u"));
     EXPECT_FALSE(ContainsText(frameGraph, "queueCompileStatistics.packetCount == 0u"));
     EXPECT_FALSE(ContainsText(frameGraph, "queueRecordingStatistics.packetCount == 0u"));
@@ -776,15 +834,15 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
         frameGraph,
         "Worker arena domain={} index={}: epochs={} pending epochs={} command buffers current/high-water={}/{}"
     ));
-    EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.queue.index,"));
-    EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.queue.deviceGeneration,"));
-    EXPECT_TRUE(ContainsText(frameGraph, "__hidden_frame_graph_export::PhysicalQueueClassLabel(queueStatistics.queueClass),"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueRuntimeStatistics.queue.index,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueRuntimeStatistics.queue.deviceGeneration,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "__hidden_frame_graph_export::PhysicalQueueClassLabel(queueInfo.queueClass),"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueInfo.familyIndex,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueInfo.queueIndex,"));
     EXPECT_TRUE(ContainsText(frameGraph, "queueInfo.dedicated,"));
     EXPECT_TRUE(ContainsText(
         frameGraph,
-        "__hidden_frame_graph_export::PhysicalQueueClassLabel(queueStatistics.queueClass),\n"
+        "__hidden_frame_graph_export::PhysicalQueueClassLabel(queueInfo.queueClass),\n"
         "                queueInfo.familyIndex,\n"
         "                queueInfo.queueIndex,\n"
         "                queueInfo.dedicated,\n"

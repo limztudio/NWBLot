@@ -57,10 +57,27 @@ public:
         , m_pendingNameEdges(pendingNameEdges)
         , m_frameIndex(frameIndex)
     {}
+    FrameGraphBuilder(
+        FrameGraphNodeDescs& nodes,
+        FrameGraphEdgeDescs& edges,
+        FrameGraphPendingNameEdges& pendingNameEdges,
+        FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+        const u64 frameIndex = 0u
+    )
+        : m_nodes(nodes)
+        , m_edges(edges)
+        , m_pendingNameEdges(pendingNameEdges)
+        , m_physicalQueueRuntimeStatistics(&physicalQueueRuntimeStatistics)
+        , m_frameIndex(frameIndex)
+    {}
 
 
 public:
     [[nodiscard]] u64 frameIndex()const{ return m_frameIndex; }
+    [[nodiscard]] bool addPhysicalQueueRuntimeStatistics(
+        FrameGraphNodeHandle owner,
+        const FrameGraphPhysicalQueueRuntimeStatistics& statistics
+    );
 
     [[nodiscard]] FrameGraphNodeHandle addPass(const Name& scope, const AStringView label, const u8 flags = 0u){
         return addNode(scope, label, FrameGraphNodeKind::Pass, FrameGraphPassMetadata{}, flags);
@@ -110,6 +127,7 @@ private:
     FrameGraphNodeDescs& m_nodes;
     FrameGraphEdgeDescs& m_edges;
     FrameGraphPendingNameEdges& m_pendingNameEdges;
+    FrameGraphPhysicalQueueRuntimeStatisticsRecords* m_physicalQueueRuntimeStatistics = nullptr;
     u64 m_frameIndex = 0u;
 };
 

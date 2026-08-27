@@ -43,6 +43,7 @@ static constexpr usize s_JsonReportBytesPerGraph = 128u;
 static constexpr usize s_JsonReportBytesPerNode = 896u;
 static constexpr usize s_JsonReportBytesPerEdge = 96u;
 static constexpr usize s_JsonReportRuntimeStatisticsBytes = 4096u;
+static constexpr usize s_JsonReportPhysicalQueueRuntimeStatisticsBytes = 2048u;
 
 struct FrameGraphReportRecord{
     u32 streamId = 0u;
@@ -198,6 +199,9 @@ using GraphTimingMap = HashMap<GraphTimingKey, f64, GraphTimingKeyHasher, EqualT
             if(node.runtimeStatistics.present)
                 reserveBytes += s_JsonReportRuntimeStatisticsBytes;
         }
+        reserveBytes += graph.payload.physicalQueueRuntimeStatistics.size()
+            * s_JsonReportPhysicalQueueRuntimeStatisticsBytes
+        ;
     }
     return reserveBytes;
 }
@@ -555,9 +559,114 @@ void AppendFrameGraphSubmissionRuntimeStatisticsJson(
     );
 }
 
+void AppendFrameGraphPhysicalQueueCompileRuntimeStatisticsJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphPhysicalQueueCompileRuntimeStatistics& statistics
+){
+    StringAppendFormat(
+        out,
+        "{{\"taskCount\": {}, \"packetCount\": {}, \"mergedTaskCount\": {}, "
+        "\"prologueBarrierCount\": {}, \"epilogueBarrierCount\": {}, "
+        "\"ownershipReleaseBarrierCount\": {}, \"ownershipAcquireBarrierCount\": {}",
+        statistics.taskCount,
+        statistics.packetCount,
+        statistics.mergedTaskCount,
+        statistics.prologueBarrierCount,
+        statistics.epilogueBarrierCount,
+        statistics.ownershipReleaseBarrierCount,
+        statistics.ownershipAcquireBarrierCount
+    );
+    StringAppendFormat(
+        out,
+        ", \"incomingLogicalOwnershipTransferCount\": {}, \"outgoingLogicalOwnershipTransferCount\": {}, "
+        "\"incomingLogicalOwnershipTransferSignatureCount\": {}, "
+        "\"outgoingLogicalOwnershipTransferSignatureCount\": {}, "
+        "\"incomingRepeatedOwnershipTransferSignatureCount\": {}, "
+        "\"outgoingRepeatedOwnershipTransferSignatureCount\": {}, "
+        "\"concurrentSharingAdviceResourceCount\": {}}}",
+        statistics.incomingLogicalOwnershipTransferCount,
+        statistics.outgoingLogicalOwnershipTransferCount,
+        statistics.incomingLogicalOwnershipTransferSignatureCount,
+        statistics.outgoingLogicalOwnershipTransferSignatureCount,
+        statistics.incomingRepeatedOwnershipTransferSignatureCount,
+        statistics.outgoingRepeatedOwnershipTransferSignatureCount,
+        statistics.concurrentSharingAdviceResourceCount
+    );
+}
+
+void AppendFrameGraphPhysicalQueueRecordingRuntimeStatisticsJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics& statistics
+){
+    StringAppendFormat(
+        out,
+        "{{\"packetCount\": {}, \"taskCount\": {}, \"commandListCount\": {}, \"barrierCount\": {}, "
+        "\"workerRoutedPacketCount\": {}, \"parallelPacketCount\": {}, "
+        "\"commandListAcquisitionSeconds\": {:.9}, \"graphBarrierRecordingSeconds\": {:.9}, "
+        "\"taskRecordSeconds\": {:.9}, \"recordingSeconds\": {:.9}}}",
+        statistics.packetCount,
+        statistics.taskCount,
+        statistics.commandListCount,
+        statistics.barrierCount,
+        statistics.workerRoutedPacketCount,
+        statistics.parallelPacketCount,
+        statistics.commandListAcquisitionSeconds,
+        statistics.graphBarrierRecordingSeconds,
+        statistics.taskRecordSeconds,
+        statistics.recordingSeconds
+    );
+}
+
+void AppendFrameGraphPhysicalQueueSubmissionRuntimeStatisticsJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics& statistics
+){
+    StringAppendFormat(
+        out,
+        "{{\"acceptedPacketCount\": {}, \"acceptedTaskCount\": {}, \"rejectedPacketCount\": {}, "
+        "\"rejectedTaskCount\": {}, \"nativeSubmissionCount\": {}, \"rejectedSubmissionCount\": {}, "
+        "\"nativeCommandListCount\": {}, \"plannedWaitTokenCount\": {}, \"sameQueueWaitElisionCount\": {}, "
+        "\"timelineWaitCount\": {}, \"mergedTimelineWaitCount\": {}, \"acceptedFrontierSubmissionCount\": {}, "
+        "\"submissionSeconds\": {:.9}}}",
+        statistics.acceptedPacketCount,
+        statistics.acceptedTaskCount,
+        statistics.rejectedPacketCount,
+        statistics.rejectedTaskCount,
+        statistics.nativeSubmissionCount,
+        statistics.rejectedSubmissionCount,
+        statistics.nativeCommandListCount,
+        statistics.plannedWaitTokenCount,
+        statistics.sameQueueWaitElisionCount,
+        statistics.timelineWaitCount,
+        statistics.mergedTimelineWaitCount,
+        statistics.acceptedFrontierSubmissionCount,
+        statistics.submissionSeconds
+    );
+}
+
+void AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& statistics
+){
+    out += "{\"queue\": ";
+    AppendFrameGraphPhysicalQueueJson(out, statistics.queue);
+    out += ", \"queueClass\": ";
+    AppendJsonQuotedText(out, AStringView(FrameGraphQueueClassText(statistics.queueClass)));
+    out += ", \"compile\": ";
+    AppendFrameGraphPhysicalQueueCompileRuntimeStatisticsJson(out, statistics.compile);
+    out += ", \"recording\": ";
+    AppendFrameGraphPhysicalQueueRecordingRuntimeStatisticsJson(out, statistics.recording);
+    out += ", \"submission\": ";
+    AppendFrameGraphPhysicalQueueSubmissionRuntimeStatisticsJson(out, statistics.submission);
+    out += '}';
+}
+
 void AppendFrameGraphRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphRuntimeStatistics& statistics
+    const Telemetry::FrameGraphRuntimeStatistics& statistics,
+    const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    const u32 ownerNodeIndex,
+    const bool physicalQueueRuntimeStatisticsPresent
 ){
     if(!statistics.present){
         out += "null";
@@ -578,7 +687,36 @@ void AppendFrameGraphRuntimeStatisticsJson(
     AppendFrameGraphRecordingRuntimeStatisticsJson(out, statistics.recording);
     out += ", \"submission\": ";
     AppendFrameGraphSubmissionRuntimeStatisticsJson(out, statistics.submission);
+    out += ", \"physicalQueues\": ";
+    if(!physicalQueueRuntimeStatisticsPresent){
+        out += "null}";
+        return;
+    }
+
+    out += '[';
+    bool firstPhysicalQueue = true;
+    for(const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord& record : physicalQueueRuntimeStatistics){
+        if(record.ownerNodeIndex != ownerNodeIndex)
+            continue;
+        if(!firstPhysicalQueue)
+            out += ", ";
+        AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(out, record.statistics);
+        firstPhysicalQueue = false;
+    }
+    out += ']';
     out += '}';
+}
+
+[[nodiscard]] usize FrameGraphPhysicalQueueRuntimeStatisticsCount(
+    const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
+    const u32 ownerNodeIndex
+)noexcept{
+    usize count = 0u;
+    for(const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord& record : physicalQueueRuntimeStatistics){
+        if(record.ownerNodeIndex == ownerNodeIndex)
+            ++count;
+    }
+    return count;
 }
 
 void AppendFrameGraphPhysicalQueueDot(
@@ -654,7 +792,9 @@ void AppendFrameGraphCompiledTaskDot(
 
 void AppendFrameGraphRuntimeStatisticsDot(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphRuntimeStatistics& statistics
+    const Telemetry::FrameGraphRuntimeStatistics& statistics,
+    const usize physicalQueueRuntimeStatisticsCount,
+    const bool physicalQueueRuntimeStatisticsPresent
 ){
     if(!statistics.present){
         out += ", runtime_statistics=\"none\"";
@@ -670,6 +810,10 @@ void AppendFrameGraphRuntimeStatisticsDot(
         statistics.recordingAttemptGeneration,
         statistics.deviceGeneration
     );
+    if(physicalQueueRuntimeStatisticsPresent)
+        StringAppendFormat(out, ", runtime_physical_queue_count={}", physicalQueueRuntimeStatisticsCount);
+    else
+        out += ", runtime_physical_queue_count=\"unknown\"";
 }
 
 // Joins each decoded frame-graph topology with timing from its exact frame and scope Name while retaining every
@@ -715,7 +859,15 @@ void AppendTimedGraphDot(
         StringAppendFormat(out, ", flags={}", static_cast<u32>(node.flags));
         AppendFrameGraphQueueAssignmentDot(out, node.queueAssignment);
         AppendFrameGraphCompiledTaskDot(out, node.compiledTask);
-        AppendFrameGraphRuntimeStatisticsDot(out, node.runtimeStatistics);
+        AppendFrameGraphRuntimeStatisticsDot(
+            out,
+            node.runtimeStatistics,
+            FrameGraphPhysicalQueueRuntimeStatisticsCount(
+                graph.physicalQueueRuntimeStatistics,
+                static_cast<u32>(i)
+            ),
+            graph.wireVersion >= Telemetry::s_FrameGraphPhysicalQueueRuntimeStatisticsPayloadVersion
+        );
         out += "];\n";
     }
 
@@ -771,7 +923,13 @@ void AppendFrameGraphJson(
         out += ", \"compiledTask\": ";
         AppendFrameGraphCompiledTaskJson(out, node.compiledTask);
         out += ", \"runtimeStatistics\": ";
-        AppendFrameGraphRuntimeStatisticsJson(out, node.runtimeStatistics);
+        AppendFrameGraphRuntimeStatisticsJson(
+            out,
+            node.runtimeStatistics,
+            graph.physicalQueueRuntimeStatistics,
+            static_cast<u32>(nodeIndex),
+            graph.wireVersion >= Telemetry::s_FrameGraphPhysicalQueueRuntimeStatisticsPayloadVersion
+        );
         StringAppendFormat(out, "}}{}\n", nodeIndex + 1u == graph.nodes.size() ? "" : ",");
     }
     out += "        ],\n";

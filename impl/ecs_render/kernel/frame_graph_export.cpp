@@ -134,6 +134,51 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
     Core::GpuTaskGraphRuntimeStatistics deferredRuntimeStatistics{};
     if(builder.frameIndex() == m_frameGraphSourceFrameIndex)
         deferredRuntimeStatistics = deferredTaskGraphRuntimeStatistics();
+    Core::Telemetry::FrameGraphPassMetadata rendererFrameMetadata;
+    rendererFrameMetadata.runtimeStatistics = ECSRenderDetail::BuildFrameGraphRuntimeStatistics(
+        deferredRuntimeStatistics,
+        builder.frameIndex(),
+        m_frameGraphSourceFrameIndex
+    );
+    const Core::GpuPhysicalQueueTopology runtimeQueueTopology = m_deferredLightingCompiledGraph.queueTopology();
+    Core::Alloc::ScratchArena physicalQueueRuntimeStatisticsScratch(RendererArenaScope::s_TaskGraphArena);
+    Vector<
+        Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics,
+        Core::Alloc::ScratchArena
+    > physicalQueueRuntimeStatistics(physicalQueueRuntimeStatisticsScratch);
+    if(
+        rendererFrameMetadata.runtimeStatistics.present
+        && (!runtimeQueueTopology.queues || runtimeQueueTopology.queueCount == 0u)
+    )
+        rendererFrameMetadata.runtimeStatistics = {};
+    if(rendererFrameMetadata.runtimeStatistics.present){
+        physicalQueueRuntimeStatistics.reserve(runtimeQueueTopology.queueCount);
+        for(usize queueIndex = 0u; queueIndex < runtimeQueueTopology.queueCount; ++queueIndex){
+            const Core::GpuPhysicalQueueId queue = runtimeQueueTopology.queues[queueIndex].id;
+            const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics queueStatistics =
+                ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
+                    m_deferredLightingCompiledGraph.physicalQueueCompileStatistics(queue),
+                    m_deferredLightingRecordedGraph.physicalQueueRecordingStatistics(
+                        m_deferredLightingCompiledGraph,
+                        queue
+                    ),
+                    m_deferredLightingSubmissionTransaction.physicalQueueSubmissionStatistics(
+                        m_deferredLightingCompiledGraph,
+                        queue
+                    )
+                )
+            ;
+            if(!Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(
+                queueStatistics,
+                rendererFrameMetadata.runtimeStatistics
+            )){
+                rendererFrameMetadata.runtimeStatistics = {};
+                physicalQueueRuntimeStatistics.clear();
+                break;
+            }
+            physicalQueueRuntimeStatistics.push_back(queueStatistics);
+        }
+    }
     m_frameGraphRendererLabel.clear();
     Core::Device& device = m_graphics.getDevice();
     if(deferredRuntimeStatistics.valid()){
@@ -226,19 +271,17 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
         // ready-frontier workers, and compiled/recorded-graph reset/recompile must not overlap these value snapshots.
         // In particular, do not replace this with the mutable live Device registry while a later recompile can change
         // the packet plan that owns these transaction snapshots.
-        const Core::GpuPhysicalQueueTopology queueTopology = m_deferredLightingCompiledGraph.queueTopology();
-        for(usize queueIndex = 0u; queueIndex < queueTopology.queueCount; ++queueIndex){
-            const Core::GpuPhysicalQueueInfo& queueInfo = queueTopology.queues[queueIndex];
-            const Core::GpuTaskGraphPhysicalQueueSubmissionStatistics queueStatistics =
-                m_deferredLightingSubmissionTransaction.physicalQueueSubmissionStatistics(
-                    m_deferredLightingCompiledGraph,
-                    queueInfo.id
-                );
-            const Core::GpuTaskGraphPhysicalQueueCompileStatistics queueCompileStatistics =
-                m_deferredLightingCompiledGraph.physicalQueueCompileStatistics(queueInfo.id)
+        for(usize queueIndex = 0u; queueIndex < physicalQueueRuntimeStatistics.size(); ++queueIndex){
+            const Core::GpuPhysicalQueueInfo& queueInfo = runtimeQueueTopology.queues[queueIndex];
+            const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueRuntimeStatistics =
+                physicalQueueRuntimeStatistics[queueIndex]
             ;
-            if(!queueStatistics.valid() || !queueCompileStatistics.valid())
-                continue;
+            const Core::Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics& queueStatistics =
+                queueRuntimeStatistics.submission
+            ;
+            const Core::Telemetry::FrameGraphPhysicalQueueCompileRuntimeStatistics& queueCompileStatistics =
+                queueRuntimeStatistics.compile
+            ;
             const bool hasTerminalSubmissionWork =
                 queueStatistics.acceptedPacketCount != 0u || queueStatistics.rejectedPacketCount != 0u
             ;
@@ -253,13 +296,9 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             ;
             if(!hasTerminalSubmissionWork && !hasLogicalOwnershipTelemetry)
                 continue;
-            const Core::GpuTaskGraphPhysicalQueueRecordingStatistics queueRecordingStatistics =
-                m_deferredLightingRecordedGraph.physicalQueueRecordingStatistics(
-                    m_deferredLightingCompiledGraph,
-                    queueInfo.id
-                );
-            if(!queueRecordingStatistics.valid())
-                continue;
+            const Core::Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics& queueRecordingStatistics =
+                queueRuntimeStatistics.recording
+            ;
             const Core::GpuCommandArenaStatistics commandArenaStatistics =
                 m_graphics.getDevice().getCommandArenaStatistics(queueInfo.id)
             ;
@@ -273,9 +312,9 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
                 "\n  Logical ownership: incoming/outgoing records={}/{} signatures={}/{} repeated signatures={}/{} attributed advice resources={}"
                 "\n  Recording: packets={} tasks={} command lists={} barriers={} worker-routed={} overlapped={} CPU summed spans: command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task={:.3f} ms packet={:.3f} ms"
                 "\n  Command arena: workers={} epochs={} pending epochs={} command buffers current/high-water={}/{} reusable={} leased={} pending={} growth={} resets={} native handle storage lower bound={} bytes",
-                queueStatistics.queue.index,
-                queueStatistics.queue.deviceGeneration,
-                __hidden_frame_graph_export::PhysicalQueueClassLabel(queueStatistics.queueClass),
+                queueRuntimeStatistics.queue.index,
+                queueRuntimeStatistics.queue.deviceGeneration,
+                __hidden_frame_graph_export::PhysicalQueueClassLabel(queueInfo.queueClass),
                 queueInfo.familyIndex,
                 queueInfo.queueIndex,
                 queueInfo.dedicated,
@@ -490,17 +529,20 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
         descriptorHeapLifecycleStatistics.abandonedHeapUseCount
     );
 
-    Core::Telemetry::FrameGraphPassMetadata rendererFrameMetadata;
-    rendererFrameMetadata.runtimeStatistics = ECSRenderDetail::BuildFrameGraphRuntimeStatistics(
-        deferredRuntimeStatistics,
-        builder.frameIndex(),
-        m_frameGraphSourceFrameIndex
-    );
     const Handle rendererFrame = builder.addPass(
         Name("ecs_render/frame"),
         AStringView(m_frameGraphRendererLabel.data(), m_frameGraphRendererLabel.size()),
         rendererFrameMetadata
     );
+    for(
+        const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueStatistics
+        : physicalQueueRuntimeStatistics
+    ){
+        if(!builder.addPhysicalQueueRuntimeStatistics(rendererFrame, queueStatistics)){
+            NWB_ASSERT(false);
+            return false;
+        }
+    }
     const Handle frameSetup = builder.addPass(Name("ecs_render/frame_setup"), "Frame Setup");
     const Handle deferredTargets = builder.addResource(Name("ecs_render/deferred_targets"), "Deferred Targets");
     const Handle meshViewBuffer = builder.addResource(Name("ecs_render/mesh_view_buffer"), "Mesh View Buffer");

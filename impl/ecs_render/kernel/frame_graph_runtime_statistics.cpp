@@ -14,6 +14,41 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_frame_graph_runtime_statistics{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static bool TranslateQueueClass(
+    const Core::CommandQueue::Enum queueClass,
+    Core::Telemetry::FrameGraphQueueClass::Enum& outQueueClass
+)noexcept{
+    switch(queueClass){
+    case Core::CommandQueue::Graphics:
+        outQueueClass = Core::Telemetry::FrameGraphQueueClass::Graphics;
+        return true;
+    case Core::CommandQueue::Compute:
+        outQueueClass = Core::Telemetry::FrameGraphQueueClass::Compute;
+        return true;
+    case Core::CommandQueue::Transfer:
+        outQueueClass = Core::Telemetry::FrameGraphQueueClass::Transfer;
+        return true;
+    default:
+        return false;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRuntimeStatistics(
     const Core::GpuTaskGraphRuntimeStatistics& statistics,
     const u64 captureFrameIndex,
@@ -130,6 +165,109 @@ Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRun
         .present = true,
     };
     if(!Core::Telemetry::IsValidFrameGraphRuntimeStatistics(result))
+        return {};
+    return result;
+}
+
+Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics
+ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
+    const Core::GpuTaskGraphPhysicalQueueCompileStatistics& compileStatistics,
+    const Core::GpuTaskGraphPhysicalQueueRecordingStatistics& recordingStatistics,
+    const Core::GpuTaskGraphPhysicalQueueSubmissionStatistics& submissionStatistics
+)noexcept{
+    if(
+        !compileStatistics.valid()
+        || !recordingStatistics.valid()
+        || !submissionStatistics.valid()
+        || compileStatistics.graphGeneration != recordingStatistics.graphGeneration
+        || compileStatistics.graphGeneration != submissionStatistics.graphGeneration
+        || compileStatistics.planGeneration != recordingStatistics.planGeneration
+        || compileStatistics.planGeneration != submissionStatistics.planGeneration
+        || recordingStatistics.recordingAttemptGeneration != submissionStatistics.recordingAttemptGeneration
+        || compileStatistics.deviceGeneration != recordingStatistics.deviceGeneration
+        || compileStatistics.deviceGeneration != submissionStatistics.deviceGeneration
+        || compileStatistics.queue != recordingStatistics.queue
+        || compileStatistics.queue != submissionStatistics.queue
+        || compileStatistics.queueClass != recordingStatistics.queueClass
+        || compileStatistics.queueClass != submissionStatistics.queueClass
+    )
+        return {};
+
+    Core::Telemetry::FrameGraphQueueClass::Enum queueClass = Core::Telemetry::FrameGraphQueueClass::Unknown;
+    if(!__hidden_frame_graph_runtime_statistics::TranslateQueueClass(compileStatistics.queueClass, queueClass))
+        return {};
+
+    const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics result{
+        .graphGeneration = compileStatistics.graphGeneration,
+        .planGeneration = compileStatistics.planGeneration,
+        .recordingAttemptGeneration = recordingStatistics.recordingAttemptGeneration,
+        .deviceGeneration = compileStatistics.deviceGeneration,
+        .queue = {
+            .index = compileStatistics.queue.index,
+            .deviceGeneration = compileStatistics.queue.deviceGeneration,
+        },
+        .queueClass = queueClass,
+        .compile = {
+            .taskCount = static_cast<u64>(compileStatistics.taskCount),
+            .packetCount = static_cast<u64>(compileStatistics.packetCount),
+            .mergedTaskCount = static_cast<u64>(compileStatistics.mergedTaskCount),
+            .prologueBarrierCount = static_cast<u64>(compileStatistics.prologueBarrierCount),
+            .epilogueBarrierCount = static_cast<u64>(compileStatistics.epilogueBarrierCount),
+            .ownershipReleaseBarrierCount = static_cast<u64>(compileStatistics.ownershipReleaseBarrierCount),
+            .ownershipAcquireBarrierCount = static_cast<u64>(compileStatistics.ownershipAcquireBarrierCount),
+            .incomingLogicalOwnershipTransferCount = static_cast<u64>(
+                compileStatistics.incomingLogicalOwnershipTransferCount
+            ),
+            .outgoingLogicalOwnershipTransferCount = static_cast<u64>(
+                compileStatistics.outgoingLogicalOwnershipTransferCount
+            ),
+            .incomingLogicalOwnershipTransferSignatureCount = static_cast<u64>(
+                compileStatistics.incomingLogicalOwnershipTransferSignatureCount
+            ),
+            .outgoingLogicalOwnershipTransferSignatureCount = static_cast<u64>(
+                compileStatistics.outgoingLogicalOwnershipTransferSignatureCount
+            ),
+            .incomingRepeatedOwnershipTransferSignatureCount = static_cast<u64>(
+                compileStatistics.incomingRepeatedOwnershipTransferSignatureCount
+            ),
+            .outgoingRepeatedOwnershipTransferSignatureCount = static_cast<u64>(
+                compileStatistics.outgoingRepeatedOwnershipTransferSignatureCount
+            ),
+            .concurrentSharingAdviceResourceCount = static_cast<u64>(
+                compileStatistics.concurrentSharingAdviceResourceCount
+            ),
+        },
+        .recording = {
+            .packetCount = static_cast<u64>(recordingStatistics.packetCount),
+            .taskCount = static_cast<u64>(recordingStatistics.taskCount),
+            .commandListCount = static_cast<u64>(recordingStatistics.commandListCount),
+            .barrierCount = static_cast<u64>(recordingStatistics.barrierCount),
+            .workerRoutedPacketCount = static_cast<u64>(recordingStatistics.workerRoutedPacketCount),
+            .parallelPacketCount = static_cast<u64>(recordingStatistics.parallelPacketCount),
+            .commandListAcquisitionSeconds = recordingStatistics.commandListAcquisitionSeconds,
+            .graphBarrierRecordingSeconds = recordingStatistics.graphBarrierRecordingSeconds,
+            .taskRecordSeconds = recordingStatistics.taskRecordSeconds,
+            .recordingSeconds = recordingStatistics.recordingSeconds,
+        },
+        .submission = {
+            .acceptedPacketCount = static_cast<u64>(submissionStatistics.acceptedPacketCount),
+            .acceptedTaskCount = static_cast<u64>(submissionStatistics.acceptedTaskCount),
+            .rejectedPacketCount = static_cast<u64>(submissionStatistics.rejectedPacketCount),
+            .rejectedTaskCount = static_cast<u64>(submissionStatistics.rejectedTaskCount),
+            .nativeSubmissionCount = static_cast<u64>(submissionStatistics.nativeSubmissionCount),
+            .rejectedSubmissionCount = static_cast<u64>(submissionStatistics.rejectedSubmissionCount),
+            .nativeCommandListCount = static_cast<u64>(submissionStatistics.nativeCommandListCount),
+            .plannedWaitTokenCount = static_cast<u64>(submissionStatistics.plannedWaitTokenCount),
+            .sameQueueWaitElisionCount = static_cast<u64>(submissionStatistics.sameQueueWaitElisionCount),
+            .timelineWaitCount = static_cast<u64>(submissionStatistics.timelineWaitCount),
+            .mergedTimelineWaitCount = static_cast<u64>(submissionStatistics.mergedTimelineWaitCount),
+            .acceptedFrontierSubmissionCount = static_cast<u64>(
+                submissionStatistics.acceptedFrontierSubmissionCount
+            ),
+            .submissionSeconds = submissionStatistics.submissionSeconds,
+        },
+    };
+    if(!Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(result))
         return {};
     return result;
 }

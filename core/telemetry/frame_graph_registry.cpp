@@ -85,10 +85,17 @@ bool FrameGraphRegistry::record(CaptureSession& session){
     FrameGraphNodeDescs nodes(arena);
     FrameGraphEdgeDescs edges(arena);
     FrameGraphPendingNameEdges pendingNameEdges(arena);
+    FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics(arena);
 
     bool hasGraph = false;
     for(auto* contributor : m_contributors){
-        FrameGraphBuilder builder(nodes, edges, pendingNameEdges, session.frameIndex());
+        FrameGraphBuilder builder(
+            nodes,
+            edges,
+            pendingNameEdges,
+            physicalQueueRuntimeStatistics,
+            session.frameIndex()
+        );
         if(contributor->appendFrameGraph(builder))
             hasGraph = true;
     }
@@ -98,7 +105,7 @@ bool FrameGraphRegistry::record(CaptureSession& session){
 
     __hidden_frame_graph_registry::ResolvePendingNameEdges(arena, nodes, edges, pendingNameEdges);
 
-    return session.recordFrameGraph(nodes, edges);
+    return session.recordFrameGraph(nodes, edges, physicalQueueRuntimeStatistics);
 }
 
 

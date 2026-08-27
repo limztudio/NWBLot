@@ -141,6 +141,95 @@ TEST(EcsGraphics, DeferredGraphExposesRuntimeTelemetryArtifacts){
 }
 
 
+// Accepted queue assignment history must survive ordinary frame graph resets and update even when capture is off.
+// Detailed export binds that history to the exact compiled plan; resource invalidation is the only reset boundary.
+TEST(EcsGraphics, DeferredGraphExportsAcceptedQueueAssignmentHistory){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString systemHeaderSource;
+    AString systemSource;
+    AString resourcesSource;
+    AString renderSource;
+    AString buildSource;
+    AString frameGraphSource;
+    AString frameModuleSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", systemHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.cpp", systemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system_resources.cpp", resourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system_render.cpp", renderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_deferred_lighting.cpp", buildSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "frame_graph_export.cpp", frameGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "frame" / "module.cpp", frameModuleSource));
+    const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
+    const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView resources(resourcesSource.data(), resourcesSource.size());
+    const AStringView render(renderSource.data(), renderSource.size());
+    const AStringView build(buildSource.data(), buildSource.size());
+    const AStringView frameGraph(frameGraphSource.data(), frameGraphSource.size());
+    const AStringView frameModule(frameModuleSource.data(), frameModuleSource.size());
+
+    EXPECT_TRUE(ContainsText(systemHeader, "#include <core/graphics/task_graph/queue_assignment_telemetry.h>"));
+    EXPECT_TRUE(ContainsText(
+        systemHeader,
+        "Core::GpuTaskGraphQueueAssignmentTelemetryTracker m_deferredLightingTaskGraphQueueAssignmentTelemetry;"
+    ));
+    EXPECT_TRUE(ContainsText(system, ", m_deferredLightingTaskGraphQueueAssignmentTelemetry(arena)"));
+    EXPECT_TRUE(ContainsText(resources, "m_deferredLightingTaskGraphQueueAssignmentTelemetry.reset();"));
+    EXPECT_FALSE(ContainsText(render, "m_deferredLightingTaskGraphQueueAssignmentTelemetry.reset();"));
+    EXPECT_FALSE(ContainsText(build, "m_deferredLightingTaskGraphQueueAssignmentTelemetry.reset();"));
+
+    const usize previousRefreshOffset = render.find(
+        "m_deferredLightingTaskGraphQueueAssignmentTelemetry.update("
+    );
+    const usize validResetOffset = render.find("m_deferredLightingTaskGraphValid = false;", previousRefreshOffset);
+    const usize graphResetOffset = render.find("m_deferredLightingTaskGraph.reset();", previousRefreshOffset);
+    ASSERT_NE(previousRefreshOffset, AStringView::npos);
+    ASSERT_NE(validResetOffset, AStringView::npos);
+    ASSERT_NE(graphResetOffset, AStringView::npos);
+    EXPECT_LT(previousRefreshOffset, validResetOffset);
+    EXPECT_LT(previousRefreshOffset, graphResetOffset);
+    EXPECT_TRUE(ContainsText(render, "deferred queue-assignment history refresh failed before graph reset"));
+
+    const usize currentRefreshOffset = frameGraph.find(
+        "m_deferredLightingTaskGraphQueueAssignmentTelemetry.update("
+    );
+    const usize guardedExportOffset = frameGraph.find("else{", currentRefreshOffset);
+    const usize telemetryOptionsOffset = frameGraph.find(
+        "const Core::GpuTaskGraphTelemetryOptions deferredLightingTelemetryOptions",
+        guardedExportOffset
+    );
+    const usize taskGraphExportOffset = frameGraph.find(
+        "m_deferredLightingTaskGraph.appendFrameGraphTelemetry(",
+        telemetryOptionsOffset
+    );
+    ASSERT_NE(currentRefreshOffset, AStringView::npos);
+    ASSERT_NE(guardedExportOffset, AStringView::npos);
+    ASSERT_NE(telemetryOptionsOffset, AStringView::npos);
+    ASSERT_NE(taskGraphExportOffset, AStringView::npos);
+    EXPECT_LT(currentRefreshOffset, guardedExportOffset);
+    EXPECT_LT(guardedExportOffset, telemetryOptionsOffset);
+    EXPECT_LT(currentRefreshOffset, telemetryOptionsOffset);
+    EXPECT_LT(telemetryOptionsOffset, taskGraphExportOffset);
+    EXPECT_TRUE(ContainsText(frameGraph, "skipping detailed task graph export"));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        ".queueAssignments = &m_deferredLightingTaskGraphQueueAssignments,"
+    ));
+    EXPECT_TRUE(ContainsText(frameGraph, ".compiledGraph = &m_deferredLightingCompiledGraph,"));
+    EXPECT_TRUE(ContainsText(
+        frameGraph,
+        ".queueAssignmentTelemetry = &m_deferredLightingTaskGraphQueueAssignmentTelemetry,"
+    ));
+
+    const usize graphicsRunOffset = frameModule.find("m_graphics.runFrame()");
+    const usize frameGraphRecordOffset = frameModule.find("m_frameGraphRegistry.record(", graphicsRunOffset);
+    ASSERT_NE(graphicsRunOffset, AStringView::npos);
+    ASSERT_NE(frameGraphRecordOffset, AStringView::npos);
+    EXPECT_LT(graphicsRunOffset, frameGraphRecordOffset);
+}
+
+
 // FrameGraphBuilder retains labels by view until the capture is encoded. Keep the renderer's human-readable
 // runtime snapshot in persistent renderer-owned storage, and reset the label when no coherent attempt exists.
 TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){

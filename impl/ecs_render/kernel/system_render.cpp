@@ -55,6 +55,20 @@ inline constexpr usize s_LaggedLightingHistoryStateSourceCapacity = 3u;
 
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
+    // Preserve the exact accepted frontier even when frame-graph capture was disabled for the completed frame. The
+    // tracker owns persistent history; every graph artifact below is about to be reset for the next declaration.
+    if(m_deferredLightingTaskGraphValid){
+        Core::Alloc::ScratchArena queueAssignmentTelemetryScratchArena(RendererArenaScope::s_TaskGraphArena);
+        if(!m_deferredLightingTaskGraphQueueAssignmentTelemetry.update(
+            m_deferredLightingTaskGraph,
+            m_deferredLightingTaskGraphQueueAssignments,
+            m_deferredLightingCompiledGraph,
+            m_deferredLightingSubmissionTransaction,
+            queueAssignmentTelemetryScratchArena
+        ))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred queue-assignment history refresh failed before graph reset"));
+    }
+
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};

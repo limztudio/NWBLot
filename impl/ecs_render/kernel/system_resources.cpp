@@ -66,6 +66,7 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
 
 void RendererSystem::invalidateResources(){
     m_deferredTaskTimingFeedback.reset();
+    m_deferredLightingTaskGraphQueueAssignmentTelemetry.reset();
     m_preparedCsgFrameState = CsgFrameState{};
     m_preparedCsgFrameStateValid = false;
     m_preparedHasTransparentRenderers = false;

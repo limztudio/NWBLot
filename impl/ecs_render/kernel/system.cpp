@@ -40,6 +40,7 @@ RendererSystem::RendererSystem(
     , m_deferredLightingTaskGraph(arena)
     , m_deferredLightingTaskGraphAnalysis(arena)
     , m_deferredLightingTaskGraphQueueAssignments(arena)
+    , m_deferredLightingTaskGraphQueueAssignmentTelemetry(arena)
     , m_deferredLightingCompiledGraph(arena)
     , m_deferredLightingRecordedGraph(arena)
     , m_deferredLightingSubmissionTransaction(arena)

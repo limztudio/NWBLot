@@ -609,16 +609,29 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
 
     if(m_deferredLightingTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-        const Core::GpuTaskGraphTelemetryOptions deferredLightingTelemetryOptions{
-            .queueAssignments = &m_deferredLightingTaskGraphQueueAssignments,
-        };
-        if(!m_deferredLightingTaskGraph.appendFrameGraphTelemetry(
-            builder,
-            m_deferredLightingTaskGraphAnalysis,
-            scratchArena,
-            deferredLightingTelemetryOptions
-        ))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred-effects/lighting/composite/present graph telemetry export failed"));
+        if(!m_deferredLightingTaskGraphQueueAssignmentTelemetry.update(
+            m_deferredLightingTaskGraph,
+            m_deferredLightingTaskGraphQueueAssignments,
+            m_deferredLightingCompiledGraph,
+            m_deferredLightingSubmissionTransaction,
+            scratchArena
+        )){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: accepted queue-assignment telemetry refresh failed; skipping detailed task graph export"));
+        }
+        else{
+            const Core::GpuTaskGraphTelemetryOptions deferredLightingTelemetryOptions{
+                .queueAssignments = &m_deferredLightingTaskGraphQueueAssignments,
+                .compiledGraph = &m_deferredLightingCompiledGraph,
+                .queueAssignmentTelemetry = &m_deferredLightingTaskGraphQueueAssignmentTelemetry,
+            };
+            if(!m_deferredLightingTaskGraph.appendFrameGraphTelemetry(
+                builder,
+                m_deferredLightingTaskGraphAnalysis,
+                scratchArena,
+                deferredLightingTelemetryOptions
+            ))
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred-effects/lighting/composite/present graph telemetry export failed"));
+        }
     }
 
     return true;

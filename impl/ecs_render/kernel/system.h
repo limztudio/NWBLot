@@ -19,6 +19,7 @@
 #include <core/graphics/task_graph/packet_runtime.h>
 #include <core/graphics/task_graph/persistent_state.h>
 #include <core/graphics/task_graph/presentation_contributor.h>
+#include <core/graphics/task_graph/queue_assignment_telemetry.h>
 #include <core/telemetry/frame_graph_contributor.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets_material/asset.h>
@@ -475,6 +476,9 @@ private:
     Core::GpuTaskGraph m_deferredLightingTaskGraph;
     Core::GpuTaskGraphAnalysis m_deferredLightingTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_deferredLightingTaskGraphQueueAssignments;
+    // Accepted-route history survives ordinary per-frame graph resets so telemetry can distinguish first, unchanged,
+    // and changed assignments. Device/resource invalidation clears the tracker with the artifacts it describes.
+    Core::GpuTaskGraphQueueAssignmentTelemetryTracker m_deferredLightingTaskGraphQueueAssignmentTelemetry;
     Core::GpuCompiledGraph m_deferredLightingCompiledGraph;
     Core::GpuRecordedGraph m_deferredLightingRecordedGraph;
     Core::GpuGraphSubmissionTransaction m_deferredLightingSubmissionTransaction;

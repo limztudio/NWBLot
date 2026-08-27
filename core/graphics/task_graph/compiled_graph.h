@@ -77,6 +77,9 @@ struct GpuCompiledTask{
     GpuSubmissionPacketId packet;
     GpuTaskPacketizationDecision::Enum packetizationDecision = GpuTaskPacketizationDecision::Unknown;
     GpuTaskTimingPolicy::Enum timingPolicy = GpuTaskTimingPolicy::None;
+    // Calibration and debug-override observations contribute route duration history without becoming the
+    // committed timing-feedback incumbent. Retain that decision so late query collection preserves policy dwell.
+    bool recordsNonCommittingTimingSample = false;
     u32 prologueStateSeedOffset = 0u;
     u32 prologueStateSeedCount = 0u;
     u32 prologueBarrierOffset = 0u;

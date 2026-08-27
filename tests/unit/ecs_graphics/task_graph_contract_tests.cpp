@@ -3626,6 +3626,7 @@ TEST(EcsGraphics, NaturalAvboitComputeStagesPermitCompilerOwnedRouting){
     EXPECT_FALSE(ContainsText(naturalComputeStages, "EnableSameFamilyComputeEffectRouting(avboitComputeScheduling, false)"));
     EXPECT_TRUE(ContainsText(naturalComputeStages, "EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling)"));
     EXPECT_TRUE(ContainsText(naturalComputeStages, "avboitComputeScheduling.allowTimingFeedbackRouting = true"));
+    EXPECT_TRUE(ContainsText(naturalComputeStages, "avboitComputeScheduling.allowCrossClassTimingFeedbackRouting = true"));
     const usize depthWarpDescOffset = naturalComputeStages.find("Core::GpuTaskDesc depthWarpDesc;");
     const usize depthWarpFailureOffset = naturalComputeStages.find(
         "if(!m_avboitSystem.taskGraphStage().m_depthWarpTask.valid())",
@@ -3714,6 +3715,9 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     EXPECT_TRUE(ContainsText(timingFeedback, "m_graphics.gpuTiming().allocateSampleAttribution()"));
     EXPECT_TRUE(ContainsText(timingFeedback, "!m_active || !m_policy.enabled || !m_subscription.valid()"));
     EXPECT_TRUE(ContainsText(timingFeedback, "sample.physicalQueue != pending.expectedQueue"));
+    EXPECT_TRUE(ContainsText(timingFeedbackHeader, "bool recordsNonCommittingTimingSample = false"));
+    EXPECT_TRUE(ContainsText(timingFeedback, "!pending.recordsNonCommittingTimingSample"));
+    EXPECT_TRUE(ContainsText(timingFeedback, "m_history.recordNonCommittingSample("));
     EXPECT_TRUE(ContainsText(systemHeader, "RendererTaskTimingFeedback m_deferredTaskTimingFeedback"));
 
     const usize lightingOffset = taskGraph.find("void RendererSystem::buildDeferredLightingTaskGraph");
@@ -3745,6 +3749,7 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
         EXPECT_TRUE(ContainsText(task, ".timingFeedback"));
         EXPECT_TRUE(ContainsText(task, ".timingScope"));
         EXPECT_TRUE(ContainsText(task, "beginSample("));
+        EXPECT_TRUE(ContainsText(task, "compiledTask->recordsNonCommittingTimingSample"));
         EXPECT_TRUE(ContainsText(task, "static void accepted("));
         EXPECT_TRUE(ContainsText(task, "acceptSubmission("));
         EXPECT_TRUE(ContainsText(task, "static void discarded("));

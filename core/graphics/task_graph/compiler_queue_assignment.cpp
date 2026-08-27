@@ -118,15 +118,18 @@ namespace GpuTaskGraphCompilerDetail{
 
 [[nodiscard]] static bool AllowsTimingFeedbackRouting(const GpuTaskGraphTaskView& task)noexcept{
     return task.scheduling.allowTimingFeedbackRouting
-        && task.scheduling.allowSameClassQueueRouting
+        && (
+            task.scheduling.allowSameClassQueueRouting
+            || task.scheduling.allowCrossClassTimingFeedbackRouting
+        )
         && task.scheduling.overlapPreferred
         && !task.scheduling.avoidQueueCrossing
     ;
 }
 
-// Adaptive routing remains inside the selected queue class. Same-family candidates are always eligible; another
-// Vulkan family additionally needs the task's explicit cross-family opt-in, after which resource planning owns the
-// required exclusive release/acquire pair or rejects an incompatible concurrent-sharing declaration.
+// Same-class routing retains its independent physical-queue opt-in. Every route into another Vulkan family keeps
+// the separate family opt-in. Cross-class timing is a stronger explicit opt-in and can only use classes already
+// admitted by a flexible queue request; candidate validation still owns capability and resource-sharing checks.
 [[nodiscard]] static bool IsLegalTimingFeedbackRoute(
     const GpuTaskGraph& graph,
     const GpuTaskGraphQueueTopology& topology,
@@ -134,14 +137,59 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuPhysicalQueueInfo& incumbent,
     const GpuPhysicalQueueInfo& candidate
 )noexcept{
-    return AllowsTimingFeedbackRouting(task)
-        && candidate.queueClass == incumbent.queueClass
+    if(!AllowsTimingFeedbackRouting(task) || !IsLegalQueueAssignmentCandidate(graph, topology, task, candidate))
+        return false;
+    if(
+        candidate.familyIndex != incumbent.familyIndex
+        && !task.scheduling.allowCrossFamilySameClassQueueRouting
+    )
+        return false;
+
+    if(candidate.queueClass == incumbent.queueClass)
+        return task.scheduling.allowSameClassQueueRouting;
+
+    return task.scheduling.allowCrossClassTimingFeedbackRouting
         && (
-            candidate.familyIndex == incumbent.familyIndex
-            || task.scheduling.allowCrossFamilySameClassQueueRouting
+            task.queue.preferredQueue == GpuQueuePreference::Any
+            || (task.queue.allowFallback && task.queue.compilerMayOverridePreference)
         )
-        && IsLegalQueueAssignmentCandidate(graph, topology, task, candidate)
     ;
+}
+
+[[nodiscard]] static GpuTaskTimingKey TimingHistoryKeyForQueue(
+    const GpuTaskTimingAssignmentKey& assignmentKey,
+    const CommandQueue::Enum queueClass
+)noexcept{
+    return GpuTaskTimingKey{
+        .task = assignmentKey.task,
+        .variant = assignmentKey.variant,
+        .resolutionClass = assignmentKey.resolutionClass,
+        .queue = queueClass,
+    };
+}
+
+[[nodiscard]] static const GpuPhysicalQueueInfo* FindTimingFeedbackIncumbent(
+    const GpuTaskGraph& graph,
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& staticQueue,
+    const GpuTaskTimingAssignmentKey& key,
+    const GpuTaskTimingHistorySnapshot& historySnapshot
+)noexcept{
+    const GpuTaskTimingAssignmentState* const assignmentState = historySnapshot.findAssignment(key);
+    if(!assignmentState || assignmentState->lastAcceptedQueue == staticQueue.id)
+        return &staticQueue;
+
+    const GpuPhysicalQueueInfo* const acceptedQueue = FindPhysicalQueueInfo(
+        topology,
+        assignmentState->lastAcceptedQueue
+    );
+    if(
+        !acceptedQueue
+        || !IsLegalTimingFeedbackRoute(graph, topology, task, staticQueue, *acceptedQueue)
+    )
+        return &staticQueue;
+    return acceptedQueue;
 }
 
 [[nodiscard]] static bool HasUsableTimingFeedback(
@@ -165,14 +213,17 @@ namespace GpuTaskGraphCompilerDetail{
     const Vector<u8, Alloc::ScratchArena>& schedulingReachability,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& incumbent,
-    const GpuTaskTimingKey& key,
+    const GpuTaskTimingAssignmentKey& key,
     const GpuTaskTimingHistorySnapshot& historySnapshot,
     const GpuTaskTimingFeedbackPolicy& policy,
     const u64 frameIndex
 )noexcept{
-    const GpuTaskTimingHistory* const incumbentHistory = historySnapshot.find(key, incumbent.id);
+    const GpuTaskTimingHistory* const incumbentHistory = historySnapshot.find(
+        TimingHistoryKeyForQueue(key, incumbent.queueClass),
+        incumbent.id
+    );
     const GpuTaskTimingAssignmentState* const assignmentState = historySnapshot.findAssignment(key);
-    if(!incumbentHistory || !assignmentState)
+    if(!incumbentHistory)
         return nullptr;
 
     const GpuPhysicalQueueInfo* result = nullptr;
@@ -186,10 +237,18 @@ namespace GpuTaskGraphCompilerDetail{
         )
             continue;
 
-        const GpuTaskTimingHistory* const candidateHistory = historySnapshot.find(key, candidate.id);
-        if(
-            !candidateHistory
-            || !GpuTaskTimingFeedbackCanSwitch(
+        const GpuTaskTimingHistory* const candidateHistory = historySnapshot.find(
+            TimingHistoryKeyForQueue(key, candidate.queueClass),
+            candidate.id
+        );
+        if(!candidateHistory)
+            continue;
+
+        // A fresh store can finish bounded calibration without committing any probe as an incumbent. In that
+        // state the deterministic static route is the baseline and the first evidence-backed choice has no prior
+        // switch whose dwell must elapse.
+        const bool canSwitch = assignmentState
+            ? GpuTaskTimingFeedbackCanSwitch(
                 *incumbentHistory,
                 *candidateHistory,
                 *assignmentState,
@@ -198,7 +257,11 @@ namespace GpuTaskGraphCompilerDetail{
                 frameIndex,
                 policy
             )
-        )
+            : GpuTaskTimingHistoryMeetsMinimumSamples(*incumbentHistory, policy)
+                && GpuTaskTimingHistoryMeetsMinimumSamples(*candidateHistory, policy)
+                && GpuTaskTimingBenefitExceedsHysteresis(*incumbentHistory, *candidateHistory, policy)
+        ;
+        if(!canSwitch)
             continue;
 
         const GpuQueueAssignmentScore candidateScore = BuildQueueAssignmentScore(
@@ -232,15 +295,15 @@ namespace GpuTaskGraphCompilerDetail{
     return result;
 }
 
-// Calibration is deliberately bounded and narrower than adaptive selection. It only visits already-legal
-// same-class routes until each has enough accepted samples, then ordinary hysteresis resumes. Returning the
-// incumbent is meaningful: it reserves this frame for a baseline sample instead of switching on incomplete data.
+// Calibration is deliberately bounded and narrower than adaptive selection. It only visits already-legal opted-in
+// routes until each has enough accepted samples, then ordinary hysteresis resumes. Returning the incumbent is
+// meaningful: it reserves this frame for a baseline sample instead of switching on incomplete data.
 [[nodiscard]] static const GpuPhysicalQueueInfo* FindTimingFeedbackCalibrationQueue(
     const GpuTaskGraph& graph,
     const GpuTaskGraphQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& incumbent,
-    const GpuTaskTimingKey& key,
+    const GpuTaskTimingAssignmentKey& key,
     const GpuTaskTimingHistorySnapshot& historySnapshot,
     const GpuTaskTimingFeedbackPolicy& policy,
     const u64 frameIndex
@@ -253,7 +316,10 @@ namespace GpuTaskGraphCompilerDetail{
         return nullptr;
 
     const auto sampleCountFor = [&](const GpuPhysicalQueueInfo& queue){
-        const GpuTaskTimingHistory* const history = historySnapshot.find(key, queue.id);
+        const GpuTaskTimingHistory* const history = historySnapshot.find(
+            TimingHistoryKeyForQueue(key, queue.queueClass),
+            queue.id
+        );
         return history ? history->sampleCount : 0u;
     };
 
@@ -277,6 +343,7 @@ namespace GpuTaskGraphCompilerDetail{
             candidateSampleCount < resultSampleCount
             || (
                 candidateSampleCount == resultSampleCount
+                && result != &incumbent
                 && IsBetterQueue(candidate, result)
             )
         ){
@@ -694,12 +761,15 @@ bool GpuTaskGraphCompiler::assignQueues(
         const GpuPhysicalQueueInfo* selectedQueue = FindPhysicalQueueInfo(topology, assignment.queue);
         NWB_ASSERT(selectedQueue);
 
-        const GpuTaskTimingKey timingKey{
+        const GpuTaskTimingAssignmentKey timingAssignmentKey{
             .task = task.identity,
             .variant = task.timing.variant,
             .resolutionClass = task.timing.resolutionClass,
-            .queue = selectedQueue->queueClass,
         };
+        const GpuTaskTimingKey timingKey = TimingHistoryKeyForQueue(
+            timingAssignmentKey,
+            selectedQueue->queueClass
+        );
         const GpuTaskTimingQueueOverride* const timingOverride = FindGpuTaskTimingQueueOverride(
             options.timingQueueOverrides,
             options.timingQueueOverrideCount,
@@ -721,12 +791,20 @@ bool GpuTaskGraphCompiler::assignQueues(
             assignment.modifiers |= GpuTaskQueueAssignmentModifier::DebugTimingOverride;
         }
         else if(HasUsableTimingFeedback(options, topology.queues[0u].id.deviceGeneration)){
-            const GpuPhysicalQueueInfo* const calibrationQueue = FindTimingFeedbackCalibrationQueue(
+            const GpuPhysicalQueueInfo* const timingIncumbent = FindTimingFeedbackIncumbent(
                 graph,
                 topology,
                 task,
                 *selectedQueue,
-                timingKey,
+                timingAssignmentKey,
+                *options.timingHistory
+            );
+            const GpuPhysicalQueueInfo* const calibrationQueue = FindTimingFeedbackCalibrationQueue(
+                graph,
+                topology,
+                task,
+                *timingIncumbent,
+                timingAssignmentKey,
                 *options.timingHistory,
                 *options.timingFeedbackPolicy,
                 options.timingFrameIndex
@@ -742,13 +820,17 @@ bool GpuTaskGraphCompiler::assignQueues(
                 topology,
                 schedulingReachability,
                 task,
-                *selectedQueue,
-                timingKey,
+                *timingIncumbent,
+                timingAssignmentKey,
                 *options.timingHistory,
                 *options.timingFeedbackPolicy,
                 options.timingFrameIndex
             )){
                 selectedQueue = timingQueue;
+                assignment.modifiers |= GpuTaskQueueAssignmentModifier::TimingFeedback;
+            }
+            else if(timingIncumbent != selectedQueue){
+                selectedQueue = timingIncumbent;
                 assignment.modifiers |= GpuTaskQueueAssignmentModifier::TimingFeedback;
             }
         }

@@ -31,8 +31,28 @@ struct GpuQueueAssignmentScore{
 };
 
 
-// Stable semantic key for measured task work.  The broad queue class belongs in the key, while the exact physical
-// queue is retained separately by a history entry so devices with several same-class queues do not blend samples.
+// Accepted assignment and dwell state follow semantic work across queue-class changes. Duration histories remain
+// route-specific below, but a Graphics -> Compute -> Graphics sequence must update one shared switch timeline.
+struct GpuTaskTimingAssignmentKey{
+    Name task = NAME_NONE;
+    u32 variant = 0u;
+    u32 resolutionClass = 0u;
+
+    [[nodiscard]] constexpr bool valid()const noexcept{ return static_cast<bool>(task); }
+};
+inline constexpr bool operator==(const GpuTaskTimingAssignmentKey& lhs, const GpuTaskTimingAssignmentKey& rhs)noexcept{
+    return lhs.task == rhs.task
+        && lhs.variant == rhs.variant
+        && lhs.resolutionClass == rhs.resolutionClass
+    ;
+}
+inline constexpr bool operator!=(const GpuTaskTimingAssignmentKey& lhs, const GpuTaskTimingAssignmentKey& rhs)noexcept{
+    return !(lhs == rhs);
+}
+
+
+// Stable route key for measured task work. The broad queue class belongs in the history key, while the exact
+// physical queue is retained separately so devices with several same-class queues do not blend samples.
 struct GpuTaskTimingKey{
     Name task = NAME_NONE;
     u32 variant = 0u;
@@ -50,6 +70,16 @@ inline constexpr bool operator==(const GpuTaskTimingKey& lhs, const GpuTaskTimin
 }
 inline constexpr bool operator!=(const GpuTaskTimingKey& lhs, const GpuTaskTimingKey& rhs)noexcept{
     return !(lhs == rhs);
+}
+
+[[nodiscard]] inline constexpr GpuTaskTimingAssignmentKey GpuTaskTimingAssignmentKeyFromHistoryKey(
+    const GpuTaskTimingKey& key
+)noexcept{
+    return GpuTaskTimingAssignmentKey{
+        .task = key.task,
+        .variant = key.variant,
+        .resolutionClass = key.resolutionClass,
+    };
 }
 
 
@@ -75,7 +105,7 @@ struct GpuTaskTimingHistoryEntry{
 // This state is intentionally separate from duration statistics.  It lets a compiler damp assignment changes even
 // when the timing query that established the last accepted route completes several frames later.
 struct GpuTaskTimingAssignmentState{
-    GpuTaskTimingKey key;
+    GpuTaskTimingAssignmentKey key;
     GpuPhysicalQueueId lastAcceptedQueue;
     u64 lastAcceptedFrameIndex = 0u;
     u64 lastSwitchFrameIndex = 0u;
@@ -96,9 +126,9 @@ struct GpuTaskTimingAssignmentState{
 struct GpuTaskTimingFeedbackPolicy{
     bool enabled = false;
     u32 minimumSampleCount = 8u;
-    // While a legal candidate lacks enough samples, one same-class probe is selected every N frames. Cross-family
-    // probes require the task's separate cross-family same-class opt-in. Zero keeps timing feedback adaptive-only
-    // and disables automatic calibration. Probes stop once every legal route has minimumSampleCount observations.
+    // While a legal candidate lacks enough samples, one opted-in route is selected every N frames. Every
+    // cross-family probe requires the family-routing opt-in, and cross-class probes also require the cross-class
+    // timing opt-in. Zero disables calibration. Probes stop after every legal route reaches minimumSampleCount.
     u32 calibrationIntervalFrames = 1u;
     f64 minimumAbsoluteBenefitSeconds = 0.0;
     f64 minimumRelativeBenefit = 0.0;
@@ -186,7 +216,9 @@ public:
         const GpuTaskTimingKey& key,
         const GpuPhysicalQueueId& physicalQueue
     )const noexcept;
-    [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignment(const GpuTaskTimingKey& key)const noexcept;
+    [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignment(
+        const GpuTaskTimingAssignmentKey& key
+    )const noexcept;
 
 
 private:
@@ -235,6 +267,13 @@ public:
         f64 durationSeconds,
         u64 sourceFrameIndex
     );
+    // A bounded calibration observation contributes route statistics but is not a committed adaptive assignment.
+    // This keeps a slow or under-sampled route from changing incumbent retention or restarting switch dwell.
+    [[nodiscard]] bool recordNonCommittingSample(
+        const GpuTaskTimingKey& key,
+        const GpuPhysicalQueueId& physicalQueue,
+        f64 durationSeconds
+    );
     // Future packet-acceptance integrations may report a route even when timestamp capacity was unavailable.
     [[nodiscard]] bool noteAcceptedAssignment(
         const GpuTaskTimingKey& key,
@@ -249,7 +288,9 @@ public:
         const GpuTaskTimingKey& key,
         const GpuPhysicalQueueId& physicalQueue
     )const noexcept;
-    [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignment(const GpuTaskTimingKey& key)const noexcept;
+    [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignment(
+        const GpuTaskTimingAssignmentKey& key
+    )const noexcept;
 
 
 private:
@@ -261,8 +302,12 @@ private:
         const GpuTaskTimingKey& key,
         const GpuPhysicalQueueId& physicalQueue
     )const noexcept;
-    [[nodiscard]] GpuTaskTimingAssignmentState* findAssignmentState(const GpuTaskTimingKey& key)noexcept;
-    [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignmentState(const GpuTaskTimingKey& key)const noexcept;
+    [[nodiscard]] GpuTaskTimingAssignmentState* findAssignmentState(
+        const GpuTaskTimingAssignmentKey& key
+    )noexcept;
+    [[nodiscard]] const GpuTaskTimingAssignmentState* findAssignmentState(
+        const GpuTaskTimingAssignmentKey& key
+    )const noexcept;
     void rebuildHistory(HistoryRecord& record)noexcept;
 
 

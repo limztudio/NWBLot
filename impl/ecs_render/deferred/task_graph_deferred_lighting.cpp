@@ -3746,6 +3746,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling);
     // Accepted samples use the queue class and exact transport chosen by this compile.
     avboitComputeScheduling.allowTimingFeedbackRouting = true;
+    avboitComputeScheduling.allowCrossClassTimingFeedbackRouting = true;
     const Core::GpuTaskTimingMetadata avboitComputeStageTiming =
         AvboitComputeStageTimingMetadata(deferredTargets.avboit)
     ;

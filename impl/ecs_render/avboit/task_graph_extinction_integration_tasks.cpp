@@ -292,7 +292,8 @@ void AvboitExtinctionGraphTask::discarded(Payload& payload){
     bool timingRecorded = false;
     if(payload.timingFeedback && payload.timingScope){
         const Core::GpuPhysicalQueueInfo* const queueInfo = context.graph.queueInfo(context.queue);
-        if(queueInfo){
+        const Core::GpuCompiledTask* const compiledTask = context.graph.findTask(context.task);
+        if(queueInfo && compiledTask){
             const Core::GpuTaskGraphTaskView task = context.taskGraph.taskAt(context.task.index);
             payload.timingAttribution = payload.timingFeedback->beginSample(
                 payload.timingScope->identity,
@@ -302,7 +303,8 @@ void AvboitExtinctionGraphTask::discarded(Payload& payload){
                     .resolutionClass = task.timing.resolutionClass,
                     .queue = queueInfo->queueClass,
                 },
-                context.queue
+                context.queue,
+                compiledTask->recordsNonCommittingTimingSample
             );
         }
     }

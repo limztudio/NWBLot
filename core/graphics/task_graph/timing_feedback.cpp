@@ -220,7 +220,7 @@ const GpuTaskTimingHistory* GpuTaskTimingHistorySnapshot::find(
 
 
 const GpuTaskTimingAssignmentState* GpuTaskTimingHistorySnapshot::findAssignment(
-    const GpuTaskTimingKey& key
+    const GpuTaskTimingAssignmentKey& key
 )const noexcept{
     if(!m_valid || !key.valid())
         return nullptr;
@@ -282,6 +282,24 @@ bool GpuTaskTimingHistoryStore::recordSample(
     if(!noteAcceptedAssignment(key, physicalQueue, sourceFrameIndex))
         return false;
 
+    return recordNonCommittingSample(key, physicalQueue, durationSeconds);
+}
+
+
+bool GpuTaskTimingHistoryStore::recordNonCommittingSample(
+    const GpuTaskTimingKey& key,
+    const GpuPhysicalQueueId& physicalQueue,
+    const f64 durationSeconds
+){
+    using namespace __hidden_gpu_task_timing_feedback;
+
+    if(!key.valid() || !physicalQueue.valid() || !IsFinitePositiveDuration(durationSeconds))
+        return false;
+    if(m_deviceGeneration == 0u)
+        m_deviceGeneration = physicalQueue.deviceGeneration;
+    if(m_deviceGeneration != physicalQueue.deviceGeneration)
+        return false;
+
     HistoryRecord* record = findHistoryRecord(key, physicalQueue);
     if(!record){
         record = &m_histories.emplace_back(m_arena);
@@ -309,10 +327,11 @@ bool GpuTaskTimingHistoryStore::noteAcceptedAssignment(
     if(m_deviceGeneration != physicalQueue.deviceGeneration)
         return false;
 
-    GpuTaskTimingAssignmentState* assignment = findAssignmentState(key);
+    const GpuTaskTimingAssignmentKey assignmentKey = GpuTaskTimingAssignmentKeyFromHistoryKey(key);
+    GpuTaskTimingAssignmentState* assignment = findAssignmentState(assignmentKey);
     if(!assignment){
         assignment = &m_assignments.emplace_back();
-        assignment->key = key;
+        assignment->key = assignmentKey;
         assignment->lastAcceptedQueue = physicalQueue;
         assignment->lastAcceptedFrameIndex = sourceFrameIndex;
         assignment->lastSwitchFrameIndex = sourceFrameIndex;
@@ -365,7 +384,7 @@ const GpuTaskTimingHistory* GpuTaskTimingHistoryStore::find(
 
 
 const GpuTaskTimingAssignmentState* GpuTaskTimingHistoryStore::findAssignment(
-    const GpuTaskTimingKey& key
+    const GpuTaskTimingAssignmentKey& key
 )const noexcept{
     return findAssignmentState(key);
 }
@@ -396,7 +415,7 @@ const GpuTaskTimingHistoryStore::HistoryRecord* GpuTaskTimingHistoryStore::findH
 
 
 GpuTaskTimingAssignmentState* GpuTaskTimingHistoryStore::findAssignmentState(
-    const GpuTaskTimingKey& key
+    const GpuTaskTimingAssignmentKey& key
 )noexcept{
     for(GpuTaskTimingAssignmentState& assignment : m_assignments){
         if(assignment.key == key)
@@ -407,7 +426,7 @@ GpuTaskTimingAssignmentState* GpuTaskTimingHistoryStore::findAssignmentState(
 
 
 const GpuTaskTimingAssignmentState* GpuTaskTimingHistoryStore::findAssignmentState(
-    const GpuTaskTimingKey& key
+    const GpuTaskTimingAssignmentKey& key
 )const noexcept{
     for(const GpuTaskTimingAssignmentState& assignment : m_assignments){
         if(assignment.key == key)

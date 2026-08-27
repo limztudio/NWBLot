@@ -83,15 +83,19 @@ struct GpuTaskSchedulingHint{
     // serial same-class chains (for example, multi-mip uploads): the first task may offload, while later tasks stay
     // with it instead of creating avoidable timeline/ownership crossings at every stage.
     bool preserveSameClassQueueWithDirectDependency = false;
-    // Extends the same-class opt-in to a physical queue from another Vulkan family. This remains separately opt-in
-    // because exclusive resource uses cross that boundary through compiler-owned release/acquire ownership pairs.
-    // It has no effect unless allowSameClassQueueRouting is also set; timing feedback also requires its own opt-in.
+    // Extends physical routing to another Vulkan family. This remains separately opt-in because exclusive resource
+    // uses cross that boundary through compiler-owned release/acquire ownership pairs. Same-class routing still
+    // requires allowSameClassQueueRouting; cross-class timing also requires its stronger opt-in below.
     bool allowCrossFamilySameClassQueueRouting = false;
     // Enables timing-history routing and bounded calibration for this task. This is separate from ordinary
     // same-class routing so an application can keep historical measurement scoped to a small, proven-safe subset.
     // Another Vulkan family additionally requires allowCrossFamilySameClassQueueRouting, preserving a deliberate
     // dual opt-in before the compiler plans any ownership-transfer route.
     bool allowTimingFeedbackRouting = false;
+    // Extends timing feedback to another queue class that the queue request and resource declarations already
+    // permit. This never relaxes required capabilities or a strict concrete preference; it only lets accepted,
+    // class-specific history replace an otherwise legal static Graphics/Compute/Transfer placement.
+    bool allowCrossClassTimingFeedbackRouting = false;
     // FrontierScored automatic coalescing requires this nonempty domain to match every task already in the
     // preceding packet. Empty domains are never scored-merge eligible; explicit mergeWithPrevious ignores it.
     Name frontierScoredMergeDomain = {};

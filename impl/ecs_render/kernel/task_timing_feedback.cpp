@@ -101,7 +101,8 @@ bool RendererTaskTimingFeedback::setPolicy(const Core::GpuTaskTimingFeedbackPoli
 Core::GpuTimingSampleAttribution RendererTaskTimingFeedback::beginSample(
     const Name& scopeName,
     const Core::GpuTaskTimingKey& key,
-    const Core::GpuPhysicalQueueId& expectedQueue
+    const Core::GpuPhysicalQueueId& expectedQueue,
+    const bool recordsNonCommittingTimingSample
 ){
     if(!scopeName || !key.valid() || !expectedQueue.valid())
         return Core::s_NoGpuTimingSampleAttribution;
@@ -120,6 +121,7 @@ Core::GpuTimingSampleAttribution RendererTaskTimingFeedback::beginSample(
         .key = key,
         .expectedQueue = expectedQueue,
         .sourceFrameIndex = m_graphics.getFrameIndex(),
+        .recordsNonCommittingTimingSample = recordsNonCommittingTimingSample,
     });
     return attribution;
 }
@@ -153,7 +155,10 @@ void RendererTaskTimingFeedback::acceptSubmission(
     }
 
     m_history.resetForDeviceGeneration(acceptedQueue.deviceGeneration);
-    if(!m_history.noteAcceptedAssignment(pending.key, acceptedQueue, pending.sourceFrameIndex)){
+    if(
+        !pending.recordsNonCommittingTimingSample
+        && !m_history.noteAcceptedAssignment(pending.key, acceptedQueue, pending.sourceFrameIndex)
+    ){
         m_pendingSamples.erase(m_pendingSamples.begin() + static_cast<isize>(pendingIndex));
         return;
     }
@@ -249,12 +254,20 @@ void RendererTaskTimingFeedback::tryRecordSample(const usize pendingIndex){
     if(!pending.accepted || !pending.hasSample)
         return;
 
-    if(!m_history.recordSample(
-        pending.key,
-        pending.expectedQueue,
-        pending.durationSeconds,
-        pending.sourceFrameIndex
-    ))
+    const bool recorded = pending.recordsNonCommittingTimingSample
+        ? m_history.recordNonCommittingSample(
+            pending.key,
+            pending.expectedQueue,
+            pending.durationSeconds
+        )
+        : m_history.recordSample(
+            pending.key,
+            pending.expectedQueue,
+            pending.durationSeconds,
+            pending.sourceFrameIndex
+        )
+    ;
+    if(!recorded)
         NWB_LOGGER_WARNING(NWB_TEXT("Renderer task timing feedback rejected an accepted GPU timing sample."));
     m_pendingSamples.erase(m_pendingSamples.begin() + static_cast<isize>(pendingIndex));
 }

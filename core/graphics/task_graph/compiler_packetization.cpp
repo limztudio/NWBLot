@@ -341,6 +341,13 @@ namespace GpuTaskGraphCompilerDetail{
             .packet = packetID,
             .packetizationDecision = packetizationDecision,
             .timingPolicy = task.timing.policy,
+            .recordsNonCommittingTimingSample = static_cast<bool>(
+                assignment->modifiers
+                & (
+                    GpuTaskQueueAssignmentModifier::TimingCalibration
+                    | GpuTaskQueueAssignmentModifier::DebugTimingOverride
+                )
+            ),
         });
     }
     return __hidden_gpu_task_graph_compiler_packetization::ResolvePacketTimingEnvelope(

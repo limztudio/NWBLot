@@ -32,6 +32,7 @@ private:
         Core::GpuPhysicalQueueId expectedQueue;
         u64 sourceFrameIndex = 0u;
         f64 durationSeconds = 0.0;
+        bool recordsNonCommittingTimingSample = false;
         bool accepted = false;
         bool hasSample = false;
     };
@@ -53,7 +54,8 @@ public:
     [[nodiscard]] Core::GpuTimingSampleAttribution beginSample(
         const Name& scopeName,
         const Core::GpuTaskTimingKey& key,
-        const Core::GpuPhysicalQueueId& expectedQueue
+        const Core::GpuPhysicalQueueId& expectedQueue,
+        bool recordsNonCommittingTimingSample
     );
     void acceptSubmission(Core::GpuTimingSampleAttribution attribution, const Core::QueueSubmissionToken& token);
     void discardRecording(Core::GpuTimingSampleAttribution attribution);

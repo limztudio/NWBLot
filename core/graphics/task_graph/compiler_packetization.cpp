@@ -14,6 +14,79 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_gpu_task_graph_compiler_packetization{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool ResolvePacketTimingEnvelope(
+    const GpuTaskGraphPacketTimingEnvelopeOptions& options,
+    GpuTaskGraphCompilerDetail::GpuTaskGraphCompiledPlanStorage& compiledPlan,
+    GpuSubmissionPacketRange& outRange
+){
+    outRange = {};
+    const bool hasFirstTask = options.firstTask.valid();
+    const bool hasLastTask = options.lastTask.valid();
+    if(hasFirstTask != hasLastTask)
+        return false;
+    if(!hasFirstTask)
+        return true;
+
+    usize firstTaskIndex = Limit<usize>::s_Max;
+    usize lastTaskIndex = Limit<usize>::s_Max;
+    for(usize taskIndex = 0u; taskIndex < compiledPlan.tasks.size(); ++taskIndex){
+        const GpuCompiledTask& task = compiledPlan.tasks[taskIndex];
+        if(task.task == options.firstTask)
+            firstTaskIndex = taskIndex;
+        if(task.task == options.lastTask)
+            lastTaskIndex = taskIndex;
+    }
+    if(
+        firstTaskIndex == Limit<usize>::s_Max
+        || lastTaskIndex == Limit<usize>::s_Max
+        || lastTaskIndex < firstTaskIndex
+    )
+        return false;
+
+    const GpuSubmissionPacketId firstPacket = compiledPlan.tasks[firstTaskIndex].packet;
+    const GpuSubmissionPacketId lastPacket = compiledPlan.tasks[lastTaskIndex].packet;
+    if(
+        !firstPacket.valid()
+        || !lastPacket.valid()
+        || firstPacket.generation != compiledPlan.planGeneration
+        || lastPacket.generation != compiledPlan.planGeneration
+        || firstPacket.index >= compiledPlan.packets.size()
+        || lastPacket.index >= compiledPlan.packets.size()
+        || lastPacket.index < firstPacket.index
+    )
+        return false;
+
+    for(usize packetIndex = 0u; packetIndex <= lastPacket.index; ++packetIndex){
+        if(compiledPlan.packets[packetIndex].joinsAcceptedQueueFrontier)
+            return false;
+    }
+
+    const usize packetCount = static_cast<usize>(lastPacket.index) - firstPacket.index + 1u;
+    outRange = GpuSubmissionPacketRange{ .first = firstPacket, .packetCount = packetCount };
+    for(usize packetOffset = 0u; packetOffset < packetCount; ++packetOffset){
+        GpuSubmissionPacket& packet = compiledPlan.packets[firstPacket.index + packetOffset];
+        packet.recordsPacketEnvelopeTiming = true;
+        packet.recordsTiming = true;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace GpuTaskGraphCompilerDetail{
 
 
@@ -76,7 +149,9 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraphAnalysis& analysis,
     const GpuTaskGraphQueueAssignments& assignments,
     const GpuTaskGraphPacketizationPolicy::Enum policy,
-    GpuTaskGraphCompiledPlanStorage& compiledPlan
+    const GpuTaskGraphPacketTimingEnvelopeOptions& timingEnvelope,
+    GpuTaskGraphCompiledPlanStorage& compiledPlan,
+    GpuSubmissionPacketRange& outTimingEnvelopeRange
 ){
     // Tasks retain one exact acceptance and synchronization point by default. An explicitly opted-in successor may
     // share its immediately preceding compatible packet, preserving task order while retaining one submission for a
@@ -268,7 +343,11 @@ namespace GpuTaskGraphCompilerDetail{
             .timingPolicy = task.timing.policy,
         });
     }
-    return true;
+    return __hidden_gpu_task_graph_compiler_packetization::ResolvePacketTimingEnvelope(
+        timingEnvelope,
+        compiledPlan,
+        outTimingEnvelopeRange
+    );
 }
 
 

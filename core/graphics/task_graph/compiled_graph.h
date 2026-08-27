@@ -39,6 +39,9 @@ struct GpuSubmissionPacket{
     // A late recovery/finalization packet receives waits for the latest accepted packet on every other physical
     // queue directly from GpuGraphSubmissionTransaction. It is a graph runtime policy, not a renderer token ladder.
     bool joinsAcceptedQueueFrontier = false;
+    // Distinguishes compiler-selected envelope membership from task-local PacketOnly/Task policies. recordsTiming
+    // remains the combined native-ticket requirement so existing recording and submission paths stay coherent.
+    bool recordsPacketEnvelopeTiming = false;
     bool recordsTiming = false;
 };
 
@@ -363,6 +366,11 @@ public:
         const GpuTaskId& last
     )const noexcept;
     [[nodiscard]] GpuSubmissionPacketRange allPacketRange()const noexcept;
+    // Immutable compiler-selected timing span. Endpoint packets are included whole because packet queries bracket
+    // native submissions rather than individual merged task payloads.
+    [[nodiscard]] GpuSubmissionPacketRange packetTimingEnvelopeRange()const noexcept{
+        return validPacketRange(m_packetTimingEnvelopeRange) ? m_packetTimingEnvelopeRange : GpuSubmissionPacketRange{};
+    }
     [[nodiscard]] const GpuCompiledTask* findTask(const GpuTaskId& task)const noexcept;
     [[nodiscard]] GpuSubmissionPacketId packetForTask(const GpuTaskId& task)const noexcept;
     [[nodiscard]] GpuTaskPacketizationDecision::Enum packetizationDecisionForTask(const GpuTaskId& task)const noexcept;
@@ -435,6 +443,7 @@ private:
     GraphicsVector<GpuCompiledExternalResourceExportSource> m_externalResourceExportSources;
     GraphicsVector<GpuPhysicalQueueInfo> m_queueTopology;
     GpuCompiledPresentEndpoint m_presentEndpoint;
+    GpuSubmissionPacketRange m_packetTimingEnvelopeRange;
     u64 m_generation = 0u;
     u64 m_declarationRevision = 0u;
     u64 m_planGeneration = 0u;

@@ -61,6 +61,7 @@ inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
     usize& outOccurrenceCount
 ){
     outOccurrenceCount = 0u;
+    const GpuSubmissionPacketRange packetTimingEnvelopeRange = compiledGraph.packetTimingEnvelopeRange();
     for(usize packetIndex = 0u; packetIndex < compiledGraph.packetCount(); ++packetIndex){
         const GpuSubmissionPacketId packetID = compiledGraph.packetIdAt(packetIndex);
         const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
@@ -84,6 +85,13 @@ inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
             if(compiledTask->timingPolicy == GpuTaskTimingPolicy::Task && taskView.identity == scopeName)
                 ++outOccurrenceCount;
         }
+        const bool recordsPacketEnvelopeTiming = packetTimingEnvelopeRange.valid()
+            && packetIndex >= packetTimingEnvelopeRange.first.index
+            && packetIndex - packetTimingEnvelopeRange.first.index < packetTimingEnvelopeRange.packetCount
+        ;
+        if(packet.recordsPacketEnvelopeTiming != recordsPacketEnvelopeTiming)
+            return false;
+        recordsTiming = recordsTiming || recordsPacketEnvelopeTiming;
         if(packet.recordsTiming != recordsTiming)
             return false;
         if(packet.recordsTiming && PacketTimingScopeName(graph, compiledGraph, packetID) == scopeName)

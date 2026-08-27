@@ -265,7 +265,9 @@ struct GpuTaskGraphResourceStatePlan{
     const GpuTaskGraphAnalysis& analysis,
     const GpuTaskGraphQueueAssignments& assignments,
     GpuTaskGraphPacketizationPolicy::Enum policy,
-    GpuTaskGraphCompiledPlanStorage& compiledPlan
+    const GpuTaskGraphPacketTimingEnvelopeOptions& timingEnvelope,
+    GpuTaskGraphCompiledPlanStorage& compiledPlan,
+    GpuSubmissionPacketRange& outTimingEnvelopeRange
 );
 
 

@@ -46,6 +46,7 @@ void GpuCompiledGraph::reset(){
     m_externalResourceExportSources.clear();
     m_queueTopology.clear();
     m_presentEndpoint = {};
+    m_packetTimingEnvelopeRange = {};
     m_generation = 0u;
     m_declarationRevision = 0u;
     m_planGeneration = 0u;

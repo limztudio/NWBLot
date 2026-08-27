@@ -129,9 +129,21 @@ struct GpuTaskGraphQueueAssignmentOptions{
     u64 timingFrameIndex = 0u;
 };
 
+// Optional semantic anchors for one compiler-owned normal-execution packet timing envelope. Both omitted disables
+// the envelope; a partial pair is invalid. Configured endpoints must belong to this graph, occur in compiler order,
+// and resolve before every accepted-queue-frontier recovery packet. The resolved range includes each endpoint's
+// complete containing packet, so explicitly merged neighbors share the same packet timing scope.
+struct GpuTaskGraphPacketTimingEnvelopeOptions{
+    GpuTaskId firstTask;
+    GpuTaskId lastTask;
+
+    [[nodiscard]] bool enabled()const noexcept{ return firstTask.valid() && lastTask.valid(); }
+};
+
 struct GpuTaskGraphCompileOptions{
     GpuTaskGraphPacketizationPolicy::Enum packetizationPolicy = GpuTaskGraphPacketizationPolicy::ExplicitMerge;
     GpuTaskGraphQueueAssignmentOptions queueAssignmentOptions;
+    GpuTaskGraphPacketTimingEnvelopeOptions packetTimingEnvelope;
     // Native packet recording requires every task to retain a payload and record thunk. Tooling-only callers that
     // compile metadata graphs may opt out explicitly; executable graph paths must retain the default.
     bool allowMetadataOnlyTasks = false;

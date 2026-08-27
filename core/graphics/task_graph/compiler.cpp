@@ -424,7 +424,9 @@ bool GpuTaskGraphCompiler::compile(
         outAnalysis,
         outAssignments,
         options.packetizationPolicy,
-        compiledPlan
+        options.packetTimingEnvelope,
+        compiledPlan,
+        outCompiledGraph.m_packetTimingEnvelopeRange
     )){
         outCompiledGraph.reset();
         return false;

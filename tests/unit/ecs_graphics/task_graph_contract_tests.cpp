@@ -1266,6 +1266,68 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
 }
 
 
+// Every normal renderer packet from the packet containing Shadow Preparation through the accepted presentation
+// endpoint owns compiler-selected timing. All recorders for that compiled graph retain the shared timing recorder
+// because even an untimed late-tail attempt validates the graph-owned plan before opening its native command list.
+TEST(EcsGraphics, DeferredGraphConfiguresCompilerOwnedPacketTiming){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString buildSource;
+    AString renderSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_deferred_lighting.cpp",
+        buildSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "kernel" / "system_render.cpp",
+        renderSource
+    ));
+    const AStringView build(buildSource.data(), buildSource.size());
+    const AStringView render(renderSource.data(), renderSource.size());
+
+    const usize buildOffset = build.find("void RendererSystem::buildDeferredLightingTaskGraph");
+    ASSERT_NE(buildOffset, AStringView::npos);
+    const usize optionsOffset = build.find("Core::GpuTaskGraphCompileOptions compileOptions;", buildOffset);
+    ASSERT_NE(optionsOffset, AStringView::npos);
+    const usize firstTaskOffset = build.find(
+        "compileOptions.packetTimingEnvelope.firstTask = m_deferredShadowPrepareTask;",
+        optionsOffset
+    );
+    ASSERT_NE(firstTaskOffset, AStringView::npos);
+    const usize lastTaskOffset = build.find(
+        "compileOptions.packetTimingEnvelope.lastTask = m_deferredFrameTimingEndTask;",
+        firstTaskOffset
+    );
+    ASSERT_NE(lastTaskOffset, AStringView::npos);
+    const usize compilerOffset = build.find("if(!compiler.compile(", lastTaskOffset);
+    ASSERT_NE(compilerOffset, AStringView::npos);
+    EXPECT_LT(optionsOffset, firstTaskOffset);
+    EXPECT_LT(firstTaskOffset, lastTaskOffset);
+    EXPECT_LT(lastTaskOffset, compilerOffset);
+
+    const AStringView compileSetup = build.substr(optionsOffset, compilerOffset - optionsOffset);
+    EXPECT_EQ(CountText(compileSetup, "packetTimingEnvelope.firstTask"), 1u);
+    EXPECT_EQ(CountText(compileSetup, "packetTimingEnvelope.lastTask"), 1u);
+    EXPECT_FALSE(ContainsText(compileSetup, "m_deferredFrameRecoveryTask"));
+
+    const usize renderFunctionOffset = render.find("void RendererSystem::render(");
+    ASSERT_NE(renderFunctionOffset, AStringView::npos);
+    const AStringView renderFunction = render.substr(renderFunctionOffset);
+    EXPECT_EQ(CountText(renderFunction, "const Core::GpuNativePacketRecorder"), 3u);
+    EXPECT_EQ(CountText(
+        renderFunction,
+        "const Core::GpuNativePacketRecorder deferredRecorder(device, m_graphics.gpuTiming());"
+    ), 1u);
+    EXPECT_EQ(CountText(
+        renderFunction,
+        "const Core::GpuNativePacketRecorder recorder(device, m_graphics.gpuTiming());"
+    ), 2u);
+    EXPECT_FALSE(ContainsText(renderFunction, "GpuNativePacketRecorder deferredRecorder(device);"));
+    EXPECT_FALSE(ContainsText(renderFunction, "GpuNativePacketRecorder recorder(device);"));
+}
+
+
 // One typed CPU snapshot binds an acquired WSI image to its exact owning framebuffer. Graphics publishes it only
 // after attachment identity validation, clears it on every lifecycle boundary, and never asks mutable backend
 // current-image state which framebuffer should render.

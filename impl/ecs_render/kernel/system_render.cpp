@@ -1775,7 +1775,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     // Record preparation and prefix through the graph's ready-frontier path. These renderer payloads intentionally
     // retain the serial default, while graph-owned upload packets later in the frame may opt into worker recording.
-    const Core::GpuNativePacketRecorder deferredRecorder(device);
+    const Core::GpuNativePacketRecorder deferredRecorder(device, m_graphics.gpuTiming());
     Core::Alloc::ScratchArena shadowPrepareStateScratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::BufferHandle, Core::Alloc::ScratchArena> shadowPrepareLiveStateBuffers{ shadowPrepareStateScratchArena };
     const auto appendShadowPrepareStateBuffer = [&](const Core::BufferHandle& buffer){
@@ -3635,7 +3635,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 .invoke = acceptReadbackFinalState,
             };
             Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-            const Core::GpuNativePacketRecorder recorder(device);
+            const Core::GpuNativePacketRecorder recorder(device, m_graphics.gpuTiming());
             const Core::GpuTaskGraphSubmitter submitter(device);
             const bool readbackAccepted = submitter.recordAndSubmitTask(
                 m_deferredLightingTaskGraph,
@@ -3865,7 +3865,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 .invoke = acceptHistoryCopyFinalState,
             };
             Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-            const Core::GpuNativePacketRecorder recorder(device);
+            const Core::GpuNativePacketRecorder recorder(device, m_graphics.gpuTiming());
             const Core::GpuTaskGraphSubmitter submitter(device);
             const bool historyCopyAccepted = submitter.recordAndSubmitTask(
                 m_deferredLightingTaskGraph,

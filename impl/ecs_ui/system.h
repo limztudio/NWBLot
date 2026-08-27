@@ -208,9 +208,9 @@ private:
     );
     [[nodiscard]] bool recordTaskGraphUploadCompletion()const;
     void confirmTaskGraphPresentationSubmission()noexcept;
+    void retainTaskGraphPresentationForRetry()noexcept;
     void discardStandaloneLegacyTaskGraphPresentation()noexcept;
     void clearTaskGraphDrawSnapshot()noexcept;
-    [[nodiscard]] bool ensureRenderCommandList();
     [[nodiscard]] bool ensureRenderResources(Core::Framebuffer* framebuffer);
     [[nodiscard]] bool ensureShadersLoaded();
     [[nodiscard]] bool ensureInputLayout();
@@ -276,7 +276,6 @@ private:
     Core::GraphicsPipelineHandle m_pipeline;
     Core::BufferHandle m_vertexBuffer;
     Core::BufferHandle m_indexBuffer;
-    Core::CommandListHandle m_renderCommandList;
     UiTextureResourceVector m_textures;
     UiTextureUploadBatch m_textureUploadBatch;
     UiTextureUploadVector m_textureUploadScratch;
@@ -293,8 +292,10 @@ private:
     bool m_inputRegistered = false;
     bool m_frameStarted = false;
     bool m_frameFinished = false;
-    // These frame-local flags keep one graph-generation claim for the draw list and retained uploads. The accepted
-    // terminal packet ends the ImGui frame; a non-graph renderer may still use the ordinary direct fallback.
+    // A rejected callback-free graph retains the live ImGui arrays until a later acquired frame can rebuild their
+    // graph-owned snapshot. The accepted terminal is the only healthy path that consumes that retained frame.
+    bool m_taskGraphPresentationRetryPending = false;
+    // These frame-local flags keep one graph-generation claim for the draw list and retained uploads.
     bool m_taskGraphPresentationPrepared = false;
     bool m_taskGraphPresentationHasWork = false;
     bool m_taskGraphPresentationClaimed = false;

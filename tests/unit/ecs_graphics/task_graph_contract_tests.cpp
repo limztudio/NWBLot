@@ -2002,23 +2002,25 @@ TEST(EcsGraphics, UiFreshTextureImportsPreserveNativeOrigins){
 }
 
 
-// The exceptional non-renderer/custom-callback UI route must keep its texture uploads and ordinary rasterization
-// graph-owned. An arbitrary callback is explicitly opaque and serial, but submitStandaloneTaskGraph() records it
-// synchronously; native direct rendering remains only as the last availability fallback after that graph rejects.
-TEST(EcsGraphics, UiLegacyFallbackUsesStandaloneGraphs){
+// Every ImGui presentation route remains graph-owned. Callback-free rejection keeps the exact live frame until a
+// later acquired image can rebuild its snapshot; an opaque callback rejection cannot be replayed and fails closed.
+TEST(EcsGraphics, UiPresentationRetriesOnlyThroughStandaloneGraphs){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString graphicsHeaderSource;
     AString graphicsSource;
+    AString uiHeaderSource;
     AString uiSource;
     AString uiTextureSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module.h", graphicsHeaderSource));
     ASSERT_TRUE(ReadGraphicsModuleSources(repoRoot, graphicsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.h", uiHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "texture_resources.cpp", uiTextureSource));
     const AStringView graphicsHeader(graphicsHeaderSource.data(), graphicsHeaderSource.size());
     const AStringView graphics(graphicsSource.data(), graphicsSource.size());
+    const AStringView uiHeader(uiHeaderSource.data(), uiHeaderSource.size());
     const AStringView ui(uiSource.data(), uiSource.size());
     const AStringView uiTextures(uiTextureSource.data(), uiTextureSource.size());
 
@@ -2035,6 +2037,11 @@ TEST(EcsGraphics, UiLegacyFallbackUsesStandaloneGraphs){
     EXPECT_TRUE(ContainsText(ui, "Standalone ImGui Presentation Back Buffer"));
     EXPECT_TRUE(ContainsText(ui, "ImGui Opaque Callback Domain"));
     EXPECT_TRUE(ContainsText(ui, "if(prepareTaskGraphPresentation(frame))"));
+    EXPECT_TRUE(ContainsText(uiHeader, "m_taskGraphPresentationRetryPending"));
+    EXPECT_FALSE(ContainsText(uiHeader, "ensureRenderCommandList"));
+    EXPECT_FALSE(ContainsText(uiHeader, "m_renderCommandList"));
+    EXPECT_FALSE(ContainsText(ui, "executeCommandLists("));
+    EXPECT_FALSE(ContainsText(ui, "ensureRenderCommandList"));
 
     const usize opaquePresentationOffset = ui.find("Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation");
     const usize legacySubmitOffset = ui.find("bool UiSystem::submitPreparedLegacyTextureUploads");
@@ -2074,46 +2081,110 @@ TEST(EcsGraphics, UiLegacyFallbackUsesStandaloneGraphs){
     EXPECT_FALSE(ContainsText(presentationDeclare, "|| !previousTask.valid()"));
     EXPECT_TRUE(ContainsText(presentationDeclare, "if(previousTask.valid())"));
 
-    const AStringView presentationRenderBody = ui.substr(renderOffset);
+    const usize resizeOffset = ui.find("void UiSystem::backBufferResizing", renderOffset);
+    ASSERT_NE(resizeOffset, AStringView::npos);
+    const AStringView presentationRenderBody = ui.substr(renderOffset, resizeOffset - renderOffset);
     const usize standalonePresentationOffset = presentationRenderBody.find("submitStandaloneTaskGraphPresentation(frame)");
     const usize opaquePresentationFallbackOffset = presentationRenderBody.find("submitStandaloneLegacyTaskGraphPresentation(frame)");
-    const usize directTextureFallbackOffset = presentationRenderBody.find("submitPreparedLegacyTextureUploads(*drawData)");
+    const usize retainedRetryOffset = presentationRenderBody.find("retainTaskGraphPresentationForRetry();");
+    const usize textureOnlyOffset = presentationRenderBody.find("submitPreparedLegacyTextureUploads(*drawData)");
     ASSERT_NE(standalonePresentationOffset, AStringView::npos);
     ASSERT_NE(opaquePresentationFallbackOffset, AStringView::npos);
-    ASSERT_NE(directTextureFallbackOffset, AStringView::npos);
-    EXPECT_LT(standalonePresentationOffset, directTextureFallbackOffset);
+    ASSERT_NE(retainedRetryOffset, AStringView::npos);
+    ASSERT_NE(textureOnlyOffset, AStringView::npos);
     EXPECT_LT(standalonePresentationOffset, opaquePresentationFallbackOffset);
-    EXPECT_LT(opaquePresentationFallbackOffset, directTextureFallbackOffset);
+    EXPECT_LT(opaquePresentationFallbackOffset, retainedRetryOffset);
+    EXPECT_LT(retainedRetryOffset, textureOnlyOffset);
+    EXPECT_TRUE(ContainsText(presentationRenderBody, "const bool retrySafe = m_taskGraphDrawUploadsPrepared;"));
+    EXPECT_TRUE(ContainsText(presentationRenderBody, "if(m_graphics.isDeviceRecreationRequested())"));
+    EXPECT_TRUE(ContainsText(presentationRenderBody, "if(!retrySafe){"));
+    EXPECT_TRUE(ContainsText(presentationRenderBody, "after an opaque callback may have executed; requesting recreation"));
+    EXPECT_TRUE(ContainsText(presentationRenderBody, "retaining callback-free frame for graph retry"));
 
-    const usize prepareFrameOffset = ui.find("bool UiSystem::prepareFrameResources");
-    const usize snapshotClearOffset = ui.find("void UiSystem::clearTaskGraphDrawSnapshot", prepareFrameOffset);
-    const usize resizeOffset = ui.find("void UiSystem::backBufferResizing", renderOffset);
-    ASSERT_NE(prepareFrameOffset, AStringView::npos);
-    ASSERT_NE(snapshotClearOffset, AStringView::npos);
-    ASSERT_NE(resizeOffset, AStringView::npos);
-    const AStringView prepareFrame = ui.substr(prepareFrameOffset, snapshotClearOffset - prepareFrameOffset);
-    const AStringView directRenderBody = ui.substr(renderOffset, resizeOffset - renderOffset);
-    EXPECT_FALSE(ContainsText(prepareFrame, "ensureRenderCommandList()"));
-    EXPECT_TRUE(ContainsText(directRenderBody, "if(!ensureRenderCommandList())"));
-    EXPECT_FALSE(ContainsText(directRenderBody, "prepareTextureRequests"));
-    EXPECT_TRUE(ContainsText(directRenderBody, "standalone legacy ImGui graph presentation failed; retaining direct raster fallback"));
-    EXPECT_TRUE(ContainsText(directRenderBody, "direct ImGui fallback submission was rejected; retaining frame for retry"));
+    const usize visibleDrawOffset = presentationRenderBody.find("if(hasVisibleDraw){");
+    ASSERT_NE(visibleDrawOffset, AStringView::npos);
+    ASSERT_LT(visibleDrawOffset, textureOnlyOffset);
+    const AStringView visibleDrawBody = presentationRenderBody.substr(visibleDrawOffset, textureOnlyOffset - visibleDrawOffset);
+    const usize legacyAttemptOffset = visibleDrawBody.find("submitStandaloneLegacyTaskGraphPresentation(frame)");
+    const usize acceptedTerminalExclusionOffset = visibleDrawBody.find("if(!m_frameFinished)", legacyAttemptOffset);
+    const usize recreationExclusionOffset = visibleDrawBody.find(
+        "if(m_graphics.isDeviceRecreationRequested())",
+        acceptedTerminalExclusionOffset
+    );
+    const usize callbackPolicyOffset = visibleDrawBody.find("if(!retrySafe){", recreationExclusionOffset);
+    const usize callbackFreeRetryOffset = visibleDrawBody.find(
+        "retainTaskGraphPresentationForRetry();",
+        callbackPolicyOffset
+    );
+    ASSERT_NE(legacyAttemptOffset, AStringView::npos);
+    ASSERT_NE(acceptedTerminalExclusionOffset, AStringView::npos);
+    ASSERT_NE(recreationExclusionOffset, AStringView::npos);
+    ASSERT_NE(callbackPolicyOffset, AStringView::npos);
+    ASSERT_NE(callbackFreeRetryOffset, AStringView::npos);
+    EXPECT_LT(legacyAttemptOffset, acceptedTerminalExclusionOffset);
+    EXPECT_LT(acceptedTerminalExclusionOffset, recreationExclusionOffset);
+    EXPECT_LT(recreationExclusionOffset, callbackPolicyOffset);
+    EXPECT_LT(callbackPolicyOffset, callbackFreeRetryOffset);
+    EXPECT_FALSE(ContainsText(visibleDrawBody, "submitPreparedLegacyTextureUploads"));
+    EXPECT_TRUE(ContainsText(visibleDrawBody, "if(!m_frameFinished)"));
+    EXPECT_TRUE(ContainsText(visibleDrawBody, "if(m_graphics.isDeviceRecreationRequested())"));
+    EXPECT_TRUE(ContainsText(visibleDrawBody, "m_graphics.requestDeviceRecreation();"));
+    EXPECT_TRUE(ContainsText(visibleDrawBody, "retainTaskGraphPresentationForRetry();"));
 
-    const usize directTextureSubmitOffset = directRenderBody.find("submitPreparedLegacyTextureUploads(*drawData)");
-    const usize directCommandListOffset = directRenderBody.find("if(!ensureRenderCommandList())");
-    const usize directExecuteOffset = directRenderBody.find("device.executeCommandLists(commandLists, 1, Core::CommandQueue::Graphics, &submitted)");
-    const usize directRejectedSubmitOffset = directRenderBody.find("if(!submitted)", directExecuteOffset);
-    const usize directFrameResetOffset = directRenderBody.find("m_frameStarted = false", directExecuteOffset);
-    ASSERT_NE(directTextureSubmitOffset, AStringView::npos);
-    ASSERT_NE(directCommandListOffset, AStringView::npos);
-    ASSERT_NE(directExecuteOffset, AStringView::npos);
-    ASSERT_NE(directRejectedSubmitOffset, AStringView::npos);
-    ASSERT_NE(directFrameResetOffset, AStringView::npos);
-    EXPECT_LT(directTextureSubmitOffset, directExecuteOffset);
-    EXPECT_LT(directTextureSubmitOffset, directCommandListOffset);
-    EXPECT_LT(directCommandListOffset, directExecuteOffset);
-    EXPECT_LT(directExecuteOffset, directRejectedSubmitOffset);
-    EXPECT_LT(directRejectedSubmitOffset, directFrameResetOffset);
+    const usize updateOffset = ui.find("void UiSystem::update");
+    const usize beginFrameOffset = ui.find("void UiSystem::beginFrame", updateOffset);
+    ASSERT_NE(updateOffset, AStringView::npos);
+    ASSERT_NE(beginFrameOffset, AStringView::npos);
+    const AStringView updateBody = ui.substr(updateOffset, beginFrameOffset - updateOffset);
+    const usize retryGateOffset = updateBody.find("if(m_taskGraphPresentationRetryPending)");
+    const usize beginCallOffset = updateBody.find("beginFrame(delta)");
+    ASSERT_NE(retryGateOffset, AStringView::npos);
+    ASSERT_NE(beginCallOffset, AStringView::npos);
+    EXPECT_LT(retryGateOffset, beginCallOffset);
+
+    const usize confirmOffset = ui.find("void UiSystem::confirmTaskGraphPresentationSubmission");
+    const usize retainDefinitionOffset = ui.find("void UiSystem::retainTaskGraphPresentationForRetry", confirmOffset);
+    const usize discardOffset = ui.find("void UiSystem::discardStandaloneLegacyTaskGraphPresentation", retainDefinitionOffset);
+    ASSERT_NE(confirmOffset, AStringView::npos);
+    ASSERT_NE(retainDefinitionOffset, AStringView::npos);
+    ASSERT_NE(discardOffset, AStringView::npos);
+    const AStringView confirmBody = ui.substr(confirmOffset, retainDefinitionOffset - confirmOffset);
+    const AStringView retainBody = ui.substr(retainDefinitionOffset, discardOffset - retainDefinitionOffset);
+    EXPECT_TRUE(ContainsText(confirmBody, "m_taskGraphPresentationRetryPending = false;"));
+    EXPECT_TRUE(ContainsText(retainBody, "m_textureUploadBatch.complete(false);"));
+    EXPECT_TRUE(ContainsText(retainBody, "m_taskGraphPresentationRetryPending = true;"));
+    EXPECT_TRUE(ContainsText(retainBody, "m_taskGraphPresentationPrepared = false;"));
+    EXPECT_TRUE(ContainsText(retainBody, "m_taskGraphPresentationFrame = {};"));
+    EXPECT_TRUE(ContainsText(retainBody, "clearTaskGraphDrawSnapshot();"));
+    EXPECT_FALSE(ContainsText(retainBody, "m_frameStarted = false;"));
+    EXPECT_FALSE(ContainsText(retainBody, "m_frameFinished = false;"));
+    EXPECT_FALSE(ContainsText(retainBody, "m_frameGeneration"));
+
+    const usize textureCompletionTaskOffset = ui.find("struct UiSystem::StandaloneTextureUploadCompletionTask");
+    const usize legacyTaskOffset = ui.find("struct UiSystem::StandaloneLegacyPresentationTask", textureCompletionTaskOffset);
+    ASSERT_NE(textureCompletionTaskOffset, AStringView::npos);
+    ASSERT_NE(legacyTaskOffset, AStringView::npos);
+    const AStringView textureCompletionTask = ui.substr(
+        textureCompletionTaskOffset,
+        legacyTaskOffset - textureCompletionTaskOffset
+    );
+    const AStringView textureOnlyRenderBody = presentationRenderBody.substr(textureOnlyOffset);
+    EXPECT_TRUE(ContainsText(textureCompletionTask, "m_textureUploadBatch.complete(true);"));
+    EXPECT_FALSE(ContainsText(textureCompletionTask, "m_frameStarted = false;"));
+    EXPECT_FALSE(ContainsText(textureCompletionTask, "m_frameFinished = false;"));
+    EXPECT_TRUE(ContainsText(textureOnlyRenderBody, "m_frameStarted = false;"));
+    EXPECT_TRUE(ContainsText(textureOnlyRenderBody, "m_frameFinished = false;"));
+    EXPECT_TRUE(ContainsText(textureOnlyRenderBody, "m_taskGraphPresentationRetryPending = false;"));
+
+    const usize invalidateOffset = ui.find("void UiSystem::invalidateResources");
+    const usize prepareResourcesOffset = ui.find("bool UiSystem::prepareResources", invalidateOffset);
+    ASSERT_NE(invalidateOffset, AStringView::npos);
+    ASSERT_NE(prepareResourcesOffset, AStringView::npos);
+    const AStringView invalidateBody = ui.substr(invalidateOffset, prepareResourcesOffset - invalidateOffset);
+    const AStringView resizeBody = ui.substr(resizeOffset);
+    EXPECT_TRUE(ContainsText(invalidateBody, "m_taskGraphPresentationRetryPending = false;"));
+    EXPECT_TRUE(ContainsText(resizeBody, "m_taskGraphPresentationRetryPending = false;"));
+    EXPECT_TRUE(ContainsText(presentationRenderBody, "m_taskGraphPresentationRetryPending = false;"));
 }
 
 
@@ -3689,11 +3760,12 @@ TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
     EXPECT_EQ(CountText(shadow, "copyBuffer("), 1u);
     EXPECT_TRUE(ContainsText(shadow, "if(snapshot && !graphOwnsAdaptivePrimitives)"));
 
-    // UI’s one direct submission is the documented availability fallback after both standalone graph attempts
-    // reject; its retained live draw bytes are never a normal renderer-owned overlay update.
-    EXPECT_EQ(CountText(ui, "executeCommandLists("), 1u);
-    EXPECT_TRUE(ContainsText(ui, "standalone legacy ImGui graph presentation failed; retaining direct raster fallback"));
-    EXPECT_TRUE(ContainsText(ui, "direct ImGui fallback submission was rejected; retaining frame for retry"));
+    // UI presentation is fully graph-owned. Callback-free rejection retains the live frame, while an opaque callback
+    // rejection stops the device generation instead of replaying arbitrary user code.
+    EXPECT_EQ(CountText(ui, "executeCommandLists("), 0u);
+    EXPECT_FALSE(ContainsText(ui, "ensureRenderCommandList"));
+    EXPECT_TRUE(ContainsText(ui, "retaining callback-free frame for graph retry"));
+    EXPECT_TRUE(ContainsText(ui, "after an opaque callback may have executed; requesting recreation"));
 }
 
 

@@ -53,20 +53,34 @@ public:
 
 public:
     [[nodiscard]] FrameGraphNodeHandle addPass(const Name& scope, const AStringView label, const u8 flags = 0u){
-        return addNode(scope, label, FrameGraphNodeKind::Pass, flags);
+        return addNode(scope, label, FrameGraphNodeKind::Pass, FrameGraphQueueAssignment{}, flags);
+    }
+    [[nodiscard]] FrameGraphNodeHandle addPass(
+        const Name& scope,
+        const AStringView label,
+        const FrameGraphQueueAssignment& queueAssignment,
+        const u8 flags = 0u
+    ){
+        return addNode(scope, label, FrameGraphNodeKind::Pass, queueAssignment, flags);
     }
     [[nodiscard]] FrameGraphNodeHandle addResource(const Name& id, const AStringView label, const u8 flags = 0u){
-        return addNode(id, label, FrameGraphNodeKind::Resource, flags);
+        return addNode(id, label, FrameGraphNodeKind::Resource, FrameGraphQueueAssignment{}, flags);
     }
     [[nodiscard]] FrameGraphNodeHandle addExternal(const Name& id, const AStringView label, const u8 flags = 0u){
-        return addNode(id, label, FrameGraphNodeKind::External, flags);
+        return addNode(id, label, FrameGraphNodeKind::External, FrameGraphQueueAssignment{}, flags);
     }
 
     void addEdge(FrameGraphNodeHandle from, FrameGraphNodeHandle to, FrameGraphEdgeKind::Enum kind, u8 flags = 0u);
     void dependsOnByName(FrameGraphNodeHandle from, const Name& dependencyName, u8 flags = 0u);
 
 private:
-    [[nodiscard]] FrameGraphNodeHandle addNode(const Name& name, AStringView label, FrameGraphNodeKind::Enum kind, u8 flags);
+    [[nodiscard]] FrameGraphNodeHandle addNode(
+        const Name& name,
+        AStringView label,
+        FrameGraphNodeKind::Enum kind,
+        const FrameGraphQueueAssignment& queueAssignment,
+        u8 flags
+    );
 
 private:
     FrameGraphNodeDescs& m_nodes;

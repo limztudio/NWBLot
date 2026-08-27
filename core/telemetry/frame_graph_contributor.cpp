@@ -38,13 +38,20 @@ void FrameGraphBuilder::dependsOnByName(const FrameGraphNodeHandle from, const N
     });
 }
 
-FrameGraphNodeHandle FrameGraphBuilder::addNode(const Name& name, const AStringView label, const FrameGraphNodeKind::Enum kind, const u8 flags){
+FrameGraphNodeHandle FrameGraphBuilder::addNode(
+    const Name& name,
+    const AStringView label,
+    const FrameGraphNodeKind::Enum kind,
+    const FrameGraphQueueAssignment& queueAssignment,
+    const u8 flags
+){
     const u32 index = static_cast<u32>(m_nodes.size());
     m_nodes.push_back(FrameGraphNodeDesc{
         .name = name,
         .label = label,
         .kind = kind,
         .flags = flags,
+        .queueAssignment = queueAssignment,
     });
     return FrameGraphNodeHandle{ .index = index };
 }

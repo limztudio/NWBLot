@@ -44,8 +44,10 @@ FORBIDDEN_LOG_MESSAGES = (
     "VUID-",
     "Validation Error",
     "cannot safely continue after an unresolved frame recovery submission",
-    "failed to record lagged lighting-history capture",
-    "lagged lighting-history capture submission was rejected",
+    "deferred graph build with optional lagged lighting-history capture failed",
+    "deferred lagged lighting-history tail was unavailable",
+    "lagged lighting-history capture skipped because its source state was unavailable",
+    "graph-owned lagged lighting-history capture record/submission was rejected",
 )
 
 # A successful target run has exactly this accepted lifecycle.  Keep the sequence as data so the live poller and
@@ -117,6 +119,18 @@ def reject_forbidden_messages(log_text: str) -> None:
         raise SmokeFailure(f"frame-lagged async-lighting smoke found forbidden log messages: {rejected}")
 
 
+def require_final_run_verdict(log_text: str, app_exit_code: int | None, app_exit_tail: str) -> None:
+    """Validate shutdown and complete diagnostics before classifying an unavailable async topology."""
+    require_normal_testbed_exit(app_exit_code, app_exit_tail)
+    reject_forbidden_messages(log_text)
+    if NO_DEDICATED_ASYNC_COMPUTE in log_text:
+        raise DedicatedComputeUnavailable(
+            "frame-lagged async-lighting smoke skipped: the requested feature accepted the Graphics queue route "
+            "because this adapter has no dedicated AsyncCompute lane"
+        )
+    require_lifecycle_stage(log_text, len(LAGGED_LIGHTING_LIFECYCLE))
+
+
 def wait_for_lifecycle_stage(
     process,
     log_directory: Path,
@@ -131,12 +145,9 @@ def wait_for_lifecycle_stage(
     while time.monotonic() < deadline:
         ensure_process_running(process, stage)
         latest_log = collect_log_delta(log_directory, log_baseline, log_pattern)
-        if NO_DEDICATED_ASYNC_COMPUTE in latest_log:
-            raise DedicatedComputeUnavailable(
-                "frame-lagged async-lighting smoke skipped: the requested feature accepted the Graphics queue route "
-                "because this adapter has no dedicated AsyncCompute lane"
-            )
         reject_forbidden_messages(latest_log)
+        if NO_DEDICATED_ASYNC_COMPUTE in latest_log:
+            return latest_log
         events = validate_lifecycle_order(latest_log)
         if len(events) >= expected_event_count:
             return latest_log
@@ -238,46 +249,48 @@ def run(args: argparse.Namespace) -> int:
             args.startup_timeout,
             "while waiting for the first accepted bootstrap",
         )
-        final_log = wait_for_lifecycle_stage(
-            app_process,
-            log_directory,
-            log_baseline,
-            log_pattern,
-            2,
-            args.transition_timeout,
-            "while waiting for the first accepted history use",
-        )
-
-        capture_backend.send_named_key(window, "F1")
-        final_log = wait_for_lifecycle_stage(
-            app_process,
-            log_directory,
-            log_baseline,
-            log_pattern,
-            3,
-            args.transition_timeout,
-            "while waiting for the accepted current-frame path",
-        )
-
-        capture_backend.send_named_key(window, "F1")
-        final_log = wait_for_lifecycle_stage(
-            app_process,
-            log_directory,
-            log_baseline,
-            log_pattern,
-            4,
-            args.transition_timeout,
-            "while waiting for the second accepted bootstrap",
-        )
-        final_log = wait_for_lifecycle_stage(
-            app_process,
-            log_directory,
-            log_baseline,
-            log_pattern,
-            5,
-            args.transition_timeout,
-            "while waiting for the second accepted history use",
-        )
+        if NO_DEDICATED_ASYNC_COMPUTE not in final_log:
+            final_log = wait_for_lifecycle_stage(
+                app_process,
+                log_directory,
+                log_baseline,
+                log_pattern,
+                2,
+                args.transition_timeout,
+                "while waiting for the first accepted history use",
+            )
+        if NO_DEDICATED_ASYNC_COMPUTE not in final_log:
+            capture_backend.send_named_key(window, "F1")
+            final_log = wait_for_lifecycle_stage(
+                app_process,
+                log_directory,
+                log_baseline,
+                log_pattern,
+                3,
+                args.transition_timeout,
+                "while waiting for the accepted current-frame path",
+            )
+        if NO_DEDICATED_ASYNC_COMPUTE not in final_log:
+            capture_backend.send_named_key(window, "F1")
+            final_log = wait_for_lifecycle_stage(
+                app_process,
+                log_directory,
+                log_baseline,
+                log_pattern,
+                4,
+                args.transition_timeout,
+                "while waiting for the second accepted bootstrap",
+            )
+        if NO_DEDICATED_ASYNC_COMPUTE not in final_log:
+            final_log = wait_for_lifecycle_stage(
+                app_process,
+                log_directory,
+                log_baseline,
+                log_pattern,
+                5,
+                args.transition_timeout,
+                "while waiting for the second accepted history use",
+            )
     finally:
         if app_process:
             app_exit_code, app_exit_tail = terminate_process(app_process, "lagged-lighting smoke", window)
@@ -289,14 +302,7 @@ def run(args: argparse.Namespace) -> int:
         if capture_backend:
             capture_backend.close()
 
-    require_normal_testbed_exit(app_exit_code, app_exit_tail)
-    if NO_DEDICATED_ASYNC_COMPUTE in final_log:
-        raise DedicatedComputeUnavailable(
-            "frame-lagged async-lighting smoke skipped: the requested feature accepted the Graphics queue route "
-            "because this adapter has no dedicated AsyncCompute lane"
-        )
-    reject_forbidden_messages(final_log)
-    require_lifecycle_stage(final_log, len(LAGGED_LIGHTING_LIFECYCLE))
+    require_final_run_verdict(final_log, app_exit_code, app_exit_tail)
     print("frame-lagged async-lighting smoke passed: bootstrap -> active history -> current frame -> bootstrap -> active history")
     return 0
 
@@ -344,6 +350,37 @@ def run_self_test() -> int:
     assert NO_DEDICATED_ASYNC_COMPUTE not in log
     graphics_route_log = f"{NO_DEDICATED_ASYNC_COMPUTE}, target generation 3)"
     assert NO_DEDICATED_ASYNC_COMPUTE in graphics_route_log
+    try:
+        require_final_run_verdict(f"{graphics_route_log}\n[ERROR] simulated validation failure", 0, "")
+    except SmokeFailure:
+        pass
+    else:
+        raise AssertionError("a forbidden error accompanying the Graphics queue route was incorrectly skipped")
+    current_history_warnings = (
+        "deferred graph build with optional lagged lighting-history capture failed; retrying without the tail",
+        "deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting",
+        "lagged lighting-history capture skipped because its source state was unavailable",
+        "graph-owned lagged lighting-history capture record/submission was rejected; reverting to current-frame lighting",
+    )
+    for warning in current_history_warnings:
+        try:
+            require_final_run_verdict(f"{log}\n{warning}", 0, "")
+        except SmokeFailure:
+            pass
+        else:
+            raise AssertionError(f"current lagged lighting-history warning was not rejected: {warning}")
+    try:
+        require_final_run_verdict(graphics_route_log, 0, "")
+    except DedicatedComputeUnavailable:
+        pass
+    else:
+        raise AssertionError("a clean Graphics queue route was not classified as a topology skip")
+    try:
+        require_final_run_verdict(graphics_route_log, 9, "simulated abnormal exit after the topology marker")
+    except SmokeFailure:
+        pass
+    else:
+        raise AssertionError("an abnormal exit after the Graphics queue route was incorrectly skipped")
     print("frame-lagged async-lighting harness self-test passed")
     return 0
 

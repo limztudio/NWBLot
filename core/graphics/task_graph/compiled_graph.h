@@ -120,12 +120,96 @@ struct GpuCompiledPresentEndpoint{
 };
 
 
+// One semantic exclusive-ownership movement. Internal moves remain one record even though native lowering emits a
+// release and an acquire barrier; external routes deliberately leave the task and packet on the external side
+// invalid. Queue-family indices and sharing intent are captured by value so telemetry never has to reinterpret a
+// later topology or resource declaration.
+namespace GpuOwnershipTransferRoute{
+    enum Enum : u8{
+        Internal,
+        ExternalImport,
+        ExternalExport,
+
+        kCount,
+    };
+};
+
+struct GpuCompiledOwnershipTransfer{
+    GpuGraphResourceId resource;
+    Name resourceIdentity = NAME_NONE;
+    GpuTaskResourceRange range;
+    GpuTaskId sourceTask;
+    GpuTaskId destinationTask;
+    GpuSubmissionPacketId sourcePacket;
+    GpuSubmissionPacketId destinationPacket;
+    GpuPhysicalQueueId sourceQueue;
+    GpuPhysicalQueueId destinationQueue;
+    u32 sourceQueueFamilyIndex = Limit<u32>::s_Max;
+    u32 destinationQueueFamilyIndex = Limit<u32>::s_Max;
+    ResourceQueueSharing::Mask declaredQueueSharing = ResourceQueueSharing::Exclusive;
+    GpuGraphResourceType::Enum resourceType = GpuGraphResourceType::HazardDomain;
+    GpuOwnershipTransferRoute::Enum route = GpuOwnershipTransferRoute::kCount;
+    bool concurrentSharingCouldAvoid = false;
+
+    [[nodiscard]] bool valid()const noexcept{
+        if(
+            !resource.valid()
+            || resourceIdentity == NAME_NONE
+            || resourceType >= GpuGraphResourceType::HazardDomain
+            || route >= GpuOwnershipTransferRoute::kCount
+            || !sourceQueue.valid()
+            || !destinationQueue.valid()
+            || sourceQueue == destinationQueue
+            || sourceQueue.deviceGeneration != destinationQueue.deviceGeneration
+            || sourceQueueFamilyIndex == Limit<u32>::s_Max
+            || destinationQueueFamilyIndex == Limit<u32>::s_Max
+            || sourceQueueFamilyIndex == destinationQueueFamilyIndex
+            || (static_cast<u8>(declaredQueueSharing) & ~static_cast<u8>(
+                ResourceQueueSharing::GraphicsAsyncComputeAndTransfer
+            )) != 0u
+        )
+            return false;
+
+        switch(route){
+        case GpuOwnershipTransferRoute::Internal:
+            return sourceTask.valid()
+                && destinationTask.valid()
+                && sourceTask != destinationTask
+                && sourceTask.generation == resource.generation
+                && destinationTask.generation == resource.generation
+                && sourcePacket.valid()
+                && destinationPacket.valid()
+                && sourcePacket != destinationPacket
+                && sourcePacket.generation == destinationPacket.generation
+            ;
+        case GpuOwnershipTransferRoute::ExternalImport:
+            return !sourceTask.valid()
+                && destinationTask.valid()
+                && destinationTask.generation == resource.generation
+                && !sourcePacket.valid()
+                && destinationPacket.valid()
+            ;
+        case GpuOwnershipTransferRoute::ExternalExport:
+            return sourceTask.valid()
+                && sourceTask.generation == resource.generation
+                && !destinationTask.valid()
+                && sourcePacket.valid()
+                && !destinationPacket.valid()
+            ;
+        default:
+            return false;
+        }
+    }
+};
+
+
 // Immutable accepted-plan telemetry for one concrete task-graph plan. Core compiler counters and the sanitized
 // caller-provided declaration duration publish only after success; failed or superseded plans retain an empty
 // snapshot, so tooling never has to reconcile partial barrier/packet data with a later generation.
 struct GpuTaskGraphCompileStatistics{
     static constexpr usize s_QueueClassCount = static_cast<usize>(CommandQueue::kCount);
     static constexpr usize s_PacketizationDecisionCount = static_cast<usize>(GpuTaskPacketizationDecision::kCount);
+    static constexpr usize s_OwnershipTransferRouteCount = static_cast<usize>(GpuOwnershipTransferRoute::kCount);
 
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -156,6 +240,15 @@ struct GpuTaskGraphCompileStatistics{
     usize ownershipReleaseBarrierCount = 0u;
     usize ownershipAcquireBarrierCount = 0u;
     usize stateExportBarrierCount = 0u;
+    // Logical ownership movements are distinct from the raw release/acquire marker counts above. Signature counts
+    // collapse fragmented ranges of the same route/task/queue handoff. Repeated signatures and the advice-resource
+    // count therefore identify actual repeated movement rather than texture-fragment fan-out.
+    usize logicalOwnershipTransferCount = 0u;
+    usize logicalOwnershipTransferSignatureCount = 0u;
+    usize repeatedOwnershipTransferSignatureCount = 0u;
+    usize concurrentSharingCouldAvoidTransferCount = 0u;
+    usize concurrentSharingAdviceResourceCount = 0u;
+    usize logicalOwnershipTransferCountByRoute[s_OwnershipTransferRouteCount] = {};
     // Recording-frontier depth: max packet recordingFrontier plus one, rather than the number of packets.
     usize recordingFrontierCount = 0u;
     usize taskCountByQueueClass[s_QueueClassCount] = {};
@@ -213,6 +306,13 @@ struct GpuTaskGraphPhysicalQueueCompileStatistics{
     usize epilogueBarrierCount = 0u;
     usize ownershipReleaseBarrierCount = 0u;
     usize ownershipAcquireBarrierCount = 0u;
+    usize incomingLogicalOwnershipTransferCount = 0u;
+    usize outgoingLogicalOwnershipTransferCount = 0u;
+    usize incomingLogicalOwnershipTransferSignatureCount = 0u;
+    usize outgoingLogicalOwnershipTransferSignatureCount = 0u;
+    usize incomingRepeatedOwnershipTransferSignatureCount = 0u;
+    usize outgoingRepeatedOwnershipTransferSignatureCount = 0u;
+    usize concurrentSharingAdviceResourceCount = 0u;
 
     [[nodiscard]] bool valid()const noexcept{
         return graphGeneration != 0u
@@ -293,6 +393,9 @@ public:
     [[nodiscard]] const GpuPacketStateSeed* taskPrologueStateSeeds(const GpuTaskId& task)const noexcept;
     [[nodiscard]] const GpuCompiledBarrier* taskPrologueBarriers(const GpuTaskId& task)const noexcept;
     [[nodiscard]] const GpuCompiledBarrier* taskEpilogueBarriers(const GpuTaskId& task)const noexcept;
+    [[nodiscard]] usize logicalOwnershipTransferCount()const noexcept{ return m_ownershipTransfers.size(); }
+    [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransfers()const noexcept;
+    [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransferAt(usize index)const noexcept;
     // Resolves the terminal graph-to-external release declaration for this imported resource. No result means the
     // resource did not request a graph-to-external handoff in this compiled generation.
     [[nodiscard]] const GpuCompiledExternalResourceExport* externalResourceExport(
@@ -328,6 +431,7 @@ private:
     GraphicsVector<GpuPacketStateSeed> m_prologueStateSeeds;
     GraphicsVector<GpuCompiledBarrier> m_prologueBarriers;
     GraphicsVector<GpuCompiledBarrier> m_epilogueBarriers;
+    GraphicsVector<GpuCompiledOwnershipTransfer> m_ownershipTransfers;
     GraphicsVector<GpuCompiledExternalResourceExport> m_externalResourceExports;
     GraphicsVector<GpuCompiledExternalResourceExportSource> m_externalResourceExportSources;
     GraphicsVector<GpuPhysicalQueueInfo> m_queueTopology;

@@ -25,6 +25,7 @@ GpuCompiledGraph::GpuCompiledGraph(GraphicsArena& arena)
     , m_prologueStateSeeds(arena)
     , m_prologueBarriers(arena)
     , m_epilogueBarriers(arena)
+    , m_ownershipTransfers(arena)
     , m_externalResourceExports(arena)
     , m_externalResourceExportSources(arena)
     , m_queueTopology(arena)
@@ -40,6 +41,7 @@ void GpuCompiledGraph::reset(){
     m_prologueStateSeeds.clear();
     m_prologueBarriers.clear();
     m_epilogueBarriers.clear();
+    m_ownershipTransfers.clear();
     m_externalResourceExports.clear();
     m_externalResourceExportSources.clear();
     m_queueTopology.clear();
@@ -316,6 +318,14 @@ const GpuCompiledBarrier* GpuCompiledGraph::taskEpilogueBarriers(const GpuTaskId
     return m_epilogueBarriers.data() + compiledTask->epilogueBarrierOffset;
 }
 
+const GpuCompiledOwnershipTransfer* GpuCompiledGraph::logicalOwnershipTransfers()const noexcept{
+    return valid() && !m_ownershipTransfers.empty() ? m_ownershipTransfers.data() : nullptr;
+}
+
+const GpuCompiledOwnershipTransfer* GpuCompiledGraph::logicalOwnershipTransferAt(const usize index)const noexcept{
+    return valid() && index < m_ownershipTransfers.size() ? &m_ownershipTransfers[index] : nullptr;
+}
+
 const GpuCompiledExternalResourceExport* GpuCompiledGraph::externalResourceExport(
     const GpuGraphResourceId& resource
 )const noexcept{
@@ -410,6 +420,89 @@ GpuTaskGraphPhysicalQueueCompileStatistics GpuCompiledGraph::physicalQueueCompil
         ++statistics.packetCount;
         if(packet.taskCount > 1u)
             statistics.mergedTaskCount += packet.taskCount - 1u;
+    }
+    const auto sameTransferSignature = [](const GpuCompiledOwnershipTransfer& lhs, const GpuCompiledOwnershipTransfer& rhs){
+        return lhs.resource == rhs.resource
+            && lhs.route == rhs.route
+            && lhs.sourceTask == rhs.sourceTask
+            && lhs.destinationTask == rhs.destinationTask
+            && lhs.sourceQueue == rhs.sourceQueue
+            && lhs.destinationQueue == rhs.destinationQueue
+        ;
+    };
+    for(usize transferIndex = 0u; transferIndex < m_ownershipTransfers.size(); ++transferIndex){
+        const GpuCompiledOwnershipTransfer& transfer = m_ownershipTransfers[transferIndex];
+        if(transfer.sourceQueue == queue)
+            ++statistics.outgoingLogicalOwnershipTransferCount;
+        if(transfer.destinationQueue == queue)
+            ++statistics.incomingLogicalOwnershipTransferCount;
+
+        bool signatureAlreadyCounted = false;
+        bool hasEarlierDistinctSignature = false;
+        for(usize previousIndex = 0u; previousIndex < transferIndex; ++previousIndex){
+            const GpuCompiledOwnershipTransfer& previous = m_ownershipTransfers[previousIndex];
+            if(sameTransferSignature(transfer, previous)){
+                signatureAlreadyCounted = true;
+                break;
+            }
+            if(previous.resource == transfer.resource)
+                hasEarlierDistinctSignature = true;
+        }
+        if(signatureAlreadyCounted)
+            continue;
+
+        if(transfer.sourceQueue == queue){
+            ++statistics.outgoingLogicalOwnershipTransferSignatureCount;
+            if(hasEarlierDistinctSignature)
+                ++statistics.outgoingRepeatedOwnershipTransferSignatureCount;
+        }
+        if(transfer.destinationQueue == queue){
+            ++statistics.incomingLogicalOwnershipTransferSignatureCount;
+            if(hasEarlierDistinctSignature)
+                ++statistics.incomingRepeatedOwnershipTransferSignatureCount;
+        }
+    }
+    for(usize transferIndex = 0u; transferIndex < m_ownershipTransfers.size(); ++transferIndex){
+        const GpuCompiledOwnershipTransfer& transfer = m_ownershipTransfers[transferIndex];
+        if(
+            !transfer.concurrentSharingCouldAvoid
+            || (transfer.sourceQueue != queue && transfer.destinationQueue != queue)
+        )
+            continue;
+
+        bool resourceAlreadyCounted = false;
+        for(usize previousIndex = 0u; previousIndex < transferIndex; ++previousIndex){
+            const GpuCompiledOwnershipTransfer& previous = m_ownershipTransfers[previousIndex];
+            if(
+                previous.resource == transfer.resource
+                && previous.concurrentSharingCouldAvoid
+                && (previous.sourceQueue == queue || previous.destinationQueue == queue)
+            ){
+                resourceAlreadyCounted = true;
+                break;
+            }
+        }
+        if(resourceAlreadyCounted)
+            continue;
+
+        usize distinctSignatureCount = 0u;
+        for(usize candidateIndex = 0u; candidateIndex < m_ownershipTransfers.size(); ++candidateIndex){
+            const GpuCompiledOwnershipTransfer& candidate = m_ownershipTransfers[candidateIndex];
+            if(candidate.resource != transfer.resource || !candidate.concurrentSharingCouldAvoid)
+                continue;
+
+            bool signatureAlreadyCounted = false;
+            for(usize previousIndex = 0u; previousIndex < candidateIndex; ++previousIndex){
+                if(sameTransferSignature(candidate, m_ownershipTransfers[previousIndex])){
+                    signatureAlreadyCounted = true;
+                    break;
+                }
+            }
+            if(!signatureAlreadyCounted)
+                ++distinctSignatureCount;
+        }
+        if(distinctSignatureCount > 1u)
+            ++statistics.concurrentSharingAdviceResourceCount;
     }
     return statistics;
 }

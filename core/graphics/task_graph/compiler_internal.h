@@ -32,6 +32,7 @@ struct GpuTaskGraphCompiledPlanStorage{
     GraphicsVector<GpuPacketStateSeed>& prologueStateSeeds;
     GraphicsVector<GpuCompiledBarrier>& prologueBarriers;
     GraphicsVector<GpuCompiledBarrier>& epilogueBarriers;
+    GraphicsVector<GpuCompiledOwnershipTransfer>& ownershipTransfers;
     GraphicsVector<GpuCompiledExternalResourceExport>& externalResourceExports;
     GraphicsVector<GpuCompiledExternalResourceExportSource>& externalResourceExportSources;
     const GraphicsVector<GpuPhysicalQueueInfo>& queueTopology;
@@ -246,6 +247,17 @@ struct GpuTaskGraphResourceStatePlan{
     const GpuTaskGraphCompiledPlanStorage& compiledPlan,
     const GpuPhysicalQueueId& queue
 )noexcept;
+
+[[nodiscard]] bool AppendCompiledOwnershipTransfer(
+    GpuTaskGraphResourceStatePlan& plan,
+    const GpuTaskGraphResourceView& resource,
+    const GpuTaskResourceRange& range,
+    GpuTaskId sourceTask,
+    GpuTaskId destinationTask,
+    GpuPhysicalQueueId sourceQueue,
+    GpuPhysicalQueueId destinationQueue,
+    GpuOwnershipTransferRoute::Enum route
+);
 
 [[nodiscard]] bool BuildSubmissionPackets(
     const GpuTaskGraph& graph,

@@ -356,7 +356,14 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
         compiledGraphHeader,
         "    usize epilogueBarrierCount = 0u;\n"
         "    usize ownershipReleaseBarrierCount = 0u;\n"
-        "    usize ownershipAcquireBarrierCount = 0u;\n\n"
+        "    usize ownershipAcquireBarrierCount = 0u;\n"
+        "    usize incomingLogicalOwnershipTransferCount = 0u;\n"
+        "    usize outgoingLogicalOwnershipTransferCount = 0u;\n"
+        "    usize incomingLogicalOwnershipTransferSignatureCount = 0u;\n"
+        "    usize outgoingLogicalOwnershipTransferSignatureCount = 0u;\n"
+        "    usize incomingRepeatedOwnershipTransferSignatureCount = 0u;\n"
+        "    usize outgoingRepeatedOwnershipTransferSignatureCount = 0u;\n"
+        "    usize concurrentSharingAdviceResourceCount = 0u;\n\n"
         "    [[nodiscard]] bool valid()const noexcept{"
     ));
     EXPECT_TRUE(ContainsText(compiledGraph, "if(!valid())\n        return {};"));

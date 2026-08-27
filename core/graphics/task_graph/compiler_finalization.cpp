@@ -109,6 +109,17 @@ namespace GpuTaskGraphCompilerDetail{
                     return false;
                 // Export the exact final state before ownership moves. Native lowering therefore captures the same
                 // state in the released snapshot and the paired Vulkan queue-family release barrier.
+                if(!AppendCompiledOwnershipTransfer(
+                    plan,
+                    resource,
+                    terminalRange,
+                    state.task,
+                    GpuTaskId{},
+                    state.queue,
+                    resource.externalFinalReleaseDestinationQueue,
+                    GpuOwnershipTransferRoute::ExternalExport
+                ))
+                    return false;
                 pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
                     .task = state.task,
                     .barrier = GpuCompiledBarrier{

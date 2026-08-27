@@ -436,6 +436,12 @@ struct TransferOwnershipPair{
     Graphics::GpuTaskId consumer;
 };
 
+static_assert(requires(const Graphics::GpuCompiledGraph& compiledGraph){
+    { compiledGraph.logicalOwnershipTransferCount() }->SameAs<usize>;
+    { compiledGraph.logicalOwnershipTransfers() }->SameAs<const Graphics::GpuCompiledOwnershipTransfer*>;
+    { compiledGraph.logicalOwnershipTransferAt(0u) }->SameAs<const Graphics::GpuCompiledOwnershipTransfer*>;
+});
+
 [[nodiscard]] TransferOwnershipPair AddTransferOwnershipPair(
     Graphics::GpuTaskGraph& graph,
     const Graphics::ResourceQueueSharing::Mask queueSharing,
@@ -10938,6 +10944,32 @@ TEST(GpuTaskGraph, RoutesAccelStructAcrossQueueFamiliesWithOwnershipAndStateSeed
     EXPECT_EQ(acquireAndTransition[1u].before, Graphics::ResourceStates::AccelStructWrite);
     EXPECT_EQ(acquireAndTransition[1u].after, Graphics::ResourceStates::AccelStructRead);
 
+    ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 1u);
+    const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
+        compiledGraph.logicalOwnershipTransfers()
+    ;
+    ASSERT_NE(ownershipTransfers, nullptr);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), ownershipTransfers);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(1u), nullptr);
+    const Graphics::GpuCompiledOwnershipTransfer& ownershipTransfer = ownershipTransfers[0u];
+    EXPECT_TRUE(ownershipTransfer.valid());
+    EXPECT_EQ(ownershipTransfer.resource, accelStruct);
+    EXPECT_EQ(ownershipTransfer.resourceIdentity, Name("tests/task_graph/cross_family_accel_struct"));
+    EXPECT_EQ(ownershipTransfer.range.textureSubresources, Graphics::s_AllSubresources);
+    EXPECT_EQ(ownershipTransfer.range.bufferRange, Graphics::s_EntireBuffer);
+    EXPECT_EQ(ownershipTransfer.sourceTask, producer);
+    EXPECT_EQ(ownershipTransfer.destinationTask, consumer);
+    EXPECT_EQ(ownershipTransfer.sourcePacket, compiledProducer->packet);
+    EXPECT_EQ(ownershipTransfer.destinationPacket, compiledConsumer->packet);
+    EXPECT_EQ(ownershipTransfer.sourceQueue, queues[0u].id);
+    EXPECT_EQ(ownershipTransfer.destinationQueue, queues[1u].id);
+    EXPECT_EQ(ownershipTransfer.sourceQueueFamilyIndex, queues[0u].familyIndex);
+    EXPECT_EQ(ownershipTransfer.destinationQueueFamilyIndex, queues[1u].familyIndex);
+    EXPECT_EQ(ownershipTransfer.declaredQueueSharing, Graphics::ResourceQueueSharing::Exclusive);
+    EXPECT_EQ(ownershipTransfer.resourceType, Graphics::GpuGraphResourceType::AccelStruct);
+    EXPECT_EQ(ownershipTransfer.route, Graphics::GpuOwnershipTransferRoute::Internal);
+    EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
+
     const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics producerQueueCompileStatistics =
         compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
     ;
@@ -10950,6 +10982,10 @@ TEST(GpuTaskGraph, RoutesAccelStructAcrossQueueFamiliesWithOwnershipAndStateSeed
     EXPECT_EQ(producerQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
     EXPECT_EQ(consumerQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
     EXPECT_EQ(consumerQueueCompileStatistics.ownershipAcquireBarrierCount, 1u);
+    EXPECT_EQ(producerQueueCompileStatistics.outgoingLogicalOwnershipTransferCount, 1u);
+    EXPECT_EQ(producerQueueCompileStatistics.incomingLogicalOwnershipTransferCount, 0u);
+    EXPECT_EQ(consumerQueueCompileStatistics.outgoingLogicalOwnershipTransferCount, 0u);
+    EXPECT_EQ(consumerQueueCompileStatistics.incomingLogicalOwnershipTransferCount, 1u);
 }
 
 
@@ -11073,7 +11109,7 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
 
     const Graphics::GpuTaskResourceUse use{
         .resource = buffer,
-        .range = {},
+        .range = Graphics::GpuTaskResourceRange{ .bufferRange = Graphics::BufferRange(32u, 64u) },
         .requiredState = Graphics::ResourceStates::CopyDest,
         .access = Graphics::GpuTaskResourceAccess::Write,
     };
@@ -11111,12 +11147,14 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
     EXPECT_EQ(barriers[0u].resource, buffer);
     EXPECT_EQ(barriers[0u].before, Graphics::ResourceStates::CopyDest);
     EXPECT_EQ(barriers[0u].after, Graphics::ResourceStates::ShaderResource);
+    EXPECT_EQ(barriers[0u].range.bufferRange, use.range.bufferRange);
     EXPECT_EQ(barriers[0u].sourceQueue, queues[0u].id);
     EXPECT_EQ(barriers[0u].destinationQueue, queues[0u].id);
     EXPECT_EQ(barriers[1u].type, Graphics::GpuCompiledBarrierType::BufferOwnershipRelease);
     EXPECT_EQ(barriers[1u].resource, buffer);
     EXPECT_EQ(barriers[1u].before, Graphics::ResourceStates::ShaderResource);
     EXPECT_EQ(barriers[1u].after, Graphics::ResourceStates::ShaderResource);
+    EXPECT_EQ(barriers[1u].range.bufferRange, use.range.bufferRange);
     EXPECT_EQ(barriers[1u].sourceQueue, queues[0u].id);
     EXPECT_EQ(barriers[1u].destinationQueue, queues[1u].id);
 
@@ -11132,6 +11170,62 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
     EXPECT_EQ(sourceQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
     EXPECT_EQ(destinationQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
     EXPECT_EQ(destinationQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
+
+    ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 1u);
+    const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
+        compiledGraph.logicalOwnershipTransfers()
+    ;
+    ASSERT_NE(ownershipTransfers, nullptr);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), ownershipTransfers);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(1u), nullptr);
+    const Graphics::GpuCompiledOwnershipTransfer& ownershipTransfer = ownershipTransfers[0u];
+    EXPECT_TRUE(ownershipTransfer.valid());
+    EXPECT_EQ(ownershipTransfer.resource, buffer);
+    EXPECT_EQ(ownershipTransfer.resourceIdentity, Name("tests/task_graph/external_final_release_buffer"));
+    EXPECT_EQ(ownershipTransfer.range.bufferRange, use.range.bufferRange);
+    EXPECT_EQ(ownershipTransfer.sourceTask, task);
+    EXPECT_FALSE(ownershipTransfer.destinationTask.valid());
+    EXPECT_EQ(ownershipTransfer.sourcePacket, compiledTask->packet);
+    EXPECT_FALSE(ownershipTransfer.destinationPacket.valid());
+    EXPECT_EQ(ownershipTransfer.sourceQueue, queues[0u].id);
+    EXPECT_EQ(ownershipTransfer.destinationQueue, queues[1u].id);
+    EXPECT_EQ(ownershipTransfer.sourceQueueFamilyIndex, queues[0u].familyIndex);
+    EXPECT_EQ(ownershipTransfer.destinationQueueFamilyIndex, queues[1u].familyIndex);
+    EXPECT_EQ(ownershipTransfer.declaredQueueSharing, Graphics::ResourceQueueSharing::Exclusive);
+    EXPECT_EQ(ownershipTransfer.resourceType, Graphics::GpuGraphResourceType::Buffer);
+    EXPECT_EQ(ownershipTransfer.route, Graphics::GpuOwnershipTransferRoute::ExternalExport);
+    EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
+
+    const Graphics::GpuTaskGraphCompileStatistics& ownershipStatistics = compiledGraph.compileStatistics();
+    ASSERT_TRUE(ownershipStatistics.valid());
+    EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferCount, 1u);
+    EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferSignatureCount, 1u);
+    EXPECT_EQ(ownershipStatistics.repeatedOwnershipTransferSignatureCount, 0u);
+    EXPECT_EQ(ownershipStatistics.concurrentSharingCouldAvoidTransferCount, 1u);
+    EXPECT_EQ(ownershipStatistics.concurrentSharingAdviceResourceCount, 0u);
+    EXPECT_EQ(
+        ownershipStatistics.logicalOwnershipTransferCountByRoute[
+            Graphics::GpuOwnershipTransferRoute::ExternalExport
+        ],
+        1u
+    );
+    EXPECT_EQ(sourceQueueCompileStatistics.outgoingLogicalOwnershipTransferCount, 1u);
+    EXPECT_EQ(sourceQueueCompileStatistics.incomingLogicalOwnershipTransferCount, 0u);
+    EXPECT_EQ(destinationQueueCompileStatistics.outgoingLogicalOwnershipTransferCount, 0u);
+    EXPECT_EQ(destinationQueueCompileStatistics.incomingLogicalOwnershipTransferCount, 1u);
+
+    Graphics::GpuPhysicalQueueInfo sameFamilyQueues[] = { queues[0u], queues[1u] };
+    sameFamilyQueues[1u].familyIndex = sameFamilyQueues[0u].familyIndex;
+    sameFamilyQueues[1u].queueIndex = 1u;
+    const Graphics::GpuTaskGraphQueueTopology sameFamilyTopology{
+        .queues = sameFamilyQueues,
+        .queueCount = LengthOf(sameFamilyQueues),
+    };
+    ASSERT_TRUE(Compile(graph, analysis, sameFamilyTopology, assignments, compiledGraph));
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransfers(), nullptr);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), nullptr);
+    EXPECT_EQ(compiledGraph.compileStatistics().logicalOwnershipTransferCount, 0u);
 }
 
 
@@ -11315,6 +11409,38 @@ TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
     EXPECT_EQ(graphicsBarriers[1u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipRelease);
     EXPECT_EQ(graphicsBarriers[1u].destinationQueue, queues[1u].id);
     EXPECT_EQ(computeBarriers[0u].type, Graphics::GpuCompiledBarrierType::TextureStateExport);
+
+    ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 1u);
+    const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
+        compiledGraph.logicalOwnershipTransfers()
+    ;
+    ASSERT_NE(ownershipTransfers, nullptr);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), ownershipTransfers);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(1u), nullptr);
+    const Graphics::GpuCompiledOwnershipTransfer& ownershipTransfer = ownershipTransfers[0u];
+    EXPECT_TRUE(ownershipTransfer.valid());
+    EXPECT_EQ(ownershipTransfer.resource, texture);
+    EXPECT_EQ(ownershipTransfer.resourceIdentity, Name("tests/task_graph/external_final_multiple_packets"));
+    EXPECT_EQ(ownershipTransfer.range.textureSubresources, graphicsUse.range.textureSubresources);
+    EXPECT_NE(ownershipTransfer.range.textureSubresources, computeUse.range.textureSubresources);
+    EXPECT_EQ(ownershipTransfer.sourceTask, graphicsTask);
+    EXPECT_FALSE(ownershipTransfer.destinationTask.valid());
+    EXPECT_EQ(ownershipTransfer.sourcePacket, compiledGraphics->packet);
+    EXPECT_FALSE(ownershipTransfer.destinationPacket.valid());
+    EXPECT_EQ(ownershipTransfer.sourceQueue, queues[0u].id);
+    EXPECT_EQ(ownershipTransfer.destinationQueue, queues[1u].id);
+    EXPECT_EQ(ownershipTransfer.sourceQueueFamilyIndex, queues[0u].familyIndex);
+    EXPECT_EQ(ownershipTransfer.destinationQueueFamilyIndex, queues[1u].familyIndex);
+    EXPECT_EQ(ownershipTransfer.declaredQueueSharing, Graphics::ResourceQueueSharing::Exclusive);
+    EXPECT_EQ(ownershipTransfer.resourceType, Graphics::GpuGraphResourceType::Texture);
+    EXPECT_EQ(ownershipTransfer.route, Graphics::GpuOwnershipTransferRoute::ExternalExport);
+    EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
+    const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledGraph.compileStatistics();
+    ASSERT_TRUE(statistics.valid());
+    EXPECT_EQ(statistics.logicalOwnershipTransferCount, 1u);
+    EXPECT_EQ(statistics.logicalOwnershipTransferSignatureCount, 1u);
+    EXPECT_EQ(statistics.repeatedOwnershipTransferSignatureCount, 0u);
+    EXPECT_EQ(statistics.concurrentSharingAdviceResourceCount, 0u);
 }
 
 
@@ -11864,12 +11990,68 @@ TEST(GpuTaskGraph, CompilesExplicitInitialExclusiveOwnershipHandoff){
         EXPECT_EQ(destinationQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
         EXPECT_EQ(destinationQueueCompileStatistics.ownershipAcquireBarrierCount, 1u);
 
+        ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 1u);
+        const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
+            compiledGraph.logicalOwnershipTransfers()
+        ;
+        ASSERT_NE(ownershipTransfers, nullptr);
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), ownershipTransfers);
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(1u), nullptr);
+        const Graphics::GpuCompiledOwnershipTransfer& ownershipTransfer = ownershipTransfers[0u];
+        EXPECT_TRUE(ownershipTransfer.valid());
+        EXPECT_EQ(ownershipTransfer.resource, resource);
+        EXPECT_EQ(ownershipTransfer.resourceIdentity, Name("tests/task_graph/initial_owner_handoff"));
+        EXPECT_EQ(ownershipTransfer.range.bufferRange, Graphics::s_EntireBuffer);
+        EXPECT_FALSE(ownershipTransfer.sourceTask.valid());
+        EXPECT_EQ(ownershipTransfer.destinationTask, task);
+        EXPECT_FALSE(ownershipTransfer.sourcePacket.valid());
+        EXPECT_EQ(ownershipTransfer.destinationPacket, compiledTask->packet);
+        EXPECT_EQ(ownershipTransfer.sourceQueue, queues[0u].id);
+        EXPECT_EQ(ownershipTransfer.destinationQueue, queues[1u].id);
+        EXPECT_EQ(ownershipTransfer.sourceQueueFamilyIndex, queues[0u].familyIndex);
+        EXPECT_EQ(ownershipTransfer.destinationQueueFamilyIndex, queues[1u].familyIndex);
+        EXPECT_EQ(ownershipTransfer.declaredQueueSharing, Graphics::ResourceQueueSharing::Exclusive);
+        EXPECT_EQ(ownershipTransfer.resourceType, Graphics::GpuGraphResourceType::Buffer);
+        EXPECT_EQ(ownershipTransfer.route, Graphics::GpuOwnershipTransferRoute::ExternalImport);
+        EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
+
+        const Graphics::GpuTaskGraphCompileStatistics& ownershipStatistics = compiledGraph.compileStatistics();
+        ASSERT_TRUE(ownershipStatistics.valid());
+        EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferCount, 1u);
+        EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferSignatureCount, 1u);
+        EXPECT_EQ(ownershipStatistics.repeatedOwnershipTransferSignatureCount, 0u);
+        EXPECT_EQ(ownershipStatistics.concurrentSharingCouldAvoidTransferCount, 1u);
+        EXPECT_EQ(ownershipStatistics.concurrentSharingAdviceResourceCount, 0u);
+        EXPECT_EQ(
+            ownershipStatistics.logicalOwnershipTransferCountByRoute[
+                Graphics::GpuOwnershipTransferRoute::ExternalImport
+            ],
+            1u
+        );
+        EXPECT_EQ(sourceQueueCompileStatistics.outgoingLogicalOwnershipTransferCount, 1u);
+        EXPECT_EQ(sourceQueueCompileStatistics.incomingLogicalOwnershipTransferCount, 0u);
+        EXPECT_EQ(destinationQueueCompileStatistics.outgoingLogicalOwnershipTransferCount, 0u);
+        EXPECT_EQ(destinationQueueCompileStatistics.incomingLogicalOwnershipTransferCount, 1u);
+
         const Graphics::GpuSubmissionPacketId packet = compiledTask->packet;
         ASSERT_TRUE(packet.valid());
         EXPECT_EQ(compiledGraph.packet(packet).externalDependencyCount, 1u);
         const Graphics::GpuExternalCompletionId* const externalDependencies = compiledGraph.packetExternalDependencies(packet);
         ASSERT_NE(externalDependencies, nullptr);
         EXPECT_EQ(externalDependencies[0u], completion);
+
+        Graphics::GpuPhysicalQueueInfo sameFamilyQueues[] = { queues[0u], queues[1u] };
+        sameFamilyQueues[1u].familyIndex = sameFamilyQueues[0u].familyIndex;
+        sameFamilyQueues[1u].queueIndex = 1u;
+        const Graphics::GpuTaskGraphQueueTopology sameFamilyTopology{
+            .queues = sameFamilyQueues,
+            .queueCount = LengthOf(sameFamilyQueues),
+        };
+        ASSERT_TRUE(Compile(graph, analysis, sameFamilyTopology, assignments, compiledGraph));
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransfers(), nullptr);
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), nullptr);
+        EXPECT_EQ(compiledGraph.compileStatistics().logicalOwnershipTransferCount, 0u);
     }
 
     {
@@ -12252,6 +12434,142 @@ TEST(GpuTaskGraph, CompilesMultiSourceInitialTextureOwnershipHandoff){
         ASSERT_EQ(compiledGraph.packet(compiledMip1->packet).externalDependencyCount, 1u);
         EXPECT_EQ(mip0Dependencies[0u], graphicsCompletion);
         EXPECT_EQ(mip1Dependencies[0u], computeCompletion);
+
+        ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 1u);
+        const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
+            compiledGraph.logicalOwnershipTransfers()
+        ;
+        ASSERT_NE(ownershipTransfers, nullptr);
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), ownershipTransfers);
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(1u), nullptr);
+        const Graphics::GpuCompiledOwnershipTransfer& ownershipTransfer = ownershipTransfers[0u];
+        EXPECT_TRUE(ownershipTransfer.valid());
+        EXPECT_EQ(ownershipTransfer.resource, texture);
+        EXPECT_EQ(ownershipTransfer.resourceIdentity, Name("tests/task_graph/multi_owner_texture"));
+        EXPECT_EQ(ownershipTransfer.range.textureSubresources, sources[1u].range.textureSubresources);
+        EXPECT_NE(ownershipTransfer.range.textureSubresources, sources[0u].range.textureSubresources);
+        EXPECT_FALSE(ownershipTransfer.sourceTask.valid());
+        EXPECT_EQ(ownershipTransfer.destinationTask, mip1Task);
+        EXPECT_FALSE(ownershipTransfer.sourcePacket.valid());
+        EXPECT_EQ(ownershipTransfer.destinationPacket, compiledMip1->packet);
+        EXPECT_NE(ownershipTransfer.destinationPacket, compiledMip0->packet);
+        EXPECT_EQ(ownershipTransfer.sourceQueue, queues[1u].id);
+        EXPECT_EQ(ownershipTransfer.destinationQueue, queues[0u].id);
+        EXPECT_EQ(ownershipTransfer.sourceQueueFamilyIndex, queues[1u].familyIndex);
+        EXPECT_EQ(ownershipTransfer.destinationQueueFamilyIndex, queues[0u].familyIndex);
+        EXPECT_EQ(ownershipTransfer.declaredQueueSharing, Graphics::ResourceQueueSharing::Exclusive);
+        EXPECT_EQ(ownershipTransfer.resourceType, Graphics::GpuGraphResourceType::Texture);
+        EXPECT_EQ(ownershipTransfer.route, Graphics::GpuOwnershipTransferRoute::ExternalImport);
+        EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
+
+        const Graphics::GpuTaskGraphCompileStatistics& ownershipStatistics = compiledGraph.compileStatistics();
+        ASSERT_TRUE(ownershipStatistics.valid());
+        EXPECT_EQ(ownershipStatistics.ownershipReleaseBarrierCount, 0u);
+        EXPECT_EQ(ownershipStatistics.ownershipAcquireBarrierCount, 2u);
+        EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferCount, 1u);
+        EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferSignatureCount, 1u);
+        EXPECT_EQ(ownershipStatistics.repeatedOwnershipTransferSignatureCount, 0u);
+        EXPECT_EQ(ownershipStatistics.concurrentSharingCouldAvoidTransferCount, 1u);
+        EXPECT_EQ(ownershipStatistics.concurrentSharingAdviceResourceCount, 0u);
+        EXPECT_EQ(
+            ownershipStatistics.logicalOwnershipTransferCountByRoute[
+                Graphics::GpuOwnershipTransferRoute::ExternalImport
+            ],
+            1u
+        );
+        const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics sourceQueueStatistics =
+            compiledGraph.physicalQueueCompileStatistics(queues[1u].id)
+        ;
+        const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics destinationQueueStatistics =
+            compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
+        ;
+        ASSERT_TRUE(sourceQueueStatistics.valid());
+        ASSERT_TRUE(destinationQueueStatistics.valid());
+        EXPECT_EQ(sourceQueueStatistics.outgoingLogicalOwnershipTransferCount, 1u);
+        EXPECT_EQ(sourceQueueStatistics.incomingLogicalOwnershipTransferCount, 0u);
+        EXPECT_EQ(sourceQueueStatistics.outgoingLogicalOwnershipTransferSignatureCount, 1u);
+        EXPECT_EQ(sourceQueueStatistics.outgoingRepeatedOwnershipTransferSignatureCount, 0u);
+        EXPECT_EQ(destinationQueueStatistics.outgoingLogicalOwnershipTransferCount, 0u);
+        EXPECT_EQ(destinationQueueStatistics.incomingLogicalOwnershipTransferCount, 1u);
+        EXPECT_EQ(destinationQueueStatistics.incomingLogicalOwnershipTransferSignatureCount, 1u);
+        EXPECT_EQ(destinationQueueStatistics.incomingRepeatedOwnershipTransferSignatureCount, 0u);
+    }
+
+    {
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        Graphics::GpuPhysicalQueueInfo sameFamilyQueues[] = {
+            GraphicsQueue(),
+            DedicatedComputeQueue(),
+        };
+        sameFamilyQueues[1u].familyIndex = sameFamilyQueues[0u].familyIndex;
+        sameFamilyQueues[1u].queueIndex = 1u;
+        ASSERT_NE(sameFamilyQueues[0u].id, sameFamilyQueues[1u].id);
+        ASSERT_EQ(sameFamilyQueues[0u].familyIndex, sameFamilyQueues[1u].familyIndex);
+        const Graphics::GpuTaskGraphQueueTopology sameFamilyTopology{
+            .queues = sameFamilyQueues,
+            .queueCount = LengthOf(sameFamilyQueues),
+        };
+        const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
+            Graphics::GpuExternalCompletionDesc{}
+                .setIdentity(Name("tests/task_graph/invalid_sharing_same_family_completion"))
+                .setMarkerLabel("Invalid Sharing Same Family Completion")
+        );
+        ASSERT_TRUE(completion.valid());
+        Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
+        const Graphics::QueueSubmissionToken minimumCompletionToken{
+            .queue = Graphics::CommandQueue::Graphics,
+            .value = 13u,
+            .physicalQueueIndex = sameFamilyQueues[0u].id.index,
+            .deviceGeneration = sameFamilyQueues[0u].id.deviceGeneration,
+        };
+        constexpr Graphics::ResourceQueueSharing::Mask s_InvalidQueueSharing =
+            static_cast<Graphics::ResourceQueueSharing::Mask>(1u << 7u)
+        ;
+        const Graphics::GpuGraphResourceId buffer = graph.importResource(
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(Name("tests/task_graph/invalid_sharing_same_family_buffer"))
+                .setMarkerLabel("Invalid Sharing Same Family Buffer")
+                .setType(Graphics::GpuGraphResourceType::Buffer)
+                .setInitialState(Graphics::ResourceStates::Common)
+                .setInitialOwnerQueue(sameFamilyQueues[0u].id)
+                .setInitialOwnerReleaseDestinationQueue(sameFamilyQueues[1u].id)
+                .setInitialOwnerCompletion(completion)
+                .setInitialOwnerMinimumCompletionToken(minimumCompletionToken)
+                .setInitialOwnerStateSource(&stateSource)
+                .setQueueSharing(s_InvalidQueueSharing)
+        );
+        ASSERT_TRUE(buffer.valid());
+        EXPECT_EQ(graph.resourceAt(buffer.index).queueSharing, s_InvalidQueueSharing);
+        const Graphics::GpuTaskResourceUse use{
+            .resource = buffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        };
+        Graphics::GpuTaskDesc taskDesc;
+        taskDesc
+            .setIdentity(Name("tests/task_graph/invalid_sharing_same_family_use"))
+            .setMarkerLabel("Invalid Sharing Same Family Use")
+            .setQueue(Graphics::GpuQueueRequest{
+                Graphics::GpuQueueCapability::Compute,
+                Graphics::GpuQueuePreference::Compute,
+                false,
+                false,
+            })
+            .setResourceUses(&use, 1u)
+        ;
+        const Graphics::GpuTaskId task = graph.addTask(taskDesc);
+        ASSERT_TRUE(task.valid());
+
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        EXPECT_FALSE(Compile(graph, analysis, sameFamilyTopology, assignments, compiledGraph));
+        EXPECT_FALSE(compiledGraph.valid());
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransfers(), nullptr);
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), nullptr);
     }
 
     {
@@ -38305,11 +38623,416 @@ TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
     EXPECT_EQ(consumerQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
     EXPECT_EQ(consumerQueueCompileStatistics.ownershipAcquireBarrierCount, 1u);
 
+    ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 1u);
+    const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
+        compiledGraph.logicalOwnershipTransfers()
+    ;
+    ASSERT_NE(ownershipTransfers, nullptr);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), ownershipTransfers);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(1u), nullptr);
+    const Graphics::GpuCompiledOwnershipTransfer& ownershipTransfer = ownershipTransfers[0u];
+    EXPECT_TRUE(ownershipTransfer.valid());
+    EXPECT_EQ(ownershipTransfer.resource, pair.texture);
+    EXPECT_EQ(ownershipTransfer.resourceIdentity, Name("tests/task_graph/transfer_ownership_texture"));
+    EXPECT_EQ(ownershipTransfer.range.textureSubresources, Graphics::s_AllSubresources);
+    EXPECT_EQ(ownershipTransfer.sourceTask, pair.producer);
+    EXPECT_EQ(ownershipTransfer.destinationTask, pair.consumer);
+    EXPECT_EQ(ownershipTransfer.sourcePacket, compiledProducer->packet);
+    EXPECT_EQ(ownershipTransfer.destinationPacket, compiledConsumer->packet);
+    EXPECT_EQ(ownershipTransfer.sourceQueue, compiledProducer->queue);
+    EXPECT_EQ(ownershipTransfer.destinationQueue, compiledConsumer->queue);
+    EXPECT_EQ(ownershipTransfer.sourceQueueFamilyIndex, queues[0u].familyIndex);
+    EXPECT_EQ(ownershipTransfer.destinationQueueFamilyIndex, queues[1u].familyIndex);
+    EXPECT_EQ(ownershipTransfer.declaredQueueSharing, Graphics::ResourceQueueSharing::Exclusive);
+    EXPECT_EQ(ownershipTransfer.resourceType, Graphics::GpuGraphResourceType::Texture);
+    EXPECT_EQ(ownershipTransfer.route, Graphics::GpuOwnershipTransferRoute::Internal);
+    EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
+    Graphics::GpuCompiledOwnershipTransfer nonAdvisoryOwnershipTransfer = ownershipTransfer;
+    nonAdvisoryOwnershipTransfer.concurrentSharingCouldAvoid = false;
+    EXPECT_TRUE(nonAdvisoryOwnershipTransfer.valid());
+
+    const Graphics::GpuTaskGraphCompileStatistics& ownershipStatistics = compiledGraph.compileStatistics();
+    ASSERT_TRUE(ownershipStatistics.valid());
+    EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferCount, 1u);
+    EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferSignatureCount, 1u);
+    EXPECT_EQ(ownershipStatistics.repeatedOwnershipTransferSignatureCount, 0u);
+    EXPECT_EQ(ownershipStatistics.concurrentSharingCouldAvoidTransferCount, 1u);
+    EXPECT_EQ(ownershipStatistics.concurrentSharingAdviceResourceCount, 0u);
+    EXPECT_EQ(
+        ownershipStatistics.logicalOwnershipTransferCountByRoute[Graphics::GpuOwnershipTransferRoute::Internal],
+        1u
+    );
+    EXPECT_EQ(
+        ownershipStatistics.logicalOwnershipTransferCountByRoute[
+            Graphics::GpuOwnershipTransferRoute::ExternalImport
+        ],
+        0u
+    );
+    EXPECT_EQ(
+        ownershipStatistics.logicalOwnershipTransferCountByRoute[
+            Graphics::GpuOwnershipTransferRoute::ExternalExport
+        ],
+        0u
+    );
+
     ASSERT_EQ(compiledGraph.packet(compiledConsumer->packet).dependencyCount, 1u);
     EXPECT_EQ(
         compiledGraph.packetDependencies(compiledConsumer->packet)[0u].producer,
         compiledProducer->packet
     );
+
+    compiledGraph.reset();
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransfers(), nullptr);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), nullptr);
+
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 1u);
+    const Graphics::GpuTaskGraphQueueTopology invalidTopology{};
+    EXPECT_FALSE(Compile(graph, analysis, invalidTopology, assignments, compiledGraph));
+    EXPECT_FALSE(compiledGraph.valid());
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransfers(), nullptr);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), nullptr);
+}
+
+
+TEST(GpuTaskGraph, ReportsOwnershipRangesWithoutReleaseAcquireDuplicates){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId texture = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/multi_range_ownership_texture"),
+        "Multi-Range Ownership Texture",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Exclusive
+    );
+    ASSERT_TRUE(texture.valid());
+
+    const Graphics::GpuTaskResourceRange firstRange{
+        .textureSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
+    };
+    const Graphics::GpuTaskResourceRange secondRange{
+        .textureSubresources = Graphics::TextureSubresourceSet(2u, 1u, 0u, 1u),
+    };
+    const Graphics::GpuTaskResourceUse producerUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = texture,
+            .range = firstRange,
+            .requiredState = Graphics::ResourceStates::CopySource,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = texture,
+            .range = secondRange,
+            .requiredState = Graphics::ResourceStates::CopySource,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskResourceUse consumerUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = texture,
+            .range = firstRange,
+            .requiredState = Graphics::ResourceStates::CopySource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = texture,
+            .range = secondRange,
+            .requiredState = Graphics::ResourceStates::CopySource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Graphics::GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/task_graph/multi_range_ownership_producer"))
+        .setMarkerLabel("Multi-Range Ownership Producer")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(scheduling)
+        .setResourceUses(producerUses, LengthOf(producerUses))
+    ;
+    Graphics::GpuTaskDesc consumerDesc;
+    consumerDesc
+        .setIdentity(Name("tests/task_graph/multi_range_ownership_consumer"))
+        .setMarkerLabel("Multi-Range Ownership Consumer")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Compute,
+            Graphics::GpuQueuePreference::Compute,
+            false,
+            false,
+        })
+        .setScheduling(scheduling)
+        .setResourceUses(consumerUses, LengthOf(consumerUses))
+    ;
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    ASSERT_TRUE(producer.valid());
+    ASSERT_TRUE(consumer.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledConsumer, nullptr);
+    EXPECT_EQ(compiledProducer->queue, queues[0u].id);
+    EXPECT_EQ(compiledConsumer->queue, queues[1u].id);
+    const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledGraph.compileStatistics();
+    ASSERT_TRUE(statistics.valid());
+    EXPECT_EQ(statistics.ownershipReleaseBarrierCount, 2u);
+    EXPECT_EQ(statistics.ownershipAcquireBarrierCount, 2u);
+    EXPECT_EQ(statistics.logicalOwnershipTransferCount, 2u);
+    EXPECT_EQ(statistics.logicalOwnershipTransferSignatureCount, 1u);
+    EXPECT_EQ(statistics.repeatedOwnershipTransferSignatureCount, 0u);
+    EXPECT_EQ(statistics.concurrentSharingCouldAvoidTransferCount, 2u);
+    EXPECT_EQ(statistics.concurrentSharingAdviceResourceCount, 0u);
+
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics producerStatistics =
+        compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
+    ;
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics consumerStatistics =
+        compiledGraph.physicalQueueCompileStatistics(queues[1u].id)
+    ;
+    ASSERT_TRUE(producerStatistics.valid());
+    ASSERT_TRUE(consumerStatistics.valid());
+    EXPECT_EQ(producerStatistics.ownershipReleaseBarrierCount, 2u);
+    EXPECT_EQ(producerStatistics.ownershipAcquireBarrierCount, 0u);
+    EXPECT_EQ(producerStatistics.outgoingLogicalOwnershipTransferCount, 2u);
+    EXPECT_EQ(producerStatistics.incomingLogicalOwnershipTransferCount, 0u);
+    EXPECT_EQ(producerStatistics.outgoingLogicalOwnershipTransferSignatureCount, 1u);
+    EXPECT_EQ(producerStatistics.outgoingRepeatedOwnershipTransferSignatureCount, 0u);
+    EXPECT_EQ(producerStatistics.concurrentSharingAdviceResourceCount, 0u);
+    EXPECT_EQ(consumerStatistics.ownershipReleaseBarrierCount, 0u);
+    EXPECT_EQ(consumerStatistics.ownershipAcquireBarrierCount, 2u);
+    EXPECT_EQ(consumerStatistics.outgoingLogicalOwnershipTransferCount, 0u);
+    EXPECT_EQ(consumerStatistics.incomingLogicalOwnershipTransferCount, 2u);
+    EXPECT_EQ(consumerStatistics.incomingLogicalOwnershipTransferSignatureCount, 1u);
+    EXPECT_EQ(consumerStatistics.incomingRepeatedOwnershipTransferSignatureCount, 0u);
+    EXPECT_EQ(consumerStatistics.concurrentSharingAdviceResourceCount, 0u);
+
+    ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 2u);
+    const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
+        compiledGraph.logicalOwnershipTransfers()
+    ;
+    ASSERT_NE(ownershipTransfers, nullptr);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), ownershipTransfers);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(1u), ownershipTransfers + 1u);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(2u), nullptr);
+    usize firstRangeCount = 0u;
+    usize secondRangeCount = 0u;
+    for(usize transferIndex = 0u; transferIndex < compiledGraph.logicalOwnershipTransferCount(); ++transferIndex){
+        const Graphics::GpuCompiledOwnershipTransfer& transfer = ownershipTransfers[transferIndex];
+        EXPECT_TRUE(transfer.valid());
+        EXPECT_EQ(transfer.resource, texture);
+        EXPECT_EQ(transfer.resourceIdentity, Name("tests/task_graph/multi_range_ownership_texture"));
+        EXPECT_EQ(transfer.sourceTask, producer);
+        EXPECT_EQ(transfer.destinationTask, consumer);
+        EXPECT_EQ(transfer.sourcePacket, compiledProducer->packet);
+        EXPECT_EQ(transfer.destinationPacket, compiledConsumer->packet);
+        EXPECT_EQ(transfer.sourceQueue, queues[0u].id);
+        EXPECT_EQ(transfer.destinationQueue, queues[1u].id);
+        EXPECT_EQ(transfer.sourceQueueFamilyIndex, queues[0u].familyIndex);
+        EXPECT_EQ(transfer.destinationQueueFamilyIndex, queues[1u].familyIndex);
+        EXPECT_EQ(transfer.declaredQueueSharing, Graphics::ResourceQueueSharing::Exclusive);
+        EXPECT_EQ(transfer.resourceType, Graphics::GpuGraphResourceType::Texture);
+        EXPECT_EQ(transfer.route, Graphics::GpuOwnershipTransferRoute::Internal);
+        EXPECT_TRUE(transfer.concurrentSharingCouldAvoid);
+        if(transfer.range.textureSubresources == firstRange.textureSubresources)
+            ++firstRangeCount;
+        if(transfer.range.textureSubresources == secondRange.textureSubresources)
+            ++secondRangeCount;
+    }
+    EXPECT_EQ(firstRangeCount, 1u);
+    EXPECT_EQ(secondRangeCount, 1u);
+}
+
+
+TEST(GpuTaskGraph, AdvisesConcurrentSharingForRepeatedExclusiveOwnershipMoves){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId texture = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/repeated_ownership_texture"),
+        "Repeated Ownership Texture",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::Exclusive
+    );
+    ASSERT_TRUE(texture.valid());
+
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    const auto addTask = [&graph, &scheduling, texture](
+        const Name& identity,
+        const AStringView label,
+        const Graphics::GpuQueueRequest& queue,
+        const Graphics::GpuTaskResourceAccess::Enum access
+    ){
+        const Graphics::GpuTaskResourceUse use{
+            .resource = texture,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopySource,
+            .access = access,
+        };
+        Graphics::GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(queue)
+            .setScheduling(scheduling)
+            .setResourceUses(&use, 1u)
+        ;
+        return graph.addTask(desc);
+    };
+    const Graphics::GpuTaskId firstGraphics = addTask(
+        Name("tests/task_graph/repeated_ownership_first_graphics"),
+        "Repeated Ownership First Graphics",
+        graphicsRequest,
+        Graphics::GpuTaskResourceAccess::Write
+    );
+    const Graphics::GpuTaskId compute = addTask(
+        Name("tests/task_graph/repeated_ownership_compute"),
+        "Repeated Ownership Compute",
+        computeRequest,
+        Graphics::GpuTaskResourceAccess::Write
+    );
+    const Graphics::GpuTaskId secondGraphics = addTask(
+        Name("tests/task_graph/repeated_ownership_second_graphics"),
+        "Repeated Ownership Second Graphics",
+        graphicsRequest,
+        Graphics::GpuTaskResourceAccess::Read
+    );
+    ASSERT_TRUE(firstGraphics.valid());
+    ASSERT_TRUE(compute.valid());
+    ASSERT_TRUE(secondGraphics.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuCompiledTask* const compiledFirstGraphics = compiledGraph.findTask(firstGraphics);
+    const Graphics::GpuCompiledTask* const compiledCompute = compiledGraph.findTask(compute);
+    const Graphics::GpuCompiledTask* const compiledSecondGraphics = compiledGraph.findTask(secondGraphics);
+    ASSERT_NE(compiledFirstGraphics, nullptr);
+    ASSERT_NE(compiledCompute, nullptr);
+    ASSERT_NE(compiledSecondGraphics, nullptr);
+    EXPECT_EQ(compiledFirstGraphics->queue, queues[0u].id);
+    EXPECT_EQ(compiledCompute->queue, queues[1u].id);
+    EXPECT_EQ(compiledSecondGraphics->queue, queues[0u].id);
+
+    ASSERT_EQ(compiledGraph.logicalOwnershipTransferCount(), 2u);
+    const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
+        compiledGraph.logicalOwnershipTransfers()
+    ;
+    ASSERT_NE(ownershipTransfers, nullptr);
+    const Graphics::GpuCompiledOwnershipTransfer* firstMove = nullptr;
+    const Graphics::GpuCompiledOwnershipTransfer* secondMove = nullptr;
+    for(usize transferIndex = 0u; transferIndex < compiledGraph.logicalOwnershipTransferCount(); ++transferIndex){
+        const Graphics::GpuCompiledOwnershipTransfer& transfer = ownershipTransfers[transferIndex];
+        EXPECT_TRUE(transfer.valid());
+        EXPECT_EQ(transfer.resource, texture);
+        EXPECT_EQ(transfer.resourceIdentity, Name("tests/task_graph/repeated_ownership_texture"));
+        EXPECT_EQ(transfer.range.textureSubresources, Graphics::s_AllSubresources);
+        EXPECT_EQ(transfer.declaredQueueSharing, Graphics::ResourceQueueSharing::Exclusive);
+        EXPECT_EQ(transfer.resourceType, Graphics::GpuGraphResourceType::Texture);
+        EXPECT_EQ(transfer.route, Graphics::GpuOwnershipTransferRoute::Internal);
+        EXPECT_TRUE(transfer.concurrentSharingCouldAvoid);
+        if(transfer.sourceTask == firstGraphics && transfer.destinationTask == compute)
+            firstMove = &transfer;
+        if(transfer.sourceTask == compute && transfer.destinationTask == secondGraphics)
+            secondMove = &transfer;
+    }
+    ASSERT_NE(firstMove, nullptr);
+    ASSERT_NE(secondMove, nullptr);
+    EXPECT_EQ(firstMove->sourcePacket, compiledFirstGraphics->packet);
+    EXPECT_EQ(firstMove->destinationPacket, compiledCompute->packet);
+    EXPECT_EQ(firstMove->sourceQueue, queues[0u].id);
+    EXPECT_EQ(firstMove->destinationQueue, queues[1u].id);
+    EXPECT_EQ(firstMove->sourceQueueFamilyIndex, queues[0u].familyIndex);
+    EXPECT_EQ(firstMove->destinationQueueFamilyIndex, queues[1u].familyIndex);
+    EXPECT_EQ(secondMove->sourcePacket, compiledCompute->packet);
+    EXPECT_EQ(secondMove->destinationPacket, compiledSecondGraphics->packet);
+    EXPECT_EQ(secondMove->sourceQueue, queues[1u].id);
+    EXPECT_EQ(secondMove->destinationQueue, queues[0u].id);
+    EXPECT_EQ(secondMove->sourceQueueFamilyIndex, queues[1u].familyIndex);
+    EXPECT_EQ(secondMove->destinationQueueFamilyIndex, queues[0u].familyIndex);
+
+    const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledGraph.compileStatistics();
+    ASSERT_TRUE(statistics.valid());
+    EXPECT_EQ(statistics.ownershipReleaseBarrierCount, 2u);
+    EXPECT_EQ(statistics.ownershipAcquireBarrierCount, 2u);
+    EXPECT_EQ(statistics.logicalOwnershipTransferCount, 2u);
+    EXPECT_EQ(statistics.logicalOwnershipTransferSignatureCount, 2u);
+    EXPECT_EQ(statistics.repeatedOwnershipTransferSignatureCount, 1u);
+    EXPECT_EQ(statistics.concurrentSharingCouldAvoidTransferCount, 2u);
+    EXPECT_EQ(statistics.concurrentSharingAdviceResourceCount, 1u);
+    EXPECT_EQ(
+        statistics.logicalOwnershipTransferCountByRoute[Graphics::GpuOwnershipTransferRoute::Internal],
+        2u
+    );
+
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics graphicsStatistics =
+        compiledGraph.physicalQueueCompileStatistics(queues[0u].id)
+    ;
+    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics computeStatistics =
+        compiledGraph.physicalQueueCompileStatistics(queues[1u].id)
+    ;
+    ASSERT_TRUE(graphicsStatistics.valid());
+    ASSERT_TRUE(computeStatistics.valid());
+    EXPECT_EQ(graphicsStatistics.outgoingLogicalOwnershipTransferCount, 1u);
+    EXPECT_EQ(graphicsStatistics.incomingLogicalOwnershipTransferCount, 1u);
+    EXPECT_EQ(graphicsStatistics.outgoingLogicalOwnershipTransferSignatureCount, 1u);
+    EXPECT_EQ(graphicsStatistics.incomingLogicalOwnershipTransferSignatureCount, 1u);
+    EXPECT_EQ(graphicsStatistics.outgoingRepeatedOwnershipTransferSignatureCount, 0u);
+    EXPECT_EQ(graphicsStatistics.incomingRepeatedOwnershipTransferSignatureCount, 1u);
+    EXPECT_EQ(graphicsStatistics.concurrentSharingAdviceResourceCount, 1u);
+    EXPECT_EQ(computeStatistics.outgoingLogicalOwnershipTransferCount, 1u);
+    EXPECT_EQ(computeStatistics.incomingLogicalOwnershipTransferCount, 1u);
+    EXPECT_EQ(computeStatistics.outgoingLogicalOwnershipTransferSignatureCount, 1u);
+    EXPECT_EQ(computeStatistics.incomingLogicalOwnershipTransferSignatureCount, 1u);
+    EXPECT_EQ(computeStatistics.outgoingRepeatedOwnershipTransferSignatureCount, 1u);
+    EXPECT_EQ(computeStatistics.incomingRepeatedOwnershipTransferSignatureCount, 0u);
+    EXPECT_EQ(computeStatistics.concurrentSharingAdviceResourceCount, 1u);
 }
 
 
@@ -38356,6 +39079,81 @@ TEST(GpuTaskGraph, UsesDeclaredTripleQueueSharingForDedicatedTransfer){
     EXPECT_TRUE(dependency[0u].forceMemoryDependency);
     EXPECT_EQ(stateSeed[0u].resource, pair.texture);
     EXPECT_EQ(stateSeed[0u].sourcePacket, compiledProducer->packet);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransfers(), nullptr);
+    EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), nullptr);
+    const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledGraph.compileStatistics();
+    ASSERT_TRUE(statistics.valid());
+    EXPECT_EQ(statistics.ownershipReleaseBarrierCount, 0u);
+    EXPECT_EQ(statistics.ownershipAcquireBarrierCount, 0u);
+    EXPECT_EQ(statistics.logicalOwnershipTransferCount, 0u);
+    EXPECT_EQ(statistics.logicalOwnershipTransferSignatureCount, 0u);
+    EXPECT_EQ(statistics.concurrentSharingCouldAvoidTransferCount, 0u);
+    EXPECT_EQ(statistics.concurrentSharingAdviceResourceCount, 0u);
+}
+
+
+TEST(GpuTaskGraph, OmitsOwnershipTelemetryForSameFamilyAndSamePhysicalRoutes){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const TransferOwnershipPair pair = AddTransferOwnershipPair(graph, Graphics::ResourceQueueSharing::Exclusive);
+    ASSERT_TRUE(pair.texture.valid());
+    ASSERT_TRUE(pair.producer.valid());
+    ASSERT_TRUE(pair.consumer.valid());
+
+    {
+        const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = &queue,
+            .queueCount = 1u,
+        };
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(pair.producer);
+        const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(pair.consumer);
+        ASSERT_NE(compiledProducer, nullptr);
+        ASSERT_NE(compiledConsumer, nullptr);
+        EXPECT_EQ(compiledProducer->queue, queue.id);
+        EXPECT_EQ(compiledConsumer->queue, queue.id);
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransfers(), nullptr);
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), nullptr);
+        EXPECT_EQ(compiledGraph.compileStatistics().ownershipReleaseBarrierCount, 0u);
+        EXPECT_EQ(compiledGraph.compileStatistics().ownershipAcquireBarrierCount, 0u);
+    }
+
+    {
+        Graphics::GpuPhysicalQueueInfo sameFamilyTransferQueue = DedicatedTransferQueue();
+        sameFamilyTransferQueue.familyIndex = GraphicsQueue().familyIndex;
+        sameFamilyTransferQueue.queueIndex = 1u;
+        const Graphics::GpuPhysicalQueueInfo queues[] = {
+            GraphicsQueue(),
+            sameFamilyTransferQueue,
+        };
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = queues,
+            .queueCount = LengthOf(queues),
+        };
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+        const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(pair.producer);
+        const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(pair.consumer);
+        ASSERT_NE(compiledProducer, nullptr);
+        ASSERT_NE(compiledConsumer, nullptr);
+        EXPECT_EQ(compiledProducer->queue, queues[0u].id);
+        EXPECT_EQ(compiledConsumer->queue, queues[1u].id);
+        EXPECT_NE(compiledProducer->queue, compiledConsumer->queue);
+        EXPECT_EQ(queues[0u].familyIndex, queues[1u].familyIndex);
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransferCount(), 0u);
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransfers(), nullptr);
+        EXPECT_EQ(compiledGraph.logicalOwnershipTransferAt(0u), nullptr);
+        EXPECT_EQ(compiledGraph.compileStatistics().ownershipReleaseBarrierCount, 0u);
+        EXPECT_EQ(compiledGraph.compileStatistics().ownershipAcquireBarrierCount, 0u);
+    }
 }
 
 

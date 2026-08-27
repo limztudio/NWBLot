@@ -17,6 +17,180 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace GpuTaskGraphCompilerDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool AppendCompiledOwnershipTransfer(
+    GpuTaskGraphResourceStatePlan& plan,
+    const GpuTaskGraphResourceView& resource,
+    const GpuTaskResourceRange& range,
+    const GpuTaskId sourceTask,
+    const GpuTaskId destinationTask,
+    const GpuPhysicalQueueId sourceQueue,
+    const GpuPhysicalQueueId destinationQueue,
+    const GpuOwnershipTransferRoute::Enum route
+){
+    GpuTaskGraphCompiledPlanStorage& compiledPlan = plan.compiledPlan;
+    if(
+        !plan.graph.validResource(resource.id)
+        || resource.id.generation != compiledPlan.graphGeneration
+        || resource.identity == NAME_NONE
+        || resource.type >= GpuGraphResourceType::HazardDomain
+        || (static_cast<u8>(resource.queueSharing) & ~static_cast<u8>(
+            ResourceQueueSharing::GraphicsAsyncComputeAndTransfer
+        )) != 0u
+    )
+        return false;
+
+    const GpuTaskGraphResourceView declaredResource = plan.graph.resourceAt(resource.id.index);
+    if(
+        declaredResource.id != resource.id
+        || declaredResource.identity != resource.identity
+        || declaredResource.type != resource.type
+        || declaredResource.queueSharing != resource.queueSharing
+    )
+        return false;
+
+    const GpuCompiledTask* compiledSourceTask = nullptr;
+    const GpuCompiledTask* compiledDestinationTask = nullptr;
+    switch(route){
+    case GpuOwnershipTransferRoute::Internal:
+        if(!sourceTask.valid() || !destinationTask.valid())
+            return false;
+        compiledSourceTask = FindCompiledTask(compiledPlan, sourceTask);
+        compiledDestinationTask = FindCompiledTask(compiledPlan, destinationTask);
+        break;
+    case GpuOwnershipTransferRoute::ExternalImport:
+        if(sourceTask.valid() || !destinationTask.valid())
+            return false;
+        compiledDestinationTask = FindCompiledTask(compiledPlan, destinationTask);
+        break;
+    case GpuOwnershipTransferRoute::ExternalExport:
+        if(!sourceTask.valid() || destinationTask.valid())
+            return false;
+        compiledSourceTask = FindCompiledTask(compiledPlan, sourceTask);
+        break;
+    default:
+        return false;
+    }
+    if(
+        (sourceTask.valid() && !compiledSourceTask)
+        || (destinationTask.valid() && !compiledDestinationTask)
+        || (
+            route == GpuOwnershipTransferRoute::Internal
+            && sourceTask == destinationTask
+        )
+    )
+        return false;
+
+    const GpuSubmissionPacketId sourcePacket = compiledSourceTask
+        ? compiledSourceTask->packet
+        : GpuSubmissionPacketId{}
+    ;
+    const GpuSubmissionPacketId destinationPacket = compiledDestinationTask
+        ? compiledDestinationTask->packet
+        : GpuSubmissionPacketId{}
+    ;
+    const auto validCompiledPacket = [&compiledPlan](const GpuSubmissionPacketId packet){
+        return packet.valid()
+            && packet.generation == compiledPlan.planGeneration
+            && packet.index < compiledPlan.packets.size()
+        ;
+    };
+    if(
+        (compiledSourceTask && (compiledSourceTask->queue != sourceQueue || !validCompiledPacket(sourcePacket)))
+        || (
+            compiledDestinationTask
+            && (compiledDestinationTask->queue != destinationQueue || !validCompiledPacket(destinationPacket))
+        )
+        || (
+            route == GpuOwnershipTransferRoute::Internal
+            && sourcePacket == destinationPacket
+        )
+    )
+        return false;
+
+    GpuTaskResourceRange transferRange;
+    switch(resource.type){
+    case GpuGraphResourceType::Texture:
+        if(
+            !ResolveTextureRangeForPlanning(plan.graph.textureForResource(resource.id), range, transferRange)
+            || !IsValidTextureRange(transferRange.textureSubresources)
+        )
+            return false;
+        transferRange.bufferRange = s_EntireBuffer;
+        break;
+    case GpuGraphResourceType::Buffer:
+        if(!IsValidBufferRange(range.bufferRange))
+            return false;
+        transferRange.bufferRange = range.bufferRange;
+        break;
+    case GpuGraphResourceType::AccelStruct:
+        break;
+    default:
+        return false;
+    }
+
+    const GpuPhysicalQueueInfo* const sourceQueueInfo = FindCompiledQueueInfo(compiledPlan, sourceQueue);
+    const GpuPhysicalQueueInfo* const destinationQueueInfo = FindCompiledQueueInfo(compiledPlan, destinationQueue);
+    if(
+        !sourceQueueInfo
+        || !destinationQueueInfo
+        || sourceQueueInfo->familyIndex == Limit<u32>::s_Max
+        || destinationQueueInfo->familyIndex == Limit<u32>::s_Max
+    )
+        return false;
+    if(sourceQueueInfo->familyIndex == destinationQueueInfo->familyIndex)
+        return true;
+
+    const bool usesConcurrentSharing = ResourceUsesConcurrentQueueSharing(resource.queueSharing, plan.topology);
+    if(usesConcurrentSharing){
+        if(!ResourceSharesQueuePairConcurrently(
+            resource.queueSharing,
+            plan.topology,
+            *sourceQueueInfo,
+            *destinationQueueInfo
+        ))
+            return false;
+        return true;
+    }
+
+    const GpuCompiledOwnershipTransfer transfer{
+        .resource = resource.id,
+        .resourceIdentity = resource.identity,
+        .range = transferRange,
+        .sourceTask = compiledSourceTask ? sourceTask : GpuTaskId{},
+        .destinationTask = compiledDestinationTask ? destinationTask : GpuTaskId{},
+        .sourcePacket = sourcePacket,
+        .destinationPacket = destinationPacket,
+        .sourceQueue = sourceQueue,
+        .destinationQueue = destinationQueue,
+        .sourceQueueFamilyIndex = sourceQueueInfo->familyIndex,
+        .destinationQueueFamilyIndex = destinationQueueInfo->familyIndex,
+        .declaredQueueSharing = resource.queueSharing,
+        .resourceType = resource.type,
+        .route = route,
+        .concurrentSharingCouldAvoid = true,
+    };
+    if(!transfer.valid())
+        return false;
+    compiledPlan.ownershipTransfers.push_back(transfer);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool GpuTaskGraphCompiler::compile(
     const GpuTaskGraph& graph,
     GpuTaskGraphAnalysis& outAnalysis,
@@ -128,6 +302,7 @@ bool GpuTaskGraphCompiler::compile(
     outCompiledGraph.m_prologueStateSeeds.reserve(graph.taskCount());
     outCompiledGraph.m_prologueBarriers.reserve(graph.taskCount());
     outCompiledGraph.m_epilogueBarriers.reserve(graph.taskCount());
+    outCompiledGraph.m_ownershipTransfers.reserve(graph.taskCount());
     outCompiledGraph.m_externalResourceExports.reserve(graph.resourceCount());
     outCompiledGraph.m_externalResourceExportSources.reserve(graph.resourceCount());
     outCompiledGraph.m_queueTopology.reserve(topology.queueCount);
@@ -143,6 +318,7 @@ bool GpuTaskGraphCompiler::compile(
         .prologueStateSeeds = outCompiledGraph.m_prologueStateSeeds,
         .prologueBarriers = outCompiledGraph.m_prologueBarriers,
         .epilogueBarriers = outCompiledGraph.m_epilogueBarriers,
+        .ownershipTransfers = outCompiledGraph.m_ownershipTransfers,
         .externalResourceExports = outCompiledGraph.m_externalResourceExports,
         .externalResourceExportSources = outCompiledGraph.m_externalResourceExportSources,
         .queueTopology = outCompiledGraph.m_queueTopology,
@@ -503,6 +679,62 @@ bool GpuTaskGraphCompiler::compile(
     };
     countBarriers(outCompiledGraph.m_prologueBarriers);
     countBarriers(outCompiledGraph.m_epilogueBarriers);
+    const auto sameTransferSignature = [](const GpuCompiledOwnershipTransfer& lhs, const GpuCompiledOwnershipTransfer& rhs){
+        return lhs.resource == rhs.resource
+            && lhs.route == rhs.route
+            && lhs.sourceTask == rhs.sourceTask
+            && lhs.destinationTask == rhs.destinationTask
+            && lhs.sourceQueue == rhs.sourceQueue
+            && lhs.destinationQueue == rhs.destinationQueue
+        ;
+    };
+    statistics.logicalOwnershipTransferCount = outCompiledGraph.m_ownershipTransfers.size();
+    for(usize transferIndex = 0u; transferIndex < outCompiledGraph.m_ownershipTransfers.size(); ++transferIndex){
+        const GpuCompiledOwnershipTransfer& transfer = outCompiledGraph.m_ownershipTransfers[transferIndex];
+        if(transfer.route < GpuOwnershipTransferRoute::kCount)
+            ++statistics.logicalOwnershipTransferCountByRoute[transfer.route];
+        if(transfer.concurrentSharingCouldAvoid)
+            ++statistics.concurrentSharingCouldAvoidTransferCount;
+
+        bool signatureAlreadyCounted = false;
+        bool hasEarlierDistinctSignature = false;
+        for(usize previousIndex = 0u; previousIndex < transferIndex; ++previousIndex){
+            const GpuCompiledOwnershipTransfer& previous = outCompiledGraph.m_ownershipTransfers[previousIndex];
+            if(sameTransferSignature(transfer, previous)){
+                signatureAlreadyCounted = true;
+                break;
+            }
+            if(previous.resource == transfer.resource)
+                hasEarlierDistinctSignature = true;
+        }
+        if(signatureAlreadyCounted)
+            continue;
+
+        ++statistics.logicalOwnershipTransferSignatureCount;
+        if(hasEarlierDistinctSignature)
+            ++statistics.repeatedOwnershipTransferSignatureCount;
+    }
+    for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
+        const GpuGraphResourceId resource = graph.resourceAt(resourceIndex).id;
+        usize distinctSignatureCount = 0u;
+        for(usize transferIndex = 0u; transferIndex < outCompiledGraph.m_ownershipTransfers.size(); ++transferIndex){
+            const GpuCompiledOwnershipTransfer& transfer = outCompiledGraph.m_ownershipTransfers[transferIndex];
+            if(transfer.resource != resource || !transfer.concurrentSharingCouldAvoid)
+                continue;
+
+            bool signatureAlreadyCounted = false;
+            for(usize previousIndex = 0u; previousIndex < transferIndex; ++previousIndex){
+                if(sameTransferSignature(transfer, outCompiledGraph.m_ownershipTransfers[previousIndex])){
+                    signatureAlreadyCounted = true;
+                    break;
+                }
+            }
+            if(!signatureAlreadyCounted)
+                ++distinctSignatureCount;
+        }
+        if(distinctSignatureCount > 1u)
+            ++statistics.concurrentSharingAdviceResourceCount;
+    }
     statistics.declarationSeconds = IsFinite(options.declarationSeconds) && options.declarationSeconds >= 0.0
         ? options.declarationSeconds
         : 0.0

@@ -327,6 +327,17 @@ namespace GpuTaskGraphCompilerDetail{
                         // The descriptor's one selected source has already been proven to cover this fragment.
                         // Emit only the unseeded fragment range so its immutable snapshot does not
                         // overwrite a graph-internal producer's adjacent subresources during packet fan-in.
+                        if(!AppendCompiledOwnershipTransfer(
+                            plan,
+                            resource,
+                            fragment.range,
+                            GpuTaskId{},
+                            taskID,
+                            initialOwnerHandoffSource->sourceQueue,
+                            compiledTask->queue,
+                            GpuOwnershipTransferRoute::ExternalImport
+                        ))
+                            return false;
                         compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{
                             .resource = use.resource,
                             .range = fragment.range,
@@ -341,6 +352,17 @@ namespace GpuTaskGraphCompilerDetail{
                     else if(!previousState && usesInitialOwnerOnlyHandoff){
                         // This marker imports the descriptor-owned snapshot before normal graph state fragments,
                         // allowing CommandList::open to emit the paired acquire only for the uncovered range.
+                        if(!AppendCompiledOwnershipTransfer(
+                            plan,
+                            resource,
+                            fragment.range,
+                            GpuTaskId{},
+                            taskID,
+                            resource.initialOwnerQueue,
+                            compiledTask->queue,
+                            GpuOwnershipTransferRoute::ExternalImport
+                        ))
+                            return false;
                         compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{
                             .resource = use.resource,
                             .range = fragment.range,
@@ -408,6 +430,17 @@ namespace GpuTaskGraphCompilerDetail{
                                     releaseType >= GpuCompiledBarrierType::kCount
                                     || acquireType >= GpuCompiledBarrierType::kCount
                                 )
+                                    return false;
+                                if(!AppendCompiledOwnershipTransfer(
+                                    plan,
+                                    resource,
+                                    fragment.range,
+                                    previousState->task,
+                                    taskID,
+                                    previousState->queue,
+                                    compiledTask->queue,
+                                    GpuOwnershipTransferRoute::Internal
+                                ))
                                     return false;
                                 pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
                                     .task = previousState->task,
@@ -541,6 +574,17 @@ namespace GpuTaskGraphCompilerDetail{
                 // The packet recorder imports the exact immutable source range before prologue lowering. This marker
                 // keeps one source owner and one completion bound to every first consumer range, including a
                 // same-physical-queue source whose timeline wait still proves the external producer accepted.
+                if(!AppendCompiledOwnershipTransfer(
+                    plan,
+                    resource,
+                    use.range,
+                    GpuTaskId{},
+                    taskID,
+                    source->sourceQueue,
+                    compiledTask->queue,
+                    GpuOwnershipTransferRoute::ExternalImport
+                ))
+                    return false;
                 compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{
                     .resource = use.resource,
                     .range = use.range,
@@ -574,6 +618,17 @@ namespace GpuTaskGraphCompilerDetail{
                 // The recorder imports the descriptor-owned state snapshot before prologue lowering. That emits
                 // the native paired acquire (if families differ); this immutable marker also proves the snapshot
                 // and the external completion belong to this first range consumer.
+                if(!AppendCompiledOwnershipTransfer(
+                    plan,
+                    resource,
+                    use.range,
+                    GpuTaskId{},
+                    taskID,
+                    resource.initialOwnerQueue,
+                    compiledTask->queue,
+                    GpuOwnershipTransferRoute::ExternalImport
+                ))
+                    return false;
                 compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{
                     .resource = use.resource,
                     .range = use.range,
@@ -647,6 +702,17 @@ namespace GpuTaskGraphCompilerDetail{
                         const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
                         const GpuCompiledBarrierType::Enum acquireType = OwnershipAcquireBarrierType(resource.type);
                         if(releaseType >= GpuCompiledBarrierType::kCount || acquireType >= GpuCompiledBarrierType::kCount)
+                            return false;
+                        if(!AppendCompiledOwnershipTransfer(
+                            plan,
+                            resource,
+                            use.range,
+                            previousState->task,
+                            taskID,
+                            previousState->queue,
+                            compiledTask->queue,
+                            GpuOwnershipTransferRoute::Internal
+                        ))
                             return false;
                         pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
                             .task = previousState->task,

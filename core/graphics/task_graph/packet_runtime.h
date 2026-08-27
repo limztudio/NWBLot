@@ -545,10 +545,11 @@ struct GpuTaskGraphTaskAcceptedCallback{
     ) = nullptr;
 };
 
-// Runs after one semantic late task records and exports its packet state, but before that packet submits. A false
-// result rejects the still-unaccepted task. This lets a caller validate an immutable final-state candidate without
-// rebuilding the record/submit sequence around compiler packet IDs.
+// Runs after a semantic task records and exports its packet state, but before that packet submits. The task anchor
+// lets whole-graph execution validate immutable final-state candidates without rebuilding its record/submit sequence
+// around compiler packet IDs.
 struct GpuTaskGraphTaskRecordedCallback{
+    GpuTaskId task;
     void* context = nullptr;
     [[nodiscard]] bool (*invoke)(
         void* context,
@@ -566,6 +567,10 @@ struct GpuTaskGraphNormalExecutionDesc{
     usize recordOverrideCount = 0u;
     const GpuTaskPacketStateBinding* taskStateBindings = nullptr;
     usize taskStateBindingCount = 0u;
+    // Invoked in compiler task order after the complete ordinary prefix records and before its first native submit.
+    // A false result leaves every packet unaccepted so the caller can discard or recover transactionally.
+    const GpuTaskGraphTaskRecordedCallback* taskRecordedCallbacks = nullptr;
+    usize taskRecordedCallbackCount = 0u;
     // A null worker pool preserves serial compile-order recording. A supplied pool enables the recorder's
     // per-packet ready-frontier policy; packets without declaration opt-in still record serially.
     Alloc::ThreadPool* readyFrontierWorkerPool = nullptr;

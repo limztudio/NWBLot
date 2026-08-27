@@ -118,6 +118,38 @@ namespace __hidden_gpu_packet_runtime_execution{
     return true;
 }
 
+[[nodiscard]] bool ValidateNormalGraphTaskRecordedCallbacks(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketRange& range,
+    const GpuTaskGraphTaskRecordedCallback* const callbacks,
+    const usize callbackCount
+){
+    if(callbackCount != 0u && !callbacks)
+        return false;
+
+    const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
+    for(usize callbackIndex = 0u; callbackIndex < callbackCount; ++callbackIndex){
+        const GpuTaskGraphTaskRecordedCallback& callback = callbacks[callbackIndex];
+        if(!callback.invoke || !graph.validTask(callback.task) || !compiledGraph.findTask(callback.task))
+            return false;
+
+        const GpuSubmissionPacketId packet = compiledGraph.packetForTask(callback.task);
+        if(
+            !packet.valid()
+            || packet.index < range.first.index
+            || static_cast<usize>(packet.index) >= rangeEnd
+        )
+            return false;
+
+        for(usize previousIndex = 0u; previousIndex < callbackIndex; ++previousIndex){
+            if(callbacks[previousIndex].task == callback.task)
+                return false;
+        }
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -169,6 +201,13 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
             desc.taskStateBindings,
             desc.taskStateBindingCount
         )
+        || !__hidden_gpu_packet_runtime_execution::ValidateNormalGraphTaskRecordedCallbacks(
+            graph,
+            compiledGraph,
+            normalRange,
+            desc.taskRecordedCallbacks,
+            desc.taskRecordedCallbackCount
+        )
     )
         return false;
 
@@ -203,6 +242,32 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
         if(outFailedPacket)
             *outFailedPacket = failedPacket;
         return false;
+    }
+
+    const usize normalRangeEnd = static_cast<usize>(normalRange.first.index) + normalRange.packetCount;
+    for(usize packetIndex = normalRange.first.index; packetIndex < normalRangeEnd; ++packetIndex){
+        const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
+        const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
+        const GpuTaskId* const tasks = compiledGraph.packetTasks(packet);
+        if(!tasks){
+            if(outFailedPacket)
+                *outFailedPacket = packet;
+            return false;
+        }
+
+        for(u32 taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
+            const GpuTaskId task = tasks[taskIndex];
+            for(usize callbackIndex = 0u; callbackIndex < desc.taskRecordedCallbackCount; ++callbackIndex){
+                const GpuTaskGraphTaskRecordedCallback& callback = desc.taskRecordedCallbacks[callbackIndex];
+                if(callback.task != task)
+                    continue;
+                if(callback.invoke(callback.context, recordedGraph.taskFinalStateSeed(compiledGraph, task)))
+                    continue;
+                if(outFailedPacket)
+                    *outFailedPacket = packet;
+                return false;
+            }
+        }
     }
 
     if(!submitPacketRangeInCompileOrderFromTasks(
@@ -521,7 +586,7 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTask(
         || !graph.validTask(task)
         || !compiledGraph.findTask(task)
         || (taskStateBindingCount != 0u && !taskStateBindings)
-        || (recordedCallback && !recordedCallback->invoke)
+        || (recordedCallback && (!recordedCallback->invoke || recordedCallback->task != task))
         || (acceptedCallback && (!acceptedCallback->invoke || acceptedCallback->task != task))
     ){
         rejectTask();

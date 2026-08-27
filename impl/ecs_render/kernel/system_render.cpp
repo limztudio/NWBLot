@@ -3593,6 +3593,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 return context->finalStateReady;
             };
             const Core::GpuTaskGraphTaskRecordedCallback readbackRecordedCallback{
+                .task = m_deferredSurfelGiCounterReadbackTask,
                 .context = &readbackContext,
                 .invoke = prepareReadbackFinalState,
             };
@@ -3808,6 +3809,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 return context->finalStateReady;
             };
             const Core::GpuTaskGraphTaskRecordedCallback historyCopyRecordedCallback{
+                .task = m_deferredLaggedLightingHistoryTask,
                 .context = &historyCopyAcceptance,
                 .invoke = prepareHistoryCopyFinalState,
             };

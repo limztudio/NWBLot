@@ -46358,6 +46358,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         return true;
     };
     const GpuTaskGraphTaskRecordedCallback historyRecordedCallback{
+        .task = historyTask,
         .context = &historyFinalStateObserved,
         .invoke = observeHistoryFinalState,
     };
@@ -46549,6 +46550,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         return false;
     };
     const GpuTaskGraphTaskRecordedCallback rejectedTailRecordedCallback{
+        .task = rejectedTailTask,
         .invoke = rejectLateTailAfterRecord,
     };
     EXPECT_FALSE(submitter.recordAndSubmitTask(
@@ -50546,18 +50548,56 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorSubmitsOrdinaryPrefix){
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
     const GpuTaskGraphSubmitter submitter(device);
+    struct NormalGraphRecordedContext{
+        GpuGraphSubmissionTransaction* transaction = nullptr;
+        bool* firstRecorded = nullptr;
+        bool* secondRecorded = nullptr;
+        GpuSubmissionPacketId firstPacket;
+        GpuSubmissionPacketId secondPacket;
+        bool invokedBeforeSubmission = false;
+    } recordedContext{
+        .transaction = &transaction,
+        .firstRecorded = &firstRecorded,
+        .secondRecorded = &secondRecorded,
+        .firstPacket = firstPacket,
+        .secondPacket = secondPacket,
+    };
+    const auto observeNormalGraphRecording = [](
+        void* const rawContext,
+        const CommandListResourceStateHandoff* const finalState
+    ) -> bool {
+        static_cast<void>(finalState);
+        NormalGraphRecordedContext* const context = static_cast<NormalGraphRecordedContext*>(rawContext);
+        if(!context || !context->transaction || !context->firstRecorded || !context->secondRecorded)
+            return false;
+        context->invokedBeforeSubmission = *context->firstRecorded
+            && *context->secondRecorded
+            && !context->transaction->packetToken(context->firstPacket).valid()
+            && !context->transaction->packetToken(context->secondPacket).valid()
+        ;
+        return context->invokedBeforeSubmission;
+    };
+    const GpuTaskGraphTaskRecordedCallback recordedCallback{
+        .task = secondTask,
+        .context = &recordedContext,
+        .invoke = observeNormalGraphRecording,
+    };
+    GpuTaskGraphNormalExecutionDesc normalExecution;
+    normalExecution.taskRecordedCallbacks = &recordedCallback;
+    normalExecution.taskRecordedCallbackCount = 1u;
     GpuSubmissionPacketId failedPacket;
     ASSERT_TRUE(submitter.recordAndSubmitNormalGraph(
         graph,
         compiledGraph,
         recorder,
         recordedGraph,
-        {},
+        normalExecution,
         transaction,
         scratchArena,
         &failedPacket
     ));
     EXPECT_FALSE(failedPacket.valid());
+    EXPECT_TRUE(recordedContext.invokedBeforeSubmission);
     EXPECT_TRUE(firstRecorded);
     EXPECT_TRUE(secondRecorded);
     EXPECT_FALSE(frontierRecorded);
@@ -50592,6 +50632,99 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorSubmitsOrdinaryPrefix){
         compiledGraph,
         recordedGraph.recordingAttemptGeneration()
     ));
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Recorded-state validation belongs to the ordinary graph transaction. A rejected candidate stops before the first
+// native submit and identifies its semantic packet while the caller retains explicit discard ownership.
+TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsBeforeRejectedRecordedCallbackSubmission){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    bool shouldRecord = true;
+    bool recorded = false;
+    const GpuTaskId task = graph.addTask<NativePacketCaptureRetryTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/normal_executor_recorded_callback_rejection"))
+            .setMarkerLabel("Normal Executor Recorded Callback Rejection")
+            .setQueue(graphicsQueue),
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &recorded,
+        }
+    );
+    ASSERT_TRUE(task.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/normal_executor_recorded_callback_rejection_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    ASSERT_TRUE(packet.valid());
+
+    bool callbackInvoked = false;
+    const auto rejectRecordedState = [](
+        void* const rawContext,
+        const CommandListResourceStateHandoff* const finalState
+    ) -> bool {
+        static_cast<void>(finalState);
+        bool* const invoked = static_cast<bool*>(rawContext);
+        if(!invoked)
+            return false;
+        *invoked = true;
+        return false;
+    };
+    const GpuTaskGraphTaskRecordedCallback recordedCallback{
+        .task = task,
+        .context = &callbackInvoked,
+        .invoke = rejectRecordedState,
+    };
+    GpuTaskGraphNormalExecutionDesc normalExecution;
+    normalExecution.taskRecordedCallbacks = &recordedCallback;
+    normalExecution.taskRecordedCallbackCount = 1u;
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    const GpuTaskGraphSubmitter submitter(device);
+    GpuSubmissionPacketId failedPacket;
+    EXPECT_FALSE(submitter.recordAndSubmitNormalGraph(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        normalExecution,
+        transaction,
+        scratchArena,
+        &failedPacket
+    ));
+    EXPECT_TRUE(recorded);
+    EXPECT_TRUE(callbackInvoked);
+    EXPECT_EQ(failedPacket, packet);
+    EXPECT_FALSE(transaction.packetToken(packet).valid());
+    ASSERT_NE(transaction.packetRuntime(packet), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(packet)->state, GpuPacketRuntimeState::Declared);
+    const GpuTaskGraphSubmissionStatistics beforeDiscard = transaction.submissionStatistics();
+    EXPECT_EQ(beforeDiscard.nativeSubmissionCount, 0u);
+    EXPECT_TRUE(transaction.discardUnaccepted(
+        graph,
+        compiledGraph,
+        recordedGraph.recordingAttemptGeneration()
+    ));
+    EXPECT_EQ(transaction.packetRuntime(packet)->state, GpuPacketRuntimeState::Rejected);
     EXPECT_TRUE(device.waitForIdle());
 }
 

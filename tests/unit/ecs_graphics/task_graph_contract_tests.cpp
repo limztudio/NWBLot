@@ -1059,8 +1059,8 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryReportsLogicalOwnershipPlan){
 }
 
 
-// MeshSkinning has a complete primary-Graphics serial chain with one terminal timing submission. It can therefore
-// let FrontierScored coalesce its cheap immediate successors without reinstating per-task merge hints.
+// MeshSkinning has one complete primary-Graphics packet. Its recorded-state preparation and accepted-state commit
+// therefore stay semantic callbacks on the generic whole-graph executor rather than splitting record and submit.
 TEST(EcsGraphics, MeshSkinningUsesFrontierScoredSerialPacketization){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -1080,12 +1080,17 @@ TEST(EcsGraphics, MeshSkinningUsesFrontierScoredSerialPacketization){
     EXPECT_TRUE(ContainsText(skinning, "terminalQueue->id != graphicsQueue"));
     EXPECT_EQ(CountText(skinning, "Core::GpuTaskGraphTaskTimingTicket{"), 1u);
     EXPECT_TRUE(ContainsText(skinning, ".task = terminalTask,\n            .timingTicket = &timingTicket,"));
-    EXPECT_TRUE(ContainsText(skinning, "m_acceptedSkinningState.buildMergedBufferSubset("));
+    EXPECT_TRUE(ContainsText(skinning, "context->cache->buildMergedBufferSubset("));
+    EXPECT_TRUE(ContainsText(skinning, "const Core::GpuTaskGraphTaskRecordedCallback recordedCallback{"));
+    EXPECT_TRUE(ContainsText(skinning, "normalExecution.taskRecordedCallbacks = &recordedCallback;"));
     EXPECT_TRUE(ContainsText(skinning, "const Core::GpuTaskGraphTaskAcceptedCallback acceptedCallback{"));
-    EXPECT_TRUE(ContainsText(skinning, ".task = terminalTask,\n        .context = &skinningAcceptance,"));
-    EXPECT_TRUE(ContainsText(skinning, "context->stateReady = context->cache->commit(*context->candidate);"));
+    EXPECT_TRUE(ContainsText(skinning, ".task = terminalTask,\n        .context = &skinningState,"));
+    EXPECT_TRUE(ContainsText(skinning, "context->stateAccepted = context->cache->commit(*context->candidate);"));
+    EXPECT_TRUE(ContainsText(skinning, "submitter.recordAndSubmitNormalGraph("));
+    EXPECT_FALSE(ContainsText(skinning, "recorder.recordPacketRangeInCompileOrder("));
+    EXPECT_FALSE(ContainsText(skinning, "submitter.submitPacketRangeInCompileOrderFromTasks("));
     EXPECT_TRUE(ContainsText(skinning, "const Core::QueueSubmissionToken skinningToken = transaction.taskToken("));
-    EXPECT_TRUE(ContainsText(skinning, "if(!skinningSubmitted || !skinningAcceptance.stateReady){"));
+    EXPECT_TRUE(ContainsText(skinning, "if(!skinningSubmitted || !skinningState.stateAccepted){"));
     EXPECT_FALSE(ContainsText(skinning, "mergeAcceptedSkinningState("));
 }
 

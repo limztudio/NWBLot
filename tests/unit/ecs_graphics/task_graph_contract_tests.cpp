@@ -3596,8 +3596,18 @@ TEST(EcsGraphics, NaturalAvboitComputeStagesPermitCompilerOwnedRouting){
     for(const AStringView computeStage : { depthWarpStage, integrationStage }){
         EXPECT_TRUE(ContainsText(computeStage, ".setQueue(ComputeQueueRequest())"));
         EXPECT_TRUE(ContainsText(computeStage, ".setScheduling(avboitComputeScheduling)"));
+        EXPECT_TRUE(ContainsText(computeStage, ".setTimingMetadata(avboitComputeStageTiming)"));
         EXPECT_FALSE(ContainsText(computeStage, "GraphicsComputeQueueRequest()"));
     }
+    EXPECT_TRUE(ContainsText(
+        naturalComputeStages,
+        "const Core::GpuTaskTimingMetadata avboitComputeStageTiming ="
+    ));
+    EXPECT_TRUE(ContainsText(
+        naturalComputeStages,
+        "AvboitComputeStageTimingMetadata(deferredTargets.avboit)"
+    ));
+    EXPECT_FALSE(ContainsText(naturalComputeStages, "AvboitIntegrationTimingMetadata"));
     EXPECT_TRUE(ContainsText(depthWarpStage, "render.avboit.depth_warp"));
     EXPECT_TRUE(ContainsText(integrationStage, "render.avboit.integration"));
     EXPECT_FALSE(ContainsText(taskGraph, "splitAvboitStages"));
@@ -3627,6 +3637,7 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
             "avboit/task_graph_extinction_integration_tasks.cpp",
             "avboit/task_graph_accumulation_tasks.h",
             "avboit/task_graph_accumulation_tasks.cpp",
+            "avboit/task_graph_timing_metadata.h",
             "deferred/task_graph_deferred_lighting.cpp",
         },
         taskGraphSource
@@ -3712,7 +3723,14 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     EXPECT_TRUE(ContainsText(integrationDeclaration, ".timingFeedback = &m_deferredTaskTimingFeedback"));
     EXPECT_TRUE(ContainsText(integrationDeclaration, ".timingScope = &RendererGpuTimingScope::s_AvboitIntegration"));
     EXPECT_TRUE(ContainsText(integrationDeclaration, ".timingTicket = &avboitIntegrationTimingTicket"));
-    EXPECT_TRUE(ContainsText(lighting, ".setTimingMetadata(avboitIntegrationTiming)"));
+    EXPECT_TRUE(ContainsText(taskGraph, "AvboitComputeStageTimingMetadata"));
+    EXPECT_TRUE(ContainsText(
+        taskGraph,
+        ".resolutionClass = bucketDimension(targets.lowWidth) | (bucketDimension(targets.lowHeight) << 16u)"
+    ));
+    EXPECT_TRUE(ContainsText(depthWarpDeclaration, ".setTimingMetadata(avboitComputeStageTiming)"));
+    EXPECT_TRUE(ContainsText(integrationDeclaration, ".setTimingMetadata(avboitComputeStageTiming)"));
+    EXPECT_FALSE(ContainsText(taskGraph, "AvboitIntegrationTimingMetadata"));
     EXPECT_FALSE(ContainsText(taskGraph, "splitAvboitStages"));
 }
 

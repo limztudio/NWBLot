@@ -3746,8 +3746,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling);
     // Accepted samples use the queue class and exact transport chosen by this compile.
     avboitComputeScheduling.allowTimingFeedbackRouting = true;
-    const Core::GpuTaskTimingMetadata avboitIntegrationTiming =
-        AvboitIntegrationTimingMetadata(deferredTargets.avboit)
+    const Core::GpuTaskTimingMetadata avboitComputeStageTiming =
+        AvboitComputeStageTimingMetadata(deferredTargets.avboit)
     ;
     Core::GpuTaskId avboitDepthWarpCompletionTask = m_avboitSystem.taskGraphStage().m_occupancyTask;
     if(hasTransparentRenderers){
@@ -3764,7 +3764,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .setMarkerLabel("AVBOIT Depth Warp")
             .setQueue(ComputeQueueRequest())
             .setScheduling(avboitComputeScheduling)
-            .setTimingMetadata({})
+            .setTimingMetadata(avboitComputeStageTiming)
             .setDependencies(preDependency, LengthOf(preDependency))
             .setResourceUses(depthWarpResourceUses, LengthOf(depthWarpResourceUses))
         ;
@@ -4670,7 +4670,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .setMarkerLabel("AVBOIT Integration")
         .setQueue(ComputeQueueRequest())
         .setScheduling(avboitComputeScheduling)
-        .setTimingMetadata(avboitIntegrationTiming)
+        .setTimingMetadata(avboitComputeStageTiming)
         .setDependencies(integrationDependency, LengthOf(integrationDependency))
         .setResourceUses(integrationResourceUses, LengthOf(integrationResourceUses))
     ;

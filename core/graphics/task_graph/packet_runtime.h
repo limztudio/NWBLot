@@ -144,19 +144,22 @@ private:
     // Every ready-frontier worker receives isolated state-handoff scratch. This is separate from the per-packet
     // final-state slots, which are written only by the packet's own recording worker and read by later frontiers.
     struct PacketRecordingScratch final : NoCopy{
+        CommandListResourceStateHandoff initialStateSeed;
+        CommandListResourceStateHandoff stateSubsetScratch;
+        CommandListResourceStateHandoff stateMergeScratch;
+        CommandListResourceStateHandoff externalBaseStateSeed;
+        CommandListResourceStateHandoff externalMergedStateSeed;
+        GraphicsVector<u8> dependencyReachability;
+
+
         explicit PacketRecordingScratch(GraphicsArena& arena)
             : initialStateSeed(arena)
             , stateSubsetScratch(arena)
             , stateMergeScratch(arena)
             , externalBaseStateSeed(arena)
             , externalMergedStateSeed(arena)
+            , dependencyReachability(arena)
         {}
-
-        CommandListResourceStateHandoff initialStateSeed;
-        CommandListResourceStateHandoff stateSubsetScratch;
-        CommandListResourceStateHandoff stateMergeScratch;
-        CommandListResourceStateHandoff externalBaseStateSeed;
-        CommandListResourceStateHandoff externalMergedStateSeed;
     };
 
 
@@ -249,12 +252,13 @@ struct GpuExternalPacketStateSource{
     const CommandListResourceStateHandoff* states = nullptr;
 };
 
-// A late external-state source anchored to semantic graph work rather than a compiler-generated packet ID.  The
-// recorder resolves `task` to its current packet and filters every source through that packet's declared resource
-// uses.  This preserves the legacy packet-wide handoff behavior across packetization changes while retiring
-// renderer-owned packet selection for sources that are only available after an earlier packet records.
+// A recording-time state source anchored to semantic graph work rather than compiler-generated packet IDs. The
+// optional recorded producer supplies its containing packet's actual native final state after that packet records;
+// external sources may supplement it. The recorder filters every source through the consumer packet's declared
+// resource uses so the contract remains stable across packetization changes.
 struct GpuTaskPacketStateBinding{
     GpuTaskId task;
+    GpuTaskId recordedProducerTask = {};
     const GpuExternalPacketStateSource* externalStateSources = nullptr;
     usize externalStateSourceCount = 0u;
 };

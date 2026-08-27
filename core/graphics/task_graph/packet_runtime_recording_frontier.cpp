@@ -36,13 +36,31 @@ inline constexpr Name s_PacketRecordingFrontierScratchArena("graphics/task_graph
 
     for(usize bindingIndex = 0u; bindingIndex < taskStateBindingCount; ++bindingIndex){
         const GpuTaskPacketStateBinding& binding = taskStateBindings[bindingIndex];
+        const bool hasRecordedProducer = binding.recordedProducerTask.valid();
         if(
             !graph.validTask(binding.task)
             || !compiledGraph.findTask(binding.task)
-            || binding.externalStateSourceCount == 0u
-            || !binding.externalStateSources
+            || (!hasRecordedProducer && binding.externalStateSourceCount == 0u)
+            || (binding.externalStateSourceCount != 0u && !binding.externalStateSources)
         )
             return false;
+        if(hasRecordedProducer){
+            if(
+                !graph.validTask(binding.recordedProducerTask)
+                || !compiledGraph.findTask(binding.recordedProducerTask)
+            )
+                return false;
+            const GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(binding.task);
+            const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(binding.recordedProducerTask);
+            if(!compiledGraph.validPacket(consumerPacket) || !compiledGraph.validPacket(producerPacket))
+                return false;
+            if(producerPacket == consumerPacket){
+                if(!compiledGraph.taskPrecedesInSamePacket(binding.recordedProducerTask, binding.task))
+                    return false;
+            }
+            else if(producerPacket.index >= consumerPacket.index)
+                return false;
+        }
         for(usize sourceIndex = 0u; sourceIndex < binding.externalStateSourceCount; ++sourceIndex){
             const CommandListResourceStateHandoff* const states =
                 binding.externalStateSources[sourceIndex].states
@@ -226,7 +244,9 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
 
     Alloc::ScratchArena scratchArena(__hidden_gpu_packet_runtime_recording_frontier::s_PacketRecordingFrontierScratchArena);
     Vector<GpuNativePacketRecordDesc, Alloc::ScratchArena> recordDescs(scratchArena);
+    Vector<u32, Alloc::ScratchArena> effectiveRecordingFrontiers(scratchArena);
     recordDescs.reserve(range.packetCount);
+    effectiveRecordingFrontiers.reserve(range.packetCount);
     u32 maximumFrontier = 0u;
     for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
         const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
@@ -240,9 +260,57 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
             }
         }
         recordDescs.push_back(desc);
-        const u32 frontier = compiledGraph.packet(packet).recordingFrontier;
-        if(frontier > maximumFrontier)
-            maximumFrontier = frontier;
+
+        u32 effectiveFrontier = compiledGraph.packet(packet).recordingFrontier;
+        if(effectiveFrontier == Limit<u32>::s_Max)
+            return false;
+        const auto raiseFromSourcePacket = [&](const GpuSubmissionPacketId sourcePacket){
+            if(
+                !compiledGraph.validPacket(sourcePacket)
+                || sourcePacket == packet
+                || sourcePacket.index >= packet.index
+            )
+                return false;
+            if(sourcePacket.index < rangeBegin)
+                return true;
+
+            const usize sourceDescIndex = sourcePacket.index - rangeBegin;
+            if(sourceDescIndex >= effectiveRecordingFrontiers.size())
+                return false;
+            const u32 sourceFrontier = effectiveRecordingFrontiers[sourceDescIndex];
+            if(sourceFrontier == Limit<u32>::s_Max)
+                return false;
+            effectiveFrontier = Max(effectiveFrontier, sourceFrontier + 1u);
+            return true;
+        };
+
+        const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
+        const GpuTaskId* const tasks = compiledGraph.packetTasks(packet);
+        if(!tasks || packetPlan.taskCount == 0u)
+            return false;
+        for(u32 taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
+            const GpuCompiledTask* const compiledTask = compiledGraph.findTask(tasks[taskIndex]);
+            const GpuPacketStateSeed* const stateSeeds = compiledGraph.taskPrologueStateSeeds(tasks[taskIndex]);
+            if(!compiledTask || (compiledTask->prologueStateSeedCount != 0u && !stateSeeds))
+                return false;
+            for(u32 seedIndex = 0u; seedIndex < compiledTask->prologueStateSeedCount; ++seedIndex){
+                if(!raiseFromSourcePacket(stateSeeds[seedIndex].sourcePacket))
+                    return false;
+            }
+        }
+        for(usize bindingIndex = 0u; bindingIndex < taskStateBindingCount; ++bindingIndex){
+            const GpuTaskPacketStateBinding& binding = taskStateBindings[bindingIndex];
+            if(
+                !binding.recordedProducerTask.valid()
+                || compiledGraph.packetForTask(binding.task) != packet
+            )
+                continue;
+            const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(binding.recordedProducerTask);
+            if(producerPacket != packet && !raiseFromSourcePacket(producerPacket))
+                return false;
+        }
+        effectiveRecordingFrontiers.push_back(effectiveFrontier);
+        maximumFrontier = Max(maximumFrontier, effectiveFrontier);
     }
     const auto completeReadyFrontierTelemetry = [&]{
         const f64 elapsedSeconds = DurationInSeconds<f64>(TimerNow(), recordingOperationBegin);
@@ -321,6 +389,24 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                     return false;
             }
         }
+        for(usize bindingIndex = 0u; bindingIndex < taskStateBindingCount; ++bindingIndex){
+            const GpuTaskPacketStateBinding& binding = taskStateBindings[bindingIndex];
+            if(
+                !binding.recordedProducerTask.valid()
+                || compiledGraph.packetForTask(binding.task) != packet
+            )
+                continue;
+            const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(binding.recordedProducerTask);
+            if(
+                producerPacket != packet
+                && (
+                    !compiledGraph.validPacket(producerPacket)
+                    || producerPacket.index >= packet.index
+                    || !outRecordedGraph.find(producerPacket)
+                )
+            )
+                return false;
+        }
         return true;
     };
     const auto packetAllowsParallelRecording = [&](const GpuNativePacketRecordDesc& desc){
@@ -353,7 +439,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         parallelDescIndices.clear();
         for(usize descIndex = 0u; descIndex < recordDescs.size(); ++descIndex){
             const GpuNativePacketRecordDesc& desc = recordDescs[descIndex];
-            if(compiledGraph.packet(desc.packet).recordingFrontier != frontier)
+            if(effectiveRecordingFrontiers[descIndex] != frontier)
                 continue;
             if(!packetStateSeedsAreRecorded(desc.packet)){
                 if(outFailedPacket)

@@ -2270,6 +2270,40 @@ struct NativePacketPrefixTask{
 };
 
 
+struct NativePacketRecordedStateProducerTask{
+    struct Payload{
+        Buffer* prerequisiteBuffer = nullptr;
+        ResourceStates::Mask expectedPrerequisiteState = ResourceStates::Unknown;
+        Buffer* producedBuffer = nullptr;
+        ResourceStates::Mask producedState = ResourceStates::Unknown;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(
+            !payload.producedBuffer
+            || payload.producedState == ResourceStates::Unknown
+            || (
+                payload.prerequisiteBuffer
+                && commandList.getBufferState(payload.prerequisiteBuffer) != payload.expectedPrerequisiteState
+            )
+        )
+            return false;
+
+        commandList.setBufferState(payload.producedBuffer, payload.producedState);
+        const bool ready = commandList.getBufferState(payload.producedBuffer) == payload.producedState;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
 struct NativePacketRenderPassBoundaryTask{
     struct Payload{
         Framebuffer* framebuffer = nullptr;
@@ -45569,6 +45603,699 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketResolvesTaskAnchoredRuntimeSta
         &invalidBinding,
         1u
     ));
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, NativePacketResolvesRecordedProducerStateAcrossTransitiveDependency){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const auto createBuffer = [&device]{
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const BufferHandle recordedStateBuffer = createBuffer();
+    const BufferHandle externalStateBuffer = createBuffer();
+    ASSERT_NE(recordedStateBuffer.get(), nullptr);
+    ASSERT_NE(externalStateBuffer.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId recordedStateResource = graph.importBuffer(
+        recordedStateBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/recorded_producer_transitive_state"))
+            .setMarkerLabel("Recorded Producer Transitive State")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Unknown)
+    );
+    const GpuGraphResourceId externalStateResource = graph.importBuffer(
+        externalStateBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/recorded_producer_external_state"))
+            .setMarkerLabel("Recorded Producer External State")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Unknown)
+    );
+    ASSERT_TRUE(recordedStateResource.valid());
+    ASSERT_TRUE(externalStateResource.valid());
+
+    GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+
+    bool producerRecorded = false;
+    GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/descriptor_buffer/recorded_producer_transitive_producer"))
+        .setMarkerLabel("Recorded Producer")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+    ;
+    const GpuTaskId producerTask = graph.addTask<NativePacketRecordedStateProducerTask>(
+        producerDesc,
+        NativePacketRecordedStateProducerTask::Payload{
+            .producedBuffer = recordedStateBuffer.get(),
+            .producedState = ResourceStates::ShaderResource,
+            .recorded = &producerRecorded,
+        }
+    );
+    ASSERT_TRUE(producerTask.valid());
+
+    const bool shouldRecord = true;
+    bool bridgeRecorded = false;
+    GpuTaskDesc bridgeDesc;
+    bridgeDesc
+        .setIdentity(Name("tests/descriptor_buffer/recorded_producer_transitive_bridge"))
+        .setMarkerLabel("Recorded Producer Bridge")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+        .setDependencies(&producerTask, 1u)
+    ;
+    const GpuTaskId bridgeTask = graph.addTask<NativePacketCaptureRetryTask>(
+        bridgeDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &bridgeRecorded,
+        }
+    );
+    ASSERT_TRUE(bridgeTask.valid());
+
+    const GpuTaskResourceUse consumerUses[] = {
+        GpuTaskResourceUse{
+            .resource = recordedStateResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = externalStateResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    bool consumerRecorded = false;
+    GpuTaskDesc consumerDesc;
+    consumerDesc
+        .setIdentity(Name("tests/descriptor_buffer/recorded_producer_transitive_consumer"))
+        .setMarkerLabel("Recorded Producer Consumer")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+        .setDependencies(&bridgeTask, 1u)
+        .setResourceUses(consumerUses, LengthOf(consumerUses))
+    ;
+    const GpuTaskId consumerTask = graph.addTask<NativePacketPrefixTask>(
+        consumerDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = recordedStateBuffer.get(),
+            .expectedState = ResourceStates::ShaderResource,
+            .additionalBuffer = externalStateBuffer.get(),
+            .expectedAdditionalBufferState = ResourceStates::ShaderResource,
+            .recorded = &consumerRecorded,
+        }
+    );
+    ASSERT_TRUE(consumerTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/recorded_producer_transitive_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producerTask);
+    const GpuSubmissionPacketId bridgePacket = compiledGraph.packetForTask(bridgeTask);
+    const GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumerTask);
+    ASSERT_TRUE(producerPacket.valid());
+    ASSERT_TRUE(bridgePacket.valid());
+    ASSERT_TRUE(consumerPacket.valid());
+    ASSERT_EQ(compiledGraph.packet(bridgePacket).dependencyCount, 1u);
+    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 1u);
+    ASSERT_NE(compiledGraph.packetDependencies(bridgePacket), nullptr);
+    ASSERT_NE(compiledGraph.packetDependencies(consumerPacket), nullptr);
+    EXPECT_EQ(compiledGraph.packetDependencies(bridgePacket)[0u].producer, producerPacket);
+    EXPECT_EQ(compiledGraph.packetDependencies(consumerPacket)[0u].producer, bridgePacket);
+
+    CommandListResourceStateHandoff externalState(DescriptorBufferRoundTripTest::arena());
+    const CommandListHandle externalStateProducer = device.createCommandList();
+    ASSERT_NE(externalStateProducer.get(), nullptr);
+    externalStateProducer->open();
+    externalStateProducer->setBufferState(externalStateBuffer.get(), ResourceStates::ShaderResource);
+    externalStateProducer->close(&externalState);
+    ASSERT_TRUE(externalState.valid());
+    const GpuExternalPacketStateSource externalSources[] = {
+        GpuExternalPacketStateSource{ .states = &externalState },
+    };
+    const GpuTaskPacketStateBinding bindings[] = {
+        GpuTaskPacketStateBinding{
+            .task = consumerTask,
+            .recordedProducerTask = producerTask,
+            .externalStateSources = externalSources,
+            .externalStateSourceCount = LengthOf(externalSources),
+        },
+    };
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.packetRange(producerPacket, bridgePacket),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(producerRecorded);
+    EXPECT_TRUE(bridgeRecorded);
+    EXPECT_FALSE(consumerRecorded);
+    EXPECT_NE(recordedGraph.taskFinalStateSeed(compiledGraph, producerTask), nullptr);
+
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.packetRange(consumerPacket, consumerPacket),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket,
+        nullptr,
+        bindings,
+        LengthOf(bindings)
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(consumerRecorded);
+    EXPECT_NE(recordedGraph.find(consumerPacket), nullptr);
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, NativePacketRejectsRecordedProducerWithoutDependencyPath){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const BufferHandle buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId resource = graph.importBuffer(
+        buffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/unrelated_recorded_producer_state"))
+            .setMarkerLabel("Unrelated Recorded Producer State")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Unknown)
+    );
+    ASSERT_TRUE(resource.valid());
+
+    GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    bool producerRecorded = false;
+    const GpuTaskId producerTask = graph.addTask<NativePacketRecordedStateProducerTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/unrelated_recorded_producer"))
+            .setMarkerLabel("Unrelated Recorded Producer")
+            .setQueue(graphicsRequest)
+            .setScheduling(scheduling),
+        NativePacketRecordedStateProducerTask::Payload{
+            .producedBuffer = buffer.get(),
+            .producedState = ResourceStates::ShaderResource,
+            .recorded = &producerRecorded,
+        }
+    );
+    ASSERT_TRUE(producerTask.valid());
+
+    const GpuTaskResourceUse consumerUse{
+        .resource = resource,
+        .range = {},
+        .requiredState = ResourceStates::ShaderResource,
+        .access = GpuTaskResourceAccess::Read,
+    };
+    bool consumerRecorded = false;
+    const GpuTaskId consumerTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/unrelated_recorded_consumer"))
+            .setMarkerLabel("Unrelated Recorded Consumer")
+            .setQueue(graphicsRequest)
+            .setScheduling(scheduling)
+            .setResourceUses(&consumerUse, 1u),
+        NativePacketPrefixTask::Payload{
+            .buffer = buffer.get(),
+            .expectedState = ResourceStates::ShaderResource,
+            .recorded = &consumerRecorded,
+        }
+    );
+    ASSERT_TRUE(consumerTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/unrelated_recorded_producer_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producerTask);
+    const GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumerTask);
+    ASSERT_TRUE(producerPacket.valid());
+    ASSERT_TRUE(consumerPacket.valid());
+    ASSERT_LT(producerPacket.index, consumerPacket.index);
+    EXPECT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 0u);
+
+    const GpuTaskPacketStateBinding binding{
+        .task = consumerTask,
+        .recordedProducerTask = producerTask,
+    };
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        &failedPacket,
+        nullptr,
+        &binding,
+        1u
+    ));
+    EXPECT_EQ(failedPacket, consumerPacket);
+    EXPECT_TRUE(producerRecorded);
+    EXPECT_FALSE(consumerRecorded);
+    EXPECT_NE(recordedGraph.find(producerPacket), nullptr);
+    EXPECT_EQ(recordedGraph.find(consumerPacket), nullptr);
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRaisesRecordedStateConsumerAfterProducer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const auto createBuffer = [&device]{
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const BufferHandle frontierBuffer = createBuffer();
+    const BufferHandle recordedStateBuffer = createBuffer();
+    ASSERT_NE(frontierBuffer.get(), nullptr);
+    ASSERT_NE(recordedStateBuffer.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId frontierResource = graph.importBuffer(
+        frontierBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/runtime_frontier_source"))
+            .setMarkerLabel("Runtime Frontier Source")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+    );
+    const GpuGraphResourceId recordedStateResource = graph.importBuffer(
+        recordedStateBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/runtime_frontier_recorded_state"))
+            .setMarkerLabel("Runtime Frontier Recorded State")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Unknown)
+    );
+    ASSERT_TRUE(frontierResource.valid());
+    ASSERT_TRUE(recordedStateResource.valid());
+
+    GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const GpuTaskResourceUse frontierWriteUse{
+        .resource = frontierResource,
+        .range = {},
+        .requiredState = ResourceStates::CopyDest,
+        .access = GpuTaskResourceAccess::Write,
+    };
+    bool frontierRecorded = false;
+    const GpuTaskId frontierTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/runtime_frontier_first"))
+            .setMarkerLabel("Runtime Frontier First")
+            .setQueue(graphicsRequest)
+            .setScheduling(scheduling)
+            .setResourceUses(&frontierWriteUse, 1u),
+        NativePacketPrefixTask::Payload{
+            .buffer = frontierBuffer.get(),
+            .expectedState = ResourceStates::CopyDest,
+            .recorded = &frontierRecorded,
+        }
+    );
+    ASSERT_TRUE(frontierTask.valid());
+
+    const GpuTaskResourceUse producerUse{
+        .resource = frontierResource,
+        .range = {},
+        .requiredState = ResourceStates::ShaderResource,
+        .access = GpuTaskResourceAccess::Read,
+    };
+    bool producerRecorded = false;
+    const GpuTaskId producerTask = graph.addTask<NativePacketRecordedStateProducerTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/runtime_frontier_producer"))
+            .setMarkerLabel("Runtime Frontier Producer")
+            .setQueue(graphicsRequest)
+            .setScheduling(scheduling)
+            .setDependencies(&frontierTask, 1u)
+            .setResourceUses(&producerUse, 1u),
+        NativePacketRecordedStateProducerTask::Payload{
+            .prerequisiteBuffer = frontierBuffer.get(),
+            .expectedPrerequisiteState = ResourceStates::ShaderResource,
+            .producedBuffer = recordedStateBuffer.get(),
+            .producedState = ResourceStates::ShaderResource,
+            .recorded = &producerRecorded,
+        }
+    );
+    ASSERT_TRUE(producerTask.valid());
+
+    const GpuTaskResourceUse consumerUse{
+        .resource = recordedStateResource,
+        .range = {},
+        .requiredState = ResourceStates::ShaderResource,
+        .access = GpuTaskResourceAccess::Read,
+    };
+    bool consumerRecorded = false;
+    const GpuTaskId consumerTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/runtime_frontier_consumer"))
+            .setMarkerLabel("Runtime Frontier Consumer")
+            .setQueue(graphicsRequest)
+            .setScheduling(scheduling)
+            .setDependencies(&producerTask, 1u)
+            .setResourceUses(&consumerUse, 1u),
+        NativePacketPrefixTask::Payload{
+            .buffer = recordedStateBuffer.get(),
+            .expectedState = ResourceStates::ShaderResource,
+            .recorded = &consumerRecorded,
+        }
+    );
+    ASSERT_TRUE(consumerTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/runtime_frontier_recorded_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    const GpuSubmissionPacketId frontierPacket = compiledGraph.packetForTask(frontierTask);
+    const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producerTask);
+    const GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumerTask);
+    ASSERT_TRUE(frontierPacket.valid());
+    ASSERT_TRUE(producerPacket.valid());
+    ASSERT_TRUE(consumerPacket.valid());
+    EXPECT_EQ(compiledGraph.packet(frontierPacket).recordingFrontier, 0u);
+    EXPECT_EQ(compiledGraph.packet(producerPacket).recordingFrontier, 1u);
+    EXPECT_EQ(compiledGraph.packet(consumerPacket).recordingFrontier, 0u);
+    const GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producerTask);
+    const GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumerTask);
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledConsumer, nullptr);
+    ASSERT_EQ(compiledProducer->prologueStateSeedCount, 1u);
+    EXPECT_EQ(compiledConsumer->prologueStateSeedCount, 0u);
+
+    const GpuTaskPacketStateBinding binding{
+        .task = consumerTask,
+        .recordedProducerTask = producerTask,
+    };
+    Alloc::ThreadPool recordingWorkers(1u, CpuAffinity::Any);
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    GpuSubmissionPacketId failedPacket;
+    ASSERT_TRUE(recorder.recordPacketRangeInReadyFrontiers(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        recordingWorkers,
+        &failedPacket,
+        nullptr,
+        &binding,
+        1u
+    )) << "failed packet " << failedPacket.index;
+    EXPECT_TRUE(frontierRecorded);
+    EXPECT_TRUE(producerRecorded);
+    EXPECT_TRUE(consumerRecorded);
+    const GpuRecordedPacket* const producerRecording = recordedGraph.find(producerPacket);
+    const GpuRecordedPacket* const consumerRecording = recordedGraph.find(consumerPacket);
+    ASSERT_NE(producerRecording, nullptr);
+    ASSERT_NE(consumerRecording, nullptr);
+    EXPECT_LE(producerRecording->recordingEndNanoseconds, consumerRecording->recordingBeginNanoseconds);
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, NativePacketValidatesSamePacketRecordedStateProducerOrder){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const BufferHandle buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId resource = graph.importBuffer(
+        buffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/same_packet_recorded_state"))
+            .setMarkerLabel("Same-Packet Recorded State")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(resource.valid());
+
+    const GpuQueueRequest graphicsRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint producerScheduling;
+    producerScheduling.allowPacketMerge = true;
+    bool producerRecorded = false;
+    const GpuTaskId producerTask = graph.addTask<NativePacketRecordedStateProducerTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/same_packet_recorded_producer"))
+            .setMarkerLabel("Same-Packet Recorded Producer")
+            .setQueue(graphicsRequest)
+            .setScheduling(producerScheduling),
+        NativePacketRecordedStateProducerTask::Payload{
+            .producedBuffer = buffer.get(),
+            .producedState = ResourceStates::CopyDest,
+            .recorded = &producerRecorded,
+        }
+    );
+    ASSERT_TRUE(producerTask.valid());
+
+    GpuTaskSchedulingHint consumerScheduling;
+    consumerScheduling.allowPacketMerge = true;
+    consumerScheduling.mergeWithPrevious = true;
+    const GpuTaskResourceUse consumerUse{
+        .resource = resource,
+        .range = {},
+        .requiredState = ResourceStates::ShaderResource,
+        .access = GpuTaskResourceAccess::Read,
+    };
+    bool consumerRecorded = false;
+    const GpuTaskId consumerTask = graph.addTask<NativePacketPrefixTask>(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/same_packet_recorded_consumer"))
+            .setMarkerLabel("Same-Packet Recorded Consumer")
+            .setQueue(graphicsRequest)
+            .setScheduling(consumerScheduling)
+            .setDependencies(&producerTask, 1u)
+            .setResourceUses(&consumerUse, 1u),
+        NativePacketPrefixTask::Payload{
+            .buffer = buffer.get(),
+            .expectedState = ResourceStates::ShaderResource,
+            .recorded = &consumerRecorded,
+        }
+    );
+    ASSERT_TRUE(consumerTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/same_packet_recorded_state_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    ASSERT_TRUE(compiledGraph.tasksSharePacket(producerTask, consumerTask));
+    ASSERT_TRUE(compiledGraph.taskPrecedesInSamePacket(producerTask, consumerTask));
+
+    const GpuNativePacketRecorder recorder(device);
+    const GpuTaskPacketStateBinding reversedBinding{
+        .task = producerTask,
+        .recordedProducerTask = consumerTask,
+    };
+    GpuRecordedGraph reversedGraph(DescriptorBufferRoundTripTest::arena());
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        reversedGraph,
+        nullptr,
+        nullptr,
+        &reversedBinding,
+        1u
+    ));
+    EXPECT_EQ(reversedGraph.recordingAttemptGeneration(), 0u);
+
+    const GpuTaskPacketStateBinding selfBinding{
+        .task = consumerTask,
+        .recordedProducerTask = consumerTask,
+    };
+    GpuRecordedGraph selfGraph(DescriptorBufferRoundTripTest::arena());
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        selfGraph,
+        nullptr,
+        nullptr,
+        &selfBinding,
+        1u
+    ));
+    EXPECT_EQ(selfGraph.recordingAttemptGeneration(), 0u);
+
+    GpuTaskPacketStateBinding staleBinding{
+        .task = consumerTask,
+        .recordedProducerTask = producerTask,
+    };
+    ++staleBinding.recordedProducerTask.generation;
+    GpuRecordedGraph staleGraph(DescriptorBufferRoundTripTest::arena());
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        staleGraph,
+        nullptr,
+        nullptr,
+        &staleBinding,
+        1u
+    ));
+    EXPECT_EQ(staleGraph.recordingAttemptGeneration(), 0u);
+
+    const GpuTaskPacketStateBinding binding{
+        .task = consumerTask,
+        .recordedProducerTask = producerTask,
+    };
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        nullptr,
+        nullptr,
+        &binding,
+        1u
+    ));
+    EXPECT_TRUE(producerRecorded);
+    EXPECT_TRUE(consumerRecorded);
 }
 
 

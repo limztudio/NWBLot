@@ -33,13 +33,31 @@ namespace __hidden_gpu_packet_runtime_execution{
 
     for(usize bindingIndex = 0u; bindingIndex < taskStateBindingCount; ++bindingIndex){
         const GpuTaskPacketStateBinding& binding = taskStateBindings[bindingIndex];
+        const bool hasRecordedProducer = binding.recordedProducerTask.valid();
         if(
             !graph.validTask(binding.task)
             || !compiledGraph.findTask(binding.task)
-            || binding.externalStateSourceCount == 0u
-            || !binding.externalStateSources
+            || (!hasRecordedProducer && binding.externalStateSourceCount == 0u)
+            || (binding.externalStateSourceCount != 0u && !binding.externalStateSources)
         )
             return false;
+        if(hasRecordedProducer){
+            if(
+                !graph.validTask(binding.recordedProducerTask)
+                || !compiledGraph.findTask(binding.recordedProducerTask)
+            )
+                return false;
+            const GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(binding.task);
+            const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(binding.recordedProducerTask);
+            if(!compiledGraph.validPacket(consumerPacket) || !compiledGraph.validPacket(producerPacket))
+                return false;
+            if(producerPacket == consumerPacket){
+                if(!compiledGraph.taskPrecedesInSamePacket(binding.recordedProducerTask, binding.task))
+                    return false;
+            }
+            else if(producerPacket.index >= consumerPacket.index)
+                return false;
+        }
         for(usize sourceIndex = 0u; sourceIndex < binding.externalStateSourceCount; ++sourceIndex){
             const CommandListResourceStateHandoff* const states =
                 binding.externalStateSources[sourceIndex].states

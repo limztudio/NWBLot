@@ -86,13 +86,31 @@ namespace __hidden_gpu_packet_runtime_state_seed{
 
     for(usize bindingIndex = 0u; bindingIndex < taskStateBindingCount; ++bindingIndex){
         const GpuTaskPacketStateBinding& binding = taskStateBindings[bindingIndex];
+        const bool hasRecordedProducer = binding.recordedProducerTask.valid();
         if(
             !graph.validTask(binding.task)
             || !compiledGraph.findTask(binding.task)
-            || binding.externalStateSourceCount == 0u
-            || !binding.externalStateSources
+            || (!hasRecordedProducer && binding.externalStateSourceCount == 0u)
+            || (binding.externalStateSourceCount != 0u && !binding.externalStateSources)
         )
             return false;
+        if(hasRecordedProducer){
+            if(
+                !graph.validTask(binding.recordedProducerTask)
+                || !compiledGraph.findTask(binding.recordedProducerTask)
+            )
+                return false;
+            const GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(binding.task);
+            const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(binding.recordedProducerTask);
+            if(!compiledGraph.validPacket(consumerPacket) || !compiledGraph.validPacket(producerPacket))
+                return false;
+            if(producerPacket == consumerPacket){
+                if(!compiledGraph.taskPrecedesInSamePacket(binding.recordedProducerTask, binding.task))
+                    return false;
+            }
+            else if(producerPacket.index >= consumerPacket.index)
+                return false;
+        }
         for(usize sourceIndex = 0u; sourceIndex < binding.externalStateSourceCount; ++sourceIndex){
             const CommandListResourceStateHandoff* const states =
                 binding.externalStateSources[sourceIndex].states
@@ -102,6 +120,48 @@ namespace __hidden_gpu_packet_runtime_state_seed{
         }
     }
     return true;
+}
+
+[[nodiscard]] bool HasPacketDependencyPath(
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId producerPacket,
+    const GpuSubmissionPacketId consumerPacket,
+    GraphicsVector<u8>& reachedPackets
+){
+    if(
+        !compiledGraph.validPacket(producerPacket)
+        || !compiledGraph.validPacket(consumerPacket)
+        || producerPacket.index >= consumerPacket.index
+    )
+        return false;
+
+    reachedPackets.clear();
+    reachedPackets.resize(compiledGraph.packetCount());
+    for(usize packetIndex = 0u; packetIndex < reachedPackets.size(); ++packetIndex)
+        reachedPackets[packetIndex] = 0u;
+    reachedPackets[consumerPacket.index] = 1u;
+
+    for(usize packetIndex = consumerPacket.index; packetIndex > producerPacket.index; --packetIndex){
+        if(reachedPackets[packetIndex] == 0u)
+            continue;
+
+        const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
+        const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
+        const GpuPacketDependency* const dependencies = compiledGraph.packetDependencies(packet);
+        if(packetPlan.dependencyCount != 0u && !dependencies)
+            return false;
+        for(u32 dependencyIndex = 0u; dependencyIndex < packetPlan.dependencyCount; ++dependencyIndex){
+            const GpuPacketDependency& dependency = dependencies[dependencyIndex];
+            if(
+                dependency.consumer != packet
+                || !compiledGraph.validPacket(dependency.producer)
+                || dependency.producer.index >= packetIndex
+            )
+                return false;
+            reachedPackets[dependency.producer.index] = 1u;
+        }
+    }
+    return reachedPackets[producerPacket.index] != 0u;
 }
 
 
@@ -377,14 +437,35 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         }
     }
 
-    // Late sources remain a recording-time bridge, but their identity is graph-owned: the caller names the task
-    // that semantically receives the imported state and the recorder resolves its current compiled packet.  Apply
-    // each source to the complete packet to preserve the established packet-wide external handoff while compiler
-    // packetization evolves.
+    // Recording-time sources remain graph-owned: the caller names both semantic endpoints and the recorder resolves
+    // their current packets. A same-packet producer needs no imported snapshot because native state tracking already
+    // flows through the packet. Cross-packet sources require a compiled GPU dependency path so CPU recording cannot
+    // invent state visibility that native submission does not preserve. Apply every source to the complete consumer
+    // packet to retain the established packet-wide handoff as packetization evolves.
     for(usize bindingIndex = 0u; bindingIndex < taskStateBindingCount; ++bindingIndex){
         const GpuTaskPacketStateBinding& binding = taskStateBindings[bindingIndex];
         if(compiledGraph.packetForTask(binding.task) != packetID)
             continue;
+        if(binding.recordedProducerTask.valid()){
+            const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(binding.recordedProducerTask);
+            if(
+                producerPacket != packetID
+                && (
+                    !__hidden_gpu_packet_runtime_state_seed::HasPacketDependencyPath(
+                        compiledGraph,
+                        producerPacket,
+                        packetID,
+                        scratch.dependencyReachability
+                    )
+                    || !appendStateSource(
+                        taskFinalStateSeed(compiledGraph, binding.recordedProducerTask),
+                        tasks,
+                        packet.taskCount
+                    )
+                )
+            )
+                return false;
+        }
         for(usize sourceIndex = 0u; sourceIndex < binding.externalStateSourceCount; ++sourceIndex){
             if(!appendStateSource(
                 binding.externalStateSources[sourceIndex].states,

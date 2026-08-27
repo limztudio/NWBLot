@@ -109,6 +109,9 @@ struct GpuTimingSample{
     // False retires a previously attributed query whose value became unavailable for publication, such as after a
     // capture epoch change. durationSeconds is meaningful only when this is true.
     bool published = false;
+    // Valid only for a published result whose backend queue exposes absolute comparable timestamps. Unpublished
+    // retirement notifications deliberately retain the default-invalid range even when raw query data existed.
+    GpuComparableTimestampRange comparableRange;
 };
 
 // The listener context belongs to its caller. setSampleListener() serializes replacement with any active callback,

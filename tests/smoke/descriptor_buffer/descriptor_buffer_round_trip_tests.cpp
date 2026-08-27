@@ -1420,6 +1420,12 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingCompletionTracksExactAuxiliaryPhy
     EXPECT_EQ(completedSamples.samples[0u].scopeName, s_AuxiliaryCompletionScope.identity);
     EXPECT_EQ(completedSamples.samples[0u].attribution, s_AuxiliaryAttribution);
     EXPECT_TRUE(completedSamples.samples[0u].published);
+    if(nativeDevice.supportsComparableGpuTimestamps(secondaryInfo->id)){
+        EXPECT_TRUE(completedSamples.samples[0u].comparableRange.valid());
+        EXPECT_EQ(completedSamples.samples[0u].comparableRange.physicalQueue, secondaryInfo->id);
+    }
+    else
+        EXPECT_FALSE(completedSamples.samples[0u].comparableRange.valid());
 
     multiQueueScope.setGpuTimingEnabled(false);
     timing.resetQueries();
@@ -47189,6 +47195,9 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionStaleScopeCannotR
     EXPECT_EQ(completedSamples.samples[0u].attribution, s_AcceptedTimingAttribution);
     EXPECT_TRUE(completedSamples.samples[0u].published);
     EXPECT_GE(completedSamples.samples[0u].durationSeconds, 0.0);
+    EXPECT_TRUE(completedSamples.samples[0u].comparableRange.valid());
+    EXPECT_EQ(completedSamples.samples[0u].comparableRange.physicalQueue.index, acceptedToken.physicalQueueIndex);
+    EXPECT_EQ(completedSamples.samples[0u].comparableRange.physicalQueue.deviceGeneration, acceptedToken.deviceGeneration);
 
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();
@@ -47410,6 +47419,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
     EXPECT_EQ(completedSamples.samples[1u].attribution, s_RetiredTimingAttribution);
     EXPECT_FALSE(completedSamples.samples[1u].published);
     EXPECT_EQ(completedSamples.samples[1u].durationSeconds, 0.0);
+    EXPECT_FALSE(completedSamples.samples[1u].comparableRange.valid());
     timing.resetQueries();
 }
 
@@ -49054,6 +49064,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
     EXPECT_EQ(completedSamples.samples[0u].scopeName, s_FrameTransactionScope.identity);
     EXPECT_EQ(completedSamples.samples[0u].attribution, s_RecoveryAttribution);
     EXPECT_FALSE(completedSamples.samples[0u].published);
+    EXPECT_FALSE(completedSamples.samples[0u].comparableRange.valid());
 
     timing.beginFrame(91u);
     auto acceptedPrefix = device.createCommandList();

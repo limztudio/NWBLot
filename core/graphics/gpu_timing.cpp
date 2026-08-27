@@ -73,19 +73,21 @@ void GpuTimingAccumulator::collect(
 
         const bool publishSample = record.epoch == epoch && record.publishSample;
         const f64 durationSeconds = result.durationSeconds();
+        GpuComparableTimestampRange comparableRange;
         if(publishSample){
             ++m_publishedSampleCount;
             recorder.m_timing.recordSample(m_timingScope, durationSeconds, record.frameIndex);
             if(result.hasComparableRange()){
+                comparableRange = GpuComparableTimestampRange{
+                    result.beginTicks,
+                    result.endTicks,
+                    result.secondsPerTick,
+                    result.physicalQueue,
+                };
                 recorder.recordTimestampRange(
                     m_scopeName,
                     record.frameIndex,
-                    GpuComparableTimestampRange{
-                        result.beginTicks,
-                        result.endTicks,
-                        result.secondsPerTick,
-                        result.physicalQueue,
-                    }
+                    comparableRange
                 );
             }
         }
@@ -98,6 +100,7 @@ void GpuTimingAccumulator::collect(
                 .durationSeconds = publishSample ? durationSeconds : 0.0,
                 .attribution = record.attribution,
                 .published = publishSample,
+                .comparableRange = comparableRange,
             });
         }
         releaseQuery(record);
@@ -405,6 +408,7 @@ void GpuTimingAccumulator::retireAttributions(Vector<GpuTimingSample, Alloc::Glo
             .scopeName = m_scopeName,
             .sourceFrameIndex = record.frameIndex,
             .attribution = record.attribution,
+            .comparableRange = {},
         });
         record.attribution = s_NoGpuTimingSampleAttribution;
     }

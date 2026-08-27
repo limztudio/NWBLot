@@ -57,6 +57,18 @@ TEST(GpuTimingRecorderStatistics, DefaultsToUnknownDeviceAndExplicitZeroOutcomes
 }
 
 
+TEST(GpuTimingSample, DefaultsToUnpublishedWithoutComparableRange){
+    const Core::GpuTimingSample sample;
+
+    EXPECT_EQ(sample.scopeName, NAME_NONE);
+    EXPECT_EQ(sample.sourceFrameIndex, 0u);
+    EXPECT_DOUBLE_EQ(sample.durationSeconds, 0.0);
+    EXPECT_FALSE(sample.comparableRange.valid());
+    EXPECT_EQ(sample.attribution, Core::s_NoGpuTimingSampleAttribution);
+    EXPECT_FALSE(sample.published);
+}
+
+
 TEST(TimerQueryResult, ConvertsStraightSixtyFourBitTickRange){
     const Core::TimerQueryResult result{
         .beginTicks = 100u,

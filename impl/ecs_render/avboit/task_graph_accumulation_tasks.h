@@ -116,7 +116,6 @@ struct AvboitAccumulationGraphTask{
         bool accumulationCsgComputeEmulationOutputStatesGraphOwned = false;
         Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr;
         bool hasTransparentRenderers = false;
-        bool splitStages = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : accumulationSnapshot(arena)

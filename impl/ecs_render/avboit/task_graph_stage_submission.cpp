@@ -60,7 +60,7 @@ RendererAvboitTaskGraphSubmission RendererAvboitSystem::submitTaskGraphStage(
     };
 
     appendTimingTicket(m_taskGraphStage.m_preTask, context.m_timingTickets.m_pre);
-    if(validation.stage().asynchronous){
+    if(validation.stage().hasTransparentTasks){
         appendTimingTicket(m_taskGraphStage.m_depthWarpTask, context.m_timingTickets.m_depthWarp);
         if(m_taskGraphStage.m_extinctionComputeEmulationTask.valid()){
             // Both callbacks resolve to one packet and deliberately share the one Extinction timing ticket.
@@ -79,6 +79,12 @@ RendererAvboitTaskGraphSubmission RendererAvboitSystem::submitTaskGraphStage(
             );
         }
         appendTimingTicket(m_taskGraphStage.m_accumulationTask, context.m_timingTickets.m_accumulation);
+    }
+    else{
+        context.m_timingTickets.m_depthWarp.discard();
+        context.m_timingTickets.m_extinction.discard();
+        context.m_timingTickets.m_integration.discard();
+        context.m_timingTickets.m_accumulation.discard();
     }
 
     submission.m_submitterAccepted = submitter.submitTaskRangeInCompileOrderFromTasks(

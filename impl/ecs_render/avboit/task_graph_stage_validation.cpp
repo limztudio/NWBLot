@@ -32,6 +32,16 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
     const auto taskIsCompiled = [&compiledGraph](const Core::GpuTaskId task){
         return compiledGraph.findTask(task) != nullptr;
     };
+    const auto taskBoundaryIsOrdered = [&compiledGraph](
+        const Core::GpuTaskId producerTask,
+        const Core::GpuTaskId consumerTask
+    ){
+        if(!producerTask.valid() || !consumerTask.valid())
+            return false;
+        if(compiledGraph.tasksSharePacket(producerTask, consumerTask))
+            return compiledGraph.taskPrecedesInSamePacket(producerTask, consumerTask);
+        return compiledGraph.taskPrecedesOrSharesPacket(producerTask, consumerTask);
+    };
     const bool avboitPrePacketContainsClear = !clearTargets || (
         taskGraphStage.m_clearFirstTask.valid()
         && taskGraphStage.m_clearTask.valid()
@@ -63,6 +73,9 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         )
     ;
     const bool avboitPrePacketContainsOccupancy = compiledGraph.tasksSharePacket(
+        taskGraphStage.m_preTask,
+        taskGraphStage.m_occupancyTask
+    ) && compiledGraph.taskPrecedesInSamePacket(
         taskGraphStage.m_preTask,
         taskGraphStage.m_occupancyTask
     )
@@ -100,23 +113,28 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
             )
             : nullptr
     ;
-    const bool avboitUsesAsyncCompute = taskGraphStage.m_depthWarpTask.valid();
+    const bool hasAllTransparentTasks =
+        taskGraphStage.m_depthWarpTask.valid()
+        && taskGraphStage.m_extinctionTask.valid()
+        && taskGraphStage.m_integrationTask.valid()
+        && taskGraphStage.m_accumulationTask.valid()
+        && taskGraphStage.m_accumulationFinalizeTask.valid()
+    ;
+    const bool hasAnyTransparentTask =
+        taskGraphStage.m_depthWarpTask.valid()
+        || taskGraphStage.m_extinctionTask.valid()
+        || taskGraphStage.m_integrationTask.valid()
+        || taskGraphStage.m_accumulationTask.valid()
+        || taskGraphStage.m_accumulationFinalizeTask.valid()
+    ;
+    const bool transparentTaskShapeValid = hasTransparentRenderers
+        ? hasAllTransparentTasks
+        : !hasAnyTransparentTask
+    ;
     const bool avboitExtinctionPacketContainsStreams = !taskGraphStage.m_extinctionStreamTask.valid()
         || compiledGraph.tasksSharePacket(
             taskGraphStage.m_extinctionTask,
             taskGraphStage.m_extinctionStreamTask
-        )
-    ;
-    const bool avboitUnsplitPrePacketContainsExtinction = !hasTransparentRenderers
-        || compiledGraph.tasksSharePacket(
-            taskGraphStage.m_preTask,
-            taskGraphStage.m_extinctionTask
-        )
-    ;
-    const bool avboitUnsplitPrePacketContainsIntegration = !hasTransparentRenderers
-        || compiledGraph.tasksSharePacket(
-            taskGraphStage.m_preTask,
-            taskGraphStage.m_integrationTask
         )
     ;
     const bool avboitAccumulationPacketContainsStreams = !taskGraphStage.m_accumulationStreamTask.valid()
@@ -131,12 +149,6 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         || compiledGraph.tasksSharePacket(
             taskGraphStage.m_accumulationTask,
             taskGraphStage.m_accumulationFinalizeTask
-        )
-    ;
-    const bool avboitUnsplitPrePacketContainsAccumulation = !hasTransparentRenderers
-        || compiledGraph.tasksSharePacket(
-            taskGraphStage.m_preTask,
-            taskGraphStage.m_accumulationTask
         )
     ;
     const Core::GpuPhysicalQueueInfo* const avboitDepthWarpQueue =
@@ -160,6 +172,8 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         compiledGraph.queueInfoForTask(taskGraphStage.m_integrationTask);
     const Core::GpuPhysicalQueueInfo* const avboitAccumulationQueue =
         compiledGraph.queueInfoForTask(taskGraphStage.m_accumulationTask);
+    const Core::GpuPhysicalQueueInfo* const avboitAccumulationFinalizeQueue =
+        compiledGraph.queueInfoForTask(taskGraphStage.m_accumulationFinalizeTask);
     const Core::GpuPhysicalQueueInfo* const avboitAccumulationComputeEmulationQueue =
         taskGraphStage.m_accumulationComputeEmulationTask.valid()
             ? compiledGraph.queueInfoForTask(taskGraphStage.m_accumulationComputeEmulationTask)
@@ -173,50 +187,49 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
             )
             : nullptr
     ;
-    // Integration is now a typed unsplit AVBOIT tail instead of native work hidden inside Extinction.  Require the
-    // exact Extinction -> Integration boundary and its one-packet Pre handoff before packet recording/submission.
-    const bool avboitUnsplitIntegrationTailMerged = [&](){
-        if(avboitUsesAsyncCompute || !hasTransparentRenderers)
-            return true;
-        if(
-            !taskGraphStage.m_extinctionTask.valid()
-            || !taskGraphStage.m_integrationTask.valid()
-            || !taskGraphStage.m_accumulationTask.valid()
-            || !avboitPreQueue
-            || !avboitExtinctionQueue
-            || !avboitIntegrationQueue
-            || !avboitAccumulationQueue
-            || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitExtinctionQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitIntegrationQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitAccumulationQueue->queueClass != Core::CommandQueue::Graphics
-            || !compiledGraph.tasksSharePacket(
-                taskGraphStage.m_preTask,
-                taskGraphStage.m_extinctionTask
-            )
-            || !compiledGraph.tasksSharePacket(
-                taskGraphStage.m_preTask,
-                taskGraphStage.m_integrationTask
-            )
-            || !compiledGraph.tasksSharePacket(
-                taskGraphStage.m_preTask,
-                taskGraphStage.m_accumulationTask
-            )
-            || !compiledGraph.taskPrecedesInSamePacket(
-                taskGraphStage.m_integrationTask,
-                taskGraphStage.m_accumulationTask
-            )
+    const bool depthWarpRunsOnGraphics = avboitDepthWarpQueue
+        && avboitDepthWarpQueue->queueClass == Core::CommandQueue::Graphics
+    ;
+    const bool depthWarpRunsOnCompute = avboitDepthWarpQueue
+        && avboitDepthWarpQueue->queueClass == Core::CommandQueue::Compute
+    ;
+    const bool integrationRunsOnGraphics = avboitIntegrationQueue
+        && avboitIntegrationQueue->queueClass == Core::CommandQueue::Graphics
+    ;
+    const bool integrationRunsOnCompute = avboitIntegrationQueue
+        && avboitIntegrationQueue->queueClass == Core::CommandQueue::Compute
+    ;
+    // The compiler may independently retain or collapse both Compute-preferred stages. Preserve the one natural
+    // semantic order, and require each collapsed stage to merge with both adjacent Graphics semantics.
+    const bool avboitNaturalStagePlacementValid = !hasTransparentRenderers || (
+        avboitDepthWarpQueue
+        && avboitExtinctionQueue
+        && avboitIntegrationQueue
+        && avboitAccumulationQueue
+        && avboitAccumulationFinalizeQueue
+        && (depthWarpRunsOnGraphics || depthWarpRunsOnCompute)
+        && avboitExtinctionQueue->queueClass == Core::CommandQueue::Graphics
+        && (integrationRunsOnGraphics || integrationRunsOnCompute)
+        && avboitAccumulationQueue->queueClass == Core::CommandQueue::Graphics
+        && avboitAccumulationFinalizeQueue->queueClass == Core::CommandQueue::Graphics
+        && taskBoundaryIsOrdered(taskGraphStage.m_occupancyTask, taskGraphStage.m_depthWarpTask)
+        && taskBoundaryIsOrdered(taskGraphStage.m_depthWarpTask, taskGraphStage.m_extinctionTask)
+        && taskBoundaryIsOrdered(taskGraphStage.m_extinctionTask, taskGraphStage.m_integrationTask)
+        && taskBoundaryIsOrdered(taskGraphStage.m_integrationTask, taskGraphStage.m_accumulationTask)
+        && taskBoundaryIsOrdered(taskGraphStage.m_accumulationTask, taskGraphStage.m_accumulationFinalizeTask)
+        && (!depthWarpRunsOnGraphics || (
+            compiledGraph.tasksSharePacket(taskGraphStage.m_occupancyTask, taskGraphStage.m_depthWarpTask)
+            && compiledGraph.tasksSharePacket(taskGraphStage.m_depthWarpTask, taskGraphStage.m_extinctionTask)
+        ))
+        && (!integrationRunsOnGraphics || (
+            compiledGraph.tasksSharePacket(taskGraphStage.m_extinctionTask, taskGraphStage.m_integrationTask)
+            && compiledGraph.tasksSharePacket(taskGraphStage.m_integrationTask, taskGraphStage.m_accumulationTask)
+        ))
+        && compiledGraph.tasksSharePacket(
+            taskGraphStage.m_accumulationTask,
+            taskGraphStage.m_accumulationFinalizeTask
         )
-            return false;
-        const Core::GpuTaskId tailSequence[] = {
-            taskGraphStage.m_extinctionTask,
-            taskGraphStage.m_integrationTask,
-        };
-        return compiledGraph.tasksFormContiguousPacketSequence(
-            tailSequence,
-            LengthOf(tailSequence)
-        );
-    }();
+    );
     // Occupancy's measurement spans the generator and raster consumer. Require the exact Pre-packet order so
     // graph declarations, rather than a callback-local transition, own the output UAV-to-VertexBuffer handoff on
     // both the split and unsplit AVBOIT routes.
@@ -286,7 +299,6 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
             || !avboitOccupancySharedComputeEmulationQueue
             || !avboitOccupancyQueue
             || !avboitPreQueue
-            || avboitUsesAsyncCompute
             || avboitOccupancySharedComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
             || avboitOccupancyQueue->queueClass != Core::CommandQueue::Graphics
             || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
@@ -373,21 +385,6 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
                 taskGraphStage.m_extinctionStreamTask,
                 taskGraphStage.m_extinctionComputeEmulationTask
             )
-            || (!avboitUsesAsyncCompute && (
-                !taskIsCompiled(taskGraphStage.m_preTask)
-                || !avboitPreQueue
-                || !avboitOccupancyQueue
-                || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
-                || avboitOccupancyQueue->queueClass != Core::CommandQueue::Graphics
-                || !compiledGraph.tasksSharePacket(
-                    taskGraphStage.m_preTask,
-                    taskGraphStage.m_extinctionComputeEmulationTask
-                )
-                || !compiledGraph.tasksSharePacket(
-                    taskGraphStage.m_occupancyTask,
-                    taskGraphStage.m_extinctionComputeEmulationTask
-                )
-            ))
         )
             return false;
         const Core::GpuTaskId producerRasterSequence[] = {
@@ -400,19 +397,11 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         ) && optionalTaskPrecedesInSharedPacket(
             taskGraphStage.m_extinctionStreamTask,
             taskGraphStage.m_extinctionComputeEmulationTask
-        ) && (avboitUsesAsyncCompute || (
-            optionalTaskPrecedesInSharedPacket(
-                taskGraphStage.m_preTask,
-                taskGraphStage.m_extinctionComputeEmulationTask
-            ) && optionalTaskPrecedesInSharedPacket(
-                taskGraphStage.m_occupancyTask,
-                taskGraphStage.m_extinctionComputeEmulationTask
-            )
-        ));
+        );
     }();
-    // A shared generated-vertex output requires the exact alternating D/R chain to remain contiguous in AVBOIT
-    // Pre's one Graphics packet. Otherwise an intervening dispatch could overwrite the retained output before its
-    // corresponding raster phase consumes the compiler-owned VertexBuffer handoff.
+    // A shared generated-vertex output requires the exact alternating D/R chain to remain packet-local. Otherwise
+    // an intervening dispatch could overwrite the retained output before its corresponding raster phase consumes
+    // the compiler-owned VertexBuffer handoff.
     const bool avboitExtinctionSharedComputeEmulationMerged = [&](){
         const usize phaseCount = taskGraphStage.m_extinctionSharedComputeEmulationTaskCount;
         if(phaseCount == 0u){
@@ -427,27 +416,12 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
             || taskGraphStage.m_extinctionComputeEmulationTask.valid()
             || !taskGraphStage.m_extinctionStreamTask.valid()
             || !taskIsCompiled(taskGraphStage.m_extinctionTask)
-            || !taskIsCompiled(taskGraphStage.m_integrationTask)
-            || !taskIsCompiled(taskGraphStage.m_preTask)
             || !avboitExtinctionSharedComputeEmulationQueue
             || !avboitExtinctionQueue
-            || !avboitIntegrationQueue
-            || !avboitPreQueue
-            || avboitUsesAsyncCompute
             || avboitExtinctionSharedComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
             || avboitExtinctionQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitIntegrationQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
             || taskGraphStage.m_extinctionTask
                 != taskGraphStage.m_extinctionSharedComputeEmulationTasks[phaseCount - 1u]
-            || !compiledGraph.tasksSharePacket(
-                taskGraphStage.m_preTask,
-                taskGraphStage.m_extinctionSharedComputeEmulationTasks[0u]
-            )
-            || !compiledGraph.tasksSharePacket(
-                taskGraphStage.m_preTask,
-                taskGraphStage.m_integrationTask
-            )
             || !compiledGraph.taskPrecedesOrSharesPacket(
                 taskGraphStage.m_extinctionStreamTask,
                 taskGraphStage.m_extinctionSharedComputeEmulationTasks[0u]
@@ -476,19 +450,9 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
             if(taskGraphStage.m_extinctionSharedComputeEmulationTasks[phaseIndex].valid())
                 return false;
         }
-        const Core::GpuTaskId integrationBoundary[] = {
-            taskGraphStage.m_extinctionSharedComputeEmulationTasks[phaseCount - 1u],
-            taskGraphStage.m_integrationTask,
-        };
         return compiledGraph.tasksFormContiguousPacketSequence(
             taskGraphStage.m_extinctionSharedComputeEmulationTasks,
             phaseCount
-        ) && compiledGraph.tasksFormContiguousPacketSequence(
-            integrationBoundary,
-            LengthOf(integrationBoundary)
-        ) && compiledGraph.taskPrecedesInSamePacket(
-            taskGraphStage.m_preTask,
-            taskGraphStage.m_extinctionSharedComputeEmulationTasks[0u]
         ) && optionalTaskPrecedesInSharedPacket(
             taskGraphStage.m_extinctionStreamTask,
             taskGraphStage.m_extinctionSharedComputeEmulationTasks[0u]
@@ -500,8 +464,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
     ;
     // Accumulation's measurement spans the generator and raster consumer. Require their exact packet order so the
     // graph, rather than a callback-local transition, owns the output UAV-to-VertexBuffer handoff before the
-    // following graph-owned attachment finalizer. The unsplit route additionally keeps this chain in AVBOIT Pre's
-    // single accepting Graphics packet and timing endpoint.
+    // following graph-owned attachment finalizer.
     const bool avboitAccumulationComputeEmulationMerged = [&](){
         if(!taskGraphStage.m_accumulationComputeEmulationTask.valid())
             return true;
@@ -519,15 +482,6 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
                 taskGraphStage.m_accumulationStreamTask,
                 taskGraphStage.m_accumulationComputeEmulationTask
             )
-            || (!avboitUsesAsyncCompute && (
-                !taskIsCompiled(taskGraphStage.m_preTask)
-                || !avboitPreQueue
-                || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
-                || !compiledGraph.tasksSharePacket(
-                    taskGraphStage.m_preTask,
-                    taskGraphStage.m_accumulationComputeEmulationTask
-                )
-            ))
         )
             return false;
         const Core::GpuTaskId producerRasterSequence[] = {
@@ -540,14 +494,11 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         ) && optionalTaskPrecedesInSharedPacket(
             taskGraphStage.m_accumulationStreamTask,
             taskGraphStage.m_accumulationComputeEmulationTask
-        ) && (avboitUsesAsyncCompute || optionalTaskPrecedesInSharedPacket(
-            taskGraphStage.m_preTask,
-            taskGraphStage.m_accumulationComputeEmulationTask
-        ));
+        );
     }();
     // A shared output needs more than the ordinary producer/raster endpoint check: every alternating D/R callback
-    // must be contiguous in AVBOIT Pre's one Graphics packet, or a later local bridge could overwrite the retained
-    // output between the compiler-owned UAV and VertexBuffer phases.
+    // must be packet-local, or a later local bridge could overwrite the retained output between the compiler-owned
+    // UAV and VertexBuffer phases.
     const bool avboitAccumulationSharedComputeEmulationMerged = [&](){
         const usize phaseCount = taskGraphStage.m_accumulationSharedComputeEmulationTaskCount;
         if(phaseCount == 0u){
@@ -563,20 +514,12 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
             || !taskGraphStage.m_accumulationStreamTask.valid()
             || !taskIsCompiled(taskGraphStage.m_accumulationTask)
             || !taskGraphStage.m_accumulationFinalizeTask.valid()
-            || !taskIsCompiled(taskGraphStage.m_preTask)
             || !avboitAccumulationSharedComputeEmulationQueue
             || !avboitAccumulationQueue
-            || !avboitPreQueue
-            || avboitUsesAsyncCompute
             || avboitAccumulationSharedComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
             || avboitAccumulationQueue->queueClass != Core::CommandQueue::Graphics
-            || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
             || taskGraphStage.m_accumulationTask
                 != taskGraphStage.m_accumulationSharedComputeEmulationTasks[phaseCount - 1u]
-            || !compiledGraph.tasksSharePacket(
-                taskGraphStage.m_preTask,
-                taskGraphStage.m_accumulationSharedComputeEmulationTasks[0u]
-            )
             || !compiledGraph.taskPrecedesOrSharesPacket(
                 taskGraphStage.m_accumulationStreamTask,
                 taskGraphStage.m_accumulationSharedComputeEmulationTasks[0u]
@@ -615,9 +558,6 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         ) && compiledGraph.tasksFormContiguousPacketSequence(
             finalizerBoundary,
             LengthOf(finalizerBoundary)
-        ) && compiledGraph.taskPrecedesInSamePacket(
-            taskGraphStage.m_preTask,
-            taskGraphStage.m_accumulationSharedComputeEmulationTasks[0u]
         ) && optionalTaskPrecedesInSharedPacket(
             taskGraphStage.m_accumulationStreamTask,
             taskGraphStage.m_accumulationSharedComputeEmulationTasks[0u]
@@ -628,16 +568,9 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         && avboitAccumulationSharedComputeEmulationMerged
     ;
     const RendererTaskGraphTransparencyStage stage = taskGraphStage.transparencyStage();
-    const Core::GpuTaskId unsplitSubmissionCompletionTask = hasTransparentRenderers
-        ? taskGraphStage.m_accumulationFinalizeTask
-        : taskGraphStage.m_preTask
-    ;
-    const Core::GpuTaskId submissionCompletionTask = avboitUsesAsyncCompute
-        ? taskGraphStage.m_accumulationFinalizeTask
-        : unsplitSubmissionCompletionTask
-    ;
+    const Core::GpuTaskId submissionCompletionTask = stage.completionTask;
     const Core::GpuSubmissionPacketRange packetRange = compiledGraph.packetRangeForTasks(
-        taskGraphStage.m_preTask,
+        stage.firstTask,
         submissionCompletionTask
     );
     return {
@@ -646,8 +579,12 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         .m_valid =
             compiledGraph.valid()
             && stage.valid()
+            && taskGraphStage.m_preTask.valid()
             && taskGraphStage.m_occupancyTask.valid()
+            && transparentTaskShapeValid
+            && stage.hasTransparentTasks == hasTransparentRenderers
             && taskIsCompiled(stage.firstTask)
+            && taskIsCompiled(stage.completionTask)
             && avboitPrePacketContainsClear
             && avboitPrePacketContainsTransparentCsgClear
             && avboitPrePacketContainsCsgReceiverSpan
@@ -656,43 +593,21 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
             && avboitOccupancyAllComputeEmulationMerged
             && avboitExtinctionPacketContainsStreams
             && avboitExtinctionAllComputeEmulationMerged
-            && avboitUnsplitIntegrationTailMerged
             && avboitAccumulationAllComputeEmulationMerged
             && avboitAccumulationPacketContainsStreams
             && avboitAccumulationPacketContainsFinalizer
+            && avboitNaturalStagePlacementValid
             && (!hasTransparentRenderers || (
-                taskGraphStage.m_extinctionTask.valid()
-                && taskGraphStage.m_accumulationTask.valid()
-                && taskGraphStage.m_accumulationFinalizeTask.valid()
-                && taskIsCompiled(taskGraphStage.m_extinctionTask)
-                && taskIsCompiled(taskGraphStage.m_accumulationTask)
-                && compiledGraph.findTask(taskGraphStage.m_accumulationFinalizeTask)
-                && (avboitUsesAsyncCompute || (
-                    avboitUnsplitPrePacketContainsExtinction
-                    && avboitUnsplitPrePacketContainsIntegration
-                    && avboitUnsplitPrePacketContainsAccumulation
-                ))
-            ))
-            && avboitPreQueue
-            && avboitPreQueue->queueClass == Core::CommandQueue::Graphics
-            && (!avboitUsesAsyncCompute || (
-                taskGraphStage.m_depthWarpTask.valid()
-                && taskGraphStage.m_extinctionTask.valid()
-                && taskGraphStage.m_integrationTask.valid()
-                && taskGraphStage.m_accumulationTask.valid()
-                && taskIsCompiled(taskGraphStage.m_depthWarpTask)
+                taskIsCompiled(taskGraphStage.m_depthWarpTask)
                 && taskIsCompiled(taskGraphStage.m_extinctionTask)
                 && taskIsCompiled(taskGraphStage.m_integrationTask)
                 && taskIsCompiled(taskGraphStage.m_accumulationTask)
-                && avboitDepthWarpQueue
-                && avboitExtinctionQueue
-                && avboitIntegrationQueue
-                && avboitAccumulationQueue
-                && avboitDepthWarpQueue->queueClass == Core::CommandQueue::Compute
-                && avboitExtinctionQueue->queueClass == Core::CommandQueue::Graphics
-                && avboitIntegrationQueue->queueClass == Core::CommandQueue::Compute
-                && avboitAccumulationQueue->queueClass == Core::CommandQueue::Graphics
+                && taskIsCompiled(taskGraphStage.m_accumulationFinalizeTask)
             ))
+            && avboitPreQueue
+            && avboitPreQueue->queueClass == Core::CommandQueue::Graphics
+            && avboitOccupancyQueue
+            && avboitOccupancyQueue->queueClass == Core::CommandQueue::Graphics
             && compiledGraph.validPacketRange(packetRange),
     };
 }

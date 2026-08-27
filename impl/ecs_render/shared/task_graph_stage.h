@@ -78,7 +78,7 @@ struct RendererFrameGraphFeatures{
 struct RendererTaskGraphTransparencyStage{
     Core::GpuTaskId firstTask;
     Core::GpuTaskId completionTask;
-    bool asynchronous = false;
+    bool hasTransparentTasks = false;
 
     [[nodiscard]] bool valid()const noexcept{ return firstTask.valid() && completionTask.valid(); }
 };
@@ -91,3 +91,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

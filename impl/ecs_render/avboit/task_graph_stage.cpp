@@ -50,7 +50,7 @@ RendererTaskGraphTransparencyStage RendererAvboitTaskGraphStageState::transparen
     return RendererTaskGraphTransparencyStage{
         .firstTask = m_preTask,
         .completionTask = m_accumulationFinalizeTask.valid() ? m_accumulationFinalizeTask : m_occupancyTask,
-        .asynchronous = m_depthWarpTask.valid(),
+        .hasTransparentTasks = m_depthWarpTask.valid(),
     };
 }
 

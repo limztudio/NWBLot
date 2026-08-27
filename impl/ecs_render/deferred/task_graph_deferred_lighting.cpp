@@ -298,16 +298,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         && features.laggedLightingHistoryReady
         && features.laggedLightingHistoryReadReady
     ;
-    const bool splitAvboitStages = !useLaggedLightingHistory
-        && dedicatedAsyncCompute
-        && features.hasTransparentRenderers
-    ;
-    if(!splitAvboitStages){
-        avboitDepthWarpTimingTicket.discard();
-        avboitExtinctionTimingTicket.discard();
-        avboitIntegrationTimingTicket.discard();
-        avboitAccumulationTimingTicket.discard();
-    }
     const bool declaresHardwareCaustics = features.hardwareCaustics;
     const bool capturesLaggedLightingHistory = includeLaggedLightingHistoryCapture
         && dedicatedAsyncCompute
@@ -3015,12 +3005,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     occupancyCsgFrameData
                 )
             ;
-            // The unsplit all-compute two-through-five-draw case can preserve one shared generated output only
+            // The all-compute two-through-five-draw case can preserve one shared generated output only
             // as an explicit D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) -> R(D) -> D(E) -> R(E)]
             // sequence. Keep mesh and CSG work out of this narrow slice so the aggregate Occupancy callback is
             // never partially replayed around its phases.
-            occupancySharedComputeEmulationPlanCaptured = !splitAvboitStages
-                && !occupancyRegularComputeEmulationPlanCaptured
+            occupancySharedComputeEmulationPlanCaptured = !occupancyRegularComputeEmulationPlanCaptured
                 && occupancyDrawItems.regular.meshDrawItems.empty()
                 && occupancyDrawItems.csg.empty()
                 && avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
@@ -3724,7 +3713,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         Core::GpuTaskDesc avboitOccupancyDesc;
         avboitOccupancyDesc
             .setIdentity(Name("render.avboit.pre"))
-            .setMarkerLabel(splitAvboitStages ? "AVBOIT Pre" : "AVBOIT")
+            .setMarkerLabel("AVBOIT Pre")
             .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(avboitOccupancyScheduling)
             .setDependencies(&occupancyDependency, 1u)
@@ -3746,25 +3735,24 @@ void RendererSystem::buildDeferredLightingTaskGraph(
 
     Core::GpuTaskSchedulingHint avboitComputeScheduling;
     avboitComputeScheduling.cost = Core::GpuTaskCostHint::Medium;
-    avboitComputeScheduling.forceSubmissionBoundary = true;
-    avboitComputeScheduling.allowPacketMerge = false;
-
-
-// Split Depth Warp and Integration are the two Compute-only AVBOIT packets. They may independently select an
-    // explicitly enabled auxiliary Compute transport, including an alternate family when each declared resource
-    // can cross it; Graphics raster/interleaving packets retain their existing primary-Graphics policy.
-    EnableSameFamilyComputeEffectRouting(avboitComputeScheduling, false);
+    avboitComputeScheduling.forceSubmissionBoundary = false;
+    avboitComputeScheduling.allowPacketMerge = true;
+    avboitComputeScheduling.mergeWithPrevious = true;
+    avboitComputeScheduling.allowMergeAcrossConsumerFrontier = true;
+    // Depth Warp and Integration independently prefer Compute, while the compiler may collapse either task onto
+    // its direct Graphics predecessor. Preserve direct affinity after a Graphics collapse and keep auxiliary
+    // Compute transports available when the compiler retains the preferred queue class.
+    EnableSameFamilyComputeEffectRouting(avboitComputeScheduling);
     EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling);
-    // Only the split AVBOIT Compute packets have accepted timestamp attribution and an intentionally bounded
-    // calibration route. Ordinary same-class routing remains available to other effects without history feedback.
+    // Accepted samples use the queue class and exact transport chosen by this compile.
     avboitComputeScheduling.allowTimingFeedbackRouting = true;
     const Core::GpuTaskTimingMetadata avboitIntegrationTiming =
         AvboitIntegrationTimingMetadata(deferredTargets.avboit)
     ;
     Core::GpuTaskId avboitDepthWarpCompletionTask = m_avboitSystem.taskGraphStage().m_occupancyTask;
-    if(splitAvboitStages){
+    if(hasTransparentRenderers){
         const Core::GpuTaskResourceUse depthWarpResourceUses[] = {
-            ReadUse(avboitCoverage),
+            ReadUse(avboitCoverage, Core::ResourceStates::UnorderedAccess),
             ReadWriteUse(avboitDepthWarp, Core::ResourceStates::UnorderedAccess),
             ReadWriteUse(avboitControl, Core::ResourceStates::UnorderedAccess),
             ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
@@ -3796,58 +3784,15 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         }
         avboitDepthWarpCompletionTask = m_avboitSystem.taskGraphStage().m_depthWarpTask;
     }
-    else if(hasTransparentRenderers){
-        // Keep Depth Warp as a distinct Graphics task even on the one-packet route. Occupancy writes coverage via
-        // UAV descriptors, and this explicit successor lets the compiler lower the required same-UAV ordering
-        // before Depth Warp reads it. The following immutable Extinction upload can then feed a producer directly
-        // into its raster consumer without an unrelated callback in between.
-        const Core::GpuTaskResourceUse unsplitDepthWarpResourceUses[] = {
-            ReadUse(avboitCoverage, Core::ResourceStates::UnorderedAccess),
-            ReadWriteUse(avboitDepthWarp, Core::ResourceStates::UnorderedAccess),
-            ReadWriteUse(avboitControl, Core::ResourceStates::UnorderedAccess),
-            ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
-        };
-        Core::GpuTaskSchedulingHint unsplitDepthWarpScheduling;
-        unsplitDepthWarpScheduling.cost = Core::GpuTaskCostHint::Medium;
-        unsplitDepthWarpScheduling.forceSubmissionBoundary = false;
-        unsplitDepthWarpScheduling.allowPacketMerge = true;
-        unsplitDepthWarpScheduling.mergeWithPrevious = true;
-        unsplitDepthWarpScheduling.allowMergeAcrossConsumerFrontier = true;
-        const Core::GpuTaskId occupancyDependency[] = { m_avboitSystem.taskGraphStage().m_occupancyTask };
-        Core::GpuTaskDesc unsplitDepthWarpDesc;
-        unsplitDepthWarpDesc
-            .setIdentity(Name("render.avboit.depth_warp"))
-            .setMarkerLabel("AVBOIT Depth Warp")
-            .setQueue(GraphicsComputeQueueRequest())
-            .setScheduling(unsplitDepthWarpScheduling)
-            .setDependencies(occupancyDependency, LengthOf(occupancyDependency))
-            .setResourceUses(unsplitDepthWarpResourceUses, LengthOf(unsplitDepthWarpResourceUses))
-        ;
-        avboitDepthWarpCompletionTask = m_deferredLightingTaskGraph.addTask<AvboitDepthWarpGraphTask>(
-            unsplitDepthWarpDesc,
-            AvboitDepthWarpGraphTask::Payload{
-                .avboitSystem = &m_avboitSystem,
-                .targets = &deferredTargets.avboit,
-                .timingTicket = &avboitPreTimingTicket,
-            }
-        );
-        if(!avboitDepthWarpCompletionTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare one-packet AVBOIT depth-warp graph task"));
-            return;
-        }
-    }
 
     if(hasTransparentRenderers){
-    // Extinction is a distinct shared-buffer write point. Snapshot and publish it only after occupancy, or after
-    // the split Compute depth warp, so neither phase can overwrite the other phase's instance/typed/CSG stream.
+    // Extinction is a distinct shared-buffer write point. Snapshot and publish it only after Depth Warp so neither
+    // phase can overwrite the other phase's instance/typed/CSG stream.
     AvboitExtinctionGraphTask::Payload avboitExtinctionPayload{ m_arena };
     AvboitExtinctionComputeEmulationGraphTask::Payload avboitExtinctionComputeEmulationPayload{ m_arena };
     avboitExtinctionPayload.avboitSystem = &m_avboitSystem;
     avboitExtinctionPayload.targets = &deferredTargets;
-    avboitExtinctionPayload.timingTicket = splitAvboitStages
-        ? &avboitExtinctionTimingTicket
-        : &avboitPreTimingTicket
-    ;
+    avboitExtinctionPayload.timingTicket = &avboitExtinctionTimingTicket;
     avboitExtinctionPayload.hasTransparentRenderers = hasTransparentRenderers;
 
     Core::GpuTaskId extinctionUploadTask = avboitDepthWarpCompletionTask;
@@ -4154,8 +4099,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     extinctionCsgFrameData
                 )
             ;
-            extinctionSharedComputeEmulationPlanCaptured = !splitAvboitStages
-                && !extinctionRegularComputeEmulationPlanCaptured
+            extinctionSharedComputeEmulationPlanCaptured = !extinctionRegularComputeEmulationPlanCaptured
                 && extinctionDrawItems.regular.meshDrawItems.empty()
                 && extinctionDrawItems.csg.empty()
                 && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
@@ -4288,31 +4232,21 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::Alloc::ScratchArena extinctionResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionResourceUses{ extinctionResourceScratch };
     extinctionResourceUses.reserve(
-        (splitAvboitStages ? 9u : 16u)
+        16u
         + (extinctionStreamsUploaded ? 7u : 0u)
         + (extinctionCsgIntervalSampleImageStatesGraphOwned ? 4u : 0u)
     );
-    if(splitAvboitStages){
-        extinctionResourceUses.push_back(ReadUse(depth));
-        extinctionResourceUses.push_back(ReadUse(avboitLowRaster, Core::ResourceStates::RenderTarget));
-        extinctionResourceUses.push_back(ReadUse(avboitDepthWarp));
-        extinctionResourceUses.push_back(ReadUse(avboitControl));
-        extinctionResourceUses.push_back(ReadWriteUse(avboitExtinction, Core::ResourceStates::UnorderedAccess));
-        extinctionResourceUses.push_back(ReadWriteUse(avboitExtinctionOverflow, Core::ResourceStates::UnorderedAccess));
-    }
-    else{
-        // A preceding packet-local Graphics task owns Depth Warp. This tail keeps Extinction immediately after its
-        // optional producer, then records Integration before the separately frozen Accumulation stream.
-        extinctionResourceUses.push_back(ReadUse(albedo));
-        extinctionResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource, true));
-        extinctionResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
-        extinctionResourceUses.push_back(ReadUse(depth));
-        extinctionResourceUses.push_back(ReadWriteUse(avboitLowRaster, Core::ResourceStates::RenderTarget));
-        extinctionResourceUses.push_back(ReadUse(avboitDepthWarp));
-        extinctionResourceUses.push_back(ReadUse(avboitControl));
-        extinctionResourceUses.push_back(ReadWriteUse(avboitExtinction, Core::ResourceStates::UnorderedAccess));
-        extinctionResourceUses.push_back(ReadWriteUse(avboitExtinctionOverflow, Core::ResourceStates::UnorderedAccess));
-    }
+    // Queue placement cannot change native descriptor access. Keep the complete raster resource contract on every
+    // route so compiler-selected crossings retain the same hazards and state lowering.
+    extinctionResourceUses.push_back(ReadUse(albedo));
+    extinctionResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource, true));
+    extinctionResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
+    extinctionResourceUses.push_back(ReadUse(depth));
+    extinctionResourceUses.push_back(ReadWriteUse(avboitLowRaster, Core::ResourceStates::RenderTarget));
+    extinctionResourceUses.push_back(ReadUse(avboitDepthWarp));
+    extinctionResourceUses.push_back(ReadUse(avboitControl));
+    extinctionResourceUses.push_back(ReadWriteUse(avboitExtinction, Core::ResourceStates::UnorderedAccess));
+    extinctionResourceUses.push_back(ReadWriteUse(avboitExtinctionOverflow, Core::ResourceStates::UnorderedAccess));
     if(extinctionStreamsUploaded){
         extinctionResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
         extinctionResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
@@ -4392,6 +4326,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitExtinctionScheduling.forceSubmissionBoundary = false;
     avboitExtinctionScheduling.allowPacketMerge = true;
     avboitExtinctionScheduling.mergeWithPrevious = true;
+    avboitExtinctionScheduling.allowMergeAcrossConsumerFrontier = true;
 
 
 // Keep the final immutable upload as the semantic stream anchor. The optional producer becomes only the
@@ -4719,9 +4654,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         return;
     }
     }
-    // Integration was the last normal AVBOIT dispatch still hidden in Extinction's unsplit callback.  Keep the
-    // established split Compute route, while the unsplit route records the same typed work as an adjacent Graphics
-    // tail in AVBOIT Pre so the compiler owns Extinction/UAV-to-Integration/SRV state lowering in both modes.
+    // Integration is one semantic Compute-preferred successor. The compiler owns both its queue and the
+    // Extinction/UAV-to-Integration/SRV state lowering.
     const Core::GpuTaskResourceUse integrationResourceUses[] = {
         ReadUse(avboitExtinction),
         ReadUse(avboitControl),
@@ -4731,32 +4665,12 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     };
     const Core::GpuTaskId integrationDependency[] = { m_avboitSystem.taskGraphStage().m_extinctionTask };
     Core::GpuTaskDesc integrationDesc;
-    if(splitAvboitStages){
-        integrationDesc
-            .setIdentity(Name("render.avboit.integration"))
-            .setMarkerLabel("AVBOIT Integration")
-            .setQueue(ComputeQueueRequest())
-            .setScheduling(avboitComputeScheduling)
-            .setTimingMetadata(avboitIntegrationTiming)
-        ;
-    }
-    else{
-        Core::GpuTaskSchedulingHint unsplitIntegrationScheduling;
-        unsplitIntegrationScheduling.cost = Core::GpuTaskCostHint::Medium;
-        unsplitIntegrationScheduling.forceSubmissionBoundary = false;
-        unsplitIntegrationScheduling.allowPacketMerge = true;
-        unsplitIntegrationScheduling.mergeWithPrevious = true;
-        // The explicit Extinction successor is permitted to stay in AVBOIT Pre even when later consumers form a
-        // FrontierSafe frontier; it has an immediate dependency and must share the one Pre timing submission.
-        unsplitIntegrationScheduling.allowMergeAcrossConsumerFrontier = true;
-        integrationDesc
-            .setIdentity(Name("render.avboit.integration"))
-            .setMarkerLabel("AVBOIT Integration")
-            .setQueue(GraphicsComputeQueueRequest())
-            .setScheduling(unsplitIntegrationScheduling)
-        ;
-    }
     integrationDesc
+        .setIdentity(Name("render.avboit.integration"))
+        .setMarkerLabel("AVBOIT Integration")
+        .setQueue(ComputeQueueRequest())
+        .setScheduling(avboitComputeScheduling)
+        .setTimingMetadata(avboitIntegrationTiming)
         .setDependencies(integrationDependency, LengthOf(integrationDependency))
         .setResourceUses(integrationResourceUses, LengthOf(integrationResourceUses))
     ;
@@ -4765,11 +4679,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         AvboitIntegrationGraphTask::Payload{
             .avboitSystem = &m_avboitSystem,
             .targets = &deferredTargets.avboit,
-            .timingTicket = splitAvboitStages
-                ? &avboitIntegrationTimingTicket
-                : &avboitPreTimingTicket,
-            .timingFeedback = splitAvboitStages ? &m_deferredTaskTimingFeedback : nullptr,
-            .timingScope = splitAvboitStages ? &RendererGpuTimingScope::s_AvboitIntegration : nullptr,
+            .timingTicket = &avboitIntegrationTimingTicket,
+            .timingFeedback = &m_deferredTaskTimingFeedback,
+            .timingScope = &RendererGpuTimingScope::s_AvboitIntegration,
         }
     );
     if(!m_avboitSystem.taskGraphStage().m_integrationTask.valid()){
@@ -4784,12 +4696,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     AvboitAccumulationComputeEmulationGraphTask::Payload avboitAccumulationComputeEmulationPayload{ m_arena };
     avboitAccumulationPayload.avboitSystem = &m_avboitSystem;
     avboitAccumulationPayload.targets = &deferredTargets;
-    avboitAccumulationPayload.timingTicket = splitAvboitStages
-        ? &avboitAccumulationTimingTicket
-        : &avboitPreTimingTicket
-    ;
+    avboitAccumulationPayload.timingTicket = &avboitAccumulationTimingTicket;
     avboitAccumulationPayload.hasTransparentRenderers = hasTransparentRenderers;
-    avboitAccumulationPayload.splitStages = splitAvboitStages;
 
     Core::GpuTaskId accumulationUploadTask = m_avboitSystem.taskGraphStage().m_integrationTask;
     bool accumulationStreamsUploaded = false;
@@ -5095,12 +5003,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                     accumulationCsgFrameData
                 )
             ;
-            // The unsplit all-compute two-through-five-draw case can preserve one shared generated output only
+            // The all-compute two-through-five-draw case can preserve one shared generated output only
             // as an explicit D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) -> R(D) -> D(E) -> R(E)]
             // sequence. Keep mesh and CSG work out of this narrow slice so the aggregate accumulation callback
             // is never partially replayed around its phases.
-            accumulationSharedComputeEmulationPlanCaptured = !splitAvboitStages
-                && !accumulationRegularComputeEmulationPlanCaptured
+            accumulationSharedComputeEmulationPlanCaptured = !accumulationRegularComputeEmulationPlanCaptured
                 && accumulationDrawItems.regular.meshDrawItems.empty()
                 && accumulationDrawItems.csg.empty()
                 && avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
@@ -5247,16 +5154,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::Alloc::ScratchArena accumulationResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationResourceUses{ accumulationResourceScratch };
     accumulationResourceUses.reserve(
-        (splitAvboitStages ? 9u : 12u)
+        12u
         + (accumulationStreamsUploaded ? 7u : 0u)
         + (accumulationCsgIntervalSampleImageStatesGraphOwned ? 4u : 0u)
     );
-    if(!splitAvboitStages){
-        // Graphics-only accumulation samples these full-resolution G-buffer inputs through material descriptors.
-        accumulationResourceUses.push_back(ReadUse(albedo));
-        accumulationResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource, true));
-        accumulationResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
-    }
+    accumulationResourceUses.push_back(ReadUse(albedo));
+    accumulationResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource, true));
+    accumulationResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
 
 
 // accumulationFramebuffer binds deferred depth read-only, which Vulkan tracks as DepthRead rather than SRV.
@@ -5349,6 +5253,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitAccumulationScheduling.forceSubmissionBoundary = false;
     avboitAccumulationScheduling.allowPacketMerge = true;
     avboitAccumulationScheduling.mergeWithPrevious = true;
+    avboitAccumulationScheduling.allowMergeAcrossConsumerFrontier = true;
 
     // Keep the final immutable upload as the semantic stream anchor. The optional producer becomes only the
     // immediate Accumulation dependency; replacing this anchor would hide a broken upload-to-producer handoff.

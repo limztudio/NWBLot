@@ -2300,6 +2300,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         shadowPrepareTimingTicket.discard();
         discardGraphicsPrefixTimingTickets();
         avboitPreTimingTicket.discard();
+        avboitDepthWarpTimingTicket.discard();
+        avboitExtinctionTimingTicket.discard();
+        avboitIntegrationTimingTicket.discard();
+        avboitAccumulationTimingTicket.discard();
         shadowVisibilityTimingTicket.discard();
         softwareCausticsTimingTicket.discard();
         surfelGiTimingTicket.discard();
@@ -2355,6 +2359,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         shadowPrepareTimingTicket.discard();
         discardGraphicsPrefixTimingTickets();
         avboitPreTimingTicket.discard();
+        avboitDepthWarpTimingTicket.discard();
+        avboitExtinctionTimingTicket.discard();
+        avboitIntegrationTimingTicket.discard();
+        avboitAccumulationTimingTicket.discard();
         shadowVisibilityTimingTicket.discard();
         softwareCausticsTimingTicket.discard();
         surfelGiTimingTicket.discard();

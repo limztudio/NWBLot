@@ -37808,6 +37808,204 @@ TEST(GpuTaskGraph, MergesRayTraceMaterialContextUploadIntoShadowPreparePacket){
 }
 
 
+TEST(GpuTaskGraph, PlacesNaturalAvboitStagesAcrossCollapsedHybridAndSplitPackets){
+    struct PlacementCase{
+        bool depthWarpOnCompute;
+        bool integrationOnCompute;
+        u32 expectedPacketIndices[5u];
+        usize expectedPacketCount;
+    };
+    const PlacementCase testCases[] = {
+        PlacementCase{
+            .depthWarpOnCompute = false,
+            .integrationOnCompute = false,
+            .expectedPacketIndices = { 0u, 0u, 0u, 0u, 0u },
+            .expectedPacketCount = 1u,
+        },
+        PlacementCase{
+            .depthWarpOnCompute = true,
+            .integrationOnCompute = false,
+            .expectedPacketIndices = { 0u, 1u, 2u, 2u, 2u },
+            .expectedPacketCount = 3u,
+        },
+        PlacementCase{
+            .depthWarpOnCompute = false,
+            .integrationOnCompute = true,
+            .expectedPacketIndices = { 0u, 0u, 0u, 1u, 2u },
+            .expectedPacketCount = 3u,
+        },
+        PlacementCase{
+            .depthWarpOnCompute = true,
+            .integrationOnCompute = true,
+            .expectedPacketIndices = { 0u, 1u, 2u, 3u, 4u },
+            .expectedPacketCount = 5u,
+        },
+    };
+
+    for(const PlacementCase& testCase : testCases){
+        SCOPED_TRACE(testCase.expectedPacketCount);
+        TestArena testArena;
+        Graphics::GpuTaskGraph graph(testArena.arena);
+        const Graphics::GpuQueueRequest graphicsRequest{
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueuePreference::Graphics,
+            false,
+            false,
+        };
+        const Graphics::GpuQueueRequest naturalComputeRequest{
+            Graphics::GpuQueueCapability::Compute,
+            Graphics::GpuQueuePreference::Compute,
+            true,
+            true,
+        };
+        Graphics::GpuQueueRequest depthWarpRequest = naturalComputeRequest;
+        depthWarpRequest.compilerMayOverridePreference = !testCase.depthWarpOnCompute;
+        Graphics::GpuQueueRequest integrationRequest = naturalComputeRequest;
+        integrationRequest.compilerMayOverridePreference = !testCase.integrationOnCompute;
+
+        Graphics::GpuTaskSchedulingHint firstScheduling;
+        firstScheduling.allowPacketMerge = true;
+        Graphics::GpuTaskSchedulingHint successorScheduling;
+        successorScheduling.allowPacketMerge = true;
+        successorScheduling.mergeWithPrevious = true;
+        successorScheduling.allowMergeAcrossConsumerFrontier = true;
+
+        const Graphics::GpuTaskId pre = AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/natural_avboit_pre"),
+            "AVBOIT Pre",
+            graphicsRequest,
+            firstScheduling
+        );
+        const Graphics::GpuTaskId depthWarp = AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/natural_avboit_depth_warp"),
+            "AVBOIT Depth Warp",
+            depthWarpRequest,
+            successorScheduling,
+            {},
+            &pre,
+            1u
+        );
+        const Graphics::GpuTaskId extinction = AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/natural_avboit_extinction"),
+            "AVBOIT Extinction",
+            graphicsRequest,
+            successorScheduling,
+            {},
+            &depthWarp,
+            1u
+        );
+        const Graphics::GpuTaskId integration = AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/natural_avboit_integration"),
+            "AVBOIT Integration",
+            integrationRequest,
+            successorScheduling,
+            {},
+            &extinction,
+            1u
+        );
+        const Graphics::GpuTaskId accumulation = AddTaskWithQueue(
+            graph,
+            Name("tests/task_graph/natural_avboit_accumulation"),
+            "AVBOIT Accumulation",
+            graphicsRequest,
+            successorScheduling,
+            {},
+            &integration,
+            1u
+        );
+        const Graphics::GpuTaskId tasks[] = { pre, depthWarp, extinction, integration, accumulation };
+        for(const Graphics::GpuTaskId task : tasks)
+            ASSERT_TRUE(task.valid());
+
+        const Graphics::GpuPhysicalQueueInfo queues[] = {
+            GraphicsQueue(),
+            DedicatedComputeQueue(),
+        };
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = queues,
+            .queueCount = LengthOf(queues),
+        };
+        Graphics::GpuTaskGraphCompileOptions compileOptions;
+        compileOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, compileOptions));
+
+        ASSERT_EQ(analysis.topologicalOrder().size(), LengthOf(tasks));
+        ASSERT_EQ(compiledGraph.packetCount(), testCase.expectedPacketCount);
+        const Graphics::CommandQueue::Enum expectedQueueClasses[] = {
+            Graphics::CommandQueue::Graphics,
+            testCase.depthWarpOnCompute ? Graphics::CommandQueue::Compute : Graphics::CommandQueue::Graphics,
+            Graphics::CommandQueue::Graphics,
+            testCase.integrationOnCompute ? Graphics::CommandQueue::Compute : Graphics::CommandQueue::Graphics,
+            Graphics::CommandQueue::Graphics,
+        };
+        const Graphics::GpuTaskQueueAssignmentReason::Enum expectedAssignmentReasons[] = {
+            Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics,
+            testCase.depthWarpOnCompute
+                ? Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute
+                : Graphics::GpuTaskQueueAssignmentReason::CompilerOverride,
+            Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics,
+            testCase.integrationOnCompute
+                ? Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute
+                : Graphics::GpuTaskQueueAssignmentReason::CompilerOverride,
+            Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics,
+        };
+        for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
+            EXPECT_EQ(analysis.topologicalOrder()[taskIndex], tasks[taskIndex]);
+            const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(tasks[taskIndex]);
+            ASSERT_NE(assignment, nullptr);
+            EXPECT_EQ(assignment->queueClass, expectedQueueClasses[taskIndex]);
+            EXPECT_EQ(assignment->reason, expectedAssignmentReasons[taskIndex]);
+            EXPECT_EQ(
+                assignment->queue,
+                expectedQueueClasses[taskIndex] == Graphics::CommandQueue::Compute
+                    ? queues[1u].id
+                    : queues[0u].id
+            );
+
+            const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(tasks[taskIndex]);
+            ASSERT_TRUE(packet.valid());
+            EXPECT_EQ(packet.index, testCase.expectedPacketIndices[taskIndex]);
+        }
+
+        for(usize firstTaskIndex = 0u; firstTaskIndex < LengthOf(tasks); ++firstTaskIndex){
+            for(usize secondTaskIndex = firstTaskIndex + 1u; secondTaskIndex < LengthOf(tasks); ++secondTaskIndex){
+                const bool sharesPacket = testCase.expectedPacketIndices[firstTaskIndex]
+                    == testCase.expectedPacketIndices[secondTaskIndex]
+                ;
+                EXPECT_EQ(compiledGraph.tasksSharePacket(tasks[firstTaskIndex], tasks[secondTaskIndex]), sharesPacket);
+                EXPECT_TRUE(compiledGraph.taskPrecedesOrSharesPacket(tasks[firstTaskIndex], tasks[secondTaskIndex]));
+                EXPECT_EQ(
+                    compiledGraph.taskPrecedesOrSharesPacket(tasks[secondTaskIndex], tasks[firstTaskIndex]),
+                    sharesPacket
+                );
+                EXPECT_EQ(
+                    compiledGraph.taskPrecedesInSamePacket(tasks[firstTaskIndex], tasks[secondTaskIndex]),
+                    sharesPacket
+                );
+                EXPECT_FALSE(compiledGraph.taskPrecedesInSamePacket(tasks[secondTaskIndex], tasks[firstTaskIndex]));
+            }
+        }
+        EXPECT_EQ(
+            compiledGraph.tasksFormContiguousPacketSequence(tasks, LengthOf(tasks)),
+            testCase.expectedPacketCount == 1u
+        );
+
+        const Graphics::GpuSubmissionPacketRange avboitRange = compiledGraph.packetRangeForTasks(pre, accumulation);
+        ASSERT_TRUE(avboitRange.valid());
+        EXPECT_TRUE(compiledGraph.validPacketRange(avboitRange));
+        EXPECT_EQ(avboitRange.first, compiledGraph.packetForTask(pre));
+        EXPECT_EQ(avboitRange.packetCount, testCase.expectedPacketCount);
+    }
+}
+
+
 TEST(GpuTaskGraph, MergesExtinctionUploadChainIntoAsyncAvboitPacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

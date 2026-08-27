@@ -1162,33 +1162,141 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
 
     AString systemHeaderSource;
     AString systemSource;
+    AString sharedStageHeaderSource;
     AString avboitSystemHeaderSource;
     AString avboitStageHeaderSource;
+    AString avboitStageSource;
     AString avboitValidationSource;
     AString avboitSubmissionSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "system.h", systemHeaderSource));
     ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "task_graph_stage.h", sharedStageHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_system.h", avboitSystemHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "task_graph_stage.h", avboitStageHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "task_graph_stage.cpp", avboitStageSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "task_graph_stage_validation.cpp", avboitValidationSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "task_graph_stage_submission.cpp", avboitSubmissionSource));
     const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
     const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView sharedStageHeader(sharedStageHeaderSource.data(), sharedStageHeaderSource.size());
     const AStringView avboitSystemHeader(avboitSystemHeaderSource.data(), avboitSystemHeaderSource.size());
     const AStringView avboitStageHeader(avboitStageHeaderSource.data(), avboitStageHeaderSource.size());
+    const AStringView avboitStage(avboitStageSource.data(), avboitStageSource.size());
     const AStringView avboitValidation(avboitValidationSource.data(), avboitValidationSource.size());
     const AStringView avboitSubmission(avboitSubmissionSource.data(), avboitSubmissionSource.size());
 
     EXPECT_TRUE(ContainsText(avboitSystemHeader, "RendererAvboitTaskGraphValidation validateTaskGraphStage("));
     EXPECT_TRUE(ContainsText(avboitSystemHeader, "RendererAvboitTaskGraphSubmission submitTaskGraphStage("));
+    EXPECT_TRUE(ContainsText(sharedStageHeader, "bool hasTransparentTasks = false;"));
     EXPECT_TRUE(ContainsText(avboitStageHeader, "struct RendererAvboitTaskGraphValidation"));
     EXPECT_TRUE(ContainsText(avboitStageHeader, "RendererTaskGraphTransparencyStage m_stage;"));
     EXPECT_TRUE(ContainsText(avboitStageHeader, "Core::GpuTaskId m_submissionCompletionTask;"));
+    EXPECT_TRUE(ContainsText(avboitStage, ".hasTransparentTasks = m_depthWarpTask.valid(),"));
     EXPECT_TRUE(ContainsText(avboitValidation, "taskIsCompiled(taskGraphStage.m_preTask)"));
     EXPECT_TRUE(ContainsText(avboitValidation, "taskIsCompiled(taskGraphStage.m_depthWarpTask)"));
     EXPECT_TRUE(ContainsText(avboitValidation, "taskIsCompiled(taskGraphStage.m_extinctionTask)"));
     EXPECT_TRUE(ContainsText(avboitValidation, "taskIsCompiled(taskGraphStage.m_integrationTask)"));
     EXPECT_TRUE(ContainsText(avboitValidation, "taskIsCompiled(taskGraphStage.m_accumulationTask)"));
+    EXPECT_TRUE(ContainsText(avboitValidation, "const bool hasAllTransparentTasks ="));
+    EXPECT_TRUE(ContainsText(avboitValidation, "const bool hasAnyTransparentTask ="));
+    EXPECT_TRUE(ContainsText(
+        avboitValidation,
+        "const bool transparentTaskShapeValid = hasTransparentRenderers\n"
+        "        ? hasAllTransparentTasks\n"
+        "        : !hasAnyTransparentTask"
+    ));
+    const usize allTransparentTasksOffset = avboitValidation.find("const bool hasAllTransparentTasks =");
+    const usize anyTransparentTaskOffset = avboitValidation.find("const bool hasAnyTransparentTask =", allTransparentTasksOffset);
+    const usize transparentTaskShapeOffset = avboitValidation.find("const bool transparentTaskShapeValid =", anyTransparentTaskOffset);
+    const usize extinctionStreamsOffset = avboitValidation.find(
+        "const bool avboitExtinctionPacketContainsStreams =",
+        transparentTaskShapeOffset
+    );
+    ASSERT_NE(allTransparentTasksOffset, AStringView::npos);
+    ASSERT_NE(anyTransparentTaskOffset, AStringView::npos);
+    ASSERT_NE(transparentTaskShapeOffset, AStringView::npos);
+    ASSERT_NE(extinctionStreamsOffset, AStringView::npos);
+    ASSERT_LT(allTransparentTasksOffset, anyTransparentTaskOffset);
+    ASSERT_LT(anyTransparentTaskOffset, transparentTaskShapeOffset);
+    ASSERT_LT(transparentTaskShapeOffset, extinctionStreamsOffset);
+    const AStringView allTransparentTasks = avboitValidation.substr(
+        allTransparentTasksOffset,
+        anyTransparentTaskOffset - allTransparentTasksOffset
+    );
+    const AStringView anyTransparentTasks = avboitValidation.substr(
+        anyTransparentTaskOffset,
+        transparentTaskShapeOffset - anyTransparentTaskOffset
+    );
+    for(const AStringView transparentTask : {
+        AStringView("m_depthWarpTask.valid()"),
+        AStringView("m_extinctionTask.valid()"),
+        AStringView("m_integrationTask.valid()"),
+        AStringView("m_accumulationTask.valid()"),
+        AStringView("m_accumulationFinalizeTask.valid()"),
+    }){
+        EXPECT_TRUE(ContainsText(allTransparentTasks, transparentTask));
+        EXPECT_TRUE(ContainsText(anyTransparentTasks, transparentTask));
+    }
+    EXPECT_TRUE(ContainsText(avboitValidation, "&& transparentTaskShapeValid"));
+    EXPECT_TRUE(ContainsText(avboitValidation, "&& stage.hasTransparentTasks == hasTransparentRenderers"));
+    EXPECT_TRUE(ContainsText(avboitValidation, "const bool depthWarpRunsOnGraphics ="));
+    EXPECT_TRUE(ContainsText(avboitValidation, "const bool depthWarpRunsOnCompute ="));
+    EXPECT_TRUE(ContainsText(avboitValidation, "const bool integrationRunsOnGraphics ="));
+    EXPECT_TRUE(ContainsText(avboitValidation, "const bool integrationRunsOnCompute ="));
+    EXPECT_TRUE(ContainsText(avboitValidation, "&& (depthWarpRunsOnGraphics || depthWarpRunsOnCompute)"));
+    EXPECT_TRUE(ContainsText(avboitValidation, "&& (integrationRunsOnGraphics || integrationRunsOnCompute)"));
+    EXPECT_TRUE(ContainsText(
+        avboitValidation,
+        "taskBoundaryIsOrdered(taskGraphStage.m_occupancyTask, taskGraphStage.m_depthWarpTask)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        avboitValidation,
+        "taskBoundaryIsOrdered(taskGraphStage.m_depthWarpTask, taskGraphStage.m_extinctionTask)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        avboitValidation,
+        "taskBoundaryIsOrdered(taskGraphStage.m_extinctionTask, taskGraphStage.m_integrationTask)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        avboitValidation,
+        "taskBoundaryIsOrdered(taskGraphStage.m_integrationTask, taskGraphStage.m_accumulationTask)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        avboitValidation,
+        "taskBoundaryIsOrdered(taskGraphStage.m_accumulationTask, taskGraphStage.m_accumulationFinalizeTask)"
+    ));
+    const usize occupancyDepthBoundaryOffset = avboitValidation.find(
+        "taskBoundaryIsOrdered(taskGraphStage.m_occupancyTask, taskGraphStage.m_depthWarpTask)"
+    );
+    const usize depthExtinctionBoundaryOffset = avboitValidation.find(
+        "taskBoundaryIsOrdered(taskGraphStage.m_depthWarpTask, taskGraphStage.m_extinctionTask)",
+        occupancyDepthBoundaryOffset
+    );
+    const usize extinctionIntegrationBoundaryOffset = avboitValidation.find(
+        "taskBoundaryIsOrdered(taskGraphStage.m_extinctionTask, taskGraphStage.m_integrationTask)",
+        depthExtinctionBoundaryOffset
+    );
+    const usize integrationAccumulationBoundaryOffset = avboitValidation.find(
+        "taskBoundaryIsOrdered(taskGraphStage.m_integrationTask, taskGraphStage.m_accumulationTask)",
+        extinctionIntegrationBoundaryOffset
+    );
+    const usize accumulationFinalizerBoundaryOffset = avboitValidation.find(
+        "taskBoundaryIsOrdered(taskGraphStage.m_accumulationTask, taskGraphStage.m_accumulationFinalizeTask)",
+        integrationAccumulationBoundaryOffset
+    );
+    ASSERT_NE(occupancyDepthBoundaryOffset, AStringView::npos);
+    ASSERT_NE(depthExtinctionBoundaryOffset, AStringView::npos);
+    ASSERT_NE(extinctionIntegrationBoundaryOffset, AStringView::npos);
+    ASSERT_NE(integrationAccumulationBoundaryOffset, AStringView::npos);
+    ASSERT_NE(accumulationFinalizerBoundaryOffset, AStringView::npos);
+    EXPECT_LT(occupancyDepthBoundaryOffset, depthExtinctionBoundaryOffset);
+    EXPECT_LT(depthExtinctionBoundaryOffset, extinctionIntegrationBoundaryOffset);
+    EXPECT_LT(extinctionIntegrationBoundaryOffset, integrationAccumulationBoundaryOffset);
+    EXPECT_LT(integrationAccumulationBoundaryOffset, accumulationFinalizerBoundaryOffset);
+    EXPECT_TRUE(ContainsText(avboitValidation, "(!depthWarpRunsOnGraphics || ("));
+    EXPECT_TRUE(ContainsText(avboitValidation, "(!integrationRunsOnGraphics || ("));
+    EXPECT_TRUE(ContainsText(avboitValidation, "&& avboitNaturalStagePlacementValid"));
+    EXPECT_FALSE(ContainsText(avboitValidation, "avboitUsesAsyncCompute"));
     EXPECT_TRUE(ContainsText(avboitValidation, "compiledGraph.tasksSharePacket(\n            taskGraphStage.m_preTask"));
     EXPECT_TRUE(ContainsText(avboitValidation, "compiledGraph.packetRangeForTasks("));
     EXPECT_TRUE(ContainsText(avboitValidation, "compiledGraph.validPacketRange(packetRange)"));
@@ -1199,6 +1307,59 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
     EXPECT_TRUE(ContainsText(avboitSubmission, "submitTaskRangeInCompileOrderFromTasks("));
     EXPECT_TRUE(ContainsText(avboitSubmission, "validation.stage().firstTask,"));
     EXPECT_TRUE(ContainsText(avboitSubmission, "validation.submissionCompletionTask(),"));
+    EXPECT_TRUE(ContainsText(avboitSubmission, "if(validation.stage().hasTransparentTasks){"));
+    EXPECT_TRUE(ContainsText(
+        avboitSubmission,
+        "appendTimingTicket(m_taskGraphStage.m_preTask, context.m_timingTickets.m_pre);"
+    ));
+    EXPECT_TRUE(ContainsText(
+        avboitSubmission,
+        "appendTimingTicket(m_taskGraphStage.m_depthWarpTask, context.m_timingTickets.m_depthWarp);"
+    ));
+    EXPECT_TRUE(ContainsText(
+        avboitSubmission,
+        "appendTimingTicket(m_taskGraphStage.m_extinctionTask, context.m_timingTickets.m_extinction);"
+    ));
+    EXPECT_TRUE(ContainsText(
+        avboitSubmission,
+        "appendTimingTicket(m_taskGraphStage.m_integrationTask, context.m_timingTickets.m_integration);"
+    ));
+    EXPECT_TRUE(ContainsText(
+        avboitSubmission,
+        "appendTimingTicket(m_taskGraphStage.m_accumulationTask, context.m_timingTickets.m_accumulation);"
+    ));
+    const usize preTimingTicketOffset = avboitSubmission.find(
+        "appendTimingTicket(m_taskGraphStage.m_preTask, context.m_timingTickets.m_pre);"
+    );
+    const usize depthWarpTimingTicketOffset = avboitSubmission.find(
+        "appendTimingTicket(m_taskGraphStage.m_depthWarpTask, context.m_timingTickets.m_depthWarp);",
+        preTimingTicketOffset
+    );
+    const usize extinctionTimingTicketOffset = avboitSubmission.find(
+        "appendTimingTicket(m_taskGraphStage.m_extinctionTask, context.m_timingTickets.m_extinction);",
+        depthWarpTimingTicketOffset
+    );
+    const usize integrationTimingTicketOffset = avboitSubmission.find(
+        "appendTimingTicket(m_taskGraphStage.m_integrationTask, context.m_timingTickets.m_integration);",
+        extinctionTimingTicketOffset
+    );
+    const usize accumulationTimingTicketOffset = avboitSubmission.find(
+        "appendTimingTicket(m_taskGraphStage.m_accumulationTask, context.m_timingTickets.m_accumulation);",
+        integrationTimingTicketOffset
+    );
+    ASSERT_NE(preTimingTicketOffset, AStringView::npos);
+    ASSERT_NE(depthWarpTimingTicketOffset, AStringView::npos);
+    ASSERT_NE(extinctionTimingTicketOffset, AStringView::npos);
+    ASSERT_NE(integrationTimingTicketOffset, AStringView::npos);
+    ASSERT_NE(accumulationTimingTicketOffset, AStringView::npos);
+    EXPECT_LT(preTimingTicketOffset, depthWarpTimingTicketOffset);
+    EXPECT_LT(depthWarpTimingTicketOffset, extinctionTimingTicketOffset);
+    EXPECT_LT(extinctionTimingTicketOffset, integrationTimingTicketOffset);
+    EXPECT_LT(integrationTimingTicketOffset, accumulationTimingTicketOffset);
+    EXPECT_TRUE(ContainsText(avboitSubmission, "context.m_timingTickets.m_depthWarp.discard();"));
+    EXPECT_TRUE(ContainsText(avboitSubmission, "context.m_timingTickets.m_extinction.discard();"));
+    EXPECT_TRUE(ContainsText(avboitSubmission, "context.m_timingTickets.m_integration.discard();"));
+    EXPECT_TRUE(ContainsText(avboitSubmission, "context.m_timingTickets.m_accumulation.discard();"));
     EXPECT_TRUE(ContainsText(system, "m_avboitSystem.validateTaskGraphStage("));
     EXPECT_TRUE(ContainsText(system, "m_avboitSystem.submitTaskGraphStage("));
     EXPECT_TRUE(ContainsText(
@@ -1209,6 +1370,11 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
     EXPECT_FALSE(ContainsText(systemHeader, "m_deferredAvboit"));
     EXPECT_FALSE(ContainsText(system, "m_deferredAvboit"));
     EXPECT_FALSE(ContainsText(system, "s_AvboitAsyncComputePacketCount"));
+    EXPECT_FALSE(ContainsText(sharedStageHeader, "asynchronous"));
+    EXPECT_FALSE(ContainsText(avboitStageHeader, "asynchronous"));
+    EXPECT_FALSE(ContainsText(avboitStage, "asynchronous"));
+    EXPECT_FALSE(ContainsText(avboitValidation, "asynchronous"));
+    EXPECT_FALSE(ContainsText(avboitSubmission, "asynchronous"));
 
     for(const AStringView avboitSource : { avboitValidation, avboitSubmission }){
         EXPECT_FALSE(ContainsText(avboitSource, "GpuSubmissionPacketId avboitPrePacket"));
@@ -3376,10 +3542,10 @@ TEST(EcsGraphics, SoftwareCausticsScratchRetainsAcceptedStateAcrossGraphicsRoute
 }
 
 
-// AVBOIT's Graphics raster packets deliberately retain their established primary route, but its split Depth Warp
-// and Integration tasks are pure Compute packets with complete graph-declared handoffs. Keep their auxiliary
-// routing opt-in explicit rather than inferring it from the broader AVBOIT effect name.
-TEST(EcsGraphics, SplitAvboitComputePacketsPermitCrossFamilyRouting){
+// Depth Warp and Integration are each declared once as merge-capable, Compute-preferred semantic tasks. The
+// compiler may independently retain or collapse either stage, while any retained Compute route keeps the explicit
+// same-family and cross-family auxiliary-transport opt-ins.
+TEST(EcsGraphics, NaturalAvboitComputeStagesPermitCompilerOwnedRouting){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
@@ -3392,13 +3558,49 @@ TEST(EcsGraphics, SplitAvboitComputePacketsPermitCrossFamilyRouting){
     ASSERT_NE(schedulingOffset, AStringView::npos);
     ASSERT_NE(accumulationOffset, AStringView::npos);
     ASSERT_LT(schedulingOffset, accumulationOffset);
-    const AStringView splitCompute = taskGraph.substr(schedulingOffset, accumulationOffset - schedulingOffset);
+    const AStringView naturalComputeStages = taskGraph.substr(schedulingOffset, accumulationOffset - schedulingOffset);
 
-    EXPECT_TRUE(ContainsText(splitCompute, "EnableSameFamilyComputeEffectRouting(avboitComputeScheduling, false)"));
-    EXPECT_TRUE(ContainsText(splitCompute, "EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling)"));
-    EXPECT_TRUE(ContainsText(splitCompute, ".setQueue(ComputeQueueRequest())"));
-    EXPECT_TRUE(ContainsText(splitCompute, "render.avboit.depth_warp"));
-    EXPECT_TRUE(ContainsText(splitCompute, "render.avboit.integration"));
+    EXPECT_TRUE(ContainsText(naturalComputeStages, "avboitComputeScheduling.forceSubmissionBoundary = false"));
+    EXPECT_TRUE(ContainsText(naturalComputeStages, "avboitComputeScheduling.allowPacketMerge = true"));
+    EXPECT_TRUE(ContainsText(naturalComputeStages, "avboitComputeScheduling.mergeWithPrevious = true"));
+    EXPECT_TRUE(ContainsText(naturalComputeStages, "avboitComputeScheduling.allowMergeAcrossConsumerFrontier = true"));
+    EXPECT_TRUE(ContainsText(naturalComputeStages, "EnableSameFamilyComputeEffectRouting(avboitComputeScheduling);"));
+    EXPECT_FALSE(ContainsText(naturalComputeStages, "EnableSameFamilyComputeEffectRouting(avboitComputeScheduling, false)"));
+    EXPECT_TRUE(ContainsText(naturalComputeStages, "EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling)"));
+    EXPECT_TRUE(ContainsText(naturalComputeStages, "avboitComputeScheduling.allowTimingFeedbackRouting = true"));
+    const usize depthWarpDescOffset = naturalComputeStages.find("Core::GpuTaskDesc depthWarpDesc;");
+    const usize depthWarpFailureOffset = naturalComputeStages.find(
+        "if(!m_avboitSystem.taskGraphStage().m_depthWarpTask.valid())",
+        depthWarpDescOffset
+    );
+    const usize integrationDescOffset = naturalComputeStages.find("Core::GpuTaskDesc integrationDesc;", depthWarpFailureOffset);
+    const usize integrationFailureOffset = naturalComputeStages.find(
+        "if(!m_avboitSystem.taskGraphStage().m_integrationTask.valid())",
+        integrationDescOffset
+    );
+    ASSERT_NE(depthWarpDescOffset, AStringView::npos);
+    ASSERT_NE(depthWarpFailureOffset, AStringView::npos);
+    ASSERT_NE(integrationDescOffset, AStringView::npos);
+    ASSERT_NE(integrationFailureOffset, AStringView::npos);
+    ASSERT_LT(depthWarpDescOffset, depthWarpFailureOffset);
+    ASSERT_LT(depthWarpFailureOffset, integrationDescOffset);
+    ASSERT_LT(integrationDescOffset, integrationFailureOffset);
+    const AStringView depthWarpStage = naturalComputeStages.substr(
+        depthWarpDescOffset,
+        depthWarpFailureOffset - depthWarpDescOffset
+    );
+    const AStringView integrationStage = naturalComputeStages.substr(
+        integrationDescOffset,
+        integrationFailureOffset - integrationDescOffset
+    );
+    for(const AStringView computeStage : { depthWarpStage, integrationStage }){
+        EXPECT_TRUE(ContainsText(computeStage, ".setQueue(ComputeQueueRequest())"));
+        EXPECT_TRUE(ContainsText(computeStage, ".setScheduling(avboitComputeScheduling)"));
+        EXPECT_FALSE(ContainsText(computeStage, "GraphicsComputeQueueRequest()"));
+    }
+    EXPECT_TRUE(ContainsText(depthWarpStage, "render.avboit.depth_warp"));
+    EXPECT_TRUE(ContainsText(integrationStage, "render.avboit.integration"));
+    EXPECT_FALSE(ContainsText(taskGraph, "splitAvboitStages"));
 }
 
 
@@ -3481,9 +3683,36 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
 
     const AStringView lighting = taskGraph.substr(lightingOffset);
     EXPECT_TRUE(ContainsText(lighting, "allowTimingFeedbackRouting = true"));
-    EXPECT_TRUE(ContainsText(lighting, ".timingFeedback = &m_deferredTaskTimingFeedback"));
-    EXPECT_TRUE(ContainsText(lighting, ".timingFeedback = splitAvboitStages ? &m_deferredTaskTimingFeedback : nullptr"));
+    const usize depthWarpDeclarationOffset = lighting.find("Core::GpuTaskDesc depthWarpDesc;");
+    const usize depthWarpDeclarationEnd = lighting.find(
+        "if(!m_avboitSystem.taskGraphStage().m_depthWarpTask.valid())",
+        depthWarpDeclarationOffset
+    );
+    const usize integrationDeclarationOffset = lighting.find("Core::GpuTaskDesc integrationDesc;", depthWarpDeclarationEnd);
+    const usize integrationDeclarationEnd = lighting.find(
+        "if(!m_avboitSystem.taskGraphStage().m_integrationTask.valid())",
+        integrationDeclarationOffset
+    );
+    ASSERT_NE(depthWarpDeclarationOffset, AStringView::npos);
+    ASSERT_NE(depthWarpDeclarationEnd, AStringView::npos);
+    ASSERT_NE(integrationDeclarationOffset, AStringView::npos);
+    ASSERT_NE(integrationDeclarationEnd, AStringView::npos);
+    const AStringView depthWarpDeclaration = lighting.substr(
+        depthWarpDeclarationOffset,
+        depthWarpDeclarationEnd - depthWarpDeclarationOffset
+    );
+    const AStringView integrationDeclaration = lighting.substr(
+        integrationDeclarationOffset,
+        integrationDeclarationEnd - integrationDeclarationOffset
+    );
+    EXPECT_TRUE(ContainsText(depthWarpDeclaration, ".timingFeedback = &m_deferredTaskTimingFeedback"));
+    EXPECT_TRUE(ContainsText(depthWarpDeclaration, ".timingScope = &RendererGpuTimingScope::s_AvboitDepthWarp"));
+    EXPECT_TRUE(ContainsText(depthWarpDeclaration, ".timingTicket = &avboitDepthWarpTimingTicket"));
+    EXPECT_TRUE(ContainsText(integrationDeclaration, ".timingFeedback = &m_deferredTaskTimingFeedback"));
+    EXPECT_TRUE(ContainsText(integrationDeclaration, ".timingScope = &RendererGpuTimingScope::s_AvboitIntegration"));
+    EXPECT_TRUE(ContainsText(integrationDeclaration, ".timingTicket = &avboitIntegrationTimingTicket"));
     EXPECT_TRUE(ContainsText(lighting, ".setTimingMetadata(avboitIntegrationTiming)"));
+    EXPECT_FALSE(ContainsText(taskGraph, "splitAvboitStages"));
 }
 
 

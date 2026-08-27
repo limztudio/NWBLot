@@ -47604,6 +47604,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingAcceptedSubmissionCompletionGates
     EXPECT_EQ(completedSamples.samples[0u].sourceFrameIndex, 231u);
     EXPECT_EQ(completedSamples.samples[0u].attribution, acceptedAttribution);
     EXPECT_TRUE(completedSamples.samples[0u].published);
+    EXPECT_EQ(completedSamples.samples[0u].physicalQueue.index, acceptedToken.physicalQueueIndex);
+    EXPECT_EQ(completedSamples.samples[0u].physicalQueue.deviceGeneration, acceptedToken.deviceGeneration);
 
     auto reusableCommandList = device.createCommandList();
     ASSERT_NE(reusableCommandList.get(), nullptr);
@@ -47813,6 +47815,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionStaleScopeCannotR
     EXPECT_TRUE(completedSamples.samples[0u].published);
     EXPECT_GE(completedSamples.samples[0u].durationSeconds, 0.0);
     EXPECT_TRUE(completedSamples.samples[0u].comparableRange.valid());
+    EXPECT_EQ(completedSamples.samples[0u].physicalQueue, completedSamples.samples[0u].comparableRange.physicalQueue);
     EXPECT_EQ(completedSamples.samples[0u].comparableRange.physicalQueue.index, acceptedToken.physicalQueueIndex);
     EXPECT_EQ(completedSamples.samples[0u].comparableRange.physicalQueue.deviceGeneration, acceptedToken.deviceGeneration);
 
@@ -48031,6 +48034,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
         retiredCommandList->close();
     }
     CommandList* retiredCommandLists[] = { retiredCommandList.get() };
+    const GpuPhysicalQueueId retiredQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_TRUE(retiredQueue.valid());
     ASSERT_TRUE(retiredTicket.submit(device, retiredCommandLists, 1u));
     ASSERT_TRUE(device.waitForIdle());
 
@@ -48040,6 +48045,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
     EXPECT_EQ(completedSamples.samples[1u].attribution, retiredTimingAttribution);
     EXPECT_FALSE(completedSamples.samples[1u].published);
     EXPECT_EQ(completedSamples.samples[1u].durationSeconds, 0.0);
+    EXPECT_EQ(completedSamples.samples[1u].physicalQueue, retiredQueue);
     EXPECT_FALSE(completedSamples.samples[1u].comparableRange.valid());
     timing.resetQueries();
 }

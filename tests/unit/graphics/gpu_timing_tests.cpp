@@ -246,6 +246,7 @@ TEST(GpuTimingSampleSubscriptions, ReplacementStartsWithNextDispatchBatch){
         .scopeName = Name("tests/timing/subscription_dispatch"),
         .sourceFrameIndex = 7u,
         .durationSeconds = 0.001,
+        .physicalQueue = { .index = 2u, .deviceGeneration = 3u },
         .attribution = attribution,
         .published = true,
         .comparableRange = {},
@@ -332,6 +333,7 @@ TEST(GpuTimingSample, DefaultsToUnpublishedWithoutComparableRange){
     EXPECT_EQ(sample.scopeName, NAME_NONE);
     EXPECT_EQ(sample.sourceFrameIndex, 0u);
     EXPECT_DOUBLE_EQ(sample.durationSeconds, 0.0);
+    EXPECT_FALSE(sample.physicalQueue.valid());
     EXPECT_FALSE(sample.comparableRange.valid());
     EXPECT_EQ(sample.attribution, Core::s_NoGpuTimingSampleAttribution);
     EXPECT_FALSE(sample.published);

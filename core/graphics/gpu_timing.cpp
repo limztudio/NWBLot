@@ -130,6 +130,7 @@ void GpuTimingAccumulator::collect(
                 .scopeName = m_scopeName,
                 .sourceFrameIndex = record.frameIndex,
                 .durationSeconds = publishSample ? durationSeconds : 0.0,
+                .physicalQueue = record.physicalQueue,
                 .attribution = record.attribution,
                 .published = publishSample,
                 .comparableRange = comparableRange,
@@ -439,6 +440,7 @@ void GpuTimingAccumulator::retireAttributions(Vector<GpuTimingSample, Alloc::Glo
         outSamples.push_back(GpuTimingSample{
             .scopeName = m_scopeName,
             .sourceFrameIndex = record.frameIndex,
+            .physicalQueue = record.physicalQueue,
             .attribution = record.attribution,
             .comparableRange = {},
         });

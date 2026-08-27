@@ -221,6 +221,7 @@ void RendererTaskTimingFeedback::onGpuTimingSample(const Core::GpuTimingSample& 
         !m_active
         || sample.scopeName != pending.scopeName
         || sample.sourceFrameIndex != pending.sourceFrameIndex
+        || sample.physicalQueue != pending.expectedQueue
     ){
         m_pendingSamples.erase(m_pendingSamples.begin() + static_cast<isize>(pendingIndex));
         return;

@@ -3644,6 +3644,7 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     EXPECT_TRUE(ContainsText(timingFeedback, "setFeedbackCollectionEnabled(subscription, policy.enabled)"));
     EXPECT_TRUE(ContainsText(timingFeedback, "m_graphics.gpuTiming().allocateSampleAttribution()"));
     EXPECT_TRUE(ContainsText(timingFeedback, "!m_active || !m_policy.enabled || !m_subscription.valid()"));
+    EXPECT_TRUE(ContainsText(timingFeedback, "sample.physicalQueue != pending.expectedQueue"));
     EXPECT_TRUE(ContainsText(systemHeader, "RendererTaskTimingFeedback m_deferredTaskTimingFeedback"));
 
     const usize lightingOffset = taskGraph.find("void RendererSystem::buildDeferredLightingTaskGraph");

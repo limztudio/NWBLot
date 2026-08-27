@@ -764,17 +764,35 @@ bool GpuTimingRecorder::prepareOverlapMetric(
 ){
     ScopedLock lock(m_mutex);
     syncActiveState();
-    if(!firstScope || !secondScope || !outputScope || firstScope == secondScope)
+    if(
+        !firstScope
+        || !secondScope
+        || !outputScope
+        || firstScope == secondScope
+        || outputScope == firstScope
+        || outputScope == secondScope
+    )
         return false;
 
+    Name canonicalFirstScope = firstScope;
+    Name canonicalSecondScope = secondScope;
+    if(canonicalSecondScope < canonicalFirstScope)
+        Swap(canonicalFirstScope, canonicalSecondScope);
+
     for(const OverlapRecord& record : m_overlapRecords){
-        if(
-            record.firstScope == firstScope
-            && record.secondScope == secondScope
-            && record.outputScope.valid()
-        )
-            return true;
+        if(record.outputScopeName == canonicalFirstScope || record.outputScopeName == canonicalSecondScope)
+            return false;
+        if(outputScope == record.firstScope || outputScope == record.secondScope)
+            return false;
+
+        const bool sameInputs = record.firstScope == canonicalFirstScope && record.secondScope == canonicalSecondScope;
+        if(sameInputs)
+            return record.outputScopeName == outputScope && record.outputScope.valid();
+        if(record.outputScopeName == outputScope)
+            return false;
     }
+    if(m_accumulators.find(outputScope) != m_accumulators.end())
+        return false;
 
     const Perf::TimingScopeId output = m_timing.registerScope(outputScope);
     if(!output.valid())
@@ -782,8 +800,9 @@ bool GpuTimingRecorder::prepareOverlapMetric(
 
     m_overlapRecords.emplace_back(m_arena);
     OverlapRecord& record = m_overlapRecords.back();
-    record.firstScope = firstScope;
-    record.secondScope = secondScope;
+    record.firstScope = canonicalFirstScope;
+    record.secondScope = canonicalSecondScope;
+    record.outputScopeName = outputScope;
     record.outputScope = output;
     return true;
 }
@@ -1042,6 +1061,11 @@ GpuTimingAccumulator* GpuTimingRecorder::findAccumulator(const GpuTimingScope& s
 }
 
 GpuTimingAccumulator* GpuTimingRecorder::findOrCreateAccumulator(const Name& scopeName){
+    for(const OverlapRecord& record : m_overlapRecords){
+        if(record.outputScopeName == scopeName)
+            return nullptr;
+    }
+
     auto found = m_accumulators.find(scopeName);
     if(found != m_accumulators.end())
         return found.value().get();

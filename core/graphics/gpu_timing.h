@@ -6,6 +6,7 @@
 
 
 #include "api.h"
+#include "gpu_timing_metrics.h"
 
 #include <core/perf/timing.h>
 
@@ -36,47 +37,6 @@ struct GpuTimingScope{
 
     [[nodiscard]] bool valid()const{ return scopeName != NAME_NONE && index != Limit<u32>::s_Max && epoch != 0u && reservation != 0u; }
 };
-
-// One absolute device-timestamp range proven comparable across submissions. Queue indices may differ, but every
-// range retains its logical-device generation and exact tick period so overlap consumers can reject stale or
-// mismatched data before conversion to floating-point seconds.
-struct GpuComparableTimestampRange{
-    u64 beginTicks = 0u;
-    u64 endTicks = 0u;
-    f64 secondsPerTick = 0.0;
-    GpuPhysicalQueueId physicalQueue;
-
-    [[nodiscard]] bool valid()const{
-        return physicalQueue.valid() && beginTicks <= endTicks && secondsPerTick > 0.0;
-    }
-};
-
-// Returns false when the ranges do not share one calibrated logical-device epoch and exact tick period. Comparable
-// disjoint ranges return true with zero overlap. Integer intersection preserves precision beyond f64's exact range.
-[[nodiscard]] inline bool TryComputeGpuTimestampOverlap(
-    const GpuComparableTimestampRange& first,
-    const GpuComparableTimestampRange& second,
-    u64& outOverlapTicks
-){
-    outOverlapTicks = 0u;
-    if(
-        !first.valid()
-        || !second.valid()
-        || first.physicalQueue.deviceGeneration != second.physicalQueue.deviceGeneration
-        || first.secondsPerTick != second.secondsPerTick
-    )
-        return false;
-
-    const u64 overlapBegin = Max(first.beginTicks, second.beginTicks);
-    const u64 overlapEnd = Min(first.endTicks, second.endTicks);
-    if(overlapEnd > overlapBegin)
-        outOverlapTicks = overlapEnd - overlapBegin;
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 struct GpuTimingScopeDefinition{
     Name identity = NAME_NONE;
@@ -394,6 +354,7 @@ private:
     struct OverlapRecord{
         Name firstScope = NAME_NONE;
         Name secondScope = NAME_NONE;
+        Name outputScopeName = NAME_NONE;
         Perf::TimingScopeId outputScope;
         Vector<PendingOverlapFrame, Alloc::GlobalArena> pendingFrames;
 
@@ -446,8 +407,10 @@ public:
     // Declares the capacity a scope needs. When capture is inactive this records the request without allocating GPU
     // query pools, so a later capture activation can materialize them before its first frame preamble.
     [[nodiscard]] bool prepareScopeQueries(const Name& scopeName, Device& device, u32 queryCount);
-    // Publishes the positive timestamp intersection of two packet envelopes. A zero-valued sample means both
-    // packets completed but did not overlap; no sample is published when either packet was rejected.
+    // Publishes the timestamp intersection of an unordered pair of packet envelopes. Reversed exact duplicates are
+    // idempotent. An output name is exclusive: it cannot be an input or query scope, and an input cannot later become
+    // an output. A zero-valued sample means both packets completed but did not overlap; no sample is published when
+    // either packet was rejected.
     [[nodiscard]] bool prepareOverlapMetric(
         const Name& firstScope,
         const Name& secondScope,

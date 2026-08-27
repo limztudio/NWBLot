@@ -33,6 +33,29 @@ public:
         samples.push_back(sample);
         recorder.dispatchCompletedSamples(samples, subscriptions);
     }
+
+    static void recordTimestampRange(
+        GpuTimingRecorder& recorder,
+        const Name& scopeName,
+        const u64 frameIndex,
+        const GpuComparableTimestampRange& range
+    ){
+        ScopedLock lock(recorder.m_mutex);
+
+        recorder.recordTimestampRange(scopeName, frameIndex, range);
+    }
+
+    [[nodiscard]] static bool createAccumulator(GpuTimingRecorder& recorder, const Name& scopeName){
+        ScopedLock lock(recorder.m_mutex);
+
+        return recorder.findOrCreateAccumulator(scopeName) != nullptr;
+    }
+
+    [[nodiscard]] static usize overlapRecordCount(GpuTimingRecorder& recorder){
+        ScopedLock lock(recorder.m_mutex);
+
+        return recorder.m_overlapRecords.size();
+    }
 };
 
 
@@ -410,7 +433,113 @@ TEST(GpuComparableTimestampRange, IntersectsRawTicksBeforeFloatingPointConversio
     mismatchedPeriod.secondsPerTick = 0.5;
     EXPECT_FALSE(Core::TryComputeGpuTimestampOverlap(first, mismatchedPeriod, overlapTicks));
     EXPECT_EQ(overlapTicks, 0u);
+
+    Core::GpuComparableTimestampRange infinitePeriod = second;
+    infinitePeriod.secondsPerTick = Limit<f64>::s_Infinity;
+    EXPECT_FALSE(infinitePeriod.valid());
+    EXPECT_FALSE(Core::TryComputeGpuTimestampOverlap(first, infinitePeriod, overlapTicks));
+    EXPECT_EQ(overlapTicks, 0u);
 }
+
+TEST(GpuTimingOverlapRegistration, IsCanonicalIdempotentAndRejectsMetricRoleConflicts){
+    TestArena testArena;
+    Core::Perf::TimingRecorder timing(testArena.arena);
+    Core::GpuTimingRecorder recorder(testArena.arena, timing);
+    const Name firstScope("tests/timing/overlap/first");
+    const Name secondScope("tests/timing/overlap/second");
+    const Name thirdScope("tests/timing/overlap/third");
+    const Name fourthScope("tests/timing/overlap/fourth");
+    const Name outputScope("tests/timing/overlap/output");
+    const Name alternateOutputScope("tests/timing/overlap/alternate_output");
+
+    EXPECT_FALSE(recorder.prepareOverlapMetric(NAME_NONE, secondScope, outputScope));
+    EXPECT_FALSE(recorder.prepareOverlapMetric(firstScope, NAME_NONE, outputScope));
+    EXPECT_FALSE(recorder.prepareOverlapMetric(firstScope, secondScope, NAME_NONE));
+    EXPECT_FALSE(recorder.prepareOverlapMetric(firstScope, firstScope, outputScope));
+    EXPECT_FALSE(recorder.prepareOverlapMetric(firstScope, secondScope, firstScope));
+    EXPECT_FALSE(recorder.prepareOverlapMetric(firstScope, secondScope, secondScope));
+    EXPECT_EQ(timing.scopeCount(), 0u);
+
+    ASSERT_TRUE(recorder.prepareOverlapMetric(firstScope, secondScope, outputScope));
+    EXPECT_EQ(timing.scopeCount(), 1u);
+    EXPECT_EQ(Core::GpuTimingRecorderDiagnosticPeer::overlapRecordCount(recorder), 1u);
+    EXPECT_TRUE(recorder.prepareOverlapMetric(secondScope, firstScope, outputScope));
+    EXPECT_EQ(timing.scopeCount(), 1u);
+    EXPECT_EQ(Core::GpuTimingRecorderDiagnosticPeer::overlapRecordCount(recorder), 1u);
+
+    EXPECT_FALSE(recorder.prepareOverlapMetric(firstScope, secondScope, alternateOutputScope));
+    EXPECT_FALSE(recorder.prepareOverlapMetric(secondScope, firstScope, alternateOutputScope));
+    EXPECT_FALSE(recorder.prepareOverlapMetric(thirdScope, fourthScope, outputScope));
+    EXPECT_FALSE(recorder.prepareOverlapMetric(outputScope, thirdScope, alternateOutputScope));
+    EXPECT_FALSE(recorder.prepareOverlapMetric(thirdScope, fourthScope, firstScope));
+    EXPECT_EQ(timing.scopeCount(), 1u);
+
+    EXPECT_TRUE(recorder.prepareOverlapMetric(firstScope, thirdScope, alternateOutputScope));
+    EXPECT_EQ(timing.scopeCount(), 2u);
+    EXPECT_EQ(Core::GpuTimingRecorderDiagnosticPeer::overlapRecordCount(recorder), 2u);
+}
+
+TEST(GpuTimingOverlapRegistration, KeepsQueryAccumulatorsAndMetricOutputsDisjoint){
+    TestArena testArena;
+    Core::Perf::TimingRecorder timing(testArena.arena);
+    Core::GpuTimingRecorder recorder(testArena.arena, timing);
+    const Name queryScope("tests/timing/overlap/query");
+    const Name otherScope("tests/timing/overlap/other");
+    const Name outputScope("tests/timing/overlap/query_disjoint_output");
+
+    ASSERT_TRUE(Core::GpuTimingRecorderDiagnosticPeer::createAccumulator(recorder, queryScope));
+    EXPECT_EQ(timing.scopeCount(), 1u);
+    EXPECT_FALSE(recorder.prepareOverlapMetric(otherScope, outputScope, queryScope));
+    EXPECT_EQ(timing.scopeCount(), 1u);
+
+    ASSERT_TRUE(recorder.prepareOverlapMetric(queryScope, otherScope, outputScope));
+    EXPECT_EQ(timing.scopeCount(), 2u);
+    EXPECT_FALSE(Core::GpuTimingRecorderDiagnosticPeer::createAccumulator(recorder, outputScope));
+    EXPECT_EQ(timing.scopeCount(), 2u);
+}
+
+TEST(GpuTimingOverlapRegistration, ReversedDuplicatePublishesOneSample){
+    TestArena testArena;
+    Core::Perf::TimingRecorder timing(testArena.arena);
+    timing.setEnabled(true);
+    Core::GpuTimingRecorder recorder(testArena.arena, timing);
+    const Name firstScope("tests/timing/overlap/sample_first");
+    const Name secondScope("tests/timing/overlap/sample_second");
+    const Name outputScope("tests/timing/overlap/sample_output");
+
+    ASSERT_TRUE(recorder.prepareOverlapMetric(firstScope, secondScope, outputScope));
+    ASSERT_TRUE(recorder.prepareOverlapMetric(secondScope, firstScope, outputScope));
+    Core::GpuTimingRecorderDiagnosticPeer::recordTimestampRange(
+        recorder,
+        firstScope,
+        41u,
+        Core::GpuComparableTimestampRange{
+            .beginTicks = 10u,
+            .endTicks = 20u,
+            .secondsPerTick = 0.25,
+            .physicalQueue = { .index = 0u, .deviceGeneration = 3u },
+        }
+    );
+    Core::GpuTimingRecorderDiagnosticPeer::recordTimestampRange(
+        recorder,
+        secondScope,
+        41u,
+        Core::GpuComparableTimestampRange{
+            .beginTicks = 18u,
+            .endTicks = 30u,
+            .secondsPerTick = 0.25,
+            .physicalQueue = { .index = 1u, .deviceGeneration = 3u },
+        }
+    );
+    timing.publishFrame(42u);
+
+    const Core::Perf::TimingStats& stats = timing.stats(outputScope);
+    ASSERT_EQ(stats.sampleCount, 1u);
+    EXPECT_DOUBLE_EQ(stats.seconds, 0.5);
+    EXPECT_EQ(stats.firstSampleFrameIndex, 41u);
+    EXPECT_EQ(stats.lastSampleFrameIndex, 41u);
+}
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1102,6 +1102,162 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
 }
 
 
+// A compatibility present is still a real native transition submission. It must stay entirely behind the missing
+// graph-signal branch, target the exact acquired WSI texture on the primary Graphics transport, and fail closed
+// before vkQueuePresentKHR whenever recording, signal claiming, or submission cannot prove that transition.
+TEST(EcsGraphics, CompatibilityPresentTransitionsExactAcquiredImageBeforeSignal){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString backendOrchestrationSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "backend_context_orchestration.cpp",
+        backendOrchestrationSource
+    ));
+    const AStringView backendOrchestration(backendOrchestrationSource.data(), backendOrchestrationSource.size());
+
+    const usize presentOffset = backendOrchestration.find("bool BackendContext::present(){");
+    ASSERT_NE(presentOffset, AStringView::npos);
+    const AStringView present = backendOrchestration.substr(presentOffset);
+    const usize compatibilityBranchOffset = present.find("if(!frameSignalAccepted){");
+    const usize presentInfoOffset = present.find("VkPresentInfoKHR presentInfo = {};");
+    ASSERT_NE(compatibilityBranchOffset, AStringView::npos);
+    ASSERT_NE(presentInfoOffset, AStringView::npos);
+    ASSERT_LT(compatibilityBranchOffset, presentInfoOffset);
+
+    const AStringView acceptedGraphSignalPath = present.substr(0u, compatibilityBranchOffset);
+    const AStringView compatibilityBranch = present.substr(
+        compatibilityBranchOffset,
+        presentInfoOffset - compatibilityBranchOffset
+    );
+    EXPECT_TRUE(ContainsText(present, "if(!m_rhiDevice || !m_frameAcquired || !m_swapChain"));
+    EXPECT_TRUE(ContainsText(
+        acceptedGraphSignalPath,
+        "m_framePresentationSignalState == FramePresentationSignalState::Accepted"
+    ));
+    EXPECT_FALSE(ContainsText(acceptedGraphSignalPath, "ResolveCompatibilityPresentTransitionPolicy"));
+    EXPECT_FALSE(ContainsText(acceptedGraphSignalPath, "createCommandList"));
+    EXPECT_FALSE(ContainsText(acceptedGraphSignalPath, "setTextureState"));
+    EXPECT_EQ(CountText(present, "ResolveCompatibilityPresentTransitionPolicy"), 1u);
+    EXPECT_EQ(CountText(present, "createCommandList"), 1u);
+    EXPECT_EQ(CountText(present, "setTextureState"), 1u);
+
+    const usize acquiredImageOffset = compatibilityBranch.find(
+        "SwapChainImage& swapChainImage = m_swapChainImages[m_swapChainIndex];"
+    );
+    const usize policyOffset = compatibilityBranch.find("ResolveCompatibilityPresentTransitionPolicy(");
+    const usize primaryQueueOffset = compatibilityBranch.find(
+        "m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics)"
+    );
+    const usize exactQueueOffset = compatibilityBranch.find("commandListParams.setPhysicalQueue(primaryGraphicsQueue);");
+    const usize createOffset = compatibilityBranch.find("m_rhiDevice->createCommandList(commandListParams)");
+    const usize openOffset = compatibilityBranch.find("compatibilityCommandList->open();");
+    const usize seedOffset = compatibilityBranch.find("compatibilityCommandList->beginTrackingTextureState(");
+    const usize transitionOffset = compatibilityBranch.find("compatibilityCommandList->setTextureState(", seedOffset);
+    const usize commitOffset = compatibilityBranch.find("compatibilityCommandList->commitBarriers();", transitionOffset);
+    const usize closeOffset = compatibilityBranch.find("compatibilityCommandList->close();", commitOffset);
+    const usize claimOffset = compatibilityBranch.find("claimFramePresentationSignal();", closeOffset);
+    const usize hookOffset = compatibilityBranch.find("submitDesc.setPreSubmitHook(presentationSignalHook);", claimOffset);
+    const usize listOffset = compatibilityBranch.find(
+        "CommandList* const compatibilityCommandLists[] = { compatibilityCommandList.get() };",
+        hookOffset
+    );
+    const usize executeOffset = compatibilityBranch.find("m_rhiDevice->executeCommandLists(", listOffset);
+    const usize confirmOffset = compatibilityBranch.find("confirmFramePresentationSignal(fallbackToken)", executeOffset);
+    const usize acceptedOffset = compatibilityBranch.find("frameSignalAccepted = true;", confirmOffset);
+    ASSERT_NE(acquiredImageOffset, AStringView::npos);
+    ASSERT_NE(policyOffset, AStringView::npos);
+    ASSERT_NE(primaryQueueOffset, AStringView::npos);
+    ASSERT_NE(exactQueueOffset, AStringView::npos);
+    ASSERT_NE(createOffset, AStringView::npos);
+    ASSERT_NE(openOffset, AStringView::npos);
+    ASSERT_NE(seedOffset, AStringView::npos);
+    ASSERT_NE(transitionOffset, AStringView::npos);
+    ASSERT_NE(commitOffset, AStringView::npos);
+    ASSERT_NE(closeOffset, AStringView::npos);
+    ASSERT_NE(claimOffset, AStringView::npos);
+    ASSERT_NE(hookOffset, AStringView::npos);
+    ASSERT_NE(listOffset, AStringView::npos);
+    ASSERT_NE(executeOffset, AStringView::npos);
+    ASSERT_NE(confirmOffset, AStringView::npos);
+    ASSERT_NE(acceptedOffset, AStringView::npos);
+    EXPECT_LT(acquiredImageOffset, policyOffset);
+    EXPECT_LT(policyOffset, primaryQueueOffset);
+    EXPECT_LT(primaryQueueOffset, exactQueueOffset);
+    EXPECT_LT(exactQueueOffset, createOffset);
+    EXPECT_LT(createOffset, openOffset);
+    EXPECT_LT(openOffset, seedOffset);
+    EXPECT_LT(seedOffset, transitionOffset);
+    EXPECT_LT(transitionOffset, commitOffset);
+    EXPECT_LT(commitOffset, closeOffset);
+    EXPECT_LT(closeOffset, claimOffset);
+    EXPECT_LT(claimOffset, hookOffset);
+    EXPECT_LT(hookOffset, listOffset);
+    EXPECT_LT(listOffset, executeOffset);
+    EXPECT_LT(executeOffset, confirmOffset);
+    EXPECT_LT(confirmOffset, acceptedOffset);
+
+    EXPECT_TRUE(ContainsText(
+        compatibilityBranch,
+        "swapChainImage.presentationState.nativeInitialState()"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compatibilityBranch,
+        "transitionPolicy == VulkanDetail::CompatibilityPresentTransitionPolicy::PreservePresent"
+    ));
+    EXPECT_EQ(CountText(compatibilityBranch, "swapChainImage.rhiHandle.get()"), 2u);
+    EXPECT_EQ(CountText(compatibilityBranch, "s_AllSubresources"), 2u);
+    EXPECT_TRUE(ContainsText(
+        compatibilityBranch,
+        "!swapChainImage.rhiHandle\n"
+        "            || transitionPolicy == VulkanDetail::CompatibilityPresentTransitionPolicy::Invalid\n"
+        "            || !primaryGraphicsQueue.valid()"
+    ));
+    EXPECT_TRUE(ContainsText(compatibilityBranch, "if(!compatibilityCommandList){"));
+    EXPECT_TRUE(ContainsText(
+        compatibilityBranch,
+        "!compatibilityCommandList->hasCommandBuffer()\n"
+        "            || !compatibilityCommandList->isRecording()\n"
+        "            || compatibilityCommandList->commandRecordingFailed()"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compatibilityBranch,
+        "!compatibilityCommandList->hasCommandBuffer()\n"
+        "            || compatibilityCommandList->isRecording()\n"
+        "            || compatibilityCommandList->commandRecordingFailed()"
+    ));
+    EXPECT_TRUE(ContainsText(compatibilityBranch, "if(!presentationSignalHook.valid()){"));
+    EXPECT_TRUE(ContainsText(
+        compatibilityBranch,
+        "compatibilityCommandLists,\n"
+        "            LengthOf(compatibilityCommandLists),\n"
+        "            primaryGraphicsQueue,\n"
+        "            submitDesc"
+    ));
+    EXPECT_FALSE(ContainsText(compatibilityBranch, "executeCommandLists(nullptr, 0u"));
+    EXPECT_TRUE(ContainsText(
+        compatibilityBranch,
+        "if(!fallbackToken.valid()){\n"
+        "            cancelFramePresentationSignal();\n"
+        "            NWB_LOGGER_ERROR(NWB_TEXT(\"Vulkan: Compatibility presentation transition/signal "
+        "submission was rejected.\"));\n"
+        "            return false;\n"
+        "        }"
+    ));
+    EXPECT_TRUE(ContainsText(
+        compatibilityBranch,
+        "if(!confirmFramePresentationSignal(fallbackToken)){\n"
+        "            cancelFramePresentationSignal();\n"
+        "            NWB_LOGGER_ERROR(NWB_TEXT(\"Vulkan: Accepted compatibility presentation submission "
+        "failed signal confirmation/tracking.\"));\n"
+        "            return false;\n"
+        "        }"
+    ));
+    EXPECT_EQ(CountText(compatibilityBranch, "return false;"), 8u);
+    EXPECT_EQ(CountText(compatibilityBranch, "cancelFramePresentationSignal();"), 5u);
+}
+
+
 // Renderer presentation must import the exact acquired swap-chain texture, preserve its captured native origin,
 // and own the RenderTarget-to-Present state closure. The late record callback revalidates both graph identity and
 // framebuffer attachment identity before touching the image.

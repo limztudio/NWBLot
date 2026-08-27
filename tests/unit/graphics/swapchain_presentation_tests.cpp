@@ -24,6 +24,7 @@ namespace Tests{
 
 namespace __hidden_swapchain_presentation_tests{
 
+namespace CompatibilityPresentTransitionPolicy = Core::GraphicsBackend::VulkanDetail::CompatibilityPresentTransitionPolicy;
 namespace Format = Core::Format;
 namespace QueuePresentWaitDisposition = Core::GraphicsBackend::VulkanDetail::QueuePresentWaitDisposition;
 namespace ResourceStates = Core::ResourceStates;
@@ -36,6 +37,7 @@ using Core::GpuPhysicalQueueInfo;
 using Core::TextureHandle;
 using Core::GraphicsBackend::VulkanDetail::ClassifyQueuePresentWaitDisposition;
 using Core::GraphicsBackend::VulkanDetail::IsPrimaryGraphicsPresentationQueue;
+using Core::GraphicsBackend::VulkanDetail::ResolveCompatibilityPresentTransitionPolicy;
 using Core::GraphicsBackend::VulkanDetail::SelectSurfaceFormat;
 using Core::GraphicsBackend::VulkanDetail::SwapChainImagePresentationState;
 using Core::GraphicsBackend::VulkanDetail::SwapChainSurfaceFormatSelection;
@@ -169,6 +171,29 @@ TEST(SwapChainPresentation, RestrictsGraphPresentationSignalsToPrimaryGraphicsTr
     EXPECT_FALSE(IsPrimaryGraphicsPresentationQueue(primaryGraphicsQueue, &sameFamilyAuxiliaryGraphicsInfo));
     EXPECT_FALSE(IsPrimaryGraphicsPresentationQueue(primaryGraphicsQueue, &crossFamilyAuxiliaryGraphicsInfo));
     EXPECT_FALSE(IsPrimaryGraphicsPresentationQueue({}, &primaryGraphicsInfo));
+}
+
+TEST(SwapChainPresentation, CompatibilityPresentTransitionsOnlyAcceptKnownWsiOrigins){
+    EXPECT_EQ(
+        ResolveCompatibilityPresentTransitionPolicy(ResourceStates::Unknown),
+        CompatibilityPresentTransitionPolicy::TransitionFromUnknown
+    );
+    EXPECT_EQ(
+        ResolveCompatibilityPresentTransitionPolicy(ResourceStates::Present),
+        CompatibilityPresentTransitionPolicy::PreservePresent
+    );
+    EXPECT_EQ(
+        ResolveCompatibilityPresentTransitionPolicy(ResourceStates::Common),
+        CompatibilityPresentTransitionPolicy::Invalid
+    );
+    EXPECT_EQ(
+        ResolveCompatibilityPresentTransitionPolicy(ResourceStates::RenderTarget),
+        CompatibilityPresentTransitionPolicy::Invalid
+    );
+    EXPECT_EQ(
+        ResolveCompatibilityPresentTransitionPolicy(ResourceStates::Present | ResourceStates::RenderTarget),
+        CompatibilityPresentTransitionPolicy::Invalid
+    );
 }
 
 

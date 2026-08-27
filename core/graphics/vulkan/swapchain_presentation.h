@@ -32,6 +32,14 @@ namespace QueuePresentWaitDisposition{
     };
 };
 
+namespace CompatibilityPresentTransitionPolicy{
+    enum Enum : u8{
+        Invalid,
+        TransitionFromUnknown,
+        PreservePresent,
+    };
+};
+
 struct SwapChainImagePresentationState{
     bool hasPresented = false;
 
@@ -75,6 +83,18 @@ inline QueuePresentWaitDisposition::Enum ClassifyQueuePresentWaitDisposition(con
     default:
         return QueuePresentWaitDisposition::Unknown;
     }
+}
+
+// A never-presented acquired image has no reusable native layout. Its compatibility command list must transition
+// from Unknown directly instead of seeding the descriptor's retained Present state as if WSI had established it.
+inline CompatibilityPresentTransitionPolicy::Enum ResolveCompatibilityPresentTransitionPolicy(
+    const ResourceStates::Mask nativeInitialState
+)noexcept{
+    if(nativeInitialState == ResourceStates::Unknown)
+        return CompatibilityPresentTransitionPolicy::TransitionFromUnknown;
+    if(nativeInitialState == ResourceStates::Present)
+        return CompatibilityPresentTransitionPolicy::PreservePresent;
+    return CompatibilityPresentTransitionPolicy::Invalid;
 }
 
 // Frame acquisition queues its binary semaphore on the primary physical Graphics transport. A secondary Graphics

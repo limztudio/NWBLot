@@ -171,7 +171,7 @@ public:
     [[nodiscard]] bool abandonAcquiredFrame()noexcept;
     bool present();
     // Claims the acquired image's completion semaphore for one exact graph packet. A null hook leaves the
-    // compatibility empty-submit path in present() active.
+    // compatibility transition-submit path in present() active.
     [[nodiscard]] QueueSubmissionPreSubmitHook claimFramePresentationSignal()noexcept;
     // The renderer confirms only the terminal packet token accepted by the graph submission transaction.
     [[nodiscard]] bool confirmFramePresentationSignal(const QueueSubmissionToken& token)noexcept;

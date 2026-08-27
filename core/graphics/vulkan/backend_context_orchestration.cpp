@@ -560,8 +560,8 @@ bool BackendContext::abandonAcquiredFrame()noexcept{
 bool BackendContext::present(){
     VkResult res = VK_SUCCESS;
 
-    if(!m_frameAcquired || !m_swapChain || m_presentSemaphores.empty() || m_swapChainImages.empty()){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: present skipped because swap chain or present semaphores are not ready."));
+    if(!m_rhiDevice || !m_frameAcquired || !m_swapChain || m_presentSemaphores.empty() || m_swapChainImages.empty()){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: present skipped because its device, acquired frame, or swap-chain resources are not ready."));
         cancelFramePresentationSignal();
         return false;
     }
@@ -583,9 +583,75 @@ bool BackendContext::present(){
     if(!frameSignalAccepted){
         cancelFramePresentationSignal();
 
-        const QueueSubmissionPreSubmitHook presentationSignalHook = claimFramePresentationSignal();
+        SwapChainImage& swapChainImage = m_swapChainImages[m_swapChainIndex];
+        const VulkanDetail::CompatibilityPresentTransitionPolicy::Enum transitionPolicy =
+            VulkanDetail::ResolveCompatibilityPresentTransitionPolicy(
+                swapChainImage.presentationState.nativeInitialState()
+            )
+        ;
         const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
-        if(!presentationSignalHook.valid() || !primaryGraphicsQueue.valid()){
+        if(
+            !swapChainImage.rhiHandle
+            || transitionPolicy == VulkanDetail::CompatibilityPresentTransitionPolicy::Invalid
+            || !primaryGraphicsQueue.valid()
+        ){
+            cancelFramePresentationSignal();
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Compatibility presentation transition preconditions failed."));
+            return false;
+        }
+
+        CommandListParameters commandListParams;
+        commandListParams.setPhysicalQueue(primaryGraphicsQueue);
+        CommandListHandle compatibilityCommandList = m_rhiDevice->createCommandList(commandListParams);
+        if(!compatibilityCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate the compatibility presentation command list."));
+            return false;
+        }
+
+        compatibilityCommandList->open();
+        if(
+            !compatibilityCommandList->hasCommandBuffer()
+            || !compatibilityCommandList->isRecording()
+            || compatibilityCommandList->commandRecordingFailed()
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to open the compatibility presentation command list."));
+            return false;
+        }
+
+        if(transitionPolicy == VulkanDetail::CompatibilityPresentTransitionPolicy::PreservePresent){
+            compatibilityCommandList->beginTrackingTextureState(
+                swapChainImage.rhiHandle.get(),
+                s_AllSubresources,
+                ResourceStates::Present
+            );
+        }
+        compatibilityCommandList->setTextureState(
+            swapChainImage.rhiHandle.get(),
+            s_AllSubresources,
+            ResourceStates::Present
+        );
+        compatibilityCommandList->commitBarriers();
+        if(
+            !compatibilityCommandList->hasCommandBuffer()
+            || !compatibilityCommandList->isRecording()
+            || compatibilityCommandList->commandRecordingFailed()
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to record the compatibility presentation transition."));
+            return false;
+        }
+
+        compatibilityCommandList->close();
+        if(
+            !compatibilityCommandList->hasCommandBuffer()
+            || compatibilityCommandList->isRecording()
+            || compatibilityCommandList->commandRecordingFailed()
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to close the compatibility presentation command list."));
+            return false;
+        }
+
+        const QueueSubmissionPreSubmitHook presentationSignalHook = claimFramePresentationSignal();
+        if(!presentationSignalHook.valid()){
             cancelFramePresentationSignal();
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to claim compatibility presentation on the primary Graphics queue."));
             return false;
@@ -593,15 +659,21 @@ bool BackendContext::present(){
 
         QueueSubmissionDesc submitDesc;
         submitDesc.setPreSubmitHook(presentationSignalHook);
+        CommandList* const compatibilityCommandLists[] = { compatibilityCommandList.get() };
         const QueueSubmissionToken fallbackToken = m_rhiDevice->executeCommandLists(
-            nullptr,
-            0u,
+            compatibilityCommandLists,
+            LengthOf(compatibilityCommandLists),
             primaryGraphicsQueue,
             submitDesc
         );
-        if(!fallbackToken.valid() || !confirmFramePresentationSignal(fallbackToken)){
+        if(!fallbackToken.valid()){
             cancelFramePresentationSignal();
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Compatibility presentation signal submission was rejected."));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Compatibility presentation transition/signal submission was rejected."));
+            return false;
+        }
+        if(!confirmFramePresentationSignal(fallbackToken)){
+            cancelFramePresentationSignal();
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Accepted compatibility presentation submission failed signal confirmation/tracking."));
             return false;
         }
 

@@ -34,12 +34,12 @@ static constexpr usize s_PerfCsvFixedReserveBytes = 128u;
 static constexpr usize s_PerfCsvBytesPerEvent = 128u;
 static constexpr usize s_TimedGraphDotFixedReserveBytes = 96u;
 static constexpr usize s_TimedGraphDotBytesPerGraph = 128u;
-static constexpr usize s_TimedGraphDotBytesPerNode = 64u;
+static constexpr usize s_TimedGraphDotBytesPerNode = 640u;
 static constexpr usize s_TimedGraphDotBytesPerEdge = 40u;
 static constexpr usize s_TimedGraphDotTimingLabelExtraBytes = 16u;
 static constexpr usize s_JsonReportReserveBytes = 1024u;
 static constexpr usize s_JsonReportBytesPerGraph = 128u;
-static constexpr usize s_JsonReportBytesPerNode = 192u;
+static constexpr usize s_JsonReportBytesPerNode = 768u;
 static constexpr usize s_JsonReportBytesPerEdge = 96u;
 
 struct FrameGraphReportRecord{
@@ -241,6 +241,165 @@ using GraphTimingMap = HashMap<GraphTimingKey, f64, GraphTimingKeyHasher, EqualT
     }
 }
 
+[[nodiscard]] const char* FrameGraphQueueClassText(const Telemetry::FrameGraphQueueClass::Enum queueClass)noexcept{
+    switch(queueClass){
+    case Telemetry::FrameGraphQueueClass::Graphics:
+        return "graphics";
+    case Telemetry::FrameGraphQueueClass::Compute:
+        return "compute";
+    case Telemetry::FrameGraphQueueClass::Transfer:
+        return "transfer";
+    case Telemetry::FrameGraphQueueClass::Unknown:
+    default:
+        return "unknown";
+    }
+}
+
+[[nodiscard]] const char* FrameGraphQueueAssignmentReasonText(
+    const Telemetry::FrameGraphQueueAssignmentReason::Enum reason
+)noexcept{
+    switch(reason){
+    case Telemetry::FrameGraphQueueAssignmentReason::RequiredGraphics:
+        return "requiredGraphics";
+    case Telemetry::FrameGraphQueueAssignmentReason::PreferredQueue:
+        return "preferredQueue";
+    case Telemetry::FrameGraphQueueAssignmentReason::DedicatedCompute:
+        return "dedicatedCompute";
+    case Telemetry::FrameGraphQueueAssignmentReason::DedicatedTransfer:
+        return "dedicatedTransfer";
+    case Telemetry::FrameGraphQueueAssignmentReason::Fallback:
+        return "fallback";
+    case Telemetry::FrameGraphQueueAssignmentReason::ConservativeAny:
+        return "conservativeAny";
+    case Telemetry::FrameGraphQueueAssignmentReason::SameClassRouting:
+        return "sameClassRouting";
+    case Telemetry::FrameGraphQueueAssignmentReason::CompilerOverride:
+        return "compilerOverride";
+    case Telemetry::FrameGraphQueueAssignmentReason::ScoredAny:
+        return "scoredAny";
+    case Telemetry::FrameGraphQueueAssignmentReason::Unknown:
+    default:
+        return "unknown";
+    }
+}
+
+[[nodiscard]] const char* FrameGraphQueueAssignmentAcceptanceText(
+    const Telemetry::FrameGraphQueueAssignmentAcceptance::Enum acceptance
+)noexcept{
+    switch(acceptance){
+    case Telemetry::FrameGraphQueueAssignmentAcceptance::First:
+        return "first";
+    case Telemetry::FrameGraphQueueAssignmentAcceptance::Unchanged:
+        return "unchanged";
+    case Telemetry::FrameGraphQueueAssignmentAcceptance::Changed:
+        return "changed";
+    case Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted:
+        return "notAccepted";
+    default:
+        return "unknown";
+    }
+}
+
+void AppendFrameGraphPhysicalQueueJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphPhysicalQueueId& queue
+){
+    if(!queue.valid()){
+        out += "null";
+        return;
+    }
+
+    StringAppendFormat(out, "{{\"index\": {}, \"deviceGeneration\": {}}}", queue.index, queue.deviceGeneration);
+}
+
+void AppendFrameGraphQueueAssignmentJson(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphQueueAssignment& assignment
+){
+    if(!assignment.present){
+        out += "null";
+        return;
+    }
+
+    out += "{\"initialQueue\": ";
+    AppendFrameGraphPhysicalQueueJson(out, assignment.initialQueue);
+    out += ", \"plannedQueue\": ";
+    AppendFrameGraphPhysicalQueueJson(out, assignment.plannedQueue);
+    out += ", \"acceptedQueue\": ";
+    AppendFrameGraphPhysicalQueueJson(out, assignment.acceptedQueue);
+    out += ", \"previousAcceptedQueue\": ";
+    AppendFrameGraphPhysicalQueueJson(out, assignment.previousAcceptedQueue);
+    out += ", \"queueClass\": ";
+    AppendJsonQuotedText(out, AStringView(FrameGraphQueueClassText(assignment.queueClass)));
+    out += ", \"reason\": ";
+    AppendJsonQuotedText(out, AStringView(FrameGraphQueueAssignmentReasonText(assignment.reason)));
+    StringAppendFormat(out, ", \"modifierMask\": {}", static_cast<u32>(assignment.modifiers));
+    out += ", \"acceptance\": ";
+    AppendJsonQuotedText(out, AStringView(FrameGraphQueueAssignmentAcceptanceText(assignment.acceptance)));
+    StringAppendFormat(out, ", \"dedicated\": {}", assignment.dedicated ? "true" : "false");
+    StringAppendFormat(
+        out,
+        ", \"score\": {{\"preference\": {}, \"overlap\": {}, \"queueLoad\": {}, \"incomingCrossings\": {}, "
+        "\"outgoingCrossings\": {}, \"ownershipTransfers\": {}, \"total\": {}}}}}",
+        assignment.score.preference,
+        assignment.score.overlap,
+        assignment.score.queueLoad,
+        assignment.score.incomingCrossings,
+        assignment.score.outgoingCrossings,
+        assignment.score.ownershipTransfers,
+        assignment.score.total
+    );
+}
+
+void AppendFrameGraphPhysicalQueueDot(
+    AString<TelemetryArena>& out,
+    const AStringView prefix,
+    const Telemetry::FrameGraphPhysicalQueueId& queue
+){
+    if(!queue.valid()){
+        StringAppendFormat(out, ", {}_index=\"none\", {}_device_generation=\"none\"", prefix, prefix);
+        return;
+    }
+
+    StringAppendFormat(out, ", {}_index={}, {}_device_generation={}", prefix, queue.index, prefix, queue.deviceGeneration);
+}
+
+void AppendFrameGraphQueueAssignmentDot(
+    AString<TelemetryArena>& out,
+    const Telemetry::FrameGraphQueueAssignment& assignment
+){
+    if(!assignment.present){
+        out += ", queue_assignment=\"none\"";
+        return;
+    }
+
+    out += ", queue_assignment=\"present\"";
+    AppendFrameGraphPhysicalQueueDot(out, "queue_initial", assignment.initialQueue);
+    AppendFrameGraphPhysicalQueueDot(out, "queue_planned", assignment.plannedQueue);
+    AppendFrameGraphPhysicalQueueDot(out, "queue_accepted", assignment.acceptedQueue);
+    AppendFrameGraphPhysicalQueueDot(out, "queue_previous_accepted", assignment.previousAcceptedQueue);
+    out += ", queue_class=";
+    AppendDotQuotedText(out, AStringView(FrameGraphQueueClassText(assignment.queueClass)));
+    out += ", queue_reason=";
+    AppendDotQuotedText(out, AStringView(FrameGraphQueueAssignmentReasonText(assignment.reason)));
+    StringAppendFormat(out, ", queue_modifier_mask={}", static_cast<u32>(assignment.modifiers));
+    out += ", queue_acceptance=";
+    AppendDotQuotedText(out, AStringView(FrameGraphQueueAssignmentAcceptanceText(assignment.acceptance)));
+    StringAppendFormat(out, ", queue_dedicated={}", assignment.dedicated ? "true" : "false");
+    StringAppendFormat(
+        out,
+        ", queue_score_preference={}, queue_score_overlap={}, queue_score_queue_load={}, queue_score_incoming_crossings={}, "
+        "queue_score_outgoing_crossings={}, queue_score_ownership_transfers={}, queue_score_total={}",
+        assignment.score.preference,
+        assignment.score.overlap,
+        assignment.score.queueLoad,
+        assignment.score.incomingCrossings,
+        assignment.score.outgoingCrossings,
+        assignment.score.ownershipTransfers,
+        assignment.score.total
+    );
+}
+
 // Joins each decoded frame-graph topology with timing from its exact frame and scope Name while retaining every
 // capture, stable identity, and opaque producer-owned flag byte. A timing stream need not match the graph stream.
 void AppendTimedGraphDot(
@@ -281,7 +440,9 @@ void AppendTimedGraphDot(
         AppendDotQuotedText(out, identity);
         out += ", kind=";
         AppendDotQuotedText(out, AStringView(FrameGraphNodeKindText(node.kind)));
-        StringAppendFormat(out, ", flags={}];\n", static_cast<u32>(node.flags));
+        StringAppendFormat(out, ", flags={}", static_cast<u32>(node.flags));
+        AppendFrameGraphQueueAssignmentDot(out, node.queueAssignment);
+        out += "];\n";
     }
 
     for(const Telemetry::FrameGraphEdgePayload& edge : graph.edges){
@@ -331,12 +492,9 @@ void AppendFrameGraphJson(
         AppendJsonQuotedText(out, AStringView(node.label.data(), node.label.size()));
         out += ", \"kind\": ";
         AppendJsonQuotedText(out, AStringView(FrameGraphNodeKindText(node.kind)));
-        StringAppendFormat(
-            out,
-            ", \"flags\": {}}}{}\n",
-            static_cast<u32>(node.flags),
-            nodeIndex + 1u == graph.nodes.size() ? "" : ","
-        );
+        StringAppendFormat(out, ", \"flags\": {}, \"queueAssignment\": ", static_cast<u32>(node.flags));
+        AppendFrameGraphQueueAssignmentJson(out, node.queueAssignment);
+        StringAppendFormat(out, "}}{}\n", nodeIndex + 1u == graph.nodes.size() ? "" : ",");
     }
     out += "        ],\n";
     out += "        \"edges\": [\n";

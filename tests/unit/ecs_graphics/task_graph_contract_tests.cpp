@@ -1128,8 +1128,24 @@ TEST(EcsGraphics, PrefixAndShadowTopologyUsesSemanticTaskAnchors){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString systemSource;
+    AString shadowPrepareSource;
+    AString shadowVisibilitySource;
     ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/task_graph_shadow_prepare.cpp",
+            "raytrace/task_graph_shadow_visibility.cpp",
+        },
+        shadowPrepareSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "raytrace" / "task_graph_shadow_visibility.cpp",
+        shadowVisibilitySource
+    ));
     const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView shadowPrepare(shadowPrepareSource.data(), shadowPrepareSource.size());
+    const AStringView shadowVisibility(shadowVisibilitySource.data(), shadowVisibilitySource.size());
 
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredShadowPrepareTask)"));
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_graphicsPrefixTask)"));
@@ -1138,19 +1154,30 @@ TEST(EcsGraphics, PrefixAndShadowTopologyUsesSemanticTaskAnchors){
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredSoftwareCausticsTask)"));
     EXPECT_TRUE(ContainsText(system, "tasksSharePacket(\n            m_graphicsPrefixDeferredClearFirstTask"));
     EXPECT_FALSE(ContainsText(system, "shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct"));
-    EXPECT_TRUE(ContainsText(system, "if(shadowPrepareStateSourceCount != 0u){"));
+    EXPECT_TRUE(ContainsText(shadowPrepare, ".states = m_shadowPreparePersistentState.source(),"));
+    EXPECT_TRUE(ContainsText(shadowPrepare, ".setExternalStateSources("));
     EXPECT_TRUE(ContainsText(
-        system,
-        "m_deferredShadowPrepareTask,\n"
-        "                {},\n"
-        "                shadowPrepareStateSources,"
+        shadowVisibility,
+        "const auto* const shadowScratchStates = m_shadowComputePersistentState.source();"
     ));
     EXPECT_TRUE(ContainsText(
-        system,
-        "m_deferredShadowVisibilityTask,\n"
-        "            m_graphicsPrefixTask,\n"
-        "            shadowVisibilityStateSources,"
+        shadowVisibility,
+        "const auto* const shadowReturnStates = m_shadowVisibilityReturnState.source();"
     ));
+    EXPECT_TRUE(ContainsText(shadowVisibility, ".states = shadowScratchStates,"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, ".states = shadowReturnStates,"));
+    EXPECT_TRUE(ContainsText(
+        shadowVisibility,
+        ".applicableConsumerQueueClass = Core::CommandQueue::Compute,"
+    ));
+    EXPECT_EQ(
+        CountText(
+            shadowVisibility,
+            ".setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)"
+        ),
+        6u
+    );
+    EXPECT_FALSE(ContainsText(system, "deferredStateBindings"));
     EXPECT_TRUE(ContainsText(system, ".context = &shadowPrepareStateLifecycle,\n        .invoke = prepareShadowPrepareTask,"));
     EXPECT_TRUE(ContainsText(system, ".context = &shadowPrepareStateLifecycle,\n        .invoke = acceptShadowPrepareTask,"));
     EXPECT_TRUE(ContainsText(
@@ -1180,22 +1207,34 @@ TEST(EcsGraphics, SoftwareShadowEffectsTopologyUsesSemanticTaskAnchors){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString systemSource;
+    AString causticsSource;
     ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "raytrace" / "task_graph_caustics.cpp",
+        causticsSource
+    ));
     const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView caustics(causticsSource.data(), causticsSource.size());
 
     EXPECT_FALSE(ContainsText(system, "softwareShadowEffectsTimingPacketsAreDistinct"));
+    EXPECT_TRUE(ContainsText(caustics, ".states = m_causticsComputePersistentState.source(),"));
+    EXPECT_TRUE(ContainsText(caustics, ".states = m_causticIrradianceReturnState.source(),"));
     EXPECT_TRUE(ContainsText(
-        system,
-        "if(!hardwareShadowSupported){\n"
-        "        deferredStateBindingsReady = deferredStateBindingsReady\n"
-        "            && appendTaskPacketStateBinding("
+        caustics,
+        ".applicableConsumerQueueClass = Core::CommandQueue::Compute,"
     ));
-    EXPECT_TRUE(ContainsText(
-        system,
-        "m_deferredSoftwareCausticsTask,\n"
-        "                m_graphicsPrefixTask,\n"
-        "                softwareCausticsStateSources,"
-    ));
+    EXPECT_EQ(
+        CountText(caustics, ".setExternalStateSources(scratchStateSources, scratchStateSourceCount)"),
+        6u
+    );
+    EXPECT_EQ(
+        CountText(
+            caustics,
+            ".setExternalStateSources(irradianceReturnStateSources, irradianceReturnStateSourceCount)"
+        ),
+        1u
+    );
+    EXPECT_FALSE(ContainsText(system, "deferredStateBindings"));
     EXPECT_TRUE(ContainsText(
         system,
         ".task = m_deferredSoftwareCausticsTask,\n"
@@ -1219,7 +1258,7 @@ TEST(EcsGraphics, SoftwareShadowEffectsTopologyUsesSemanticTaskAnchors){
 
 
 // Snapshot Copy and the timed Surfel GI endpoint retain distinct acceptance boundaries. Preparation may alias/share
-// Snapshot, while Prefix-produced state and lifecycle publication remain semantic-task bindings.
+// Snapshot, while declaration-owned state and lifecycle publication remain semantic-task contracts.
 TEST(EcsGraphics, SurfelGiTopologyUsesSemanticTaskAnchors){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -1241,24 +1280,17 @@ TEST(EcsGraphics, SurfelGiTopologyUsesSemanticTaskAnchors){
     ));
     EXPECT_EQ(CountText(system, "surfelGiSnapshotCopyAndTimingPacketsAreDistinct"), 2u);
     EXPECT_TRUE(ContainsText(system, "|| !surfelGiSnapshotCopyAndTimingPacketsAreDistinct"));
+    EXPECT_TRUE(ContainsText(surfelGi, ".states = m_surfelGiComputePersistentState.source(),"));
+    EXPECT_TRUE(ContainsText(surfelGi, ".states = m_surfelGiCounterPersistentState.source(),"));
+    EXPECT_TRUE(ContainsText(surfelGi, ".states = m_surfelIrradianceReturnState.source(),"));
     EXPECT_TRUE(ContainsText(
-        system,
-        "m_deferredSurfelGiPreparationTask,\n"
-        "                m_graphicsPrefixTask,\n"
-        "                surfelGiStateSources,"
+        surfelGi,
+        ".applicableConsumerQueueClass = Core::CommandQueue::Compute,"
     ));
-    EXPECT_TRUE(ContainsText(
-        system,
-        "m_deferredSurfelGiSnapshotCopyTask,\n"
-        "                m_graphicsPrefixTask,\n"
-        "                surfelGiStateSources,"
-    ));
-    EXPECT_TRUE(ContainsText(
-        system,
-        "m_deferredSurfelGiTask,\n"
-        "            m_graphicsPrefixTask,\n"
-        "            surfelGiStateSources,"
-    ));
+    EXPECT_TRUE(ContainsText(surfelGi, "surfelGiComputeCounterStateSources"));
+    EXPECT_TRUE(ContainsText(surfelGi, "surfelGiComputeReturnStateSources"));
+    EXPECT_TRUE(ContainsText(surfelGi, "surfelGiAllStateSources"));
+    EXPECT_FALSE(ContainsText(system, "deferredStateBindings"));
     EXPECT_TRUE(ContainsText(
         system,
         ".task = m_deferredSurfelGiTask,\n"
@@ -1272,6 +1304,19 @@ TEST(EcsGraphics, SurfelGiTopologyUsesSemanticTaskAnchors){
         "        .invoke = acceptSurfelGiTask,"
     ));
     EXPECT_TRUE(ContainsText(system, "appendNormalTimingTicket(m_deferredSurfelGiTask, surfelGiTimingTicket)"));
+
+    const usize surfelLifecycleOffset = system.find("struct SurfelGiStateLifecycleContext{");
+    const usize hardwareLifecycleOffset = system.find("struct HardwareCausticsStateLifecycleContext{", surfelLifecycleOffset);
+    ASSERT_NE(surfelLifecycleOffset, AStringView::npos);
+    ASSERT_NE(hardwareLifecycleOffset, AStringView::npos);
+    ASSERT_LT(surfelLifecycleOffset, hardwareLifecycleOffset);
+    const AStringView surfelLifecycle = system.substr(
+        surfelLifecycleOffset,
+        hardwareLifecycleOffset - surfelLifecycleOffset
+    );
+    EXPECT_FALSE(ContainsText(surfelLifecycle, "runsOnCompute"));
+    EXPECT_TRUE(ContainsText(surfelLifecycle, "m_surfelGiComputePersistentState.buildFilteredResourceSubset("));
+    EXPECT_TRUE(ContainsText(surfelLifecycle, "m_surfelGiComputePersistentState.commit(*context->computeStateCandidate)"));
 
     EXPECT_TRUE(ContainsText(
         surfelGi,
@@ -1546,12 +1591,19 @@ TEST(EcsGraphics, DeferredLightingCompositeTopologyUsesSemanticTaskAnchors){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString systemSource;
+    AString deferredSource;
     ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_deferred_lighting.cpp",
+        deferredSource
+    ));
     const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView deferred(deferredSource.data(), deferredSource.size());
 
     EXPECT_FALSE(ContainsText(system, "deferredLightingCompositeTimingPacketsAreDistinct"));
-    EXPECT_TRUE(ContainsText(system, "m_deferredLightingTask,\n            m_graphicsPrefixTask,\n            nullptr,"));
-    EXPECT_TRUE(ContainsText(system, "m_deferredCompositeTask,\n            m_graphicsPrefixTask,\n            nullptr,"));
+    EXPECT_FALSE(ContainsText(system, "deferredStateBindings"));
+    EXPECT_FALSE(ContainsText(deferred, "laggedReadsHaveIndependentStateSources"));
+    EXPECT_FALSE(ContainsText(deferred, "laggedBindlessSlotsHaveIndependentStateSource"));
     EXPECT_TRUE(ContainsText(system, "appendNormalTimingTicket(m_deferredLightingTask, deferredLightingTimingTicket)"));
     EXPECT_TRUE(ContainsText(system, "appendNormalTimingTicket(m_deferredCompositeTask, deferredCompositeTimingTicket)"));
     EXPECT_TRUE(ContainsText(
@@ -1600,8 +1652,9 @@ TEST(EcsGraphics, RendererNormalExecutionUsesSemanticTaskAnchors){
     EXPECT_EQ(CountText(system, ".submitTaskRangeInCompileOrderFromTasks("), 0u);
     EXPECT_EQ(CountText(system, "taskFinalStateSeed("), 0u);
     EXPECT_TRUE(ContainsText(system, "normalExecution.readyFrontierWorkerPool = &m_world.taskPool();"));
-    EXPECT_TRUE(ContainsText(system, "normalExecution.taskStateBindings = deferredStateBindings;"));
-    EXPECT_TRUE(ContainsText(system, "normalExecution.taskStateBindingCount = deferredStateBindingCount;"));
+    EXPECT_FALSE(ContainsText(system, "normalExecution.taskStateBindings"));
+    EXPECT_FALSE(ContainsText(system, "normalExecution.taskStateBindingCount"));
+    EXPECT_FALSE(ContainsText(system, "deferredStateBindings"));
     EXPECT_TRUE(ContainsText(system, "normalExecution.taskRecordedCallbacks = normalRecordedCallbacks;"));
     EXPECT_TRUE(ContainsText(system, "normalExecution.taskRecordedCallbackCount = normalRecordedCallbackCount;"));
     EXPECT_TRUE(ContainsText(system, "normalExecution.taskTimingTickets = normalTimingTickets;"));
@@ -3147,7 +3200,7 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
     EXPECT_TRUE(ContainsText(readback, ".source = counter,"));
     EXPECT_TRUE(ContainsText(readback, ".setQueue(TransferQueueRequest())"));
 
-    EXPECT_TRUE(ContainsText(system, "if(m_surfelGiCounterPersistentState.valid())"));
+    EXPECT_TRUE(ContainsText(surfelTaskGraph, ".states = m_surfelGiCounterPersistentState.source(),"));
     EXPECT_TRUE(ContainsText(system, "m_surfelGiCounterPersistentState.buildFilteredBufferSubset("));
     EXPECT_TRUE(ContainsText(system, "m_surfelGiCounterPersistentState.commit(\n                    *context->candidate"));
     EXPECT_TRUE(ContainsText(system, ".task = m_deferredSurfelGiCounterReadbackTask,"));
@@ -3353,45 +3406,34 @@ TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAc
     EXPECT_FALSE(ContainsText(hardwarePrepare, "hardwareResolvePrepareResourceUses.push_back(ReadWriteTextureUse("));
     EXPECT_EQ(CountText(hardwarePrepare, "hardwareResolvePrepareResourceUses.push_back(WriteTextureUse("), 2u);
 
-    const usize hardwareStateSourcesOffset = system.find("Core::GpuExternalPacketStateSource hardwareCausticsStateSources[");
-    const usize deferredStateBindingsOffset = system.find(
-        "Core::GpuTaskPacketStateBinding deferredStateBindings[",
-        hardwareStateSourcesOffset
-    );
     const usize hardwareLifecycleOffset = system.find("struct HardwareCausticsStateLifecycleContext{");
     const usize deferredLightingLifecycleOffset = system.find(
         "const Core::TextureHandle deferredLightingShadowReturnTextures[]",
         hardwareLifecycleOffset
     );
-    ASSERT_NE(hardwareStateSourcesOffset, AStringView::npos);
-    ASSERT_NE(deferredStateBindingsOffset, AStringView::npos);
     ASSERT_NE(hardwareLifecycleOffset, AStringView::npos);
     ASSERT_NE(deferredLightingLifecycleOffset, AStringView::npos);
-    ASSERT_LT(hardwareStateSourcesOffset, deferredStateBindingsOffset);
     ASSERT_LT(hardwareLifecycleOffset, deferredLightingLifecycleOffset);
-    const AStringView hardwareStateSources = system.substr(
-        hardwareStateSourcesOffset,
-        deferredStateBindingsOffset - hardwareStateSourcesOffset
-    );
     const AStringView hardwareLifecycle = system.substr(
         hardwareLifecycleOffset,
         deferredLightingLifecycleOffset - hardwareLifecycleOffset
     );
 
-    EXPECT_TRUE(ContainsText(system, "s_HardwareCausticsStateSourceCapacity = 1u;"));
     EXPECT_TRUE(ContainsText(system, "m_hardwareCausticAccumulatorPersistentState(arena)"));
     EXPECT_TRUE(ContainsText(system, "m_hardwareCausticAccumulatorPersistentState.reset();"));
     EXPECT_EQ(CountText(system, "m_hardwareCausticAccumulatorPersistentState.reset();"), 1u);
     EXPECT_TRUE(ContainsText(systemHeader, "Core::GpuPersistentResourceStateCache m_hardwareCausticAccumulatorPersistentState;"));
-    EXPECT_TRUE(ContainsText(hardwareStateSources, "RendererSystemRenderDetail::s_HardwareCausticsStateSourceCapacity"));
-    EXPECT_TRUE(ContainsText(hardwareStateSources, "m_hardwareCausticAccumulatorPersistentState.valid()"));
-    EXPECT_TRUE(ContainsText(hardwareStateSources, "m_hardwareCausticAccumulatorPersistentState.source()"));
-    EXPECT_TRUE(ContainsText(
-        system,
-        "m_deferredHardwareCausticsTask,\n"
-        "                m_graphicsPrefixTask,\n"
-        "                hardwareCausticsStateSources,"
-    ));
+    EXPECT_TRUE(ContainsText(hardwareCaustics, "const Core::GpuTaskExternalStateSource accumulatorStateSources[]"));
+    EXPECT_TRUE(ContainsText(hardwareCaustics, ".states = m_hardwareCausticAccumulatorPersistentState.source(),"));
+    EXPECT_TRUE(ContainsText(hardwareCaustics, "m_hardwareCausticAccumulatorPersistentState.valid()"));
+    EXPECT_EQ(
+        CountText(
+            hardwareCaustics,
+            ".setExternalStateSources(accumulatorStateSources, accumulatorStateSourceCount)"
+        ),
+        3u
+    );
+    EXPECT_FALSE(ContainsText(system, "deferredStateBindings"));
     EXPECT_TRUE(ContainsText(hardwareLifecycle, "prepareHardwareCausticsTask"));
     EXPECT_TRUE(ContainsText(hardwareLifecycle, "m_hardwareCausticAccumulatorPersistentState.buildFilteredResourceSubset("));
     EXPECT_TRUE(ContainsText(hardwareLifecycle, "m_causticIrradianceLightingState.buildFilteredResourceSubset("));
@@ -3695,31 +3737,30 @@ TEST(EcsGraphics, ShadowTemporalScratchRetainsAcceptedStateAcrossGraphicsRoute){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString systemSource;
+    AString shadowVisibilitySource;
     ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "raytrace" / "task_graph_shadow_visibility.cpp",
+        shadowVisibilitySource
+    ));
     const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView shadowVisibility(shadowVisibilitySource.data(), shadowVisibilitySource.size());
 
-    const usize stateSourcesOffset = system.find("Core::GpuExternalPacketStateSource shadowVisibilityStateSources[");
-    const usize softwareCausticsSourcesOffset = system.find(
-        "Core::GpuExternalPacketStateSource softwareCausticsStateSources[",
-        stateSourcesOffset
-    );
-    ASSERT_NE(stateSourcesOffset, AStringView::npos);
-    ASSERT_NE(softwareCausticsSourcesOffset, AStringView::npos);
-    ASSERT_LT(stateSourcesOffset, softwareCausticsSourcesOffset);
-    const AStringView shadowVisibilityStateSources = system.substr(
-        stateSourcesOffset,
-        softwareCausticsSourcesOffset - stateSourcesOffset
-    );
-    EXPECT_TRUE(ContainsText(shadowVisibilityStateSources, "if(m_shadowComputePersistentState.valid())"));
-    EXPECT_TRUE(ContainsText(shadowVisibilityStateSources, "m_shadowComputePersistentState.source()"));
-    EXPECT_FALSE(ContainsText(
-        shadowVisibilityStateSources,
-        "shadowVisibilityRunsOnCompute && m_shadowComputePersistentState.valid()"
+    EXPECT_TRUE(ContainsText(
+        shadowVisibility,
+        "const auto* const shadowScratchStates = m_shadowComputePersistentState.source();"
     ));
     EXPECT_TRUE(ContainsText(
-        shadowVisibilityStateSources,
-        "if(shadowVisibilityRunsOnCompute && m_shadowVisibilityReturnState.valid())"
+        shadowVisibility,
+        "const auto* const shadowReturnStates = m_shadowVisibilityReturnState.source();"
     ));
+    EXPECT_TRUE(ContainsText(shadowVisibility, ".states = shadowScratchStates,"));
+    EXPECT_TRUE(ContainsText(shadowVisibility, ".states = shadowReturnStates,"));
+    EXPECT_TRUE(ContainsText(
+        shadowVisibility,
+        ".applicableConsumerQueueClass = Core::CommandQueue::Compute,"
+    ));
+    EXPECT_FALSE(ContainsText(shadowVisibility, "shadowVisibilityRunsOnCompute"));
 
     const usize acceptedShadowOffset = system.find("const Core::TextureHandle shadowVisibilityReturnTextures[]");
     const usize scratchStateOffset = system.find("m_shadowComputePersistentState.buildFilteredResourceSubset(", acceptedShadowOffset);
@@ -3769,24 +3810,22 @@ TEST(EcsGraphics, SoftwareCausticsScratchRetainsAcceptedStateAcrossGraphicsRoute
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString systemSource;
+    AString causticsSource;
     ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "raytrace" / "task_graph_caustics.cpp",
+        causticsSource
+    ));
     const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView caustics(causticsSource.data(), causticsSource.size());
 
-    const usize stateSourcesOffset = system.find("Core::GpuExternalPacketStateSource softwareCausticsStateSources[");
-    const usize surfelSourcesOffset = system.find("Core::GpuExternalPacketStateSource surfelGiStateSources[", stateSourcesOffset);
-    ASSERT_NE(stateSourcesOffset, AStringView::npos);
-    ASSERT_NE(surfelSourcesOffset, AStringView::npos);
-    ASSERT_LT(stateSourcesOffset, surfelSourcesOffset);
-    const AStringView stateSources = system.substr(stateSourcesOffset, surfelSourcesOffset - stateSourcesOffset);
-    EXPECT_TRUE(ContainsText(stateSources, "if(m_causticsComputePersistentState.valid())"));
-    EXPECT_FALSE(ContainsText(
-        stateSources,
-        "softwareCausticsRunsOnCompute && m_causticsComputePersistentState.valid()"
-    ));
+    EXPECT_TRUE(ContainsText(caustics, ".states = m_causticsComputePersistentState.source(),"));
+    EXPECT_TRUE(ContainsText(caustics, ".states = m_causticIrradianceReturnState.source(),"));
     EXPECT_TRUE(ContainsText(
-        stateSources,
-        "if(softwareCausticsRunsOnCompute && m_causticIrradianceReturnState.valid())"
+        caustics,
+        ".applicableConsumerQueueClass = Core::CommandQueue::Compute,"
     ));
+    EXPECT_FALSE(ContainsText(caustics, "softwareCausticsRunsOnCompute"));
 
     const usize candidatesOffset = system.find("const Core::TextureHandle causticsComputeScratchTextures[]");
     const usize callbacksOffset = system.find(

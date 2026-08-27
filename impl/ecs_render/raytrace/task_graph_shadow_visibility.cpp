@@ -84,6 +84,25 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     )
         return false;
 
+    Core::GpuTaskExternalStateSource shadowVisibilityStateSources[2u] = {};
+    usize shadowVisibilityStateSourceCount = 0u;
+    const auto* const shadowScratchStates = m_shadowComputePersistentState.source();
+    if(shadowScratchStates){
+        shadowVisibilityStateSources[shadowVisibilityStateSourceCount++] = {
+            .states = shadowScratchStates,
+        };
+    }
+    const auto* const shadowReturnStates = m_shadowVisibilityReturnState.source();
+    if(shadowReturnStates){
+        shadowVisibilityStateSources[shadowVisibilityStateSourceCount++] = {
+            .states = shadowReturnStates,
+            .applicableConsumerQueueClass = Core::CommandQueue::Compute,
+        };
+    }
+    const Core::GpuTaskExternalStateSource* const shadowVisibilityStateSourceData =
+        shadowVisibilityStateSourceCount != 0u ? shadowVisibilityStateSources : nullptr
+    ;
+
     const Core::GpuExternalCompletionId* const laggedLightingHistoryWriterDrainDependencies =
         laggedLightingHistoryWriterDrainCompletion.valid() ? &laggedLightingHistoryWriterDrainCompletion : nullptr
     ;
@@ -835,6 +854,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
                 laggedLightingHistoryWriterDrainDependencies,
                 laggedLightingHistoryWriterDrainDependencyCount
             )
+            .setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)
             .setResourceUses(opaqueResourceUses.data(), opaqueResourceUses.size())
             .setResourceSetUses(
                 !hardwareShadowSupported && softwareTraceGeometryStatesGraphOwned ? &softwareTraceGeometrySetUse : nullptr,
@@ -875,6 +895,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             .setQueue(ComputeQueueRequest())
             .setScheduling(tailScheduling)
             .setDependencies(opaqueFirstWaveletDependencies, LengthOf(opaqueFirstWaveletDependencies))
+            .setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)
             .setResourceUses(opaqueFirstWaveletResourceUses.data(), opaqueFirstWaveletResourceUses.size())
         ;
         m_deferredShadowVisibilityOpaqueFirstWaveletTask = m_raytracingSystem.declareShadowVisibilityOpaqueFirstWaveletTask(
@@ -932,6 +953,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             .setQueue(ComputeQueueRequest())
             .setScheduling(tailScheduling)
             .setDependencies(traceDependencies, LengthOf(traceDependencies))
+            .setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)
             .setResourceUses(transparentTraceResourceUses.data(), transparentTraceResourceUses.size())
             .setResourceSetUses(
                 traceResourceSetUseCount != 0u ? traceResourceSetUses : nullptr,
@@ -965,6 +987,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
                 .setQueue(ComputeQueueRequest())
                 .setScheduling(tailScheduling)
                 .setDependencies(transparentTemporalMergeDependencies, LengthOf(transparentTemporalMergeDependencies))
+                .setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)
                 .setResourceUses(
                     transparentTemporalMergeResourceUses.data(),
                     transparentTemporalMergeResourceUses.size()
@@ -1175,6 +1198,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         .setQueue(ComputeTransferPacketQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(&shadowVisibilityDependency, 1u)
+        .setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)
         .setResourceUses(resourceUses.data(), resourceUses.size())
         .setResourceSetUses(
             traceResourceSetUseCount != 0u ? traceResourceSetUses : nullptr,
@@ -1220,6 +1244,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
             .setQueue(ComputeTransferPacketQueueRequest())
             .setScheduling(statsReadbackScheduling)
             .setDependencies(statsReadbackDependencies, LengthOf(statsReadbackDependencies))
+            .setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)
         ;
         m_deferredShadowVisibilityAdaptiveStatsReadbackTask = m_deferredLightingTaskGraph.addCopyBufferTask(
             statsReadbackDesc,

@@ -1116,6 +1116,9 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     scheduling.allowMergeAcrossConsumerFrontier = pureSoftwareMeshSwBvhBuildsGraphOwned;
     const Core::GpuTaskId* const dependencies = &shadowPrepareDependency;
     constexpr usize dependencyCount = 1u;
+    const Core::GpuTaskExternalStateSource shadowPrepareStateSource{
+        .states = m_shadowPreparePersistentState.source(),
+    };
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.shadow_prepare"))
@@ -1123,6 +1126,10 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         .setQueue(GraphicsQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(dependencies, dependencyCount)
+        .setExternalStateSources(
+            shadowPrepareStateSource.states ? &shadowPrepareStateSource : nullptr,
+            shadowPrepareStateSource.states ? 1u : 0u
+        )
         .setResourceUses(resourceUses.data(), resourceUses.size())
         .setResourceSetUses(resourceSetUses.data(), resourceSetUses.size())
     ;

@@ -27,14 +27,8 @@ namespace RendererSystemRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// These fixed arrays describe the maximum number of independently retained sources/tickets that the graph binds
-// for each semantic packet. They are capacities, not a runtime packet-count assumption.
-inline constexpr usize s_ShadowVisibilityStateSourceCapacity = 2u;
-inline constexpr usize s_SoftwareCausticsStateSourceCapacity = 2u;
-inline constexpr usize s_SurfelGiStateSourceCapacity = 3u;
-inline constexpr usize s_HardwareCausticsStateSourceCapacity = 1u;
-inline constexpr usize s_SingleStateSourceCapacity = 1u;
-inline constexpr usize s_DeferredPacketStateBindingCapacity = 9u;
+// These fixed arrays describe the maximum number of independently retained lifecycle callbacks, timing tickets,
+// and late history-copy sources. They are capacities, not a runtime packet-count assumption.
 inline constexpr usize s_DeferredStateLifecycleCallbackCapacity = 6u;
 inline constexpr usize s_DeferredTimingTicketCapacity = 15u + s_AvboitTaskGraphTimingTicketCapacity;
 inline constexpr usize s_LaggedLightingHistoryStateSourceCapacity = 3u;
@@ -1129,7 +1123,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredSurfelGiSnapshotCopyTask);
     const Core::GpuPhysicalQueueInfo* const surfelGiCounterReadbackQueue =
         m_deferredLightingCompiledGraph.queueInfoForTask(m_deferredSurfelGiCounterReadbackTask);
-    const bool surfelGiRunsOnCompute = surfelGiQueue && surfelGiQueue->queueClass == Core::CommandQueue::Compute;
     // The clear must remain in GI's semantic packet. If it split, the standard effects range would either gain a
     // hidden submission or record an output write outside the acceptance/timing endpoint it protects.
     const bool surfelGiOutputClearMergedIntoGiPacket =
@@ -1647,30 +1640,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         };
         return true;
     };
-    const auto appendTaskPacketStateBinding = [](
-        Core::GpuTaskPacketStateBinding* const bindings,
-        const usize capacity,
-        usize& bindingCount,
-        const Core::GpuTaskId task,
-        const Core::GpuTaskId recordedProducerTask,
-        const Core::GpuExternalPacketStateSource* const sources,
-        const usize sourceCount
-    ){
-        if(
-            !task.valid()
-            || (!recordedProducerTask.valid() && sourceCount == 0u)
-            || (sourceCount != 0u && !sources)
-            || bindingCount >= capacity
-        )
-            return false;
-        bindings[bindingCount++] = Core::GpuTaskPacketStateBinding{
-            .task = task,
-            .recordedProducerTask = recordedProducerTask,
-            .externalStateSources = sources,
-            .externalStateSourceCount = sourceCount,
-        };
-        return true;
-    };
 
     // Record preparation and prefix through the graph's ready-frontier path. These renderer payloads intentionally
     // retain the serial default, while graph-owned upload packets later in the frame may opt into worker recording.
@@ -1728,289 +1697,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     appendShadowPrepareStateBuffer(m_rayTracingState.m_bvhSortPayloadBuffer);
     appendShadowPrepareStateBuffer(m_rayTracingState.m_bvhVisitCounterBuffer);
 
-    // Filter the prior accepted cache into a typed recording source, but do not alter the cache yet: a rejected
-    // Shadow Preparation packet must leave both its state and resource lifetimes exactly as the last acceptance.
-    Core::GpuPersistentResourceStateCache::Candidate shadowPreparePriorStateCandidate(m_arena);
-    bool shadowPreparePriorStateReady = true;
-    if(m_shadowPreparePersistentState.valid()){
-        const Core::CommandListResourceStateHandoff* const previousStates = m_shadowPreparePersistentState.source();
-        shadowPreparePriorStateReady = previousStates
-            && m_shadowPreparePersistentState.buildFilteredBufferSubset(
-                shadowPreparePriorStateCandidate,
-                *previousStates,
-                shadowPrepareLiveStateBuffers.data(),
-                shadowPrepareLiveStateBuffers.size()
-            )
-        ;
-    }
-
-    Core::GpuExternalPacketStateSource shadowPrepareStateSources[
-        RendererSystemRenderDetail::s_SingleStateSourceCapacity
-    ] = {};
-    usize shadowPrepareStateSourceCount = 0u;
-    if(shadowPreparePriorStateReady && shadowPreparePriorStateCandidate.valid()){
-        if(!appendDeclaredStateSource(
-            shadowPrepareStateSources,
-            LengthOf(shadowPrepareStateSources),
-            shadowPrepareStateSourceCount,
-            shadowPreparePriorStateCandidate.source()
-        )){
-            shadowPrepareStateSourceCount = 0u;
-        }
-    }
-    // The normal executor builds the sparse AS/software-BVH candidate after recording every ordinary packet and
-    // commits it only when Shadow Preparation accepts.
+    // The declaration-owned source imports the prior cache. The normal executor builds the sparse
+    // AS/software-BVH candidate after recording every ordinary packet and commits it only when Shadow Preparation
+    // accepts.
     Core::GpuPersistentResourceStateCache::Candidate shadowPrepareAcceptedStateCandidate(m_arena);
-
-    Core::GpuExternalPacketStateSource shadowVisibilityStateSources[
-        RendererSystemRenderDetail::s_ShadowVisibilityStateSourceCapacity
-    ] = {};
-    usize shadowVisibilityStateSourceCount = 0u;
-    bool shadowVisibilityStateSourcesReady = true;
-    if(m_shadowComputePersistentState.valid()){
-        shadowVisibilityStateSourcesReady = shadowVisibilityStateSourcesReady
-            && appendDeclaredStateSource(
-                shadowVisibilityStateSources,
-                LengthOf(shadowVisibilityStateSources),
-                shadowVisibilityStateSourceCount,
-                m_shadowComputePersistentState.source()
-            )
-        ;
-    }
-    if(shadowVisibilityRunsOnCompute && m_shadowVisibilityReturnState.valid()){
-        shadowVisibilityStateSourcesReady = shadowVisibilityStateSourcesReady
-            && appendDeclaredStateSource(
-                shadowVisibilityStateSources,
-                LengthOf(shadowVisibilityStateSources),
-                shadowVisibilityStateSourceCount,
-                m_shadowVisibilityReturnState.source()
-            )
-        ;
-    }
-
-    Core::GpuExternalPacketStateSource softwareCausticsStateSources[
-        RendererSystemRenderDetail::s_SoftwareCausticsStateSourceCapacity
-    ] = {};
-    usize softwareCausticsStateSourceCount = 0u;
-    bool softwareCausticsStateSourcesReady = true;
-    if(!hardwareShadowSupported){
-        if(m_causticsComputePersistentState.valid()){
-            softwareCausticsStateSourcesReady = softwareCausticsStateSourcesReady
-                && appendDeclaredStateSource(
-                    softwareCausticsStateSources,
-                    LengthOf(softwareCausticsStateSources),
-                    softwareCausticsStateSourceCount,
-                    m_causticsComputePersistentState.source()
-                )
-            ;
-        }
-        if(softwareCausticsRunsOnCompute && m_causticIrradianceReturnState.valid()){
-            softwareCausticsStateSourcesReady = softwareCausticsStateSourcesReady
-                && appendDeclaredStateSource(
-                    softwareCausticsStateSources,
-                    LengthOf(softwareCausticsStateSources),
-                    softwareCausticsStateSourceCount,
-                    m_causticIrradianceReturnState.source()
-                )
-            ;
-        }
-    }
-
-    // Shadow Visibility, optional Software Caustics, and each Surfel-GI packet record after Prefix in compiler
-    // order. The snapshot packet needs the same persistent source as the final compute task, while compiler
-    // prologue seeds replace only the regions produced by an in-graph initialization or copy packet.
-    Core::GpuExternalPacketStateSource surfelGiStateSources[
-        RendererSystemRenderDetail::s_SurfelGiStateSourceCapacity
-    ] = {};
-    usize surfelGiStateSourceCount = 0u;
-    bool surfelGiStateSourcesReady = true;
-    if(surfelGiRunsOnCompute && m_surfelGiComputePersistentState.valid()){
-        surfelGiStateSourcesReady = surfelGiStateSourcesReady
-            && appendDeclaredStateSource(
-                surfelGiStateSources,
-                LengthOf(surfelGiStateSources),
-                surfelGiStateSourceCount,
-                m_surfelGiComputePersistentState.source()
-            )
-        ;
-    }
-    if(m_surfelGiCounterPersistentState.valid()){
-        surfelGiStateSourcesReady = surfelGiStateSourcesReady
-            && appendDeclaredStateSource(
-                surfelGiStateSources,
-                LengthOf(surfelGiStateSources),
-                surfelGiStateSourceCount,
-                m_surfelGiCounterPersistentState.source()
-            )
-        ;
-    }
-    if(surfelGiRunsOnCompute && m_surfelIrradianceReturnState.valid()){
-        surfelGiStateSourcesReady = surfelGiStateSourcesReady
-            && appendDeclaredStateSource(
-                surfelGiStateSources,
-                LengthOf(surfelGiStateSources),
-                surfelGiStateSourceCount,
-                m_surfelIrradianceReturnState.source()
-            )
-        ;
-    }
-
-    // AVBOIT and lagged Lighting retain the filtered Prefix source for their independent common reads. Hardware
-    // Caustics additionally imports its accepted Graphics accumulator state when a warm temporal decay reads it.
-    // Their packet ordering remains internal to this compiled graph.
     m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
-    Core::GpuExternalPacketStateSource hardwareCausticsStateSources[
-        RendererSystemRenderDetail::s_HardwareCausticsStateSourceCapacity
-    ] = {};
-    usize hardwareCausticsStateSourceCount = 0u;
-    bool hardwareCausticsStateSourcesReady = true;
-    if(hardwareShadowSupported){
-        if(m_hardwareCausticAccumulatorPersistentState.valid()){
-            hardwareCausticsStateSourcesReady = hardwareCausticsStateSourcesReady
-                && appendDeclaredStateSource(
-                    hardwareCausticsStateSources,
-                    LengthOf(hardwareCausticsStateSources),
-                    hardwareCausticsStateSourceCount,
-                    m_hardwareCausticAccumulatorPersistentState.source()
-                )
-            ;
-        }
-    }
-    // Bind Prefix-produced native state by semantic task. The recorder resolves its final state only after the
-    // producer records, so packetization and ready-frontier placement remain compiler-owned.
-    Core::GpuTaskPacketStateBinding deferredStateBindings[
-        RendererSystemRenderDetail::s_DeferredPacketStateBindingCapacity
-    ] = {};
-    usize deferredStateBindingCount = 0u;
-    bool deferredStateBindingsReady = shadowPreparePriorStateReady;
-    if(shadowPrepareStateSourceCount != 0u){
-        deferredStateBindingsReady = deferredStateBindingsReady
-            && appendTaskPacketStateBinding(
-                deferredStateBindings,
-                LengthOf(deferredStateBindings),
-                deferredStateBindingCount,
-                m_deferredShadowPrepareTask,
-                {},
-                shadowPrepareStateSources,
-                shadowPrepareStateSourceCount
-            );
-    }
-    deferredStateBindingsReady = deferredStateBindingsReady
-        && appendTaskPacketStateBinding(
-            deferredStateBindings,
-            LengthOf(deferredStateBindings),
-            deferredStateBindingCount,
-            m_deferredShadowVisibilityTask,
-            m_graphicsPrefixTask,
-            shadowVisibilityStateSources,
-            shadowVisibilityStateSourceCount
-        );
-    if(!hardwareShadowSupported){
-        deferredStateBindingsReady = deferredStateBindingsReady
-            && appendTaskPacketStateBinding(
-                deferredStateBindings,
-                LengthOf(deferredStateBindings),
-                deferredStateBindingCount,
-                m_deferredSoftwareCausticsTask,
-                m_graphicsPrefixTask,
-                softwareCausticsStateSources,
-                softwareCausticsStateSourceCount
-            )
-        ;
-    }
-    if(m_deferredSurfelGiPreparationTask.valid()){
-        deferredStateBindingsReady = deferredStateBindingsReady
-            && appendTaskPacketStateBinding(
-                deferredStateBindings,
-                LengthOf(deferredStateBindings),
-                deferredStateBindingCount,
-                m_deferredSurfelGiPreparationTask,
-                m_graphicsPrefixTask,
-                surfelGiStateSources,
-                surfelGiStateSourceCount
-            )
-        ;
-    }
-    if(
-        m_deferredSurfelGiSnapshotCopyTask.valid()
-        && m_deferredSurfelGiSnapshotCopyTask != m_deferredSurfelGiPreparationTask
-    ){
-        deferredStateBindingsReady = deferredStateBindingsReady
-            && appendTaskPacketStateBinding(
-                deferredStateBindings,
-                LengthOf(deferredStateBindings),
-                deferredStateBindingCount,
-                m_deferredSurfelGiSnapshotCopyTask,
-                m_graphicsPrefixTask,
-                surfelGiStateSources,
-                surfelGiStateSourceCount
-            )
-        ;
-    }
-    deferredStateBindingsReady = deferredStateBindingsReady
-        && appendTaskPacketStateBinding(
-            deferredStateBindings,
-            LengthOf(deferredStateBindings),
-            deferredStateBindingCount,
-            m_deferredSurfelGiTask,
-            m_graphicsPrefixTask,
-            surfelGiStateSources,
-            surfelGiStateSourceCount
-        )
-    ;
-    if(hardwareShadowSupported){
-        deferredStateBindingsReady = deferredStateBindingsReady
-            && appendTaskPacketStateBinding(
-                deferredStateBindings,
-                LengthOf(deferredStateBindings),
-                deferredStateBindingCount,
-                m_deferredHardwareCausticsTask,
-                m_graphicsPrefixTask,
-                hardwareCausticsStateSources,
-                hardwareCausticsStateSourceCount
-            )
-        ;
-    }
-    deferredStateBindingsReady = deferredStateBindingsReady
-        && appendTaskPacketStateBinding(
-            deferredStateBindings,
-            LengthOf(deferredStateBindings),
-            deferredStateBindingCount,
-            avboitValidation.stage().firstTask,
-            m_graphicsPrefixTask,
-            nullptr,
-            0u
-        )
-        && appendTaskPacketStateBinding(
-            deferredStateBindings,
-            LengthOf(deferredStateBindings),
-            deferredStateBindingCount,
-            m_deferredLightingTask,
-            m_graphicsPrefixTask,
-            nullptr,
-            0u
-        )
-        && appendTaskPacketStateBinding(
-            deferredStateBindings,
-            LengthOf(deferredStateBindings),
-            deferredStateBindingCount,
-            m_deferredCompositeTask,
-            m_graphicsPrefixTask,
-            nullptr,
-            0u
-        )
-    ;
-    if(
-        !hardwareCausticsStateSourcesReady
-        || !shadowVisibilityStateSourcesReady
-        || !softwareCausticsStateSourcesReady
-        || !surfelGiStateSourcesReady
-        || !deferredStateBindingsReady
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to bind normal deferred graph state sources"));
-        discardRenderPackets();
-        return;
-    }
 
     const auto submitFrameRecoveryPacket = [&]() -> bool {
         // Retire the accepted frame scope after a rejected packet. The transaction supplies one latest token from
@@ -2449,7 +2140,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         usize counterBufferCount = 0u;
         usize computeTextureCount = 0u;
         usize computeBufferCount = 0u;
-        bool runsOnCompute = false;
         bool statePrepared = false;
         bool stateReady = false;
     } surfelGiStateLifecycle{
@@ -2465,7 +2155,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         .counterBufferCount = LengthOf(surfelGiCounterBuffers),
         .computeTextureCount = LengthOf(surfelGiComputeScratchTextures),
         .computeBufferCount = LengthOf(surfelGiComputeScratchBuffers),
-        .runsOnCompute = surfelGiRunsOnCompute,
     };
     const auto prepareSurfelGiTask = [](
         void* const rawContext,
@@ -2502,17 +2191,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             context->counterBuffers,
             context->counterBufferCount
         );
-        bool computeStateReady = true;
-        if(context->runsOnCompute){
-            computeStateReady = context->renderer->m_surfelGiComputePersistentState.buildFilteredResourceSubset(
+        const bool computeStateReady =
+            context->renderer->m_surfelGiComputePersistentState.buildFilteredResourceSubset(
                 *context->computeStateCandidate,
                 *finalState,
                 context->computeTextures,
                 context->computeTextureCount,
                 context->computeBuffers,
                 context->computeBufferCount
-            );
-        }
+            )
+        ;
         context->statePrepared = returnStateReady && counterStateReady && computeStateReady;
         return context->statePrepared;
     };
@@ -2535,9 +2223,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         RendererSystem& renderer = *context->renderer;
         const bool returnStateReady = renderer.m_surfelIrradianceReturnState.commit(*context->returnStateCandidate);
         const bool counterStateReady = renderer.m_surfelGiCounterPersistentState.commit(*context->counterStateCandidate);
-        bool computeStateReady = true;
-        if(context->runsOnCompute)
-            computeStateReady = renderer.m_surfelGiComputePersistentState.commit(*context->computeStateCandidate);
+        const bool computeStateReady = renderer.m_surfelGiComputePersistentState.commit(*context->computeStateCandidate);
         context->stateReady = returnStateReady && counterStateReady && computeStateReady;
         return context->stateReady;
     };
@@ -2942,8 +2628,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     };
     Core::GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.terminalTask = terminalPresentationTask;
-    normalExecution.taskStateBindings = deferredStateBindings;
-    normalExecution.taskStateBindingCount = deferredStateBindingCount;
     normalExecution.taskRecordedCallbacks = normalRecordedCallbacks;
     normalExecution.taskRecordedCallbackCount = normalRecordedCallbackCount;
     normalExecution.readyFrontierWorkerPool = &m_world.taskPool();

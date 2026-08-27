@@ -1237,8 +1237,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwarePhotonResourceUses.push_back(ReadTextureUse(
             worldPosition,
             ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource,
-            true
+            Core::ResourceStates::ShaderResource
         ));
         hardwarePhotonResourceUses.push_back(ReadTextureUse(
             depth,
@@ -1247,15 +1246,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ));
         hardwarePhotonResourceUses.push_back(ReadUse(
             currentBindlessSlots,
-            Core::ResourceStates::ConstantBuffer,
-            true
+            Core::ResourceStates::ConstantBuffer
         ));
         hardwarePhotonResourceUses.push_back(ReadUse(
             sceneShading,
-            Core::ResourceStates::ConstantBuffer,
-            true
+            Core::ResourceStates::ConstantBuffer
         ));
-        hardwarePhotonResourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource, true));
+        hardwarePhotonResourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource));
         hardwarePhotonResourceUses.push_back(ReadUse(sceneGeometryDomain));
         hardwarePhotonResourceUses.push_back(ReadWriteTextureUse(
             causticAccumulator,
@@ -1510,8 +1507,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         if(materialContextSlots.valid()){
             hardwarePhotonResourceUses.push_back(ReadUse(
                 materialContextSlots,
-                Core::ResourceStates::ConstantBuffer,
-                true
+                Core::ResourceStates::ConstantBuffer
             ));
         }
         // Hardware caustic closest-hit shaders directly heap-load the selected mesh attribute streams.  These are
@@ -1553,6 +1549,15 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwareScheduling.allowPacketMerge = false;
         EnableSameFamilyComputeEffectRouting(hardwareScheduling);
         EnableCrossFamilyComputeEffectRouting(hardwareScheduling);
+        const Core::GpuTaskExternalStateSource accumulatorStateSources[] = {
+            Core::GpuTaskExternalStateSource{
+                .states = m_hardwareCausticAccumulatorPersistentState.source(),
+            },
+        };
+        const usize accumulatorStateSourceCount = m_hardwareCausticAccumulatorPersistentState.valid()
+            ? LengthOf(accumulatorStateSources)
+            : 0u
+        ;
 
         // The lagged-history completion must protect the first writer too: clear starts the existing Hardware
         // Caustics Graphics packet and the ray-tracing producer merges into it below. A fresh temporal accumulator
@@ -1606,6 +1611,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 .setQueue(GraphicsUploadQueueRequest())
                 .setScheduling(accumulatorNonTemporalClearScheduling)
                 .setDependencies(&causticsDependency, 1u)
+                .setExternalStateSources(accumulatorStateSources, accumulatorStateSourceCount)
             ;
             Core::GpuClearTextureTaskDesc accumulatorNonTemporalClear;
             accumulatorNonTemporalClear.destination = causticAccumulator;
@@ -1643,6 +1649,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 .setQueue(GraphicsUploadQueueRequest())
                 .setScheduling(accumulatorBootstrapClearScheduling)
                 .setDependencies(&irradianceClearTask, 1u)
+                .setExternalStateSources(accumulatorStateSources, accumulatorStateSourceCount)
             ;
             Core::GpuClearTextureTaskDesc accumulatorBootstrapClear;
             accumulatorBootstrapClear.destination = causticAccumulator;
@@ -1688,6 +1695,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 .setQueue(GraphicsPreferredComputeQueueRequest())
                 .setScheduling(accumulatorDecayScheduling)
                 .setDependencies(&causticsDependency, 1u)
+                .setExternalStateSources(accumulatorStateSources, accumulatorStateSourceCount)
                 .setResourceUses(accumulatorDecayUses, LengthOf(accumulatorDecayUses))
             ;
             const Core::GpuTaskId accumulatorDecayTask = m_raytracingSystem.declareCausticAccumulatorDecayTask(
@@ -2478,7 +2486,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         transparentCsgMaterialResourceSetUses[transparentCsgMaterialResourceSetUseCount++] =
             transparentCsgMaterialSampledTextureSetUse;
     }
-    avboitIntervalResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer, true));
+    avboitIntervalResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     avboitIntervalResourceUses.push_back(ReadUse(avboitMaterialDomain));
     avboitIntervalResourceUses.push_back(ReadWriteUse(avboitCsgDomain, Core::ResourceStates::ShaderResource));
 
@@ -2538,8 +2546,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ));
         avboitIntervalSpanResourceUses.push_back(ReadUse(
             currentBindlessSlots,
-            Core::ResourceStates::ConstantBuffer,
-            true
+            Core::ResourceStates::ConstantBuffer
         ));
         avboitIntervalSpanResourceUses.push_back(WriteTextureUse(
             csgReceiverSpanData,
@@ -2591,8 +2598,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ));
         avboitIntervalCombineResourceUses.push_back(ReadUse(
             currentBindlessSlots,
-            Core::ResourceStates::ConstantBuffer,
-            true
+            Core::ResourceStates::ConstantBuffer
         ));
         avboitIntervalCombineResourceUses.push_back(WriteTextureUse(
             csgRemovedIntervalDepth,
@@ -3314,8 +3320,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         + (occupancyCsgIntervalSampleImageStatesGraphOwned ? 4u : 0u)
     );
     avboitPreResourceUses.push_back(ReadUse(albedo));
-    avboitPreResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource, true));
-    avboitPreResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
+    avboitPreResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
+    avboitPreResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
     avboitPreResourceUses.push_back(ReadUse(depth));
     avboitPreResourceUses.push_back(ReadWriteUse(avboitLowRaster, Core::ResourceStates::RenderTarget));
     avboitPreResourceUses.push_back(ReadWriteUse(avboitCoverage, Core::ResourceStates::UnorderedAccess));
@@ -3383,7 +3389,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         occupancyMaterialResourceSetUses[occupancyMaterialResourceSetUseCount++] =
             occupancyComputeEmulationOutputVertexBufferSetUse;
     }
-    avboitPreResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer, true));
+    avboitPreResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     avboitPreResourceUses.push_back(ReadUse(avboitMaterialDomain));
     avboitPreResourceUses.push_back(ReadUse(avboitCsgDomain, Core::ResourceStates::ShaderResource));
 
@@ -4240,8 +4246,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     // Queue placement cannot change native descriptor access. Keep the complete raster resource contract on every
     // route so compiler-selected crossings retain the same hazards and state lowering.
     extinctionResourceUses.push_back(ReadUse(albedo));
-    extinctionResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource, true));
-    extinctionResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
+    extinctionResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
+    extinctionResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
     extinctionResourceUses.push_back(ReadUse(depth));
     extinctionResourceUses.push_back(ReadWriteUse(avboitLowRaster, Core::ResourceStates::RenderTarget));
     extinctionResourceUses.push_back(ReadUse(avboitDepthWarp));
@@ -5160,8 +5166,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         + (accumulationCsgIntervalSampleImageStatesGraphOwned ? 4u : 0u)
     );
     accumulationResourceUses.push_back(ReadUse(albedo));
-    accumulationResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource, true));
-    accumulationResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
+    accumulationResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
+    accumulationResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
 
 
 // accumulationFramebuffer binds deferred depth read-only, which Vulkan tracks as DepthRead rather than SRV.
@@ -5649,7 +5655,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     };
     // Lagged Lighting normally reads its shared G-buffer inputs from the accepted prefix while history supplies the
     // temporal effects. Transparent AVBOIT accumulation temporarily binds current deferred depth as DepthRead, so
-    // its finalizer must complete before that independent Compute reader can observe ShaderResource layout again.
+    // its finalizer must complete before Lighting can observe ShaderResource layout again.
     const Core::GpuTaskId laggedLightingDependencies[] = {
         m_graphicsPrefixTask,
         avboitFinalTask,
@@ -5717,52 +5723,39 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             ? laggedLightingDependencyCount
             : LengthOf(hardwareLightingDependencies))
     ;
-    // Active lagged Lighting receives its shared albedo/normal/world inputs directly from the accepted prefix
-    // source while it reads history. Transparent depth is the explicit exception: the finalizer dependency above
-    // orders its temporary AVBOIT DepthRead layout before Lighting samples ShaderResource state.
-    const bool laggedReadsHaveIndependentStateSources = useLaggedLightingHistory;
-    const bool laggedBindlessSlotsHaveIndependentStateSource =
-        laggedReadsHaveIndependentStateSources && !laggedBindlessSlotsGraphOwned
-    ;
+    // Active lagged Lighting receives compiler-owned state seeds for its shared prefix inputs while it reads
+    // history. Transparent depth is the explicit exception: the finalizer dependency above orders its temporary
+    // AVBOIT DepthRead layout before Lighting samples ShaderResource state.
     const Core::GpuTaskResourceUse resourceUses[] = {
         ReadTextureUse(
             albedo,
             ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource,
-            laggedReadsHaveIndependentStateSources
+            Core::ResourceStates::ShaderResource
         ),
         ReadTextureUse(
             normal,
             ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource,
-            laggedReadsHaveIndependentStateSources
+            Core::ResourceStates::ShaderResource
         ),
         ReadTextureUse(
             worldPosition,
             ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource,
-            laggedReadsHaveIndependentStateSources
+            Core::ResourceStates::ShaderResource
         ),
         ReadTextureUse(
             depth,
             ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource,
-            laggedReadsHaveIndependentStateSources
+            Core::ResourceStates::ShaderResource
         ),
         ReadTextureUse(shadowVisibility, ECSRenderDetail::s_ShadowVisibilitySubresources),
         ReadTextureUse(causticIrradiance, ECSRenderDetail::s_FramebufferSubresources),
         ReadTextureUse(surfelIrradiance, ECSRenderDetail::s_FramebufferSubresources),
         ReadUse(
             sceneShading,
-            Core::ResourceStates::ConstantBuffer,
-            laggedReadsHaveIndependentStateSources
+            Core::ResourceStates::ConstantBuffer
         ),
-        ReadUse(lights, Core::ResourceStates::ShaderResource, laggedReadsHaveIndependentStateSources),
-        ReadUse(
-            bindlessSlots,
-            Core::ResourceStates::ConstantBuffer,
-            laggedBindlessSlotsHaveIndependentStateSource
-        ),
+        ReadUse(lights, Core::ResourceStates::ShaderResource),
+        ReadUse(bindlessSlots, Core::ResourceStates::ConstantBuffer),
         WriteTextureUse(opaqueColor, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
     };
     Core::GpuTaskSchedulingHint scheduling;
@@ -5816,8 +5809,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ReadUse(avboitAccumExtinction),
         ReadUse(
             compositeBindlessSlots,
-            Core::ResourceStates::ConstantBuffer,
-            useLaggedLightingHistory
+            Core::ResourceStates::ConstantBuffer
         ),
         WriteUse(compositeColor, Core::ResourceStates::UnorderedAccess),
     };

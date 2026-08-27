@@ -457,6 +457,26 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     if(traceMaterialSampledTextureSet.valid())
         photonResourceSetUses[photonResourceSetUseCount++] = traceMaterialSampledTextureSetUse;
 
+    const Core::GpuTaskExternalStateSource scratchStateSources[] = {
+        Core::GpuTaskExternalStateSource{
+            .states = m_causticsComputePersistentState.source(),
+        },
+    };
+    const usize scratchStateSourceCount = m_causticsComputePersistentState.valid()
+        ? LengthOf(scratchStateSources)
+        : 0u
+    ;
+    const Core::GpuTaskExternalStateSource irradianceReturnStateSources[] = {
+        Core::GpuTaskExternalStateSource{
+            .states = m_causticIrradianceReturnState.source(),
+            .applicableConsumerQueueClass = Core::CommandQueue::Compute,
+        },
+    };
+    const usize irradianceReturnStateSourceCount = m_causticIrradianceReturnState.valid()
+        ? LengthOf(irradianceReturnStateSources)
+        : 0u
+    ;
+
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
     scheduling.forceSubmissionBoundary = true;
@@ -484,6 +504,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         .setQueue(ComputeTransferQueueRequest())
         .setScheduling(irradianceClearScheduling)
         .setDependencies(shadowVisibilityDependency, LengthOf(shadowVisibilityDependency))
+        .setExternalStateSources(irradianceReturnStateSources, irradianceReturnStateSourceCount)
     ;
     Core::GpuClearTextureTaskDesc irradianceClear;
     irradianceClear.destination = causticIrradiance;
@@ -515,6 +536,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
             .setQueue(ComputeTransferQueueRequest())
             .setScheduling(accumulatorNonTemporalClearScheduling)
             .setDependencies(&causticsDependency, 1u)
+            .setExternalStateSources(scratchStateSources, scratchStateSourceCount)
         ;
         Core::GpuClearTextureTaskDesc accumulatorNonTemporalClear;
         accumulatorNonTemporalClear.destination = causticAccumulator;
@@ -552,6 +574,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
             .setQueue(ComputeTransferQueueRequest())
             .setScheduling(accumulatorBootstrapClearScheduling)
             .setDependencies(&irradianceClearTask, 1u)
+            .setExternalStateSources(scratchStateSources, scratchStateSourceCount)
         ;
         Core::GpuClearTextureTaskDesc accumulatorBootstrapClear;
         accumulatorBootstrapClear.destination = causticAccumulator;
@@ -597,6 +620,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
             .setQueue(ComputePacketQueueRequest())
             .setScheduling(accumulatorDecayScheduling)
             .setDependencies(&causticsDependency, 1u)
+            .setExternalStateSources(scratchStateSources, scratchStateSourceCount)
             .setResourceUses(accumulatorDecayUses, LengthOf(accumulatorDecayUses))
         ;
         const Core::GpuTaskId accumulatorDecayTask = m_raytracingSystem.declareCausticAccumulatorDecayTask(
@@ -665,6 +689,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         .setQueue(ComputeQueueRequest())
         .setScheduling(geometryScheduling)
         .setDependencies(&m_deferredCausticPhotonTask, 1u)
+        .setExternalStateSources(scratchStateSources, scratchStateSourceCount)
         .setResourceUses(geometryResourceUses.data(), geometryResourceUses.size())
     ;
     m_deferredCausticGeometryTask = m_raytracingSystem.declareCausticGeometryDownsampleTask(
@@ -690,6 +715,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         .setQueue(ComputeQueueRequest())
         .setScheduling(resolvePrepareScheduling)
         .setDependencies(&m_deferredCausticGeometryTask, 1u)
+        .setExternalStateSources(scratchStateSources, scratchStateSourceCount)
         .setResourceUses(resolvePrepareResourceUses.data(), resolvePrepareResourceUses.size())
     ;
     m_deferredCausticResolvePrepareTask = m_raytracingSystem.declareCausticResolvePrepareTask(
@@ -713,6 +739,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         .setQueue(ComputeQueueRequest())
         .setScheduling(resolveWaveletScheduling)
         .setDependencies(&m_deferredCausticResolvePrepareTask, 1u)
+        .setExternalStateSources(scratchStateSources, scratchStateSourceCount)
         .setResourceUses(resolveWaveletResourceUses.data(), resolveWaveletResourceUses.size())
     ;
     m_deferredCausticResolveWaveletTask = m_raytracingSystem.declareCausticResolveWaveletTask(

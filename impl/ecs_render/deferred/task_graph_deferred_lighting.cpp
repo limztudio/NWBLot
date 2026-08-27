@@ -62,6 +62,77 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_task_graph_deferred_lighting{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool PreparePacketEnvelopeMetrics(
+    const Core::GpuTaskGraph& graph,
+    const Core::GpuCompiledGraph& compiledGraph,
+    Core::GpuTimingRecorder& timingRecorder,
+    const u64 sourceFrameIndex,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    const Core::GpuSubmissionPacketRange range = compiledGraph.packetTimingEnvelopeRange();
+    if(!range.valid() || !compiledGraph.validPacketRange(range))
+        return false;
+
+    Vector<Core::GpuPacketEnvelopeMetricScope, Core::Alloc::ScratchArena> packetScopes{scratchArena};
+    Vector<Core::GpuPacketEnvelopeMetricQueueOutput, Core::Alloc::ScratchArena> queueOutputs{scratchArena};
+    packetScopes.reserve(range.packetCount);
+    queueOutputs.reserve(range.packetCount);
+    for(usize packetOffset = 0u; packetOffset < range.packetCount; ++packetOffset){
+        const Core::GpuSubmissionPacketId packetID = compiledGraph.packetIdAt(range.first.index + packetOffset);
+        const Core::GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
+        const Core::GpuTaskId* const packetTasks = compiledGraph.packetTasks(packetID);
+        if(!packet.recordsPacketEnvelopeTiming || packet.taskCount == 0u || !packetTasks)
+            return false;
+
+        const Name packetScopeName = Core::GpuTaskPacketTimingScopeName(graph.taskAt(packetTasks[0u].index).identity);
+        if(!packetScopeName)
+            return false;
+        packetScopes.push_back(Core::GpuPacketEnvelopeMetricScope{
+            .scopeName = packetScopeName,
+            .physicalQueue = packet.queue,
+        });
+
+        bool hasQueueOutput = false;
+        for(const Core::GpuPacketEnvelopeMetricQueueOutput& output : queueOutputs)
+            hasQueueOutput = hasQueueOutput || output.physicalQueue == packet.queue;
+        if(hasQueueOutput)
+            continue;
+
+        const Name internalIdleScopeName = RendererGpuTimingScope::DeferredGraphQueueInternalIdle(packet.queue, scratchArena);
+        if(!internalIdleScopeName)
+            return false;
+        queueOutputs.push_back(Core::GpuPacketEnvelopeMetricQueueOutput{
+            .physicalQueue = packet.queue,
+            .internalIdleScopeName = internalIdleScopeName,
+        });
+    }
+
+    return timingRecorder.preparePacketEnvelopeMetrics(
+        sourceFrameIndex,
+        MakeNotNull(static_cast<const Core::GpuPacketEnvelopeMetricScope*>(packetScopes.data())),
+        packetScopes.size(),
+        RendererGpuTimingScope::s_DeferredGraphQueueOverlap.identity,
+        MakeNotNull(static_cast<const Core::GpuPacketEnvelopeMetricQueueOutput*>(queueOutputs.data())),
+        queueOutputs.size()
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void RendererSystem::buildDeferredLightingTaskGraph(
     const ECSRenderDetail::RendererFrameGraphFeatures& features,
     DeferredFrameTargets& deferredTargets,
@@ -6110,6 +6181,14 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile deferred AVBOIT/lighting/composite/present task graph"));
         return;
     }
+    if(!__hidden_task_graph_deferred_lighting::PreparePacketEnvelopeMetrics(
+        m_deferredLightingTaskGraph,
+        m_deferredLightingCompiledGraph,
+        m_graphics.gpuTiming(),
+        m_graphics.getFrameIndex(),
+        scratchArena
+    ))
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not prepare deferred graph packet metrics"));
     m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
     m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
     m_deferredLightingTaskGraphValid = true;

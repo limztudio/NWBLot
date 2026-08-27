@@ -46578,6 +46578,8 @@ inline constexpr GpuTimingScopeDefinition s_UnpreparedTimingScope("tests/timing_
 inline constexpr GpuTimingScopeDefinition s_TimingStatisticsScope("tests/timing_statistics_scope");
 inline constexpr GpuTimingScopeDefinition s_SubmissionTicketScope("tests/timing_submission_ticket");
 inline constexpr GpuTimingScopeDefinition s_GraphCompanionSubmissionTicketScope("tests/timing_graph_companion_submission_ticket");
+inline constexpr GpuTimingScopeDefinition s_GraphPacketEnvelopeOverlapScope("tests/timing_graph_packet_envelope_overlap");
+inline constexpr GpuTimingScopeDefinition s_GraphPacketEnvelopeInternalIdleScope("tests/timing_graph_packet_envelope_internal_idle");
 inline constexpr GpuTimingScopeDefinition s_ConcurrentSubmissionTicketScope("tests/timing_submission_ticket_concurrent");
 inline constexpr GpuTimingScopeDefinition s_StableSubmissionTicketScope("tests/timing_stable_submission_ticket");
 inline constexpr GpuTimingScopeDefinition s_StableFrameTransactionScope("tests/timing_stable_frame_transaction");
@@ -47093,6 +47095,26 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
     EXPECT_EQ(compiledGraph.packetTimingEnvelopeRange().first, range.first);
     EXPECT_EQ(compiledGraph.packetTimingEnvelopeRange().packetCount, range.packetCount);
 
+    const GpuPacketEnvelopeMetricScope packetEnvelopeScopes[] = {
+        { .scopeName = envelopeOnlyPacketScope, .physicalQueue = graphicsQueue },
+        { .scopeName = packetOnlyPacketScope, .physicalQueue = graphicsQueue },
+        { .scopeName = taskPacketScope, .physicalQueue = graphicsQueue },
+    };
+    const GpuPacketEnvelopeMetricQueueOutput packetEnvelopeOutputs[] = {
+        {
+            .physicalQueue = graphicsQueue,
+            .internalIdleScopeName = s_GraphPacketEnvelopeInternalIdleScope.identity,
+        },
+    };
+    ASSERT_TRUE(timing.preparePacketEnvelopeMetrics(
+        260u,
+        MakeNotNull(&packetEnvelopeScopes[0u]),
+        LengthOf(packetEnvelopeScopes),
+        s_GraphPacketEnvelopeOverlapScope.identity,
+        MakeNotNull(&packetEnvelopeOutputs[0u]),
+        LengthOf(packetEnvelopeOutputs)
+    ));
+
     ASSERT_TRUE(timing.prepareScopeQueries(envelopeOnlyPacketScope, device, s_MaxFramesInFlight));
     ASSERT_TRUE(timing.prepareScopeQueries(packetOnlyPacketScope, device, s_MaxFramesInFlight));
     ASSERT_TRUE(timing.prepareScopeQueries(taskPacketScope, device, s_MaxFramesInFlight));
@@ -47301,16 +47323,26 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
     const auto taskPacketStatistics = timingSink.stats(taskPacketScope);
     const auto taskStatistics = timingSink.stats(taskIdentity);
     const auto companionTimingStatistics = timingSink.stats(s_GraphCompanionSubmissionTicketScope.identity);
+    const auto envelopeOverlapStatistics = timingSink.stats(s_GraphPacketEnvelopeOverlapScope.identity);
+    const auto envelopeInternalIdleStatistics = timingSink.stats(s_GraphPacketEnvelopeInternalIdleScope.identity);
     ASSERT_TRUE(envelopeOnlyPacketStatistics.valid());
     ASSERT_TRUE(packetOnlyPacketStatistics.valid());
     ASSERT_TRUE(taskPacketStatistics.valid());
     ASSERT_TRUE(taskStatistics.valid());
     ASSERT_TRUE(companionTimingStatistics.valid());
+    ASSERT_TRUE(envelopeOverlapStatistics.valid());
+    ASSERT_TRUE(envelopeInternalIdleStatistics.valid());
     EXPECT_EQ(envelopeOnlyPacketStatistics.sampleCount, 1u);
     EXPECT_EQ(packetOnlyPacketStatistics.sampleCount, 1u);
     EXPECT_EQ(taskPacketStatistics.sampleCount, 1u);
     EXPECT_EQ(taskStatistics.sampleCount, 1u);
     EXPECT_EQ(companionTimingStatistics.sampleCount, 1u);
+    EXPECT_EQ(envelopeOverlapStatistics.sampleCount, 1u);
+    EXPECT_EQ(envelopeInternalIdleStatistics.sampleCount, 1u);
+    EXPECT_DOUBLE_EQ(envelopeOverlapStatistics.seconds, 0.0);
+    EXPECT_GE(envelopeInternalIdleStatistics.seconds, 0.0);
+    EXPECT_EQ(envelopeOverlapStatistics.firstSampleFrameIndex, 260u);
+    EXPECT_EQ(envelopeInternalIdleStatistics.firstSampleFrameIndex, 260u);
     EXPECT_FALSE(timingSink.stats(outsidePrefixPacketScope).valid());
     EXPECT_FALSE(timingSink.stats(outsidePrefixIdentity).valid());
     EXPECT_FALSE(timingSink.stats(envelopeOnlyIdentity).valid());

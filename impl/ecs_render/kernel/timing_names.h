@@ -34,6 +34,7 @@ inline constexpr Core::GpuTimingScopeDefinition s_AsyncPrefix("render.async_pref
 inline constexpr Core::GpuTimingScopeDefinition s_AsyncShadow("render.async_shadow");
 inline constexpr Core::GpuTimingScopeDefinition s_AsyncSurfelGi("render.async_surfel_gi");
 inline constexpr Core::GpuTimingScopeDefinition s_AsyncFinal("render.async_final");
+inline constexpr Core::GpuTimingScopeDefinition s_DeferredGraphQueueOverlap("render.deferred_graph.queue_overlap");
 inline constexpr Core::GpuTimingScopeDefinition s_DeferredClear("render.deferred_clear");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowVisibility("render.shadow_visibility");
 // Keep the aggregate shadow envelope for frame-level ranking, and publish its expensive compute phases separately so
@@ -75,6 +76,22 @@ inline constexpr Core::GpuTimingScopeDefinition s_SurfelHashBuild("render.surfel
 inline constexpr Core::GpuTimingScopeDefinition s_SurfelTrace("render.surfel_trace");
 inline constexpr Core::GpuTimingScopeDefinition s_SurfelResolve("render.surfel_resolve");
 inline constexpr Core::GpuTimingScopeDefinition s_SurfelUpsample("render.surfel_upsample");
+
+
+[[nodiscard]] inline Name DeferredGraphQueueInternalIdle(
+    const Core::GpuPhysicalQueueId& queue,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    if(!queue.valid())
+        return NAME_NONE;
+
+    const AString<Core::Alloc::ScratchArena> scopeName = StringFormat(
+        scratchArena,
+        "render.deferred_graph.queue_{}.internal_idle",
+        queue.index
+    );
+    return ToName(scopeName);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

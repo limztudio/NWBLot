@@ -1296,6 +1296,27 @@ TEST(EcsGraphics, DeferredGraphConfiguresCompilerOwnedPacketTiming){
     EXPECT_EQ(CountText(compileSetup, "packetTimingEnvelope.lastTask"), 1u);
     EXPECT_FALSE(ContainsText(compileSetup, "m_deferredFrameRecoveryTask"));
 
+    const usize metricHelperOffset = build.find("[[nodiscard]] bool PreparePacketEnvelopeMetrics(");
+    ASSERT_NE(metricHelperOffset, AStringView::npos);
+    const AStringView metricHelper = build.substr(metricHelperOffset, buildOffset - metricHelperOffset);
+    EXPECT_TRUE(ContainsText(metricHelper, "compiledGraph.packetTimingEnvelopeRange()"));
+    EXPECT_TRUE(ContainsText(metricHelper, "compiledGraph.packetTasks(packetID)"));
+    EXPECT_TRUE(ContainsText(metricHelper, "graph.taskAt(packetTasks[0u].index).identity"));
+    EXPECT_TRUE(ContainsText(metricHelper, ".physicalQueue = packet.queue,"));
+    EXPECT_TRUE(ContainsText(metricHelper, "DeferredGraphQueueInternalIdle(packet.queue, scratchArena)"));
+    EXPECT_TRUE(ContainsText(metricHelper, "RendererGpuTimingScope::s_DeferredGraphQueueOverlap.identity"));
+    EXPECT_TRUE(ContainsText(metricHelper, "timingRecorder.preparePacketEnvelopeMetrics("));
+
+    const usize metricPrepareOffset = build.find(
+        "if(!__hidden_task_graph_deferred_lighting::PreparePacketEnvelopeMetrics(",
+        compilerOffset
+    );
+    const usize recordedGraphResetOffset = build.find("m_deferredLightingRecordedGraph.reset(", compilerOffset);
+    ASSERT_NE(metricPrepareOffset, AStringView::npos);
+    ASSERT_NE(recordedGraphResetOffset, AStringView::npos);
+    EXPECT_LT(compilerOffset, metricPrepareOffset);
+    EXPECT_LT(metricPrepareOffset, recordedGraphResetOffset);
+
     const usize renderFunctionOffset = render.find("void RendererSystem::render(");
     ASSERT_NE(renderFunctionOffset, AStringView::npos);
     const AStringView renderFunction = render.substr(renderFunctionOffset);

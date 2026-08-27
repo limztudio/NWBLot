@@ -484,17 +484,18 @@ struct GpuTaskGraphExternalResourceHandoff{
 
 
 // Associates one compiler-generated packet with an external timing ticket whose scopes share that packet's exact
-// native acceptance token. A graph-owned automatic ticket remains authoritative and is resolved alongside this
-// compatibility ticket rather than being replaced by it.
+// native acceptance token. Multiple distinct external tickets may target one packet, while one ticket may target
+// only one native packet. A graph-owned automatic ticket remains authoritative and resolves alongside every
+// compatibility ticket rather than being replaced by one.
 struct GpuTaskGraphPacketTimingTicket{
     GpuSubmissionPacketId packet;
     GpuTimingSubmissionTicket* timingTicket = nullptr;
 };
 
-// Binds a timing submission ticket to semantic graph work instead of a compiler-generated packet ID.  The
-// submitter resolves the task to its current packet after compilation. Semantic anchors sharing a packet must bind
-// the same external ticket; the graph may additionally own its automatic packet ticket. This is the migration path
-// for renderer code that should not mirror packetization merely to route its timing transaction.
+// Binds a timing submission ticket to semantic graph work instead of a compiler-generated packet ID. The submitter
+// resolves the task to its current packet after compilation. Semantic anchors sharing a packet may bind the same or
+// distinct external tickets; identical ticket aliases in that packet coalesce, while one ticket cannot span native
+// packets. The graph may additionally own its automatic packet ticket.
 struct GpuTaskGraphTaskTimingTicket{
     GpuTaskId task;
     GpuTimingSubmissionTicket* timingTicket = nullptr;
@@ -982,7 +983,8 @@ private:
         usize externalCompletionTokenCount,
         GpuGraphSubmissionTransaction& transaction,
         Alloc::ScratchArena& scratchArena,
-        GpuTimingSubmissionTicket* timingTicket,
+        GpuTimingSubmissionTicket* const* timingTickets,
+        usize timingTicketCount,
         const QueueSubmissionPreSubmitHook* preSubmitHook,
         const GpuTaskGraphPacketAcceptedCallback* acceptedCallback,
         const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks,
@@ -1155,10 +1157,10 @@ public:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         const GpuTaskGraphTaskAcceptedCallback* acceptedCallback = nullptr
     )const;
-    // Semantic companion to the packet-timing overload above.  It resolves timing tickets and one-shot native
+    // Semantic companion to the packet-timing overload above. It resolves timing tickets and one-shot native
     // pre-submit hooks through the current compiled graph, so packet splitting/merging remains compiler-owned.
-    // Multiple timing bindings may target one packet only when they deliberately share the same timing ticket;
-    // pre-submit hooks instead require one unambiguous packet target.
+    // Distinct timing tickets may share one packet and resolve with its exact token; pre-submit hooks instead
+    // require one unambiguous packet target.
     [[nodiscard]] bool submitPacketRangeInCompileOrderFromTasks(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -1180,7 +1182,7 @@ public:
         usize taskSubmissionHookCount = 0u
     )const;
     // Resolves both the submitted range and timing bindings from semantic tasks after compilation. Multiple timing
-    // anchors may share one packet only when they deliberately reference the same submission ticket.
+    // anchors may share one packet with either shared or independent submission tickets.
     [[nodiscard]] bool submitTaskRangeInCompileOrderFromTasks(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

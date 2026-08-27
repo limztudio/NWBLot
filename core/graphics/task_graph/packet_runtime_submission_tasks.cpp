@@ -69,18 +69,18 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderFromTasks(
         )
             return false;
 
-        bool packetAlreadyBound = false;
+        bool ticketAlreadyBound = false;
         for(const GpuTaskGraphPacketTimingTicket& existing : packetTimingTickets){
-            if(existing.packet != packet)
-                continue;
-            // A merged packet submits exactly one native command list.  Let semantic anchors intentionally share
-            // that one ticket, but reject silently choosing between two independent timing transactions.
             if(existing.timingTicket != binding.timingTicket)
+                continue;
+            // One ticket is a one-shot native-submission transaction. Semantic aliases may share it only when the
+            // compiler resolves every anchor to the same merged packet.
+            if(existing.packet != packet)
                 return false;
-            packetAlreadyBound = true;
+            ticketAlreadyBound = true;
             break;
         }
-        if(!packetAlreadyBound){
+        if(!ticketAlreadyBound){
             packetTimingTickets.push_back(GpuTaskGraphPacketTimingTicket{
                 .packet = packet,
                 .timingTicket = binding.timingTicket,

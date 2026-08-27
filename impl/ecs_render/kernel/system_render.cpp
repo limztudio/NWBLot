@@ -1330,27 +1330,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.packetRangeForTasks(m_graphicsPrefixTask, m_graphicsPrefixTask);
     const Core::GpuSubmissionPacketRange shadowPrepareThroughPrefixPacketRange =
         m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredShadowPrepareTask, m_graphicsPrefixTask);
-    // Shadow Preparation and Mesh View Setup own distinct timing tickets. Their endpoint packets cannot merge,
-    // while the inclusive semantic range may contain compiler-owned untimed packets between those anchors.
-    const bool shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct =
-        !m_deferredLightingCompiledGraph.tasksSharePacket(
-            m_deferredShadowPrepareTask,
-            m_graphicsPrefixMeshViewSetupTask
-        )
-    ;
     const Core::GpuSubmissionPacketRange shadowEffectsPacketRange = m_deferredLightingCompiledGraph.packetRangeForTasks(
         m_deferredShadowVisibilityTask,
         hardwareShadowSupported ? m_deferredShadowVisibilityTask : m_deferredSoftwareCausticsTask
     );
-    // Software visibility and caustics own distinct timing tickets, so their endpoint packets cannot merge. The
-    // inclusive semantic range may still contain compiler-owned untimed packets between those anchors.
-    const bool softwareShadowEffectsTimingPacketsAreDistinct =
-        !hardwareShadowSupported
-        && !m_deferredLightingCompiledGraph.tasksSharePacket(
-            m_deferredShadowVisibilityTask,
-            m_deferredSoftwareCausticsTask
-        )
-    ;
     const Core::GpuTaskId surfelGiFirstTask = m_deferredSurfelGiPreparationTask.valid()
         ? m_deferredSurfelGiPreparationTask
         : m_deferredSurfelGiTask
@@ -1373,10 +1356,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         );
     const Core::GpuSubmissionPacketRange deferredLightingCompositePacketRange =
         m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredLightingTask, m_deferredCompositeTask);
-    const bool deferredLightingCompositeTimingPacketsAreDistinct = !m_deferredLightingCompiledGraph.tasksSharePacket(
-        m_deferredLightingTask,
-        m_deferredCompositeTask
-    );
     const Core::GpuSubmissionPacketRange deferredPresentPacketRange =
         m_deferredLightingCompiledGraph.packetRangeForTasks(m_deferredPresentTask, m_deferredPresentTask);
     const Core::GpuSubmissionPacketRange terminalPresentationPacketRange =
@@ -1578,11 +1557,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !graphicsPrefixPacketRange.valid()
         || graphicsPrefixPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount
         || !shadowPrepareThroughPrefixPacketRange.valid()
-        || !shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct
         || !shadowEffectsPacketRange.valid()
         || (hardwareShadowSupported
-            ? shadowEffectsPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount
-            : !softwareShadowEffectsTimingPacketsAreDistinct)
+            && shadowEffectsPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount)
         || !surfelGiPacketRange.valid()
         || !surfelGiSnapshotCopyAndTimingPacketsAreDistinct
         || (hardwareShadowSupported && (
@@ -1590,7 +1567,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || hardwareCausticsPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount
         ))
         || !deferredLightingCompositePacketRange.valid()
-        || !deferredLightingCompositeTimingPacketsAreDistinct
         || !deferredPresentPacketRange.valid()
         || deferredPresentPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount
         || !terminalPresentationPacketRange.valid()
@@ -2597,7 +2573,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && taskIsCompiled(m_deferredLightingTask)
             && taskIsCompiled(m_deferredCompositeTask)
             && deferredLightingCompositePacketRange.valid()
-            && deferredLightingCompositeTimingPacketsAreDistinct
             && deferredSubmitter.submitTaskRangeInCompileOrderFromTasks(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
@@ -3075,11 +3050,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationMerged
             && graphicsPrefixWorkPacketRange.valid()
             && shadowPrepareThroughPrefixPacketRange.valid()
-            && shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct
             && shadowPreparePrefixTimingTicketsValid
             && prefixTimingAcceptance.shadowPrepareStateReady
             && shadowPreparePrefixTimingTicketCount == 1u + graphicsPrefixUniquePacketCount
-            && shadowPrepareThroughPrefixPacketRange.packetCount >= shadowPreparePrefixTimingTicketCount
             && shadowPreparePrefixSubmitter.submitTaskRangeInCompileOrderFromTasks(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
@@ -3355,7 +3328,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && shadowEffectsPacketRange.valid()
             && shadowEffectsStateCandidatesReady
             && softwareCausticsStateCandidatesReady
-            && (hardwareShadowSupported || softwareShadowEffectsTimingPacketsAreDistinct)
             && (hardwareShadowSupported || (
                 m_deferredSoftwareCausticsTask.valid()
                 && taskIsCompiled(m_deferredSoftwareCausticsTask)

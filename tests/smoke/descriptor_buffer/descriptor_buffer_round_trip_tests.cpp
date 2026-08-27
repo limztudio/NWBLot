@@ -25181,9 +25181,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& timing = graphics.gpuTiming();
     auto& timingSink = s_scope->gpuTimingSink();
+    const Name packetTimingTaskIdentity("tests/descriptor_buffer/shared_opaque_compute_dispatch_a_triple");
+    const Name packetTimingScopeIdentity = GpuTaskPacketTimingScopeName(packetTimingTaskIdentity);
 
     s_scope->setGpuTimingEnabled(true);
-    ASSERT_TRUE(timing.prepareScopeQueries(s_SharedOpaqueComputeEmulationScope.identity, device, 1u));
+    ASSERT_TRUE(timing.prepareScopeQueries(s_SharedOpaqueComputeEmulationScope.identity, device, 3u));
+    ASSERT_TRUE(timing.prepareScopeQueries(packetTimingScopeIdentity, device, 1u));
     auto timingResetCommandList = device.createCommandList();
     ASSERT_NE(timingResetCommandList.get(), nullptr);
     timingResetCommandList->open();
@@ -25268,7 +25271,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
         },
     };
     const Name identities[] = {
-        Name("tests/descriptor_buffer/shared_opaque_compute_dispatch_a_triple"),
+        packetTimingTaskIdentity,
         Name("tests/descriptor_buffer/shared_opaque_compute_raster_a_triple"),
         Name("tests/descriptor_buffer/shared_opaque_compute_dispatch_b_triple"),
         Name("tests/descriptor_buffer/shared_opaque_compute_raster_b_triple"),
@@ -25283,7 +25286,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
         "Shared Opaque Compute Dispatch C Triple",
         "Shared Opaque Compute Raster C Triple",
     };
-    GpuTimingSubmissionTicket timingTicket(timing);
+    GpuTimingSubmissionTicket firstPairTimingTicket(timing);
+    GpuTimingSubmissionTicket secondPairTimingTicket(timing);
+    GpuTimingSubmissionTicket thirdPairTimingTicket(timing);
+    GpuTimingSubmissionTicket* const pairTimingTickets[] = {
+        &firstPairTimingTicket,
+        &secondPairTimingTicket,
+        &thirdPairTimingTicket,
+    };
     u32 recordOrdinal = 0u;
     bool observedStates[LengthOf(identities)] = {};
     QueueSubmissionToken acceptedTokens[LengthOf(identities)] = {};
@@ -25303,6 +25313,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
         ;
         if(taskIndex != 0u)
             desc.setDependencies(&tasks[taskIndex - 1u], 1u);
+        if(taskIndex == 0u)
+            desc.setTimingMetadata(GpuTaskTimingMetadata{ .policy = GpuTaskTimingPolicy::PacketOnly });
         tasks[taskIndex] = graph.addTask<NativePacketSharedOutputHandoffTask>(
             desc,
             NativePacketSharedOutputHandoffTask::Payload{
@@ -25312,8 +25324,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
                 .expectedOrdinal = static_cast<u32>(taskIndex),
                 .device = &device,
                 .timing = &timing,
-                .timingTicket = &timingTicket,
-                .recordTiming = taskIndex + 1u == LengthOf(tasks),
+                .timingTicket = pairTimingTickets[taskIndex / 2u],
+                .recordTiming = isRaster,
                 .recorded = &observedStates[taskIndex],
                 .acceptedToken = &acceptedTokens[taskIndex],
             }
@@ -25350,6 +25362,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
     EXPECT_TRUE(compiledGraph.tasksSharePacket(tasks[0u], tasks[5u]));
     EXPECT_EQ(compiledGraph.packet(packet).queue, primaryGraphicsQueue);
     EXPECT_EQ(compiledGraph.packet(packet).dependencyCount, 0u);
+    EXPECT_TRUE(compiledGraph.packet(packet).recordsTiming);
     ASSERT_EQ(compiledGraph.packet(packet).taskCount, LengthOf(tasks));
     const GpuTaskId* const packetTasks = compiledGraph.packetTasks(packet);
     ASSERT_NE(packetTasks, nullptr);
@@ -25380,7 +25393,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
-    const GpuNativePacketRecorder recorder(device);
+    const GpuNativePacketRecorder recorder(device, timing);
     ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -25404,10 +25417,38 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
         timingTickets[taskIndex] = GpuTaskGraphTaskTimingTicket{
             .task = tasks[taskIndex],
-            .timingTicket = &timingTicket,
+            .timingTicket = pairTimingTickets[taskIndex / 2u],
         };
     }
     const GpuTaskGraphSubmitter submitter(device);
+    GpuTimingSubmissionTicket resolvedTimingTicket(timing);
+    resolvedTimingTicket.discard();
+    const GpuTaskGraphPacketTimingTicket retryableTimingTickets[] = {
+        GpuTaskGraphPacketTimingTicket{ .packet = packet, .timingTicket = pairTimingTickets[0u] },
+        GpuTaskGraphPacketTimingTicket{ .packet = packet, .timingTicket = pairTimingTickets[1u] },
+        GpuTaskGraphPacketTimingTicket{ .packet = packet, .timingTicket = pairTimingTickets[2u] },
+        GpuTaskGraphPacketTimingTicket{ .packet = packet, .timingTicket = &resolvedTimingTicket },
+    };
+    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        retryableTimingTickets,
+        LengthOf(retryableTimingTickets),
+        transaction,
+        scratchArena
+    ));
+    EXPECT_FALSE(transaction.hasAcceptedPackets());
+    ASSERT_NE(transaction.packetRuntime(packet), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(packet)->state, GpuPacketRuntimeState::Declared);
+    const GpuTaskGraphSubmissionStatistics retryableStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(retryableStatistics.valid());
+    EXPECT_EQ(retryableStatistics.acceptedPacketCount, 0u);
+    EXPECT_EQ(retryableStatistics.nativeSubmissionCount, 0u);
+    EXPECT_EQ(retryableStatistics.rejectedSubmissionCount, 0u);
     ASSERT_TRUE(submitter.submitTaskRangeInCompileOrderFromTasks(
         graph,
         compiledGraph,
@@ -25421,6 +25462,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
         transaction,
         scratchArena
     ));
+    const GpuTaskGraphSubmissionStatistics acceptedStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(acceptedStatistics.valid());
+    EXPECT_EQ(acceptedStatistics.acceptedPacketCount, 1u);
+    EXPECT_EQ(acceptedStatistics.acceptedTaskCount, LengthOf(tasks));
+    EXPECT_EQ(acceptedStatistics.nativeSubmissionCount, 1u);
     const QueueSubmissionToken packetToken = transaction.packetToken(packet);
     ASSERT_TRUE(packetToken.valid());
     const auto expectPacketToken = [&](const QueueSubmissionToken& token){
@@ -25437,8 +25483,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
     ASSERT_TRUE(device.waitForIdle());
     timing.collect(device, 1u);
     const auto timingStats = timingSink.stats(s_SharedOpaqueComputeEmulationScope.identity);
+    const auto packetTimingStats = timingSink.stats(packetTimingScopeIdentity);
     ASSERT_TRUE(timingStats.valid());
-    EXPECT_EQ(timingStats.sampleCount, 1u);
+    ASSERT_TRUE(packetTimingStats.valid());
+    EXPECT_EQ(timingStats.sampleCount, 3u);
+    EXPECT_EQ(packetTimingStats.sampleCount, 1u);
 
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();
@@ -40228,7 +40277,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitExtinctionComputeEmulationShare
     EXPECT_TRUE(extinctionTimingFinished);
     EXPECT_FALSE(extinctionTiming.has_value());
 
-    // These two task anchors may intentionally map to the same packet only because they carry the same ticket.
+    // These two semantic anchors intentionally share one ticket, so their same-packet aliases coalesce.
     const GpuTaskGraphTaskTimingTicket timingTickets[] = {
         GpuTaskGraphTaskTimingTicket{ .task = producerTask, .timingTicket = &extinctionTimingTicket },
         GpuTaskGraphTaskTimingTicket{ .task = extinctionTask, .timingTicket = &extinctionTimingTicket },
@@ -48099,8 +48148,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
 
 #if !defined(NWB_FINAL)
 
-// A backend rejection happens after both automatic and manual tickets are prepared. The one failed native attempt
-// must discard both transactions, and the next frame reset must make both query slots reusable.
+// A backend rejection happens after the automatic ticket and three independent manual tickets are prepared. One
+// failed native attempt must discard all four transactions, and the next frame reset must make every slot reusable.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingRejectsAndReusesCompanionQueriesTogether){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& timing = s_scope->graphics().gpuTiming();
@@ -48111,42 +48160,69 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingRejectsAndReusesC
     s_scope->setGpuTimingEnabled(true);
     timing.beginFrame(270u);
 
-    GpuTimingSubmissionTicket companionTimingTicket(timing);
+    GpuTimingSubmissionTicket firstCompanionTimingTicket(timing);
+    GpuTimingSubmissionTicket secondCompanionTimingTicket(timing);
+    GpuTimingSubmissionTicket thirdCompanionTimingTicket(timing);
+    GpuTimingSubmissionTicket* const companionTimingTickets[] = {
+        &firstCompanionTimingTicket,
+        &secondCompanionTimingTicket,
+        &thirdCompanionTimingTicket,
+    };
     bool shouldRecord = true;
-    bool taskRecorded = false;
-    const Name taskIdentity("tests/timing_graph_companion_rejection");
+    bool tasksRecorded[LengthOf(companionTimingTickets)] = {};
+    const Name taskIdentities[] = {
+        Name("tests/timing_graph_companion_rejection_a"),
+        Name("tests/timing_graph_companion_rejection_b"),
+        Name("tests/timing_graph_companion_rejection_c"),
+    };
+    const AStringView taskMarkers[] = {
+        "Rejected Automatic Companion Timing A",
+        "Rejected Automatic Companion Timing B",
+        "Rejected Automatic Companion Timing C",
+    };
     GpuTimingScopeDefinition packetTimingScope;
-    packetTimingScope.identity = GpuTaskPacketTimingScopeName(taskIdentity);
+    packetTimingScope.identity = GpuTaskPacketTimingScopeName(taskIdentities[0u]);
     packetTimingScope.markerLabel = "Rejected Automatic Companion Timing Packet";
     ASSERT_TRUE(packetTimingScope.valid());
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     GpuTaskSchedulingHint scheduling;
-    scheduling.forceSubmissionBoundary = true;
-    scheduling.allowPacketMerge = false;
+    scheduling.allowPacketMerge = true;
+    GpuTaskSchedulingHint mergedScheduling = scheduling;
+    mergedScheduling.mergeWithPrevious = true;
+    mergedScheduling.allowMergeAcrossConsumerFrontier = true;
     const GpuQueueRequest graphicsRequest{
         GpuQueueCapability::Graphics,
         GpuQueuePreference::Graphics,
         false,
         false,
     };
-    const GpuTaskId task = graph.addTask<NativePacketCompanionTimingCaptureRetryTask>(
-        GpuTaskDesc{}
-            .setIdentity(taskIdentity)
-            .setMarkerLabel("Rejected Automatic Companion Timing")
+    GpuTaskId tasks[LengthOf(companionTimingTickets)] = {};
+    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
+        GpuTaskDesc desc;
+        desc
+            .setIdentity(taskIdentities[taskIndex])
+            .setMarkerLabel(taskMarkers[taskIndex])
             .setQueue(graphicsRequest)
-            .setScheduling(scheduling)
-            .setTimingMetadata(GpuTaskTimingMetadata{ .policy = GpuTaskTimingPolicy::PacketOnly }),
-        NativePacketCompanionTimingCaptureRetryTask::Payload{
-            .shouldRecord = &shouldRecord,
-            .attempted = &taskRecorded,
-            .device = &device,
-            .timing = &timing,
-            .timingTicket = &companionTimingTicket,
-            .timingScope = &s_GraphCompanionSubmissionTicketScope,
-        }
-    );
-    ASSERT_TRUE(task.valid());
+            .setScheduling(taskIndex == 0u ? scheduling : mergedScheduling)
+        ;
+        if(taskIndex != 0u)
+            desc.setDependencies(&tasks[taskIndex - 1u], 1u);
+        if(taskIndex == 0u)
+            desc.setTimingMetadata(GpuTaskTimingMetadata{ .policy = GpuTaskTimingPolicy::PacketOnly });
+        tasks[taskIndex] = graph.addTask<NativePacketCompanionTimingCaptureRetryTask>(
+            desc,
+            NativePacketCompanionTimingCaptureRetryTask::Payload{
+                .shouldRecord = &shouldRecord,
+                .attempted = &tasksRecorded[taskIndex],
+                .device = &device,
+                .timing = &timing,
+                .timingTicket = companionTimingTickets[taskIndex],
+                .timingScope = &s_GraphCompanionSubmissionTicketScope,
+            }
+        );
+        ASSERT_TRUE(tasks[taskIndex].valid());
+    }
 
     GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
     GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
@@ -48162,12 +48238,18 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingRejectsAndReusesC
         scratchArena
     ));
     ASSERT_EQ(compiledGraph.packetCount(), 1u);
-    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(tasks[0u]);
     ASSERT_TRUE(packet.valid());
+    for(const GpuTaskId task : tasks)
+        EXPECT_EQ(compiledGraph.packetForTask(task), packet);
     EXPECT_TRUE(compiledGraph.packet(packet).recordsTiming);
 
     ASSERT_TRUE(timing.prepareScopeQueries(packetTimingScope.identity, device, s_MaxFramesInFlight));
-    ASSERT_TRUE(timing.prepareScopeQueries(s_GraphCompanionSubmissionTicketScope.identity, device, 1u));
+    ASSERT_TRUE(timing.prepareScopeQueries(
+        s_GraphCompanionSubmissionTicketScope.identity,
+        device,
+        LengthOf(companionTimingTickets)
+    ));
     auto resetCommandList = device.createCommandList();
     ASSERT_NE(resetCommandList.get(), nullptr);
     resetCommandList->open();
@@ -48189,30 +48271,40 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingRejectsAndReusesC
     ASSERT_TRUE(recorder.recordTaskRangeInCompileOrder(
         graph,
         compiledGraph,
-        task,
-        task,
+        tasks[0u],
+        tasks[LengthOf(tasks) - 1u],
         nullptr,
         0u,
         recordedGraph
     ));
-    ASSERT_TRUE(taskRecorded);
+    for(const bool taskRecorded : tasksRecorded)
+        ASSERT_TRUE(taskRecorded);
     const GpuTimingRecorderStatistics recordedStatistics = timing.statistics(device);
     ASSERT_TRUE(recordedStatistics.valid());
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuTaskGraphSubmitter submitter(device);
+    GpuTaskGraphTaskTimingTicket timingTickets[LengthOf(tasks)] = {};
+    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
+        timingTickets[taskIndex] = GpuTaskGraphTaskTimingTicket{
+            .task = tasks[taskIndex],
+            .timingTicket = companionTimingTickets[taskIndex],
+        };
+    }
     device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
-    EXPECT_FALSE(submitter.submitPacket(
+    EXPECT_FALSE(submitter.submitTaskRangeInCompileOrderFromTasks(
         graph,
         compiledGraph,
         recordedGraph,
-        packet,
+        tasks[0u],
+        tasks[LengthOf(tasks) - 1u],
         nullptr,
         0u,
+        timingTickets,
+        LengthOf(timingTickets),
         transaction,
-        scratchArena,
-        &companionTimingTicket
+        scratchArena
     ));
     ASSERT_NE(transaction.packetRuntime(packet), nullptr);
     EXPECT_EQ(transaction.packetRuntime(packet)->state, GpuPacketRuntimeState::Rejected);
@@ -48224,7 +48316,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingRejectsAndReusesC
     EXPECT_EQ(submissionStatistics.rejectedSubmissionCount, 1u);
     const GpuTimingRecorderStatistics rejectedStatistics = timing.statistics(device);
     ASSERT_TRUE(rejectedStatistics.valid());
-    EXPECT_EQ(rejectedStatistics.discardedScopeCount, recordedStatistics.discardedScopeCount + 2u);
+    EXPECT_EQ(rejectedStatistics.discardedScopeCount, recordedStatistics.discardedScopeCount + 4u);
     timing.collect(device, 271u);
     EXPECT_FALSE(timingSink.stats(packetTimingScope.identity).valid());
     EXPECT_FALSE(timingSink.stats(s_GraphCompanionSubmissionTicketScope.identity).valid());
@@ -48256,7 +48348,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingRejectsAndReusesC
             GpuTimingMeasure packetTiming(timing, packetTimingScope, device, *retryCommandList);
             EXPECT_TRUE(packetTiming.valid());
         }
-        {
+        for(usize timingIndex = 0u; timingIndex < LengthOf(companionTimingTickets); ++timingIndex){
             GpuTimingMeasure companionTiming(timing, s_GraphCompanionSubmissionTicketScope, device, *retryCommandList);
             EXPECT_TRUE(companionTiming.valid());
         }
@@ -48267,7 +48359,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingRejectsAndReusesC
     ASSERT_TRUE(device.waitForIdle());
     timing.collect(device, 272u);
     EXPECT_EQ(timingSink.stats(packetTimingScope.identity).sampleCount, 1u);
-    EXPECT_EQ(timingSink.stats(s_GraphCompanionSubmissionTicketScope.identity).sampleCount, 1u);
+    EXPECT_EQ(
+        timingSink.stats(s_GraphCompanionSubmissionTicketScope.identity).sampleCount,
+        LengthOf(companionTimingTickets)
+    );
 
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();

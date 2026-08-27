@@ -923,8 +923,8 @@ TEST(EcsGraphics, EffectsTopologyUsesSemanticTaskAnchors){
 }
 
 
-// Prefix and shadow record spans are task-addressed. Shadow Preparation and Mesh View Setup keep distinct timing
-// packets without requiring adjacency, while the later normal-range partition remains an exact coverage invariant.
+// Prefix and shadow record spans are task-addressed. Independent timing tickets tolerate a compiler merge between
+// Shadow Preparation and Mesh View Setup, while the later normal-range partition remains an exact coverage invariant.
 TEST(EcsGraphics, PrefixAndShadowTopologyUsesSemanticTaskAnchors){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -943,16 +943,7 @@ TEST(EcsGraphics, PrefixAndShadowTopologyUsesSemanticTaskAnchors){
         system,
         "packetRangeForTasks(m_deferredShadowPrepareTask, m_graphicsPrefixTask)"
     ));
-    EXPECT_TRUE(ContainsText(
-        system,
-        "const bool shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct =\n"
-        "        !m_deferredLightingCompiledGraph.tasksSharePacket(\n"
-        "            m_deferredShadowPrepareTask,\n"
-        "            m_graphicsPrefixMeshViewSetupTask"
-    ));
-    EXPECT_EQ(CountText(system, "shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct"), 3u);
-    EXPECT_TRUE(ContainsText(system, "|| !shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct"));
-    EXPECT_TRUE(ContainsText(system, "&& shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct"));
+    EXPECT_FALSE(ContainsText(system, "shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct"));
     EXPECT_TRUE(ContainsText(system, "shadowPreparePrefixSubmitter.submitTaskRangeInCompileOrderFromTasks("));
     EXPECT_TRUE(ContainsText(system, "m_deferredShadowPrepareTask,\n                m_graphicsPrefixTask,"));
 
@@ -967,6 +958,10 @@ TEST(EcsGraphics, PrefixAndShadowTopologyUsesSemanticTaskAnchors){
         "            != shadowPrepareThroughPrefixPacketRange.packetCount + effectsThroughPresentationPacketRange.packetCount"
     ));
     EXPECT_TRUE(ContainsText(system, "shadowPreparePrefixTimingTicketCount == 1u + graphicsPrefixUniquePacketCount"));
+    EXPECT_FALSE(ContainsText(
+        system,
+        "shadowPrepareThroughPrefixPacketRange.packetCount >= shadowPreparePrefixTimingTicketCount"
+    ));
 
     EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId shadowPreparePacket"));
     EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId graphicsPrefixPacket"));
@@ -975,8 +970,8 @@ TEST(EcsGraphics, PrefixAndShadowTopologyUsesSemanticTaskAnchors){
 }
 
 
-// Software visibility and caustics retain distinct timing tickets, but their semantic range may contain untimed
-// compiler packets. Keep the hardware single-packet invariant while making the software boundary task-based.
+// Software visibility and caustics retain distinct timing tickets, but those tickets may resolve with one merged
+// packet token. Keep the hardware single-packet invariant while making the software boundary task-based.
 TEST(EcsGraphics, SoftwareShadowEffectsTopologyUsesSemanticTaskAnchors){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -991,17 +986,11 @@ TEST(EcsGraphics, SoftwareShadowEffectsTopologyUsesSemanticTaskAnchors){
         "        m_deferredShadowVisibilityTask,\n"
         "        hardwareShadowSupported ? m_deferredShadowVisibilityTask : m_deferredSoftwareCausticsTask"
     ));
-    EXPECT_TRUE(ContainsText(
-        system,
-        "const bool softwareShadowEffectsTimingPacketsAreDistinct =\n"
-        "        !hardwareShadowSupported\n"
-        "        && !m_deferredLightingCompiledGraph.tasksSharePacket("
-    ));
-    EXPECT_EQ(CountText(system, "softwareShadowEffectsTimingPacketsAreDistinct"), 3u);
+    EXPECT_FALSE(ContainsText(system, "softwareShadowEffectsTimingPacketsAreDistinct"));
     EXPECT_TRUE(ContainsText(
         system,
         "hardwareShadowSupported\n"
-        "            ? shadowEffectsPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount"
+        "            && shadowEffectsPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount"
     ));
     EXPECT_TRUE(ContainsText(system, "shadowEffectsSubmitter.submitTaskRangeInCompileOrderFromTasks("));
     EXPECT_TRUE(ContainsText(
@@ -1133,8 +1122,8 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
 }
 
 
-// Lighting and Composite own distinct timing tickets, but their semantic range may contain untimed compiler
-// packets. Preserve the non-merge requirement without constraining the inclusive range to exactly two packets.
+// Lighting and Composite own distinct timing tickets, but those tickets may resolve with one merged packet token.
+// Their semantic range may also contain compiler-owned untimed packets.
 TEST(EcsGraphics, DeferredLightingCompositeTopologyUsesSemanticTaskAnchors){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -1147,11 +1136,7 @@ TEST(EcsGraphics, DeferredLightingCompositeTopologyUsesSemanticTaskAnchors){
         system,
         "packetRangeForTasks(m_deferredLightingTask, m_deferredCompositeTask)"
     ));
-    EXPECT_TRUE(ContainsText(
-        system,
-        "const bool deferredLightingCompositeTimingPacketsAreDistinct = !m_deferredLightingCompiledGraph.tasksSharePacket("
-    ));
-    EXPECT_TRUE(ContainsText(system, "&& deferredLightingCompositeTimingPacketsAreDistinct"));
+    EXPECT_FALSE(ContainsText(system, "deferredLightingCompositeTimingPacketsAreDistinct"));
     EXPECT_TRUE(ContainsText(system, "deferredSubmitter.submitTaskRangeInCompileOrderFromTasks("));
     EXPECT_TRUE(ContainsText(system, "m_deferredLightingTask,\n                m_deferredCompositeTask,"));
     EXPECT_FALSE(ContainsText(system, "s_DeferredLightingCompositePacketCount"));

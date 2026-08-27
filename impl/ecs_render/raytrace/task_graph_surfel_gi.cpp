@@ -825,6 +825,7 @@ void RendererSystem::declareDeferredSurfelCountReadbackTask(){
     m_deferredSurfelGiCounterReadbackTask = {};
     if(
         !m_deferredSurfelGiTask.valid()
+        || !m_deferredFrameTimingEndTask.valid()
         || !m_raytracingSystem.shouldCaptureSurfelCountReadback()
     )
         return;
@@ -850,12 +851,15 @@ void RendererSystem::declareDeferredSurfelCountReadbackTask(){
         },
     };
     Core::GpuTaskSchedulingHint scheduling;
-    // This infrequent diagnostic is independent of the deferred suffix. Treat it as a small copy so a dedicated
-    // Transfer transport can absorb it after Present, while Compute/Graphics remain valid fallbacks.
+    // This infrequent diagnostic follows the terminal presentation endpoint. Treat it as a small copy so a
+    // dedicated Transfer transport can absorb it without delaying Present, while Compute/Graphics remain valid.
     scheduling.cost = Core::GpuTaskCostHint::Small;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
-    const Core::GpuTaskId dependencies[] = { m_deferredSurfelGiTask };
+    const Core::GpuTaskId dependencies[] = {
+        m_deferredSurfelGiTask,
+        m_deferredFrameTimingEndTask,
+    };
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.surfel_gi.counter_readback"))

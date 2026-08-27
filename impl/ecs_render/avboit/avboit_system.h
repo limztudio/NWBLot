@@ -33,9 +33,12 @@ public:
         bool clearTargets,
         bool hasTransparentRenderers
     )const;
-    [[nodiscard]] RendererAvboitTaskGraphSubmission submitTaskGraphStage(
-        RendererAvboitTaskGraphSubmitContext& context,
-        const RendererAvboitTaskGraphValidation& validation
+    [[nodiscard]] bool appendTaskGraphTimingTickets(
+        const RendererAvboitTaskGraphValidation& validation,
+        RendererAvboitTaskGraphTimingTickets& timingTickets,
+        Core::GpuTaskGraphTaskTimingTicket* bindings,
+        usize bindingCapacity,
+        usize& bindingCount
     )const;
 
 
@@ -188,3 +191,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -5970,8 +5970,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         return;
     }
 
-    // Keep this diagnostic after the normal Present path in declaration order. Its only dependency is Surfel GI,
-    // so it remains a late independent Transfer-preferred tail and does not delay lighting or presentation.
+    // Keep this diagnostic behind the terminal presentation endpoint so whole-normal execution cannot absorb its
+    // independent Transfer-preferred tail and it cannot delay lighting or presentation.
     declareDeferredSurfelCountReadbackTask();
 
     if(capturesLaggedLightingHistory){
@@ -5993,7 +5993,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         historyCopyScheduling.cost = Core::GpuTaskCostHint::Medium;
         historyCopyScheduling.forceSubmissionBoundary = true;
         historyCopyScheduling.allowPacketMerge = false;
-        const Core::GpuTaskId historyCopyDependencies[] = { m_deferredPresentTask };
+        const Core::GpuTaskId historyCopyDependencies[] = { m_deferredFrameTimingEndTask };
         Core::GpuTaskDesc historyCopyDesc;
         historyCopyDesc
             .setIdentity(Name("render.lagged_history_copy"))

@@ -45937,7 +45937,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRejectsRecordedProducerWithout
 }
 
 
-TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRaisesRecordedStateConsumerAfterProducer){
+TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorReadyFrontierRaisesRecordedStateConsumerAfterProducer){
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto createBuffer = [&device]{
         return device.createBuffer(
@@ -46096,29 +46096,39 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRaisesRecordedStateCo
     };
     Alloc::ThreadPool recordingWorkers(1u, CpuAffinity::Any);
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
+    const GpuTaskGraphSubmitter submitter(device);
+    GpuTaskGraphNormalExecutionDesc normalExecution;
+    normalExecution.terminalTask = consumerTask;
+    normalExecution.taskStateBindings = &binding;
+    normalExecution.taskStateBindingCount = 1u;
+    normalExecution.readyFrontierWorkerPool = &recordingWorkers;
     GpuSubmissionPacketId failedPacket;
-    ASSERT_TRUE(recorder.recordPacketRangeInReadyFrontiers(
+    ASSERT_TRUE(submitter.recordAndSubmitNormalGraph(
         graph,
         compiledGraph,
-        compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
+        recorder,
         recordedGraph,
-        recordingWorkers,
-        &failedPacket,
-        nullptr,
-        &binding,
-        1u
+        normalExecution,
+        transaction,
+        scratchArena,
+        &failedPacket
     )) << "failed packet " << failedPacket.index;
+    EXPECT_FALSE(failedPacket.valid());
     EXPECT_TRUE(frontierRecorded);
     EXPECT_TRUE(producerRecorded);
     EXPECT_TRUE(consumerRecorded);
+    EXPECT_TRUE(transaction.taskToken(compiledGraph, frontierTask).valid());
+    EXPECT_TRUE(transaction.taskToken(compiledGraph, producerTask).valid());
+    EXPECT_TRUE(transaction.taskToken(compiledGraph, consumerTask).valid());
     const GpuRecordedPacket* const producerRecording = recordedGraph.find(producerPacket);
     const GpuRecordedPacket* const consumerRecording = recordedGraph.find(consumerPacket);
     ASSERT_NE(producerRecording, nullptr);
     ASSERT_NE(consumerRecording, nullptr);
     EXPECT_LE(producerRecording->recordingEndNanoseconds, consumerRecording->recordingBeginNanoseconds);
+    EXPECT_TRUE(device.waitForIdle());
 }
 
 

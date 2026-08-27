@@ -1121,8 +1121,8 @@ TEST(EcsGraphics, EffectsTopologyUsesSemanticTaskAnchors){
 }
 
 
-// Prefix and shadow record spans are task-addressed. Independent timing tickets tolerate a compiler merge between
-// Shadow Preparation and Mesh View Setup, while the later normal-range partition remains an exact coverage invariant.
+// Prefix and shadow state, lifecycle, and timing contracts stay task-addressed while the shared normal executor
+// owns compiler-generated packet coverage.
 TEST(EcsGraphics, PrefixAndShadowTopologyUsesSemanticTaskAnchors){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -1137,29 +1137,34 @@ TEST(EcsGraphics, PrefixAndShadowTopologyUsesSemanticTaskAnchors){
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredShadowVisibilityTask)"));
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredSoftwareCausticsTask)"));
     EXPECT_TRUE(ContainsText(system, "tasksSharePacket(\n            m_graphicsPrefixDeferredClearFirstTask"));
-    EXPECT_TRUE(ContainsText(
-        system,
-        "packetRangeForTasks(m_deferredShadowPrepareTask, m_graphicsPrefixTask)"
-    ));
     EXPECT_FALSE(ContainsText(system, "shadowPrepareAndMeshViewSetupTimingPacketsAreDistinct"));
-    EXPECT_TRUE(ContainsText(system, "shadowPreparePrefixSubmitter.submitTaskRangeInCompileOrderFromTasks("));
-    EXPECT_TRUE(ContainsText(system, "m_deferredShadowPrepareTask,\n                m_graphicsPrefixTask,"));
-
-    EXPECT_FALSE(ContainsText(
+    EXPECT_TRUE(ContainsText(system, "if(shadowPrepareStateSourceCount != 0u){"));
+    EXPECT_TRUE(ContainsText(
         system,
-        "shadowPrepareThroughPrefixPacketRange.packetCount\n"
-        "            != shadowPreparePacketRange.packetCount + graphicsPrefixWorkPacketRange.packetCount"
+        "m_deferredShadowPrepareTask,\n"
+        "                {},\n"
+        "                shadowPrepareStateSources,"
     ));
     EXPECT_TRUE(ContainsText(
         system,
-        "deferredNormalPacketRange.packetCount\n"
-        "            != shadowPrepareThroughPrefixPacketRange.packetCount + effectsThroughPresentationPacketRange.packetCount"
+        "m_deferredShadowVisibilityTask,\n"
+        "            m_graphicsPrefixTask,\n"
+        "            shadowVisibilityStateSources,"
     ));
-    EXPECT_TRUE(ContainsText(system, "shadowPreparePrefixTimingTicketCount == 1u + graphicsPrefixUniquePacketCount"));
-    EXPECT_FALSE(ContainsText(
+    EXPECT_TRUE(ContainsText(system, ".context = &shadowPrepareStateLifecycle,\n        .invoke = prepareShadowPrepareTask,"));
+    EXPECT_TRUE(ContainsText(system, ".context = &shadowPrepareStateLifecycle,\n        .invoke = acceptShadowPrepareTask,"));
+    EXPECT_TRUE(ContainsText(
         system,
-        "shadowPrepareThroughPrefixPacketRange.packetCount >= shadowPreparePrefixTimingTicketCount"
+        ".context = &shadowVisibilityStateLifecycle,\n"
+        "        .invoke = prepareShadowVisibilityTask,"
     ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        ".context = &shadowVisibilityStateLifecycle,\n"
+        "        .invoke = acceptShadowVisibilityTask,"
+    ));
+    EXPECT_TRUE(ContainsText(system, "normalTimingTicketCount == 1u + graphicsPrefixUniquePacketCount"));
+    EXPECT_TRUE(ContainsText(system, "appendNormalTimingTicket(m_deferredShadowVisibilityTask, shadowVisibilityTimingTicket)"));
 
     EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId shadowPreparePacket"));
     EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId graphicsPrefixPacket"));
@@ -1168,8 +1173,8 @@ TEST(EcsGraphics, PrefixAndShadowTopologyUsesSemanticTaskAnchors){
 }
 
 
-// Software visibility and caustics retain distinct timing tickets, but those tickets may resolve with one merged
-// packet token. Keep the hardware single-packet invariant while making the software boundary task-based.
+// Software visibility and caustics contribute their semantic state, lifecycle, and timing bindings to the one
+// compiler-owned normal execution.
 TEST(EcsGraphics, SoftwareShadowEffectsTopologyUsesSemanticTaskAnchors){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -1178,32 +1183,43 @@ TEST(EcsGraphics, SoftwareShadowEffectsTopologyUsesSemanticTaskAnchors){
     ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
     const AStringView system(systemSource.data(), systemSource.size());
 
-    EXPECT_TRUE(ContainsText(
-        system,
-        "packetRangeForTasks(\n"
-        "        m_deferredShadowVisibilityTask,\n"
-        "        hardwareShadowSupported ? m_deferredShadowVisibilityTask : m_deferredSoftwareCausticsTask"
-    ));
     EXPECT_FALSE(ContainsText(system, "softwareShadowEffectsTimingPacketsAreDistinct"));
     EXPECT_TRUE(ContainsText(
         system,
-        "hardwareShadowSupported\n"
-        "            && shadowEffectsPacketRange.packetCount != RendererSystemRenderDetail::s_SinglePacketCount"
+        "if(!hardwareShadowSupported){\n"
+        "        deferredStateBindingsReady = deferredStateBindingsReady\n"
+        "            && appendTaskPacketStateBinding("
     ));
-    EXPECT_TRUE(ContainsText(system, "shadowEffectsSubmitter.submitTaskRangeInCompileOrderFromTasks("));
     EXPECT_TRUE(ContainsText(
         system,
-        "m_deferredShadowVisibilityTask,\n"
-        "                hardwareShadowSupported ? m_deferredShadowVisibilityTask : m_deferredSoftwareCausticsTask,"
+        "m_deferredSoftwareCausticsTask,\n"
+        "                m_graphicsPrefixTask,\n"
+        "                softwareCausticsStateSources,"
     ));
-    EXPECT_TRUE(ContainsText(system, "const usize shadowEffectsTimingTicketCount = hardwareShadowSupported"));
+    EXPECT_TRUE(ContainsText(
+        system,
+        ".task = m_deferredSoftwareCausticsTask,\n"
+        "            .context = &softwareCausticsStateLifecycle,\n"
+        "            .invoke = prepareSoftwareCausticsTask,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        ".task = m_deferredSoftwareCausticsTask,\n"
+        "            .context = &softwareCausticsStateLifecycle,\n"
+        "            .invoke = acceptSoftwareCausticsTask,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "hardwareShadowSupported ? m_deferredHardwareCausticsTask : m_deferredSoftwareCausticsTask,\n"
+        "            hardwareShadowSupported ? hardwareCausticsTimingTicket : softwareCausticsTimingTicket"
+    ));
     EXPECT_FALSE(ContainsText(system, "s_SoftwareShadowEffectsPacketCount"));
-    EXPECT_FALSE(ContainsText(system, "shadowEffectsPacketRange.packetCount == shadowEffectsTimingTicketCount"));
+    EXPECT_FALSE(ContainsText(system, "shadowEffectsSubmitter"));
 }
 
 
-// Snapshot Copy and the timed Surfel GI endpoint must retain distinct packets, but Preparation may alias/share
-// Snapshot and compiler-owned untimed packets may appear inside the semantic task range.
+// Snapshot Copy and the timed Surfel GI endpoint retain distinct acceptance boundaries. Preparation may alias/share
+// Snapshot, while Prefix-produced state and lifecycle publication remain semantic-task bindings.
 TEST(EcsGraphics, SurfelGiTopologyUsesSemanticTaskAnchors){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -1217,21 +1233,45 @@ TEST(EcsGraphics, SurfelGiTopologyUsesSemanticTaskAnchors){
 
     EXPECT_TRUE(ContainsText(
         system,
-        "packetRangeForTasks(surfelGiFirstTask, m_deferredSurfelGiTask)"
-    ));
-    EXPECT_TRUE(ContainsText(
-        system,
         "const bool surfelGiSnapshotCopyAndTimingPacketsAreDistinct =\n"
         "        !m_deferredSurfelGiSnapshotCopyTask.valid()\n"
         "        || !m_deferredLightingCompiledGraph.tasksSharePacket(\n"
         "            m_deferredSurfelGiSnapshotCopyTask,\n"
         "            m_deferredSurfelGiTask"
     ));
-    EXPECT_EQ(CountText(system, "surfelGiSnapshotCopyAndTimingPacketsAreDistinct"), 3u);
+    EXPECT_EQ(CountText(system, "surfelGiSnapshotCopyAndTimingPacketsAreDistinct"), 2u);
     EXPECT_TRUE(ContainsText(system, "|| !surfelGiSnapshotCopyAndTimingPacketsAreDistinct"));
-    EXPECT_TRUE(ContainsText(system, "&& surfelGiSnapshotCopyAndTimingPacketsAreDistinct"));
-    EXPECT_TRUE(ContainsText(system, "surfelGiSubmitter.submitTaskRangeInCompileOrderFromTasks("));
-    EXPECT_TRUE(ContainsText(system, "surfelGiFirstTask,\n                m_deferredSurfelGiTask,"));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "m_deferredSurfelGiPreparationTask,\n"
+        "                m_graphicsPrefixTask,\n"
+        "                surfelGiStateSources,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "m_deferredSurfelGiSnapshotCopyTask,\n"
+        "                m_graphicsPrefixTask,\n"
+        "                surfelGiStateSources,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "m_deferredSurfelGiTask,\n"
+        "            m_graphicsPrefixTask,\n"
+        "            surfelGiStateSources,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        ".task = m_deferredSurfelGiTask,\n"
+        "        .context = &surfelGiStateLifecycle,\n"
+        "        .invoke = prepareSurfelGiTask,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        ".task = m_deferredSurfelGiTask,\n"
+        "        .context = &surfelGiStateLifecycle,\n"
+        "        .invoke = acceptSurfelGiTask,"
+    ));
+    EXPECT_TRUE(ContainsText(system, "appendNormalTimingTicket(m_deferredSurfelGiTask, surfelGiTimingTicket)"));
 
     EXPECT_TRUE(ContainsText(
         surfelGi,
@@ -1251,6 +1291,12 @@ TEST(EcsGraphics, SurfelGiTopologyUsesSemanticTaskAnchors){
     EXPECT_FALSE(ContainsText(system, "expectedSurfelGiPacketCount"));
     EXPECT_FALSE(ContainsText(system, "surfelGiPacketRange.packetCount =="));
     EXPECT_FALSE(ContainsText(system, "surfelGiPacketRange.packetCount !="));
+    EXPECT_TRUE(ContainsText(
+        surfelGi,
+        "const Core::GpuTaskId dependencies[] = {\n"
+        "        m_deferredSurfelGiTask,\n"
+        "        m_deferredFrameTimingEndTask,"
+    ));
 }
 
 
@@ -1286,11 +1332,12 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
     const AStringView avboitSubmission(avboitSubmissionSource.data(), avboitSubmissionSource.size());
 
     EXPECT_TRUE(ContainsText(avboitSystemHeader, "RendererAvboitTaskGraphValidation validateTaskGraphStage("));
-    EXPECT_TRUE(ContainsText(avboitSystemHeader, "RendererAvboitTaskGraphSubmission submitTaskGraphStage("));
+    EXPECT_TRUE(ContainsText(avboitSystemHeader, "bool appendTaskGraphTimingTickets("));
     EXPECT_TRUE(ContainsText(sharedStageHeader, "bool hasTransparentTasks = false;"));
     EXPECT_TRUE(ContainsText(avboitStageHeader, "struct RendererAvboitTaskGraphValidation"));
     EXPECT_TRUE(ContainsText(avboitStageHeader, "RendererTaskGraphTransparencyStage m_stage;"));
-    EXPECT_TRUE(ContainsText(avboitStageHeader, "Core::GpuTaskId m_submissionCompletionTask;"));
+    EXPECT_TRUE(ContainsText(avboitStageHeader, "s_AvboitTaskGraphTimingTicketCapacity = 7u;"));
+    EXPECT_FALSE(ContainsText(avboitStageHeader, "m_submissionCompletionTask"));
     EXPECT_TRUE(ContainsText(avboitStage, ".hasTransparentTasks = m_depthWarpTask.valid(),"));
     EXPECT_TRUE(ContainsText(avboitValidation, "taskIsCompiled(taskGraphStage.m_preTask)"));
     EXPECT_TRUE(ContainsText(avboitValidation, "taskIsCompiled(taskGraphStage.m_depthWarpTask)"));
@@ -1398,53 +1445,61 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
     EXPECT_TRUE(ContainsText(avboitValidation, "&& avboitNaturalStagePlacementValid"));
     EXPECT_FALSE(ContainsText(avboitValidation, "avboitUsesAsyncCompute"));
     EXPECT_TRUE(ContainsText(avboitValidation, "compiledGraph.tasksSharePacket(\n            taskGraphStage.m_preTask"));
-    EXPECT_TRUE(ContainsText(avboitValidation, "compiledGraph.packetRangeForTasks("));
+    EXPECT_TRUE(ContainsText(
+        avboitValidation,
+        "compiledGraph.packetRangeForTasks(\n"
+        "        stage.firstTask,\n"
+        "        stage.completionTask"
+    ));
     EXPECT_TRUE(ContainsText(avboitValidation, "compiledGraph.validPacketRange(packetRange)"));
     EXPECT_FALSE(ContainsText(avboitValidation, "s_AsyncComputePacketCount"));
     EXPECT_FALSE(ContainsText(avboitValidation, "s_SinglePacketCount"));
     EXPECT_FALSE(ContainsText(avboitValidation, "expectedPacketCount"));
     EXPECT_FALSE(ContainsText(avboitValidation, "packetRange.packetCount =="));
-    EXPECT_TRUE(ContainsText(avboitSubmission, "submitTaskRangeInCompileOrderFromTasks("));
-    EXPECT_TRUE(ContainsText(avboitSubmission, "validation.stage().firstTask,"));
-    EXPECT_TRUE(ContainsText(avboitSubmission, "validation.submissionCompletionTask(),"));
+    EXPECT_TRUE(ContainsText(avboitSubmission, "bool RendererAvboitSystem::appendTaskGraphTimingTickets("));
+    EXPECT_TRUE(ContainsText(avboitSubmission, "if(!validation.valid() || !bindings || bindingCount > bindingCapacity)"));
+    EXPECT_TRUE(ContainsText(avboitSubmission, "requiredBindingCount > s_AvboitTaskGraphTimingTicketCapacity"));
+    EXPECT_TRUE(ContainsText(avboitSubmission, "requiredBindingCount > bindingCapacity - bindingCount"));
+    EXPECT_FALSE(ContainsText(avboitSubmission, "GpuTaskGraphSubmitter"));
+    EXPECT_FALSE(ContainsText(avboitSubmission, "GpuGraphSubmissionTransaction"));
     EXPECT_TRUE(ContainsText(avboitSubmission, "if(validation.stage().hasTransparentTasks){"));
     EXPECT_TRUE(ContainsText(
         avboitSubmission,
-        "appendTimingTicket(m_taskGraphStage.m_preTask, context.m_timingTickets.m_pre);"
+        "appendTimingTicket(m_taskGraphStage.m_preTask, timingTickets.m_pre);"
     ));
     EXPECT_TRUE(ContainsText(
         avboitSubmission,
-        "appendTimingTicket(m_taskGraphStage.m_depthWarpTask, context.m_timingTickets.m_depthWarp);"
+        "appendTimingTicket(m_taskGraphStage.m_depthWarpTask, timingTickets.m_depthWarp);"
     ));
     EXPECT_TRUE(ContainsText(
         avboitSubmission,
-        "appendTimingTicket(m_taskGraphStage.m_extinctionTask, context.m_timingTickets.m_extinction);"
+        "appendTimingTicket(m_taskGraphStage.m_extinctionTask, timingTickets.m_extinction);"
     ));
     EXPECT_TRUE(ContainsText(
         avboitSubmission,
-        "appendTimingTicket(m_taskGraphStage.m_integrationTask, context.m_timingTickets.m_integration);"
+        "appendTimingTicket(m_taskGraphStage.m_integrationTask, timingTickets.m_integration);"
     ));
     EXPECT_TRUE(ContainsText(
         avboitSubmission,
-        "appendTimingTicket(m_taskGraphStage.m_accumulationTask, context.m_timingTickets.m_accumulation);"
+        "appendTimingTicket(m_taskGraphStage.m_accumulationTask, timingTickets.m_accumulation);"
     ));
     const usize preTimingTicketOffset = avboitSubmission.find(
-        "appendTimingTicket(m_taskGraphStage.m_preTask, context.m_timingTickets.m_pre);"
+        "appendTimingTicket(m_taskGraphStage.m_preTask, timingTickets.m_pre);"
     );
     const usize depthWarpTimingTicketOffset = avboitSubmission.find(
-        "appendTimingTicket(m_taskGraphStage.m_depthWarpTask, context.m_timingTickets.m_depthWarp);",
+        "appendTimingTicket(m_taskGraphStage.m_depthWarpTask, timingTickets.m_depthWarp);",
         preTimingTicketOffset
     );
     const usize extinctionTimingTicketOffset = avboitSubmission.find(
-        "appendTimingTicket(m_taskGraphStage.m_extinctionTask, context.m_timingTickets.m_extinction);",
+        "appendTimingTicket(m_taskGraphStage.m_extinctionTask, timingTickets.m_extinction);",
         depthWarpTimingTicketOffset
     );
     const usize integrationTimingTicketOffset = avboitSubmission.find(
-        "appendTimingTicket(m_taskGraphStage.m_integrationTask, context.m_timingTickets.m_integration);",
+        "appendTimingTicket(m_taskGraphStage.m_integrationTask, timingTickets.m_integration);",
         extinctionTimingTicketOffset
     );
     const usize accumulationTimingTicketOffset = avboitSubmission.find(
-        "appendTimingTicket(m_taskGraphStage.m_accumulationTask, context.m_timingTickets.m_accumulation);",
+        "appendTimingTicket(m_taskGraphStage.m_accumulationTask, timingTickets.m_accumulation);",
         integrationTimingTicketOffset
     );
     ASSERT_NE(preTimingTicketOffset, AStringView::npos);
@@ -1456,17 +1511,15 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
     EXPECT_LT(depthWarpTimingTicketOffset, extinctionTimingTicketOffset);
     EXPECT_LT(extinctionTimingTicketOffset, integrationTimingTicketOffset);
     EXPECT_LT(integrationTimingTicketOffset, accumulationTimingTicketOffset);
-    EXPECT_TRUE(ContainsText(avboitSubmission, "context.m_timingTickets.m_depthWarp.discard();"));
-    EXPECT_TRUE(ContainsText(avboitSubmission, "context.m_timingTickets.m_extinction.discard();"));
-    EXPECT_TRUE(ContainsText(avboitSubmission, "context.m_timingTickets.m_integration.discard();"));
-    EXPECT_TRUE(ContainsText(avboitSubmission, "context.m_timingTickets.m_accumulation.discard();"));
+    EXPECT_TRUE(ContainsText(avboitSubmission, "timingTickets.m_depthWarp.discard();"));
+    EXPECT_TRUE(ContainsText(avboitSubmission, "timingTickets.m_extinction.discard();"));
+    EXPECT_TRUE(ContainsText(avboitSubmission, "timingTickets.m_integration.discard();"));
+    EXPECT_TRUE(ContainsText(avboitSubmission, "timingTickets.m_accumulation.discard();"));
     EXPECT_TRUE(ContainsText(system, "m_avboitSystem.validateTaskGraphStage("));
-    EXPECT_TRUE(ContainsText(system, "m_avboitSystem.submitTaskGraphStage("));
-    EXPECT_TRUE(ContainsText(
-        system,
-        "if(m_deferredLightingTaskGraphValid){\n"
-        "            RendererAvboitTaskGraphSubmitContext avboitSubmitContext"
-    ));
+    EXPECT_TRUE(ContainsText(system, "m_avboitSystem.appendTaskGraphTimingTickets("));
+    EXPECT_TRUE(ContainsText(system, "s_DeferredTimingTicketCapacity = 15u + s_AvboitTaskGraphTimingTicketCapacity;"));
+    EXPECT_FALSE(ContainsText(system, "RendererAvboitTaskGraphSubmitContext"));
+    EXPECT_FALSE(ContainsText(system, "submitTaskGraphStage("));
     EXPECT_FALSE(ContainsText(systemHeader, "m_deferredAvboit"));
     EXPECT_FALSE(ContainsText(system, "m_deferredAvboit"));
     EXPECT_FALSE(ContainsText(system, "s_AvboitAsyncComputePacketCount"));
@@ -1486,8 +1539,8 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
 }
 
 
-// Lighting and Composite own distinct timing tickets, but those tickets may resolve with one merged packet token.
-// Their semantic range may also contain compiler-owned untimed packets.
+// Lighting and Composite keep semantic state and timing bindings while the shared normal executor owns generated
+// packet coverage.
 TEST(EcsGraphics, DeferredLightingCompositeTopologyUsesSemanticTaskAnchors){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -1496,22 +1549,33 @@ TEST(EcsGraphics, DeferredLightingCompositeTopologyUsesSemanticTaskAnchors){
     ASSERT_TRUE(ReadRendererSystemSources(repoRoot, systemSource));
     const AStringView system(systemSource.data(), systemSource.size());
 
+    EXPECT_FALSE(ContainsText(system, "deferredLightingCompositeTimingPacketsAreDistinct"));
+    EXPECT_TRUE(ContainsText(system, "m_deferredLightingTask,\n            m_graphicsPrefixTask,\n            nullptr,"));
+    EXPECT_TRUE(ContainsText(system, "m_deferredCompositeTask,\n            m_graphicsPrefixTask,\n            nullptr,"));
+    EXPECT_TRUE(ContainsText(system, "appendNormalTimingTicket(m_deferredLightingTask, deferredLightingTimingTicket)"));
+    EXPECT_TRUE(ContainsText(system, "appendNormalTimingTicket(m_deferredCompositeTask, deferredCompositeTimingTicket)"));
     EXPECT_TRUE(ContainsText(
         system,
-        "packetRangeForTasks(m_deferredLightingTask, m_deferredCompositeTask)"
+        ".task = m_deferredLightingTask,\n"
+        "        .context = &deferredLightingStateLifecycle,\n"
+        "        .invoke = prepareDeferredLightingTask,"
     ));
-    EXPECT_FALSE(ContainsText(system, "deferredLightingCompositeTimingPacketsAreDistinct"));
-    EXPECT_TRUE(ContainsText(system, "deferredSubmitter.submitTaskRangeInCompileOrderFromTasks("));
-    EXPECT_TRUE(ContainsText(system, "m_deferredLightingTask,\n                m_deferredCompositeTask,"));
+    EXPECT_TRUE(ContainsText(
+        system,
+        ".task = m_deferredLightingTask,\n"
+        "        .context = &deferredLightingStateLifecycle,\n"
+        "        .invoke = acceptDeferredLightingTask,"
+    ));
+    EXPECT_FALSE(ContainsText(system, "deferredSubmitter"));
     EXPECT_FALSE(ContainsText(system, "s_DeferredLightingCompositePacketCount"));
     EXPECT_FALSE(ContainsText(system, "deferredLightingCompositePacketRange.packetCount =="));
     EXPECT_FALSE(ContainsText(system, "deferredLightingCompositePacketRange.packetCount\n            !="));
 }
 
 
-// The exact terminal packet is retained solely in compiler-owned presentation metadata for the swap-chain binary
-// signal. Every other normal renderer readiness check uses a declared task anchor or a semantic task range.
-TEST(EcsGraphics, OnlyTerminalPresentationRetainsAPacketIdentity){
+// Renderer policy addresses semantic tasks only. The compiler-owned presentation endpoint supplies the terminal
+// task and queue without exposing generated packet identities.
+TEST(EcsGraphics, RendererNormalExecutionUsesSemanticTaskAnchors){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
@@ -1520,15 +1584,42 @@ TEST(EcsGraphics, OnlyTerminalPresentationRetainsAPacketIdentity){
     const AStringView system(systemSource.data(), systemSource.size());
 
     EXPECT_EQ(CountText(system, "packetForTask("), 0u);
+    EXPECT_EQ(CountText(system, "GpuSubmissionPacketId"), 0u);
+    EXPECT_EQ(CountText(system, "GpuSubmissionPacketRange"), 0u);
     EXPECT_TRUE(ContainsText(system, "GpuCompiledPresentEndpoint* const presentationEndpoint"));
     EXPECT_TRUE(ContainsText(system, "m_deferredLightingCompiledGraph.presentEndpoint()"));
-    EXPECT_TRUE(ContainsText(system, "presentationEndpoint->packet"));
-    EXPECT_TRUE(ContainsText(system, "terminalPresentationPacket"));
-    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId deferredLightingPacket"));
-    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId deferredCompositePacket"));
-    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId deferredPresentPacket"));
-    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId deferredLaggedLightingHistoryPacket"));
-    EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId deferredFrameRecoveryPacket"));
+    EXPECT_FALSE(ContainsText(system, "presentationEndpoint->packet"));
+    EXPECT_FALSE(ContainsText(system, "terminalPresentationPacket"));
+    EXPECT_TRUE(ContainsText(system, "normalExecution.terminalTask = terminalPresentationTask;"));
+    EXPECT_TRUE(ContainsText(system, "presentationEndpoint->producer != m_deferredFrameTimingEndTask"));
+    EXPECT_TRUE(ContainsText(system, "presentationEndpoint->queue != primaryGraphicsQueue"));
+    EXPECT_EQ(CountText(system, ".recordAndSubmitNormalGraph("), 1u);
+    EXPECT_EQ(CountText(system, ".recordAndSubmitAcceptedFrontierTask("), 1u);
+    EXPECT_EQ(CountText(system, ".recordAndSubmitTask("), 2u);
+    EXPECT_EQ(CountText(system, ".recordTaskRangeInReadyFrontiers("), 0u);
+    EXPECT_EQ(CountText(system, ".submitTaskRangeInCompileOrderFromTasks("), 0u);
+    EXPECT_EQ(CountText(system, "taskFinalStateSeed("), 0u);
+    EXPECT_TRUE(ContainsText(system, "normalExecution.readyFrontierWorkerPool = &m_world.taskPool();"));
+    EXPECT_TRUE(ContainsText(system, "normalExecution.taskStateBindings = deferredStateBindings;"));
+    EXPECT_TRUE(ContainsText(system, "normalExecution.taskStateBindingCount = deferredStateBindingCount;"));
+    EXPECT_TRUE(ContainsText(system, "normalExecution.taskRecordedCallbacks = normalRecordedCallbacks;"));
+    EXPECT_TRUE(ContainsText(system, "normalExecution.taskRecordedCallbackCount = normalRecordedCallbackCount;"));
+    EXPECT_TRUE(ContainsText(system, "normalExecution.taskTimingTickets = normalTimingTickets;"));
+    EXPECT_TRUE(ContainsText(system, "normalExecution.taskTimingTicketCount = normalTimingTicketCount;"));
+    EXPECT_TRUE(ContainsText(system, "normalExecution.taskAcceptedCallbacks = normalAcceptedCallbacks;"));
+    EXPECT_TRUE(ContainsText(system, "normalExecution.taskAcceptedCallbackCount = normalAcceptedCallbackCount;"));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "normalExecution.taskSubmissionHooks = framePresentationSignal.valid()\n"
+        "        ? terminalPresentationSubmissionHooks\n"
+        "        : nullptr"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "normalExecution.taskSubmissionHookCount = framePresentationSignal.valid()\n"
+        "        ? LengthOf(terminalPresentationSubmissionHooks)\n"
+        "        : 0u"
+    ));
 }
 
 
@@ -1639,18 +1730,22 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
 
     const usize shadowPrepareAcceptanceOffset = system.find("const auto acceptShadowPrepareTask = [](");
     ASSERT_NE(shadowPrepareAcceptanceOffset, AStringView::npos);
-    const usize shadowPreparePrefixAcceptedOffset = system.find(
-        "const bool shadowPreparePrefixAccepted =",
+    const usize normalTimingCallbacksOffset = system.find(
+        "Core::GpuTaskGraphTaskTimingTicket normalTimingTickets[",
         shadowPrepareAcceptanceOffset
     );
-    ASSERT_NE(shadowPreparePrefixAcceptedOffset, AStringView::npos);
+    ASSERT_NE(normalTimingCallbacksOffset, AStringView::npos);
     const AStringView shadowPrepareAcceptance = system.substr(
         shadowPrepareAcceptanceOffset,
-        shadowPreparePrefixAcceptedOffset - shadowPrepareAcceptanceOffset
+        normalTimingCallbacksOffset - shadowPrepareAcceptanceOffset
     );
     EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, "context->frameTimingTransaction->confirmBeginSubmission(token)"));
     EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, ".task = m_deferredShadowPrepareTask,"));
     EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, ".invoke = acceptShadowPrepareTask,"));
+    EXPECT_TRUE(ContainsText(system, "frameTimingTransaction.confirmEndSubmission(finalPresentationSubmissionToken, true)"));
+    EXPECT_TRUE(ContainsText(system, "surfelCounterReadbackFollowsPresentation"));
+    EXPECT_TRUE(ContainsText(system, "laggedLightingHistoryFollowsPresentation"));
+    EXPECT_TRUE(ContainsText(taskGraph, "const Core::GpuTaskId historyCopyDependencies[] = { m_deferredFrameTimingEndTask };"));
     EXPECT_FALSE(ContainsText(system, "acceptGraphicsPrefixBeginTask"));
 }
 
@@ -2201,10 +2296,13 @@ TEST(EcsGraphics, RendererPresentationGraphBindsExactAcquiredTexture){
     // Once the exact back-buffer writer accepted, generic suffix recovery cannot make the acquired image reusable.
     // The renderer must escalate that partial-acceptance edge to Graphics' recreation/abandonment path.
     const usize partialAcceptanceOffset = renderer.find(
-        "const bool presentationBackBufferWriteAccepted = m_deferredLightingSubmissionTransaction.taskToken("
+        "const Core::QueueSubmissionToken deferredPresentSubmissionToken ="
     );
     const usize acceptedWriterOffset = renderer.find("m_deferredPresentTask", partialAcceptanceOffset);
-    const usize recreationOffset = renderer.find("if(presentationBackBufferWriteAccepted){", acceptedWriterOffset);
+    const usize recreationOffset = renderer.find(
+        "if(deferredPresentSubmissionToken.valid() && !finalPresentationSubmissionToken.valid()){",
+        acceptedWriterOffset
+    );
     const usize recoveryFailureOffset = renderer.find("failFrameRenderRecovery();", recreationOffset);
     ASSERT_NE(partialAcceptanceOffset, AStringView::npos);
     ASSERT_NE(acceptedWriterOffset, AStringView::npos);
@@ -3256,28 +3354,31 @@ TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAc
     EXPECT_EQ(CountText(hardwarePrepare, "hardwareResolvePrepareResourceUses.push_back(WriteTextureUse("), 2u);
 
     const usize hardwareStateSourcesOffset = system.find("Core::GpuExternalPacketStateSource hardwareCausticsStateSources[");
-    const usize deferredCompositeStateSourcesOffset = system.find(
-        "Core::GpuExternalPacketStateSource deferredCompositeStateSources[",
+    const usize deferredStateBindingsOffset = system.find(
+        "Core::GpuTaskPacketStateBinding deferredStateBindings[",
         hardwareStateSourcesOffset
     );
-    const usize hardwareAcceptanceOffset = system.find("struct HardwareCausticsAcceptanceContext{");
-    const usize hardwareFailureOffset = system.find("if(!hardwareCausticsStateReady){", hardwareAcceptanceOffset);
+    const usize hardwareLifecycleOffset = system.find("struct HardwareCausticsStateLifecycleContext{");
+    const usize deferredLightingLifecycleOffset = system.find(
+        "const Core::TextureHandle deferredLightingShadowReturnTextures[]",
+        hardwareLifecycleOffset
+    );
     ASSERT_NE(hardwareStateSourcesOffset, AStringView::npos);
-    ASSERT_NE(deferredCompositeStateSourcesOffset, AStringView::npos);
-    ASSERT_NE(hardwareAcceptanceOffset, AStringView::npos);
-    ASSERT_NE(hardwareFailureOffset, AStringView::npos);
-    ASSERT_LT(hardwareStateSourcesOffset, deferredCompositeStateSourcesOffset);
-    ASSERT_LT(hardwareAcceptanceOffset, hardwareFailureOffset);
+    ASSERT_NE(deferredStateBindingsOffset, AStringView::npos);
+    ASSERT_NE(hardwareLifecycleOffset, AStringView::npos);
+    ASSERT_NE(deferredLightingLifecycleOffset, AStringView::npos);
+    ASSERT_LT(hardwareStateSourcesOffset, deferredStateBindingsOffset);
+    ASSERT_LT(hardwareLifecycleOffset, deferredLightingLifecycleOffset);
     const AStringView hardwareStateSources = system.substr(
         hardwareStateSourcesOffset,
-        deferredCompositeStateSourcesOffset - hardwareStateSourcesOffset
+        deferredStateBindingsOffset - hardwareStateSourcesOffset
     );
-    const AStringView hardwareAcceptance = system.substr(
-        hardwareAcceptanceOffset,
-        hardwareFailureOffset - hardwareAcceptanceOffset
+    const AStringView hardwareLifecycle = system.substr(
+        hardwareLifecycleOffset,
+        deferredLightingLifecycleOffset - hardwareLifecycleOffset
     );
 
-    EXPECT_TRUE(ContainsText(system, "s_HardwareCausticsStateSourceCapacity = 2u;"));
+    EXPECT_TRUE(ContainsText(system, "s_HardwareCausticsStateSourceCapacity = 1u;"));
     EXPECT_TRUE(ContainsText(system, "m_hardwareCausticAccumulatorPersistentState(arena)"));
     EXPECT_TRUE(ContainsText(system, "m_hardwareCausticAccumulatorPersistentState.reset();"));
     EXPECT_EQ(CountText(system, "m_hardwareCausticAccumulatorPersistentState.reset();"), 1u);
@@ -3285,12 +3386,40 @@ TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAc
     EXPECT_TRUE(ContainsText(hardwareStateSources, "RendererSystemRenderDetail::s_HardwareCausticsStateSourceCapacity"));
     EXPECT_TRUE(ContainsText(hardwareStateSources, "m_hardwareCausticAccumulatorPersistentState.valid()"));
     EXPECT_TRUE(ContainsText(hardwareStateSources, "m_hardwareCausticAccumulatorPersistentState.source()"));
-    EXPECT_TRUE(ContainsText(hardwareAcceptance, "m_hardwareCausticAccumulatorPersistentState.replaceTextureSubset("));
-    EXPECT_TRUE(ContainsText(hardwareAcceptance, "context->targets->causticAccumulator"));
-    EXPECT_TRUE(ContainsText(hardwareAcceptance, "const Core::GpuTaskGraphTaskAcceptedCallback hardwareCausticsAcceptedCallback{"));
-    EXPECT_TRUE(ContainsText(hardwareAcceptance, "if(context->stateReady && context->usesLaggedHistory){"));
-    EXPECT_TRUE(ContainsText(system, "a rejected record must preserve its prior warm-decay source."));
-    EXPECT_TRUE(ContainsText(system, "if(!hardwareCausticsWasAccepted)\n                    restoreCausticsCpuState();"));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "m_deferredHardwareCausticsTask,\n"
+        "                m_graphicsPrefixTask,\n"
+        "                hardwareCausticsStateSources,"
+    ));
+    EXPECT_TRUE(ContainsText(hardwareLifecycle, "prepareHardwareCausticsTask"));
+    EXPECT_TRUE(ContainsText(hardwareLifecycle, "m_hardwareCausticAccumulatorPersistentState.buildFilteredResourceSubset("));
+    EXPECT_TRUE(ContainsText(hardwareLifecycle, "m_causticIrradianceLightingState.buildFilteredResourceSubset("));
+    EXPECT_TRUE(ContainsText(hardwareLifecycle, "acceptHardwareCausticsTask"));
+    EXPECT_TRUE(ContainsText(hardwareLifecycle, "m_hardwareCausticAccumulatorPersistentState.commit("));
+    EXPECT_TRUE(ContainsText(hardwareLifecycle, "m_causticIrradianceLightingState.commit("));
+    EXPECT_FALSE(ContainsText(hardwareLifecycle, "replaceTextureSubset("));
+    EXPECT_TRUE(ContainsText(
+        system,
+        ".task = m_deferredHardwareCausticsTask,\n"
+        "            .context = &hardwareCausticsStateLifecycle,\n"
+        "            .invoke = prepareHardwareCausticsTask,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        ".task = m_deferredHardwareCausticsTask,\n"
+        "            .context = &hardwareCausticsStateLifecycle,\n"
+        "            .invoke = acceptHardwareCausticsTask,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "(selectedCausticsSubmissionToken.valid() && !selectedCausticsStateReady)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "if(!selectedCausticsSubmissionToken.valid())\n"
+        "                    restoreCausticsCpuState();"
+    ));
 }
 
 
@@ -3613,7 +3742,7 @@ TEST(EcsGraphics, ShadowTemporalScratchRetainsAcceptedStateAcrossGraphicsRoute){
     EXPECT_TRUE(ContainsText(acceptedShadow, "deferredTargets.shadowSoftGeometry,"));
     EXPECT_TRUE(ContainsText(acceptedShadow, "deferredTargets.shadowSoftGeometryPrev,"));
     EXPECT_TRUE(ContainsText(acceptedShadow, "m_shadowComputePersistentState.buildFilteredResourceSubset("));
-    EXPECT_TRUE(ContainsText(acceptedShadow, "if(shadowVisibilityRunsOnCompute){"));
+    EXPECT_TRUE(ContainsText(acceptedShadow, "if(context->runsOnCompute){"));
     EXPECT_TRUE(ContainsText(acceptedShadow, "m_shadowVisibilityReturnState.buildFilteredResourceSubset("));
     EXPECT_TRUE(ContainsText(acceptedShadow, "context->renderer->m_shadowVisibilityReturnState.commit("));
     EXPECT_TRUE(ContainsText(acceptedShadow, "context->renderer->m_shadowComputePersistentState.commit("));
@@ -3621,8 +3750,14 @@ TEST(EcsGraphics, ShadowTemporalScratchRetainsAcceptedStateAcrossGraphicsRoute){
     EXPECT_TRUE(ContainsText(
         system,
         ".task = m_deferredShadowVisibilityTask,\n"
-        "                .context = &shadowVisibilityAcceptance,\n"
-        "                .invoke = acceptShadowVisibilityTask,"
+        "        .context = &shadowVisibilityStateLifecycle,\n"
+        "        .invoke = prepareShadowVisibilityTask,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        ".task = m_deferredShadowVisibilityTask,\n"
+        "        .context = &shadowVisibilityStateLifecycle,\n"
+        "        .invoke = acceptShadowVisibilityTask,"
     ));
 }
 
@@ -3654,31 +3789,43 @@ TEST(EcsGraphics, SoftwareCausticsScratchRetainsAcceptedStateAcrossGraphicsRoute
     ));
 
     const usize candidatesOffset = system.find("const Core::TextureHandle causticsComputeScratchTextures[]");
-    const usize callbacksOffset = system.find("const Core::GpuTaskGraphTaskAcceptedCallback shadowEffectsAcceptedCallbacks[]", candidatesOffset);
+    const usize callbacksOffset = system.find(
+        "Core::GpuTaskGraphTaskRecordedCallback normalRecordedCallbacks[",
+        candidatesOffset
+    );
     ASSERT_NE(candidatesOffset, AStringView::npos);
     ASSERT_NE(callbacksOffset, AStringView::npos);
     ASSERT_LT(candidatesOffset, callbacksOffset);
     const AStringView acceptedCaustics = system.substr(candidatesOffset, callbacksOffset - candidatesOffset);
-    EXPECT_TRUE(ContainsText(acceptedCaustics, "if(laggedAsyncLightingSchedule){"));
+    EXPECT_TRUE(ContainsText(acceptedCaustics, "if(context->usesLaggedHistory){"));
     EXPECT_TRUE(ContainsText(acceptedCaustics, "m_causticIrradianceLightingState.buildFilteredResourceSubset("));
-    EXPECT_TRUE(ContainsText(acceptedCaustics, "if(softwareCausticsRunsOnCompute){"));
+    EXPECT_TRUE(ContainsText(acceptedCaustics, "if(context->runsOnCompute){"));
     EXPECT_TRUE(ContainsText(acceptedCaustics, "m_causticIrradianceReturnState.buildFilteredResourceSubset("));
     EXPECT_TRUE(ContainsText(acceptedCaustics, "m_causticsComputePersistentState.buildFilteredResourceSubset("));
     EXPECT_TRUE(ContainsText(acceptedCaustics, "context->renderer->m_causticIrradianceLightingState.commit("));
     EXPECT_TRUE(ContainsText(acceptedCaustics, "context->renderer->m_causticIrradianceReturnState.commit("));
     EXPECT_TRUE(ContainsText(acceptedCaustics, "context->renderer->m_causticsComputePersistentState.commit("));
-    EXPECT_TRUE(ContainsText(system, ".task = m_deferredSoftwareCausticsTask,"));
-    EXPECT_TRUE(ContainsText(system, "shadowEffectsSubmitted && softwareCausticsSubmissionToken.valid()"));
-    const usize stateFailureOffset = system.find(
-        "if(!hardwareShadowSupported && softwareCausticsSubmissionToken.valid() && !softwareCausticsAcceptance.stateReady)"
-    );
-    const usize surfelSubmitOffset = system.find("if(!submitDeferredSurfelGi())", stateFailureOffset);
-    ASSERT_NE(stateFailureOffset, AStringView::npos);
-    ASSERT_NE(surfelSubmitOffset, AStringView::npos);
-    ASSERT_LT(stateFailureOffset, surfelSubmitOffset);
-    const AStringView stateFailure = system.substr(stateFailureOffset, surfelSubmitOffset - stateFailureOffset);
-    EXPECT_TRUE(ContainsText(stateFailure, "restoreUnacceptedShadowEffectsCpuState();"));
-    EXPECT_FALSE(ContainsText(stateFailure, "restoreAvboitCpuState();"));
+    EXPECT_TRUE(ContainsText(
+        system,
+        ".task = m_deferredSoftwareCausticsTask,\n"
+        "            .context = &softwareCausticsStateLifecycle,\n"
+        "            .invoke = prepareSoftwareCausticsTask,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        ".task = m_deferredSoftwareCausticsTask,\n"
+        "            .context = &softwareCausticsStateLifecycle,\n"
+        "            .invoke = acceptSoftwareCausticsTask,"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "(selectedCausticsSubmissionToken.valid() && !selectedCausticsStateReady)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "if(!selectedCausticsSubmissionToken.valid())\n"
+        "                    restoreCausticsCpuState();"
+    ));
 }
 
 
@@ -4215,8 +4362,8 @@ TEST(EcsGraphics, LaggedLightingHistoryConsumersOwnSemanticPriorTokens){
     ));
     EXPECT_EQ(CountText(
         render,
-        "!laggedLightingHistoryWriterWaitPending || m_deferredLightingHistoryWriterDrainCompletion.valid()"
-    ), 3u);
+        "laggedLightingHistoryWriterWaitPending && !m_deferredLightingHistoryWriterDrainCompletion.valid()"
+    ), 1u);
     EXPECT_TRUE(ContainsText(render, "device.queueGetCompletedInstance("));
     EXPECT_FALSE(ContainsText(render, "consumeLaggedLightingHistoryWriterDrain"));
     EXPECT_TRUE(ContainsText(lighting, ".acceptedToken = &m_laggedLightingHistorySubmissionToken"));
@@ -4721,48 +4868,48 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
         rayTracing.substr(discardPreflightOffset, preflightOffset - discardPreflightOffset),
         "meshResources.blasBackingFresh = false;"
     ));
-    // A missing or rejected candidate occurs after native packet acceptance. Retain plan cleanup, but force the
-    // established device-recreation recovery path before any fresh backing can be retried with Common.
-    EXPECT_TRUE(ContainsText(system, "bool shadowPrepareStateLostAfterAcceptance = false;"));
-    EXPECT_EQ(CountText(system, "context->shadowPrepareStateLostAfterAcceptance = true;"), 2u);
+    // Candidate creation happens after recording but before native acceptance. A failed prepare callback therefore
+    // rejects the graph without publishing state; a failed accepted callback is surfaced by the unified state guard.
     EXPECT_TRUE(ContainsText(
         system,
-        "context->shadowPrepareStateLostAfterAcceptance = true;\n"
-        "                renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();\n"
-        "                context->shadowPrepareStateReady = false;\n"
-        "                return false;"
+        "context->stateReady = false;\n"
+        "            renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();\n"
+        "            return false;"
     ));
     EXPECT_TRUE(ContainsText(
         system,
-        "context->shadowPrepareStateLostAfterAcceptance = true;\n"
-        "                    renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();\n"
-        "                    context->shadowPrepareStateReady = false;\n"
-        "                    return false;"
+        "context->stateReady = renderer.m_shadowPreparePersistentState.commit(*context->stateCandidate);"
     ));
     EXPECT_TRUE(ContainsText(
         system,
-        "if(!recovered || prefixTimingAcceptance.shadowPrepareStateLostAfterAcceptance)\n"
-        "                failFrameRenderRecovery();"
+        "if(!context->stateReady){\n"
+        "            renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();"
     ));
-    const usize stateLossAfterAcceptanceOffset = system.find("context->shadowPrepareStateLostAfterAcceptance = true;");
-    const usize commitStateLossOffset = system.find(
-        "context->shadowPrepareStateLostAfterAcceptance = true;",
-        commitPersistentStateOffset
-    );
+    EXPECT_TRUE(ContainsText(system, "const bool acceptedStateLost ="));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "(shadowPrepareSubmissionToken.valid() && !shadowPrepareStateLifecycle.stateReady)"
+    ));
+    EXPECT_TRUE(ContainsText(
+        system,
+        "if(!recovered || acceptedStateLost || (!presentationSignalReady && finalPresentationSubmissionToken.valid()))"
+    ));
+    const usize stateReadyFalseOffset = system.find("context->stateReady = false;");
+    const usize acceptedStateLostOffset = system.find("const bool acceptedStateLost =");
     const usize stateLossRecoveryGuardOffset = system.find(
-        "if(!recovered || prefixTimingAcceptance.shadowPrepareStateLostAfterAcceptance)"
+        "if(!recovered || acceptedStateLost || (!presentationSignalReady && finalPresentationSubmissionToken.valid()))"
     );
     const usize stateLossRecoveryOffset = system.find("failFrameRenderRecovery();", stateLossRecoveryGuardOffset);
-    ASSERT_NE(stateLossAfterAcceptanceOffset, AStringView::npos);
-    ASSERT_NE(commitStateLossOffset, AStringView::npos);
+    ASSERT_NE(stateReadyFalseOffset, AStringView::npos);
+    ASSERT_NE(acceptedStateLostOffset, AStringView::npos);
     ASSERT_NE(stateLossRecoveryGuardOffset, AStringView::npos);
     ASSERT_NE(stateLossRecoveryOffset, AStringView::npos);
     EXPECT_LT(commitPersistentStateOffset, confirmSceneTlasOffset);
     EXPECT_LT(confirmSceneTlasOffset, confirmMeshBlasOffset);
     EXPECT_LT(confirmMeshBlasOffset, confirmDirectHandoffOffset);
-    EXPECT_LT(stateLossAfterAcceptanceOffset, stateLossRecoveryGuardOffset);
-    EXPECT_LT(commitPersistentStateOffset, commitStateLossOffset);
-    EXPECT_LT(commitStateLossOffset, stateLossRecoveryGuardOffset);
+    EXPECT_LT(stateReadyFalseOffset, acceptedStateLostOffset);
+    EXPECT_LT(commitPersistentStateOffset, acceptedStateLostOffset);
+    EXPECT_LT(acceptedStateLostOffset, stateLossRecoveryGuardOffset);
     EXPECT_LT(stateLossRecoveryGuardOffset, stateLossRecoveryOffset);
 }
 

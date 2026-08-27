@@ -55,7 +55,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         )
     );
     // Prepared transparent CSG clears the two persistent interval values through the same first/last primitive
-    // bracket. Keep both with AVBOIT Pre so its stable timing ticket and accepted endpoint remain authoritative.
+    // bracket. Keep both with AVBOIT Pre so its stable timing binding and packet-local handoff remain authoritative.
     const bool avboitPrePacketContainsTransparentCsgClear =
         (!taskGraphStage.m_transparentCsgIntervalClearFirstTask.valid()
             && !taskGraphStage.m_transparentCsgIntervalClearTask.valid())
@@ -144,7 +144,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         )
     ;
     // The graph-only finalizer lowers the final attachment transition, so it is part of accumulation's accepted
-    // Graphics packet and its timing/submission endpoint. A split here would let Composite bypass that handoff.
+    // Graphics packet and timing endpoint. A split here would let Composite bypass that handoff.
     const bool avboitAccumulationPacketContainsFinalizer = !hasTransparentRenderers
         || compiledGraph.tasksSharePacket(
             taskGraphStage.m_accumulationTask,
@@ -568,14 +568,12 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         && avboitAccumulationSharedComputeEmulationMerged
     ;
     const RendererTaskGraphTransparencyStage stage = taskGraphStage.transparencyStage();
-    const Core::GpuTaskId submissionCompletionTask = stage.completionTask;
     const Core::GpuSubmissionPacketRange packetRange = compiledGraph.packetRangeForTasks(
         stage.firstTask,
-        submissionCompletionTask
+        stage.completionTask
     );
     return {
         .m_stage = stage,
-        .m_submissionCompletionTask = submissionCompletionTask,
         .m_valid =
             compiledGraph.valid()
             && stage.valid()

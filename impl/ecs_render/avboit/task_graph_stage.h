@@ -21,8 +21,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// AVBOIT owns every graph-local task identifier required to declare, validate, and submit its transparency
-// stage. The host observes only the typed first/completion boundary published by transparencyStage().
+// AVBOIT owns every graph-local task identifier required to declare and validate its transparency stage. The host
+// observes the typed first/completion boundary published by transparencyStage() and owns whole-graph execution.
 struct RendererAvboitTaskGraphStageState{
     Core::GpuTaskId m_clearFirstTask;
     Core::GpuTaskId m_clearTask;
@@ -61,47 +61,25 @@ struct RendererAvboitTaskGraphStageState{
 };
 
 // The host sees only this immutable result after graph compilation. AVBOIT keeps the concrete task topology,
-// queue checks, and packet-order invariants inside its own domain implementation. The submission endpoint can
-// differ from the semantic stage completion: an empty transparency frame completes its consumer dependency at
-// Occupancy, while its accepted packet range intentionally terminates at AVBOIT Pre.
+// queue checks, and packet-order invariants inside its own domain implementation.
 struct RendererAvboitTaskGraphValidation{
     RendererTaskGraphTransparencyStage m_stage;
-    Core::GpuTaskId m_submissionCompletionTask;
     bool m_valid = false;
 
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
     [[nodiscard]] const RendererTaskGraphTransparencyStage& stage()const noexcept{ return m_stage; }
-    [[nodiscard]] const Core::GpuTaskId& submissionCompletionTask()const noexcept{ return m_submissionCompletionTask; }
 };
 
-// Submission stays inside AVBOIT, but the graph artifact and its frame-owned timing tickets remain supplied by
-// the graph host. This keeps the domain free to change its internal packet topology without kernel rewiring.
+// AVBOIT contributes semantic timing bindings to its host's whole-graph execution. This keeps the domain free to
+// change its internal packet topology without taking ownership of graph recording or submission.
+inline constexpr usize s_AvboitTaskGraphTimingTicketCapacity = 7u;
+
 struct RendererAvboitTaskGraphTimingTickets{
     Core::GpuTimingSubmissionTicket& m_pre;
     Core::GpuTimingSubmissionTicket& m_depthWarp;
     Core::GpuTimingSubmissionTicket& m_extinction;
     Core::GpuTimingSubmissionTicket& m_integration;
     Core::GpuTimingSubmissionTicket& m_accumulation;
-};
-
-struct RendererAvboitTaskGraphSubmitContext{
-    Core::Device& m_device;
-    Core::GpuTaskGraph& m_graph;
-    const Core::GpuCompiledGraph& m_compiledGraph;
-    const Core::GpuRecordedGraph& m_recordedGraph;
-    Core::GpuGraphSubmissionTransaction& m_submissionTransaction;
-    RendererAvboitTaskGraphTimingTickets m_timingTickets;
-};
-
-struct RendererAvboitTaskGraphSubmission{
-    Core::QueueSubmissionToken m_preToken;
-    Core::QueueSubmissionToken m_completionToken;
-    bool m_submitterAccepted = false;
-
-    [[nodiscard]] bool accepted()const noexcept{
-        return m_submitterAccepted && m_preToken.valid() && m_completionToken.valid();
-    }
-    [[nodiscard]] bool preAccepted()const noexcept{ return m_preToken.valid(); }
 };
 
 
@@ -112,3 +90,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

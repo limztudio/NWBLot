@@ -1313,7 +1313,7 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     BuildTestFrameGraph(testArena.arena, nodes, edges);
-    EXPECT_TRUE(Telemetry::RecordFrameGraph(recorder, 909u, nodes, edges, 4u));
+    EXPECT_TRUE(Telemetry::RecordFrameGraph(recorder, stats.publishFrameIndex, nodes, edges, 4u));
 
     Log::TelemetryReport report(testArena.arena);
     EXPECT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
@@ -1326,7 +1326,7 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
     EXPECT_TRUE(report.summary.hasFrameRange);
     EXPECT_EQ(report.summary.minFrameIndex, 4u);
-    EXPECT_EQ(report.summary.maxFrameIndex, 909u);
+    EXPECT_EQ(report.summary.maxFrameIndex, snapshot.frameIndex);
     EXPECT_EQ(report.summary.cpuTimingEventCount, 1u);
     EXPECT_EQ(report.summary.cpuTimingSampleCount, stats.sampleCount);
     EXPECT_EQ(report.summary.cpuTimingSeconds, stats.seconds);
@@ -1340,6 +1340,119 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
     EXPECT_TRUE(ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "source,scope,publish_frame"));
     EXPECT_TRUE(ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "cpu,gbuffer"));
     EXPECT_TRUE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "GBuffer Pass\\n125.000 ms"));
+}
+
+TEST(Telemetry, TelemetryReportPreservesEveryFrameGraphAndCorrelatesTimingByFrame){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+
+    const Name gbufferScopeName("gbuffer");
+    NWB::Core::Perf::TimingStats firstTiming = MakeTestTimingStats();
+    firstTiming.seconds = 0.041;
+    firstTiming.publishFrameIndex = 41u;
+    firstTiming.firstSampleFrameIndex = 40u;
+    firstTiming.lastSampleFrameIndex = 40u;
+    ASSERT_TRUE(Telemetry::RecordPerfTiming(
+        recorder,
+        Telemetry::PerfTimingSource::Gpu,
+        gbufferScopeName,
+        "gbuffer",
+        firstTiming,
+        70u
+    ));
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 41u, nodes, edges, 7u));
+
+    NWB::Core::Perf::TimingStats secondTiming = MakeTestTimingStats();
+    secondTiming.seconds = 0.042;
+    secondTiming.publishFrameIndex = 42u;
+    secondTiming.firstSampleFrameIndex = 41u;
+    secondTiming.lastSampleFrameIndex = 41u;
+    ASSERT_TRUE(Telemetry::RecordPerfTiming(
+        recorder,
+        Telemetry::PerfTimingSource::Gpu,
+        gbufferScopeName,
+        "gbuffer",
+        secondTiming,
+        80u
+    ));
+
+    nodes[0u].label = "Second GBuffer Pass";
+    nodes[0u].flags = 129u;
+    edges[0u].flags = 64u;
+    edges[1u].flags = 3u;
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 42u, nodes, edges, 8u));
+
+    nodes[0u].label = "Unmatched GBuffer Pass";
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 43u, nodes, edges, 9u));
+
+    Log::TelemetryReport report(testArena.arena);
+    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    EXPECT_EQ(report.summary.frameGraphFrameCount, 3u);
+
+    const AStringView json(report.json.data(), report.json.size());
+    const usize firstJsonGraph = json.find("\"frameIndex\": 41");
+    const usize secondJsonGraph = json.find("\"frameIndex\": 42");
+    const usize thirdJsonGraph = json.find("\"frameIndex\": 43");
+    ASSERT_NE(firstJsonGraph, AStringView::npos);
+    ASSERT_NE(secondJsonGraph, AStringView::npos);
+    ASSERT_NE(thirdJsonGraph, AStringView::npos);
+    EXPECT_LT(firstJsonGraph, secondJsonGraph);
+    EXPECT_LT(secondJsonGraph, thirdJsonGraph);
+    const AStringView firstJsonRecord = json.substr(firstJsonGraph, secondJsonGraph - firstJsonGraph);
+    const AStringView secondJsonRecord = json.substr(secondJsonGraph, thirdJsonGraph - secondJsonGraph);
+    const AStringView thirdJsonRecord = json.substr(thirdJsonGraph);
+    EXPECT_TRUE(ContainsText(firstJsonRecord, "\"streamId\": 7"));
+    EXPECT_TRUE(ContainsText(secondJsonRecord, "\"streamId\": 8"));
+    EXPECT_TRUE(ContainsText(thirdJsonRecord, "\"streamId\": 9"));
+    EXPECT_TRUE(ContainsText(firstJsonRecord, "\"label\": \"GBuffer Pass\", \"kind\": \"pass\", \"flags\": 1"));
+    EXPECT_TRUE(ContainsText(secondJsonRecord, "\"label\": \"Second GBuffer Pass\", \"kind\": \"pass\", \"flags\": 129"));
+    EXPECT_TRUE(ContainsText(thirdJsonRecord, "\"label\": \"Unmatched GBuffer Pass\", \"kind\": \"pass\", \"flags\": 129"));
+    EXPECT_TRUE(ContainsText(firstJsonRecord, "\"from\": 1, \"to\": 2, \"kind\": \"reads\", \"flags\": 2"));
+    EXPECT_TRUE(ContainsText(secondJsonRecord, "\"from\": 1, \"to\": 2, \"kind\": \"reads\", \"flags\": 3"));
+    EXPECT_TRUE(ContainsText(firstJsonRecord, "\"from\": 0, \"to\": 1, \"kind\": \"writes\", \"flags\": 0"));
+    EXPECT_TRUE(ContainsText(secondJsonRecord, "\"from\": 0, \"to\": 1, \"kind\": \"writes\", \"flags\": 64"));
+
+    char gbufferIdentityText[NameDetail::s_DebugHashTextLength + 1u] = {};
+    NameDetail::HashToDebugString(Name("gbuffer").hash(), gbufferIdentityText, sizeof(gbufferIdentityText));
+    constexpr AStringView identityPrefix = "\"identity\": \"";
+    const usize identityOffset = json.find(identityPrefix);
+    ASSERT_NE(identityOffset, AStringView::npos);
+    EXPECT_EQ(
+        json.substr(identityOffset + identityPrefix.size(), NameDetail::s_DebugHashTextLength),
+        AStringView(gbufferIdentityText, NameDetail::s_DebugHashTextLength)
+    );
+
+    const AStringView dot(report.graph.data(), report.graph.size());
+    const usize firstDotGraph = dot.find("digraph frame_graph_41_7_0");
+    const usize secondDotGraph = dot.find("digraph frame_graph_42_8_1");
+    const usize thirdDotGraph = dot.find("digraph frame_graph_43_9_2");
+    ASSERT_NE(firstDotGraph, AStringView::npos);
+    ASSERT_NE(secondDotGraph, AStringView::npos);
+    ASSERT_NE(thirdDotGraph, AStringView::npos);
+    EXPECT_LT(firstDotGraph, secondDotGraph);
+    EXPECT_LT(secondDotGraph, thirdDotGraph);
+    EXPECT_EQ(dot.find("digraph frame_graph_", thirdDotGraph + 1u), AStringView::npos);
+    const AStringView firstDotRecord = dot.substr(firstDotGraph, secondDotGraph - firstDotGraph);
+    const AStringView secondDotRecord = dot.substr(secondDotGraph, thirdDotGraph - secondDotGraph);
+    const AStringView thirdDotRecord = dot.substr(thirdDotGraph);
+    EXPECT_TRUE(ContainsText(firstDotRecord, AStringView(gbufferIdentityText, NameDetail::s_DebugHashTextLength)));
+    EXPECT_TRUE(ContainsText(secondDotRecord, AStringView(gbufferIdentityText, NameDetail::s_DebugHashTextLength)));
+    EXPECT_TRUE(ContainsText(thirdDotRecord, AStringView(gbufferIdentityText, NameDetail::s_DebugHashTextLength)));
+    EXPECT_TRUE(ContainsText(firstDotRecord, "GBuffer Pass\\n41.000 ms"));
+    EXPECT_TRUE(ContainsText(secondDotRecord, "Second GBuffer Pass\\n42.000 ms"));
+    EXPECT_TRUE(ContainsText(thirdDotRecord, "Unmatched GBuffer Pass"));
+    EXPECT_FALSE(ContainsText(thirdDotRecord, " ms"));
+    EXPECT_TRUE(ContainsText(firstDotRecord, "kind=\"pass\", flags=1"));
+    EXPECT_TRUE(ContainsText(secondDotRecord, "kind=\"pass\", flags=129"));
+    EXPECT_TRUE(ContainsText(firstDotRecord, "label=\"reads\", flags=2"));
+    EXPECT_TRUE(ContainsText(secondDotRecord, "label=\"reads\", flags=3"));
+    EXPECT_TRUE(ContainsText(firstDotRecord, "label=\"writes\", flags=0"));
+    EXPECT_TRUE(ContainsText(secondDotRecord, "label=\"writes\", flags=64"));
 }
 
 TEST(Telemetry, TelemetryIngestStoresRawAndReports){

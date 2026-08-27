@@ -4,6 +4,7 @@
 
 #include "report.h"
 
+#include <global/hash_utils.h>
 #include <global/type_properties.h>
 
 
@@ -32,10 +33,25 @@ static constexpr f64 s_MillisecondsPerSecond = 1000.0;
 static constexpr usize s_PerfCsvFixedReserveBytes = 128u;
 static constexpr usize s_PerfCsvBytesPerEvent = 128u;
 static constexpr usize s_TimedGraphDotFixedReserveBytes = 96u;
+static constexpr usize s_TimedGraphDotBytesPerGraph = 128u;
 static constexpr usize s_TimedGraphDotBytesPerNode = 64u;
 static constexpr usize s_TimedGraphDotBytesPerEdge = 40u;
 static constexpr usize s_TimedGraphDotTimingLabelExtraBytes = 16u;
 static constexpr usize s_JsonReportReserveBytes = 1024u;
+static constexpr usize s_JsonReportBytesPerGraph = 128u;
+static constexpr usize s_JsonReportBytesPerNode = 192u;
+static constexpr usize s_JsonReportBytesPerEdge = 96u;
+
+struct FrameGraphReportRecord{
+    u32 streamId = 0u;
+    Telemetry::FrameGraphPayload payload;
+
+    explicit FrameGraphReportRecord(TelemetryArena& arena)
+        : payload(arena)
+    {}
+};
+
+using FrameGraphReportRecords = Vector<FrameGraphReportRecord, TelemetryArena>;
 
 [[nodiscard]] usize EventKindBucket(const Telemetry::EventKind::Enum kind)noexcept{
     const usize index = static_cast<usize>(kind);
@@ -121,7 +137,24 @@ void AddFrameGraph(TelemetryReportSummary& summary, const Telemetry::FrameGraphP
         summary.maxFrameGraphEdgeCount = edgeCount;
 }
 
-using GraphTimingMap = HashMap<Name, f64, Hasher<Name>, EqualTo<Name>, TelemetryArena>;
+struct GraphTimingKey{
+    u64 frameIndex = 0u;
+    Name scopeName = NAME_NONE;
+};
+
+inline bool operator==(const GraphTimingKey& lhs, const GraphTimingKey& rhs)noexcept{
+    return lhs.frameIndex == rhs.frameIndex && lhs.scopeName == rhs.scopeName;
+}
+
+struct GraphTimingKeyHasher{
+    usize operator()(const GraphTimingKey& key)const noexcept{
+        usize seed = Hasher<u64>{}(key.frameIndex);
+        ::HashCombine(seed, key.scopeName);
+        return seed;
+    }
+};
+
+using GraphTimingMap = HashMap<GraphTimingKey, f64, GraphTimingKeyHasher, EqualTo<GraphTimingKey>, TelemetryArena>;
 
 [[nodiscard]] usize EstimatePerfCsvReserve(const usize eventCount)noexcept{
     return s_PerfCsvFixedReserveBytes + eventCount * s_PerfCsvBytesPerEvent;
@@ -133,10 +166,38 @@ using GraphTimingMap = HashMap<Name, f64, Hasher<Name>, EqualTo<Name>, Telemetry
         labelBytes += node.label.size();
 
     return s_TimedGraphDotFixedReserveBytes
+        + s_TimedGraphDotBytesPerGraph
         + graph.nodes.size() * s_TimedGraphDotBytesPerNode
         + graph.edges.size() * s_TimedGraphDotBytesPerEdge
         + labelBytes
     ;
+}
+
+[[nodiscard]] usize EstimateTimedGraphsDotReserve(const FrameGraphReportRecords& graphs)noexcept{
+    usize reserveBytes = 0u;
+    for(const FrameGraphReportRecord& graph : graphs)
+        reserveBytes += EstimateTimedGraphDotReserve(graph.payload);
+    return reserveBytes;
+}
+
+[[nodiscard]] usize EstimateJsonReportReserve(const FrameGraphReportRecords& graphs)noexcept{
+    usize reserveBytes = s_JsonReportReserveBytes;
+    for(const FrameGraphReportRecord& graph : graphs){
+        reserveBytes += s_JsonReportBytesPerGraph;
+        reserveBytes += graph.payload.nodes.size() * s_JsonReportBytesPerNode;
+        reserveBytes += graph.payload.edges.size() * s_JsonReportBytesPerEdge;
+        for(const Telemetry::FrameGraphNodePayload& node : graph.payload.nodes)
+            reserveBytes += node.label.size();
+    }
+    return reserveBytes;
+}
+
+[[nodiscard]] AStringView FrameGraphNodeIdentityText(
+    const Telemetry::FrameGraphNodePayload& node,
+    char (&identityText)[NameDetail::s_DebugHashTextLength + 1u]
+)noexcept{
+    NameDetail::HashToDebugString(node.name.hash(), identityText, sizeof(identityText));
+    return AStringView(identityText, NameDetail::s_DebugHashTextLength);
 }
 
 [[nodiscard]] const char* FrameGraphNodeShape(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
@@ -149,6 +210,20 @@ using GraphTimingMap = HashMap<Name, f64, Hasher<Name>, EqualTo<Name>, Telemetry
     case Telemetry::FrameGraphNodeKind::Unknown:
     default:
         return "box";
+    }
+}
+
+[[nodiscard]] const char* FrameGraphNodeKindText(const Telemetry::FrameGraphNodeKind::Enum kind)noexcept{
+    switch(kind){
+    case Telemetry::FrameGraphNodeKind::Pass:
+        return "pass";
+    case Telemetry::FrameGraphNodeKind::Resource:
+        return "resource";
+    case Telemetry::FrameGraphNodeKind::External:
+        return "external";
+    case Telemetry::FrameGraphNodeKind::Unknown:
+    default:
+        return "unknown";
     }
 }
 
@@ -166,20 +241,29 @@ using GraphTimingMap = HashMap<Name, f64, Hasher<Name>, EqualTo<Name>, Telemetry
     }
 }
 
-// Joins the decoded frame-graph topology with per-scope timing (keyed by Name hash, which is
-// shared between graph nodes and perf-timing scopes) and emits a Graphviz DOT timed frame graph.
-void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayload& graph, const GraphTimingMap& timing, AString<TelemetryArena>& out){
-    out.clear();
-    out.reserve(EstimateTimedGraphDotReserve(graph));
-    out += "digraph frame_graph {\n";
+// Joins each decoded frame-graph topology with timing from its exact frame and scope Name while retaining every
+// capture, stable identity, and opaque producer-owned flag byte. A timing stream need not match the graph stream.
+void AppendTimedGraphDot(
+    TelemetryArena& arena,
+    const FrameGraphReportRecord& record,
+    const usize graphIndex,
+    const GraphTimingMap& timing,
+    AString<TelemetryArena>& out
+){
+    const Telemetry::FrameGraphPayload& graph = record.payload;
+    StringAppendFormat(out, "digraph frame_graph_{}_{}_{} {{\n", graph.frameIndex, record.streamId, graphIndex);
+    StringAppendFormat(out, "  graph [label=\"Frame {} stream {}\"];\n", graph.frameIndex, record.streamId);
     out += "  rankdir=LR;\n";
     out += "  node [shape=box, fontname=\"monospace\"];\n";
 
     AString<TelemetryArena> timedLabel(arena);
     for(usize i = 0u; i < graph.nodes.size(); ++i){
         const Telemetry::FrameGraphNodePayload& node = graph.nodes[i];
+        char identityText[NameDetail::s_DebugHashTextLength + 1u] = {};
+        const AStringView identity = FrameGraphNodeIdentityText(node, identityText);
 
-        const auto timed = timing.find(node.name);
+        const GraphTimingKey timingKey{ graph.frameIndex, node.name };
+        const auto timed = timing.find(timingKey);
         const AStringView labelView(node.label.data(), node.label.size());
         StringAppendFormat(out, "  n{} [shape={}, label=", i, FrameGraphNodeShape(node.kind));
         if(timed != timing.end()){
@@ -193,21 +277,96 @@ void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayloa
         }
         else
             AppendDotQuotedText(out, labelView);
-        out += "];\n";
+        out += ", identity=";
+        AppendDotQuotedText(out, identity);
+        out += ", kind=";
+        AppendDotQuotedText(out, AStringView(FrameGraphNodeKindText(node.kind)));
+        StringAppendFormat(out, ", flags={}];\n", static_cast<u32>(node.flags));
     }
 
     for(const Telemetry::FrameGraphEdgePayload& edge : graph.edges){
         StringAppendFormat(out, "  n{} -> n{} [label=", edge.fromNodeIndex, edge.toNodeIndex);
         AppendDotQuotedText(out, AStringView(FrameGraphEdgeLabel(edge.kind)));
-        out += "];\n";
+        StringAppendFormat(out, ", flags={}];\n", static_cast<u32>(edge.flags));
     }
 
     out += "}\n";
 }
 
-void BuildJson(const TelemetryReportSummary& summary, AString<TelemetryArena>& out){
+void BuildTimedGraphsDot(
+    TelemetryArena& arena,
+    const FrameGraphReportRecords& graphs,
+    const GraphTimingMap& timing,
+    AString<TelemetryArena>& out
+){
     out.clear();
-    out.reserve(s_JsonReportReserveBytes);
+    out.reserve(EstimateTimedGraphsDotReserve(graphs));
+    for(usize graphIndex = 0u; graphIndex < graphs.size(); ++graphIndex){
+        AppendTimedGraphDot(arena, graphs[graphIndex], graphIndex, timing, out);
+        if(graphIndex + 1u != graphs.size())
+            out += '\n';
+    }
+}
+
+void AppendFrameGraphJson(
+    const FrameGraphReportRecord& record,
+    const usize graphIndex,
+    const bool finalGraph,
+    AString<TelemetryArena>& out
+){
+    const Telemetry::FrameGraphPayload& graph = record.payload;
+    out += "      {\n";
+    StringAppendFormat(out, "        \"captureIndex\": {},\n", graphIndex);
+    StringAppendFormat(out, "        \"frameIndex\": {},\n", graph.frameIndex);
+    StringAppendFormat(out, "        \"streamId\": {},\n", record.streamId);
+    out += "        \"nodes\": [\n";
+    for(usize nodeIndex = 0u; nodeIndex < graph.nodes.size(); ++nodeIndex){
+        const Telemetry::FrameGraphNodePayload& node = graph.nodes[nodeIndex];
+        char identityText[NameDetail::s_DebugHashTextLength + 1u] = {};
+        const AStringView identity = FrameGraphNodeIdentityText(node, identityText);
+
+        StringAppendFormat(out, "          {{\"index\": {}, \"identity\": ", nodeIndex);
+        AppendJsonQuotedText(out, identity);
+        out += ", \"label\": ";
+        AppendJsonQuotedText(out, AStringView(node.label.data(), node.label.size()));
+        out += ", \"kind\": ";
+        AppendJsonQuotedText(out, AStringView(FrameGraphNodeKindText(node.kind)));
+        StringAppendFormat(
+            out,
+            ", \"flags\": {}}}{}\n",
+            static_cast<u32>(node.flags),
+            nodeIndex + 1u == graph.nodes.size() ? "" : ","
+        );
+    }
+    out += "        ],\n";
+    out += "        \"edges\": [\n";
+    for(usize edgeIndex = 0u; edgeIndex < graph.edges.size(); ++edgeIndex){
+        const Telemetry::FrameGraphEdgePayload& edge = graph.edges[edgeIndex];
+        StringAppendFormat(
+            out,
+            "          {{\"from\": {}, \"to\": {}, \"kind\": ",
+            edge.fromNodeIndex,
+            edge.toNodeIndex
+        );
+        AppendJsonQuotedText(out, AStringView(FrameGraphEdgeLabel(edge.kind)));
+        StringAppendFormat(
+            out,
+            ", \"flags\": {}}}{}\n",
+            static_cast<u32>(edge.flags),
+            edgeIndex + 1u == graph.edges.size() ? "" : ","
+        );
+    }
+    out += "        ]\n";
+    StringAppendFormat(out, "      }}{}\n", finalGraph ? "" : ",");
+}
+
+void BuildJson(
+    const TelemetryReportSummary& summary,
+    const FrameGraphReportRecords& graphs,
+    AString<TelemetryArena>& out
+){
+    out.clear();
+    out.reserve(EstimateJsonReportReserve(graphs));
     out += "{\n";
     StringAppendFormat(out, "  \"eventCount\": {},\n", summary.eventCount);
     out += "  \"frameRange\": {";
@@ -244,7 +403,11 @@ void BuildJson(const TelemetryReportSummary& summary, AString<TelemetryArena>& o
     StringAppendFormat(out, "    \"nodes\": {},\n", summary.frameGraphNodeCount);
     StringAppendFormat(out, "    \"edges\": {},\n", summary.frameGraphEdgeCount);
     StringAppendFormat(out, "    \"maxNodes\": {},\n", summary.maxFrameGraphNodeCount);
-    StringAppendFormat(out, "    \"maxEdges\": {}\n", summary.maxFrameGraphEdgeCount);
+    StringAppendFormat(out, "    \"maxEdges\": {},\n", summary.maxFrameGraphEdgeCount);
+    out += "    \"records\": [\n";
+    for(usize graphIndex = 0u; graphIndex < graphs.size(); ++graphIndex)
+        AppendFrameGraphJson(graphs[graphIndex], graphIndex, graphIndex + 1u == graphs.size(), out);
+    out += "    ]\n";
     out += "  },\n";
     StringAppendFormat(out, "  \"parseFailures\": {}\n", summary.parseFailureCount);
     out += "}\n";
@@ -301,9 +464,15 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
 
     outReport.summary.eventCount = events.eventCount();
 
-    __hidden_telemetry_report::GraphTimingMap timingByScope(0, Hasher<Name>(), EqualTo<Name>(), arena);
-    timingByScope.reserve(events.eventCount());
-    usize lastFrameGraphIndex = events.eventCount();
+    __hidden_telemetry_report::GraphTimingMap timingByFrameAndScope(
+        0,
+        __hidden_telemetry_report::GraphTimingKeyHasher(),
+        EqualTo<__hidden_telemetry_report::GraphTimingKey>(),
+        arena
+    );
+    timingByFrameAndScope.reserve(events.eventCount());
+    __hidden_telemetry_report::FrameGraphReportRecords frameGraphs(arena);
+    frameGraphs.reserve(events.eventCount());
 
     for(usize i = 0u; i < events.eventCount(); ++i){
         const Telemetry::EventRecord* const event = events.eventAt(i);
@@ -336,7 +505,10 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
             }
             __hidden_telemetry_report::AddTiming(outReport.summary, payload);
             __hidden_telemetry_report::AppendPerfCsvRow(outReport.perfCsv, payload.source, payload);
-            timingByScope.insert_or_assign(payload.scopeName, payload.stats.seconds);
+            timingByFrameAndScope.insert_or_assign(
+                __hidden_telemetry_report::GraphTimingKey{ payload.stats.publishFrameIndex, payload.scopeName },
+                payload.stats.seconds
+            );
             break;
         }
         case Telemetry::EventKind::MemoryFrame: {
@@ -349,13 +521,14 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
             break;
         }
         case Telemetry::EventKind::FrameGraphFrame: {
-            Telemetry::FrameGraphPayload payload(arena);
-            if(!Telemetry::ParseFrameGraphPayload(arena, event->payload.data(), event->payload.size(), payload)){
+            __hidden_telemetry_report::FrameGraphReportRecord& record = frameGraphs.emplace_back(arena);
+            record.streamId = event->header.streamId;
+            if(!Telemetry::ParseFrameGraphPayload(arena, event->payload.data(), event->payload.size(), record.payload)){
+                frameGraphs.pop_back();
                 ++outReport.summary.parseFailureCount;
                 break;
             }
-            __hidden_telemetry_report::AddFrameGraph(outReport.summary, payload);
-            lastFrameGraphIndex = i;
+            __hidden_telemetry_report::AddFrameGraph(outReport.summary, record.payload);
             break;
         }
         default:
@@ -363,16 +536,8 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
         }
     }
 
-    if(lastFrameGraphIndex < events.eventCount()){
-        const Telemetry::EventRecord* const graphEvent = events.eventAt(lastFrameGraphIndex);
-        if(graphEvent){
-            Telemetry::FrameGraphPayload graphPayload(arena);
-            if(Telemetry::ParseFrameGraphPayload(arena, graphEvent->payload.data(), graphEvent->payload.size(), graphPayload))
-                __hidden_telemetry_report::BuildTimedGraphDot(arena, graphPayload, timingByScope, outReport.graph);
-        }
-    }
-
-    __hidden_telemetry_report::BuildJson(outReport.summary, outReport.json);
+    __hidden_telemetry_report::BuildTimedGraphsDot(arena, frameGraphs, timingByFrameAndScope, outReport.graph);
+    __hidden_telemetry_report::BuildJson(outReport.summary, frameGraphs, outReport.json);
     return true;
 }
 

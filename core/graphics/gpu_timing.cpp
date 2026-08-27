@@ -58,6 +58,7 @@ void GpuTimingAccumulator::collect(
             record.state = QueryState::Quarantined;
             record.frameResetRecorded = false;
             record.deviceReady = false;
+            ++m_quarantinedScopeCount;
             NWB_LOGGER_ERROR(NWB_TEXT("GPU timing query quarantined after its accepted submission lost exact queue identity"));
             continue;
         }
@@ -73,6 +74,7 @@ void GpuTimingAccumulator::collect(
         const bool publishSample = record.epoch == epoch && record.publishSample;
         const f64 durationSeconds = result.durationSeconds();
         if(publishSample){
+            ++m_publishedSampleCount;
             recorder.m_timing.recordSample(m_timingScope, durationSeconds, record.frameIndex);
             if(result.hasComparableRange()){
                 recorder.recordTimestampRange(
@@ -87,6 +89,8 @@ void GpuTimingAccumulator::collect(
                 );
             }
         }
+        else
+            ++m_unpublishedSampleCount;
         if(completedSamples && record.attribution != s_NoGpuTimingSampleAttribution){
             completedSamples->push_back(GpuTimingSample{
                 .scopeName = m_scopeName,
@@ -157,12 +161,16 @@ bool GpuTimingAccumulator::beginQuery(
     GpuTimingScope& outScope
 ){
     outScope = {};
-    if(!m_enabled)
+    if(!m_enabled){
+        ++m_skippedScopeCountByReason[GpuTimingScopeSkipReason::CollectionInactive];
         return true;
+    }
 
     const u32 index = findAvailableQuery();
-    if(index == Limit<u32>::s_Max)
+    if(index == Limit<u32>::s_Max){
+        ++m_skippedScopeCountByReason[GpuTimingScopeSkipReason::QueryCapacityUnavailable];
         return true;
+    }
 
     QueryRecord& record = m_queries[index];
     // beginTimerQuery self-resets an already prepared pool when recording outside a render pass. Inside a render pass
@@ -170,14 +178,20 @@ bool GpuTimingAccumulator::beginQuery(
     // undeclared scopes skip their sample instead of allocating persistent query pools from a recording path.
     if(!commandList.isRecording() || !commandList.hasCommandBuffer() || commandList.commandRecordingFailed())
         return false;
-    if(!commandList.canRecordTimerQueryHere())
+    if(!commandList.canRecordTimerQueryHere()){
+        ++m_skippedScopeCountByReason[GpuTimingScopeSkipReason::RecordingPositionUnavailable];
         return true;
-    if(commandList.isRenderPassActive()){
-        if(!record.deviceReady)
-            return true;
     }
-    else if(!commandList.canResetTimerQueryHere())
+    if(commandList.isRenderPassActive()){
+        if(!record.deviceReady){
+            ++m_skippedScopeCountByReason[GpuTimingScopeSkipReason::RecordingPositionUnavailable];
+            return true;
+        }
+    }
+    else if(!commandList.canResetTimerQueryHere()){
+        ++m_skippedScopeCountByReason[GpuTimingScopeSkipReason::RecordingPositionUnavailable];
         return true;
+    }
 
     // A device-timeline reset authorizes exactly one timestamp pair. Consume it as soon as the reservation records
     // its begin endpoint, even if that command buffer is later discarded before submission.
@@ -200,6 +214,7 @@ bool GpuTimingAccumulator::beginQuery(
         ++m_nextReservation;
     record.reservation = m_nextReservation;
     outScope = GpuTimingScope{ m_scopeName, index, epoch, record.reservation };
+    ++m_recordedScopeCount;
     return true;
 }
 
@@ -281,6 +296,7 @@ bool GpuTimingAccumulator::confirmQuery(
     record.acceptedSubmission = token;
     record.state = QueryState::PendingAccepted;
     record.publishSample = publishSample;
+    ++m_acceptedScopeCount;
     return true;
 }
 
@@ -317,6 +333,7 @@ void GpuTimingAccumulator::discardQuery(const GpuTimingScope& scope){
         return;
 
     releaseQuery(record);
+    ++m_discardedScopeCount;
 }
 
 void GpuTimingAccumulator::quarantineQuery(const GpuTimingScope& scope){
@@ -326,11 +343,14 @@ void GpuTimingAccumulator::quarantineQuery(const GpuTimingScope& scope){
     QueryRecord& record = m_queries[scope.index];
     if(record.epoch != scope.epoch || record.reservation != scope.reservation)
         return;
+    if(record.state == QueryState::Quarantined)
+        return;
 
     record.state = QueryState::Quarantined;
     record.publishSample = false;
     record.frameResetRecorded = false;
     record.deviceReady = false;
+    ++m_quarantinedScopeCount;
 }
 
 bool GpuTimingAccumulator::reserveQueries(Device& device, const u32 queryCount){
@@ -388,6 +408,19 @@ void GpuTimingAccumulator::retireAttributions(Vector<GpuTimingSample, Alloc::Glo
         });
         record.attribution = s_NoGpuTimingSampleAttribution;
     }
+}
+
+void GpuTimingAccumulator::appendStatistics(GpuTimingRecorderStatistics& outStatistics)const noexcept{
+    outStatistics.requestedQueryCount += static_cast<u64>(m_requestedQueryCount);
+    outStatistics.materializedQueryCount += static_cast<u64>(m_queries.size());
+    outStatistics.recordedScopeCount += m_recordedScopeCount;
+    outStatistics.acceptedScopeCount += m_acceptedScopeCount;
+    outStatistics.publishedSampleCount += m_publishedSampleCount;
+    outStatistics.unpublishedSampleCount += m_unpublishedSampleCount;
+    outStatistics.discardedScopeCount += m_discardedScopeCount;
+    outStatistics.quarantinedScopeCount += m_quarantinedScopeCount;
+    for(u8 reason = 0u; reason < GpuTimingScopeSkipReason::kCount; ++reason)
+        outStatistics.skippedScopeCountByReason[reason] += m_skippedScopeCountByReason[reason];
 }
 
 
@@ -449,6 +482,21 @@ void GpuTimingRecorder::setSampleListener(const GpuTimingSampleListener& listene
     m_hasSampleListener.store(listener.valid(), MemoryOrder::release);
 }
 
+GpuTimingRecorderStatistics GpuTimingRecorder::statistics(const Device& device)const{
+    ScopedLock lock(m_mutex);
+    GpuTimingRecorderStatistics result = m_statistics;
+    result.deviceGeneration = device.getDeviceGeneration();
+    result.preparedScopeCount = static_cast<u64>(m_accumulators.size());
+    result.queryCollectionEnabled = m_enabled;
+    result.timingSinkEnabled = m_timing.enabled();
+    result.feedbackCollectionEnabled = m_feedbackCollectionEnabled;
+    result.collectionActive = (m_enabled && m_timing.enabled()) || m_feedbackCollectionEnabled;
+    result.comparableTimestampsSupported = device.supportsComparableGpuTimestamps();
+    for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
+        it.value()->appendStatistics(result);
+    return result;
+}
+
 void GpuTimingRecorder::resetQueries(){
     const bool collectSamples = m_hasSampleListener.load(MemoryOrder::acquire);
     const u64 listenerGeneration = collectSamples
@@ -469,6 +517,7 @@ void GpuTimingRecorder::resetQueries(){
         advanceEpoch();
         m_accumulatorsActive = false;
         m_currentFrameIndex = 0u;
+        m_statistics = {};
     }
     dispatchCompletedSamples(retiredSamples, listenerGeneration);
 }
@@ -580,7 +629,10 @@ bool GpuTimingRecorder::prepareScopeQueries(const Name& scopeName, Device& devic
         return false;
 
     accumulator->requestQueries(queryCount);
-    return !m_accumulatorsActive || accumulator->materializeRequestedQueries(device);
+    const bool materialized = !m_accumulatorsActive || accumulator->materializeRequestedQueries(device);
+    if(!materialized)
+        ++m_statistics.queryMaterializationFailureCount;
+    return materialized;
 }
 
 bool GpuTimingRecorder::prepareOverlapMetric(
@@ -620,11 +672,12 @@ bool GpuTimingRecorder::materializeRequestedQueries(Device& device){
     if(!m_accumulatorsActive)
         return true;
 
-    for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it){
-        if(!it.value()->materializeRequestedQueries(device))
-            return false;
-    }
-    return true;
+    bool materialized = true;
+    for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
+        materialized = it.value()->materializeRequestedQueries(device) && materialized;
+    if(!materialized)
+        ++m_statistics.queryMaterializationFailureCount;
+    return materialized;
 }
 
 void GpuTimingRecorder::recordFrameReset(CommandList& commandList){
@@ -692,39 +745,67 @@ void GpuTimingRecorder::discardFrameResetLocked(){
         it.value()->discardFrameReset();
 }
 
+void GpuTimingRecorder::noteSkippedScope(const GpuTimingScopeSkipReason::Enum reason){
+    NWB_ASSERT(reason < GpuTimingScopeSkipReason::kCount);
+    if(reason < GpuTimingScopeSkipReason::kCount)
+        ++m_statistics.skippedScopeCountByReason[reason];
+}
+
 bool GpuTimingRecorder::beginScope(
     const Name& scopeName,
     Device& device,
     CommandList& commandList,
     const GpuTimingSampleAttribution attribution,
+    const bool requiresComparableTimestamps,
     GpuTimingScope& outScope
 ){
     outScope = {};
     ScopedLock lock(m_mutex);
     syncActiveState();
-    if(!m_accumulatorsActive || !scopeName)
+    if(!scopeName)
         return true;
-    if(&commandList.getDevice() != &device)
+    ++m_statistics.scopeAttemptCount;
+    if(!m_accumulatorsActive){
+        noteSkippedScope(GpuTimingScopeSkipReason::CollectionInactive);
+        return true;
+    }
+    if(&commandList.getDevice() != &device){
+        ++m_statistics.beginFailureCount;
         return false;
+    }
 
     const CommandListParameters commandListDescription = commandList.getResolvedDescription();
     const GpuPhysicalQueueInfo* const queueInfo = device.getPhysicalQueueInfo(commandListDescription.physicalQueue);
-    if(!queueInfo)
+    if(!queueInfo){
+        ++m_statistics.beginFailureCount;
         return false;
-    if(queueInfo->timestampValidBits == 0u)
+    }
+    if(queueInfo->timestampValidBits == 0u){
+        noteSkippedScope(GpuTimingScopeSkipReason::QueueTimestampsUnsupported);
         return true;
+    }
+    if(requiresComparableTimestamps && !device.supportsComparableGpuTimestamps(queueInfo->id)){
+        noteSkippedScope(GpuTimingScopeSkipReason::ComparableTimestampsUnsupported);
+        return true;
+    }
 
     GpuTimingSubmissionTicket* const ticket = activeSubmissionTicket();
     NWB_ASSERT_MSG(ticket, NWB_TEXT("GPU timing scopes must be recorded inside a submission ticket"));
-    if(!ticket)
+    if(!ticket){
+        ++m_statistics.beginFailureCount;
         return false;
+    }
 
     const auto found = m_accumulators.find(scopeName);
-    if(found == m_accumulators.end())
+    if(found == m_accumulators.end()){
+        noteSkippedScope(GpuTimingScopeSkipReason::ScopeNotPrepared);
         return true;
+    }
 
-    if(!found.value()->beginQuery(commandList, m_currentFrameIndex, m_epoch, attribution, outScope))
+    if(!found.value()->beginQuery(commandList, m_currentFrameIndex, m_epoch, attribution, outScope)){
+        ++m_statistics.beginFailureCount;
         return false;
+    }
     if(outScope.valid())
         outScope.submissionTicket = ticket;
     return true;
@@ -737,7 +818,7 @@ bool GpuTimingRecorder::beginDeferredScope(
     const GpuTimingSampleAttribution attribution,
     GpuTimingScope& outScope
 ){
-    if(!beginScope(scopeName, device, commandList, attribution, outScope))
+    if(!beginScope(scopeName, device, commandList, attribution, true, outScope))
         return false;
     // The frame transaction owns this reservation until the end packet is accepted. The begin packet's submission
     // ticket deliberately has no rollback handle for it: a later recovery endpoint may be required after that begin

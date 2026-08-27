@@ -46473,6 +46473,7 @@ inline constexpr GpuTimingScopeDefinition s_FrameTimingLateActivationScope("test
 inline constexpr GpuTimingScopeDefinition s_FrameTimingFeedbackOnlyScope("tests/frame_timing_feedback_only");
 inline constexpr GpuTimingScopeDefinition s_FrameTimingRejectedGraphResetScope("tests/frame_timing_rejected_graph_reset");
 inline constexpr GpuTimingScopeDefinition s_UnpreparedTimingScope("tests/timing_unprepared_scope");
+inline constexpr GpuTimingScopeDefinition s_TimingStatisticsScope("tests/timing_statistics_scope");
 inline constexpr GpuTimingScopeDefinition s_SubmissionTicketScope("tests/timing_submission_ticket");
 inline constexpr GpuTimingScopeDefinition s_ConcurrentSubmissionTicketScope("tests/timing_submission_ticket_concurrent");
 inline constexpr GpuTimingScopeDefinition s_StableSubmissionTicketScope("tests/timing_stable_submission_ticket");
@@ -46603,6 +46604,150 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleResetsTimerQueriesBef
 
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();
+}
+
+
+// A snapshot must report why a valid timing request produced no scope, keep recorded/accepted/published outcomes
+// distinct, and clear all generation-local counts and query capacity at the recorder reset boundary.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingStatisticsDistinguishSkipsOutcomesAndReset){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueInfo* const graphicsQueueInfo = device.getPhysicalQueueInfo(graphicsQueue);
+    ASSERT_NE(graphicsQueueInfo, nullptr);
+    if(graphicsQueueInfo->timestampValidBits == 0u)
+        GTEST_SKIP() << "GPU timing statistics: the primary graphics queue does not support timestamps.";
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.setFeedbackCollectionEnabled(false);
+    timing.resetQueries();
+
+    const GpuTimingRecorderStatistics initialStatistics = timing.statistics(device);
+    ASSERT_TRUE(initialStatistics.valid());
+    EXPECT_EQ(initialStatistics.deviceGeneration, device.getDeviceGeneration());
+    EXPECT_FALSE(initialStatistics.queryCollectionEnabled);
+    EXPECT_FALSE(initialStatistics.timingSinkEnabled);
+    EXPECT_FALSE(initialStatistics.feedbackCollectionEnabled);
+    EXPECT_FALSE(initialStatistics.collectionActive);
+    EXPECT_EQ(initialStatistics.scopeAttemptCount, 0u);
+    EXPECT_EQ(initialStatistics.preparedScopeCount, 0u);
+
+    auto inactiveCommandList = device.createCommandList();
+    ASSERT_NE(inactiveCommandList.get(), nullptr);
+    {
+        GpuTimingSubmissionTicket inactiveTicket(timing);
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(inactiveTicket);
+        inactiveCommandList->open();
+        {
+            GpuTimingMeasure inactiveMeasure(timing, s_TimingStatisticsScope, device, *inactiveCommandList);
+            EXPECT_FALSE(inactiveMeasure.valid());
+        }
+        inactiveCommandList->close();
+    }
+    const GpuTimingRecorderStatistics inactiveStatistics = timing.statistics(device);
+    EXPECT_EQ(inactiveStatistics.scopeAttemptCount, 1u);
+    EXPECT_EQ(
+        inactiveStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::CollectionInactive],
+        1u
+    );
+
+    s_scope->setGpuTimingEnabled(true);
+    auto unpreparedCommandList = device.createCommandList();
+    ASSERT_NE(unpreparedCommandList.get(), nullptr);
+    {
+        GpuTimingSubmissionTicket unpreparedTicket(timing);
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(unpreparedTicket);
+        unpreparedCommandList->open();
+        {
+            GpuTimingMeasure unpreparedMeasure(timing, s_TimingStatisticsScope, device, *unpreparedCommandList);
+            EXPECT_FALSE(unpreparedMeasure.valid());
+        }
+        unpreparedCommandList->close();
+    }
+    const GpuTimingRecorderStatistics unpreparedStatistics = timing.statistics(device);
+    EXPECT_TRUE(unpreparedStatistics.queryCollectionEnabled);
+    EXPECT_TRUE(unpreparedStatistics.timingSinkEnabled);
+    EXPECT_TRUE(unpreparedStatistics.collectionActive);
+    EXPECT_EQ(unpreparedStatistics.scopeAttemptCount, 2u);
+    EXPECT_EQ(
+        unpreparedStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::ScopeNotPrepared],
+        1u
+    );
+
+    ASSERT_TRUE(timing.prepareScopeQueries(s_TimingStatisticsScope.identity, device, 1u));
+    const GpuTimingRecorderStatistics preparedStatistics = timing.statistics(device);
+    EXPECT_EQ(preparedStatistics.preparedScopeCount, 1u);
+    EXPECT_EQ(preparedStatistics.requestedQueryCount, 1u);
+    EXPECT_EQ(preparedStatistics.materializedQueryCount, 1u);
+    EXPECT_EQ(preparedStatistics.queryMaterializationFailureCount, 0u);
+
+    auto discardedCommandList = device.createCommandList();
+    ASSERT_NE(discardedCommandList.get(), nullptr);
+    {
+        GpuTimingSubmissionTicket discardedTicket(timing);
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(discardedTicket);
+        discardedCommandList->open();
+        {
+            GpuTimingMeasure discardedMeasure(timing, s_TimingStatisticsScope, device, *discardedCommandList);
+            ASSERT_TRUE(discardedMeasure.valid());
+            discardedMeasure.discardTiming();
+        }
+        discardedCommandList->close();
+    }
+
+    timing.beginFrame(240u);
+    auto acceptedCommandList = device.createCommandList();
+    ASSERT_NE(acceptedCommandList.get(), nullptr);
+    GpuTimingSubmissionTicket acceptedTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(acceptedTicket);
+        acceptedCommandList->open();
+        {
+            GpuTimingMeasure acceptedMeasure(timing, s_TimingStatisticsScope, device, *acceptedCommandList);
+            ASSERT_TRUE(acceptedMeasure.valid());
+        }
+        acceptedCommandList->close();
+    }
+    CommandList* acceptedCommandLists[] = { acceptedCommandList.get() };
+    const QueueSubmissionToken acceptedToken = acceptedTicket.submit(
+        device,
+        acceptedCommandLists,
+        LengthOf(acceptedCommandLists),
+        graphicsQueue,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(acceptedToken.valid());
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 241u);
+
+    const GpuTimingRecorderStatistics completedStatistics = timing.statistics(device);
+    EXPECT_EQ(completedStatistics.scopeAttemptCount, 4u);
+    EXPECT_EQ(completedStatistics.recordedScopeCount, 2u);
+    EXPECT_EQ(completedStatistics.acceptedScopeCount, 1u);
+    EXPECT_EQ(completedStatistics.publishedSampleCount, 1u);
+    EXPECT_EQ(completedStatistics.unpublishedSampleCount, 0u);
+    EXPECT_EQ(completedStatistics.discardedScopeCount, 1u);
+    EXPECT_EQ(completedStatistics.quarantinedScopeCount, 0u);
+    EXPECT_EQ(completedStatistics.beginFailureCount, 0u);
+    EXPECT_EQ(completedStatistics.comparableTimestampsSupported, device.supportsComparableGpuTimestamps());
+
+    inactiveCommandList.reset();
+    unpreparedCommandList.reset();
+    discardedCommandList.reset();
+    acceptedCommandList.reset();
+    timing.resetQueries();
+    const GpuTimingRecorderStatistics resetStatistics = timing.statistics(device);
+    EXPECT_EQ(resetStatistics.preparedScopeCount, 0u);
+    EXPECT_EQ(resetStatistics.requestedQueryCount, 0u);
+    EXPECT_EQ(resetStatistics.materializedQueryCount, 0u);
+    EXPECT_EQ(resetStatistics.scopeAttemptCount, 0u);
+    EXPECT_EQ(resetStatistics.recordedScopeCount, 0u);
+    EXPECT_EQ(resetStatistics.acceptedScopeCount, 0u);
+    EXPECT_EQ(resetStatistics.publishedSampleCount, 0u);
+    EXPECT_EQ(resetStatistics.discardedScopeCount, 0u);
+
+    s_scope->setGpuTimingEnabled(false);
 }
 
 
@@ -46827,6 +46972,11 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingAcceptedSubmissionCompletionGates
         }
         blockedCommandList->close();
     }
+    const GpuTimingRecorderStatistics blockedStatistics = timing.statistics(device);
+    EXPECT_EQ(
+        blockedStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::QueryCapacityUnavailable],
+        1u
+    );
 
     timing.releaseSubmissionCompletionForTesting(acceptedToken);
     timing.collect(device, 232u);
@@ -48560,6 +48710,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingUnsupportedPhysicalQueueIsSuccess
         GTEST_SKIP() << "GPU timing unsupported queue: every exposed physical queue supports timestamps.";
 
     auto& timing = graphics.gpuTiming();
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
     s_scope->setGpuTimingEnabled(true);
     ASSERT_TRUE(timing.prepareScopeQueries(s_TimerQueryUnsupportedQueueScope.identity, device, 1u));
     timing.beginFrame(201u);
@@ -48578,6 +48730,12 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingUnsupportedPhysicalQueueIsSuccess
         EXPECT_TRUE(transaction.recordEnd(*commandList));
         commandList->close();
     }
+    const GpuTimingRecorderStatistics unsupportedStatistics = timing.statistics(device);
+    EXPECT_EQ(unsupportedStatistics.recordedScopeCount, 0u);
+    EXPECT_EQ(
+        unsupportedStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::QueueTimestampsUnsupported],
+        1u
+    );
 
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();
@@ -48591,8 +48749,12 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionFollowsComparable
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& timing = graphics.gpuTiming();
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueInfo* const graphicsQueueInfo = device.getPhysicalQueueInfo(graphicsQueue);
+    ASSERT_NE(graphicsQueueInfo, nullptr);
     const bool comparableTimestamps = device.supportsComparableGpuTimestamps(graphicsQueue);
 
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
     s_scope->setGpuTimingEnabled(true);
     ASSERT_TRUE(timing.prepareScopeQueries(s_TimerQueryComparableEpochScope.identity, device, 1u));
     timing.beginFrame(202u);
@@ -48611,6 +48773,16 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionFollowsComparable
         EXPECT_EQ(transaction.recordEnd(*commandList), !comparableTimestamps);
     }
     EXPECT_FALSE(transaction.needsRetirement());
+    const GpuTimingRecorderStatistics comparableStatistics = timing.statistics(device);
+    EXPECT_EQ(comparableStatistics.recordedScopeCount, comparableTimestamps ? 1u : 0u);
+    EXPECT_EQ(
+        comparableStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::QueueTimestampsUnsupported],
+        graphicsQueueInfo->timestampValidBits == 0u ? 1u : 0u
+    );
+    EXPECT_EQ(
+        comparableStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::ComparableTimestampsUnsupported],
+        graphicsQueueInfo->timestampValidBits != 0u && !comparableTimestamps ? 1u : 0u
+    );
 
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();

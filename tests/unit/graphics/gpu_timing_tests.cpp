@@ -28,6 +28,35 @@ namespace __hidden_gpu_timing_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST(GpuTimingRecorderStatistics, DefaultsToUnknownDeviceAndExplicitZeroOutcomes){
+    static_assert(Core::GpuTimingScopeSkipReason::kCount == 6u);
+
+    const Core::GpuTimingRecorderStatistics statistics;
+
+    EXPECT_FALSE(statistics.valid());
+    EXPECT_EQ(statistics.deviceGeneration, 0u);
+    EXPECT_EQ(statistics.preparedScopeCount, 0u);
+    EXPECT_EQ(statistics.requestedQueryCount, 0u);
+    EXPECT_EQ(statistics.materializedQueryCount, 0u);
+    EXPECT_EQ(statistics.queryMaterializationFailureCount, 0u);
+    EXPECT_EQ(statistics.scopeAttemptCount, 0u);
+    EXPECT_EQ(statistics.recordedScopeCount, 0u);
+    EXPECT_EQ(statistics.acceptedScopeCount, 0u);
+    EXPECT_EQ(statistics.publishedSampleCount, 0u);
+    EXPECT_EQ(statistics.unpublishedSampleCount, 0u);
+    EXPECT_EQ(statistics.discardedScopeCount, 0u);
+    EXPECT_EQ(statistics.quarantinedScopeCount, 0u);
+    EXPECT_EQ(statistics.beginFailureCount, 0u);
+    for(u8 reason = 0u; reason < Core::GpuTimingScopeSkipReason::kCount; ++reason)
+        EXPECT_EQ(statistics.skippedScopeCountByReason[reason], 0u);
+    EXPECT_FALSE(statistics.queryCollectionEnabled);
+    EXPECT_FALSE(statistics.timingSinkEnabled);
+    EXPECT_FALSE(statistics.feedbackCollectionEnabled);
+    EXPECT_FALSE(statistics.collectionActive);
+    EXPECT_FALSE(statistics.comparableTimestampsSupported);
+}
+
+
 TEST(TimerQueryResult, ConvertsStraightSixtyFourBitTickRange){
     const Core::TimerQueryResult result{
         .beginTicks = 100u,

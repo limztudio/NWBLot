@@ -212,6 +212,85 @@ TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){
 }
 
 
+// Timing availability and outcomes belong to the device-wide recorder rather than one compiled graph attempt. Keep
+// the snapshot by value, export explicit skip reasons, and enumerate every live physical queue even on no-graph
+// frames so unsupported capabilities remain distinguishable from measured zero-duration work.
+TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString timingHeaderSource;
+    AString timingSource;
+    AString timingSubmissionSource;
+    AString frameGraphSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "gpu_timing.h", timingHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "gpu_timing.cpp", timingSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "gpu_timing_submission.cpp", timingSubmissionSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "kernel" / "frame_graph_export.cpp", frameGraphSource));
+    const AStringView timingHeader(timingHeaderSource.data(), timingHeaderSource.size());
+    const AStringView timing(timingSource.data(), timingSource.size());
+    const AStringView timingSubmission(timingSubmissionSource.data(), timingSubmissionSource.size());
+    const AStringView frameGraph(frameGraphSource.data(), frameGraphSource.size());
+
+    EXPECT_TRUE(ContainsText(timingHeader, "namespace GpuTimingScopeSkipReason{"));
+    EXPECT_TRUE(ContainsText(timingHeader, "CollectionInactive,"));
+    EXPECT_TRUE(ContainsText(timingHeader, "QueueTimestampsUnsupported,"));
+    EXPECT_TRUE(ContainsText(timingHeader, "ComparableTimestampsUnsupported,"));
+    EXPECT_TRUE(ContainsText(timingHeader, "ScopeNotPrepared,"));
+    EXPECT_TRUE(ContainsText(timingHeader, "QueryCapacityUnavailable,"));
+    EXPECT_TRUE(ContainsText(timingHeader, "RecordingPositionUnavailable,"));
+    EXPECT_TRUE(ContainsText(timingHeader, "struct GpuTimingRecorderStatistics{"));
+    EXPECT_TRUE(ContainsText(timingHeader, "u64 publishedSampleCount = 0u;"));
+    EXPECT_TRUE(ContainsText(timingHeader, "u64 unpublishedSampleCount = 0u;"));
+    EXPECT_TRUE(ContainsText(timingHeader, "u64 skippedScopeCountByReason[GpuTimingScopeSkipReason::kCount]{};"));
+    EXPECT_TRUE(ContainsText(timingHeader, "GpuTimingRecorderStatistics statistics(const Device& device)const;"));
+    EXPECT_FALSE(ContainsText(timingHeader, "const GpuTimingRecorderStatistics& statistics("));
+    EXPECT_TRUE(ContainsText(timing, "GpuTimingRecorderStatistics result = m_statistics;"));
+    EXPECT_TRUE(ContainsText(timing, "result.deviceGeneration = device.getDeviceGeneration();"));
+    EXPECT_TRUE(ContainsText(timing, "m_statistics = {};"));
+    EXPECT_TRUE(ContainsText(timing, "++m_publishedSampleCount;"));
+    EXPECT_TRUE(ContainsText(timing, "++m_unpublishedSampleCount;"));
+    EXPECT_TRUE(ContainsText(timing, "++m_statistics.scopeAttemptCount;"));
+    EXPECT_TRUE(ContainsText(timing, "GpuTimingScopeSkipReason::CollectionInactive"));
+    EXPECT_TRUE(ContainsText(timing, "GpuTimingScopeSkipReason::QueueTimestampsUnsupported"));
+    EXPECT_TRUE(ContainsText(timing, "GpuTimingScopeSkipReason::ComparableTimestampsUnsupported"));
+    EXPECT_TRUE(ContainsText(timing, "GpuTimingScopeSkipReason::ScopeNotPrepared"));
+    EXPECT_TRUE(ContainsText(timing, "GpuTimingScopeSkipReason::QueryCapacityUnavailable"));
+    EXPECT_TRUE(ContainsText(timing, "GpuTimingScopeSkipReason::RecordingPositionUnavailable"));
+    EXPECT_TRUE(ContainsText(timingSubmission, "beginScope(scopeDefinition.identity, device, commandList, attribution, false, m_scope)"));
+    EXPECT_FALSE(ContainsText(timingSubmission, "if(!device.supportsComparableGpuTimestamps(commandList.getResolvedDescription().physicalQueue))"));
+
+    const usize fallbackOffset = frameGraph.find("m_frameGraphRendererLabel += \"Renderer Frame\";");
+    const usize snapshotOffset = frameGraph.find("const Core::GpuTimingRecorderStatistics gpuTimingStatistics");
+    const usize topologyOffset = frameGraph.find("const Core::GpuPhysicalQueueTopology gpuTimingQueueTopology");
+    const usize descriptorOffset = frameGraph.find("const Core::GpuDescriptorHeapLifecycleStatistics");
+    ASSERT_NE(fallbackOffset, AStringView::npos);
+    ASSERT_NE(snapshotOffset, AStringView::npos);
+    ASSERT_NE(topologyOffset, AStringView::npos);
+    ASSERT_NE(descriptorOffset, AStringView::npos);
+    EXPECT_LT(fallbackOffset, snapshotOffset);
+    EXPECT_LT(snapshotOffset, topologyOffset);
+    EXPECT_LT(topologyOffset, descriptorOffset);
+    EXPECT_TRUE(ContainsText(frameGraph, "m_graphics.gpuTiming().statistics(device)"));
+    EXPECT_TRUE(ContainsText(frameGraph, "GPU timing (device-wide cumulative since query reset):"));
+    EXPECT_TRUE(ContainsText(frameGraph, "GPU timing outcomes: attempts={} recorded={} accepted={} published={} completed unpublished={}"));
+    EXPECT_TRUE(ContainsText(frameGraph, "skipped inactive/no timestamps/no comparable timestamps/unprepared/no capacity/recording unavailable={}/{}/{}/{}/{}/{}"));
+    EXPECT_TRUE(ContainsText(frameGraph, "gpuTimingStatistics.unpublishedSampleCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::RecordingPositionUnavailable]"));
+    EXPECT_TRUE(ContainsText(frameGraph, "device.getPhysicalQueueTopology()"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueInfo.id.deviceGeneration,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueInfo.familyIndex,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueInfo.queueIndex,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "static_cast<u32>(queueInfo.capabilities),"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueInfo.timestampValidBits != 0u,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "device.supportsComparableGpuTimestamps(queueInfo.id)"));
+    const AStringView timingQueueSlice = frameGraph.substr(topologyOffset, descriptorOffset - topologyOffset);
+    EXPECT_FALSE(ContainsText(timingQueueSlice, "continue;"));
+    EXPECT_FALSE(ContainsText(timingQueueSlice, "durationSeconds"));
+    EXPECT_FALSE(ContainsText(timingQueueSlice, "0.0"));
+}
+
+
 // Descriptor heap lifetime is owned by the Device rather than any deferred graph attempt or physical queue. Keep
 // one by-value current snapshot on the persistent renderer label so no-graph frames retain this diagnostic context.
 TEST(EcsGraphics, FrameGraphExportsDeviceWideDescriptorHeapLifecycle){
@@ -225,7 +304,7 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideDescriptorHeapLifecycle){
     EXPECT_TRUE(ContainsText(
         frameGraph,
         "const Core::GpuDescriptorHeapLifecycleStatistics descriptorHeapLifecycleStatistics =\n"
-        "        m_graphics.getDevice().getDescriptorHeap().lifecycleStatistics()\n"
+        "        device.getDescriptorHeap().lifecycleStatistics()\n"
         "    ;"
     ));
     EXPECT_TRUE(ContainsText(
@@ -372,7 +451,12 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
 
     EXPECT_TRUE(ContainsText(frameGraph, "if(deferredRuntimeStatistics.valid()){"));
     EXPECT_TRUE(ContainsText(frameGraph, "m_deferredLightingCompiledGraph.queueTopology()"));
-    EXPECT_FALSE(ContainsText(frameGraph, "getPhysicalQueueTopology()"));
+    const usize gpuTimingTopologyOffset = frameGraph.find(
+        "const Core::GpuPhysicalQueueTopology gpuTimingQueueTopology"
+    );
+    ASSERT_NE(gpuTimingTopologyOffset, AStringView::npos);
+    const AStringView compiledQueueTelemetry = frameGraph.substr(0u, gpuTimingTopologyOffset);
+    EXPECT_FALSE(ContainsText(compiledQueueTelemetry, "getPhysicalQueueTopology()"));
     EXPECT_TRUE(ContainsText(
         frameGraph,
         "const Core::GpuPhysicalQueueInfo& queueInfo = queueTopology.queues[queueIndex];"

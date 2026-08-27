@@ -132,6 +132,7 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
 
     const Core::GpuTaskGraphRuntimeStatistics deferredRuntimeStatistics = deferredTaskGraphRuntimeStatistics();
     m_frameGraphRendererLabel.clear();
+    Core::Device& device = m_graphics.getDevice();
     if(deferredRuntimeStatistics.valid()){
         const Core::GpuTaskGraphCompileStatistics& compileStatistics = deferredRuntimeStatistics.compile;
         const Core::GpuTaskGraphRecordingStatistics& recordingStatistics = deferredRuntimeStatistics.recording;
@@ -415,8 +416,57 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
     else
         m_frameGraphRendererLabel += "Renderer Frame";
 
+    const Core::GpuTimingRecorderStatistics gpuTimingStatistics = m_graphics.gpuTiming().statistics(device);
+    StringAppendFormat(
+        m_frameGraphRendererLabel,
+        "\nGPU timing (device-wide cumulative since query reset): generation={} query collection={} timing sink={} feedback={} active={} comparable timestamps={} prepared scopes={} requested/materialized queries={}/{} materialization failures={}"
+        "\nGPU timing outcomes: attempts={} recorded={} accepted={} published={} completed unpublished={} discarded before acceptance={} quarantined={} begin failures={} skipped inactive/no timestamps/no comparable timestamps/unprepared/no capacity/recording unavailable={}/{}/{}/{}/{}/{}",
+        gpuTimingStatistics.deviceGeneration,
+        gpuTimingStatistics.queryCollectionEnabled,
+        gpuTimingStatistics.timingSinkEnabled,
+        gpuTimingStatistics.feedbackCollectionEnabled,
+        gpuTimingStatistics.collectionActive,
+        gpuTimingStatistics.comparableTimestampsSupported,
+        gpuTimingStatistics.preparedScopeCount,
+        gpuTimingStatistics.requestedQueryCount,
+        gpuTimingStatistics.materializedQueryCount,
+        gpuTimingStatistics.queryMaterializationFailureCount,
+        gpuTimingStatistics.scopeAttemptCount,
+        gpuTimingStatistics.recordedScopeCount,
+        gpuTimingStatistics.acceptedScopeCount,
+        gpuTimingStatistics.publishedSampleCount,
+        gpuTimingStatistics.unpublishedSampleCount,
+        gpuTimingStatistics.discardedScopeCount,
+        gpuTimingStatistics.quarantinedScopeCount,
+        gpuTimingStatistics.beginFailureCount,
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::CollectionInactive],
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::QueueTimestampsUnsupported],
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::ComparableTimestampsUnsupported],
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::ScopeNotPrepared],
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::QueryCapacityUnavailable],
+        gpuTimingStatistics.skippedScopeCountByReason[Core::GpuTimingScopeSkipReason::RecordingPositionUnavailable]
+    );
+
+    const Core::GpuPhysicalQueueTopology gpuTimingQueueTopology = device.getPhysicalQueueTopology();
+    for(usize queueIndex = 0u; queueIndex < gpuTimingQueueTopology.queueCount; ++queueIndex){
+        const Core::GpuPhysicalQueueInfo& queueInfo = gpuTimingQueueTopology.queues[queueIndex];
+        StringAppendFormat(
+            m_frameGraphRendererLabel,
+            "\nGPU timing physical queue index={} generation={} class={} family index={} native queue index={} capability mask={} timestamp valid bits={} duration timestamps={} comparable timestamps={}",
+            queueInfo.id.index,
+            queueInfo.id.deviceGeneration,
+            __hidden_frame_graph_export::PhysicalQueueClassLabel(queueInfo.queueClass),
+            queueInfo.familyIndex,
+            queueInfo.queueIndex,
+            static_cast<u32>(queueInfo.capabilities),
+            queueInfo.timestampValidBits,
+            queueInfo.timestampValidBits != 0u,
+            device.supportsComparableGpuTimestamps(queueInfo.id)
+        );
+    }
+
     const Core::GpuDescriptorHeapLifecycleStatistics descriptorHeapLifecycleStatistics =
-        m_graphics.getDevice().getDescriptorHeap().lifecycleStatistics()
+        device.getDescriptorHeap().lifecycleStatistics()
     ;
     StringAppendFormat(
         m_frameGraphRendererLabel,

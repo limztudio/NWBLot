@@ -124,6 +124,46 @@ struct GpuTimingSampleListener{
 };
 
 
+namespace GpuTimingScopeSkipReason{
+    enum Enum : u8{
+        CollectionInactive,
+        QueueTimestampsUnsupported,
+        ComparableTimestampsUnsupported,
+        ScopeNotPrepared,
+        QueryCapacityUnavailable,
+        RecordingPositionUnavailable,
+
+        kCount,
+    };
+};
+
+
+struct GpuTimingRecorderStatistics{
+    u16 deviceGeneration = 0u;
+    u64 preparedScopeCount = 0u;
+    u64 requestedQueryCount = 0u;
+    u64 materializedQueryCount = 0u;
+    u64 queryMaterializationFailureCount = 0u;
+    u64 scopeAttemptCount = 0u;
+    u64 recordedScopeCount = 0u;
+    u64 acceptedScopeCount = 0u;
+    u64 publishedSampleCount = 0u;
+    u64 unpublishedSampleCount = 0u;
+    u64 discardedScopeCount = 0u;
+    u64 quarantinedScopeCount = 0u;
+    u64 beginFailureCount = 0u;
+    u64 skippedScopeCountByReason[GpuTimingScopeSkipReason::kCount]{};
+    bool queryCollectionEnabled = false;
+    bool timingSinkEnabled = false;
+    bool feedbackCollectionEnabled = false;
+    bool collectionActive = false;
+    bool comparableTimestampsSupported = false;
+
+
+    [[nodiscard]] bool valid()const noexcept{ return deviceGeneration != 0u; }
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -221,6 +261,7 @@ private:
     [[nodiscard]] u32 appendQuery(Device& device);
     void releaseQuery(QueryRecord& record);
     void retireAttributions(Vector<GpuTimingSample, Alloc::GlobalArena>& outSamples);
+    void appendStatistics(GpuTimingRecorderStatistics& outStatistics)const noexcept;
 
 
 private:
@@ -229,6 +270,13 @@ private:
     Perf::TimingScopeId m_timingScope;
     u32 m_requestedQueryCount = 0u;
     u64 m_nextReservation = 0u;
+    u64 m_recordedScopeCount = 0u;
+    u64 m_acceptedScopeCount = 0u;
+    u64 m_publishedSampleCount = 0u;
+    u64 m_unpublishedSampleCount = 0u;
+    u64 m_discardedScopeCount = 0u;
+    u64 m_quarantinedScopeCount = 0u;
+    u64 m_skippedScopeCountByReason[GpuTimingScopeSkipReason::kCount]{};
     bool m_enabled = false;
 };
 
@@ -290,6 +338,7 @@ public:
     // True when either normal Perf capture or an adaptive feedback consumer needs query pools to be materialized
     // and reset for the current frame.
     [[nodiscard]] bool collectionActive()const{ return (m_enabled && m_timing.enabled()) || m_feedbackCollectionEnabled; }
+    [[nodiscard]] GpuTimingRecorderStatistics statistics(const Device& device)const;
     void resetQueries();
     void collect(Device& device);
     void collect(Device& device, u64 publishFrameIndex);
@@ -330,6 +379,7 @@ private:
         Device& device,
         CommandList& commandList,
         GpuTimingSampleAttribution attribution,
+        bool requiresComparableTimestamps,
         GpuTimingScope& outScope
     );
     [[nodiscard]] bool beginDeferredScope(
@@ -366,6 +416,7 @@ private:
     void retirePendingAttributionsLocked(Vector<GpuTimingSample, Alloc::GlobalArena>& outSamples);
     void recordTimestampRange(const Name& scopeName, u64 frameIndex, const GpuComparableTimestampRange& range);
     void discardFrameResetLocked();
+    void noteSkippedScope(GpuTimingScopeSkipReason::Enum reason);
     void syncActiveState();
     void advanceEpoch();
 
@@ -378,7 +429,7 @@ private:
     OverlapVector m_overlapRecords;
     // A submission ticket protects its own rollback list, while this lock serializes every query-pool mutation and
     // recorder-map access. Worker command-list recordings may share a ticket and begin timing scopes concurrently.
-    Futex m_mutex;
+    mutable Futex m_mutex;
     // This intentionally permits callback-driven removal. It serializes listener replacement with each invocation
     // without retaining m_mutex across external code.
     RecursiveMutex m_sampleListenerMutex;
@@ -387,6 +438,7 @@ private:
     Atomic<bool> m_hasSampleListener{ false };
     u64 m_currentFrameIndex = 0u;
     u32 m_epoch = 1u;
+    GpuTimingRecorderStatistics m_statistics;
 #if !defined(NWB_FINAL)
     QueueSubmissionToken m_heldSubmissionCompletion;
 #endif

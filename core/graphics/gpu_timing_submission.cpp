@@ -250,11 +250,6 @@ bool GpuTimingFrameTransaction::begin(
         m_state = State::Inactive;
         return true;
     }
-    if(!device.supportsComparableGpuTimestamps(commandList.getResolvedDescription().physicalQueue)){
-        m_state = State::Inactive;
-        return true;
-    }
-
     if(!m_recorder.beginDeferredScope(scopeDefinition.identity, device, commandList, attribution, m_scope)){
         m_scope = {};
         m_state = State::Resolved;
@@ -413,7 +408,7 @@ GpuTimingMeasure::GpuTimingMeasure(
 
     m_commandList.beginMarker(scopeDefinition.markerLabel);
     m_markerOpen = true;
-    if(!m_recorder.beginScope(scopeDefinition.identity, device, commandList, attribution, m_scope))
+    if(!m_recorder.beginScope(scopeDefinition.identity, device, commandList, attribution, false, m_scope))
         m_scope = {};
 }
 GpuTimingMeasure::~GpuTimingMeasure(){

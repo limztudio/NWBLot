@@ -566,12 +566,15 @@ bool GpuTaskGraphCompiler::analyze(
     const Timer acceptedQueueFrontierValidationBegin = TimerNow();
     for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
         const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
+        if(task.scheduling.isRecoverySubmission && !task.scheduling.joinsAcceptedQueueFrontier)
+            return fail(GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask, task.id);
         if(!task.scheduling.joinsAcceptedQueueFrontier)
             continue;
 
-        // Recovery joins the latest accepted queue tokens at submission time. It must not inherit a graph
-        // prerequisite whose rejection could make recovery unavailable. Scheduling edges are a reduced subset of
-        // these raw edges, so rejecting every raw incoming edge also covers inferred HazardDomain prerequisites.
+        // Late recovery/finalization joins the latest accepted queue tokens at submission time. It must not inherit
+        // a graph prerequisite whose rejection could make the join unavailable. Scheduling edges are a reduced
+        // subset of these raw edges, so rejecting every raw incoming edge also covers inferred HazardDomain
+        // prerequisites.
         for(const GpuTaskDependencyEdge& edge : outAnalysis.m_edges){
             if(edge.consumer == task.id){
                 return fail(

@@ -96,6 +96,7 @@ struct StandaloneTaskGraphRecoveryTask{
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
     scheduling.joinsAcceptedQueueFrontier = true;
+    scheduling.isRecoverySubmission = true;
     GpuTaskDesc recoveryDesc;
     recoveryDesc
         .setIdentity(Name("graphics.standalone_task_graph.recovery"))

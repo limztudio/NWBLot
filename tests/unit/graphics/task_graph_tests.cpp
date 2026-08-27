@@ -64,6 +64,27 @@ public:
         return transaction.acceptSubmittingPacket(graph, compiledGraph, packet, token, lease);
     }
 
+    [[nodiscard]] static bool acceptNativeSubmittingPacket(
+        GpuGraphSubmissionTransaction& transaction,
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        GpuSubmissionPacketId packet,
+        const QueueSubmissionToken& token,
+        GpuTaskPacketSubmissionLease& lease
+    )noexcept{
+        const GpuGraphSubmissionTransaction::NativeSubmissionInfo nativeSubmissionInfo{
+            .commandListCount = 1u,
+        };
+        return transaction.acceptSubmittingPacket(
+            graph,
+            compiledGraph,
+            packet,
+            token,
+            lease,
+            &nativeSubmissionInfo
+        );
+    }
+
     static void rejectSubmittingPacket(
         GpuGraphSubmissionTransaction& transaction,
         GpuTaskGraph& graph,
@@ -15297,6 +15318,34 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
     EXPECT_EQ(analysis.topologicalOrder()[2], first);
 }
 
+TEST(GpuTaskGraph, RejectsRecoverySubmissionWithoutAcceptedQueueFrontierRole){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuTaskSchedulingHint recoveryScheduling;
+    recoveryScheduling.forceSubmissionBoundary = true;
+    recoveryScheduling.allowPacketMerge = false;
+    recoveryScheduling.isRecoverySubmission = true;
+    Graphics::GpuTaskDesc recoveryDesc;
+    recoveryDesc
+        .setIdentity(Name("tests/task_graph/recovery_without_frontier"))
+        .setMarkerLabel("Recovery Without Frontier")
+        .setScheduling(recoveryScheduling)
+    ;
+    const Graphics::GpuTaskId recovery = graph.addTask(recoveryDesc);
+    ASSERT_TRUE(recovery.valid());
+
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    EXPECT_FALSE(Analyze(graph, analysis));
+    EXPECT_FALSE(analysis.valid());
+    EXPECT_EQ(
+        analysis.diagnostic().status,
+        Graphics::GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask
+    );
+    EXPECT_EQ(analysis.diagnostic().task, recovery);
+    EXPECT_FALSE(analysis.diagnostic().relatedTask.valid());
+    EXPECT_FALSE(analysis.diagnostic().resource.valid());
+}
+
 TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites){
     TestArena testArena;
     Graphics::GpuTaskSchedulingHint frontierScheduling;
@@ -15603,6 +15652,7 @@ TEST(GpuTaskGraph, CompilesOnlyIndependentAcceptedQueueFrontierTasks){
         EXPECT_EQ(packet.dependencyCount, 0u);
         EXPECT_EQ(packet.externalDependencyCount, 0u);
         EXPECT_TRUE(packet.joinsAcceptedQueueFrontier);
+        EXPECT_FALSE(packet.isRecoverySubmission);
         EXPECT_EQ(compiledTask->prologueStateSeedCount, 0u);
         EXPECT_EQ(compiledTask->prologueBarrierCount, 0u);
         EXPECT_EQ(compiledTask->epilogueBarrierCount, 0u);
@@ -15686,6 +15736,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     recoveryScheduling.forceSubmissionBoundary = true;
     recoveryScheduling.allowPacketMerge = false;
     recoveryScheduling.joinsAcceptedQueueFrontier = true;
+    recoveryScheduling.isRecoverySubmission = true;
     Graphics::GpuTaskDesc recoveryDesc;
     recoveryDesc
         .setIdentity(Name("tests/task_graph/packet_recovery"))
@@ -15858,6 +15909,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_EQ(recoveryPacketPlan.dependencyCount, 0u);
     EXPECT_EQ(recoveryPacketPlan.externalDependencyCount, 0u);
     EXPECT_TRUE(recoveryPacketPlan.joinsAcceptedQueueFrontier);
+    EXPECT_TRUE(recoveryPacketPlan.isRecoverySubmission);
 
     const auto completeGraphPacketRecording = [&](const Graphics::GpuSubmissionPacketId& packetID){
         Graphics::GpuTaskPacketRecordingLease recordingLease;
@@ -15949,6 +16001,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_EQ(firstQueueStatistics.plannedWaitTokenCount, 0u);
     EXPECT_EQ(firstQueueStatistics.timelineWaitCount, 0u);
     EXPECT_EQ(firstQueueStatistics.acceptedFrontierSubmissionCount, 0u);
+    EXPECT_EQ(firstQueueStatistics.recoverySubmissionCount, 0u);
     EXPECT_EQ(firstQueueStatistics.submissionSeconds, 0.0);
     const Graphics::GpuPhysicalQueueId staleFirstQueue{
         firstQueue.index,
@@ -16157,6 +16210,18 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_EQ(recoveredTaskStatistics.rejectedPacketCount, 1u);
     EXPECT_EQ(recoveredTaskStatistics.rejectedTaskCount, 1u);
     EXPECT_EQ(recoveredTaskStatistics.rejectedSubmissionCount, 0u);
+    EXPECT_EQ(recoveredTaskStatistics.acceptedFrontierSubmissionCount, 0u);
+    EXPECT_EQ(recoveredTaskStatistics.recoverySubmissionCount, 0u);
+    const Graphics::GpuTaskGraphPhysicalQueueSubmissionStatistics recoveredQueueStatistics =
+        transaction.physicalQueueSubmissionStatistics(
+            compiledGraph,
+            recoveryQueue
+        );
+    ASSERT_TRUE(recoveredQueueStatistics.valid());
+    EXPECT_EQ(recoveredQueueStatistics.acceptedPacketCount, 1u);
+    EXPECT_EQ(recoveredQueueStatistics.nativeSubmissionCount, 0u);
+    EXPECT_EQ(recoveredQueueStatistics.acceptedFrontierSubmissionCount, 0u);
+    EXPECT_EQ(recoveredQueueStatistics.recoverySubmissionCount, 0u);
 
     EXPECT_TRUE(transaction.discardUnaccepted(graph, compiledGraph));
     EXPECT_EQ(acceptedCount, 3u);
@@ -16921,6 +16986,271 @@ TEST(GpuTaskGraph, RejectsCrossPacketSubmissionLeaseResolution){
     EXPECT_EQ(firstDiscardedCount, 0u);
     EXPECT_EQ(secondAcceptedCount, 0u);
     EXPECT_EQ(secondDiscardedCount, 1u);
+}
+
+
+TEST(GpuTaskGraph, CountsOnlyAcceptedNativeRecoverySubmissionsOnTheirPhysicalQueues){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuTaskSchedulingHint frontierScheduling;
+    frontierScheduling.forceSubmissionBoundary = true;
+    frontierScheduling.allowPacketMerge = false;
+    frontierScheduling.joinsAcceptedQueueFrontier = true;
+    Graphics::GpuTaskSchedulingHint recoveryScheduling = frontierScheduling;
+    recoveryScheduling.isRecoverySubmission = true;
+
+    Graphics::GpuTaskDesc genericFrontierDesc;
+    genericFrontierDesc
+        .setIdentity(Name("tests/task_graph/native_generic_frontier"))
+        .setMarkerLabel("Native Generic Frontier")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Compute,
+            Graphics::GpuQueuePreference::Compute,
+            false,
+            false,
+        })
+        .setScheduling(frontierScheduling)
+    ;
+    const Graphics::GpuTaskId genericFrontier = graph.addTask<PacketLifecycleTask>(
+        genericFrontierDesc,
+        PacketLifecycleTask::Payload{}
+    );
+    ASSERT_TRUE(genericFrontier.valid());
+
+    Graphics::GpuTaskDesc acceptedRecoveryDesc;
+    acceptedRecoveryDesc
+        .setIdentity(Name("tests/task_graph/native_accepted_recovery"))
+        .setMarkerLabel("Native Accepted Recovery")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(recoveryScheduling)
+    ;
+    const Graphics::GpuTaskId acceptedRecovery = graph.addTask<PacketLifecycleTask>(
+        acceptedRecoveryDesc,
+        PacketLifecycleTask::Payload{}
+    );
+    ASSERT_TRUE(acceptedRecovery.valid());
+
+    Graphics::GpuTaskDesc rejectedRecoveryDesc;
+    rejectedRecoveryDesc
+        .setIdentity(Name("tests/task_graph/native_rejected_recovery"))
+        .setMarkerLabel("Native Rejected Recovery")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            false,
+            false,
+        })
+        .setScheduling(recoveryScheduling)
+    ;
+    const Graphics::GpuTaskId rejectedRecovery = graph.addTask<PacketLifecycleTask>(
+        rejectedRecoveryDesc,
+        PacketLifecycleTask::Payload{}
+    );
+    ASSERT_TRUE(rejectedRecovery.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+        DedicatedTransferQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuSubmissionPacketId genericFrontierPacket = compiledGraph.packetForTask(genericFrontier);
+    const Graphics::GpuSubmissionPacketId acceptedRecoveryPacket = compiledGraph.packetForTask(acceptedRecovery);
+    const Graphics::GpuSubmissionPacketId rejectedRecoveryPacket = compiledGraph.packetForTask(rejectedRecovery);
+    ASSERT_TRUE(genericFrontierPacket.valid());
+    ASSERT_TRUE(acceptedRecoveryPacket.valid());
+    ASSERT_TRUE(rejectedRecoveryPacket.valid());
+    EXPECT_TRUE(compiledGraph.packet(genericFrontierPacket).joinsAcceptedQueueFrontier);
+    EXPECT_FALSE(compiledGraph.packet(genericFrontierPacket).isRecoverySubmission);
+    EXPECT_TRUE(compiledGraph.packet(acceptedRecoveryPacket).joinsAcceptedQueueFrontier);
+    EXPECT_TRUE(compiledGraph.packet(acceptedRecoveryPacket).isRecoverySubmission);
+    EXPECT_TRUE(compiledGraph.packet(rejectedRecoveryPacket).joinsAcceptedQueueFrontier);
+    EXPECT_TRUE(compiledGraph.packet(rejectedRecoveryPacket).isRecoverySubmission);
+
+    const auto completePacketRecording = [&](const Graphics::GpuSubmissionPacketId packet){
+        Graphics::GpuTaskPacketRecordingLease recordingLease;
+        return graph.beginRecordingAttempt(compiledGraph, packet)
+            && graph.beginPacketRecording(
+                compiledGraph,
+                packet,
+                graph.recordingAttemptGeneration(),
+                recordingLease
+            )
+            && graph.completePacketRecording(compiledGraph, packet, recordingLease)
+        ;
+    };
+    ASSERT_TRUE(completePacketRecording(genericFrontierPacket));
+    ASSERT_TRUE(completePacketRecording(acceptedRecoveryPacket));
+    ASSERT_TRUE(completePacketRecording(rejectedRecoveryPacket));
+    const u64 recordingAttemptGeneration = graph.recordingAttemptGeneration();
+
+    Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
+    transaction.reset(compiledGraph);
+    ASSERT_TRUE(transaction.markPacketRecorded(
+        graph,
+        compiledGraph,
+        genericFrontierPacket,
+        recordingAttemptGeneration
+    ));
+    ASSERT_TRUE(transaction.markPacketRecorded(
+        graph,
+        compiledGraph,
+        acceptedRecoveryPacket,
+        recordingAttemptGeneration
+    ));
+    ASSERT_TRUE(transaction.markPacketRecorded(
+        graph,
+        compiledGraph,
+        rejectedRecoveryPacket,
+        recordingAttemptGeneration
+    ));
+
+    const Graphics::GpuPhysicalQueueInfo* const genericFrontierQueueInfo =
+        compiledGraph.queueInfo(compiledGraph.packet(genericFrontierPacket).queue);
+    const Graphics::GpuPhysicalQueueInfo* const acceptedRecoveryQueueInfo =
+        compiledGraph.queueInfo(compiledGraph.packet(acceptedRecoveryPacket).queue);
+    const Graphics::GpuPhysicalQueueInfo* const rejectedRecoveryQueueInfo =
+        compiledGraph.queueInfo(compiledGraph.packet(rejectedRecoveryPacket).queue);
+    ASSERT_NE(genericFrontierQueueInfo, nullptr);
+    ASSERT_NE(acceptedRecoveryQueueInfo, nullptr);
+    ASSERT_NE(rejectedRecoveryQueueInfo, nullptr);
+
+    Graphics::GpuTaskPacketSubmissionLease genericFrontierLease;
+    ASSERT_TRUE(Graphics::GpuGraphSubmissionTransactionDiagnosticPeer::beginPacketSubmission(
+        transaction,
+        graph,
+        compiledGraph,
+        genericFrontierPacket,
+        recordingAttemptGeneration,
+        genericFrontierLease
+    ));
+    ASSERT_TRUE(Graphics::GpuGraphSubmissionTransactionDiagnosticPeer::acceptNativeSubmittingPacket(
+        transaction,
+        graph,
+        compiledGraph,
+        genericFrontierPacket,
+        Graphics::QueueSubmissionToken{
+            .queue = genericFrontierQueueInfo->queueClass,
+            .value = 101u,
+            .physicalQueueIndex = genericFrontierQueueInfo->id.index,
+            .deviceGeneration = genericFrontierQueueInfo->id.deviceGeneration,
+        },
+        genericFrontierLease
+    ));
+    EXPECT_FALSE(genericFrontierLease.valid());
+
+    Graphics::GpuTaskPacketSubmissionLease acceptedRecoveryLease;
+    ASSERT_TRUE(Graphics::GpuGraphSubmissionTransactionDiagnosticPeer::beginPacketSubmission(
+        transaction,
+        graph,
+        compiledGraph,
+        acceptedRecoveryPacket,
+        recordingAttemptGeneration,
+        acceptedRecoveryLease
+    ));
+    ASSERT_TRUE(Graphics::GpuGraphSubmissionTransactionDiagnosticPeer::acceptNativeSubmittingPacket(
+        transaction,
+        graph,
+        compiledGraph,
+        acceptedRecoveryPacket,
+        Graphics::QueueSubmissionToken{
+            .queue = acceptedRecoveryQueueInfo->queueClass,
+            .value = 102u,
+            .physicalQueueIndex = acceptedRecoveryQueueInfo->id.index,
+            .deviceGeneration = acceptedRecoveryQueueInfo->id.deviceGeneration,
+        },
+        acceptedRecoveryLease
+    ));
+    EXPECT_FALSE(acceptedRecoveryLease.valid());
+
+    Graphics::GpuTaskPacketSubmissionLease rejectedRecoveryLease;
+    ASSERT_TRUE(Graphics::GpuGraphSubmissionTransactionDiagnosticPeer::beginPacketSubmission(
+        transaction,
+        graph,
+        compiledGraph,
+        rejectedRecoveryPacket,
+        recordingAttemptGeneration,
+        rejectedRecoveryLease
+    ));
+    Graphics::GpuGraphSubmissionTransactionDiagnosticPeer::rejectSubmittingPacket(
+        transaction,
+        graph,
+        compiledGraph,
+        rejectedRecoveryPacket,
+        rejectedRecoveryLease
+    );
+    EXPECT_FALSE(rejectedRecoveryLease.valid());
+
+    const Graphics::GpuTaskGraphSubmissionStatistics submissionStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(submissionStatistics.valid());
+    EXPECT_EQ(submissionStatistics.acceptedPacketCount, 2u);
+    EXPECT_EQ(submissionStatistics.acceptedTaskCount, 2u);
+    EXPECT_EQ(submissionStatistics.rejectedPacketCount, 1u);
+    EXPECT_EQ(submissionStatistics.rejectedTaskCount, 1u);
+    EXPECT_EQ(submissionStatistics.nativeSubmissionCount, 2u);
+    EXPECT_EQ(submissionStatistics.rejectedSubmissionCount, 1u);
+    EXPECT_EQ(submissionStatistics.acceptedFrontierSubmissionCount, 2u);
+    EXPECT_EQ(submissionStatistics.recoverySubmissionCount, 1u);
+
+    const Graphics::GpuTaskGraphPhysicalQueueSubmissionStatistics genericFrontierStatistics =
+        transaction.physicalQueueSubmissionStatistics(compiledGraph, genericFrontierQueueInfo->id);
+    const Graphics::GpuTaskGraphPhysicalQueueSubmissionStatistics acceptedRecoveryStatistics =
+        transaction.physicalQueueSubmissionStatistics(compiledGraph, acceptedRecoveryQueueInfo->id);
+    const Graphics::GpuTaskGraphPhysicalQueueSubmissionStatistics rejectedRecoveryStatistics =
+        transaction.physicalQueueSubmissionStatistics(compiledGraph, rejectedRecoveryQueueInfo->id);
+    ASSERT_TRUE(genericFrontierStatistics.valid());
+    ASSERT_TRUE(acceptedRecoveryStatistics.valid());
+    ASSERT_TRUE(rejectedRecoveryStatistics.valid());
+    EXPECT_EQ(genericFrontierStatistics.nativeSubmissionCount, 1u);
+    EXPECT_EQ(genericFrontierStatistics.acceptedFrontierSubmissionCount, 1u);
+    EXPECT_EQ(genericFrontierStatistics.recoverySubmissionCount, 0u);
+    EXPECT_EQ(genericFrontierStatistics.rejectedSubmissionCount, 0u);
+    EXPECT_EQ(acceptedRecoveryStatistics.nativeSubmissionCount, 1u);
+    EXPECT_EQ(acceptedRecoveryStatistics.acceptedFrontierSubmissionCount, 1u);
+    EXPECT_EQ(acceptedRecoveryStatistics.recoverySubmissionCount, 1u);
+    EXPECT_EQ(acceptedRecoveryStatistics.rejectedSubmissionCount, 0u);
+    EXPECT_EQ(rejectedRecoveryStatistics.nativeSubmissionCount, 0u);
+    EXPECT_EQ(rejectedRecoveryStatistics.acceptedFrontierSubmissionCount, 0u);
+    EXPECT_EQ(rejectedRecoveryStatistics.recoverySubmissionCount, 0u);
+    EXPECT_EQ(rejectedRecoveryStatistics.rejectedSubmissionCount, 1u);
+    EXPECT_EQ(
+        genericFrontierStatistics.nativeSubmissionCount
+            + acceptedRecoveryStatistics.nativeSubmissionCount
+            + rejectedRecoveryStatistics.nativeSubmissionCount,
+        submissionStatistics.nativeSubmissionCount
+    );
+    EXPECT_EQ(
+        genericFrontierStatistics.acceptedFrontierSubmissionCount
+            + acceptedRecoveryStatistics.acceptedFrontierSubmissionCount
+            + rejectedRecoveryStatistics.acceptedFrontierSubmissionCount,
+        submissionStatistics.acceptedFrontierSubmissionCount
+    );
+    EXPECT_EQ(
+        genericFrontierStatistics.recoverySubmissionCount
+            + acceptedRecoveryStatistics.recoverySubmissionCount
+            + rejectedRecoveryStatistics.recoverySubmissionCount,
+        submissionStatistics.recoverySubmissionCount
+    );
+    EXPECT_EQ(
+        genericFrontierStatistics.rejectedSubmissionCount
+            + acceptedRecoveryStatistics.rejectedSubmissionCount
+            + rejectedRecoveryStatistics.rejectedSubmissionCount,
+        submissionStatistics.rejectedSubmissionCount
+    );
 }
 #endif
 

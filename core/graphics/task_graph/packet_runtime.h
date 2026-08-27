@@ -614,6 +614,7 @@ struct GpuTaskGraphSubmissionStatistics{
     usize timelineWaitCount = 0u;
     usize mergedTimelineWaitCount = 0u;
     usize acceptedFrontierSubmissionCount = 0u;
+    usize recoverySubmissionCount = 0u;
     usize nativeSubmissionCountByQueueClass[s_QueueClassCount] = {};
     usize nativeCommandListCountByQueueClass[s_QueueClassCount] = {};
     usize timelineWaitCountByQueueClass[s_QueueClassCount] = {};
@@ -647,6 +648,7 @@ struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
     usize timelineWaitCount = 0u;
     usize mergedTimelineWaitCount = 0u;
     usize acceptedFrontierSubmissionCount = 0u;
+    usize recoverySubmissionCount = 0u;
     f64 submissionSeconds = 0.0;
 
     [[nodiscard]] bool valid()const noexcept{

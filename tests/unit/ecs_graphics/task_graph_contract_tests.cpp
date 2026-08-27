@@ -260,7 +260,7 @@ TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){
     EXPECT_TRUE(ContainsText(frameGraph, "\"Declarations: resource sets={} resource-set members={} direct uses={} declared set uses={} expanded set-member uses={} materialized uses={}\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"Data: payload objects={} payload object bytes={} upload blobs={} upload blob bytes={}\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"Recording: packets={} tasks={} command lists={} barriers={} worker-routed={} overlapped={}\\n\""));
-    EXPECT_TRUE(ContainsText(frameGraph, "\"Submission: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} submissions={} command lists={} waits={} failed submissions={}\\n\""));
+    EXPECT_TRUE(ContainsText(frameGraph, "\"Submission: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} submissions={} accepted frontier={} recovery submissions={} command lists={} waits={} failed submissions={}\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "\"CPU: declaration={:.3f} ms compile={:.3f} ms native recording elapsed={:.3f} ms submit={:.3f} ms\\n\""));
     EXPECT_TRUE(ContainsText(frameGraph, "compileStatistics.declarationSeconds * 1000.0,"));
     EXPECT_TRUE(ContainsText(frameGraph, "\"CPU compile phases: analysis={:.3f} ms queue assignment={:.3f} ms planning={:.3f} ms\\n\""));
@@ -300,7 +300,11 @@ TEST(EcsGraphics, DeferredGraphRuntimeTelemetryUsesPersistentFrameGraphLabel){
     EXPECT_TRUE(ContainsText(frameGraph, "submissionStatistics.acceptedTaskCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "submissionStatistics.rejectedPacketCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "submissionStatistics.rejectedTaskCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "submissionStatistics.acceptedFrontierSubmissionCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "submissionStatistics.recoverySubmissionCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "submissionStatistics.rejectedSubmissionCount,"));
+    EXPECT_TRUE(ContainsText(frameGraph, "accepted frontier={} recovery submissions={} CPU={:.3f} ms"));
+    EXPECT_TRUE(ContainsText(frameGraph, "queueStatistics.recoverySubmissionCount,"));
     EXPECT_TRUE(ContainsText(frameGraph, "m_frameGraphRendererLabel += \"Renderer Frame\";"));
     EXPECT_TRUE(ContainsText(frameGraph, "AStringView(m_frameGraphRendererLabel.data(), m_frameGraphRendererLabel.size())"));
 }
@@ -359,6 +363,8 @@ TEST(EcsGraphics, DeferredGraphAttachesStructuredRuntimeStatisticsOnlyToRenderer
         runtimeStatistics,
         ".acceptedFrontierSubmissionCount = static_cast<u64>("
     ));
+    EXPECT_EQ(CountText(runtimeStatistics, ".recoverySubmissionCount = static_cast<u64>("), 2u);
+    EXPECT_EQ(CountText(runtimeStatistics, "submissionStatistics.recoverySubmissionCount"), 2u);
     EXPECT_TRUE(ContainsText(runtimeStatistics, ".submissionSeconds = submissionStatistics.submissionSeconds,"));
     EXPECT_TRUE(ContainsText(runtimeStatistics, ".present = true,"));
     EXPECT_TRUE(ContainsText(
@@ -794,7 +800,7 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     EXPECT_TRUE(ContainsText(frameGraph, "accepted packets={} accepted tasks={} rejected packets={} rejected tasks={}"));
     EXPECT_TRUE(ContainsText(frameGraph, "native submissions={} rejected submit paths={} command lists={}"));
     EXPECT_TRUE(ContainsText(frameGraph, "planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={}"));
-    EXPECT_TRUE(ContainsText(frameGraph, "accepted frontier={} CPU={:.3f} ms"));
+    EXPECT_TRUE(ContainsText(frameGraph, "accepted frontier={} recovery submissions={} CPU={:.3f} ms"));
     EXPECT_TRUE(ContainsText(
         frameGraph,
         "  Compile plan: tasks={} packets={} merged tasks={} prologue barriers={} epilogue barriers={} raw ownership release barriers (subset)={} raw ownership acquire barriers (subset)={}"
@@ -1487,6 +1493,46 @@ TEST(EcsGraphics, OnlyTerminalPresentationRetainsAPacketIdentity){
     EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId deferredPresentPacket"));
     EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId deferredLaggedLightingHistoryPacket"));
     EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId deferredFrameRecoveryPacket"));
+}
+
+
+// Recovery packets join the accepted native frontier but remain explicitly distinguishable from generic frontier
+// finalization in both production graph declaration paths.
+TEST(EcsGraphics, ProductionRecoveryTasksDeclareExactSubmissionRole){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString standaloneSource;
+    AString deferredSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "module_graph_setup.cpp", standaloneSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_deferred_lighting.cpp",
+        deferredSource
+    ));
+    const AStringView standalone(standaloneSource.data(), standaloneSource.size());
+    const AStringView deferred(deferredSource.data(), deferredSource.size());
+
+    const usize standaloneRecoveryOffset = standalone.find("DeclareStandaloneTaskGraphRecoveryTask");
+    const usize standaloneRecoveryDescOffset = standalone.find("GpuTaskDesc recoveryDesc;", standaloneRecoveryOffset);
+    ASSERT_NE(standaloneRecoveryOffset, AStringView::npos);
+    ASSERT_NE(standaloneRecoveryDescOffset, AStringView::npos);
+    const AStringView standaloneScheduling = standalone.substr(
+        standaloneRecoveryOffset,
+        standaloneRecoveryDescOffset - standaloneRecoveryOffset
+    );
+    EXPECT_TRUE(ContainsText(standaloneScheduling, "scheduling.joinsAcceptedQueueFrontier = true;"));
+    EXPECT_TRUE(ContainsText(standaloneScheduling, "scheduling.isRecoverySubmission = true;"));
+
+    const usize deferredRecoveryOffset = deferred.find("Core::GpuTaskSchedulingHint recoveryScheduling;");
+    const usize deferredRecoveryDescOffset = deferred.find("Core::GpuTaskDesc recoveryDesc;", deferredRecoveryOffset);
+    ASSERT_NE(deferredRecoveryOffset, AStringView::npos);
+    ASSERT_NE(deferredRecoveryDescOffset, AStringView::npos);
+    const AStringView deferredScheduling = deferred.substr(
+        deferredRecoveryOffset,
+        deferredRecoveryDescOffset - deferredRecoveryOffset
+    );
+    EXPECT_TRUE(ContainsText(deferredScheduling, "recoveryScheduling.joinsAcceptedQueueFrontier = true;"));
+    EXPECT_TRUE(ContainsText(deferredScheduling, "recoveryScheduling.isRecoverySubmission = true;"));
 }
 
 

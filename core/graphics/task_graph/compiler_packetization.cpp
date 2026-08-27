@@ -331,6 +331,7 @@ namespace GpuTaskGraphCompilerDetail{
                 .taskOffset = static_cast<u32>(compiledPlan.packetTasks.size()),
                 .taskCount = 1u,
                 .joinsAcceptedQueueFrontier = task.scheduling.joinsAcceptedQueueFrontier,
+                .isRecoverySubmission = task.scheduling.isRecoverySubmission,
                 .recordsTiming = taskRecordsTiming,
             });
         }

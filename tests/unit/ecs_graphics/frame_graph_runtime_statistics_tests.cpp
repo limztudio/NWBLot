@@ -83,6 +83,7 @@ struct PhysicalQueueRuntimeSnapshots{
     snapshots.submission.timelineWaitCount = 2u;
     snapshots.submission.mergedTimelineWaitCount = 1u;
     snapshots.submission.acceptedFrontierSubmissionCount = 1u;
+    snapshots.submission.recoverySubmissionCount = 1u;
     snapshots.submission.submissionSeconds = 0.005;
     return snapshots;
 }
@@ -111,6 +112,8 @@ struct PhysicalQueueRuntimeSnapshots{
     statistics.submission.acceptedTaskCount = 1u;
     statistics.submission.nativeSubmissionCount = 1u;
     statistics.submission.nativeCommandListCount = 1u;
+    statistics.submission.acceptedFrontierSubmissionCount = 1u;
+    statistics.submission.recoverySubmissionCount = 1u;
     return statistics;
 }
 
@@ -136,6 +139,8 @@ TEST(EcsGraphics, FrameGraphPhysicalQueueRuntimeStatisticsMapsCoherentSnapshots)
     EXPECT_EQ(telemetry.recording.commandListCount, 2u);
     EXPECT_DOUBLE_EQ(telemetry.recording.recordingSeconds, 0.004);
     EXPECT_EQ(telemetry.submission.plannedWaitTokenCount, 4u);
+    EXPECT_EQ(telemetry.submission.acceptedFrontierSubmissionCount, 1u);
+    EXPECT_EQ(telemetry.submission.recoverySubmissionCount, 1u);
     EXPECT_DOUBLE_EQ(telemetry.submission.submissionSeconds, 0.005);
 }
 
@@ -162,6 +167,16 @@ TEST(EcsGraphics, FrameGraphPhysicalQueueRuntimeStatisticsRejectsMixedSnapshots)
 
     snapshots = MakeValidPhysicalQueueRuntimeSnapshots();
     snapshots.submission.queueClass = NWB::Core::CommandQueue::Graphics;
+    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(
+        NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
+            snapshots.compile,
+            snapshots.recording,
+            snapshots.submission
+        )
+    ));
+
+    snapshots = MakeValidPhysicalQueueRuntimeSnapshots();
+    snapshots.submission.recoverySubmissionCount = 2u;
     EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(
         NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
             snapshots.compile,
@@ -265,6 +280,11 @@ TEST(EcsGraphics, FrameGraphRuntimeStatisticsSelectsOnlyMatchingCoherentSnapshot
     EXPECT_EQ(matching.compile.taskCount, statistics.compile.taskCount);
     EXPECT_EQ(matching.recording.commandListCount, statistics.recording.commandListCount);
     EXPECT_EQ(matching.submission.nativeSubmissionCount, statistics.submission.nativeSubmissionCount);
+    EXPECT_EQ(
+        matching.submission.acceptedFrontierSubmissionCount,
+        statistics.submission.acceptedFrontierSubmissionCount
+    );
+    EXPECT_EQ(matching.submission.recoverySubmissionCount, statistics.submission.recoverySubmissionCount);
 
     const NWB::Core::Telemetry::FrameGraphRuntimeStatistics stale =
         NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(statistics, 42u, 41u)

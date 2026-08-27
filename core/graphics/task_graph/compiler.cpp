@@ -515,15 +515,16 @@ bool GpuTaskGraphCompiler::compile(
             return failAcceptedQueueFrontierPlan(compiledTask.task);
 
         const GpuSubmissionPacket& packet = outCompiledGraph.m_packets[compiledTask.packet.index];
-        const bool invalidRecoveryPlan = packet.taskCount != 1u
+        const bool invalidAcceptedQueueFrontierPlan = packet.taskCount != 1u
             || packet.dependencyCount != 0u
             || packet.externalDependencyCount != 0u
             || !packet.joinsAcceptedQueueFrontier
+            || packet.isRecoverySubmission != task.scheduling.isRecoverySubmission
             || compiledTask.prologueStateSeedCount != 0u
             || compiledTask.prologueBarrierCount != 0u
             || compiledTask.epilogueBarrierCount != 0u
         ;
-        if(!invalidRecoveryPlan)
+        if(!invalidAcceptedQueueFrontierPlan)
             continue;
 
         GpuTaskId relatedTask;

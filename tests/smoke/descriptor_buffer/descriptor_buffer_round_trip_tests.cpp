@@ -50079,6 +50079,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
 
     GpuTaskSchedulingHint recoveryScheduling = scheduling;
     recoveryScheduling.joinsAcceptedQueueFrontier = true;
+    recoveryScheduling.isRecoverySubmission = true;
     GpuTaskDesc recoveryDesc;
     recoveryDesc
         .setIdentity(Name("tests/descriptor_buffer/recovery_tail"))
@@ -50136,6 +50137,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     EXPECT_EQ(compiledGraph.packet(recoveryPacket).dependencyCount, 0u);
     EXPECT_EQ(compiledGraph.packet(recoveryPacket).externalDependencyCount, 0u);
     EXPECT_TRUE(compiledGraph.packet(recoveryPacket).joinsAcceptedQueueFrontier);
+    EXPECT_TRUE(compiledGraph.packet(recoveryPacket).isRecoverySubmission);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -50195,6 +50197,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     EXPECT_EQ(rejectedSubmissionStatistics.rejectedTaskCount, 1u);
     EXPECT_EQ(rejectedSubmissionStatistics.rejectedSubmissionCount, 1u);
     EXPECT_EQ(rejectedSubmissionStatistics.acceptedFrontierSubmissionCount, 0u);
+    EXPECT_EQ(rejectedSubmissionStatistics.recoverySubmissionCount, 0u);
     EXPECT_FALSE(recoveryRecorded);
     EXPECT_FALSE(recoveryAccepted);
     EXPECT_FALSE(recoveryDiscarded);
@@ -50227,6 +50230,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     EXPECT_EQ(recoveredSubmissionStatistics.rejectedTaskCount, 1u);
     EXPECT_EQ(recoveredSubmissionStatistics.rejectedSubmissionCount, 1u);
     EXPECT_EQ(recoveredSubmissionStatistics.acceptedFrontierSubmissionCount, 1u);
+    EXPECT_EQ(recoveredSubmissionStatistics.recoverySubmissionCount, 1u);
     // The recovery packet joins the accepted frontier semantically, but its only accepted producer is on this same
     // physical queue, so queue order removes the otherwise redundant timeline wait before native submission.
     EXPECT_EQ(recoveredSubmissionStatistics.plannedWaitTokenCount, 0u);
@@ -50304,6 +50308,7 @@ TEST_F(DescriptorBufferRoundTripTest, TaskRangeHelperPreservesRecoveryOwnership)
     bool recoveryRecorded = false;
     GpuTaskSchedulingHint recoveryScheduling = normalScheduling;
     recoveryScheduling.joinsAcceptedQueueFrontier = true;
+    recoveryScheduling.isRecoverySubmission = true;
     const GpuTaskId recoveryTask = graph.addTask<NativePacketCaptureRetryTask>(
         GpuTaskDesc{}
             .setIdentity(Name("tests/descriptor_buffer/task_range_helper_serial_recovery"))
@@ -50534,6 +50539,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorSubmitsOrdinaryPrefix){
     EXPECT_EQ(compiledGraph.packetIdAt(1u), secondPacket);
     EXPECT_EQ(compiledGraph.packetIdAt(2u), frontierPacket);
     EXPECT_TRUE(compiledGraph.packet(frontierPacket).joinsAcceptedQueueFrontier);
+    EXPECT_FALSE(compiledGraph.packet(frontierPacket).isRecoverySubmission);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -50564,6 +50570,23 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorSubmitsOrdinaryPrefix){
     EXPECT_EQ(transaction.packetRuntime(firstPacket)->state, GpuPacketRuntimeState::Accepted);
     EXPECT_EQ(transaction.packetRuntime(secondPacket)->state, GpuPacketRuntimeState::Accepted);
     EXPECT_EQ(transaction.packetRuntime(frontierPacket)->state, GpuPacketRuntimeState::Declared);
+    ASSERT_TRUE(submitter.recordAndSubmitAcceptedFrontierTask(
+        graph,
+        compiledGraph,
+        recorder,
+        recordedGraph,
+        frontierTask,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(frontierRecorded);
+    ASSERT_TRUE(transaction.packetToken(frontierPacket).valid());
+    ASSERT_NE(transaction.packetRuntime(frontierPacket), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(frontierPacket)->state, GpuPacketRuntimeState::Accepted);
+    const GpuTaskGraphSubmissionStatistics submissionStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(submissionStatistics.valid());
+    EXPECT_EQ(submissionStatistics.acceptedFrontierSubmissionCount, 1u);
+    EXPECT_EQ(submissionStatistics.recoverySubmissionCount, 0u);
     EXPECT_TRUE(transaction.discardUnaccepted(
         graph,
         compiledGraph,
@@ -50625,6 +50648,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorPreservesRecoveryOwners
     bool recoveryRecorded = false;
     GpuTaskSchedulingHint recoveryScheduling = normalScheduling;
     recoveryScheduling.joinsAcceptedQueueFrontier = true;
+    recoveryScheduling.isRecoverySubmission = true;
     const GpuTaskId recoveryTask = graph.addTask<NativePacketCaptureRetryTask>(
         GpuTaskDesc{}
             .setIdentity(Name("tests/descriptor_buffer/task_range_helper_serial_recovery"))
@@ -50656,6 +50680,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorPreservesRecoveryOwners
     ASSERT_TRUE(recoveryPacket.valid());
     ASSERT_EQ(compiledGraph.packetCount(), 3u);
     EXPECT_TRUE(compiledGraph.packet(recoveryPacket).joinsAcceptedQueueFrontier);
+    EXPECT_TRUE(compiledGraph.packet(recoveryPacket).isRecoverySubmission);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -50713,6 +50738,10 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorPreservesRecoveryOwners
     EXPECT_EQ(transaction.packetRuntime(prefixPacket)->state, GpuPacketRuntimeState::Accepted);
     EXPECT_EQ(transaction.packetRuntime(rejectedPacket)->state, GpuPacketRuntimeState::Rejected);
     EXPECT_EQ(transaction.packetRuntime(recoveryPacket)->state, GpuPacketRuntimeState::Declared);
+    const GpuTaskGraphSubmissionStatistics rejectedSubmissionStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(rejectedSubmissionStatistics.valid());
+    EXPECT_EQ(rejectedSubmissionStatistics.acceptedFrontierSubmissionCount, 0u);
+    EXPECT_EQ(rejectedSubmissionStatistics.recoverySubmissionCount, 0u);
 
     ASSERT_TRUE(submitter.recordAndSubmitAcceptedFrontierTask(
         graph,
@@ -50725,6 +50754,10 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorPreservesRecoveryOwners
     ));
     EXPECT_TRUE(recoveryRecorded);
     ASSERT_TRUE(transaction.packetToken(recoveryPacket).valid());
+    const GpuTaskGraphSubmissionStatistics recoveredSubmissionStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(recoveredSubmissionStatistics.valid());
+    EXPECT_EQ(recoveredSubmissionStatistics.acceptedFrontierSubmissionCount, 1u);
+    EXPECT_EQ(recoveredSubmissionStatistics.recoverySubmissionCount, 1u);
     EXPECT_TRUE(transaction.discardUnaccepted(
         graph,
         compiledGraph,
@@ -50880,6 +50913,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierTaskRangeHelperPreservesRecov
     bool recoveryRecorded = false;
     GpuTaskSchedulingHint recoveryScheduling = normalScheduling;
     recoveryScheduling.joinsAcceptedQueueFrontier = true;
+    recoveryScheduling.isRecoverySubmission = true;
     const GpuTaskId recoveryTask = graph.addTask<NativePacketCaptureRetryTask>(
         GpuTaskDesc{}
             .setIdentity(Name("tests/descriptor_buffer/range_helper_recovery"))
@@ -51420,6 +51454,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     GpuTaskSchedulingHint recoveryScheduling = packetScheduling;
     recoveryScheduling.cost = GpuTaskCostHint::Tiny;
     recoveryScheduling.joinsAcceptedQueueFrontier = true;
+    recoveryScheduling.isRecoverySubmission = true;
     const GpuTaskId recoveryTask = graph.addTask<NativePacketCaptureRetryTask>(
         GpuTaskDesc{}
             .setIdentity(Name("tests/descriptor_buffer/recovery_dedicated_transfer_tail"))
@@ -51469,6 +51504,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_EQ(compiledGraph.packet(recoveryPacket).dependencyCount, 0u);
     EXPECT_EQ(compiledGraph.packet(recoveryPacket).externalDependencyCount, 0u);
     EXPECT_TRUE(compiledGraph.packet(recoveryPacket).joinsAcceptedQueueFrontier);
+    EXPECT_TRUE(compiledGraph.packet(recoveryPacket).isRecoverySubmission);
 
     GpuRecordedGraph recordedGraph(transferScope.arena());
     GpuGraphSubmissionTransaction transaction(transferScope.arena());
@@ -51534,6 +51570,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_EQ(rejectedGraphicsQueueStatistics.nativeSubmissionCount, 0u);
     EXPECT_EQ(rejectedGraphicsQueueStatistics.rejectedSubmissionCount, 1u);
     EXPECT_EQ(rejectedGraphicsQueueStatistics.nativeCommandListCount, 0u);
+    EXPECT_EQ(rejectedGraphicsQueueStatistics.acceptedFrontierSubmissionCount, 0u);
+    EXPECT_EQ(rejectedGraphicsQueueStatistics.recoverySubmissionCount, 0u);
 
     Vector<QueueSubmissionToken, Alloc::ScratchArena> recoveryWaitTokens(scratchArena);
     ASSERT_TRUE(transaction.appendAcceptedQueueFrontierWaitTokens(graphicsQueue, recoveryWaitTokens));
@@ -51587,7 +51625,34 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_EQ(recoveredGraphicsQueueStatistics.timelineWaitCount, 1u);
     EXPECT_EQ(recoveredGraphicsQueueStatistics.mergedTimelineWaitCount, 0u);
     EXPECT_EQ(recoveredGraphicsQueueStatistics.acceptedFrontierSubmissionCount, 1u);
+    EXPECT_EQ(recoveredGraphicsQueueStatistics.recoverySubmissionCount, 1u);
     EXPECT_GE(recoveredGraphicsQueueStatistics.submissionSeconds, 0.0);
+
+    const GpuTaskGraphPhysicalQueueSubmissionStatistics recoveredTransferQueueStatistics =
+        transaction.physicalQueueSubmissionStatistics(
+            compiledGraph,
+            transferQueue
+        );
+    ASSERT_TRUE(recoveredTransferQueueStatistics.valid());
+    EXPECT_EQ(recoveredTransferQueueStatistics.nativeSubmissionCount, 1u);
+    EXPECT_EQ(recoveredTransferQueueStatistics.acceptedFrontierSubmissionCount, 0u);
+    EXPECT_EQ(recoveredTransferQueueStatistics.recoverySubmissionCount, 0u);
+
+    const GpuTaskGraphSubmissionStatistics recoveredSubmissionStatistics = transaction.submissionStatistics();
+    ASSERT_TRUE(recoveredSubmissionStatistics.valid());
+    EXPECT_EQ(recoveredSubmissionStatistics.nativeSubmissionCount, 2u);
+    EXPECT_EQ(recoveredSubmissionStatistics.acceptedFrontierSubmissionCount, 1u);
+    EXPECT_EQ(recoveredSubmissionStatistics.recoverySubmissionCount, 1u);
+    EXPECT_EQ(
+        recoveredGraphicsQueueStatistics.acceptedFrontierSubmissionCount
+            + recoveredTransferQueueStatistics.acceptedFrontierSubmissionCount,
+        recoveredSubmissionStatistics.acceptedFrontierSubmissionCount
+    );
+    EXPECT_EQ(
+        recoveredGraphicsQueueStatistics.recoverySubmissionCount
+            + recoveredTransferQueueStatistics.recoverySubmissionCount,
+        recoveredSubmissionStatistics.recoverySubmissionCount
+    );
 
     EXPECT_TRUE(transaction.discardUnaccepted(
         graph,
@@ -51700,6 +51765,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketCompatibilityCallbacksGateAcce
     bool recoveryRecorded = false;
     GpuTaskSchedulingHint recoveryScheduling = packetScheduling;
     recoveryScheduling.joinsAcceptedQueueFrontier = true;
+    recoveryScheduling.isRecoverySubmission = true;
     const GpuTaskId recoveryTask = graph.addTask<NativePacketCaptureRetryTask>(
         GpuTaskDesc{}
             .setIdentity(Name("tests/descriptor_buffer/submission_serialization_recovery"))

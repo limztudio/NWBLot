@@ -160,6 +160,7 @@ Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRun
             .acceptedFrontierSubmissionCount = static_cast<u64>(
                 submissionStatistics.acceptedFrontierSubmissionCount
             ),
+            .recoverySubmissionCount = static_cast<u64>(submissionStatistics.recoverySubmissionCount),
             .submissionSeconds = submissionStatistics.submissionSeconds,
         },
         .present = true,
@@ -264,6 +265,7 @@ ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
             .acceptedFrontierSubmissionCount = static_cast<u64>(
                 submissionStatistics.acceptedFrontierSubmissionCount
             ),
+            .recoverySubmissionCount = static_cast<u64>(submissionStatistics.recoverySubmissionCount),
             .submissionSeconds = submissionStatistics.submissionSeconds,
         },
     };

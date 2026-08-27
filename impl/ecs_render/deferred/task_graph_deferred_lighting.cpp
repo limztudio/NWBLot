@@ -6035,6 +6035,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     recoveryScheduling.forceSubmissionBoundary = true;
     recoveryScheduling.allowPacketMerge = false;
     recoveryScheduling.joinsAcceptedQueueFrontier = true;
+    recoveryScheduling.isRecoverySubmission = true;
     Core::GpuTaskDesc recoveryDesc;
     recoveryDesc
         .setIdentity(Name("render.frame_recovery"))

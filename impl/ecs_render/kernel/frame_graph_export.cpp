@@ -194,7 +194,7 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             "Raw barriers: transitions={} UAV={} ownership releases={} ownership acquires={} state exports={}\n"
             "Logical ownership transfers: records={} signatures={} repeated signatures={} concurrent-sharing candidate records={} advised repeated resources={} route records internal/import/export={}/{}/{}\n"
             "Recording: packets={} tasks={} command lists={} barriers={} worker-routed={} overlapped={}\n"
-            "Submission: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} submissions={} command lists={} waits={} failed submissions={}\n"
+            "Submission: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} submissions={} accepted frontier={} recovery submissions={} command lists={} waits={} failed submissions={}\n"
             "CPU: declaration={:.3f} ms compile={:.3f} ms native recording elapsed={:.3f} ms submit={:.3f} ms\n"
             "CPU compile phases: analysis={:.3f} ms queue assignment={:.3f} ms planning={:.3f} ms\n"
             "CPU analysis detail: validation={:.3f} ms dependencies={:.3f} ms hazards={:.3f} ms cycles/topology={:.3f} ms\n"
@@ -239,6 +239,8 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             submissionStatistics.rejectedPacketCount,
             submissionStatistics.rejectedTaskCount,
             submissionStatistics.nativeSubmissionCount,
+            submissionStatistics.acceptedFrontierSubmissionCount,
+            submissionStatistics.recoverySubmissionCount,
             submissionStatistics.nativeCommandListCount,
             submissionStatistics.timelineWaitCount,
             submissionStatistics.rejectedSubmissionCount,
@@ -307,7 +309,7 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
 
             StringAppendFormat(
                 m_frameGraphRendererLabel,
-                "\nPhysical queue index={} generation={} class={} family index={} native queue index={} dedicated={}: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} native submissions={} rejected submit paths={} command lists={} planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={} accepted frontier={} CPU={:.3f} ms"
+                "\nPhysical queue index={} generation={} class={} family index={} native queue index={} dedicated={}: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} native submissions={} rejected submit paths={} command lists={} planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={} accepted frontier={} recovery submissions={} CPU={:.3f} ms"
                 "\n  Compile plan: tasks={} packets={} merged tasks={} prologue barriers={} epilogue barriers={} raw ownership release barriers (subset)={} raw ownership acquire barriers (subset)={}"
                 "\n  Logical ownership: incoming/outgoing records={}/{} signatures={}/{} repeated signatures={}/{} attributed advice resources={}"
                 "\n  Recording: packets={} tasks={} command lists={} barriers={} worker-routed={} overlapped={} CPU summed spans: command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task={:.3f} ms packet={:.3f} ms"
@@ -330,6 +332,7 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
                 queueStatistics.timelineWaitCount,
                 queueStatistics.mergedTimelineWaitCount,
                 queueStatistics.acceptedFrontierSubmissionCount,
+                queueStatistics.recoverySubmissionCount,
                 queueStatistics.submissionSeconds * 1000.0,
                 queueCompileStatistics.taskCount,
                 queueCompileStatistics.packetCount,

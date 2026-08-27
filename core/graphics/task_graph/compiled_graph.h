@@ -39,6 +39,9 @@ struct GpuSubmissionPacket{
     // A late recovery/finalization packet receives waits for the latest accepted packet on every other physical
     // queue directly from GpuGraphSubmissionTransaction. It is a graph runtime policy, not a renderer token ladder.
     bool joinsAcceptedQueueFrontier = false;
+    // Exact recovery role within the broader accepted-frontier packet class. This remains false for ordinary late
+    // finalization packets that need the same queue join but do not recover a partially accepted graph.
+    bool isRecoverySubmission = false;
     // Distinguishes compiler-selected envelope membership from task-local PacketOnly/Task policies. recordsTiming
     // remains the combined native-ticket requirement so existing recording and submission paths stay coherent.
     bool recordsPacketEnvelopeTiming = false;

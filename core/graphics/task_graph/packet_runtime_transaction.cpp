@@ -221,6 +221,8 @@ GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::phy
             statistics.submissionSeconds += runtime.submissionSeconds;
             if(packet.joinsAcceptedQueueFrontier)
                 ++statistics.acceptedFrontierSubmissionCount;
+            if(packet.isRecoverySubmission)
+                ++statistics.recoverySubmissionCount;
             break;
         case GpuPacketRuntimeState::Rejected:
             ++statistics.rejectedPacketCount;
@@ -493,6 +495,8 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
         m_submissionStatistics.submissionSeconds += nativeSubmissionInfo->submissionSeconds;
         if(packet.joinsAcceptedQueueFrontier)
             ++m_submissionStatistics.acceptedFrontierSubmissionCount;
+        if(packet.isRecoverySubmission)
+            ++m_submissionStatistics.recoverySubmissionCount;
 
         const usize queueClassIndex = static_cast<usize>(queueInfo->queueClass);
         NWB_ASSERT(queueClassIndex < GpuTaskGraphSubmissionStatistics::s_QueueClassCount);

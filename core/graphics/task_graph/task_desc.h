@@ -67,6 +67,9 @@ struct GpuTaskSchedulingHint{
     // HazardDomains, and may have outgoing task edges, but it cannot have an incoming task/external dependency,
     // an external state source, or a concrete Texture/Buffer/AccelStruct use.
     bool joinsAcceptedQueueFrontier = false;
+    // Identifies a true partial-submission recovery packet within the broader recovery/finalization frontier class.
+    // Recovery must also join the accepted queue frontier and is counted only after native submission acceptance.
+    bool isRecoverySubmission = false;
     // Recording stays serial unless every task in a packet explicitly opts in.  An opt-in record thunk may run on a
     // worker concurrently with other opt-in packets from the same compiler-derived ready frontier, so it must not
     // mutate shared CPU state or rely on thread-affine APIs. Submission remains in compiler order.

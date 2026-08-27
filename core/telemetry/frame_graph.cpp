@@ -196,6 +196,186 @@ namespace __hidden_telemetry_frame_graph{
     return IsValidFrameGraphCompiledTask(outCompiledTask);
 }
 
+[[nodiscard]] static EncodedFrameGraphCompileRuntimeStatistics EncodeCompileRuntimeStatistics(
+    const FrameGraphCompileRuntimeStatistics& statistics
+)noexcept{
+    return EncodedFrameGraphCompileRuntimeStatistics{
+        .taskCount = statistics.taskCount,
+        .resourceCount = statistics.resourceCount,
+        .resourceUseCount = statistics.resourceUseCount,
+        .explicitDependencyCount = statistics.explicitDependencyCount,
+        .inferredDependencyCount = statistics.inferredDependencyCount,
+        .packetCount = statistics.packetCount,
+        .packetDependencyCount = statistics.packetDependencyCount,
+        .mergedTaskCount = statistics.mergedTaskCount,
+        .transitionBarrierCount = statistics.transitionBarrierCount,
+        .uavBarrierCount = statistics.uavBarrierCount,
+        .ownershipReleaseBarrierCount = statistics.ownershipReleaseBarrierCount,
+        .ownershipAcquireBarrierCount = statistics.ownershipAcquireBarrierCount,
+        .stateExportBarrierCount = statistics.stateExportBarrierCount,
+        .logicalOwnershipTransferCount = statistics.logicalOwnershipTransferCount,
+        .logicalOwnershipTransferSignatureCount = statistics.logicalOwnershipTransferSignatureCount,
+        .repeatedOwnershipTransferSignatureCount = statistics.repeatedOwnershipTransferSignatureCount,
+        .concurrentSharingCouldAvoidTransferCount = statistics.concurrentSharingCouldAvoidTransferCount,
+        .concurrentSharingAdviceResourceCount = statistics.concurrentSharingAdviceResourceCount,
+        .logicalOwnershipTransferInternalCount = statistics.logicalOwnershipTransferInternalCount,
+        .logicalOwnershipTransferExternalImportCount = statistics.logicalOwnershipTransferExternalImportCount,
+        .logicalOwnershipTransferExternalExportCount = statistics.logicalOwnershipTransferExternalExportCount,
+        .resourceSetCount = statistics.resourceSetCount,
+        .resourceSetMemberCount = statistics.resourceSetMemberCount,
+        .directResourceUseCount = statistics.directResourceUseCount,
+        .declaredResourceSetUseCount = statistics.declaredResourceSetUseCount,
+        .expandedResourceSetMemberUseCount = statistics.expandedResourceSetMemberUseCount,
+        .payloadObjectCount = statistics.payloadObjectCount,
+        .payloadObjectBytes = statistics.payloadObjectBytes,
+        .uploadBlobCount = statistics.uploadBlobCount,
+        .uploadBlobBytes = statistics.uploadBlobBytes,
+        .declarationSeconds = statistics.declarationSeconds,
+        .analysisSeconds = statistics.analysisSeconds,
+        .validationSeconds = statistics.validationSeconds,
+        .dependencyAnalysisSeconds = statistics.dependencyAnalysisSeconds,
+        .hazardAnalysisSeconds = statistics.hazardAnalysisSeconds,
+        .topologicalOrderSeconds = statistics.topologicalOrderSeconds,
+        .queueAssignmentSeconds = statistics.queueAssignmentSeconds,
+        .planningSeconds = statistics.planningSeconds,
+        .packetizationSeconds = statistics.packetizationSeconds,
+        .resourceStatePlanningSeconds = statistics.resourceStatePlanningSeconds,
+        .packetDependencyPlanningSeconds = statistics.packetDependencyPlanningSeconds,
+        .totalSeconds = statistics.totalSeconds,
+    };
+}
+
+[[nodiscard]] static FrameGraphCompileRuntimeStatistics DecodeCompileRuntimeStatistics(
+    const EncodedFrameGraphCompileRuntimeStatistics& statistics
+)noexcept{
+    return FrameGraphCompileRuntimeStatistics{
+        .taskCount = statistics.taskCount,
+        .resourceCount = statistics.resourceCount,
+        .resourceUseCount = statistics.resourceUseCount,
+        .explicitDependencyCount = statistics.explicitDependencyCount,
+        .inferredDependencyCount = statistics.inferredDependencyCount,
+        .packetCount = statistics.packetCount,
+        .packetDependencyCount = statistics.packetDependencyCount,
+        .mergedTaskCount = statistics.mergedTaskCount,
+        .transitionBarrierCount = statistics.transitionBarrierCount,
+        .uavBarrierCount = statistics.uavBarrierCount,
+        .ownershipReleaseBarrierCount = statistics.ownershipReleaseBarrierCount,
+        .ownershipAcquireBarrierCount = statistics.ownershipAcquireBarrierCount,
+        .stateExportBarrierCount = statistics.stateExportBarrierCount,
+        .logicalOwnershipTransferCount = statistics.logicalOwnershipTransferCount,
+        .logicalOwnershipTransferSignatureCount = statistics.logicalOwnershipTransferSignatureCount,
+        .repeatedOwnershipTransferSignatureCount = statistics.repeatedOwnershipTransferSignatureCount,
+        .concurrentSharingCouldAvoidTransferCount = statistics.concurrentSharingCouldAvoidTransferCount,
+        .concurrentSharingAdviceResourceCount = statistics.concurrentSharingAdviceResourceCount,
+        .logicalOwnershipTransferInternalCount = statistics.logicalOwnershipTransferInternalCount,
+        .logicalOwnershipTransferExternalImportCount = statistics.logicalOwnershipTransferExternalImportCount,
+        .logicalOwnershipTransferExternalExportCount = statistics.logicalOwnershipTransferExternalExportCount,
+        .resourceSetCount = statistics.resourceSetCount,
+        .resourceSetMemberCount = statistics.resourceSetMemberCount,
+        .directResourceUseCount = statistics.directResourceUseCount,
+        .declaredResourceSetUseCount = statistics.declaredResourceSetUseCount,
+        .expandedResourceSetMemberUseCount = statistics.expandedResourceSetMemberUseCount,
+        .payloadObjectCount = statistics.payloadObjectCount,
+        .payloadObjectBytes = statistics.payloadObjectBytes,
+        .uploadBlobCount = statistics.uploadBlobCount,
+        .uploadBlobBytes = statistics.uploadBlobBytes,
+        .declarationSeconds = statistics.declarationSeconds,
+        .analysisSeconds = statistics.analysisSeconds,
+        .validationSeconds = statistics.validationSeconds,
+        .dependencyAnalysisSeconds = statistics.dependencyAnalysisSeconds,
+        .hazardAnalysisSeconds = statistics.hazardAnalysisSeconds,
+        .topologicalOrderSeconds = statistics.topologicalOrderSeconds,
+        .queueAssignmentSeconds = statistics.queueAssignmentSeconds,
+        .planningSeconds = statistics.planningSeconds,
+        .packetizationSeconds = statistics.packetizationSeconds,
+        .resourceStatePlanningSeconds = statistics.resourceStatePlanningSeconds,
+        .packetDependencyPlanningSeconds = statistics.packetDependencyPlanningSeconds,
+        .totalSeconds = statistics.totalSeconds,
+    };
+}
+
+[[nodiscard]] static EncodedFrameGraphRecordingRuntimeStatistics EncodeRecordingRuntimeStatistics(
+    const FrameGraphRecordingRuntimeStatistics& statistics
+)noexcept{
+    return EncodedFrameGraphRecordingRuntimeStatistics{
+        .packetCount = statistics.packetCount,
+        .taskCount = statistics.taskCount,
+        .commandListCount = statistics.commandListCount,
+        .barrierCount = statistics.barrierCount,
+        .workerRoutedPacketCount = statistics.workerRoutedPacketCount,
+        .parallelPacketCount = statistics.parallelPacketCount,
+        .commandListAcquisitionSeconds = statistics.commandListAcquisitionSeconds,
+        .graphBarrierRecordingSeconds = statistics.graphBarrierRecordingSeconds,
+        .taskRecordSeconds = statistics.taskRecordSeconds,
+        .recordingSeconds = statistics.recordingSeconds,
+        .recordingElapsedSeconds = statistics.recordingElapsedSeconds,
+        .readyFrontierElapsedSeconds = statistics.readyFrontierElapsedSeconds,
+        .readyFrontierWorkerBusySeconds = statistics.readyFrontierWorkerBusySeconds,
+        .readyFrontierWorkerCapacitySeconds = statistics.readyFrontierWorkerCapacitySeconds,
+    };
+}
+
+[[nodiscard]] static FrameGraphRecordingRuntimeStatistics DecodeRecordingRuntimeStatistics(
+    const EncodedFrameGraphRecordingRuntimeStatistics& statistics
+)noexcept{
+    return FrameGraphRecordingRuntimeStatistics{
+        .packetCount = statistics.packetCount,
+        .taskCount = statistics.taskCount,
+        .commandListCount = statistics.commandListCount,
+        .barrierCount = statistics.barrierCount,
+        .workerRoutedPacketCount = statistics.workerRoutedPacketCount,
+        .parallelPacketCount = statistics.parallelPacketCount,
+        .commandListAcquisitionSeconds = statistics.commandListAcquisitionSeconds,
+        .graphBarrierRecordingSeconds = statistics.graphBarrierRecordingSeconds,
+        .taskRecordSeconds = statistics.taskRecordSeconds,
+        .recordingSeconds = statistics.recordingSeconds,
+        .recordingElapsedSeconds = statistics.recordingElapsedSeconds,
+        .readyFrontierElapsedSeconds = statistics.readyFrontierElapsedSeconds,
+        .readyFrontierWorkerBusySeconds = statistics.readyFrontierWorkerBusySeconds,
+        .readyFrontierWorkerCapacitySeconds = statistics.readyFrontierWorkerCapacitySeconds,
+    };
+}
+
+[[nodiscard]] static EncodedFrameGraphSubmissionRuntimeStatistics EncodeSubmissionRuntimeStatistics(
+    const FrameGraphSubmissionRuntimeStatistics& statistics
+)noexcept{
+    return EncodedFrameGraphSubmissionRuntimeStatistics{
+        .acceptedPacketCount = statistics.acceptedPacketCount,
+        .acceptedTaskCount = statistics.acceptedTaskCount,
+        .rejectedPacketCount = statistics.rejectedPacketCount,
+        .rejectedTaskCount = statistics.rejectedTaskCount,
+        .nativeSubmissionCount = statistics.nativeSubmissionCount,
+        .rejectedSubmissionCount = statistics.rejectedSubmissionCount,
+        .nativeCommandListCount = statistics.nativeCommandListCount,
+        .plannedWaitTokenCount = statistics.plannedWaitTokenCount,
+        .sameQueueWaitElisionCount = statistics.sameQueueWaitElisionCount,
+        .timelineWaitCount = statistics.timelineWaitCount,
+        .mergedTimelineWaitCount = statistics.mergedTimelineWaitCount,
+        .acceptedFrontierSubmissionCount = statistics.acceptedFrontierSubmissionCount,
+        .submissionSeconds = statistics.submissionSeconds,
+    };
+}
+
+[[nodiscard]] static FrameGraphSubmissionRuntimeStatistics DecodeSubmissionRuntimeStatistics(
+    const EncodedFrameGraphSubmissionRuntimeStatistics& statistics
+)noexcept{
+    return FrameGraphSubmissionRuntimeStatistics{
+        .acceptedPacketCount = statistics.acceptedPacketCount,
+        .acceptedTaskCount = statistics.acceptedTaskCount,
+        .rejectedPacketCount = statistics.rejectedPacketCount,
+        .rejectedTaskCount = statistics.rejectedTaskCount,
+        .nativeSubmissionCount = statistics.nativeSubmissionCount,
+        .rejectedSubmissionCount = statistics.rejectedSubmissionCount,
+        .nativeCommandListCount = statistics.nativeCommandListCount,
+        .plannedWaitTokenCount = statistics.plannedWaitTokenCount,
+        .sameQueueWaitElisionCount = statistics.sameQueueWaitElisionCount,
+        .timelineWaitCount = statistics.timelineWaitCount,
+        .mergedTimelineWaitCount = statistics.mergedTimelineWaitCount,
+        .acceptedFrontierSubmissionCount = statistics.acceptedFrontierSubmissionCount,
+        .submissionSeconds = statistics.submissionSeconds,
+    };
+}
+
 [[nodiscard]] static EncodedFrameGraphRuntimeStatistics EncodeRuntimeStatistics(
     const u32 nodeIndex,
     const FrameGraphRuntimeStatistics& statistics
@@ -206,9 +386,9 @@ namespace __hidden_telemetry_frame_graph{
     encoded.graphGeneration = statistics.graphGeneration;
     encoded.planGeneration = statistics.planGeneration;
     encoded.recordingAttemptGeneration = statistics.recordingAttemptGeneration;
-    encoded.compile = statistics.compile;
-    encoded.recording = statistics.recording;
-    encoded.submission = statistics.submission;
+    encoded.compile = EncodeCompileRuntimeStatistics(statistics.compile);
+    encoded.recording = EncodeRecordingRuntimeStatistics(statistics.recording);
+    encoded.submission = EncodeSubmissionRuntimeStatistics(statistics.submission);
     return encoded;
 }
 
@@ -224,9 +404,9 @@ namespace __hidden_telemetry_frame_graph{
         .planGeneration = encoded.planGeneration,
         .recordingAttemptGeneration = encoded.recordingAttemptGeneration,
         .deviceGeneration = encoded.deviceGeneration,
-        .compile = encoded.compile,
-        .recording = encoded.recording,
-        .submission = encoded.submission,
+        .compile = DecodeCompileRuntimeStatistics(encoded.compile),
+        .recording = DecodeRecordingRuntimeStatistics(encoded.recording),
+        .submission = DecodeSubmissionRuntimeStatistics(encoded.submission),
         .present = true,
     };
     return IsValidFrameGraphRuntimeStatistics(outStatistics);

@@ -815,6 +815,96 @@ static Telemetry::FrameGraphCompiledTask MakeFrameGraphCompiledTask(
     };
 }
 
+static Telemetry::EncodedFrameGraphRuntimeStatistics EncodeTestFrameGraphRuntimeStatistics(
+    const Telemetry::FrameGraphRuntimeStatistics& statistics,
+    const u32 nodeIndex,
+    const u16 reserved
+){
+    return Telemetry::EncodedFrameGraphRuntimeStatistics{
+        .nodeIndex = nodeIndex,
+        .deviceGeneration = statistics.deviceGeneration,
+        .reserved = reserved,
+        .graphGeneration = statistics.graphGeneration,
+        .planGeneration = statistics.planGeneration,
+        .recordingAttemptGeneration = statistics.recordingAttemptGeneration,
+        .compile = {
+            .taskCount = statistics.compile.taskCount,
+            .resourceCount = statistics.compile.resourceCount,
+            .resourceUseCount = statistics.compile.resourceUseCount,
+            .explicitDependencyCount = statistics.compile.explicitDependencyCount,
+            .inferredDependencyCount = statistics.compile.inferredDependencyCount,
+            .packetCount = statistics.compile.packetCount,
+            .packetDependencyCount = statistics.compile.packetDependencyCount,
+            .mergedTaskCount = statistics.compile.mergedTaskCount,
+            .transitionBarrierCount = statistics.compile.transitionBarrierCount,
+            .uavBarrierCount = statistics.compile.uavBarrierCount,
+            .ownershipReleaseBarrierCount = statistics.compile.ownershipReleaseBarrierCount,
+            .ownershipAcquireBarrierCount = statistics.compile.ownershipAcquireBarrierCount,
+            .stateExportBarrierCount = statistics.compile.stateExportBarrierCount,
+            .logicalOwnershipTransferCount = statistics.compile.logicalOwnershipTransferCount,
+            .logicalOwnershipTransferSignatureCount = statistics.compile.logicalOwnershipTransferSignatureCount,
+            .repeatedOwnershipTransferSignatureCount = statistics.compile.repeatedOwnershipTransferSignatureCount,
+            .concurrentSharingCouldAvoidTransferCount = statistics.compile.concurrentSharingCouldAvoidTransferCount,
+            .concurrentSharingAdviceResourceCount = statistics.compile.concurrentSharingAdviceResourceCount,
+            .logicalOwnershipTransferInternalCount = statistics.compile.logicalOwnershipTransferInternalCount,
+            .logicalOwnershipTransferExternalImportCount = statistics.compile.logicalOwnershipTransferExternalImportCount,
+            .logicalOwnershipTransferExternalExportCount = statistics.compile.logicalOwnershipTransferExternalExportCount,
+            .resourceSetCount = statistics.compile.resourceSetCount,
+            .resourceSetMemberCount = statistics.compile.resourceSetMemberCount,
+            .directResourceUseCount = statistics.compile.directResourceUseCount,
+            .declaredResourceSetUseCount = statistics.compile.declaredResourceSetUseCount,
+            .expandedResourceSetMemberUseCount = statistics.compile.expandedResourceSetMemberUseCount,
+            .payloadObjectCount = statistics.compile.payloadObjectCount,
+            .payloadObjectBytes = statistics.compile.payloadObjectBytes,
+            .uploadBlobCount = statistics.compile.uploadBlobCount,
+            .uploadBlobBytes = statistics.compile.uploadBlobBytes,
+            .declarationSeconds = statistics.compile.declarationSeconds,
+            .analysisSeconds = statistics.compile.analysisSeconds,
+            .validationSeconds = statistics.compile.validationSeconds,
+            .dependencyAnalysisSeconds = statistics.compile.dependencyAnalysisSeconds,
+            .hazardAnalysisSeconds = statistics.compile.hazardAnalysisSeconds,
+            .topologicalOrderSeconds = statistics.compile.topologicalOrderSeconds,
+            .queueAssignmentSeconds = statistics.compile.queueAssignmentSeconds,
+            .planningSeconds = statistics.compile.planningSeconds,
+            .packetizationSeconds = statistics.compile.packetizationSeconds,
+            .resourceStatePlanningSeconds = statistics.compile.resourceStatePlanningSeconds,
+            .packetDependencyPlanningSeconds = statistics.compile.packetDependencyPlanningSeconds,
+            .totalSeconds = statistics.compile.totalSeconds,
+        },
+        .recording = {
+            .packetCount = statistics.recording.packetCount,
+            .taskCount = statistics.recording.taskCount,
+            .commandListCount = statistics.recording.commandListCount,
+            .barrierCount = statistics.recording.barrierCount,
+            .workerRoutedPacketCount = statistics.recording.workerRoutedPacketCount,
+            .parallelPacketCount = statistics.recording.parallelPacketCount,
+            .commandListAcquisitionSeconds = statistics.recording.commandListAcquisitionSeconds,
+            .graphBarrierRecordingSeconds = statistics.recording.graphBarrierRecordingSeconds,
+            .taskRecordSeconds = statistics.recording.taskRecordSeconds,
+            .recordingSeconds = statistics.recording.recordingSeconds,
+            .recordingElapsedSeconds = statistics.recording.recordingElapsedSeconds,
+            .readyFrontierElapsedSeconds = statistics.recording.readyFrontierElapsedSeconds,
+            .readyFrontierWorkerBusySeconds = statistics.recording.readyFrontierWorkerBusySeconds,
+            .readyFrontierWorkerCapacitySeconds = statistics.recording.readyFrontierWorkerCapacitySeconds,
+        },
+        .submission = {
+            .acceptedPacketCount = statistics.submission.acceptedPacketCount,
+            .acceptedTaskCount = statistics.submission.acceptedTaskCount,
+            .rejectedPacketCount = statistics.submission.rejectedPacketCount,
+            .rejectedTaskCount = statistics.submission.rejectedTaskCount,
+            .nativeSubmissionCount = statistics.submission.nativeSubmissionCount,
+            .rejectedSubmissionCount = statistics.submission.rejectedSubmissionCount,
+            .nativeCommandListCount = statistics.submission.nativeCommandListCount,
+            .plannedWaitTokenCount = statistics.submission.plannedWaitTokenCount,
+            .sameQueueWaitElisionCount = statistics.submission.sameQueueWaitElisionCount,
+            .timelineWaitCount = statistics.submission.timelineWaitCount,
+            .mergedTimelineWaitCount = statistics.submission.mergedTimelineWaitCount,
+            .acceptedFrontierSubmissionCount = statistics.submission.acceptedFrontierSubmissionCount,
+            .submissionSeconds = statistics.submission.submissionSeconds,
+        },
+    };
+}
+
 static Telemetry::FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics(){
     return Telemetry::FrameGraphRuntimeStatistics{
         .graphGeneration = 51u,
@@ -1409,6 +1499,101 @@ TEST(Telemetry, FrameGraphRuntimeStatisticsPayloadRoundTrip){
     EXPECT_EQ(parsed.nodes[2u].runtimeStatistics.recordingAttemptGeneration, 63u);
 }
 
+TEST(Telemetry, FrameGraphRuntimeStatisticsV4WireFieldOrderIsStable){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 912u, nodes, edges, payload));
+    const usize runtimeStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV4)
+        + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
+        + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
+        + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u
+        + sizeof(Telemetry::EncodedFrameGraphCompiledTask) * 2u
+    ;
+    ASSERT_GE(payload.size(), runtimeStatisticsOffset + sizeof(Telemetry::EncodedFrameGraphRuntimeStatistics));
+
+    const auto readU16 = [&payload, runtimeStatisticsOffset](const usize wireOffset){
+        u16 value = 0u;
+        NWB_MEMCPY(&value, sizeof(value), payload.data() + runtimeStatisticsOffset + wireOffset, sizeof(value));
+        return value;
+    };
+    const auto readU32 = [&payload, runtimeStatisticsOffset](const usize wireOffset){
+        u32 value = 0u;
+        NWB_MEMCPY(&value, sizeof(value), payload.data() + runtimeStatisticsOffset + wireOffset, sizeof(value));
+        return value;
+    };
+    const auto readU64 = [&payload, runtimeStatisticsOffset](const usize wireOffset){
+        u64 value = 0u;
+        NWB_MEMCPY(&value, sizeof(value), payload.data() + runtimeStatisticsOffset + wireOffset, sizeof(value));
+        return value;
+    };
+    const auto readF64 = [&payload, runtimeStatisticsOffset](const usize wireOffset){
+        f64 value = 0.0;
+        NWB_MEMCPY(&value, sizeof(value), payload.data() + runtimeStatisticsOffset + wireOffset, sizeof(value));
+        return value;
+    };
+
+    EXPECT_EQ(readU32(0u), 0u);
+    EXPECT_EQ(readU16(4u), 17u);
+    EXPECT_EQ(readU16(6u), 0u);
+    EXPECT_EQ(readU64(8u), 51u);
+    EXPECT_EQ(readU64(16u), 52u);
+    EXPECT_EQ(readU64(24u), 53u);
+
+    const u64 expectedCompileCounts[] = {
+        78u, 2u, 50u, 4u, 5u, 76u, 7u, 2u, 9u, 10u,
+        11u, 12u, 13u, 60u, 15u, 14u, 17u, 2u, 19u, 20u,
+        21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u,
+    };
+    for(
+        usize fieldIndex = 0u;
+        fieldIndex < LengthOf(expectedCompileCounts);
+        ++fieldIndex
+    )
+        EXPECT_EQ(readU64(32u + fieldIndex * sizeof(u64)), expectedCompileCounts[fieldIndex]);
+    const f64 expectedCompileSeconds[] = {
+        0.001, 0.002, 0.003, 0.004, 0.005, 0.006,
+        0.007, 0.008, 0.009, 0.010, 0.011, 0.012,
+    };
+    for(
+        usize fieldIndex = 0u;
+        fieldIndex < LengthOf(expectedCompileSeconds);
+        ++fieldIndex
+    )
+        EXPECT_DOUBLE_EQ(readF64(272u + fieldIndex * sizeof(f64)), expectedCompileSeconds[fieldIndex]);
+
+    const u64 expectedRecordingCounts[] = { 31u, 32u, 33u, 34u, 30u, 29u };
+    for(
+        usize fieldIndex = 0u;
+        fieldIndex < LengthOf(expectedRecordingCounts);
+        ++fieldIndex
+    )
+        EXPECT_EQ(readU64(368u + fieldIndex * sizeof(u64)), expectedRecordingCounts[fieldIndex]);
+    const f64 expectedRecordingSeconds[] = {
+        0.013, 0.014, 0.015, 0.016, 0.017, 0.018, 0.019, 0.020,
+    };
+    for(
+        usize fieldIndex = 0u;
+        fieldIndex < LengthOf(expectedRecordingSeconds);
+        ++fieldIndex
+    )
+        EXPECT_DOUBLE_EQ(readF64(416u + fieldIndex * sizeof(f64)), expectedRecordingSeconds[fieldIndex]);
+
+    const u64 expectedSubmissionCounts[] = {
+        37u, 38u, 39u, 40u, 30u, 38u, 32u, 44u, 12u, 14u, 18u, 28u,
+    };
+    for(
+        usize fieldIndex = 0u;
+        fieldIndex < LengthOf(expectedSubmissionCounts);
+        ++fieldIndex
+    )
+        EXPECT_EQ(readU64(480u + fieldIndex * sizeof(u64)), expectedSubmissionCounts[fieldIndex]);
+    EXPECT_DOUBLE_EQ(readF64(576u), 0.021);
+}
+
 TEST(Telemetry, FrameGraphPayloadRejectsUnknownVersion){
     TestArena testArena;
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
@@ -1689,9 +1874,7 @@ TEST(Telemetry, FrameGraphRuntimeStatisticsPayloadRejectsMalformedRecords){
         ASSERT_TRUE(loadRuntimeStatistics());
         Telemetry::FrameGraphRuntimeStatistics malformed = MakeFrameGraphRuntimeStatistics();
         s_FrameGraphRuntimeStatisticsCountMutations[mutationIndex](malformed);
-        first.compile = malformed.compile;
-        first.recording = malformed.recording;
-        first.submission = malformed.submission;
+        first = EncodeTestFrameGraphRuntimeStatistics(malformed, first.nodeIndex, first.reserved);
         NWB_MEMCPY(payload.data() + runtimeStatisticsOffset, payload.size() - runtimeStatisticsOffset, &first, sizeof(first));
         EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
     }

@@ -754,6 +754,7 @@ bool GpuTaskGraphCompiler::compile(
     statistics.packetDependencyPlanningSeconds = packetDependencyPlanningSeconds;
     statistics.totalSeconds = DurationInSeconds<f64>(TimerNow(), compileBegin);
 
+    outAssignments.m_compiledPlanGeneration = outCompiledGraph.m_planGeneration;
     outCompiledGraph.m_valid = true;
     return true;
 }

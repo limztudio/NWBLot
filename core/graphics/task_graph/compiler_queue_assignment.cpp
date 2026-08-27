@@ -302,6 +302,7 @@ void GpuTaskGraphQueueAssignments::reset(){
     m_diagnostic = GpuTaskQueueAssignmentDiagnostic{};
     m_generation = 0u;
     m_declarationRevision = 0u;
+    m_compiledPlanGeneration = 0u;
     m_taskCount = 0u;
     m_valid = false;
 }
@@ -311,6 +312,17 @@ bool GpuTaskGraphQueueAssignments::validFor(const GpuTaskGraph& graph)const noex
         && m_generation == graph.generation()
         && m_declarationRevision == graph.declarationRevision()
         && m_taskCount == graph.taskCount()
+    ;
+}
+
+bool GpuTaskGraphQueueAssignments::validFor(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph
+)const noexcept{
+    return validFor(graph)
+        && compiledGraph.validFor(graph)
+        && m_compiledPlanGeneration != 0u
+        && m_compiledPlanGeneration == compiledGraph.planGeneration()
     ;
 }
 

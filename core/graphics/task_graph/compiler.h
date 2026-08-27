@@ -226,6 +226,10 @@ public:
 
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
     [[nodiscard]] bool validFor(const GpuTaskGraph& graph)const noexcept;
+    [[nodiscard]] bool validFor(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph
+    )const noexcept;
     [[nodiscard]] const GpuTaskQueueAssignmentDiagnostic& diagnostic()const noexcept{ return m_diagnostic; }
     [[nodiscard]] const GpuTaskQueueAssignment* find(const GpuTaskId& task)const noexcept;
 
@@ -235,6 +239,7 @@ private:
     GpuTaskQueueAssignmentDiagnostic m_diagnostic;
     u64 m_generation = 0u;
     u64 m_declarationRevision = 0u;
+    u64 m_compiledPlanGeneration = 0u;
     usize m_taskCount = 0u;
     bool m_valid = false;
 };

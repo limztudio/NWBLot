@@ -23,6 +23,7 @@ NWB_CORE_BEGIN
 
 class GpuTaskGraphAnalysis;
 class GpuTaskGraphQueueAssignments;
+class GpuTaskGraphQueueAssignmentTelemetryTracker;
 class GpuCompiledGraph;
 struct GpuCompiledBarrier;
 
@@ -120,6 +121,8 @@ struct GpuPresentEndpoint{
 
 struct GpuTaskGraphTelemetryOptions{
     const GpuTaskGraphQueueAssignments* queueAssignments = nullptr;
+    const GpuCompiledGraph* compiledGraph = nullptr;
+    const GpuTaskGraphQueueAssignmentTelemetryTracker* queueAssignmentTelemetry = nullptr;
 };
 
 namespace GpuTaskLifecycleState{

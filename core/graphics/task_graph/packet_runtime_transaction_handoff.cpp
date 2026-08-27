@@ -18,6 +18,37 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool GpuGraphSubmissionTransaction::copyAcceptedPacketTokens(
+    const GpuCompiledGraph& compiledGraph,
+    QueueSubmissionToken* const outTokens,
+    const usize tokenCount,
+    GpuGraphSubmissionAcceptanceSnapshot& outSnapshot
+)const noexcept{
+    if((tokenCount != 0u && !outTokens) || tokenCount != compiledGraph.packetCount())
+        return false;
+
+    ScopedLock lock(m_mutex);
+    if(
+        !validForLocked(compiledGraph)
+        || tokenCount != m_packets.size()
+        || m_acceptanceRevision == 0u
+    )
+        return false;
+
+    for(usize packetIndex = 0u; packetIndex < tokenCount; ++packetIndex){
+        const GpuPacketRuntime& runtime = m_packets[packetIndex];
+        outTokens[packetIndex] = runtime.state == GpuPacketRuntimeState::Accepted
+            ? runtime.token
+            : QueueSubmissionToken{}
+        ;
+    }
+    outSnapshot = GpuGraphSubmissionAcceptanceSnapshot{
+        .recordingAttemptGeneration = m_recordingAttemptGeneration,
+        .acceptanceRevision = m_acceptanceRevision,
+    };
+    return true;
+}
+
 QueueSubmissionToken GpuGraphSubmissionTransaction::packetToken(const GpuSubmissionPacketId& packet)const noexcept{
     ScopedLock lock(m_mutex);
     if(

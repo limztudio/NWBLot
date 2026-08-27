@@ -648,6 +648,12 @@ struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
 };
 
 
+struct GpuGraphSubmissionAcceptanceSnapshot{
+    u64 recordingAttemptGeneration = 0u;
+    u64 acceptanceRevision = 0u;
+};
+
+
 class GpuGraphSubmissionTransaction final : NoCopy{
     friend class GpuTaskGraphSubmitter;
 #if !defined(NWB_FINAL)
@@ -801,6 +807,17 @@ public:
         const GpuCompiledGraph& compiledGraph,
         const GpuPhysicalQueueId& queue
     )const noexcept;
+    // Copies one packet-indexed acceptance snapshot while holding the transaction mutex once. The caller supplies
+    // exactly compiledGraph.packetCount() entries; rejected and unresolved packets are represented by invalid
+    // tokens. The accompanying recording attempt and process-unique acceptance revision are copied under that same
+    // lock. Invalid, stale, mismatched-plan, and wrong-sized requests leave both caller outputs untouched.
+    // Callers must externally serialize this snapshot with compiled-graph reset and recompilation.
+    [[nodiscard]] bool copyAcceptedPacketTokens(
+        const GpuCompiledGraph& compiledGraph,
+        QueueSubmissionToken* outTokens,
+        usize tokenCount,
+        GpuGraphSubmissionAcceptanceSnapshot& outSnapshot
+    )const noexcept;
     [[nodiscard]] QueueSubmissionToken packetToken(const GpuSubmissionPacketId& packet)const noexcept;
     // Resolves the current compiler packet for semantic graph work before returning its accepted submission token.
     // This is generation-checked so renderer lifecycle code cannot treat a task from an older compiled graph as
@@ -897,6 +914,7 @@ private:
     u64 m_recordingAttemptGeneration = 0u;
     u16 m_deviceGeneration = 0u;
     u64 m_acceptedSubmissionCount = 0u;
+    u64 m_acceptanceRevision = 0u;
     GpuTaskGraphSubmissionStatistics m_submissionStatistics;
     bool m_valid = false;
 #if !defined(NWB_FINAL)

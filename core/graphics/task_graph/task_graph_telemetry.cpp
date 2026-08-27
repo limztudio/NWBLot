@@ -4,6 +4,7 @@
 
 #include "task_graph.h"
 #include "compiler.h"
+#include "queue_assignment_telemetry.h"
 
 #include <core/telemetry/frame_graph_contributor.h>
 
@@ -12,6 +13,178 @@
 
 
 NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_task_graph_telemetry{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static bool TranslateQueueClass(
+    const CommandQueue::Enum queueClass,
+    Telemetry::FrameGraphQueueClass::Enum& outQueueClass
+)noexcept{
+    switch(queueClass){
+    case CommandQueue::Graphics:
+        outQueueClass = Telemetry::FrameGraphQueueClass::Graphics;
+        return true;
+    case CommandQueue::Compute:
+        outQueueClass = Telemetry::FrameGraphQueueClass::Compute;
+        return true;
+    case CommandQueue::Transfer:
+        outQueueClass = Telemetry::FrameGraphQueueClass::Transfer;
+        return true;
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] static bool TranslateReason(
+    const GpuTaskQueueAssignmentReason::Enum reason,
+    Telemetry::FrameGraphQueueAssignmentReason::Enum& outReason
+)noexcept{
+    switch(reason){
+    case GpuTaskQueueAssignmentReason::RequiredGraphics:
+        outReason = Telemetry::FrameGraphQueueAssignmentReason::RequiredGraphics;
+        return true;
+    case GpuTaskQueueAssignmentReason::PreferredQueue:
+        outReason = Telemetry::FrameGraphQueueAssignmentReason::PreferredQueue;
+        return true;
+    case GpuTaskQueueAssignmentReason::DedicatedCompute:
+        outReason = Telemetry::FrameGraphQueueAssignmentReason::DedicatedCompute;
+        return true;
+    case GpuTaskQueueAssignmentReason::DedicatedTransfer:
+        outReason = Telemetry::FrameGraphQueueAssignmentReason::DedicatedTransfer;
+        return true;
+    case GpuTaskQueueAssignmentReason::Fallback:
+        outReason = Telemetry::FrameGraphQueueAssignmentReason::Fallback;
+        return true;
+    case GpuTaskQueueAssignmentReason::ConservativeAny:
+        outReason = Telemetry::FrameGraphQueueAssignmentReason::ConservativeAny;
+        return true;
+    case GpuTaskQueueAssignmentReason::SameClassRouting:
+        outReason = Telemetry::FrameGraphQueueAssignmentReason::SameClassRouting;
+        return true;
+    case GpuTaskQueueAssignmentReason::CompilerOverride:
+        outReason = Telemetry::FrameGraphQueueAssignmentReason::CompilerOverride;
+        return true;
+    case GpuTaskQueueAssignmentReason::ScoredAny:
+        outReason = Telemetry::FrameGraphQueueAssignmentReason::ScoredAny;
+        return true;
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] static bool TranslateModifiers(
+    const GpuTaskQueueAssignmentModifier::Mask modifiers,
+    Telemetry::FrameGraphQueueAssignmentModifier::Mask& outModifiers
+)noexcept{
+    constexpr u8 s_KnownModifiers = GpuTaskQueueAssignmentModifier::DirectDependencyAffinity
+        | GpuTaskQueueAssignmentModifier::SameClassLoadBalance
+        | GpuTaskQueueAssignmentModifier::NonPrimaryPreference
+        | GpuTaskQueueAssignmentModifier::DebugTimingOverride
+        | GpuTaskQueueAssignmentModifier::TimingCalibration
+        | GpuTaskQueueAssignmentModifier::TimingFeedback
+    ;
+    if((static_cast<u8>(modifiers) & static_cast<u8>(~s_KnownModifiers)) != 0u)
+        return false;
+
+    u8 translated = Telemetry::FrameGraphQueueAssignmentModifier::None;
+    if(modifiers & GpuTaskQueueAssignmentModifier::DirectDependencyAffinity)
+        translated |= Telemetry::FrameGraphQueueAssignmentModifier::DirectDependencyAffinity;
+    if(modifiers & GpuTaskQueueAssignmentModifier::SameClassLoadBalance)
+        translated |= Telemetry::FrameGraphQueueAssignmentModifier::SameClassLoadBalance;
+    if(modifiers & GpuTaskQueueAssignmentModifier::NonPrimaryPreference)
+        translated |= Telemetry::FrameGraphQueueAssignmentModifier::NonPrimaryPreference;
+    if(modifiers & GpuTaskQueueAssignmentModifier::DebugTimingOverride)
+        translated |= Telemetry::FrameGraphQueueAssignmentModifier::DebugTimingOverride;
+    if(modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration)
+        translated |= Telemetry::FrameGraphQueueAssignmentModifier::TimingCalibration;
+    if(modifiers & GpuTaskQueueAssignmentModifier::TimingFeedback)
+        translated |= Telemetry::FrameGraphQueueAssignmentModifier::TimingFeedback;
+    outModifiers = static_cast<Telemetry::FrameGraphQueueAssignmentModifier::Mask>(translated);
+    return true;
+}
+
+[[nodiscard]] static bool TranslateAcceptance(
+    const GpuTaskQueueAssignmentAcceptance::Enum acceptance,
+    Telemetry::FrameGraphQueueAssignmentAcceptance::Enum& outAcceptance
+)noexcept{
+    switch(acceptance){
+    case GpuTaskQueueAssignmentAcceptance::NotAccepted:
+        outAcceptance = Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted;
+        return true;
+    case GpuTaskQueueAssignmentAcceptance::First:
+        outAcceptance = Telemetry::FrameGraphQueueAssignmentAcceptance::First;
+        return true;
+    case GpuTaskQueueAssignmentAcceptance::Unchanged:
+        outAcceptance = Telemetry::FrameGraphQueueAssignmentAcceptance::Unchanged;
+        return true;
+    case GpuTaskQueueAssignmentAcceptance::Changed:
+        outAcceptance = Telemetry::FrameGraphQueueAssignmentAcceptance::Changed;
+        return true;
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] static bool BuildQueueAssignment(
+    const GpuTaskQueueAssignment& assignment,
+    const GpuTaskQueueAssignmentTelemetry* const accepted,
+    Telemetry::FrameGraphQueueAssignment& outAssignment
+)noexcept{
+    outAssignment = {};
+    outAssignment.initialQueue = {
+        .index = assignment.initialQueue.index,
+        .deviceGeneration = assignment.initialQueue.deviceGeneration,
+    };
+    outAssignment.plannedQueue = {
+        .index = assignment.queue.index,
+        .deviceGeneration = assignment.queue.deviceGeneration,
+    };
+    outAssignment.score = {
+        .preference = assignment.score.preference,
+        .overlap = assignment.score.overlap,
+        .queueLoad = assignment.score.queueLoad,
+        .incomingCrossings = assignment.score.incomingCrossings,
+        .outgoingCrossings = assignment.score.outgoingCrossings,
+        .ownershipTransfers = assignment.score.ownershipTransfers,
+        .total = assignment.score.total(),
+    };
+    outAssignment.dedicated = assignment.dedicated;
+    outAssignment.present = true;
+    if(
+        !TranslateQueueClass(assignment.queueClass, outAssignment.queueClass)
+        || !TranslateReason(assignment.reason, outAssignment.reason)
+        || !TranslateModifiers(assignment.modifiers, outAssignment.modifiers)
+    )
+        return false;
+
+    if(accepted){
+        outAssignment.acceptedQueue = {
+            .index = accepted->acceptedQueue.index,
+            .deviceGeneration = accepted->acceptedQueue.deviceGeneration,
+        };
+        outAssignment.previousAcceptedQueue = {
+            .index = accepted->previousAcceptedQueue.index,
+            .deviceGeneration = accepted->previousAcceptedQueue.deviceGeneration,
+        };
+        if(!TranslateAcceptance(accepted->acceptance, outAssignment.acceptance))
+            return false;
+    }
+    return Telemetry::IsValidFrameGraphQueueAssignment(outAssignment);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,11 +200,29 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
         !analysis.validFor(*this)
         || m_tasks.empty()
         || (options.queueAssignments && !options.queueAssignments->validFor(*this))
+        || ((options.compiledGraph == nullptr) != (options.queueAssignmentTelemetry == nullptr))
+        || (
+            options.queueAssignmentTelemetry
+            && (
+                !options.queueAssignments
+                || !options.compiledGraph
+                || !options.queueAssignmentTelemetry->validFor(
+                    *this,
+                    *options.queueAssignments,
+                    *options.compiledGraph
+                )
+            )
+        )
     )
         return false;
     if(options.queueAssignments){
         for(usize taskIndex = 0u; taskIndex < m_tasks.size(); ++taskIndex){
             if(!options.queueAssignments->find(taskAt(taskIndex).id))
+                return false;
+            if(
+                options.queueAssignmentTelemetry
+                && !options.queueAssignmentTelemetry->find(taskAt(taskIndex).id)
+            )
                 return false;
         }
     }
@@ -54,9 +245,20 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
     for(usize taskIndex = 0u; taskIndex < m_tasks.size(); ++taskIndex){
         const GpuTaskGraphTaskView task = taskAt(taskIndex);
         u8 flags = GpuTaskGraphTelemetryNodeFlag::None;
+        Telemetry::FrameGraphQueueAssignment telemetryAssignment;
         if(options.queueAssignments){
             const GpuTaskQueueAssignment* const assignment = options.queueAssignments->find(task.id);
             NWB_ASSERT(assignment);
+            const GpuTaskQueueAssignmentTelemetry* const accepted = options.queueAssignmentTelemetry
+                ? options.queueAssignmentTelemetry->find(task.id)
+                : nullptr
+            ;
+            if(!__hidden_task_graph_telemetry::BuildQueueAssignment(
+                *assignment,
+                accepted,
+                telemetryAssignment
+            ))
+                return false;
             switch(assignment->queueClass){
             case CommandQueue::Graphics:
                 flags |= GpuTaskGraphTelemetryNodeFlag::AssignedGraphicsQueue;
@@ -90,7 +292,10 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
             )
                 flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentTimingRouting;
         }
-        taskNodes.push_back(builder.addPass(task.identity, task.markerLabel, flags));
+        taskNodes.push_back(options.queueAssignments
+            ? builder.addPass(task.identity, task.markerLabel, telemetryAssignment, flags)
+            : builder.addPass(task.identity, task.markerLabel, flags)
+        );
     }
 
     for(usize taskIndex = 0u; taskIndex < m_tasks.size(); ++taskIndex){

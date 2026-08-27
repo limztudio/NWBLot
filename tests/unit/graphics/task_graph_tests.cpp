@@ -13,6 +13,7 @@
 #include <core/graphics/capture/command_ir_internal.h>
 #include <core/graphics/task_graph/compiler.h>
 #include <core/graphics/task_graph/packet_runtime.h>
+#include <core/graphics/task_graph/queue_assignment_telemetry.h>
 #include <core/graphics/vulkan/backend.h>
 #include <core/graphics/vulkan/command_validation.h>
 #include <core/graphics/vulkan/device_detail.h>
@@ -443,6 +444,52 @@ struct ImportedTexturePair{
     };
 }
 
+[[nodiscard]] Telemetry::FrameGraphQueueAssignmentModifier::Mask ExpectedTelemetryModifiers(
+    const Graphics::GpuTaskQueueAssignmentModifier::Mask modifiers
+){
+    u8 expected = Telemetry::FrameGraphQueueAssignmentModifier::None;
+    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::DirectDependencyAffinity)
+        expected |= Telemetry::FrameGraphQueueAssignmentModifier::DirectDependencyAffinity;
+    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance)
+        expected |= Telemetry::FrameGraphQueueAssignmentModifier::SameClassLoadBalance;
+    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::NonPrimaryPreference)
+        expected |= Telemetry::FrameGraphQueueAssignmentModifier::NonPrimaryPreference;
+    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::DebugTimingOverride)
+        expected |= Telemetry::FrameGraphQueueAssignmentModifier::DebugTimingOverride;
+    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingCalibration)
+        expected |= Telemetry::FrameGraphQueueAssignmentModifier::TimingCalibration;
+    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback)
+        expected |= Telemetry::FrameGraphQueueAssignmentModifier::TimingFeedback;
+    return static_cast<Telemetry::FrameGraphQueueAssignmentModifier::Mask>(expected);
+}
+
+static void ExpectPlannedQueueAssignmentTelemetry(
+    const Graphics::GpuTaskQueueAssignment& source,
+    const Telemetry::FrameGraphQueueAssignment& telemetry,
+    const Telemetry::FrameGraphQueueClass::Enum queueClass,
+    const Telemetry::FrameGraphQueueAssignmentReason::Enum reason
+){
+    EXPECT_TRUE(telemetry.present);
+    EXPECT_EQ(telemetry.initialQueue.index, source.initialQueue.index);
+    EXPECT_EQ(telemetry.initialQueue.deviceGeneration, source.initialQueue.deviceGeneration);
+    EXPECT_EQ(telemetry.plannedQueue.index, source.queue.index);
+    EXPECT_EQ(telemetry.plannedQueue.deviceGeneration, source.queue.deviceGeneration);
+    EXPECT_FALSE(telemetry.acceptedQueue.valid());
+    EXPECT_FALSE(telemetry.previousAcceptedQueue.valid());
+    EXPECT_EQ(telemetry.score.preference, source.score.preference);
+    EXPECT_EQ(telemetry.score.overlap, source.score.overlap);
+    EXPECT_EQ(telemetry.score.queueLoad, source.score.queueLoad);
+    EXPECT_EQ(telemetry.score.incomingCrossings, source.score.incomingCrossings);
+    EXPECT_EQ(telemetry.score.outgoingCrossings, source.score.outgoingCrossings);
+    EXPECT_EQ(telemetry.score.ownershipTransfers, source.score.ownershipTransfers);
+    EXPECT_EQ(telemetry.score.total, source.score.total());
+    EXPECT_EQ(telemetry.queueClass, queueClass);
+    EXPECT_EQ(telemetry.reason, reason);
+    EXPECT_EQ(telemetry.modifiers, ExpectedTelemetryModifiers(source.modifiers));
+    EXPECT_EQ(telemetry.acceptance, Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted);
+    EXPECT_EQ(telemetry.dedicated, source.dedicated);
+}
+
 struct TransferOwnershipPair{
     Graphics::GpuGraphResourceId texture;
     Graphics::GpuTaskId producer;
@@ -686,6 +733,53 @@ struct PacketLifecycleTask{
             ++*payload.discardedCount;
     }
 };
+
+[[nodiscard]] bool AcceptTaskPacket(
+    Graphics::GpuTaskGraph& graph,
+    const Graphics::GpuCompiledGraph& compiledGraph,
+    Graphics::GpuGraphSubmissionTransaction& transaction,
+    const Graphics::GpuTaskId task,
+    const u64 tokenValue
+){
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    if(!compiledGraph.validPacket(packet))
+        return false;
+    const Graphics::GpuPhysicalQueueId queue = compiledGraph.packet(packet).queue;
+    const Graphics::GpuPhysicalQueueInfo* const queueInfo = compiledGraph.queueInfo(queue);
+    if(!queueInfo)
+        return false;
+
+    Graphics::GpuTaskPacketRecordingLease recordingLease;
+    if(
+        !graph.beginRecordingAttempt(compiledGraph, packet)
+        || !graph.beginPacketRecording(
+            compiledGraph,
+            packet,
+            graph.recordingAttemptGeneration(),
+            recordingLease
+        )
+        || !graph.completePacketRecording(compiledGraph, packet, recordingLease)
+        || !transaction.markPacketRecorded(
+            graph,
+            compiledGraph,
+            packet,
+            graph.recordingAttemptGeneration()
+        )
+    )
+        return false;
+
+    return transaction.acceptPacket(
+        graph,
+        compiledGraph,
+        packet,
+        Graphics::QueueSubmissionToken{
+            .queue = queueInfo->queueClass,
+            .value = tokenValue,
+            .physicalQueueIndex = queue.index,
+            .deviceGeneration = queue.deviceGeneration,
+        }
+    );
+}
 
 struct NativeRecordProbeTask{
     struct Payload{
@@ -9794,6 +9888,8 @@ TEST(GpuTaskGraph, AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOption
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     const Graphics::GpuTaskGraphTelemetryOptions telemetryOptions{
         .queueAssignments = &assignments,
+        .compiledGraph = nullptr,
+        .queueAssignmentTelemetry = nullptr,
     };
     ASSERT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
     ASSERT_EQ(nodes.size(), 1u);
@@ -9911,6 +10007,8 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     const Graphics::GpuTaskGraphTelemetryOptions telemetryOptions{
         .queueAssignments = &assignments,
+        .compiledGraph = nullptr,
+        .queueAssignmentTelemetry = nullptr,
     };
     ASSERT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
     ASSERT_EQ(nodes.size(), 1u);
@@ -13882,6 +13980,8 @@ TEST(GpuTaskGraph, ExportsInferredEvidenceAndQueueAssignments){
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
     const Graphics::GpuTaskGraphTelemetryOptions telemetryOptions{
         .queueAssignments = &assignments,
+        .compiledGraph = nullptr,
+        .queueAssignmentTelemetry = nullptr,
     };
     ASSERT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
 
@@ -14003,10 +14103,14 @@ TEST(GpuTaskGraph, ExportsDetailedQueueAssignmentTelemetry){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
+    const Graphics::GpuTaskQueueAssignment* const computeAssignment = assignments.find(compute);
+    const Graphics::GpuTaskQueueAssignment* const transferAssignment = assignments.find(transfer);
     const Graphics::GpuTaskQueueAssignment* const fallbackAssignment = assignments.find(computeFallback);
     const Graphics::GpuTaskQueueAssignment* const primaryAssignment = assignments.find(sameClassPrimary);
     const Graphics::GpuTaskQueueAssignment* const routedAssignment = assignments.find(sameClassRouted);
     const Graphics::GpuTaskQueueAssignment* const overrideAssignment = assignments.find(compilerOverride);
+    ASSERT_NE(computeAssignment, nullptr);
+    ASSERT_NE(transferAssignment, nullptr);
     ASSERT_NE(fallbackAssignment, nullptr);
     ASSERT_NE(primaryAssignment, nullptr);
     ASSERT_NE(routedAssignment, nullptr);
@@ -14026,6 +14130,8 @@ TEST(GpuTaskGraph, ExportsDetailedQueueAssignmentTelemetry){
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     const Graphics::GpuTaskGraphTelemetryOptions telemetryOptions{
         .queueAssignments = &assignments,
+        .compiledGraph = nullptr,
+        .queueAssignmentTelemetry = nullptr,
     };
     ASSERT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
 
@@ -14056,6 +14162,410 @@ TEST(GpuTaskGraph, ExportsDetailedQueueAssignmentTelemetry){
         Graphics::GpuTaskGraphTelemetryNodeFlag::AssignedGraphicsQueue
         | Graphics::GpuTaskGraphTelemetryNodeFlag::QueueAssignmentCompilerOverride
     );
+    ExpectPlannedQueueAssignmentTelemetry(
+        *computeAssignment,
+        nodes[compute.index].queueAssignment,
+        Telemetry::FrameGraphQueueClass::Compute,
+        Telemetry::FrameGraphQueueAssignmentReason::DedicatedCompute
+    );
+    ExpectPlannedQueueAssignmentTelemetry(
+        *transferAssignment,
+        nodes[transfer.index].queueAssignment,
+        Telemetry::FrameGraphQueueClass::Transfer,
+        Telemetry::FrameGraphQueueAssignmentReason::DedicatedTransfer
+    );
+    ExpectPlannedQueueAssignmentTelemetry(
+        *fallbackAssignment,
+        nodes[computeFallback.index].queueAssignment,
+        Telemetry::FrameGraphQueueClass::Graphics,
+        Telemetry::FrameGraphQueueAssignmentReason::Fallback
+    );
+    ExpectPlannedQueueAssignmentTelemetry(
+        *primaryAssignment,
+        nodes[sameClassPrimary.index].queueAssignment,
+        Telemetry::FrameGraphQueueClass::Graphics,
+        Telemetry::FrameGraphQueueAssignmentReason::RequiredGraphics
+    );
+    ExpectPlannedQueueAssignmentTelemetry(
+        *routedAssignment,
+        nodes[sameClassRouted.index].queueAssignment,
+        Telemetry::FrameGraphQueueClass::Graphics,
+        Telemetry::FrameGraphQueueAssignmentReason::RequiredGraphics
+    );
+    ExpectPlannedQueueAssignmentTelemetry(
+        *overrideAssignment,
+        nodes[compilerOverride.index].queueAssignment,
+        Telemetry::FrameGraphQueueClass::Graphics,
+        Telemetry::FrameGraphQueueAssignmentReason::CompilerOverride
+    );
+}
+
+TEST(GpuTaskGraph, TracksAcceptedExactQueueAssignmentsAcrossGraphGenerations){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignmentTelemetryTracker tracker(testArena.arena);
+    Core::Alloc::ScratchArena trackerScratchArena(s_TaskGraphScratchArena);
+    const Name routeIdentity("tests/task_graph/queue_assignment_history");
+    Graphics::GpuTaskId routeTask;
+
+    Graphics::GpuQueueRequest graphicsRequest;
+    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+    graphicsRequest.allowFallback = false;
+    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Graphics::GpuTaskDesc routeDesc;
+    routeDesc
+        .setIdentity(routeIdentity)
+        .setMarkerLabel("Queue Assignment History")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+    ;
+    routeTask = graph.addTask<PacketLifecycleTask>(routeDesc, PacketLifecycleTask::Payload{});
+    Graphics::GpuTaskDesc rejectedDesc;
+    rejectedDesc
+        .setIdentity(Name("tests/task_graph/queue_assignment_partial_rejected"))
+        .setMarkerLabel("Queue Assignment Partial Rejected")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+    ;
+    const Graphics::GpuTaskId rejectedTask = graph.addTask<PacketLifecycleTask>(
+        rejectedDesc,
+        PacketLifecycleTask::Payload{}
+    );
+    Graphics::GpuTaskDesc laterAcceptedDesc;
+    laterAcceptedDesc
+        .setIdentity(Name("tests/task_graph/queue_assignment_progressive_acceptance"))
+        .setMarkerLabel("Queue Assignment Progressive Acceptance")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+    ;
+    const Graphics::GpuTaskId laterAcceptedTask = graph.addTask<PacketLifecycleTask>(
+        laterAcceptedDesc,
+        PacketLifecycleTask::Payload{}
+    );
+    ASSERT_TRUE(routeTask.valid());
+    ASSERT_TRUE(rejectedTask.valid());
+    ASSERT_TRUE(laterAcceptedTask.valid());
+    const Graphics::GpuPhysicalQueueInfo initialQueue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology initialTopology{
+        .queues = &initialQueue,
+        .queueCount = 1u,
+    };
+    ASSERT_TRUE(Compile(graph, analysis, initialTopology, assignments, compiledGraph));
+    ASSERT_TRUE(assignments.validFor(graph, compiledGraph));
+    Graphics::GpuTaskGraphQueueAssignments standaloneAssignments(testArena.arena);
+    ASSERT_TRUE(Assign(graph, analysis, initialTopology, standaloneAssignments));
+    ASSERT_TRUE(standaloneAssignments.validFor(graph));
+    EXPECT_FALSE(standaloneAssignments.validFor(graph, compiledGraph));
+    transaction.reset(compiledGraph);
+    Graphics::GpuTaskGraphQueueAssignmentTelemetryTracker standaloneTracker(testArena.arena);
+    EXPECT_FALSE(standaloneTracker.update(
+        graph,
+        standaloneAssignments,
+        compiledGraph,
+        transaction,
+        trackerScratchArena
+    ));
+
+    ASSERT_TRUE(tracker.update(graph, assignments, compiledGraph, transaction, trackerScratchArena));
+    const Graphics::GpuTaskQueueAssignmentTelemetry* tracked = tracker.find(routeTask);
+    ASSERT_NE(tracked, nullptr);
+    EXPECT_FALSE(tracked->acceptedQueue.valid());
+    EXPECT_EQ(tracked->acceptance, Graphics::GpuTaskQueueAssignmentAcceptance::NotAccepted);
+
+    ASSERT_TRUE(AcceptTaskPacket(graph, compiledGraph, transaction, routeTask, 101u));
+    ASSERT_TRUE(tracker.update(graph, assignments, compiledGraph, transaction, trackerScratchArena));
+    ASSERT_TRUE(tracker.validFor(graph, assignments, compiledGraph));
+
+    tracked = tracker.find(routeTask);
+    ASSERT_NE(tracked, nullptr);
+    EXPECT_EQ(tracked->acceptedQueue, initialQueue.id);
+    EXPECT_FALSE(tracked->previousAcceptedQueue.valid());
+    EXPECT_EQ(tracked->acceptance, Graphics::GpuTaskQueueAssignmentAcceptance::First);
+    ASSERT_TRUE(AcceptTaskPacket(graph, compiledGraph, transaction, laterAcceptedTask, 102u));
+    transaction.rejectTask(graph, compiledGraph, rejectedTask);
+    ASSERT_TRUE(tracker.update(graph, assignments, compiledGraph, transaction, trackerScratchArena));
+    tracked = tracker.find(routeTask);
+    ASSERT_NE(tracked, nullptr);
+    EXPECT_FALSE(tracked->previousAcceptedQueue.valid());
+    EXPECT_EQ(tracked->acceptance, Graphics::GpuTaskQueueAssignmentAcceptance::First);
+    const Graphics::GpuTaskQueueAssignmentTelemetry* rejected = tracker.find(rejectedTask);
+    ASSERT_NE(rejected, nullptr);
+    EXPECT_FALSE(rejected->acceptedQueue.valid());
+    EXPECT_FALSE(rejected->previousAcceptedQueue.valid());
+    EXPECT_EQ(rejected->acceptance, Graphics::GpuTaskQueueAssignmentAcceptance::NotAccepted);
+    const Graphics::GpuTaskQueueAssignmentTelemetry* laterAccepted = tracker.find(laterAcceptedTask);
+    ASSERT_NE(laterAccepted, nullptr);
+    EXPECT_EQ(laterAccepted->acceptedQueue, initialQueue.id);
+    EXPECT_FALSE(laterAccepted->previousAcceptedQueue.valid());
+    EXPECT_EQ(laterAccepted->acceptance, Graphics::GpuTaskQueueAssignmentAcceptance::First);
+    ASSERT_TRUE(tracker.update(graph, assignments, compiledGraph, transaction, trackerScratchArena));
+    tracked = tracker.find(routeTask);
+    ASSERT_NE(tracked, nullptr);
+    EXPECT_FALSE(tracked->previousAcceptedQueue.valid());
+    EXPECT_EQ(tracked->acceptance, Graphics::GpuTaskQueueAssignmentAcceptance::First);
+
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    Telemetry::FrameGraphPendingNameEdges pendingEdges(testArena.arena);
+    Telemetry::FrameGraphBuilder builder(nodes, edges, pendingEdges);
+    const Graphics::GpuTaskGraphTelemetryOptions trackedTelemetryOptions{
+        .queueAssignments = &assignments,
+        .compiledGraph = &compiledGraph,
+        .queueAssignmentTelemetry = &tracker,
+    };
+    const Graphics::GpuTaskGraphTelemetryOptions compiledOnlyTelemetryOptions{
+        .queueAssignments = &assignments,
+        .compiledGraph = &compiledGraph,
+        .queueAssignmentTelemetry = nullptr,
+    };
+    const Graphics::GpuTaskGraphTelemetryOptions trackerOnlyTelemetryOptions{
+        .queueAssignments = &assignments,
+        .compiledGraph = nullptr,
+        .queueAssignmentTelemetry = &tracker,
+    };
+    EXPECT_FALSE(graph.appendFrameGraphTelemetry(
+        builder,
+        analysis,
+        trackerScratchArena,
+        compiledOnlyTelemetryOptions
+    ));
+    EXPECT_FALSE(graph.appendFrameGraphTelemetry(
+        builder,
+        analysis,
+        trackerScratchArena,
+        trackerOnlyTelemetryOptions
+    ));
+    EXPECT_TRUE(nodes.empty());
+    ASSERT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, trackerScratchArena, trackedTelemetryOptions));
+    ASSERT_EQ(nodes.size(), 3u);
+    const Graphics::GpuTaskQueueAssignment* const initialAssignment = assignments.find(routeTask);
+    ASSERT_NE(initialAssignment, nullptr);
+    const Telemetry::FrameGraphQueueAssignment& initialTelemetry = nodes[routeTask.index].queueAssignment;
+    EXPECT_EQ(initialTelemetry.initialQueue.index, initialAssignment->initialQueue.index);
+    EXPECT_EQ(initialTelemetry.initialQueue.deviceGeneration, initialAssignment->initialQueue.deviceGeneration);
+    EXPECT_EQ(initialTelemetry.plannedQueue.index, initialAssignment->queue.index);
+    EXPECT_EQ(initialTelemetry.plannedQueue.deviceGeneration, initialAssignment->queue.deviceGeneration);
+    EXPECT_EQ(initialTelemetry.acceptedQueue.index, initialQueue.id.index);
+    EXPECT_EQ(initialTelemetry.acceptedQueue.deviceGeneration, initialQueue.id.deviceGeneration);
+    EXPECT_FALSE(initialTelemetry.previousAcceptedQueue.valid());
+    EXPECT_EQ(initialTelemetry.score.preference, initialAssignment->score.preference);
+    EXPECT_EQ(initialTelemetry.score.overlap, initialAssignment->score.overlap);
+    EXPECT_EQ(initialTelemetry.score.queueLoad, initialAssignment->score.queueLoad);
+    EXPECT_EQ(initialTelemetry.score.incomingCrossings, initialAssignment->score.incomingCrossings);
+    EXPECT_EQ(initialTelemetry.score.outgoingCrossings, initialAssignment->score.outgoingCrossings);
+    EXPECT_EQ(initialTelemetry.score.ownershipTransfers, initialAssignment->score.ownershipTransfers);
+    EXPECT_EQ(initialTelemetry.score.total, initialAssignment->score.total());
+    EXPECT_EQ(initialTelemetry.queueClass, Telemetry::FrameGraphQueueClass::Graphics);
+    EXPECT_EQ(initialTelemetry.reason, Telemetry::FrameGraphQueueAssignmentReason::RequiredGraphics);
+    EXPECT_EQ(initialTelemetry.modifiers, ExpectedTelemetryModifiers(initialAssignment->modifiers));
+    EXPECT_EQ(initialTelemetry.acceptance, Telemetry::FrameGraphQueueAssignmentAcceptance::First);
+    EXPECT_FALSE(initialTelemetry.dedicated);
+    EXPECT_TRUE(initialTelemetry.present);
+
+    Graphics::GpuTaskGraphAnalysis replacementAnalysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments replacementAssignments(testArena.arena);
+    Graphics::GpuCompiledGraph replacementCompiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(
+        graph,
+        replacementAnalysis,
+        initialTopology,
+        replacementAssignments,
+        replacementCompiledGraph
+    ));
+    ASSERT_TRUE(replacementAssignments.validFor(graph, replacementCompiledGraph));
+    EXPECT_FALSE(assignments.validFor(graph, replacementCompiledGraph));
+    EXPECT_FALSE(replacementAssignments.validFor(graph, compiledGraph));
+    Graphics::GpuGraphSubmissionTransaction replacementTransaction(testArena.arena);
+    replacementTransaction.reset(replacementCompiledGraph);
+    Graphics::GpuTaskGraphQueueAssignmentTelemetryTracker replacementTracker(testArena.arena);
+    EXPECT_FALSE(replacementTracker.update(
+        graph,
+        assignments,
+        replacementCompiledGraph,
+        replacementTransaction,
+        trackerScratchArena
+    ));
+
+    transaction.reset(compiledGraph);
+    ASSERT_TRUE(tracker.update(graph, assignments, compiledGraph, transaction, trackerScratchArena));
+    tracked = tracker.find(routeTask);
+    ASSERT_NE(tracked, nullptr);
+    EXPECT_FALSE(tracked->acceptedQueue.valid());
+    EXPECT_EQ(tracked->previousAcceptedQueue, initialQueue.id);
+    EXPECT_EQ(tracked->acceptance, Graphics::GpuTaskQueueAssignmentAcceptance::NotAccepted);
+
+    const u64 initialPlanGeneration = compiledGraph.planGeneration();
+    ASSERT_TRUE(Compile(graph, analysis, initialTopology, assignments, compiledGraph));
+    EXPECT_NE(compiledGraph.planGeneration(), initialPlanGeneration);
+    EXPECT_FALSE(tracker.validFor(graph, assignments, compiledGraph));
+    EXPECT_FALSE(graph.appendFrameGraphTelemetry(
+        builder,
+        analysis,
+        trackerScratchArena,
+        trackedTelemetryOptions
+    ));
+
+    const auto prepareSingleRoute = [&](const Graphics::GpuPhysicalQueueInfo& queue, const bool accept){
+        compiledGraph.reset();
+        graph.reset();
+
+        Graphics::GpuQueueRequest request;
+        if(queue.queueClass == Graphics::CommandQueue::Graphics){
+            request.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+            request.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+        }
+        else if(queue.queueClass == Graphics::CommandQueue::Compute){
+            request.requiredCapabilities = Graphics::GpuQueueCapability::Compute;
+            request.preferredQueue = Graphics::GpuQueuePreference::Compute;
+        }
+        else{
+            return false;
+        }
+        request.allowFallback = false;
+        request.compilerMayOverridePreference = false;
+        Graphics::GpuTaskDesc desc;
+        desc
+            .setIdentity(routeIdentity)
+            .setMarkerLabel("Queue Assignment History")
+            .setQueue(request)
+            .setScheduling(scheduling)
+        ;
+        routeTask = graph.addTask<PacketLifecycleTask>(desc, PacketLifecycleTask::Payload{});
+        if(!routeTask.valid())
+            return false;
+        const Graphics::GpuTaskGraphQueueTopology topology{
+            .queues = &queue,
+            .queueCount = 1u,
+        };
+        if(!Compile(graph, analysis, topology, assignments, compiledGraph))
+            return false;
+        transaction.reset(compiledGraph);
+        if(accept){
+            if(!AcceptTaskPacket(graph, compiledGraph, transaction, routeTask, 200u + queue.id.index))
+                return false;
+        }
+        else{
+            transaction.rejectTask(graph, compiledGraph, routeTask);
+        }
+        return tracker.update(graph, assignments, compiledGraph, transaction, trackerScratchArena);
+    };
+
+    ASSERT_TRUE(prepareSingleRoute(initialQueue, true));
+    tracked = tracker.find(routeTask);
+    ASSERT_NE(tracked, nullptr);
+    EXPECT_EQ(tracked->acceptedQueue, initialQueue.id);
+    EXPECT_EQ(tracked->previousAcceptedQueue, initialQueue.id);
+    EXPECT_EQ(tracked->acceptance, Graphics::GpuTaskQueueAssignmentAcceptance::Unchanged);
+
+    Graphics::GpuPhysicalQueueInfo alternateGraphicsQueue = GraphicsQueue(3u);
+    alternateGraphicsQueue.queueIndex = 1u;
+    ASSERT_TRUE(prepareSingleRoute(alternateGraphicsQueue, false));
+    tracked = tracker.find(routeTask);
+    ASSERT_NE(tracked, nullptr);
+    EXPECT_FALSE(tracked->acceptedQueue.valid());
+    EXPECT_EQ(tracked->previousAcceptedQueue, initialQueue.id);
+    EXPECT_EQ(tracked->acceptance, Graphics::GpuTaskQueueAssignmentAcceptance::NotAccepted);
+
+    compiledGraph.reset();
+    graph.reset();
+    Graphics::GpuTaskDesc duplicateDesc;
+    duplicateDesc
+        .setIdentity(routeIdentity)
+        .setMarkerLabel("Duplicate Queue Assignment History")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+    ;
+    ASSERT_TRUE(graph.addTask<PacketLifecycleTask>(duplicateDesc, PacketLifecycleTask::Payload{}).valid());
+    ASSERT_TRUE(graph.addTask<PacketLifecycleTask>(duplicateDesc, PacketLifecycleTask::Payload{}).valid());
+    ASSERT_TRUE(Compile(graph, analysis, initialTopology, assignments, compiledGraph));
+    transaction.reset(compiledGraph);
+    EXPECT_FALSE(tracker.update(graph, assignments, compiledGraph, transaction, trackerScratchArena));
+    EXPECT_FALSE(tracker.validFor(graph, assignments, compiledGraph));
+
+    compiledGraph.reset();
+    graph.reset();
+    Graphics::GpuTaskSchedulingHint initialQueueMismatchScheduling = scheduling;
+    initialQueueMismatchScheduling.allowSameClassQueueRouting = true;
+    initialQueueMismatchScheduling.allowTimingFeedbackRouting = true;
+    Graphics::GpuTaskDesc initialQueueMismatchDesc;
+    initialQueueMismatchDesc
+        .setIdentity(routeIdentity)
+        .setMarkerLabel("Initial Queue Topology Mismatch")
+        .setQueue(graphicsRequest)
+        .setScheduling(initialQueueMismatchScheduling)
+    ;
+    routeTask = graph.addTask<PacketLifecycleTask>(
+        initialQueueMismatchDesc,
+        PacketLifecycleTask::Payload{}
+    );
+    ASSERT_TRUE(routeTask.valid());
+    Graphics::GpuTaskGraphQueueAssignments staleAssignments(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    const Graphics::GpuPhysicalQueueInfo mismatchQueues[] = { initialQueue, alternateGraphicsQueue };
+    const Graphics::GpuTaskGraphQueueTopology mismatchSourceTopology{
+        .queues = mismatchQueues,
+        .queueCount = LengthOf(mismatchQueues),
+    };
+    const Graphics::GpuTaskTimingQueueOverride mismatchOverride[]{
+        Graphics::GpuTaskTimingQueueOverride{
+            .key = Graphics::GpuTaskTimingKey{
+                .task = routeIdentity,
+                .queue = Graphics::CommandQueue::Graphics,
+            },
+            .queue = alternateGraphicsQueue.id,
+        },
+    };
+    Graphics::GpuTaskGraphQueueAssignmentOptions mismatchAssignmentOptions;
+    mismatchAssignmentOptions.timingQueueOverrides = mismatchOverride;
+    mismatchAssignmentOptions.timingQueueOverrideCount = LengthOf(mismatchOverride);
+    ASSERT_TRUE(Assign(graph, analysis, mismatchSourceTopology, staleAssignments, mismatchAssignmentOptions));
+    const Graphics::GpuTaskQueueAssignment* const staleAssignment = staleAssignments.find(routeTask);
+    ASSERT_NE(staleAssignment, nullptr);
+    ASSERT_EQ(staleAssignment->initialQueue, initialQueue.id);
+    ASSERT_EQ(staleAssignment->queue, alternateGraphicsQueue.id);
+    const Graphics::GpuTaskGraphQueueTopology alternateTopology{
+        .queues = &alternateGraphicsQueue,
+        .queueCount = 1u,
+    };
+    ASSERT_TRUE(Compile(graph, analysis, alternateTopology, assignments, compiledGraph));
+    transaction.reset(compiledGraph);
+    EXPECT_FALSE(tracker.update(graph, staleAssignments, compiledGraph, transaction, trackerScratchArena));
+
+    ASSERT_TRUE(prepareSingleRoute(alternateGraphicsQueue, true));
+    tracked = tracker.find(routeTask);
+    ASSERT_NE(tracked, nullptr);
+    EXPECT_EQ(tracked->acceptedQueue, alternateGraphicsQueue.id);
+    EXPECT_EQ(tracked->previousAcceptedQueue, initialQueue.id);
+    EXPECT_EQ(tracked->acceptance, Graphics::GpuTaskQueueAssignmentAcceptance::Changed);
+
+    const Graphics::GpuPhysicalQueueInfo computeQueue = DedicatedComputeQueue();
+    ASSERT_TRUE(prepareSingleRoute(computeQueue, true));
+    tracked = tracker.find(routeTask);
+    ASSERT_NE(tracked, nullptr);
+    EXPECT_EQ(tracked->acceptedQueue, computeQueue.id);
+    EXPECT_EQ(tracked->previousAcceptedQueue, alternateGraphicsQueue.id);
+    EXPECT_EQ(tracked->acceptance, Graphics::GpuTaskQueueAssignmentAcceptance::Changed);
+
+    Graphics::GpuPhysicalQueueInfo nextGenerationComputeQueue = DedicatedComputeQueue();
+    nextGenerationComputeQueue.id.deviceGeneration = 2u;
+    ASSERT_TRUE(prepareSingleRoute(nextGenerationComputeQueue, true));
+    tracked = tracker.find(routeTask);
+    ASSERT_NE(tracked, nullptr);
+    EXPECT_EQ(tracked->acceptedQueue, nextGenerationComputeQueue.id);
+    EXPECT_FALSE(tracked->previousAcceptedQueue.valid());
+    EXPECT_EQ(tracked->acceptance, Graphics::GpuTaskQueueAssignmentAcceptance::First);
+
+    tracker.reset();
+    EXPECT_FALSE(tracker.validFor(graph, assignments, compiledGraph));
+    EXPECT_EQ(tracker.find(routeTask), nullptr);
 }
 
 TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
@@ -14905,6 +15415,78 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_EQ(repeatedSecondQueueStatistics.rejectedTaskCount, 1u);
     EXPECT_EQ(repeatedSecondQueueStatistics.rejectedSubmissionCount, 0u);
 
+    Graphics::QueueSubmissionToken packetTokens[4u];
+    Graphics::GpuGraphSubmissionAcceptanceSnapshot acceptanceSnapshot;
+    ASSERT_EQ(LengthOf(packetTokens), compiledGraph.packetCount());
+    ASSERT_TRUE(transaction.copyAcceptedPacketTokens(
+        compiledGraph,
+        packetTokens,
+        LengthOf(packetTokens),
+        acceptanceSnapshot
+    ));
+    EXPECT_NE(acceptanceSnapshot.recordingAttemptGeneration, 0u);
+    EXPECT_NE(acceptanceSnapshot.acceptanceRevision, 0u);
+    EXPECT_EQ(packetTokens[firstPacket.index].queue, firstToken.queue);
+    EXPECT_EQ(packetTokens[firstPacket.index].value, firstToken.value);
+    EXPECT_EQ(packetTokens[firstPacket.index].physicalQueueIndex, firstToken.physicalQueueIndex);
+    EXPECT_EQ(packetTokens[firstPacket.index].deviceGeneration, firstToken.deviceGeneration);
+    EXPECT_FALSE(packetTokens[secondPacket.index].valid());
+    EXPECT_EQ(packetTokens[transferPacket.index].queue, transferToken.queue);
+    EXPECT_EQ(packetTokens[transferPacket.index].value, transferToken.value);
+    EXPECT_EQ(packetTokens[transferPacket.index].physicalQueueIndex, transferToken.physicalQueueIndex);
+    EXPECT_EQ(packetTokens[transferPacket.index].deviceGeneration, transferToken.deviceGeneration);
+    EXPECT_FALSE(packetTokens[recoveryPacket.index].valid());
+    const Graphics::GpuGraphSubmissionAcceptanceSnapshot repeatedAcceptanceSnapshot = acceptanceSnapshot;
+    ASSERT_TRUE(transaction.copyAcceptedPacketTokens(
+        compiledGraph,
+        packetTokens,
+        LengthOf(packetTokens),
+        acceptanceSnapshot
+    ));
+    EXPECT_EQ(acceptanceSnapshot.recordingAttemptGeneration, repeatedAcceptanceSnapshot.recordingAttemptGeneration);
+    EXPECT_EQ(acceptanceSnapshot.acceptanceRevision, repeatedAcceptanceSnapshot.acceptanceRevision);
+
+    Graphics::QueueSubmissionToken failureTokens[4u];
+    Graphics::QueueSubmissionToken expectedFailureTokens[4u];
+    Graphics::GpuGraphSubmissionAcceptanceSnapshot failureSnapshot{
+        .recordingAttemptGeneration = 71u,
+        .acceptanceRevision = 72u,
+    };
+    const Graphics::GpuGraphSubmissionAcceptanceSnapshot expectedFailureSnapshot = failureSnapshot;
+    for(usize packetIndex = 0u; packetIndex < LengthOf(failureTokens); ++packetIndex){
+        const Graphics::QueueSubmissionToken sentinel{
+            .queue = Graphics::CommandQueue::Graphics,
+            .value = 90u + packetIndex,
+            .physicalQueueIndex = 7u,
+            .deviceGeneration = compiledGraph.deviceGeneration(),
+        };
+        failureTokens[packetIndex] = sentinel;
+        expectedFailureTokens[packetIndex] = sentinel;
+    }
+    EXPECT_FALSE(transaction.copyAcceptedPacketTokens(
+        compiledGraph,
+        failureTokens,
+        LengthOf(failureTokens) - 1u,
+        failureSnapshot
+    ));
+    EXPECT_FALSE(transaction.copyAcceptedPacketTokens(
+        compiledGraph,
+        nullptr,
+        LengthOf(failureTokens),
+        failureSnapshot
+    ));
+    EXPECT_EQ(failureSnapshot.recordingAttemptGeneration, expectedFailureSnapshot.recordingAttemptGeneration);
+    EXPECT_EQ(failureSnapshot.acceptanceRevision, expectedFailureSnapshot.acceptanceRevision);
+    for(usize packetIndex = 0u; packetIndex < LengthOf(failureTokens); ++packetIndex){
+        EXPECT_EQ(failureTokens[packetIndex].queue, expectedFailureTokens[packetIndex].queue);
+        EXPECT_EQ(failureTokens[packetIndex].value, expectedFailureTokens[packetIndex].value);
+        EXPECT_EQ(
+            failureTokens[packetIndex].physicalQueueIndex,
+            expectedFailureTokens[packetIndex].physicalQueueIndex
+        );
+        EXPECT_EQ(failureTokens[packetIndex].deviceGeneration, expectedFailureTokens[packetIndex].deviceGeneration);
+    }
+
     Core::Alloc::ScratchArena recoveryScratchArena(s_TaskGraphScratchArena);
     Vector<Graphics::QueueSubmissionToken, Core::Alloc::ScratchArena> recoveryWaitTokens(recoveryScratchArena);
     ASSERT_TRUE(transaction.appendAcceptedQueueFrontierWaitTokens(recoveryQueue, recoveryWaitTokens));
@@ -14947,6 +15529,47 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         transaction.packetRuntime(recoveryPacket)->state,
         Graphics::GpuPacketRuntimeState::Accepted
     );
+    Graphics::GpuGraphSubmissionAcceptanceSnapshot recoveredAcceptanceSnapshot;
+    ASSERT_TRUE(transaction.copyAcceptedPacketTokens(
+        compiledGraph,
+        packetTokens,
+        LengthOf(packetTokens),
+        recoveredAcceptanceSnapshot
+    ));
+    EXPECT_NE(recoveredAcceptanceSnapshot.acceptanceRevision, acceptanceSnapshot.acceptanceRevision);
+    transaction.reset(compiledGraph);
+    Graphics::GpuGraphSubmissionAcceptanceSnapshot resetAcceptanceSnapshot;
+    ASSERT_TRUE(transaction.copyAcceptedPacketTokens(
+        compiledGraph,
+        packetTokens,
+        LengthOf(packetTokens),
+        resetAcceptanceSnapshot
+    ));
+    EXPECT_EQ(resetAcceptanceSnapshot.recordingAttemptGeneration, 0u);
+    EXPECT_NE(resetAcceptanceSnapshot.acceptanceRevision, recoveredAcceptanceSnapshot.acceptanceRevision);
+    for(const Graphics::QueueSubmissionToken& token : packetTokens)
+        EXPECT_FALSE(token.valid());
+    const u64 acceptedPlanGeneration = compiledGraph.planGeneration();
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_EQ(compiledGraph.packetCount(), LengthOf(failureTokens));
+    EXPECT_NE(compiledGraph.planGeneration(), acceptedPlanGeneration);
+    EXPECT_FALSE(transaction.copyAcceptedPacketTokens(
+        compiledGraph,
+        failureTokens,
+        LengthOf(failureTokens),
+        failureSnapshot
+    ));
+    EXPECT_EQ(failureSnapshot.recordingAttemptGeneration, expectedFailureSnapshot.recordingAttemptGeneration);
+    EXPECT_EQ(failureSnapshot.acceptanceRevision, expectedFailureSnapshot.acceptanceRevision);
+    for(usize packetIndex = 0u; packetIndex < LengthOf(failureTokens); ++packetIndex){
+        EXPECT_EQ(failureTokens[packetIndex].queue, expectedFailureTokens[packetIndex].queue);
+        EXPECT_EQ(failureTokens[packetIndex].value, expectedFailureTokens[packetIndex].value);
+        EXPECT_EQ(
+            failureTokens[packetIndex].physicalQueueIndex,
+            expectedFailureTokens[packetIndex].physicalQueueIndex
+        );
+        EXPECT_EQ(failureTokens[packetIndex].deviceGeneration, expectedFailureTokens[packetIndex].deviceGeneration);
+    }
     compiledGraph.reset();
     const Graphics::GpuPhysicalQueueTopology resetQueueTopology = compiledGraph.queueTopology();
     EXPECT_EQ(resetQueueTopology.queues, nullptr);

@@ -16,6 +16,32 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_packet_runtime_transaction{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static Atomic<u64> s_NextAcceptanceRevision{ 1u };
+
+
+[[nodiscard]] static u64 AllocateAcceptanceRevision()noexcept{
+    u64 revision = s_NextAcceptanceRevision.fetch_add(1u, MemoryOrder::relaxed);
+    if(revision == 0u)
+        revision = s_NextAcceptanceRevision.fetch_add(1u, MemoryOrder::relaxed);
+    return revision;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 thread_local const GpuGraphSubmissionTransaction::SubmissionOperation* GpuGraphSubmissionTransaction::SubmissionOperation::s_activeOperation = nullptr;
 
 
@@ -102,6 +128,7 @@ void GpuGraphSubmissionTransaction::reset(const GpuCompiledGraph& compiledGraph)
     m_recordingAttemptGeneration = 0u;
     m_deviceGeneration = compiledGraph.deviceGeneration();
     m_acceptedSubmissionCount = 0u;
+    m_acceptanceRevision = 0u;
     m_submissionStatistics = {};
     m_valid = compiledGraph.valid();
     if(!m_valid)
@@ -122,6 +149,7 @@ void GpuGraphSubmissionTransaction::reset(const GpuCompiledGraph& compiledGraph)
     m_submissionStatistics.graphGeneration = m_generation;
     m_submissionStatistics.planGeneration = m_planGeneration;
     m_submissionStatistics.deviceGeneration = m_deviceGeneration;
+    m_acceptanceRevision = __hidden_packet_runtime_transaction::AllocateAcceptanceRevision();
 }
 
 bool GpuGraphSubmissionTransaction::validFor(const GpuCompiledGraph& compiledGraph)const noexcept{
@@ -451,6 +479,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     ++m_acceptedSubmissionCount;
     if(m_acceptedSubmissionCount == 0u)
         ++m_acceptedSubmissionCount;
+    m_acceptanceRevision = __hidden_packet_runtime_transaction::AllocateAcceptanceRevision();
 
     ++m_submissionStatistics.acceptedPacketCount;
     m_submissionStatistics.acceptedTaskCount += packet.taskCount;
